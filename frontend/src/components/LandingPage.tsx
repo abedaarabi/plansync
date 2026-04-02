@@ -18,16 +18,6 @@ import { useViewerStore } from "@/store/viewerStore";
 const LANDING_PDF_INPUT_ID = "landing-pdf-input";
 const YOUTUBE_VIDEO_ID = "B3aR-qLvCFo";
 
-/** Sections linked by the fixed side nav (order = top to bottom). */
-const LANDING_SECTION_ANCHORS = [
-  { id: "hero", label: "Home" },
-  { id: "walkthrough", label: "Demo" },
-  { id: "compare", label: "Pricing" },
-  { id: "features", label: "Features" },
-  { id: "faq", label: "FAQ" },
-  { id: "cta", label: "Start" },
-] as const;
-
 function isPdfFile(f: File): boolean {
   return f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
 }
@@ -78,17 +68,20 @@ function AnimateIn({
   children,
   className = "",
   delay = 0,
+  /** Above-the-fold: no opacity-0 flash (better LCP / no “blank hero”). */
+  instant = false,
 }: {
   children: React.ReactNode;
   className?: string;
   delay?: number;
+  instant?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const reducedMotion = usePrefersReducedMotion();
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(() => instant || reducedMotion);
 
   useEffect(() => {
-    if (reducedMotion) {
+    if (instant || reducedMotion) {
       setVisible(true);
       return;
     }
@@ -102,15 +95,16 @@ function AnimateIn({
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [reducedMotion]);
+  }, [instant, reducedMotion]);
 
-  const style = reducedMotion
-    ? { opacity: 1, transform: "none" as const }
-    : {
-        opacity: visible ? 1 : 0,
-        transform: visible ? "none" : "translateY(20px)",
-        transition: `opacity 0.7s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.7s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
-      };
+  const style =
+    instant || reducedMotion
+      ? { opacity: 1, transform: "none" as const }
+      : {
+          opacity: visible ? 1 : 0,
+          transform: visible ? "none" : "translateY(20px)",
+          transition: `opacity 0.7s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.7s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+        };
 
   return (
     <div ref={ref} className={className} style={style}>
@@ -143,108 +137,6 @@ const PRO_FEATURES = [
   "Priority support",
 ];
 
-/* ── Side section nav (timeline + scroll spy) ──────────────── */
-
-function LandingSideNav() {
-  const reducedMotion = usePrefersReducedMotion();
-  const [active, setActive] = useState<string>(LANDING_SECTION_ANCHORS[0].id);
-
-  useEffect(() => {
-    const ids = LANDING_SECTION_ANCHORS.map((s) => s.id);
-    const update = () => {
-      const marker = window.scrollY + Math.min(168, window.innerHeight * 0.22);
-      let current = ids[0];
-      for (const id of ids) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        const top = el.getBoundingClientRect().top + window.scrollY;
-        if (top <= marker) current = id;
-      }
-      setActive(current);
-    };
-    update();
-    window.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
-    return () => {
-      window.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, []);
-
-  function goTo(id: string) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
-  }
-
-  return (
-    <nav
-      aria-label="On this page"
-      className="pointer-events-none fixed right-0 top-1/2 z-40 hidden -translate-y-1/2 md:block"
-    >
-      <div className="pointer-events-auto pr-5 lg:pr-8">
-        <div className="relative inline-flex flex-col items-end">
-          {/* Rail — passes through dot centers */}
-          <div
-            className="pointer-events-none absolute right-[9px] top-4 bottom-4 w-px rounded-full bg-gradient-to-b from-slate-200/0 via-slate-300/80 to-slate-200/0"
-            aria-hidden
-          />
-
-          <ul className="relative flex flex-col gap-5">
-            {LANDING_SECTION_ANCHORS.map(({ id, label }) => {
-              const isActive = active === id;
-              return (
-                <li key={id}>
-                  <a
-                    href={`#${id}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      goTo(id);
-                    }}
-                    className={`group flex items-center gap-3 rounded-full py-1.5 pl-4 pr-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--landing-cta)] focus-visible:ring-offset-2 ${
-                      isActive
-                        ? "bg-white/70 shadow-sm ring-1 ring-slate-200/80 backdrop-blur-sm"
-                        : "hover:bg-white/50"
-                    }`}
-                    aria-label={`Go to ${label}`}
-                    aria-current={isActive ? "location" : undefined}
-                  >
-                    <span
-                      className={`max-w-[6.5rem] text-right text-[13px] font-semibold leading-snug tracking-tight sm:max-w-[9rem] ${
-                        isActive ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700"
-                      }`}
-                    >
-                      {label}
-                    </span>
-
-                    <span className="relative z-10 flex h-[18px] w-[18px] shrink-0 items-center justify-center">
-                      <span
-                        className={`absolute inset-0 rounded-full transition-[box-shadow,background-color] ${
-                          isActive
-                            ? "bg-white shadow-sm ring-2 ring-[var(--landing-cta)]/35"
-                            : "bg-white/90 ring-[1.5px] ring-slate-200/90 group-hover:ring-slate-300"
-                        }`}
-                        aria-hidden
-                      />
-                      <span
-                        className={`relative rounded-full transition-all ${
-                          isActive
-                            ? "h-2 w-2 bg-[var(--landing-cta)]"
-                            : "h-1.5 w-1.5 bg-slate-300 group-hover:bg-slate-400"
-                        }`}
-                      />
-                    </span>
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </div>
-    </nav>
-  );
-}
-
 /* ── Browser Mockup ────────────────────────────────────────── */
 
 function BrowserMockup({
@@ -256,17 +148,18 @@ function BrowserMockup({
 }) {
   return (
     <div
-      className={`overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-[0_20px_50px_-12px_rgba(15,23,42,0.12),0_0_0_1px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.04] ${className}`}
+      className={`overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_28px_72px_-20px_rgba(15,23,42,0.14),0_0_0_1px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.03] ${className}`}
     >
-      <div className="flex items-center gap-2 border-b border-slate-100/90 bg-gradient-to-b from-slate-50 to-slate-50/80 px-4 py-2.5">
-        <div className="flex gap-1.5">
-          <div className="h-3 w-3 rounded-full bg-slate-300" />
-          <div className="h-3 w-3 rounded-full bg-slate-300" />
-          <div className="h-3 w-3 rounded-full bg-slate-300" />
+      <div className="flex items-center gap-2 border-b border-slate-100/95 bg-linear-to-b from-slate-50 to-white px-4 py-2.5">
+        <div className="flex gap-1.5" aria-hidden>
+          <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]/95 shadow-sm ring-1 ring-black/10" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]/95 shadow-sm ring-1 ring-black/10" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]/95 shadow-sm ring-1 ring-black/10" />
         </div>
-        <div className="mx-auto flex h-6 w-64 items-center justify-center rounded-md bg-slate-100 text-[11px] text-slate-400">
-          plansync.dev
+        <div className="mx-auto flex h-7 min-w-0 max-w-[min(16rem,72%)] flex-1 items-center justify-center rounded-lg bg-slate-100/90 px-3 text-[11px] font-medium tracking-tight text-slate-500 ring-1 ring-slate-200/80">
+          <span className="truncate">plansync.dev</span>
         </div>
+        <span className="w-[52px] shrink-0" aria-hidden />
       </div>
       {children}
     </div>
@@ -337,33 +230,42 @@ export function LandingPage() {
 
       {/* ═══════════ SECTION 1 — NAV ═══════════ */}
       <nav
-        className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+        className={`fixed inset-x-0 top-0 z-50 border-b transition-[background,box-shadow,border-color] duration-300 ${
           scrolled
-            ? "border-b border-slate-200/80 bg-white/95 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] backdrop-blur-md"
-            : "border-b border-transparent bg-white/70 backdrop-blur-md"
+            ? "border-slate-200/90 bg-white/98 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.1)] backdrop-blur-md"
+            : "border-slate-200/70 bg-white/96 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-xl"
         }`}
       >
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Image src="/logo.svg" alt="" width={28} height={28} className="h-7 w-7" />
-            <span className="text-base font-bold text-slate-900">PlanSync</span>
+          <Link href="/" className="flex items-center gap-2.5" aria-label="PlanSync home">
+            <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 shrink-0" />
+            <span className="text-base font-bold tracking-tight text-slate-900">PlanSync</span>
           </Link>
 
           {/* Desktop links */}
           <div className="hidden items-center gap-8 md:flex">
             <a
               href="#walkthrough"
-              className="text-sm text-slate-600 transition hover:text-slate-900"
+              className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
             >
               Watch demo
             </a>
-            <a href="#features" className="text-sm text-slate-600 transition hover:text-slate-900">
+            <a
+              href="#features"
+              className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
+            >
               Features
             </a>
-            <a href="#compare" className="text-sm text-slate-600 transition hover:text-slate-900">
+            <a
+              href="#compare"
+              className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
+            >
               Pricing
             </a>
-            <a href="#faq" className="text-sm text-slate-600 transition hover:text-slate-900">
+            <a
+              href="#faq"
+              className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
+            >
               FAQ
             </a>
           </div>
@@ -388,7 +290,7 @@ export function LandingPage() {
             <button
               type="button"
               onClick={openFreePdf}
-              className="btn-shine relative overflow-hidden rounded-full bg-[var(--landing-cta)] px-5 py-2 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
+              className="btn-shine relative overflow-hidden rounded-full bg-[var(--landing-cta)] px-5 py-2 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_35%,transparent)] transition hover:bg-[var(--landing-cta-bright)] hover:ring-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)]"
             >
               Start Free &rarr;
             </button>
@@ -397,7 +299,7 @@ export function LandingPage() {
           {/* Mobile hamburger */}
           <button
             type="button"
-            className="md:hidden"
+            className="text-slate-800 md:hidden"
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label="Toggle menu"
           >
@@ -407,7 +309,7 @@ export function LandingPage() {
 
         {/* Mobile menu */}
         {mobileOpen && (
-          <div className="border-t border-slate-100/90 bg-white/95 px-6 pb-6 pt-4 backdrop-blur-md md:hidden">
+          <div className="border-t border-slate-200/80 bg-white px-6 pb-6 pt-4 md:hidden">
             <div className="flex flex-col gap-4">
               <a
                 href="#walkthrough"
@@ -462,63 +364,116 @@ export function LandingPage() {
         )}
       </nav>
 
-      <LandingSideNav />
-
       <main>
-        {/* ═══════════ SECTION 2 — HERO ═══════════ */}
+        {/* ═══════════ SECTION 2 — HERO (construction SaaS) ═══════════ */}
         <section
           id="hero"
-          className="landing-dots relative scroll-mt-20 overflow-hidden pt-32 pb-20 sm:pt-40 sm:pb-28 lg:pt-48 lg:pb-32"
+          className="relative isolate min-h-[min(36rem,90svh)] scroll-mt-20 overflow-hidden pt-28 pb-14 sm:min-h-[min(40rem,92svh)] sm:pt-36 sm:pb-20 lg:flex lg:items-center lg:py-24 xl:py-28"
         >
-          <div
-            className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/40 via-transparent to-slate-50/30"
-            aria-hidden
-          />
-          <div
-            className="pointer-events-none absolute -left-24 top-16 h-[22rem] w-[22rem] rounded-full bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.22),transparent_68%)] blur-2xl sm:-left-32 sm:h-[28rem] sm:w-[28rem]"
-            aria-hidden
-          />
-          <div
-            className="pointer-events-none absolute -right-20 top-32 h-[18rem] w-[18rem] rounded-full bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.14),transparent_70%)] blur-2xl"
-            aria-hidden
-          />
-          <div className="relative mx-auto max-w-6xl px-6">
-            <AnimateIn className="mx-auto max-w-3xl text-center">
-              <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 shadow-sm backdrop-blur-sm">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--landing-cta)]" aria-hidden />
-                Plans, issues &amp; RFIs in one workspace
-              </p>
-              <h1 className="text-4xl font-bold leading-[1.12] tracking-tight text-slate-900 sm:text-5xl lg:text-[56px] lg:leading-[1.1]">
-                The <span className="text-gradient-blue">construction drawing</span> workspace your
-                team actually uses
-              </h1>
-              <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600 sm:mt-8 sm:text-xl">
-                Stop working off the wrong revision. PlanSync keeps every drawing, issue, and RFI in
-                one place — free to start, no signup needed.
-              </p>
+          <div className="pointer-events-none absolute inset-0" aria-hidden>
+            <Image
+              src="/images/cta/CTA-constraction.jpg"
+              alt=""
+              fill
+              sizes="100vw"
+              className="object-cover object-[center_36%]"
+              priority
+              quality={82}
+            />
+          </div>
 
-              <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={openFreePdf}
-                  className="btn-shine relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-[var(--landing-cta)] px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:bg-[var(--landing-cta-bright)] hover:shadow-xl hover:shadow-blue-600/30 active:scale-[0.98]"
-                >
-                  Open a PDF Free <ArrowRight className="h-4 w-4" />
-                </button>
-                <Link
-                  href="/sign-in"
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white/90 px-7 py-3.5 text-base font-semibold text-slate-800 shadow-sm backdrop-blur-sm transition hover:border-slate-300 hover:bg-white"
-                >
-                  Start Pro Trial
-                </Link>
-              </div>
+          <div
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.3)_0%,rgba(15,23,42,0.52)_38%,rgba(15,23,42,0.68)_62%,rgba(2,6,23,0.88)_100%)]"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,transparent_45%,rgba(37,99,235,0.1)_100%)]"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute inset-0 shadow-[inset_0_0_90px_rgba(0,0,0,0.22),inset_0_-100px_150px_rgba(0,0,0,0.42)]"
+            aria-hidden
+          />
 
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
-                <span>No installation</span>
-                <span className="hidden sm:inline">&middot;</span>
-                <span>No credit card</span>
-                <span className="hidden sm:inline">&middot;</span>
-                <span>Works in your browser</span>
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.05]"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M60 0H0v60' fill='none' stroke='%23ffffff' stroke-width='0.5'/%3E%3C/svg%3E")`,
+              backgroundSize: "60px 60px",
+            }}
+            aria-hidden
+          />
+
+          <div className="relative z-10 mx-auto w-full max-w-6xl px-6">
+            <AnimateIn instant>
+              <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12 xl:gap-14">
+                <div className="text-center lg:text-left">
+                  <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--landing-cta)_35%,transparent)] bg-[color-mix(in_srgb,var(--landing-cta)_12%,rgba(15,23,42,0.55))] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-blue-100 shadow-sm backdrop-blur-md lg:inline-flex">
+                    <span
+                      className="h-1.5 w-1.5 rounded-full bg-[var(--landing-cta)]"
+                      aria-hidden
+                    />
+                    Plans · issues · RFIs · one system
+                  </p>
+                  <h1 className="text-balance text-4xl font-bold leading-[1.12] tracking-tight text-blue-50 sm:text-5xl lg:text-[52px] lg:leading-[1.06]">
+                    Plans, issues, and RFIs —{" "}
+                    <span className="text-blue-200 [text-shadow:0_1px_28px_rgba(37,99,235,0.45)]">
+                      one source of truth
+                    </span>{" "}
+                    for your team
+                  </h1>
+                  <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-blue-100/88 sm:mt-8 sm:text-xl lg:mx-0">
+                    Everyone works from the same drawings. Field issues and formal RFIs stay tied to
+                    the plan — not buried in email. Start free in your browser; upgrade when your
+                    team needs the cloud.
+                  </p>
+
+                  <div className="mt-10 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-4 lg:justify-start">
+                    <button
+                      type="button"
+                      onClick={openFreePdf}
+                      className="btn-shine relative inline-flex min-h-12 flex-1 items-center justify-center gap-2 overflow-hidden rounded-xl bg-[var(--landing-cta)] px-8 py-3.5 text-base font-semibold text-[var(--landing-cta-text)] shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)] transition hover:bg-[var(--landing-cta-bright)] hover:shadow-xl hover:shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--landing-cta)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 active:scale-[0.98] sm:flex-none sm:px-9"
+                    >
+                      Open a PDF Free <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+                    </button>
+                    <Link
+                      href="/sign-in"
+                      className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border-2 border-white/90 bg-white/[0.07] px-8 py-3.5 text-base font-semibold text-white shadow-sm backdrop-blur-sm transition hover:border-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:flex-none sm:px-9"
+                    >
+                      Start Pro Trial
+                    </Link>
+                  </div>
+
+                  <p className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium text-blue-200/75 lg:justify-start">
+                    <span>No installation</span>
+                    <span className="hidden text-blue-400/45 sm:inline" aria-hidden>
+                      &middot;
+                    </span>
+                    <span>No credit card</span>
+                    <span className="hidden text-blue-400/45 sm:inline" aria-hidden>
+                      &middot;
+                    </span>
+                    <span>Works in your browser</span>
+                  </p>
+                </div>
+
+                <div className="mx-auto w-full max-w-lg lg:mx-0 lg:max-w-none">
+                  <BrowserMockup className="shadow-[0_24px_80px_-12px_rgba(0,0,0,0.45)] ring-1 ring-white/10">
+                    <div className="relative aspect-[4/3] overflow-hidden bg-slate-900">
+                      <Image
+                        src="/images/markup.png"
+                        alt="PlanSync viewer with issue pins on a construction drawing"
+                        fill
+                        className="object-cover object-top-left"
+                        sizes="(max-width: 1024px) 100vw, 50vw"
+                        quality={90}
+                      />
+                    </div>
+                  </BrowserMockup>
+                  <p className="mt-3 text-center text-xs leading-relaxed text-blue-200/75 lg:text-left">
+                    Real product: issue pins on the plan — the same viewer your team uses in Pro.
+                  </p>
+                </div>
               </div>
             </AnimateIn>
           </div>
@@ -527,64 +482,69 @@ export function LandingPage() {
         {/* ═══════════ WALKTHROUGH VIDEO ═══════════ */}
         <section
           id="walkthrough"
-          className="scroll-mt-20 border-t border-slate-200/60 bg-white/90 py-20 backdrop-blur-sm sm:py-28"
+          className="landing-band-white relative scroll-mt-20 border-t border-slate-200/70 py-24 sm:py-32"
         >
-          <div className="mx-auto max-w-4xl px-6">
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.45] landing-dots"
+            aria-hidden
+          />
+          <div className="relative mx-auto max-w-5xl px-6">
             <AnimateIn className="text-center">
-              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[var(--landing-cta)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
                 Walkthrough
               </p>
-              <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
                 See PlanSync in action
               </h2>
-              <p className="mx-auto mt-4 max-w-lg text-base text-slate-500">
+              <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
                 Watch a 2-minute overview — open a PDF, calibrate, measure, and mark up. No editing,
                 just the real workflow.
               </p>
             </AnimateIn>
 
-            <AnimateIn className="mx-auto mt-12 max-w-3xl" delay={150}>
+            <AnimateIn className="mx-auto mt-14 max-w-4xl" delay={150}>
               <BrowserMockup>
                 <div className="relative aspect-video bg-black">
                   <HeroYouTubeEmbed />
                 </div>
               </BrowserMockup>
-              <p className="mt-4 text-center text-xs text-slate-400">
+              <p className="mt-4 text-center text-xs text-slate-500">
                 <a
                   href={`https://www.youtube.com/watch?v=${YOUTUBE_VIDEO_ID}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="transition hover:text-slate-600"
+                  className="font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 transition hover:text-[var(--landing-cta)] hover:decoration-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)]"
                 >
                   Open on YouTube &rarr;
                 </a>
               </p>
             </AnimateIn>
 
-            {/* Quick preview GIF */}
-            <AnimateIn className="mx-auto mt-16 max-w-3xl" delay={200}>
-              <p className="text-center text-sm font-semibold uppercase tracking-wider text-slate-500">
-                Quick preview
-              </p>
-              <h3 className="mt-3 text-center text-xl font-bold tracking-tight text-slate-900">
-                The viewer in motion
-              </h3>
-              <p className="mx-auto mt-3 max-w-lg text-center text-sm text-slate-500">
-                A short, silent loop of the real workflow — open a PDF, calibrate scale, measure,
-                and export. No sound needed.
-              </p>
-              <div className="mt-8">
-                <BrowserMockup>
-                  <div className="relative aspect-video bg-slate-900">
-                    <Image
-                      src="/images/cta/gifcta.gif"
-                      alt="PlanSync viewer demo — open PDF, calibrate, measure, markup"
-                      fill
-                      className="object-cover"
-                      unoptimized
-                    />
-                  </div>
-                </BrowserMockup>
+            <AnimateIn className="mx-auto mt-20 max-w-4xl" delay={200}>
+              <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-6 shadow-[var(--enterprise-shadow-card)] backdrop-blur-sm sm:p-8">
+                <p className="text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Quick preview
+                </p>
+                <h3 className="mt-2 text-center text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+                  The viewer in motion
+                </h3>
+                <p className="mx-auto mt-3 max-w-xl text-center text-sm leading-relaxed text-slate-600">
+                  A short, silent loop of the real workflow — open a PDF, calibrate scale, measure,
+                  and export. No sound needed.
+                </p>
+                <div className="mt-8">
+                  <BrowserMockup>
+                    <div className="relative aspect-video bg-slate-900">
+                      <Image
+                        src="/images/cta/gifcta.gif"
+                        alt="PlanSync viewer demo — open PDF, calibrate, measure, markup"
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </div>
+                  </BrowserMockup>
+                </div>
               </div>
             </AnimateIn>
           </div>
@@ -592,46 +552,54 @@ export function LandingPage() {
 
         {/* ═══════════ SECTION 3 — FREE vs PRO ═══════════ */}
         <section
-          className="scroll-mt-20 border-t border-slate-200/50 bg-white/70 py-24 backdrop-blur-[2px] sm:py-32"
+          className="landing-band-pricing relative scroll-mt-20 border-t border-slate-200/60 py-24 sm:py-32"
           id="compare"
         >
-          <div className="mx-auto max-w-4xl px-6">
+          <div className="relative mx-auto max-w-5xl px-6">
             <AnimateIn className="text-center">
-              <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
+                Pricing
+              </p>
+              <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
                 Free to start. Pro when you&apos;re ready.
               </h2>
-              <p className="mx-auto mt-4 max-w-xl text-base text-slate-500">
+              <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
                 Everything you need to view construction PDFs — upgrade when your team needs
                 collaboration.
               </p>
             </AnimateIn>
 
-            <div className="mt-16 grid gap-8 md:grid-cols-2">
+            <div className="mt-16 grid gap-8 lg:grid-cols-2 lg:gap-10">
               {/* Free */}
               <AnimateIn delay={100}>
-                <div className="flex h-full flex-col rounded-2xl border border-slate-200/90 bg-white p-8 shadow-[var(--enterprise-shadow-card)]">
+                <div className="flex h-full flex-col rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[0_20px_50px_-24px_rgba(15,23,42,0.1),var(--enterprise-shadow-card)] sm:p-9">
                   <div className="flex items-start gap-4">
                     <div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600"
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 ring-1 ring-slate-200/80"
                       aria-hidden
                     >
                       <Monitor className="h-6 w-6" strokeWidth={1.75} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold uppercase tracking-[0.1em] text-slate-500">
+                      <div className="text-xs font-semibold uppercase tracking-widest text-slate-500">
                         Free
                       </div>
-                      <div className="mt-2 text-3xl font-bold text-slate-900">$0</div>
-                      <p className="mt-1 text-sm text-slate-500">No signup needed</p>
-                      <p className="mt-1 text-sm text-slate-500">Local PDF viewer</p>
+                      <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
+                        $0
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600">No signup needed</p>
+                      <p className="mt-0.5 text-sm text-slate-500">Local PDF viewer</p>
                     </div>
                   </div>
 
-                  <ul className="mt-8 flex flex-1 flex-col gap-3">
+                  <ul className="mt-8 flex flex-1 flex-col gap-2.5">
                     {FREE_FEATURES.map((f) => (
-                      <li key={f} className="flex items-start gap-2.5 text-sm text-slate-700">
+                      <li
+                        key={f}
+                        className="flex items-start gap-3 rounded-xl px-1 py-1.5 text-sm text-slate-700"
+                      >
                         <Check
-                          className="mt-0.5 h-4 w-4 shrink-0 text-slate-400"
+                          className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
                           strokeWidth={2.5}
                         />
                         {f}
@@ -642,7 +610,7 @@ export function LandingPage() {
                   <button
                     type="button"
                     onClick={openFreePdf}
-                    className="mt-8 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                    className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
                   >
                     Open PDF Free <ArrowRight className="h-4 w-4" />
                   </button>
@@ -651,35 +619,38 @@ export function LandingPage() {
 
               {/* Pro */}
               <AnimateIn delay={200}>
-                <div className="relative flex h-full flex-col rounded-2xl border-2 border-[var(--landing-cta)] bg-white p-8 shadow-[0_20px_50px_-20px_rgba(37,99,235,0.25),var(--enterprise-shadow-card)]">
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-[var(--landing-cta)] px-4 py-1 text-xs font-semibold text-white shadow-md shadow-blue-600/30">
+                <div className="relative flex h-full flex-col rounded-3xl border-2 border-[var(--landing-cta)] bg-white p-8 shadow-[0_24px_60px_-20px_rgba(37,99,235,0.22),var(--enterprise-shadow-card)] ring-4 ring-[color-mix(in_srgb,var(--landing-cta)_12%,transparent)] sm:p-9">
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-[var(--landing-cta)] px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-blue-600/25">
                     Most Popular
                   </div>
 
                   <div className="flex items-start gap-4">
                     <div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[var(--landing-cta)]"
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_22%,transparent)]"
                       aria-hidden
                     >
                       <Cloud className="h-6 w-6" strokeWidth={1.75} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold uppercase tracking-[0.1em] text-[var(--landing-cta)]">
+                      <div className="text-xs font-semibold uppercase tracking-widest text-[var(--landing-cta)]">
                         Pro
                       </div>
-                      <div className="mt-2 text-3xl font-bold text-slate-900">
+                      <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
                         $49<span className="text-lg font-normal text-slate-500">/month</span>
                       </div>
                       <p className="mt-2 text-sm font-medium text-slate-700">8 uses</p>
-                      <p className="mt-1 text-sm text-slate-500">Everything in Free +</p>
+                      <p className="mt-0.5 text-sm text-slate-500">Everything in Free +</p>
                     </div>
                   </div>
 
-                  <ul className="mt-8 flex flex-1 flex-col gap-3">
+                  <ul className="mt-8 flex flex-1 flex-col gap-2.5">
                     {PRO_FEATURES.map((f) => (
-                      <li key={f} className="flex items-start gap-2.5 text-sm text-slate-700">
+                      <li
+                        key={f}
+                        className="flex items-start gap-3 rounded-xl px-1 py-1.5 text-sm text-slate-700"
+                      >
                         <Check
-                          className="mt-0.5 h-4 w-4 shrink-0 text-blue-500"
+                          className="mt-0.5 h-4 w-4 shrink-0 text-[var(--landing-cta)]"
                           strokeWidth={2.5}
                         />
                         {f}
@@ -689,7 +660,7 @@ export function LandingPage() {
 
                   <Link
                     href="/sign-in"
-                    className="btn-shine relative mt-8 flex w-full items-center justify-center gap-2 overflow-hidden rounded-lg bg-[var(--landing-cta)] py-3 text-sm font-semibold text-white transition hover:bg-[var(--landing-cta-bright)]"
+                    className="btn-shine relative mt-8 flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[var(--landing-cta)] py-3.5 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
                   >
                     Start 14-day Trial <ArrowRight className="h-4 w-4" />
                   </Link>
@@ -701,23 +672,26 @@ export function LandingPage() {
 
         {/* ═══════════ SECTION 4 — FEATURES SHOWCASE ═══════════ */}
         <section
-          className="scroll-mt-20 border-t border-slate-200/50 bg-gradient-to-b from-slate-50/90 to-slate-100/30 py-24 sm:py-32"
+          className="landing-band-features relative scroll-mt-20 border-t border-slate-200/60 py-24 sm:py-32"
           id="features"
         >
-          <div className="mx-auto max-w-6xl px-6">
+          <div className="relative mx-auto max-w-6xl px-6">
             <AnimateIn className="text-center">
-              <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
+                Features
+              </p>
+              <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
                 Built for construction professionals
               </h2>
-              <p className="mx-auto mt-4 max-w-xl text-base text-slate-500">
+              <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
                 Every tool you need to manage drawings, issues, and RFIs — in one platform.
               </p>
             </AnimateIn>
 
             {/* Feature 1 — Viewer (image left, text right) */}
-            <AnimateIn className="mt-20 grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+            <AnimateIn className="mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
               <BrowserMockup>
-                <div className="relative aspect-[4/3] overflow-hidden">
+                <div className="relative aspect-4/3 overflow-hidden">
                   <Image
                     src="/images/measure.png"
                     alt="PlanSync free PDF viewer with measurement tools"
@@ -726,18 +700,18 @@ export function LandingPage() {
                   />
                 </div>
               </BrowserMockup>
-              <div>
+              <div className="lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
                 <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                   The most powerful free plan viewer
                 </h3>
-                <p className="mt-4 text-base leading-relaxed text-slate-500">
+                <p className="mt-4 text-base leading-relaxed text-slate-600">
                   Open any PDF instantly in your browser. Calibrate scale, measure distances and
                   areas, annotate, and export — all locally. No files leave your device. Ever.
                 </p>
                 <button
                   type="button"
                   onClick={openFreePdf}
-                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 transition hover:text-blue-700"
+                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
                 >
                   Try the free viewer <ArrowRight className="h-4 w-4" />
                 </button>
@@ -745,25 +719,25 @@ export function LandingPage() {
             </AnimateIn>
 
             {/* Feature 2 — Issues (text left, image right) */}
-            <AnimateIn className="mt-24 grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-              <div className="order-2 lg:order-1">
+            <AnimateIn className="mt-24 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+              <div className="order-2 lg:order-1 lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
                 <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                   Pin issues directly on the drawing
                 </h3>
-                <p className="mt-4 text-base leading-relaxed text-slate-500">
+                <p className="mt-4 text-base leading-relaxed text-slate-600">
                   Click anywhere on a plan to drop an issue pin. Assign it, set priority, attach
                   photos. Your team gets notified instantly. Track from Open to Resolved without
                   leaving PlanSync.
                 </p>
                 <Link
                   href="/sign-in"
-                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 transition hover:text-blue-700"
+                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
                 >
                   See how issues work <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
               <BrowserMockup className="order-1 lg:order-2">
-                <div className="relative aspect-[4/3] overflow-hidden">
+                <div className="relative aspect-4/3 overflow-hidden">
                   <Image
                     src="/images/markup.png"
                     alt="PlanSync issue pins on a construction drawing"
@@ -775,55 +749,57 @@ export function LandingPage() {
             </AnimateIn>
 
             {/* Feature 3 — RFIs (image left, text right) */}
-            <AnimateIn className="mt-24 grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                  <span className="text-sm font-semibold text-slate-900">RFIs</span>
-                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600">
-                    3 Open
-                  </span>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {[
-                    { num: "001", title: "Wall thickness?", status: "Open", color: "bg-red-500" },
-                    {
-                      num: "002",
-                      title: "Door spec change",
-                      status: "Answered",
-                      color: "bg-green-500",
-                    },
-                    {
-                      num: "003",
-                      title: "Rebar spacing",
-                      status: "Pending",
-                      color: "bg-yellow-500",
-                    },
-                  ].map((rfi) => (
-                    <div
-                      key={rfi.num}
-                      className="flex items-center gap-3 rounded-lg border border-slate-100 p-3"
-                    >
-                      <span className="text-xs font-mono text-slate-400">#{rfi.num}</span>
-                      <span className="flex-1 text-sm text-slate-700">{rfi.title}</span>
-                      <div className="flex items-center gap-1.5">
-                        <div className={`h-2 w-2 rounded-full ${rfi.color}`} />
-                        <span className="text-xs text-slate-500">{rfi.status}</span>
+            <AnimateIn className="mt-24 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+              <BrowserMockup>
+                <div className="p-5 sm:p-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <span className="text-sm font-semibold text-slate-900">RFIs</span>
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 ring-1 ring-blue-100">
+                      3 open
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-2.5">
+                    {[
+                      { num: "001", title: "Wall thickness?", status: "Open", color: "bg-red-500" },
+                      {
+                        num: "002",
+                        title: "Door spec change",
+                        status: "Answered",
+                        color: "bg-green-500",
+                      },
+                      {
+                        num: "003",
+                        title: "Rebar spacing",
+                        status: "Pending",
+                        color: "bg-yellow-500",
+                      },
+                    ].map((rfi) => (
+                      <div
+                        key={rfi.num}
+                        className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3 transition hover:border-slate-200 hover:bg-white"
+                      >
+                        <span className="text-xs font-mono text-slate-400">#{rfi.num}</span>
+                        <span className="min-w-0 flex-1 text-sm text-slate-700">{rfi.title}</span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <div className={`h-2 w-2 rounded-full ${rfi.color}`} />
+                          <span className="text-xs text-slate-500">{rfi.status}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div>
+              </BrowserMockup>
+              <div className="lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
                 <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                   Formal RFIs in seconds
                 </h3>
-                <p className="mt-4 text-base leading-relaxed text-slate-500">
+                <p className="mt-4 text-base leading-relaxed text-slate-600">
                   Convert any issue into a formal RFI. Track responses, attach drawings, and close
                   them out — all in one place. No more RFIs buried in email threads.
                 </p>
                 <Link
                   href="/sign-in"
-                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 transition hover:text-blue-700"
+                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
                 >
                   Start Pro Trial <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -831,24 +807,24 @@ export function LandingPage() {
             </AnimateIn>
 
             {/* Feature 4 — Takeoff (text left, image right) */}
-            <AnimateIn className="mt-24 grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-              <div className="order-2 lg:order-1">
+            <AnimateIn className="mt-24 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+              <div className="order-2 lg:order-1 lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
                 <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                   Measure once. Take off everywhere.
                 </h3>
-                <p className="mt-4 text-base leading-relaxed text-slate-500">
+                <p className="mt-4 text-base leading-relaxed text-slate-600">
                   Draw measurement zones directly on your drawings. PlanSync calculates quantities
                   automatically. Export to CSV or PDF in one click.
                 </p>
                 <Link
                   href="/sign-in"
-                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 transition hover:text-blue-700"
+                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
                 >
                   Start Pro Trial <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
               <BrowserMockup className="order-1 lg:order-2">
-                <div className="relative aspect-[4/3] overflow-hidden">
+                <div className="relative aspect-4/3 overflow-hidden">
                   <Image
                     src="/images/calibrate.png"
                     alt="PlanSync quantity takeoff with colored zones on a construction drawing"
@@ -863,25 +839,31 @@ export function LandingPage() {
 
         {/* ═══════════ SECTION 5 — FAQ ═══════════ */}
         <section
-          className="scroll-mt-20 border-t border-slate-200/50 bg-[var(--enterprise-bg)] py-24 sm:py-32"
+          className="relative scroll-mt-20 border-t border-slate-200/60 bg-[var(--enterprise-bg)] py-24 sm:py-32"
           id="faq"
         >
           <div className="mx-auto max-w-3xl px-6">
             <AnimateIn className="text-center">
-              <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
+                FAQ
+              </p>
+              <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
                 Frequently asked questions
               </h2>
+              <p className="mx-auto mt-3 max-w-lg text-sm text-slate-600 sm:text-base">
+                Billing, storage, and how Free vs Pro works.
+              </p>
             </AnimateIn>
 
-            <div className="mt-14">
+            <div className="mt-12 rounded-2xl border border-slate-200/90 bg-white p-1 shadow-[var(--enterprise-shadow-card)] sm:mt-14 sm:p-2">
               {LANDING_FAQ.map((item, i) => (
-                <AnimateIn key={item.q} delay={i * 50}>
-                  <details className="group border-b border-slate-200 last:border-0">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-left text-[15px] font-semibold text-slate-900 transition-colors hover:text-[var(--landing-cta)] sm:py-6 [&::-webkit-details-marker]:hidden">
+                <AnimateIn key={item.q} delay={i * 40}>
+                  <details className="group border-b border-slate-100 last:border-0 first:rounded-t-xl last:rounded-b-xl open:bg-slate-50/50">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-4 text-left text-[15px] font-semibold text-slate-900 transition-colors hover:text-[var(--landing-cta)] sm:px-5 sm:py-5 [&::-webkit-details-marker]:hidden">
                       {item.q}
-                      <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" />
+                      <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180 group-open:text-[var(--landing-cta)]" />
                     </summary>
-                    <p className="pb-5 pr-8 text-sm leading-relaxed text-slate-500 sm:pb-6">
+                    <p className="px-4 pb-4 pr-10 text-sm leading-relaxed text-slate-600 sm:px-5 sm:pb-5">
                       {item.a}
                     </p>
                   </details>
@@ -892,10 +874,36 @@ export function LandingPage() {
         </section>
 
         {/* ═══════════ SECTION 6 — FINAL CTA ═══════════ */}
-        <section id="cta" className="relative scroll-mt-20 overflow-hidden bg-[#0F172A]">
-          {/* Grid pattern */}
+        <section
+          id="cta"
+          className="relative isolate scroll-mt-20 min-h-[26rem] overflow-hidden border-t border-white/[0.06] sm:min-h-[30rem]"
+        >
+          <div className="pointer-events-none absolute inset-0" aria-hidden>
+            <Image
+              src="/images/cta/CTA-constraction.jpg"
+              alt=""
+              fill
+              sizes="100vw"
+              className="object-cover object-[center_32%] sm:object-[center_30%]"
+              quality={85}
+            />
+          </div>
+          {/* Top: photo reads clearly; bottom ~half ramps to deep slate (content sits in dark band) */}
           <div
-            className="pointer-events-none absolute inset-0 opacity-[0.04]"
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.2)_0%,rgba(15,23,42,0.28)_22%,rgba(15,23,42,0.42)_45%,rgba(15,23,42,0.78)_72%,rgba(2,6,23,0.97)_100%)]"
+            aria-hidden
+          />
+          {/* Brand: subtle blue only in lower third — ties to app primary without muddying the whole frame */}
+          <div
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,transparent_52%,rgba(37,99,235,0.14)_100%)]"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute inset-0 shadow-[inset_0_0_80px_rgba(0,0,0,0.2),inset_0_-100px_140px_rgba(0,0,0,0.55)]"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.035]"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M60 0H0v60' fill='none' stroke='%23ffffff' stroke-width='0.5'/%3E%3C/svg%3E")`,
               backgroundSize: "60px 60px",
@@ -903,12 +911,12 @@ export function LandingPage() {
             aria-hidden
           />
 
-          <div className="relative mx-auto max-w-3xl px-6 py-24 text-center sm:py-32">
+          <div className="relative z-10 mx-auto max-w-3xl px-6 py-24 text-center sm:px-8 sm:py-32 md:py-36">
             <AnimateIn>
-              <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              <h2 className="text-3xl font-bold tracking-tight text-blue-50 drop-shadow-[0_1px_20px_rgba(37,99,235,0.2)] sm:text-4xl">
                 Start for free today
               </h2>
-              <p className="mx-auto mt-5 max-w-lg text-base leading-relaxed text-slate-400">
+              <p className="mx-auto mt-5 max-w-lg text-base leading-relaxed text-blue-100/85">
                 Open a PDF in seconds — no signup needed.
                 <br />
                 Upgrade to Pro when your team is ready.
@@ -918,19 +926,19 @@ export function LandingPage() {
                 <button
                   type="button"
                   onClick={openFreePdf}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white px-7 py-3.5 text-base font-semibold text-slate-900 transition hover:bg-slate-100 active:scale-[0.98]"
+                  className="inline-flex items-center gap-2 rounded-xl bg-[var(--landing-cta)] px-7 py-3.5 text-base font-semibold text-[var(--landing-cta-text)] shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] transition hover:bg-[var(--landing-cta-bright)] hover:shadow-[color-mix(in_srgb,var(--landing-cta)_38%,transparent)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--landing-cta)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
                   Open PDF Free <ArrowRight className="h-4 w-4" />
                 </button>
                 <Link
                   href="/sign-in"
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-600 bg-transparent px-7 py-3.5 text-base font-semibold text-white transition hover:border-slate-500 hover:bg-white/5"
+                  className="inline-flex items-center gap-2 rounded-xl border-2 border-white/90 bg-white/[0.07] px-7 py-3.5 text-base font-semibold text-white backdrop-blur-sm transition hover:border-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
                   Start Pro Trial
                 </Link>
               </div>
 
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-blue-200/70">
                 <span>No installation</span>
                 <span className="hidden sm:inline">&middot;</span>
                 <span>No credit card</span>
@@ -941,7 +949,7 @@ export function LandingPage() {
       </main>
 
       {/* ═══════════ SECTION 7 — FOOTER ═══════════ */}
-      <footer className="bg-[#0F172A] text-white">
+      <footer className="border-t border-slate-800/80 bg-[#0F172A] text-white">
         <div className="mx-auto max-w-6xl px-6 pt-16 pb-8 sm:pt-20">
           <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
             {/* Brand */}
@@ -950,12 +958,12 @@ export function LandingPage() {
                 <Image
                   src="/logo.svg"
                   alt=""
-                  width={28}
-                  height={28}
-                  className="h-7 w-7 shrink-0"
+                  width={32}
+                  height={32}
+                  className="h-8 w-8 shrink-0"
                   unoptimized
                 />
-                <span className="text-base font-bold">PlanSync</span>
+                <span className="text-base font-bold tracking-tight">PlanSync</span>
               </div>
               <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-400">
                 The construction drawing workspace for teams who can&apos;t afford to work off the

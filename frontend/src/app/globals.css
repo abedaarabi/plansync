@@ -247,6 +247,24 @@ body {
     linear-gradient(180deg, #f8fafc 0%, #f1f5f9 55%, #eef2f7 100%);
 }
 
+/* Below-hero landing sections — depth without noise */
+.landing-band-white {
+  background:
+    radial-gradient(ellipse 85% 55% at 50% -25%, rgba(37, 99, 235, 0.055), transparent 50%),
+    linear-gradient(180deg, #ffffff 0%, #fafbfc 55%, #f4f6f9 100%);
+}
+.landing-band-pricing {
+  background:
+    radial-gradient(ellipse 100% 60% at 50% 0%, rgba(37, 99, 235, 0.065), transparent 55%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 45%, #eef2f6 100%);
+}
+.landing-band-features {
+  background:
+    radial-gradient(ellipse 70% 45% at 100% 0%, rgba(59, 130, 246, 0.05), transparent 45%),
+    radial-gradient(ellipse 55% 40% at 0% 80%, rgba(99, 102, 241, 0.04), transparent 42%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 50%, #eef2f7 100%);
+}
+
 /* Premium dot grid for hero/CTA sections */
 .landing-dots {
   background-image: radial-gradient(
@@ -516,6 +534,30 @@ body {
 
 .enterprise-animate-in {
   animation: enterprise-fade-in 0.35s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enterprise-animate-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Projects / empty-state “add another” tiles */
+.enterprise-dashed-add {
+  border-radius: 1rem;
+  border: 2px dashed color-mix(in srgb, var(--enterprise-border) 88%, var(--enterprise-primary));
+  background: color-mix(in srgb, var(--enterprise-surface) 97%, var(--enterprise-primary-soft));
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.enterprise-dashed-add:hover {
+  border-color: color-mix(in srgb, var(--enterprise-primary) 35%, var(--enterprise-border));
+  background: color-mix(in srgb, var(--enterprise-surface) 92%, var(--enterprise-primary-soft));
+  box-shadow: var(--enterprise-shadow-xs);
 }
 
 /** Shimmer skeletons — file explorer & loading placeholders */

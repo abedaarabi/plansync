@@ -24,6 +24,7 @@ import { ProjectPicker } from "./ProjectPicker";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { fetchProjects } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
+import Image from "next/image";
 import Link from "next/link";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -113,7 +114,7 @@ export function EnterpriseTopBar({
   const projectHomeHref = projectId ? `/projects/${projectId}/home` : "/projects";
 
   return (
-    <header className="sticky top-0 z-50 flex h-[3.25rem] shrink-0 items-center justify-between gap-3 border-b border-[var(--enterprise-border-subtle)] bg-[color-mix(in_srgb,var(--enterprise-surface)_82%,transparent)] px-3 shadow-[0_1px_0_0_rgba(255,255,255,0.65)_inset] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--enterprise-surface)_72%,transparent)] sm:gap-4 sm:px-6">
+    <header className="sticky top-0 z-50 flex h-[3.25rem] shrink-0 items-center justify-between gap-3 border-b border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_88%,transparent)] px-3 shadow-[0_1px_0_0_rgba(255,255,255,0.72)_inset,0_4px_24px_-16px_rgba(15,23,42,0.06)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--enterprise-surface)_78%,transparent)] sm:gap-4 sm:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] sm:text-sm">
         {/* Mobile menu */}
         <button
@@ -145,10 +146,13 @@ export function EnterpriseTopBar({
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Link
             href="/dashboard"
-            className="hidden shrink-0 font-bold tracking-tight hover:opacity-90 sm:inline"
+            className="flex shrink-0 items-center gap-2 font-bold tracking-tight transition hover:opacity-90"
           >
-            <span className="text-[var(--enterprise-text)]">Plan</span>
-            <span className="text-[var(--enterprise-primary)]">Sync</span>
+            <Image src="/logo.svg" alt="" width={28} height={28} className="h-7 w-7 shrink-0" />
+            <span className="hidden sm:inline">
+              <span className="text-[var(--enterprise-text)]">Plan</span>
+              <span className="text-[var(--enterprise-primary)]">Sync</span>
+            </span>
           </Link>
           <div className="hidden h-4 w-px bg-[var(--enterprise-border)] sm:block" />
 

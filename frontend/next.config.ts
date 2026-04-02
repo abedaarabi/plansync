@@ -36,6 +36,8 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
+  /** Hide bottom-left dev “N” indicator in development (not shown in production). */
+  devIndicators: false,
   output: "standalone",
   /** Monorepo: trace from repo root (`frontend` sits directly under root). */
   outputFileTracingRoot: path.join(configDir, ".."),

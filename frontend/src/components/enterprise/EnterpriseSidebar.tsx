@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -235,7 +236,7 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
           className={
             ws?.logoUrl
               ? "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-500/30 bg-white ring-1 ring-black/5"
-              : "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#2563EB] text-white shadow-[0_0_24px_-4px_rgba(37,99,235,0.8)] ring-2 ring-[#3B82F6]/35"
+              : "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-white/15"
           }
           aria-hidden
         >
@@ -243,7 +244,13 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
             // eslint-disable-next-line @next/next/no-img-element
             <img src={ws.logoUrl} alt="" className="h-full w-full object-contain p-1" />
           ) : (
-            <span className="text-[13px] font-bold tracking-tight text-white">PS</span>
+            <Image
+              src="/logo.svg"
+              alt=""
+              width={36}
+              height={36}
+              className="h-9 w-9 rounded-lg object-cover"
+            />
           )}
         </div>
         <div className={`min-w-0 flex-1 leading-tight ${collapsedDesktop ? "lg:hidden" : ""}`}>

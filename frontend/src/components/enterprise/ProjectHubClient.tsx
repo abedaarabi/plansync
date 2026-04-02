@@ -316,36 +316,39 @@ export function ProjectHubClient() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--enterprise-text)]">
-          Your Projects
-        </h1>
+    <div className="space-y-8">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--enterprise-text-muted)]">
+            Workspace
+          </p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-[1.75rem]">
+            Your projects
+          </h1>
+        </div>
         {isAdmin && (
           <button
             type="button"
             onClick={() => setProjectModal(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d4ed8]"
-            style={{ borderRadius: "8px" }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] ring-1 ring-[color-mix(in_srgb,var(--enterprise-primary)_30%,transparent)] transition hover:bg-[var(--enterprise-primary-deep)] sm:shrink-0"
           >
-            <Plus className="h-4 w-4" />
-            New Project
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            New project
           </button>
         )}
-      </div>
+      </header>
 
       {sub === "trialing" && (
-        <div
-          className="flex flex-col gap-3 border border-amber-200 bg-amber-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-          style={{ borderRadius: "12px" }}
-        >
+        <div className="enterprise-alert-warning flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <Sparkles className="h-5 w-5 shrink-0 text-amber-600" />
-            <span className="text-sm font-medium text-amber-900">Trial: 14 days remaining</span>
+            <Sparkles className="h-5 w-5 shrink-0 text-[var(--enterprise-semantic-warning-text)]" />
+            <span className="text-sm font-medium text-[var(--enterprise-semantic-warning-text)]">
+              Trial: 14 days remaining
+            </span>
           </div>
           <Link
             href="/organization"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1d4ed8]"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)]"
           >
             Upgrade to Pro
             <ArrowRight className="h-3.5 w-3.5" />
@@ -354,11 +357,8 @@ export function ProjectHubClient() {
       )}
 
       {error && (
-        <div
-          className="flex items-center gap-2 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-          style={{ borderRadius: "12px" }}
-        >
-          <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+        <div className="enterprise-alert-danger flex items-center gap-2 px-4 py-3 text-sm">
+          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
           {error}
         </div>
       )}
@@ -367,20 +367,16 @@ export function ProjectHubClient() {
         {projects.map((project) => (
           <div
             key={project.id}
-            className="group flex flex-col overflow-hidden border border-[#E2E8F0] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-[#2563EB]/30 hover:shadow-[0_8px_24px_-8px_rgba(12,18,34,0.12)]"
-            style={{
-              borderRadius: "12px",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-            }}
+            className="enterprise-card enterprise-card-hover group flex flex-col overflow-hidden rounded-2xl"
           >
             <Link
               href={`/projects/${project.id}`}
-              className="flex flex-1 flex-col p-5 transition-colors hover:bg-[#FAFBFC]/80"
+              className="flex flex-1 flex-col p-5 transition-colors hover:bg-[var(--enterprise-hover-surface)]/50"
             >
               <div className="flex gap-3">
                 <ProjectLogo name={project.name} logoUrl={project.logoUrl} size={48} />
                 <div className="min-w-0 flex-1 space-y-2.5">
-                  <h3 className="truncate text-base font-semibold leading-snug text-[#0F172A]">
+                  <h3 className="truncate text-base font-semibold leading-snug text-[var(--enterprise-text)]">
                     {project.name}
                   </h3>
                   <div className="flex flex-wrap items-center gap-2">
@@ -390,7 +386,7 @@ export function ProjectHubClient() {
                     <ProjectStageBadge stage={project.stage} />
                   </div>
                   {(project.projectNumber?.trim() || project.location?.trim()) && (
-                    <p className="line-clamp-2 text-[12px] leading-relaxed text-[#64748B]">
+                    <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--enterprise-text-muted)]">
                       {[
                         project.projectNumber?.trim() && `#${project.projectNumber.trim()}`,
                         project.location?.trim(),
