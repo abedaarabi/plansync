@@ -40,14 +40,17 @@ function extractProjectIdFromPath(pathname: string): string | null {
 }
 
 function redirectToSignIn(request: NextRequest): NextResponse {
-  const signIn = new URL("/sign-in", request.url);
-  const returnTo = `${request.nextUrl.pathname}${request.nextUrl.search}`;
-  signIn.searchParams.set("next", returnTo);
+  const signIn = request.nextUrl.clone();
+  signIn.pathname = "/sign-in";
+  signIn.search = "";
+  signIn.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
   return NextResponse.redirect(signIn);
 }
 
 function redirectToNotInvited(request: NextRequest): NextResponse {
-  const denied = new URL("/not-invited", request.url);
+  const denied = request.nextUrl.clone();
+  denied.pathname = "/not-invited";
+  denied.search = "";
   denied.searchParams.set("from", `${request.nextUrl.pathname}${request.nextUrl.search}`);
   return NextResponse.redirect(denied);
 }
@@ -55,7 +58,7 @@ function redirectToNotInvited(request: NextRequest): NextResponse {
 type SessionPayload = { user?: unknown; session?: unknown } | null;
 
 async function canAccessProject(request: NextRequest, projectId: string): Promise<boolean> {
-  const url = new URL(`/api/v1/projects/${encodeURIComponent(projectId)}`, request.url);
+  const url = new URL(`/api/v1/projects/${encodeURIComponent(projectId)}`, request.nextUrl.origin);
   try {
     const res = await fetch(url, {
       headers: { cookie: request.headers.get("cookie") ?? "" },
@@ -72,7 +75,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const sessionUrl = new URL("/api/auth/get-session", request.url);
+  const sessionUrl = new URL("/api/auth/get-session", request.nextUrl.origin);
   let res: Response;
   try {
     res = await fetch(sessionUrl, {
