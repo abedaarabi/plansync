@@ -15,6 +15,7 @@ const repoRoot = resolve(backendRoot, "..");
 config({ path: resolve(repoRoot, ".env") });
 config({ path: resolve(repoRoot, ".env.prod") });
 config({ path: resolve(backendRoot, ".env") });
+config({ path: resolve(repoRoot, ".env.local"), override: true });
 
 const result = spawnSync(
   "npx",

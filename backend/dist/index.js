@@ -3,10 +3,11 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Monorepo root — `.env` then `.env.prod` (shared with Next / Prisma)
+// Monorepo root — `.env`, `.env.prod`, `backend/.env`, then `.env.local` (local overrides)
 config({ path: resolve(__dirname, "../../.env") });
 config({ path: resolve(__dirname, "../../.env.prod") });
 config({ path: resolve(__dirname, "../.env") });
+config({ path: resolve(__dirname, "../../.env.local"), override: true });
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -30,5 +31,7 @@ app.route("/api/stripe", stripeRoutes(env));
 app.route("/api/v1", v1Routes(auth, env));
 app.get("/", (c) => c.json({ ok: true, service: "plansync-api" }));
 serve({ fetch: app.fetch, port: env.PORT }, (info) => {
-    console.log(`API listening on http://localhost:${info.port}`);
+    // Inside Docker this is the container port; Traefik/DNS expose PUBLIC_API_URL / api host.
+    const publicApi = env.PUBLIC_API_URL?.trim() || "(unset — set PUBLIC_API_URL or NEXT_PUBLIC_API_URL in compose)";
+    console.log(`API listening on :${info.port} (public API origin: ${publicApi}; app: ${env.PUBLIC_APP_URL})`);
 });

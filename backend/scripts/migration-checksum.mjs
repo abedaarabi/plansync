@@ -13,14 +13,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const backendRoot = resolve(__dirname, "..");
-const name =
-  process.argv[2] || "20260330110000_add_file_folder_key";
-const sqlPath = resolve(
-  backendRoot,
-  "prisma/migrations",
-  name,
-  "migration.sql",
-);
+const name = process.argv[2] || "20260330110000_add_file_folder_key";
+const sqlPath = resolve(backendRoot, "prisma/migrations", name, "migration.sql");
 
 const buf = readFileSync(sqlPath);
 const checksum = createHash("sha256").update(buf).digest("hex");

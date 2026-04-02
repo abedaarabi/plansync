@@ -14,10 +14,11 @@ const repoRoot = resolve(backendRoot, "..");
 config({ path: resolve(repoRoot, ".env") });
 config({ path: resolve(repoRoot, ".env.prod") });
 config({ path: resolve(backendRoot, ".env") });
+config({ path: resolve(repoRoot, ".env.local"), override: true });
 
 const url = process.env.DATABASE_URL;
 if (!url) {
-  console.error("DATABASE_URL is not set (check repo root .env / .env.prod).");
+  console.error("DATABASE_URL is not set (check repo root .env / .env.prod / .env.local).");
   process.exit(1);
 }
 

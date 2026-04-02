@@ -12,23 +12,23 @@ datasource db {
 // --- Better Auth (core) — keep in sync with better-auth prisma adapter ---
 
 model User {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  email         String   @unique
+  emailVerified Boolean  @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   sessions Session[]
   accounts Account[]
 
   workspaceMembers WorkspaceMember[]
   projectMembers   ProjectMember[]
-  emailInvitesSent EmailInvite[] @relation("EmailInviteInviter")
-  activityLogs     ActivityLog[] @relation("ActivityActor")
-  issuesAssigned   Issue[]       @relation("IssueAssignee")
-  issuesCreated    Issue[]       @relation("IssueCreator")
+  emailInvitesSent EmailInvite[]     @relation("EmailInviteInviter")
+  activityLogs     ActivityLog[]     @relation("ActivityActor")
+  issuesAssigned   Issue[]           @relation("IssueAssignee")
+  issuesCreated    Issue[]           @relation("IssueCreator")
   fileVersions     FileVersion[]
 }
 
@@ -77,9 +77,9 @@ model Verification {
 // --- PlanSync domain ---
 
 model Workspace {
-  id     String @id @default(cuid())
-  name   String
-  slug   String @unique
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
 
   /// Public org branding (dashboard, invites, sidebar)
   logoUrl     String?
@@ -90,20 +90,20 @@ model Workspace {
   storageQuotaBytes BigInt @default(10737418240)
   storageUsedBytes  BigInt @default(0)
 
-  stripeCustomerId     String? @unique
-  stripeSubscriptionId String? @unique
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
   subscriptionStatus   String? // active | canceled | past_due | trialing | incomplete | null = free/manual
   currentPeriodEnd     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members   WorkspaceMember[]
-  invites   WorkspaceInvite[]
+  members      WorkspaceMember[]
+  invites      WorkspaceInvite[]
   emailInvites EmailInvite[]
-  projects  Project[]
-  activity  ActivityLog[]
-  issues    Issue[]
+  projects     Project[]
+  activity     ActivityLog[]
+  issues       Issue[]
 
   materialCategories MaterialCategory[]
   materials          Material[]
@@ -112,14 +112,14 @@ model Workspace {
 
 /// Grouping label (e.g. Concrete, Steel, Finishes). Unique per workspace (case-insensitive via nameKey).
 model MaterialCategory {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
   workspaceId String
   name        String
   nameKey     String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   materials   Material[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@unique([workspaceId, nameKey])
   @@index([workspaceId])
@@ -127,15 +127,15 @@ model MaterialCategory {
 
 /// Workspace materials catalog (for estimates, takeoff references, procurement).
 model Material {
-  id            String   @id @default(cuid())
+  id            String           @id @default(cuid())
   workspaceId   String
   categoryId    String
   name          String
   nameKey       String
   sku           String?
-  unit          String   @default("ea")
-  unitPrice     Decimal? @db.Decimal(19, 2)
-  currency      String   @default("USD")
+  unit          String           @default("ea")
+  unitPrice     Decimal?         @db.Decimal(19, 2)
+  currency      String           @default("USD")
   supplier      String?
   manufacturer  String?
   specification String?
@@ -143,8 +143,8 @@ model Material {
   workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   category      MaterialCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   takeoffLines  TakeoffLine[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   @@unique([workspaceId, categoryId, nameKey])
   @@index([workspaceId])
@@ -172,7 +172,7 @@ enum WorkspaceRole {
 
 /// 1 admin + up to 3 members = 4 (product rule; enforce in API)
 model WorkspaceMember {
-  id          String @id @default(cuid())
+  id          String        @id @default(cuid())
   workspaceId String
   userId      String
   role        WorkspaceRole @default(MEMBER)
@@ -201,18 +201,18 @@ model ProjectMember {
 
 /// Email invite with optional project scope (Resend). Accepted users become workspace members + ProjectMember rows when scoped.
 model EmailInvite {
-  id          String    @id @default(cuid())
-  token       String    @unique
+  id          String        @id @default(cuid())
+  token       String        @unique
   workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   email       String
   invitedById String
-  invitedBy   User      @relation("EmailInviteInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+  invitedBy   User          @relation("EmailInviteInviter", fields: [invitedById], references: [id], onDelete: Cascade)
   role        WorkspaceRole @default(MEMBER)
   expiresAt   DateTime
   revokedAt   DateTime?
   acceptedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime      @default(now())
 
   projects EmailInviteProject[]
 
@@ -251,15 +251,15 @@ model Project {
   /// Local currency budget amount.
   localBudget   Decimal? @db.Decimal(19, 2)
   /// e.g. square footage, floors, or scope summary.
-  projectSize String?
+  projectSize   String?
   /// e.g. Commercial, Residential, Infrastructure.
-  projectType String?
+  projectType   String?
   /// Site or city (optional).
-  location  String?
+  location      String?
   /// Project or client website (https). Used to resolve a favicon for the project logo.
-  websiteUrl String?
+  websiteUrl    String?
   /// Cached favicon image URL (typically Google favicons service for `websiteUrl` hostname).
-  logoUrl    String?
+  logoUrl       String?
 
   stage           ProjectStage @default(NOT_STARTED)
   /// Overall completion 0–100 (manual; not tied strictly to `stage`).
@@ -269,17 +269,17 @@ model Project {
   /// Planned project end date.
   endDate         DateTime?
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  projectMembers ProjectMember[]
+  workspace           Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectMembers      ProjectMember[]
   emailInviteProjects EmailInviteProject[]
-  folders   Folder[]
-  files     File[]
-  issues    Issue[]
-  takeoffLines TakeoffLine[]
-  rfis      Rfi[]
-  punchItems PunchItem[]
-  fieldReports FieldReport[]
-  auditLogs ActivityLog[]
+  folders             Folder[]
+  files               File[]
+  issues              Issue[]
+  takeoffLines        TakeoffLine[]
+  rfis                Rfi[]
+  punchItems          PunchItem[]
+  fieldReports        FieldReport[]
+  auditLogs           ActivityLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -288,15 +288,15 @@ model Project {
 }
 
 model Folder {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   projectId String
   name      String
   parentId  String?
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent  Folder? @relation("FolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: SetNull)
   children Folder[] @relation("FolderTree")
-  files   File[]
+  files    File[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -305,23 +305,23 @@ model Folder {
 }
 
 model File {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   projectId String
   folderId  String?
   /// Same as `folderId` when set; `""` when file is in project root (enforces one logical file per name per folder).
-  folderKey String @default("")
+  folderKey String  @default("")
   name      String
-  mimeType  String @default("application/pdf")
+  mimeType  String  @default("application/pdf")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   folder  Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
-  versions FileVersion[]
-  issues   Issue[]
+  versions     FileVersion[]
+  issues       Issue[]
   takeoffLines TakeoffLine[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   /// Last time the file was opened in the viewer (any version)
   lastOpenedAt DateTime?
 
@@ -330,16 +330,16 @@ model File {
 }
 
 model FileVersion {
-  id          String @id @default(cuid())
-  fileId      String
-  version     Int
-  s3Key       String
-  sizeBytes   BigInt
-  sha256      String?
-  label       String?
+  id           String  @id @default(cuid())
+  fileId       String
+  version      Int
+  s3Key        String
+  sizeBytes    BigInt
+  sha256       String?
+  label        String?
   uploadedById String?
 
-  file       File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  file       File  @relation(fields: [fileId], references: [id], onDelete: Cascade)
   uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
   annotationBlob Json? /// persisted Zustand-compatible annotation JSON per version
@@ -347,8 +347,8 @@ model FileVersion {
   lockedAt       DateTime?
   lockExpiresAt  DateTime?
 
-  createdAt DateTime @default(now())
-  issues    Issue[]
+  createdAt    DateTime      @default(now())
+  issues       Issue[]
   takeoffLines TakeoffLine[]
 
   @@unique([fileId, version])
@@ -377,7 +377,7 @@ model Issue {
 
   title       String
   description String?
-  status      IssueStatus @default(OPEN)
+  status      IssueStatus   @default(OPEN)
   priority    IssuePriority @default(MEDIUM)
   startDate   DateTime?
   dueDate     DateTime?
@@ -396,12 +396,12 @@ model Issue {
   assigneeId String?
   creatorId  String?
 
-  workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  file       File       @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  file        File        @relation(fields: [fileId], references: [id], onDelete: Cascade)
   fileVersion FileVersion @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
-  assignee   User?      @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  creator    User?      @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  assignee    User?       @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  creator     User?       @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -414,15 +414,15 @@ model Issue {
 
 /// Quantity takeoff line for a specific sheet revision (Pro).
 model TakeoffLine {
-  id            String @id @default(cuid())
+  id            String   @id @default(cuid())
   workspaceId   String
   projectId     String
   fileId        String
   fileVersionId String
   materialId    String?
-  label         String @default("")
-  quantity      Decimal @db.Decimal(19, 4)
-  unit          String  @default("ea")
+  label         String   @default("")
+  quantity      Decimal  @db.Decimal(19, 4)
+  unit          String   @default("ea")
   notes         String?
   /// Viewer zone id for upsert when publishing quantities from the sheet.
   sourceZoneId  String?
@@ -452,17 +452,17 @@ enum RfiStatus {
 }
 
 model Rfi {
-  id          String    @id @default(cuid())
-  projectId   String
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
-  status      RfiStatus @default(OPEN)
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  status         RfiStatus @default(OPEN)
   fromDiscipline String?
-  dueDate     DateTime?
-  risk        String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  dueDate        DateTime?
+  risk           String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([projectId])
 }
@@ -481,16 +481,16 @@ enum PunchStatus {
 }
 
 model PunchItem {
-  id          String        @id @default(cuid())
-  projectId   String
-  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  location    String
-  trade       String
-  priority    PunchPriority @default(P2)
-  status      PunchStatus   @default(OPEN)
-  notes       String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id        String        @id @default(cuid())
+  projectId String
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  location  String
+  trade     String
+  priority  PunchPriority @default(P2)
+  status    PunchStatus   @default(OPEN)
+  notes     String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
   @@index([projectId])
 }
@@ -542,7 +542,7 @@ enum ActivityType {
 }
 
 model ActivityLog {
-  id          String @id @default(cuid())
+  id          String       @id @default(cuid())
   workspaceId String
   /// When set, this event is scoped to a project (audit log / export).
   projectId   String?

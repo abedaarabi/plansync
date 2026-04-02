@@ -3,6 +3,8 @@
 - **`frontend/`** — Next.js 16 app (marketing, local PDF viewer, enterprise shell, PWA).
 - **`backend/`** — Hono API and **Prisma** schema (`backend/prisma/`), Better Auth, Stripe webhooks, S3 presigns, workspaces/projects/files/issues, audit log, sheet locks, storage alerts (Resend).
 
+**Full developer guide** (architecture, environments, Prisma, troubleshooting): [docs/getting-started.md](docs/getting-started.md). **CI** runs `npm run check` on PRs and pushes (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
 ## Quick start
 
 1. **Postgres** (Docker):
@@ -18,12 +20,16 @@
    - `CORS_ORIGIN=http://localhost:3000`
    - `PUBLIC_APP_URL=http://localhost:3000`
 
-3. **Database schema** — put `DATABASE_URL` in the **repo root** `.env` or `.env.prod` (Prisma and the seed script load both). Then:
+   If `.env` already points at a remote database but you want **local Docker Postgres** for development, add a repo root **`.env.local`** (gitignored) with only `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/plansync`. It is loaded after `.env` / `.env.prod` and overrides `DATABASE_URL`.
+
+3. **Database schema** — put `DATABASE_URL` in the **repo root** `.env`, `.env.prod`, or `.env.local` (Prisma and the seed script load all three in that order). Then:
 
    ```bash
    npm run db:generate
    npm run db:push
    ```
+
+   **Scripts** — `db:local:*` (studio, generate, push, migrate) use `.env.local` when present. **`db:prod:*`** (generate, push, studio, `migrate:deploy`) set `PRISMA_SKIP_LOCAL` so only `.env` / `.env.prod` apply—use for CI or when targeting a remote DB while `.env.local` exists.
 
    Optional **dev seed** (email/password user + a workspace with `subscriptionStatus=active`, no Stripe):
 
@@ -53,18 +59,20 @@
 
 ## Scripts
 
-| Script                      | Description                                           |
-| --------------------------- | ----------------------------------------------------- |
-| `npm run dev`               | Next (3000) + Hono API (8787) via `concurrently`      |
-| `npm run dev:frontend`      | Next only                                             |
-| `npm run dev:backend`       | Hono API only                                         |
-| `npm run check`             | lint + typecheck + format:check + db:generate + build |
-| `npm run db:push`           | `prisma db push`                                      |
-| `npm run db:migrate`        | `prisma migrate dev`                                  |
-| `npm run db:migrate:deploy` | `prisma migrate deploy` (production / CI)             |
-| `npm run db:generate`       | Generate Prisma client                                |
-| `npm run db:validate`       | `prisma validate`                                     |
-| `npm run db:seed`           | Dev user + Pro workspace (see seed script)            |
+| Script                      | Description                                                                   |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `npm run dev`               | Next (3000) + Hono API (8787) via `concurrently`                              |
+| `npm run dev:frontend`      | Next only                                                                     |
+| `npm run dev:backend`       | Hono API only                                                                 |
+| `npm run test`              | Vitest — backend + frontend unit / smoke tests                                |
+| `npm run check`             | lint + typecheck + format + **test** + db:precommit + build (run before prod) |
+| `npm run db:push`           | `prisma db push`                                                              |
+| `npm run db:migrate`        | `prisma migrate dev`                                                          |
+| `npm run db:migrate:deploy` | `prisma migrate deploy` (production / CI)                                     |
+| `npm run db:generate`       | Generate Prisma client                                                        |
+| `npm run db:validate`       | `prisma validate`                                                             |
+| `npm run db:precommit`      | validate + `format --check` + `generate` (also runs on commit)                |
+| `npm run db:seed`           | Dev user + Pro workspace (see seed script)                                    |
 
 ## S3 (cloud PDF storage)
 
@@ -75,4 +83,4 @@ Optional. Set `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `S
 - **Local Postgres only:** `docker compose up -d` (root `docker-compose.yml`).
 - **Full stack (Next + API + Postgres):** use [`docker-compose.deploy.yml`](docker-compose.deploy.yml) — build context is the **repo root**. See [docs/deploy-dokploy.md](docs/deploy-dokploy.md) for env vars, migrations, and Dokploy.
 
-Pre-commit (Husky): **lint-staged** (ESLint + Prettier on staged files), then **typecheck** all workspaces, then **`db:validate`**.
+Pre-commit (Husky): **lint-staged**, then **typecheck**, then **`npm run test`**, then **`db:precommit`** (Prisma validate, **`format --check`**, **`generate`**).

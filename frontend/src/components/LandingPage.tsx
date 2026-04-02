@@ -189,8 +189,8 @@ function BrowserMockup({
 
 export function LandingPage() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const setPdf = useViewerStore((s) => s.setPdf);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const { data: me } = useQuery({
     queryKey: qk.me(),
@@ -202,24 +202,30 @@ export function LandingPage() {
   const blockLocalPdf = meHasProWorkspace(me ?? null);
   const isLoggedIn = !!me?.user;
 
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [annual, setAnnual] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
   const handleFileChange = useCallback(
     (files: FileList | null) => {
       if (blockLocalPdf || !files) return;
       const pdf = Array.from(files).find(isPdfFile);
       if (!pdf) return;
+      setMobileOpen(false);
       const url = URL.createObjectURL(pdf);
       setPdf(url, pdf.name, pdf.size);
       router.push("/viewer");
     },
-    [blockLocalPdf, setPdf, router],
+    [blockLocalPdf, setPdf, router, setMobileOpen],
   );
 
-  /* mobile menu */
-  const [mobileOpen, setMobileOpen] = useState(false);
-  /* pricing toggle */
-  const [annual, setAnnual] = useState(false);
-  /* navbar scroll */
-  const [scrolled, setScrolled] = useState(false);
+  function openFreePdf() {
+    if (blockLocalPdf) {
+      router.push("/projects");
+      return;
+    }
+    pdfInputRef.current?.click();
+  }
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -227,24 +233,19 @@ export function LandingPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const openFreePdf = () => {
-    if (blockLocalPdf) {
-      router.push("/projects");
-    } else {
-      fileInputRef.current?.click();
-    }
-  };
-
   return (
     <div className="min-h-screen bg-white">
       {/* Hidden file input */}
       <input
-        ref={fileInputRef}
+        ref={pdfInputRef}
         id={LANDING_PDF_INPUT_ID}
         type="file"
-        accept="application/pdf,.pdf"
-        className="hidden"
-        onChange={(e) => handleFileChange(e.target.files)}
+        accept=".pdf,application/pdf"
+        className="sr-only"
+        onChange={(e) => {
+          handleFileChange(e.target.files);
+          e.target.value = "";
+        }}
       />
 
       {/* ═══════════ SECTION 1 — NAV ═══════════ */}

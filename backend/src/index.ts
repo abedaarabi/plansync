@@ -4,10 +4,11 @@ import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Monorepo root — `.env` then `.env.prod` (shared with Next / Prisma)
+// Monorepo root — `.env`, `.env.prod`, `backend/.env`, then `.env.local` (local overrides)
 config({ path: resolve(__dirname, "../../.env") });
 config({ path: resolve(__dirname, "../../.env.prod") });
 config({ path: resolve(__dirname, "../.env") });
+config({ path: resolve(__dirname, "../../.env.local"), override: true });
 
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";

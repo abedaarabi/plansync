@@ -1,6 +1,6 @@
 /**
  * Dev seed: Better Auth user (email/password) + workspace with Pro status (no Stripe).
- * Requires DATABASE_URL (e.g. repo root `.env` or `backend/.env`).
+ * Requires DATABASE_URL (e.g. repo root `.env`, `.env.local`, or `backend/.env`).
  *
  *   SEED_USER_EMAIL     default dev@plansync.local
  *   SEED_USER_PASSWORD  default devpassword123
@@ -17,6 +17,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: resolve(__dirname, "../../.env") });
 loadEnv({ path: resolve(__dirname, "../../.env.prod") });
 loadEnv({ path: resolve(__dirname, "../.env") });
+loadEnv({ path: resolve(__dirname, "../../.env.local"), override: true });
 
 const prisma = new PrismaClient();
 
@@ -28,7 +29,7 @@ async function main() {
 
   if (!process.env.DATABASE_URL) {
     throw new Error(
-      "DATABASE_URL is not set. Add it to the repo root `.env` or `backend/.env` (same URL you use for Postgres).",
+      "DATABASE_URL is not set. Add it to the repo root `.env` or `.env.local` or `backend/.env` (same URL you use for Postgres).",
     );
   }
 

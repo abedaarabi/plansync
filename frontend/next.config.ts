@@ -6,9 +6,10 @@ import withPWAInit from "@ducanh2912/next-pwa";
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(configDir, "..");
-/** Repo root env — load `.env`, then optional `.env.prod` overrides (same as backend / Prisma scripts). */
+/** Repo root env — `.env`, `.env.prod`, then `.env.local` (local overrides; same order as backend / Prisma). */
 loadEnv({ path: path.join(repoRoot, ".env") });
 loadEnv({ path: path.join(repoRoot, ".env.prod") });
+loadEnv({ path: path.join(repoRoot, ".env.local"), override: true });
 
 const withPWA = withPWAInit({
   dest: "public",

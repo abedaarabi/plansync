@@ -15,6 +15,8 @@ function eslintInPackage(pkg, files) {
 }
 
 export default {
+  // Canonical schema before validate / format --check in the pre-commit hook
+  "backend/prisma/schema.prisma": () => "cd backend && npx prisma format",
   "frontend/**/*.{js,jsx,mjs,cjs,ts,tsx}": (files) => {
     if (!files.length) return [];
     return [

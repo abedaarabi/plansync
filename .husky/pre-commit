@@ -2,4 +2,7 @@
 set -e
 npx lint-staged
 npm run typecheck --workspaces --if-present
-npm run db:validate
+npm run test
+# Prisma: validate schema, ensure formatted, regenerate client (no DB required).
+# Full migration drift vs DB needs a shadow URL — run before deploy: npm run db:prod:migrate:deploy
+npm run db:precommit

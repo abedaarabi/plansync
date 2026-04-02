@@ -16,6 +16,7 @@ const repoRoot = path.resolve(backendRoot, "..");
 config({ path: path.join(repoRoot, ".env") });
 config({ path: path.join(repoRoot, ".env.prod") });
 config({ path: path.join(backendRoot, ".env") });
+config({ path: path.join(repoRoot, ".env.local"), override: true });
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
