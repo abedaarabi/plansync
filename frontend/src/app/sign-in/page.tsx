@@ -1,0 +1,319 @@
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { AlertCircle, ArrowRight, Loader2, Lock, Mail, User } from "lucide-react";
+import { SocialAuthButtons } from "@/components/SocialAuthButtons";
+import { authClient } from "@/lib/auth-client";
+
+const CARD_RADIUS = "16px";
+
+export default function SignInPage() {
+  const router = useRouter();
+  const [next, setNext] = useState("/dashboard");
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const q = sp.get("next");
+    if (q?.startsWith("/")) setNext(q);
+    if (sp.get("mode") === "sign-up") setMode("sign-up");
+  }, []);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setError(null);
+  }, [mode]);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      if (mode === "sign-up") {
+        const { error: err } = await authClient.signUp.email({
+          email,
+          password,
+          name: name.trim() || email.split("@")[0] || "User",
+        });
+        if (err) setError(err.message ?? "Sign up failed");
+        else {
+          const afterOnboarding = encodeURIComponent(next);
+          router.replace(
+            `/verify-email?email=${encodeURIComponent(email)}&next=${encodeURIComponent(`/onboarding?next=${afterOnboarding}`)}`,
+          );
+        }
+      } else {
+        const { error: err } = await authClient.signIn.email({ email, password });
+        if (err) setError(err.message ?? "Sign in failed");
+        else router.replace(next);
+      }
+    } catch (ex) {
+      setError(ex instanceof Error ? ex.message : "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[var(--enterprise-auth-bg)] font-[family-name:var(--font-inter)]">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.35]"
+        style={{
+          backgroundImage:
+            "radial-gradient(ellipse 85% 55% at 50% -25%, rgba(59, 130, 246, 0.22), transparent 55%), radial-gradient(ellipse 100% 60% at 100% 100%, rgba(15, 23, 42, 0.35), transparent)",
+        }}
+        aria-hidden
+      />
+
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-10 sm:py-16">
+        <div className="w-full max-w-[420px]">
+          <div className="mb-8 flex flex-col items-center text-center">
+            <Link
+              href="/"
+              className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-md shadow-slate-900/20 ring-1 ring-white/20 transition hover:shadow-lg hover:ring-white/30"
+            >
+              <Image
+                src="/logo.svg"
+                alt="PlanSync"
+                width={40}
+                height={40}
+                className="h-10 w-10"
+                priority
+              />
+            </Link>
+            <h1 className="text-2xl font-bold text-white" style={{ fontSize: "24px" }}>
+              {mode === "sign-in" ? "Welcome back" : "PlanSync"}
+            </h1>
+            {mode === "sign-up" ? (
+              <>
+                <p className="mt-2 text-[15px] font-medium text-slate-300">
+                  Start your free 14-day trial
+                </p>
+                <p className="mt-1 text-sm text-slate-500">No credit card required</p>
+              </>
+            ) : (
+              <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-400">
+                Sign in to your workspace dashboard and cloud projects.
+              </p>
+            )}
+          </div>
+
+          <div
+            className="border border-slate-200/10 bg-white p-6 shadow-2xl shadow-black/40 sm:p-8"
+            style={{ borderRadius: CARD_RADIUS }}
+          >
+            <div className="space-y-6">
+              <div
+                className="flex rounded-xl bg-slate-100 p-1"
+                role="tablist"
+                aria-label="Authentication mode"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === "sign-in"}
+                  onClick={() => setMode("sign-in")}
+                  className={`relative flex-1 rounded-lg py-2.5 text-sm font-medium transition ${
+                    mode === "sign-in"
+                      ? "bg-white text-[#0F172A] shadow-sm"
+                      : "text-slate-600 hover:text-slate-600"
+                  }`}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === "sign-up"}
+                  onClick={() => setMode("sign-up")}
+                  className={`relative flex-1 rounded-lg py-2.5 text-sm font-medium transition ${
+                    mode === "sign-up"
+                      ? "bg-white text-[#0F172A] shadow-sm"
+                      : "text-slate-600 hover:text-slate-600"
+                  }`}
+                >
+                  Create account
+                </button>
+              </div>
+
+              <form onSubmit={onSubmit} className="space-y-5">
+                {mode === "sign-up" && (
+                  <div>
+                    <label
+                      htmlFor="auth-name"
+                      className="mb-1.5 block text-[13px] font-medium text-[#64748B]"
+                    >
+                      Full name
+                    </label>
+                    <div className="relative">
+                      <User
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                        aria-hidden
+                      />
+                      <input
+                        id="auth-name"
+                        className="w-full rounded-xl border border-[#E2E8F0] bg-white py-2.5 pl-10 pr-3 text-sm text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        autoComplete="name"
+                        placeholder="Abed Aarabi"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label
+                    htmlFor="auth-email"
+                    className="mb-1.5 block text-[13px] font-medium text-[#64748B]"
+                  >
+                    {mode === "sign-up" ? "Work email" : "Email"}
+                  </label>
+                  <div className="relative">
+                    <Mail
+                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                      aria-hidden
+                    />
+                    <input
+                      id="auth-email"
+                      type="email"
+                      required
+                      className="w-full rounded-xl border border-[#E2E8F0] bg-white py-2.5 pl-10 pr-3 text-sm text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                      placeholder="you@company.com"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="auth-password"
+                    className="mb-1.5 block text-[13px] font-medium text-[#64748B]"
+                  >
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock
+                      className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                      aria-hidden
+                    />
+                    <input
+                      id="auth-password"
+                      type="password"
+                      required
+                      minLength={8}
+                      className="w-full rounded-xl border border-[#E2E8F0] bg-white py-2.5 pl-10 pr-3 text-sm text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
+                      placeholder="••••••••••••"
+                    />
+                  </div>
+                </div>
+
+                {error && (
+                  <div
+                    className="flex gap-2 rounded-xl border border-red-200 bg-red-50/90 px-3 py-2.5 text-sm text-red-800"
+                    role="alert"
+                  >
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/25 transition hover:bg-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/50 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      Please wait…
+                    </>
+                  ) : (
+                    <>
+                      {mode === "sign-in" ? "Sign in" : "Start Free Trial"}
+                      <ArrowRight
+                        className="h-4 w-4 transition group-hover:translate-x-0.5"
+                        aria-hidden
+                      />
+                    </>
+                  )}
+                </button>
+
+                {mode === "sign-up" ? (
+                  <p className="text-center text-[13px] text-[#64748B]">No credit card required</p>
+                ) : null}
+              </form>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center" aria-hidden>
+                  <div className="w-full border-t border-slate-200" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-white px-2 text-[#64748B]">Or continue with</span>
+                </div>
+              </div>
+
+              <SocialAuthButtons callbackURL={next} onError={setError} />
+            </div>
+          </div>
+
+          <p className="mt-8 text-center text-sm text-slate-500">
+            {mode === "sign-up" ? (
+              <>
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => setMode("sign-in")}
+                  className="font-medium text-[#64748B] underline underline-offset-2 hover:text-white"
+                >
+                  Sign in
+                </button>
+              </>
+            ) : (
+              <>
+                New to PlanSync?{" "}
+                <button
+                  type="button"
+                  onClick={() => setMode("sign-up")}
+                  className="font-medium text-[#64748B] underline underline-offset-2 hover:text-white"
+                >
+                  Start free trial
+                </button>
+              </>
+            )}
+          </p>
+
+          <nav className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-center text-sm text-slate-500">
+            <Link href="/" className="transition hover:text-slate-300">
+              ← Home
+            </Link>
+            <span className="text-slate-600" aria-hidden>
+              ·
+            </span>
+            <Link href="/viewer" className="transition hover:text-slate-300">
+              Free local viewer
+            </Link>
+            <span className="text-slate-600" aria-hidden>
+              ·
+            </span>
+            <Link href="/dashboard" className="transition hover:text-slate-300">
+              Dashboard
+            </Link>
+          </nav>
+        </div>
+      </div>
+    </div>
+  );
+}

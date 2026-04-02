@@ -1,0 +1,35 @@
+{
+  "name": "plansync-monorepo",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n frontend,backend -c cyan,magenta \"npm run dev -w @plansync/web\" \"npm run dev -w backend\"",
+    "dev:frontend": "npm run dev -w @plansync/web",
+    "dev:backend": "npm run dev -w backend",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run lint && npm run typecheck && npm run format:check && npm run db:generate && npm run build",
+    "db:generate": "npm run db:generate -w backend",
+    "db:migrate": "npm run db:migrate -w backend",
+    "db:migrate:deploy": "npm run db:migrate:deploy -w backend",
+    "db:push": "npm run db:push -w backend",
+    "db:seed": "npm run db:seed -w backend",
+    "db:studio": "npm run db:studio -w backend",
+    "db:validate": "npm run db:validate -w backend",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "concurrently": "^9.2.0",
+    "eslint": "^9",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.5.0"
+  }
+}

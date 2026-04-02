@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" fill="none" aria-hidden="true">
+  <path d="M4,7 H20 V11 H8 V23 H4 Z" fill="#2563EB"/>
+  <path d="M38,41 H22 V37 H34 V25 H38 Z" fill="#2563EB" fill-opacity="0.38"/>
+  <text x="50" y="33" font-family="'Inter', 'Geist', system-ui, -apple-system, sans-serif" font-weight="700" font-size="26" letter-spacing="-1">
+    <tspan fill="#F8FAFC">Plan</tspan><tspan fill="#2563EB">Sync</tspan>
+  </text>
+</svg>

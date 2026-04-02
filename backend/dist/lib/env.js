@@ -1,0 +1,55 @@
+import { z } from "zod";
+const schema = z.object({
+    NODE_ENV: z.string().optional(),
+    PORT: z.coerce.number().default(8787),
+    DATABASE_URL: z.string().min(1),
+    CORS_ORIGIN: z.string().default("http://localhost:3000"),
+    /** Public API origin when the SPA calls `api.example.com` (e.g. Mintlify / OpenAPI). Mirror `NEXT_PUBLIC_API_URL` in production. */
+    PUBLIC_API_URL: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().url().optional()),
+    /** Apex host for Better Auth session cookies across `app` + `api` subdomains (e.g. `plansync.dev`). */
+    BETTER_AUTH_COOKIE_DOMAIN: z.string().optional(),
+    /** Comma-separated extra `Origin` values allowed for CORS and Better Auth (e.g. Mintlify preview URL). */
+    CORS_EXTRA_ORIGINS: z.string().optional(),
+    BETTER_AUTH_SECRET: z.string().min(16),
+    BETTER_AUTH_URL: z.string().url().default("http://localhost:8787"),
+    AWS_REGION: z.string().optional(),
+    AWS_ACCESS_KEY_ID: z.string().optional(),
+    AWS_SECRET_ACCESS_KEY: z.string().optional(),
+    S3_BUCKET: z.string().optional(),
+    /** Max bytes for POST /files/upload (browser → API → S3; avoids S3 CORS). Default 100 MiB. */
+    MAX_DIRECT_UPLOAD_BYTES: z.coerce.bigint().default(104857600n),
+    STRIPE_SECRET_KEY: z.string().optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().optional(),
+    STRIPE_PRICE_PRO_MONTHLY: z.string().optional(),
+    RESEND_API_KEY: z.string().optional(),
+    RESEND_FROM: z.string().optional(),
+    PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+    /** OAuth — optional; set both id + secret to enable each provider */
+    GOOGLE_CLIENT_ID: z.string().optional(),
+    GOOGLE_CLIENT_SECRET: z.string().optional(),
+    GITHUB_CLIENT_ID: z.string().optional(),
+    GITHUB_CLIENT_SECRET: z.string().optional(),
+    SLACK_CLIENT_ID: z.string().optional(),
+    SLACK_CLIENT_SECRET: z.string().optional(),
+});
+export function buildCorsAllowList(env) {
+    const list = [env.CORS_ORIGIN, env.PUBLIC_APP_URL];
+    if (env.PUBLIC_API_URL?.trim())
+        list.push(env.PUBLIC_API_URL.trim());
+    if (env.CORS_EXTRA_ORIGINS?.trim()) {
+        for (const o of env.CORS_EXTRA_ORIGINS.split(",")) {
+            const t = o.trim();
+            if (t)
+                list.push(t);
+        }
+    }
+    return [...new Set(list.filter(Boolean))];
+}
+export function loadEnv() {
+    const parsed = schema.safeParse(process.env);
+    if (!parsed.success) {
+        console.error(parsed.error.flatten());
+        throw new Error("Invalid environment variables");
+    }
+    return parsed.data;
+}

@@ -1,0 +1,114 @@
+# Full stack for production / Dokploy (build from repo root).
+# Usage:
+#   docker compose -f docker-compose.deploy.yml up -d --build
+#
+# Dokploy: set the same variables in the UI (or an env file). Traefik needs the
+# external network `dokploy-network` (created by Dokploy). For local runs without
+# Dokploy, use: docker network create dokploy-network  (or comment networks/labels).
+
+networks:
+  internal:
+    driver: bridge
+  dokploy-network:
+    external: true
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks:
+      - internal
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-plansync}
+    volumes:
+      - plansync_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    networks:
+      - internal
+      - dokploy-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${BACKEND_PORT:-8787}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-plansync}
+      CORS_ORIGIN: ${CORS_ORIGIN:-${PUBLIC_APP_URL:?set PUBLIC_APP_URL}}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-${PUBLIC_APP_URL}}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-${NEXT_PUBLIC_API_URL:-}}
+      BETTER_AUTH_COOKIE_DOMAIN: ${BETTER_AUTH_COOKIE_DOMAIN:-}
+      CORS_EXTRA_ORIGINS: ${CORS_EXTRA_ORIGINS:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      # Override default (100 MiB) only if needed — must be a numeric string.
+      MAX_DIRECT_UPLOAD_BYTES: ${MAX_DIRECT_UPLOAD_BYTES:-104857600}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_PRO_MONTHLY: ${STRIPE_PRICE_PRO_MONTHLY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:-}
+      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:-}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dokploy-network"
+      - "traefik.http.routers.plansync-api.rule=Host(`${PUBLIC_API_HOST:-api.plansync.dev}`)"
+      - "traefik.http.routers.plansync-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.plansync-api.service=plansync-api"
+      - "traefik.http.services.plansync-api.loadbalancer.server.port=${BACKEND_PORT:-8787}"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-${PUBLIC_APP_URL:-}}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-${PUBLIC_APP_URL:-}}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        NEXT_PUBLIC_SOCIAL_AUTH: ${NEXT_PUBLIC_SOCIAL_AUTH:-}
+        NEXT_PUBLIC_SMART_UPLOAD_FLOW: ${NEXT_PUBLIC_SMART_UPLOAD_FLOW:-}
+        NEXT_PUBLIC_UMAMI_URL: ${NEXT_PUBLIC_UMAMI_URL:-}
+        NEXT_PUBLIC_UMAMI_WEBSITE_ID: ${NEXT_PUBLIC_UMAMI_WEBSITE_ID:-}
+        API_PROXY_TARGET: http://backend:${BACKEND_PORT:-8787}
+    restart: unless-stopped
+    networks:
+      - internal
+      - dokploy-network
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dokploy-network"
+      - "traefik.http.routers.plansync-web.rule=Host(`${PUBLIC_APP_HOST:-plansync.dev}`)"
+      - "traefik.http.routers.plansync-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.plansync-web.service=plansync-web"
+      - "traefik.http.services.plansync-web.loadbalancer.server.port=3000"
+
+volumes:
+  plansync_pg:

@@ -1,0 +1,728 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Calculator,
+  Download,
+  ExternalLink,
+  Loader2,
+  Package,
+  Plus,
+  Ruler,
+  Search,
+  Tag,
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
+import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import {
+  createMaterial,
+  deleteTakeoffLine,
+  fetchMaterials,
+  fetchProject,
+  fetchTakeoffLinesForProject,
+  patchTakeoffLine,
+  type TakeoffLineRow,
+  ProRequiredError,
+  viewerHrefForCloudRevision,
+} from "@/lib/api-client";
+import { qk } from "@/lib/queryKeys";
+import { PROJECT_TAKEOFF_INVALIDATE_CHANNEL } from "@/lib/takeoffPublishCloud";
+
+export function ProjectTakeoffClient({
+  projectId,
+  workspaceId: workspaceIdProp,
+}: {
+  projectId: string;
+  workspaceId?: string;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const qc = useQueryClient();
+  const takeoffKey = qk.takeoffForProject(projectId);
+  const [projectDiscountPct, setProjectDiscountPct] = useState("0");
+  const [itemDiscountPctByKey, setItemDiscountPctByKey] = useState<Record<string, string>>({});
+  const [materialType, setMaterialType] = useState("");
+  const [materialName, setMaterialName] = useState("");
+  const [materialUnit, setMaterialUnit] = useState("ea");
+  const [materialPrice, setMaterialPrice] = useState("");
+  const [materialCurrency, setMaterialCurrency] = useState("USD");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [lineSearch, setLineSearch] = useState("");
+
+  const {
+    data: lines = [],
+    isPending,
+    isError,
+    error: takeoffLoadError,
+    refetch: refetchTakeoffLines,
+  } = useQuery({
+    queryKey: takeoffKey,
+    queryFn: () => fetchTakeoffLinesForProject(projectId),
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const bc = new BroadcastChannel(PROJECT_TAKEOFF_INVALIDATE_CHANNEL);
+    bc.onmessage = (ev: MessageEvent<{ projectId?: string }>) => {
+      if (ev.data?.projectId === projectId) {
+        void qc.invalidateQueries({ queryKey: takeoffKey });
+      }
+    };
+    return () => bc.close();
+  }, [projectId, qc, takeoffKey]);
+  const { data: project } = useQuery({
+    queryKey: qk.project(projectId),
+    queryFn: () => fetchProject(projectId),
+  });
+  const workspaceId = workspaceIdProp ?? project?.workspaceId;
+  const projectFilesHref = `/projects/${projectId}/files`;
+
+  useEffect(() => {
+    if (!workspaceIdProp && workspaceId && pathname.startsWith(`/projects/${projectId}/takeoff`)) {
+      router.replace(`/workspaces/${workspaceId}/projects/${projectId}/takeoff`);
+    }
+  }, [pathname, projectId, router, workspaceId, workspaceIdProp]);
+  useQuery({
+    queryKey: qk.materials(workspaceId ?? ""),
+    queryFn: () => fetchMaterials(workspaceId!),
+    enabled: Boolean(workspaceId),
+  });
+
+  const patchMut = useMutation({
+    mutationFn: (vars: { id: string; quantity: string }) =>
+      patchTakeoffLine(vars.id, { quantity: vars.quantity }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: takeoffKey }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const delMut = useMutation({
+    mutationFn: (id: string) => deleteTakeoffLine(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: takeoffKey });
+      toast.success("Line removed");
+    },
+    onError: (e: Error) =>
+      toast.error(e instanceof ProRequiredError ? "Pro subscription required." : e.message),
+  });
+
+  const addMaterialMut = useMutation({
+    mutationFn: async () => {
+      if (!workspaceId) throw new Error("Workspace not loaded.");
+      if (!materialType.trim() || !materialName.trim()) {
+        throw new Error("Material type and name are required.");
+      }
+      return createMaterial(workspaceId, {
+        materialType: materialType.trim(),
+        name: materialName.trim(),
+        unit: materialUnit.trim() || "ea",
+        unitPrice: materialPrice.trim() || null,
+        currency: materialCurrency.trim() || "USD",
+      });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.materials(workspaceId ?? "") });
+      setMaterialType("");
+      setMaterialName("");
+      setMaterialUnit("ea");
+      setMaterialPrice("");
+      setMaterialCurrency("USD");
+      toast.success("Material added to workspace catalog.");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const allTags = useMemo(() => {
+    const s = new Set<string>();
+    for (const row of lines) {
+      for (const t of row.tags ?? []) {
+        if (t.trim()) s.add(t.trim());
+      }
+    }
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [lines]);
+
+  const visibleLines = useMemo(() => {
+    if (!tagFilter) return lines;
+    return lines.filter((r) => (r.tags ?? []).includes(tagFilter));
+  }, [lines, tagFilter]);
+
+  const tableLines = useMemo(() => {
+    const q = lineSearch.trim().toLowerCase();
+    if (!q) return visibleLines;
+    return visibleLines.filter((r) => {
+      const item = r.material ? `${r.material.categoryName} ${r.material.name}` : r.label || "";
+      const blob = [
+        r.fileName,
+        String(r.fileVersion),
+        item,
+        (r.tags ?? []).join(" "),
+        r.notes ?? "",
+        r.unit,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return blob.includes(q);
+    });
+  }, [visibleLines, lineSearch]);
+
+  const totalsBySheet = useMemo(() => {
+    const gross = (r: TakeoffLineRow) => {
+      const q = Number(r.quantity) || 0;
+      const p = Number(r.material?.unitPrice ?? 0) || 0;
+      return q * p;
+    };
+    const m = new Map<string, { label: string; total: number }>();
+    for (const r of tableLines) {
+      const key = r.fileId;
+      const prev = m.get(key);
+      const g = gross(r);
+      if (prev) prev.total += g;
+      else m.set(key, { label: r.fileName, total: g });
+    }
+    return [...m.entries()]
+      .map(([fileId, v]) => ({ fileId, ...v }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [tableLines]);
+
+  const totalsByPrimaryTag = useMemo(() => {
+    const gross = (r: TakeoffLineRow) => {
+      const q = Number(r.quantity) || 0;
+      const p = Number(r.material?.unitPrice ?? 0) || 0;
+      return q * p;
+    };
+    const m = new Map<string, number>();
+    for (const r of tableLines) {
+      const tags = r.tags ?? [];
+      const primary = tags.length > 0 ? tags[0]!.trim() : "Untagged";
+      const k = primary || "Untagged";
+      m.set(k, (m.get(k) ?? 0) + gross(r));
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [tableLines]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        unit: string;
+        qty: number;
+        rate: number;
+        currency: string;
+      }
+    >();
+    for (const row of lines) {
+      const key = row.materialId ?? `${row.label}::${row.unit}`;
+      const prev = map.get(key);
+      const qty = Number(row.quantity) || 0;
+      const rate = Number(row.material?.unitPrice ?? 0) || 0;
+      if (prev) {
+        prev.qty += qty;
+      } else {
+        map.set(key, {
+          key,
+          label: row.material
+            ? `${row.material.categoryName} — ${row.material.name}`
+            : row.label || "Item",
+          unit: row.unit,
+          qty,
+          rate,
+          currency: row.material?.currency ?? "USD",
+        });
+      }
+    }
+    return [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [lines]);
+
+  const pricing = useMemo(() => {
+    const itemRows = grouped.map((g) => {
+      const gross = g.qty * g.rate;
+      const discPct = Math.max(0, Number(itemDiscountPctByKey[g.key] ?? "0") || 0);
+      const discount = gross * (discPct / 100);
+      const net = gross - discount;
+      return { ...g, gross, discPct, discount, net };
+    });
+    const subtotal = itemRows.reduce((s, r) => s + r.gross, 0);
+    const itemDiscountTotal = itemRows.reduce((s, r) => s + r.discount, 0);
+    const afterItemDiscount = subtotal - itemDiscountTotal;
+    const projectDiscPct = Math.max(0, Number(projectDiscountPct) || 0);
+    const projectDiscount = afterItemDiscount * (projectDiscPct / 100);
+    const grandTotal = afterItemDiscount - projectDiscount;
+    return {
+      itemRows,
+      subtotal,
+      itemDiscountTotal,
+      afterItemDiscount,
+      projectDiscPct,
+      projectDiscount,
+      grandTotal,
+    };
+  }, [grouped, itemDiscountPctByKey, projectDiscountPct]);
+
+  function exportCsv() {
+    const headers = [
+      "File",
+      "Version",
+      "Item",
+      "Quantity",
+      "Unit",
+      "Rate",
+      "Currency",
+      "Line Total",
+      "Tags",
+      "Notes",
+    ];
+    const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
+    const rows = lines.map((r) =>
+      [
+        r.fileName,
+        String(r.fileVersion),
+        r.material ? `${r.material.categoryName} — ${r.material.name}` : r.label,
+        r.quantity,
+        r.unit,
+        r.material?.unitPrice ?? "",
+        r.material?.currency ?? "",
+        (() => {
+          const q = Number(r.quantity) || 0;
+          const p = Number(r.material?.unitPrice ?? 0) || 0;
+          return (q * p).toFixed(2);
+        })(),
+        (r.tags ?? []).join("; "),
+        r.notes ?? "",
+      ]
+        .map((c) => esc(String(c)))
+        .join(","),
+    );
+    const blob = new Blob([[headers.join(","), ...rows].join("\n")], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `takeoff-${projectId.slice(0, 8)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#2563EB] shadow-sm ring-1 ring-[#BFDBFE]">
+            <Package className="h-5 w-5" strokeWidth={1.75} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[#0F172A]">Shared company materials</p>
+            <p className="mt-0.5 text-[13px] leading-snug text-[#475569]">
+              Add lines per sheet in viewer (Pro cloud). Exports, costing, and discounts are handled
+              here.
+            </p>
+          </div>
+        </div>
+        <Link
+          href={workspaceId ? `/workspaces/${workspaceId}/materials` : "#"}
+          className="inline-flex shrink-0 items-center justify-center rounded-lg bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d4ed8]"
+        >
+          Open materials library
+        </Link>
+      </div>
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight text-[#0F172A]">Quantity Takeoff</h1>
+          {project?.name ? (
+            <p className="mt-1 truncate text-sm text-[#64748B]" title={project.name}>
+              {project.name}
+            </p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={lines.length === 0}
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[#E2E8F0] bg-white px-4 py-2.5 text-sm font-medium text-[#0F172A] shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition hover:bg-[#F8FAFC] disabled:opacity-40"
+        >
+          <Download className="h-4 w-4" />
+          Export CSV
+        </button>
+      </div>
+
+      <div className="rounded-xl border border-[#E2E8F0] bg-white p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Tag className="h-4 w-4 text-[#2563EB]" />
+          <h2 className="text-sm font-semibold text-[#0F172A]">Quick add material</h2>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-5">
+          <input
+            value={materialType}
+            onChange={(e) => setMaterialType(e.target.value)}
+            placeholder="Type"
+            className="rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
+          />
+          <input
+            value={materialName}
+            onChange={(e) => setMaterialName(e.target.value)}
+            placeholder="Material name"
+            className="rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
+          />
+          <input
+            value={materialUnit}
+            onChange={(e) => setMaterialUnit(e.target.value)}
+            placeholder="Unit"
+            className="rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
+          />
+          <input
+            value={materialPrice}
+            onChange={(e) => setMaterialPrice(e.target.value)}
+            placeholder="Unit price"
+            className="rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
+          />
+          <div className="flex gap-2">
+            <input
+              value={materialCurrency}
+              onChange={(e) => setMaterialCurrency(e.target.value.toUpperCase())}
+              placeholder="USD"
+              className="w-20 rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => addMaterialMut.mutate()}
+              disabled={addMaterialMut.isPending}
+              className="inline-flex flex-1 items-center justify-center gap-1 rounded-md bg-[#2563EB] px-3 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-40"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-[#E2E8F0] bg-white p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Calculator className="h-4 w-4 text-[#2563EB]" />
+          <h2 className="text-sm font-semibold text-[#0F172A]">Costing and discounts</h2>
+        </div>
+        <div className="space-y-2">
+          {pricing.itemRows.length > 0 ? (
+            <div className="grid grid-cols-[minmax(0,1fr)_90px_120px_120px] items-end gap-2 px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
+              <span>Item</span>
+              <span className="text-right">Disc %</span>
+              <span className="text-right">Discount</span>
+              <span className="text-right">Net</span>
+            </div>
+          ) : null}
+          {pricing.itemRows.map((r) => (
+            <div
+              key={r.key}
+              className="grid grid-cols-[minmax(0,1fr)_90px_120px_120px] items-center gap-2 rounded-md border border-[#E2E8F0] px-3 py-2 text-sm"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-[#0F172A]">{r.label}</p>
+                <p className="text-xs text-[#64748B]">
+                  Qty {r.qty.toFixed(2)} {r.unit} × Rate {r.rate.toFixed(2)} {r.currency}
+                </p>
+              </div>
+              <input
+                value={itemDiscountPctByKey[r.key] ?? "0"}
+                onChange={(e) =>
+                  setItemDiscountPctByKey((prev) => ({ ...prev, [r.key]: e.target.value }))
+                }
+                className="rounded-md border border-[#E2E8F0] px-2 py-1 text-right tabular-nums"
+                title="Item discount %"
+              />
+              <span className="text-right tabular-nums text-[#64748B]">
+                -{r.discount.toFixed(2)}
+              </span>
+              <span className="text-right tabular-nums font-semibold text-[#0F172A]">
+                {r.net.toFixed(2)}
+              </span>
+            </div>
+          ))}
+          <div className="mt-3 flex items-center justify-end gap-3 text-sm">
+            <label className="text-[#64748B]">Project discount %</label>
+            <input
+              value={projectDiscountPct}
+              onChange={(e) => setProjectDiscountPct(e.target.value)}
+              className="w-24 rounded-md border border-[#E2E8F0] px-2 py-1 text-right tabular-nums"
+            />
+          </div>
+          <div className="mt-3 grid gap-1 text-sm text-[#334155]">
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span className="tabular-nums">{pricing.subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Item discounts</span>
+              <span className="tabular-nums">-{pricing.itemDiscountTotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Project discount ({pricing.projectDiscPct.toFixed(2)}%)</span>
+              <span className="tabular-nums">-{pricing.projectDiscount.toFixed(2)}</span>
+            </div>
+            <div className="mt-1 flex justify-between border-t border-[#E2E8F0] pt-2 text-base font-semibold text-[#0F172A]">
+              <span>Grand total</span>
+              <span className="tabular-nums">{pricing.grandTotal.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {isPending ? (
+        <EnterpriseLoadingState
+          variant="minimal"
+          message="Loading takeoff…"
+          label="Loading quantity takeoff"
+        />
+      ) : isError ? (
+        <div
+          className="rounded-xl border border-red-200 bg-red-50 px-4 py-6 text-sm text-red-900"
+          style={{ borderRadius: "12px" }}
+        >
+          <p className="font-semibold">Could not load takeoff lines</p>
+          <p className="mt-2 text-red-800/90">
+            {takeoffLoadError instanceof Error ? takeoffLoadError.message : "Request failed."} Often
+            this means the database migration for takeoff lines has not been applied on the server,
+            or you need to sign in again.
+          </p>
+          <button
+            type="button"
+            onClick={() => void refetchTakeoffLines()}
+            className="mt-4 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-900 hover:bg-red-100"
+          >
+            Retry
+          </button>
+        </div>
+      ) : (
+        <div
+          className="overflow-hidden border border-[#E2E8F0] bg-white"
+          style={{
+            borderRadius: "12px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          }}
+        >
+          {lines.length > 0 ? (
+            <div className="border-b border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
+                By sheet (line totals, pre-discount)
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {totalsBySheet.map((s) => (
+                  <span
+                    key={s.fileId}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#E2E8F0] bg-white px-2 py-1 text-xs text-[#334155]"
+                  >
+                    <span className="max-w-[200px] truncate font-medium text-[#0F172A]">
+                      {s.label}
+                    </span>
+                    <span className="tabular-nums text-[#64748B]">{s.total.toFixed(2)}</span>
+                  </span>
+                ))}
+              </div>
+              <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
+                By primary tag (first tag per line)
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {totalsByPrimaryTag.map(([tag, total]) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#E2E8F0] bg-white px-2 py-1 text-xs text-[#334155]"
+                  >
+                    <span className="font-medium text-[#0F172A]">{tag}</span>
+                    <span className="tabular-nums text-[#64748B]">{total.toFixed(2)}</span>
+                  </span>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-[#64748B]">Filter by tag:</span>
+                <button
+                  type="button"
+                  onClick={() => setTagFilter(null)}
+                  className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                    tagFilter === null
+                      ? "border-[#2563EB] bg-[#EFF6FF] text-[#1D4ED8]"
+                      : "border-[#E2E8F0] bg-white text-[#334155] hover:bg-[#F8FAFC]"
+                  }`}
+                >
+                  All
+                </button>
+                {allTags.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTagFilter(t)}
+                    className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                      tagFilter === t
+                        ? "border-[#2563EB] bg-[#EFF6FF] text-[#1D4ED8]"
+                        : "border-[#E2E8F0] bg-white text-[#334155] hover:bg-[#F8FAFC]"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 shadow-sm">
+                  <Search className="h-4 w-4 shrink-0 text-[#94A3B8]" aria-hidden />
+                  <input
+                    value={lineSearch}
+                    onChange={(e) => setLineSearch(e.target.value)}
+                    placeholder="Search file, item, tags, notes…"
+                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-[#0F172A] outline-none placeholder:text-[#94A3B8]"
+                    type="search"
+                    autoComplete="off"
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-semibold uppercase tracking-wide text-[#64748B] shadow-[0_1px_0_#E2E8F0]">
+                  <th className="px-4 py-3">File</th>
+                  <th className="px-4 py-3">Item</th>
+                  <th className="px-4 py-3 text-right">Qty</th>
+                  <th className="px-4 py-3">Unit</th>
+                  <th className="px-4 py-3">Tags</th>
+                  <th className="px-4 py-3">Notes</th>
+                  <th className="px-4 py-3">Sheet</th>
+                  <th className="w-10 px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {lines.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-12 text-center text-[#64748B]">
+                      <p className="mx-auto max-w-lg">
+                        No takeoff lines yet. Open a drawing from{" "}
+                        <Link
+                          href={projectFilesHref}
+                          className="font-semibold text-[#2563EB] hover:underline"
+                        >
+                          Files &amp; Drawings
+                        </Link>
+                        , use the Takeoff tool, finish a shape, then press{" "}
+                        <strong className="font-semibold text-[#334155]">Save</strong> in the
+                        takeoff panel. Each save syncs one line here.
+                      </p>
+                      <p className="mx-auto mt-3 max-w-lg text-xs text-[#94A3B8]">
+                        Refresh if you just saved, and confirm this page is for the same project as
+                        the sheet.
+                      </p>
+                    </td>
+                  </tr>
+                ) : tableLines.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center text-[#64748B]">
+                      No lines match your search or tag filter.{" "}
+                      <button
+                        type="button"
+                        className="font-semibold text-[#2563EB] hover:underline"
+                        onClick={() => {
+                          setLineSearch("");
+                          setTagFilter(null);
+                        }}
+                      >
+                        Clear filters
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
+                  tableLines.map((row) => (
+                    <tr
+                      key={row.id}
+                      className="border-b border-[#E2E8F0]/80 transition-colors duration-150 hover:bg-[#F8FAFC]"
+                    >
+                      <td className="max-w-[180px] px-4 py-3 text-[#0F172A]">
+                        <span className="line-clamp-2 font-medium">{row.fileName}</span>
+                        <span className="block text-[11px] text-[#94A3B8]">v{row.fileVersion}</span>
+                      </td>
+                      <td className="max-w-[220px] px-4 py-3 text-[#0F172A]">
+                        {row.material
+                          ? `${row.material.categoryName} — ${row.material.name}`
+                          : row.label || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <input
+                          defaultValue={row.quantity}
+                          key={`${row.id}-${row.quantity}`}
+                          onBlur={(e) => {
+                            const next = e.target.value.trim();
+                            if (!next || next === row.quantity) return;
+                            patchMut.mutate({ id: row.id, quantity: next });
+                          }}
+                          className="w-24 rounded-md border border-[#E2E8F0] px-2 py-1 text-right tabular-nums"
+                        />
+                        {patchMut.isPending && patchMut.variables?.id === row.id ? (
+                          <Loader2 className="ml-1 inline h-3 w-3 animate-spin text-[#94A3B8]" />
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-[#64748B]">{row.unit}</td>
+                      <td className="max-w-[140px] px-4 py-3 text-[#64748B]">
+                        <span className="line-clamp-2 text-xs">
+                          {(row.tags ?? []).length ? (row.tags ?? []).join(", ") : "—"}
+                        </span>
+                      </td>
+                      <td className="max-w-[200px] px-4 py-3 text-[#64748B]">
+                        <span className="line-clamp-2">{row.notes || "—"}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link
+                          href={viewerHrefForCloudRevision({
+                            fileId: row.fileId,
+                            fileName: row.fileName,
+                            projectId: row.projectId,
+                            fileVersionId: row.fileVersionId,
+                            version: row.fileVersion,
+                          })}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:underline"
+                        >
+                          Open
+                          <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => delMut.mutate(row.id)}
+                          className="rounded-md p-1 text-[#94A3B8] hover:bg-red-50 hover:text-red-500"
+                          title="Delete line"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {lines.length > 0 ? (
+            <div className="border-t border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3 text-sm font-medium text-[#64748B]">
+              {tagFilter || lineSearch.trim()
+                ? `Showing ${tableLines.length} of ${lines.length} lines`
+                : `Total lines: ${lines.length}`}
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <div
+        className="flex items-center gap-3 border border-blue-100 bg-blue-50/50 px-4 py-3"
+        style={{ borderRadius: "12px" }}
+      >
+        <Ruler className="h-5 w-5 shrink-0 text-[#2563EB]" />
+        <p className="text-sm text-[#1E40AF]">
+          Calibrate drawing scale in the viewer before relying on measurements for quantities.
+        </p>
+      </div>
+    </div>
+  );
+}

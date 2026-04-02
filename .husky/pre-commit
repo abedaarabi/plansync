@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -e
+npx lint-staged
+npm run typecheck --workspaces --if-present
+npm run db:validate

@@ -1,0 +1,1 @@
+ALTER TYPE "ActivityType" ADD VALUE 'FILE_OPENED';

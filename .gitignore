@@ -1,0 +1,13 @@
+node_modules/
+.DS_Store
+*.log
+.env
+.env.local
+.env.prod
+.env.*.local
+
+# Local backup of former nested frontend repo (remove when no longer needed)
+.frontend-git-backup/
+
+# Stray Next output if dev is run from repo root by mistake
+plansync/
