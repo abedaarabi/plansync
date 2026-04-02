@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, ChevronDown, Menu, Play, X } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Cloud, Menu, Monitor, Play, X } from "lucide-react";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { fetchMe } from "@/lib/api-client";
 import { LANDING_FAQ } from "@/lib/landingContent";
@@ -610,12 +610,22 @@ export function LandingPage() {
               {/* Free */}
               <AnimateIn delay={100}>
                 <div className="flex h-full flex-col rounded-2xl border border-slate-200/90 bg-white p-8 shadow-[var(--enterprise-shadow-card)]">
-                  <div className="text-sm font-semibold uppercase tracking-[0.1em] text-slate-500">
-                    Free
+                  <div className="flex items-start gap-4">
+                    <div
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600"
+                      aria-hidden
+                    >
+                      <Monitor className="h-6 w-6" strokeWidth={1.75} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold uppercase tracking-[0.1em] text-slate-500">
+                        Free
+                      </div>
+                      <div className="mt-2 text-3xl font-bold text-slate-900">$0</div>
+                      <p className="mt-1 text-sm text-slate-500">No signup needed</p>
+                      <p className="mt-1 text-sm text-slate-500">Local PDF viewer</p>
+                    </div>
                   </div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">$0</div>
-                  <p className="mt-1 text-sm text-slate-500">No signup needed</p>
-                  <p className="mt-1 text-sm text-slate-500">Local PDF viewer</p>
 
                   <ul className="mt-8 flex flex-1 flex-col gap-3">
                     {FREE_FEATURES.map((f) => (
@@ -646,13 +656,24 @@ export function LandingPage() {
                     Most Popular
                   </div>
 
-                  <div className="text-sm font-semibold uppercase tracking-[0.1em] text-[var(--landing-cta)]">
-                    Pro
+                  <div className="flex items-start gap-4">
+                    <div
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[var(--landing-cta)]"
+                      aria-hidden
+                    >
+                      <Cloud className="h-6 w-6" strokeWidth={1.75} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold uppercase tracking-[0.1em] text-[var(--landing-cta)]">
+                        Pro
+                      </div>
+                      <div className="mt-2 text-3xl font-bold text-slate-900">
+                        $49<span className="text-lg font-normal text-slate-500">/month</span>
+                      </div>
+                      <p className="mt-2 text-sm font-medium text-slate-700">8 uses</p>
+                      <p className="mt-1 text-sm text-slate-500">Everything in Free +</p>
+                    </div>
                   </div>
-                  <div className="mt-2 text-3xl font-bold text-slate-900">
-                    $19<span className="text-lg font-normal text-slate-500">/month</span>
-                  </div>
-                  <p className="mt-1 text-sm text-slate-500">Everything in Free +</p>
 
                   <ul className="mt-8 flex flex-1 flex-col gap-3">
                     {PRO_FEATURES.map((f) => (

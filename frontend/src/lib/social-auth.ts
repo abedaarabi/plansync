@@ -1,15 +1,14 @@
-export type SocialProviderId = "google" | "github" | "slack";
+export type SocialProviderId = "google";
 
 /**
- * Which OAuth buttons to show. Defaults to all three so the sign-in page shows Google, GitHub, and Slack
- * without extra env (the API must still have matching OAuth credentials).
- * Set `NEXT_PUBLIC_SOCIAL_AUTH=none` to hide. Use `google,github` etc. to restrict.
+ * Which OAuth buttons to show. Defaults to Google only.
+ * Set `NEXT_PUBLIC_SOCIAL_AUTH=none` to hide social buttons entirely.
  */
 export function getEnabledSocialProviders(): SocialProviderId[] {
   const raw = process.env.NEXT_PUBLIC_SOCIAL_AUTH?.trim().toLowerCase();
   if (raw === "none" || raw === "false" || raw === "0") return [];
-  if (!raw) return ["google", "github", "slack"];
-  const allowed = new Set<SocialProviderId>(["google", "github", "slack"]);
+  if (!raw) return ["google"];
+  const allowed = new Set<SocialProviderId>(["google"]);
   return raw
     .split(",")
     .map((s) => s.trim().toLowerCase())

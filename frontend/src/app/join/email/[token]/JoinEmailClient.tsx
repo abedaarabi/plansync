@@ -452,7 +452,7 @@ export function JoinEmailClient({ token }: { token: string }) {
                 href={`/sign-in?next=${encodeURIComponent(`/join/email/${token}`)}`}
                 className="text-blue-600 hover:underline"
               >
-                Sign in with Google, GitHub, or Slack
+                Sign in with Google
               </Link>
               {" · "}
               <Link href="/" className="text-slate-600 hover:underline">
