@@ -8,10 +8,12 @@ RUN apk add --no-cache libc6-compat
 FROM base AS deps
 WORKDIR /app
 ENV HUSKY=0
+# Dokploy/CI often sets NODE_ENV=production, which makes `npm ci` skip devDependencies.
+# `sharp` is required for `prebuild` → `icons:pwa` (generate-pwa-icons.mjs).
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
 COPY backend/package.json ./backend/package.json
-RUN npm ci
+RUN npm ci --include=dev
 
 FROM base AS builder
 WORKDIR /app
