@@ -78,8 +78,8 @@ services:
       - dokploy-network
     depends_on:
       - backend
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+    # No host `ports:` — Traefik reaches this service on dokploy-network (see labels). Publishing
+    # 3000:3000 conflicts with other stacks / Dokploy’s gateway on the same host.
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       HOSTNAME: 0.0.0.0

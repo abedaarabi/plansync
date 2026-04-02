@@ -30,7 +30,7 @@ In Dokploy, create a Compose application pointing at this repo and set the compo
 
 Optional (same names as `.env.example`): `AWS_*`, `S3_BUCKET`, `STRIPE_*`, `RESEND_*`, `NEXT_PUBLIC_UMAMI_*`. For S3, configure bucket **CORS** for your public app origin — see [s3-setup.md](./s3-setup.md).
 
-`FRONTEND_PORT` maps the host port for the Next container (default `3000`). Put TLS and your public hostname on Dokploy’s reverse proxy in front of that port.
+The compose file does **not** publish Next on a host port; Traefik routes using the Docker network and labels. To hit Next directly on the host for debugging, add a `ports:` override (e.g. `3001:3000`) in a local override file.
 
 ## Database migrations (production)
 
