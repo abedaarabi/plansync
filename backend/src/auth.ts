@@ -36,16 +36,18 @@ export function createAuth(env: Env) {
     database: prismaAdapter(prisma, { provider: "postgresql" }),
     emailAndPassword: { enabled: true },
     ...(socialProviders ? { socialProviders } : {}),
-    ...(cookieDomain
-      ? {
-          advanced: {
+    advanced: {
+      /** Trust `x-forwarded-proto` / `x-forwarded-host` from Traefik and the Next.js API proxy. */
+      trustedProxyHeaders: true,
+      ...(cookieDomain
+        ? {
             crossSubDomainCookies: {
               enabled: true,
               domain: cookieDomain,
             },
-          },
-        }
-      : {}),
+          }
+        : {}),
+    },
     session: {
       cookieCache: { enabled: true, maxAge: 60 },
     },
