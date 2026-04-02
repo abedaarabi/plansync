@@ -43,5 +43,10 @@ app.route("/api/v1", v1Routes(auth, env));
 app.get("/", (c) => c.json({ ok: true, service: "plansync-api" }));
 
 serve({ fetch: app.fetch, port: env.PORT }, (info) => {
-  console.log(`API listening on http://localhost:${info.port}`);
+  // Inside Docker this is the container port; Traefik/DNS expose PUBLIC_API_URL / api host.
+  const publicApi =
+    env.PUBLIC_API_URL?.trim() || "(unset — set PUBLIC_API_URL or NEXT_PUBLIC_API_URL in compose)";
+  console.log(
+    `API listening on :${info.port} (public API origin: ${publicApi}; app: ${env.PUBLIC_APP_URL})`,
+  );
 });
