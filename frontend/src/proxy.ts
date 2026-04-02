@@ -64,6 +64,7 @@ function redirectToNotInvited(request: NextRequest): NextResponse {
 }
 
 type SessionPayload = { user?: unknown } | null;
+type AuthSessionPayload = { user?: unknown; session?: unknown } | null;
 
 async function canAccessProject(request: NextRequest, projectId: string): Promise<boolean> {
   const url = new URL(`/api/v1/projects/${encodeURIComponent(projectId)}`, request.nextUrl.origin);
@@ -83,10 +84,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const sessionUrl = new URL("/api/v1/me", request.nextUrl.origin);
+  const meUrl = new URL("/api/v1/me", request.nextUrl.origin);
   let res: Response;
   try {
-    res = await fetch(sessionUrl, {
+    res = await fetch(meUrl, {
       headers: {
         cookie: request.headers.get("cookie") ?? "",
       },
@@ -97,7 +98,33 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!res.ok) {
-    return redirectToSignIn(request, "session_status_not_ok");
+    // Fallback: if Better Auth session endpoint is healthy, allow navigation.
+    // This prevents false login loops when `/api/v1/me` fails for non-auth reasons.
+    const authSessionUrl = new URL("/api/auth/get-session", request.nextUrl.origin);
+    let authRes: Response;
+    try {
+      authRes = await fetch(authSessionUrl, {
+        headers: {
+          cookie: request.headers.get("cookie") ?? "",
+        },
+        cache: "no-store",
+      });
+    } catch {
+      return redirectToSignIn(request, "session_status_not_ok");
+    }
+    if (!authRes.ok) {
+      return redirectToSignIn(request, "session_status_not_ok");
+    }
+    let authData: AuthSessionPayload;
+    try {
+      authData = (await authRes.json()) as AuthSessionPayload;
+    } catch {
+      return redirectToSignIn(request, "session_invalid_json");
+    }
+    if (authData && authData.user && authData.session) {
+      return NextResponse.next();
+    }
+    return redirectToSignIn(request, "session_missing_user");
   }
 
   let data: SessionPayload;
