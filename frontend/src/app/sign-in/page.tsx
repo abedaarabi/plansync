@@ -26,6 +26,23 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  async function waitForSessionReady(): Promise<boolean> {
+    const waitsMs = [0, 120, 250, 500, 900];
+    for (const w of waitsMs) {
+      if (w > 0) await new Promise((resolve) => window.setTimeout(resolve, w));
+      try {
+        const res = await fetch("/api/v1/me", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (res.ok) return true;
+      } catch {
+        // retry
+      }
+    }
+    return false;
+  }
+
   useEffect(() => {
     setError(null);
   }, [mode]);
@@ -52,8 +69,14 @@ export default function SignInPage() {
         const { error: err } = await authClient.signIn.email({ email, password });
         if (err) setError(err.message ?? "Sign in failed");
         else {
-          // Full navigation: production (Traefik, cookies, PWA) is reliable; soft router.replace can
-          // navigate before the browser commits Set-Cookie from the auth response.
+          const sessionReady = await waitForSessionReady();
+          if (!sessionReady) {
+            setError(
+              "Signed in, but session was not persisted yet. Please try again. If this continues in production, check proxy Set-Cookie forwarding and cookie domain settings.",
+            );
+            return;
+          }
+          // Full navigation after session is confirmed.
           window.location.assign(next.startsWith("/") ? next : `/${next}`);
         }
       }

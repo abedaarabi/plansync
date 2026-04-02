@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -48,6 +49,36 @@ function forwardedHost(req: NextRequest): string | undefined {
 
 type Params = { path?: string[] };
 
+/**
+ * Some runtimes/proxies expose multiple Set-Cookie headers as one comma-joined string.
+ * Split safely so each cookie is appended as its own header.
+ */
+function splitSetCookieHeader(raw: string): string[] {
+  const out: string[] = [];
+  let start = 0;
+  let inExpires = false;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (!inExpires && raw.slice(i, i + 8).toLowerCase() === "expires=") {
+      inExpires = true;
+      i += 7;
+      continue;
+    }
+    if (inExpires && ch === ";") {
+      inExpires = false;
+      continue;
+    }
+    if (ch === "," && !inExpires) {
+      const part = raw.slice(start, i).trim();
+      if (part) out.push(part);
+      start = i + 1;
+    }
+  }
+  const tail = raw.slice(start).trim();
+  if (tail) out.push(tail);
+  return out;
+}
+
 async function proxy(req: NextRequest, params: Params): Promise<Response> {
   const sub = params.path?.length ? params.path.join("/") : "";
   const path = sub ? `/api/${sub}` : "/api";
@@ -88,7 +119,9 @@ async function proxy(req: NextRequest, params: Params): Promise<Response> {
     for (const c of cookies) out.headers.append("set-cookie", c);
   } else {
     const one = res.headers.get("set-cookie");
-    if (one) out.headers.append("set-cookie", one);
+    if (one) {
+      for (const c of splitSetCookieHeader(one)) out.headers.append("set-cookie", c);
+    }
   }
 
   res.headers.forEach((value, key) => {
