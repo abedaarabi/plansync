@@ -39,19 +39,11 @@ function extractProjectIdFromPath(pathname: string): string | null {
   return null;
 }
 
-function redirectToSignIn(
-  request: NextRequest,
-  reason:
-    | "session_fetch_failed"
-    | "session_status_not_ok"
-    | "session_invalid_json"
-    | "session_missing_user",
-): NextResponse {
+function redirectToSignIn(request: NextRequest): NextResponse {
   const signIn = request.nextUrl.clone();
   signIn.pathname = "/sign-in";
   signIn.search = "";
   signIn.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
-  signIn.searchParams.set("reason", reason);
   return NextResponse.redirect(signIn);
 }
 
@@ -85,10 +77,11 @@ function authCheckHeaders(request: NextRequest): HeadersInit {
 }
 
 async function canAccessProject(request: NextRequest, projectId: string): Promise<boolean> {
-  const url = new URL(`/api/v1/projects/${encodeURIComponent(projectId)}`, request.nextUrl.origin);
+  const base = authCheckBase(request);
+  const url = `${base}/api/v1/projects/${encodeURIComponent(projectId)}`;
   try {
     const res = await fetch(url, {
-      headers: { cookie: request.headers.get("cookie") ?? "" },
+      headers: authCheckHeaders(request),
       cache: "no-store",
     });
     return res.ok;
@@ -112,7 +105,7 @@ export async function proxy(request: NextRequest) {
       cache: "no-store",
     });
   } catch {
-    return redirectToSignIn(request, "session_fetch_failed");
+    return redirectToSignIn(request);
   }
 
   if (!res.ok) {
@@ -126,28 +119,28 @@ export async function proxy(request: NextRequest) {
         cache: "no-store",
       });
     } catch {
-      return redirectToSignIn(request, "session_status_not_ok");
+      return redirectToSignIn(request);
     }
     if (!authRes.ok) {
-      return redirectToSignIn(request, "session_status_not_ok");
+      return redirectToSignIn(request);
     }
     let authData: AuthSessionPayload;
     try {
       authData = (await authRes.json()) as AuthSessionPayload;
     } catch {
-      return redirectToSignIn(request, "session_invalid_json");
+      return redirectToSignIn(request);
     }
     if (authData && authData.user && authData.session) {
       return NextResponse.next();
     }
-    return redirectToSignIn(request, "session_missing_user");
+    return redirectToSignIn(request);
   }
 
   let data: SessionPayload;
   try {
     data = (await res.json()) as SessionPayload;
   } catch {
-    return redirectToSignIn(request, "session_invalid_json");
+    return redirectToSignIn(request);
   }
 
   if (data && data.user) {
@@ -167,7 +160,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  return redirectToSignIn(request, "session_missing_user");
+  return redirectToSignIn(request);
 }
 
 export const config = {

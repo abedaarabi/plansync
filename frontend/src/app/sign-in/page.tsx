@@ -18,19 +18,6 @@ export default function SignInPage() {
     const q = sp.get("next");
     if (q?.startsWith("/")) setNext(q);
     if (sp.get("mode") === "sign-up") setMode("sign-up");
-    const reason = sp.get("reason");
-    if (reason) {
-      const msgByReason: Record<string, string> = {
-        session_fetch_failed:
-          "Could not verify your session on this server. This is usually a production proxy/network issue.",
-        session_status_not_ok:
-          "Session check endpoint returned a non-OK status. This usually means auth cookie was not accepted.",
-        session_invalid_json:
-          "Session check returned an unexpected response. This can happen when a proxy rewrites API responses.",
-        session_missing_user: "Sign-in succeeded, but no authenticated user was found in session.",
-      };
-      setError(msgByReason[reason] ?? `Login redirect reason: ${reason}`);
-    }
   }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
