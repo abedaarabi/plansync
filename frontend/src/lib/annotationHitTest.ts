@@ -7,6 +7,8 @@ import { computeRotationCenterPx, inverseRotateNorm } from "@/lib/annotationRota
 const PAD = 10;
 /** Extra hit padding for issue-linked markups (easier to grab small pins). */
 const LINK_PAD = 14;
+/** Wider grab area for Sheet AI proposal markups (thin lines are hard to hit). */
+const SHEET_AI_HIT = 10;
 
 function distPointToSeg(
   px: number,
@@ -71,7 +73,8 @@ export function hitTestAnnotation(
   }
   const px = nxT * cssW;
   const py = nyT * cssH;
-  const tol = 10 + a.strokeWidth;
+  const ai = a.fromSheetAi ? SHEET_AI_HIT : 0;
+  const tol = 10 + a.strokeWidth + ai;
   switch (a.type) {
     case "rect":
     case "cloud":
@@ -82,7 +85,8 @@ export function hitTestAnnotation(
       const y = Math.min(p1.y, p2.y) * cssH;
       const w = Math.abs(p2.x - p1.x) * cssW;
       const h = Math.abs(p2.y - p1.y) * cssH;
-      const lp = a.linkedIssueId ? LINK_PAD : 0;
+      const lp =
+        (a.linkedIssueId ? LINK_PAD : 0) + (a.fromSheetAi && !a.linkedIssueId ? SHEET_AI_HIT : 0);
       return (
         px >= x - PAD - lp && px <= x + w + PAD + lp && py >= y - PAD - lp && py <= y + h + PAD + lp
       );

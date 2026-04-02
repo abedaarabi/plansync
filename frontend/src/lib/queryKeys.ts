@@ -29,6 +29,9 @@ export const qk = {
     ["issues", "fileVersion", fileVersionId] as const,
   issuesForProject: (projectId: string, fileVersionId?: string) =>
     ["issues", "project", projectId, fileVersionId ?? "all"] as const,
+  /** Persisted Sheet AI smart sheet + chat (GET cache; invalidate after POST summary/chat). */
+  sheetAiSheetCache: (fileVersionId: string, pageIndex0: number) =>
+    ["sheetAi", "sheetCache", fileVersionId, pageIndex0] as const,
   takeoffForFileVersion: (fileVersionId: string) =>
     ["takeoff", "fileVersion", fileVersionId] as const,
   takeoffForProject: (projectId: string) => ["takeoff", "project", projectId] as const,

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import type { MeasureUnit } from "@/lib/coords";
-import { putViewerState } from "@/lib/api-client";
+import { patchIssue, putViewerState } from "@/lib/api-client";
 import { clearPersistedSession } from "@/lib/sessionPersistence";
 import {
   annotationToClipboardPayload,
@@ -112,6 +112,8 @@ export interface Annotation {
   linkedIssueTitle?: string;
   /** Pin placed before the create-issue dialog is saved (no server issue id yet). */
   issueDraft?: boolean;
+  /** TOC zoom box, Sheet AI proposal markup, or AI-placed issue pin — removable in one action. */
+  fromSheetAi?: boolean;
 }
 
 export interface Calibration {
@@ -340,6 +342,11 @@ interface ViewerState {
   deleteAllMarkupsOnPage: (pageIndex0: number) => void;
   /** Remove all non-measurement annotations on every page. */
   deleteAllMarkupsInDocument: () => void;
+  /**
+   * Remove Sheet AI overlays: TOC highlights, proposal markups, AI issue pins (unlinks server pin),
+   * and takeoff zones/items tagged from Sheet AI (e.g. smart sheet / TOC).
+   */
+  clearSheetAiFromDrawing: () => Promise<void>;
   /** In-memory copy buffer for Ctrl+C / paste on page. */
   markupClipboard: Omit<Annotation, "id" | "createdAt">[] | null;
   copyAnnotationsToClipboard: (ids: string[]) => void;
@@ -1263,4 +1270,34 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
         selectedAnnotationIds: [],
       };
     }),
+
+  clearSheetAiFromDrawing: async () => {
+    const state = get();
+    const sheetAiAnn = state.annotations.filter((a) => a.fromSheetAi === true);
+    for (const a of sheetAiAnn) {
+      if (a.linkedIssueId) {
+        try {
+          await patchIssue(a.linkedIssueId, { annotationId: null });
+        } catch {
+          /* offline / permission */
+        }
+      }
+    }
+    const annIds = sheetAiAnn.map((a) => a.id);
+    if (annIds.length > 0) {
+      get().removeAnnotations(annIds);
+    }
+    const st1 = get();
+    const zoneIds = st1.takeoffZones.filter((z) => z.fromSheetAi && !z.locked).map((z) => z.id);
+    if (zoneIds.length > 0) {
+      get().takeoffRemoveZonesBulk(zoneIds);
+    }
+    const st2 = get();
+    const orphanItemIds = st2.takeoffItems
+      .filter((it) => it.fromSheetAi === true && !st2.takeoffZones.some((z) => z.itemId === it.id))
+      .map((it) => it.id);
+    for (const iid of orphanItemIds) {
+      get().takeoffRemoveItem(iid);
+    }
+  },
 }));

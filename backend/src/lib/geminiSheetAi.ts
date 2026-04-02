@@ -3,11 +3,10 @@ import type { Env } from "./env.js";
 import { resolveGeminiApiKey } from "./env.js";
 import {
   assertImageSizeOk,
-  proposeActionsResultSchema,
-  sanitizeProposeResult,
   sanitizeSheetSummaryResult,
   sheetSummaryResultSchema,
   type SheetAiContextBundle,
+  type SheetSummaryReadingRow,
   type SheetSummaryTocEntry,
 } from "./sheetAiSchemas.js";
 
@@ -38,7 +37,7 @@ function contextText(bundle: SheetAiContextBundle): string {
   }
   if (bundle.pdfTextSnippet?.trim()) {
     parts.push(
-      `Extracted PDF text (may be partial):\n---\n${bundle.pdfTextSnippet.slice(0, 80_000)}\n---`,
+      `Extracted PDF text (may be partial):\n---\n${bundle.pdfTextSnippet.slice(0, 24_000)}\n---`,
     );
   }
   return parts.join("\n\n");
@@ -51,13 +50,17 @@ export function geminiConfigured(env: Env): boolean {
 async function runGemini(
   env: Env,
   parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>,
+  generationConfig?: { maxOutputTokens: number },
 ): Promise<string> {
   const key = resolveGeminiApiKey(env);
   if (!key) throw new Error("Gemini API key not configured");
 
   const genAI = new GoogleGenerativeAI(key);
   const model = genAI.getGenerativeModel({
-    model: env.GEMINI_MODEL.trim() || "gemini-2.5-pro",
+    model: env.GEMINI_MODEL.trim() || "gemini-2.5-flash",
+    generationConfig: generationConfig
+      ? { maxOutputTokens: generationConfig.maxOutputTokens, temperature: 0.35 }
+      : { temperature: 0.35 },
   });
 
   const result = await model.generateContent(parts);
@@ -76,7 +79,11 @@ export class EmptyModelResponseError extends Error {
 export async function geminiSheetSummary(
   env: Env,
   bundle: SheetAiContextBundle,
-): Promise<{ summaryMarkdown: string; tableOfContents: SheetSummaryTocEntry[] }> {
+): Promise<{
+  summaryMarkdown: string;
+  readingsTable: SheetSummaryReadingRow[];
+  tableOfContents: SheetSummaryTocEntry[];
+}> {
   const raw = stripDataUrlPrefix(bundle.imageBase64);
   const size = assertImageSizeOk(raw);
   if (!size.ok) throw new Error(size.error);
@@ -87,7 +94,14 @@ ${contextText(bundle)}
 
 Return ONLY a single JSON object (no markdown code fences) with this exact shape:
 {
-  "summaryMarkdown": "string — markdown: discipline, sheet id, architectural zones, STRUCTURAL (slabs, framing), ENVELOPE (wall sections, insulation layers, WRB, cladding), MEP (ducts, piping, diffusers, equipment tags, risers, ceiling services), and readable text (dimensions, detail refs, specs). If illegible, say so. Do not invent numbers.",
+  "summaryMarkdown": "string — short markdown overview only: discipline, sheet name/number, what the sheet is for, and caveats (illegible areas). Do NOT duplicate row-by-row reads here — use readingsTable for those.",
+  "readingsTable": [
+    {
+      "element": "short label for one distinct item (e.g. 'Wall type 7', 'RTU-01', 'Detail 5/A-501', 'General note 12')",
+      "detail": "concrete readable content: dimensions, insulation layers, pipe size, spec ref, first line of note — quote or paraphrase visible text",
+      "kind": "area" | "detail" | "note" | "schedule" | "title_block" | "legend" | "mep" | "envelope" | "structure" | "other"
+    }
+  ],
   "tableOfContents": [
     {
       "title": "short UI label (e.g. Kitchen, Detail 5/A-501, General notes 7–12, Door schedule)",
@@ -102,6 +116,12 @@ Return ONLY a single JSON object (no markdown code fences) with this exact shape
   ]
 }
 
+Rules for readingsTable:
+- One row per meaningful element you can read (wall types, MEP tags, detail keys, schedule headers, note topics, title block fields).
+- "detail" must be specific; if unreadable write "Illegible" — do not invent numbers or specs.
+- Aim for 10–40 rows on busy sheets; fewer on sparse sheets.
+- "kind" is optional but preferred.
+
 Rules for tableOfContents (user will click an entry to zoom and highlight that region):
 - Use pageIndex exactly ${bundle.pageIndex} for every entry.
 - Coordinates: normalized to the FULL sheet image (0,0) top-left, (1,1) bottom-right; use 3 decimal places.
@@ -112,20 +132,21 @@ Rules for tableOfContents (user will click an entry to zoom and highlight that r
 - Aim for 8–28 entries when the sheet is busy; fewer on simple sheets. Omit regions you cannot locate confidently.
 - Titles must be unique in the list.`;
 
-  const text = await runGemini(env, [
-    { text: prompt },
-    { inlineData: { mimeType: bundle.mimeType, data: raw } },
-  ]);
+  const text = await runGemini(
+    env,
+    [{ text: prompt }, { inlineData: { mimeType: bundle.mimeType, data: raw } }],
+    { maxOutputTokens: 8192 },
+  );
 
   try {
     const json = extractJsonObject(text);
     const parsed = sheetSummaryResultSchema.safeParse(json);
     if (!parsed.success) {
-      return { summaryMarkdown: text.trim(), tableOfContents: [] };
+      return { summaryMarkdown: text.trim(), readingsTable: [], tableOfContents: [] };
     }
     return sanitizeSheetSummaryResult(parsed.data, bundle.pageIndex);
   } catch {
-    return { summaryMarkdown: text.trim(), tableOfContents: [] };
+    return { summaryMarkdown: text.trim(), readingsTable: [], tableOfContents: [] };
   }
 }
 
@@ -153,63 +174,10 @@ Rules: Describe insulation layers, wall types, ducts, piping, and equipment when
 
 ${historyText ? `Prior turns:\n${historyText}\n\n` : ""}**user**: ${last.content}`;
 
-  const text = await runGemini(env, [
-    { text: prompt },
-    { inlineData: { mimeType: bundle.mimeType, data: raw } },
-  ]);
+  const text = await runGemini(
+    env,
+    [{ text: prompt }, { inlineData: { mimeType: bundle.mimeType, data: raw } }],
+    { maxOutputTokens: 2048 },
+  );
   return { reply: text.trim() };
-}
-
-export async function geminiProposeActions(
-  env: Env,
-  bundle: SheetAiContextBundle,
-  userPrompt?: string,
-): Promise<{ proposals: ReturnType<typeof sanitizeProposeResult> }> {
-  const raw = stripDataUrlPrefix(bundle.imageBase64);
-  const size = assertImageSizeOk(raw);
-  if (!size.ok) throw new Error(size.error);
-
-  const schemaHint = `Return ONLY a single JSON object (no markdown fences) with this shape:
-{
-  "takeoffZones": [ { "suggestedItemName": string (optional), "measurementType": "area"|"linear"|"count", "points": [{"x":0-1,"y":0-1}, ...], "notes": string (optional) } ],
-  "issueDrafts": [ { "title": string, "description": string (optional), "pageNumber": number optional 1-based, "pinNorm": {"x":0-1,"y":0-1} optional } ],
-  "markups": [ { "type": "rect"|"ellipse"|"cloud"|"highlight"|"line"|"text"|"polygon", "color": "#RRGGBB" optional, "strokeWidth": number optional, "points": [...], "text": string for type text optional } ]
-}
-
-Rules:
-- Coordinates are normalized to the FULL sheet image (0-1).
-- area: at least 3 points (closed polygon vertices in order).
-- linear: at least 2 points along the path.
-- count: one point per counted item OR one point if unclear.
-- rect/ellipse/cloud/highlight: two points = opposite corners of bounding box.
-- line: two endpoints.
-- polygon: at least 3 vertices.
-- text: one anchor point (x,y); put label in "text".
-- Prefer a small number of high-confidence items over many guesses.
-`;
-
-  const prompt = `You propose takeoff zones, issue pins, and markups from a construction sheet. Include envelope/MEP where relevant: insulation boundaries, duct/pipe centerlines, equipment pads, layered wall sections in details.
-
-${contextText(bundle)}
-
-${userPrompt?.trim() ? `User request: ${userPrompt.trim()}\n\n` : ""}${schemaHint}`;
-
-  const text = await runGemini(env, [
-    { text: prompt },
-    { inlineData: { mimeType: bundle.mimeType, data: raw } },
-  ]);
-
-  let parsed: unknown;
-  try {
-    parsed = extractJsonObject(text);
-  } catch {
-    throw new Error("Model did not return valid JSON");
-  }
-
-  const validated = proposeActionsResultSchema.safeParse(parsed);
-  if (!validated.success) {
-    throw new Error("Model JSON failed validation");
-  }
-
-  return { proposals: sanitizeProposeResult(validated.data) };
 }

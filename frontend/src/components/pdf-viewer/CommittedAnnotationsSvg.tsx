@@ -13,6 +13,12 @@ import { computeRotationCenterPx } from "@/lib/annotationRotation";
 
 const MEASURE_LABEL_CLASS = "font-mono";
 
+/** Sheet AI lines are often thin in model output — keep them readable and easier to see at zoom. */
+function markupStrokeWidthPx(a: Pick<Annotation, "strokeWidth" | "fromSheetAi">): number {
+  if (!a.fromSheetAi) return a.strokeWidth;
+  return Math.max(2.25, Math.min(8, a.strokeWidth));
+}
+
 function RotatedMarkupG({
   a,
   cssW,
@@ -226,6 +232,7 @@ export function CommittedAnnotationsSvg({
         }));
         if (a.type === "polyline" && a.points.length >= 2) {
           const d = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+          const sw = markupStrokeWidthPx(a);
           return (
             <RotatedMarkupG
               key={a.id}
@@ -236,19 +243,35 @@ export function CommittedAnnotationsSvg({
               pageH={pageH}
               scale={scale}
             >
+              {a.fromSheetAi ? (
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={a.color}
+                  strokeOpacity={0.22}
+                  strokeWidth={sw + 3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              ) : null}
               <path
                 d={d}
                 fill="none"
                 stroke={a.color}
-                strokeWidth={a.strokeWidth}
+                strokeWidth={sw}
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                vectorEffect={a.fromSheetAi ? "non-scaling-stroke" : undefined}
               />
             </RotatedMarkupG>
           );
         }
         if (a.type === "highlight" && a.points.length >= 2) {
           const d = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+          const hiSw = a.fromSheetAi
+            ? Math.max(highlightStrokeWidthPx(markupStrokeWidthPx(a)), 10)
+            : highlightStrokeWidthPx(a.strokeWidth);
           return (
             <RotatedMarkupG
               key={a.id}
@@ -263,16 +286,18 @@ export function CommittedAnnotationsSvg({
                 d={d}
                 fill="none"
                 stroke={a.color}
-                strokeWidth={highlightStrokeWidthPx(a.strokeWidth)}
+                strokeWidth={hiSw}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeOpacity={0.4}
+                strokeOpacity={a.fromSheetAi ? 0.35 : 0.4}
+                vectorEffect={a.fromSheetAi ? "non-scaling-stroke" : undefined}
               />
             </RotatedMarkupG>
           );
         }
         if (a.type === "line" && a.points.length === 2) {
           const [p1, p2] = pts;
+          const lw = markupStrokeWidthPx(a);
           return (
             <RotatedMarkupG
               key={a.id}
@@ -284,14 +309,29 @@ export function CommittedAnnotationsSvg({
               scale={scale}
             >
               <g style={a.arrowHead ? { color: a.color } : undefined}>
+                {a.fromSheetAi ? (
+                  <line
+                    x1={p1.x}
+                    y1={p1.y}
+                    x2={p2.x}
+                    y2={p2.y}
+                    stroke={a.color}
+                    strokeOpacity={0.2}
+                    strokeWidth={lw + 4}
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ) : null}
                 <line
                   x1={p1.x}
                   y1={p1.y}
                   x2={p2.x}
                   y2={p2.y}
                   stroke={a.color}
-                  strokeWidth={a.strokeWidth}
+                  strokeWidth={lw}
+                  strokeLinecap="round"
                   markerEnd={a.arrowHead ? markerUrl : undefined}
+                  vectorEffect={a.fromSheetAi ? "non-scaling-stroke" : undefined}
                 />
               </g>
             </RotatedMarkupG>
@@ -520,6 +560,7 @@ export function CommittedAnnotationsSvg({
         }
         if (a.type === "polygon" && a.points.length >= 3) {
           const d = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ") + " Z";
+          const psw = markupStrokeWidthPx(a);
           return (
             <RotatedMarkupG
               key={a.id}
@@ -530,13 +571,26 @@ export function CommittedAnnotationsSvg({
               pageH={pageH}
               scale={scale}
             >
+              {a.fromSheetAi ? (
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={a.color}
+                  strokeOpacity={0.18}
+                  strokeWidth={psw + 3}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              ) : null}
               <path
                 d={d}
                 fill="none"
                 stroke={a.color}
-                strokeWidth={a.strokeWidth}
+                strokeWidth={psw}
                 strokeLinejoin="round"
                 strokeLinecap="round"
+                vectorEffect={a.fromSheetAi ? "non-scaling-stroke" : undefined}
               />
             </RotatedMarkupG>
           );

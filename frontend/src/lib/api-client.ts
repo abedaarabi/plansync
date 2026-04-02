@@ -1077,33 +1077,16 @@ export type SheetAiTocEntry = {
   maxY: number;
 };
 
-export type SheetAiNormPoint = { x: number; y: number };
-
-export type SheetAiProposals = {
-  takeoffZones: {
-    suggestedItemName?: string;
-    measurementType: "area" | "linear" | "count";
-    points: SheetAiNormPoint[];
-    notes?: string;
-  }[];
-  issueDrafts: {
-    title: string;
-    description?: string;
-    pageNumber?: number;
-    pinNorm?: SheetAiNormPoint;
-  }[];
-  markups: {
-    type: "rect" | "ellipse" | "cloud" | "highlight" | "line" | "text" | "polygon";
-    color?: string;
-    strokeWidth?: number;
-    points: SheetAiNormPoint[];
-    text?: string;
-  }[];
+/** Row from smart sheet analysis (element label + what was read). */
+export type SheetAiReadingRow = {
+  element: string;
+  detail: string;
+  kind?: SheetAiTocKind;
 };
 
 async function sheetAiJson<T>(
   fileVersionId: string,
-  aiPath: "ai/sheet-summary" | "ai/chat" | "ai/propose-actions",
+  aiPath: "ai/sheet-summary" | "ai/chat",
   body: unknown,
 ): Promise<T> {
   const res = await fetch(
@@ -1128,15 +1111,55 @@ async function sheetAiJson<T>(
   return j as T;
 }
 
+export type SheetAiSheetCacheResponse =
+  | { cached: false }
+  | {
+      cached: true;
+      summaryMarkdown: string;
+      readingsTable: SheetAiReadingRow[];
+      tableOfContents: SheetAiTocEntry[];
+      chatMessages: SheetAiChatMessage[];
+      updatedAt: string;
+    };
+
+export async function fetchSheetAiSheetCache(
+  fileVersionId: string,
+  pageIndex0: number,
+): Promise<SheetAiSheetCacheResponse> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/ai/sheet-cache?pageIndex=${encodeURIComponent(String(pageIndex0))}`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (res.status === 503) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? "Sheet AI is not configured.");
+  }
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+  } & Partial<SheetAiSheetCacheResponse>;
+  if (!res.ok) {
+    const msg = typeof j.error === "string" ? j.error : "Could not load Sheet AI cache.";
+    throw new HttpError(res.status, msg);
+  }
+  return j as SheetAiSheetCacheResponse;
+}
+
 export async function fetchSheetAiSummary(
   fileVersionId: string,
   body: SheetAiContextPayload,
-): Promise<{ summaryMarkdown: string; tableOfContents: SheetAiTocEntry[] }> {
-  return sheetAiJson<{ summaryMarkdown: string; tableOfContents: SheetAiTocEntry[] }>(
-    fileVersionId,
-    "ai/sheet-summary",
-    body,
-  );
+): Promise<{
+  summaryMarkdown: string;
+  readingsTable: SheetAiReadingRow[];
+  tableOfContents: SheetAiTocEntry[];
+}> {
+  return sheetAiJson<{
+    summaryMarkdown: string;
+    readingsTable: SheetAiReadingRow[];
+    tableOfContents: SheetAiTocEntry[];
+  }>(fileVersionId, "ai/sheet-summary", body);
 }
 
 export async function fetchSheetAiChat(
@@ -1144,13 +1167,6 @@ export async function fetchSheetAiChat(
   body: SheetAiContextPayload & { messages: SheetAiChatMessage[] },
 ): Promise<{ reply: string }> {
   return sheetAiJson<{ reply: string }>(fileVersionId, "ai/chat", body);
-}
-
-export async function fetchSheetAiProposeActions(
-  fileVersionId: string,
-  body: SheetAiContextPayload & { userPrompt?: string },
-): Promise<{ proposals: SheetAiProposals }> {
-  return sheetAiJson<{ proposals: SheetAiProposals }>(fileVersionId, "ai/propose-actions", body);
 }
 
 // --- Takeoff lines (Pro) ---

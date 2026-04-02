@@ -368,6 +368,8 @@ model FileVersion {
   uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
   annotationBlob Json? /// persisted Zustand-compatible annotation JSON per version
+  /// Sheet AI: cached smart sheet + chat per PDF page (see `sheetAiCache` shape in backend).
+  sheetAiCache   Json?
   lockedByUserId String?
   lockedAt       DateTime?
   lockExpiresAt  DateTime?

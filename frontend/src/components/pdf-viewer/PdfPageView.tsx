@@ -42,6 +42,7 @@ import {
   annotationIsIssuePin,
 } from "@/lib/annotationIssues";
 import {
+  annotationSelectionBounds,
   pickAnnotationAt,
   pickAnnotationsInMarquee,
   translateAnnotationPoints,
@@ -546,6 +547,8 @@ export function PdfPageView({
     start: { x: number; y: number };
     current: { x: number; y: number };
   } | null>(null);
+  /** Select tool: markup under cursor (highlights before click). */
+  const [markupHoverId, setMarkupHoverId] = useState<string | null>(null);
   const resizeSessionRef = useRef<ResizeSession | null>(null);
   const [resizeActive, setResizeActive] = useState(false);
   const panSessionRef = useRef<{
@@ -1181,6 +1184,14 @@ export function PdfPageView({
   useEffect(() => {
     setToolbarHoveredLayerId(null);
   }, [pageNumber, setToolbarHoveredLayerId]);
+
+  useEffect(() => {
+    if (tool !== "select") setMarkupHoverId(null);
+  }, [tool]);
+
+  useEffect(() => {
+    if (compareReferenceOnly) setMarkupHoverId(null);
+  }, [compareReferenceOnly]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2609,6 +2620,18 @@ export function PdfPageView({
         return;
       }
 
+      if (tool !== "select" || compareReferenceOnly || textCommentOpen) {
+        setMarkupHoverId(null);
+      } else if (moveDrag || selectMarquee || resizeActive) {
+        setMarkupHoverId(null);
+      } else {
+        const pageAnn = annotations.filter((a) => a.pageIndex === pageIdx0);
+        const cw = pageSize.w * scale;
+        const ch = pageSize.h * scale;
+        const hid = pickAnnotationAt(pageAnn, raw.x, raw.y, cw, ch, pageSize.w, pageSize.h, scale);
+        setMarkupHoverId(hid);
+      }
+
       const blockPdfHover =
         calibrateOpen ||
         toolbarHoveredLayerId ||
@@ -2683,6 +2706,10 @@ export function PdfPageView({
       takeoffVertexSession,
       takeoffMoveSession,
       setTakeoffHoverZoneId,
+      annotations,
+      pageIdx0,
+      resizeActive,
+      compareReferenceOnly,
     ],
   );
 
@@ -3023,6 +3050,43 @@ export function PdfPageView({
     );
   }, [selectedAnnotationIds, tool, annotations, cssW, cssH, pageSize.w, pageSize.h, scale]);
 
+  const markupHoverHighlight = useMemo(() => {
+    if (tool !== "select" || !markupHoverId || selectedAnnotationIds.includes(markupHoverId)) {
+      return null;
+    }
+    const a = annotations.find((x) => x.id === markupHoverId);
+    if (!a || a.pageIndex !== pageIdx0) return null;
+    const b = annotationSelectionBounds(a, cssW, cssH, pageSize.w, pageSize.h, scale);
+    if (!b) return null;
+    let x0 = b.minX;
+    let y0 = b.minY;
+    let rw = b.maxX - b.minX;
+    let rh = b.maxY - b.minY;
+    const MIN = 16;
+    if (rw < MIN) {
+      const pad = (MIN - rw) / 2;
+      x0 -= pad;
+      rw = MIN;
+    }
+    if (rh < MIN) {
+      const pad = (MIN - rh) / 2;
+      y0 -= pad;
+      rh = MIN;
+    }
+    return { x0, y0, rw, rh };
+  }, [
+    tool,
+    markupHoverId,
+    selectedAnnotationIds,
+    annotations,
+    pageIdx0,
+    cssW,
+    cssH,
+    pageSize.w,
+    pageSize.h,
+    scale,
+  ]);
+
   const selectedLinkedIssueLabel = useMemo(() => {
     if (tool !== "select" || selectedAnnotationIds.length !== 1) return null;
     const a = annotations.find((x) => x.id === selectedAnnotationIds[0]);
@@ -3190,6 +3254,7 @@ export function PdfPageView({
           }}
           onContextMenu={handleSheetContextMenu}
           onPointerLeave={(ev) => {
+            setMarkupHoverId(null);
             setSnapHoverPathIndex(null);
             setBrushHoverNorm(null);
             if (tool === "takeoff") {
@@ -3526,6 +3591,20 @@ export function PdfPageView({
                     stroke="#0ea5e9"
                     strokeWidth={2}
                     strokeDasharray="6 4"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+                {markupHoverHighlight && (
+                  <rect
+                    className="print:hidden pointer-events-none"
+                    x={markupHoverHighlight.x0}
+                    y={markupHoverHighlight.y0}
+                    width={markupHoverHighlight.rw}
+                    height={markupHoverHighlight.rh}
+                    fill="rgba(251, 191, 36, 0.1)"
+                    stroke="rgba(251, 191, 36, 0.72)"
+                    strokeWidth={1.25}
+                    rx={4}
                     vectorEffect="non-scaling-stroke"
                   />
                 )}

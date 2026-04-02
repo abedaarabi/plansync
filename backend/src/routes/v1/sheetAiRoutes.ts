@@ -3,18 +3,17 @@ import type { MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { prisma } from "../../lib/prisma.js";
 import type { Env } from "../../lib/env.js";
-import {
-  geminiConfigured,
-  geminiProposeActions,
-  geminiSheetChat,
-  geminiSheetSummary,
-} from "../../lib/geminiSheetAi.js";
+import { geminiConfigured, geminiSheetChat, geminiSheetSummary } from "../../lib/geminiSheetAi.js";
 import { loadProjectForMember } from "../../lib/projectAccess.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import {
+  getSheetAiPageFromDb,
+  saveSheetAiChatToDb,
+  saveSheetAiSummaryToDb,
+} from "../../lib/sheetAiCacheDb.js";
+import {
   assertImageSizeOk,
   sheetChatBodySchema,
-  sheetProposeBodySchema,
   sheetSummaryBodySchema,
 } from "../../lib/sheetAiSchemas.js";
 
@@ -44,6 +43,38 @@ const aiBodyLimit = bodyLimit({
 });
 
 export function registerSheetAiRoutes(r: Hono, needUser: MiddlewareHandler, env: Env) {
+  r.get("/file-versions/:fileVersionId/ai/sheet-cache", needUser, async (c) => {
+    const fileVersionId = c.req.param("fileVersionId")!;
+    const authz = await authorizeSheetAi(fileVersionId, c.get("user").id);
+    if ("error" in authz && authz.status === 404) return c.json({ error: authz.error }, 404);
+    if ("error" in authz) return c.json({ error: authz.error }, authz.status);
+
+    const pageRaw = c.req.query("pageIndex");
+    const pageIndex0 = pageRaw === undefined ? NaN : Number(pageRaw);
+    if (!Number.isInteger(pageIndex0) || pageIndex0 < 0 || pageIndex0 > 10_000) {
+      return c.json({ error: "Invalid pageIndex (0-based integer)" }, 400);
+    }
+
+    const entry = await getSheetAiPageFromDb(fileVersionId, pageIndex0);
+    if (!entry) {
+      return c.json({ cached: false as const });
+    }
+    const hasSummary = entry.summaryMarkdown.trim().length > 0;
+    const hasTables = entry.readingsTable.length > 0 || entry.tableOfContents.length > 0;
+    const hasChat = (entry.chatMessages?.length ?? 0) > 0;
+    if (!hasSummary && !hasTables && !hasChat) {
+      return c.json({ cached: false as const });
+    }
+    return c.json({
+      cached: true as const,
+      summaryMarkdown: entry.summaryMarkdown,
+      readingsTable: entry.readingsTable,
+      tableOfContents: entry.tableOfContents,
+      chatMessages: entry.chatMessages ?? [],
+      updatedAt: entry.updatedAt,
+    });
+  });
+
   r.post("/file-versions/:fileVersionId/ai/sheet-summary", needUser, aiBodyLimit, async (c) => {
     if (!geminiConfigured(env)) return c.json({ error: "Sheet AI is not configured" }, 503);
 
@@ -60,8 +91,16 @@ export function registerSheetAiRoutes(r: Hono, needUser: MiddlewareHandler, env:
     if (!img.ok) return c.json({ error: img.error }, 400);
 
     try {
-      const { summaryMarkdown, tableOfContents } = await geminiSheetSummary(env, parsed.data);
-      return c.json({ summaryMarkdown, tableOfContents });
+      const { summaryMarkdown, readingsTable, tableOfContents } = await geminiSheetSummary(
+        env,
+        parsed.data,
+      );
+      await saveSheetAiSummaryToDb(fileVersionId, parsed.data.pageIndex, {
+        summaryMarkdown,
+        readingsTable,
+        tableOfContents,
+      });
+      return c.json({ summaryMarkdown, readingsTable, tableOfContents });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Sheet summary failed";
       return c.json({ error: msg }, 502);
@@ -86,34 +125,11 @@ export function registerSheetAiRoutes(r: Hono, needUser: MiddlewareHandler, env:
 
     try {
       const { reply } = await geminiSheetChat(env, parsed.data, parsed.data.messages);
+      const thread = [...parsed.data.messages, { role: "model" as const, content: reply }];
+      await saveSheetAiChatToDb(fileVersionId, parsed.data.pageIndex, thread);
       return c.json({ reply });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Chat failed";
-      return c.json({ error: msg }, 502);
-    }
-  });
-
-  r.post("/file-versions/:fileVersionId/ai/propose-actions", needUser, aiBodyLimit, async (c) => {
-    if (!geminiConfigured(env)) return c.json({ error: "Sheet AI is not configured" }, 503);
-
-    const fileVersionId = c.req.param("fileVersionId")!;
-    const authz = await authorizeSheetAi(fileVersionId, c.get("user").id);
-    if ("error" in authz && authz.status === 404) return c.json({ error: authz.error }, 404);
-    if ("error" in authz) return c.json({ error: authz.error }, authz.status);
-
-    const raw = await c.req.json().catch(() => null);
-    const parsed = sheetProposeBodySchema.safeParse(raw);
-    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
-
-    const b64 = parsed.data.imageBase64.replace(/^data:[^;]+;base64,/, "");
-    const img = assertImageSizeOk(b64);
-    if (!img.ok) return c.json({ error: img.error }, 400);
-
-    try {
-      const { proposals } = await geminiProposeActions(env, parsed.data, parsed.data.userPrompt);
-      return c.json({ proposals });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Proposals failed";
       return c.json({ error: msg }, 502);
     }
   });

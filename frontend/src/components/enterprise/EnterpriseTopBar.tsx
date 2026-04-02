@@ -24,7 +24,6 @@ import { ProjectPicker } from "./ProjectPicker";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { fetchProjects } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
-import Image from "next/image";
 import Link from "next/link";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -144,16 +143,13 @@ export function EnterpriseTopBar({
 
         {/* Breadcrumb */}
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          <Link
-            href="/dashboard"
-            className="flex shrink-0 items-center gap-2 font-bold tracking-tight transition hover:opacity-90"
+          <span
+            className="flex shrink-0 select-none items-baseline gap-0 font-bold tracking-tight"
+            aria-label="PlanSync"
           >
-            <Image src="/logo.svg" alt="" width={28} height={28} className="h-7 w-7 shrink-0" />
-            <span className="hidden sm:inline">
-              <span className="text-[var(--enterprise-text)]">Plan</span>
-              <span className="text-[var(--enterprise-primary)]">Sync</span>
-            </span>
-          </Link>
+            <span className="text-[var(--enterprise-text)]">Plan</span>
+            <span className="text-[var(--enterprise-primary)]">Sync</span>
+          </span>
           <div className="hidden h-4 w-px bg-[var(--enterprise-border)] sm:block" />
 
           {isProjectContext ? (

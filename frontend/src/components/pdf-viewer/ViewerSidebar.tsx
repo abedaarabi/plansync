@@ -490,7 +490,7 @@ export function ViewerSidebar() {
                         setTakeoffMode(false);
                         setTakeoffInventoryDrawerFromSidebar(false);
                       }}
-                      title="Sheet AI — summary, chat, suggestions"
+                      title="Sheet AI — summary &amp; chat"
                       className={sidebarPanelTabClass(sidebarTab === "sheetAi")}
                     >
                       <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -516,7 +516,11 @@ export function ViewerSidebar() {
         {pdfUrl && sidebarTab === "outline" && <SidebarOutlineTab />}
         {pdfUrl && sidebarTab === "issues" && showProTabs && <SidebarIssuesTab />}
         {pdfUrl && sidebarTab === "takeoff" && showProTabs && <SidebarTakeoffTab />}
-        {pdfUrl && sidebarTab === "sheetAi" && showProTabs && <SidebarSheetAiTab />}
+        {pdfUrl && sidebarTab === "sheetAi" && showProTabs && (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <SidebarSheetAiTab />
+          </div>
+        )}
 
         {pdfUrl && sidebarTab === "draw" && (
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:thin]">

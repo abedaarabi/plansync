@@ -8,7 +8,9 @@ export function workspaceJson(ws: Workspace) {
   };
 }
 
-export function fileVersionJson(fv: FileVersion | Omit<FileVersion, "annotationBlob">) {
+export function fileVersionJson(
+  fv: FileVersion | Omit<FileVersion, "annotationBlob" | "sheetAiCache">,
+) {
   return {
     ...fv,
     sizeBytes: fv.sizeBytes.toString(),
@@ -29,7 +31,7 @@ export function projectTreeJson(
     folders: unknown[];
     files: Array<
       {
-        versions: (FileVersion | Omit<FileVersion, "annotationBlob">)[];
+        versions: (FileVersion | Omit<FileVersion, "annotationBlob" | "sheetAiCache">)[];
       } & Record<string, unknown>
     >;
     localBudget?: unknown;

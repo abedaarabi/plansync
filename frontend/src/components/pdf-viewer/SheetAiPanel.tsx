@@ -1,35 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Send, Sparkles, Wand2 } from "lucide-react";
+import { Loader2, MessageSquare, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
-  createIssue,
   fetchIssuesForFileVersion,
-  fetchProject,
   fetchSheetAiChat,
-  fetchSheetAiProposeActions,
+  fetchSheetAiSheetCache,
   fetchSheetAiSummary,
-  formatIssueLockHint,
-  patchIssue,
   type SheetAiChatMessage,
-  type SheetAiProposals,
+  type SheetAiReadingRow,
   type SheetAiTocEntry,
   type SheetAiTocKind,
 } from "@/lib/api-client";
-import { issueStatusMarkerStrokeHex } from "@/lib/issueStatusStyle";
 import { qk } from "@/lib/queryKeys";
 import { captureCanvasToPngBase64 } from "@/lib/sheetAiCapture";
-import {
-  applyItemToRawQuantity,
-  computeRawQuantity,
-  rectPolygonFromTwoCornersNorm,
-} from "@/lib/takeoffCompute";
+import { buildSheetAiViewerSnapshot } from "@/lib/sheetAiViewerSnapshot";
 import { DEFAULT_TAKEOFF_COLOR, TAKEOFF_COLOR_PRESETS } from "@/lib/takeoffUi";
-import type { TakeoffMeasurementType, TakeoffUnit } from "@/lib/takeoffTypes";
-import { publishTakeoffZoneToProjectLine } from "@/lib/takeoffPublishCloud";
 import { TAKEOFF_FOCUS_FIT_MARGIN } from "@/lib/takeoffFocus";
 import { useViewerStore } from "@/store/viewerStore";
 import { useViewerPageCanvasRef } from "@/components/pdf-viewer/ViewerCanvasContext";
@@ -40,10 +28,9 @@ function formatTocKind(kind: SheetAiTocKind): string {
   return kind.replace(/_/g, " ");
 }
 
-function defaultUnitFor(mt: TakeoffMeasurementType): TakeoffUnit {
-  if (mt === "area") return "m²";
-  if (mt === "linear") return "m";
-  return "ea";
+function formatReadingKind(kind: SheetAiTocKind | undefined): string {
+  if (!kind) return "—";
+  return formatTocKind(kind);
 }
 
 function clamp01(n: number): number {
@@ -51,52 +38,26 @@ function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
 }
 
-function buildViewerSnapshot(
-  pageIndex0: number,
-  state: ReturnType<typeof useViewerStore.getState>,
-  issues?: { title: string; status: string }[],
-): Record<string, unknown> {
-  return {
-    currentPage1Based: pageIndex0 + 1,
-    fileName: state.fileName,
-    pageCalibrated: Boolean(state.calibrationByPage[pageIndex0]),
-    takeoffZonesOnPage: state.takeoffZones.filter((z) => z.pageIndex === pageIndex0).length,
-    takeoffItemCount: state.takeoffItems.length,
-    markupsOnPage: state.annotations.filter(
-      (a) =>
-        a.pageIndex === pageIndex0 && !a.linkedIssueId && !a.issueDraft && a.type !== "measurement",
-    ).length,
-    openIssuesOnSheet: issues ?? [],
-  };
+/** Neutral segment style so tabs read as “view mode”, not the same as the violet Generate CTA. */
+function sheetAiDrawerTabClass(selected: boolean): string {
+  return `viewer-focus-ring flex h-7 flex-1 items-center justify-center gap-1 rounded-md px-2 text-[9px] font-medium transition-colors ${
+    selected
+      ? "bg-slate-700/90 text-slate-50 shadow-sm ring-1 ring-white/10"
+      : "text-slate-500 hover:bg-slate-800/60 hover:text-slate-300"
+  }`;
 }
 
 export function SheetAiPanel() {
   const pageCanvasRef = useViewerPageCanvasRef();
-  const searchParams = useSearchParams();
-  const fileId = searchParams.get("fileId");
   const qc = useQueryClient();
 
   const currentPage = useViewerStore((s) => s.currentPage);
   const pageIdx0 = currentPage - 1;
   const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
-  const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
-  const calibrationByPage = useViewerStore((s) => s.calibrationByPage);
-  const pageSizePtByPage = useViewerStore((s) => s.pageSizePtByPage);
-  const takeoffAddItem = useViewerStore((s) => s.takeoffAddItem);
-  const takeoffAddZone = useViewerStore((s) => s.takeoffAddZone);
-  const addAnnotation = useViewerStore((s) => s.addAnnotation);
   const displayName = useViewerStore((s) => s.displayName);
-  const strokeWidth = useViewerStore((s) => s.strokeWidth);
   const textBoxFillFromFrame = useViewerStore((s) => s.textBoxFillFromFrame);
 
   const lastTocAnnotationIdsRef = useRef<string[]>([]);
-
-  const { data: project } = useQuery({
-    queryKey: qk.project(viewerProjectId ?? ""),
-    queryFn: () => fetchProject(viewerProjectId!),
-    enabled: Boolean(viewerProjectId),
-  });
-  const workspaceId = project?.workspaceId;
 
   const { data: issuesRows = [] } = useQuery({
     queryKey: qk.issuesForFileVersion(cloudFileVersionId ?? ""),
@@ -110,21 +71,26 @@ export function SheetAiPanel() {
   );
 
   const [summary, setSummary] = useState("");
+  const [readingsTable, setReadingsTable] = useState<SheetAiReadingRow[]>([]);
   const [tableOfContents, setTableOfContents] = useState<SheetAiTocEntry[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [chatMessages, setChatMessages] = useState<SheetAiChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [proposals, setProposals] = useState<SheetAiProposals | null>(null);
-  const [proposePrompt, setProposePrompt] = useState("");
-  const [proposeLoading, setProposeLoading] = useState(false);
-  const [applyBusy, setApplyBusy] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<"generate" | "chat">("generate");
+
+  const { data: sheetCache, isSuccess: sheetCacheReady } = useQuery({
+    queryKey: qk.sheetAiSheetCache(cloudFileVersionId ?? "", pageIdx0),
+    queryFn: () => fetchSheetAiSheetCache(cloudFileVersionId!, pageIdx0),
+    enabled: Boolean(cloudFileVersionId),
+    staleTime: 60_000,
+  });
 
   const captureContext = useCallback(async () => {
     const cap = captureCanvasToPngBase64(pageCanvasRef?.current ?? null);
     if (!cap) throw new Error("Could not capture the sheet image.");
     const st = useViewerStore.getState();
-    const snap = buildViewerSnapshot(pageIdx0, st, issuesSummary);
+    const snap = buildSheetAiViewerSnapshot(pageIdx0, st, issuesSummary);
     return {
       pageIndex: pageIdx0,
       imageBase64: cap.base64,
@@ -138,22 +104,47 @@ export function SheetAiPanel() {
     setSummaryLoading(true);
     try {
       const ctx = await captureContext();
-      const { summaryMarkdown, tableOfContents: toc } = await fetchSheetAiSummary(
-        cloudFileVersionId,
-        ctx,
-      );
+      const {
+        summaryMarkdown,
+        readingsTable: rows,
+        tableOfContents: toc,
+      } = await fetchSheetAiSummary(cloudFileVersionId, ctx);
       if (lastTocAnnotationIdsRef.current.length > 0) {
         useViewerStore.getState().removeAnnotations(lastTocAnnotationIdsRef.current);
         lastTocAnnotationIdsRef.current = [];
       }
       setSummary(summaryMarkdown);
+      setReadingsTable(rows);
       setTableOfContents(toc);
+      void qc.invalidateQueries({
+        queryKey: qk.sheetAiSheetCache(cloudFileVersionId, pageIdx0),
+      });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Summary failed");
     } finally {
       setSummaryLoading(false);
     }
-  }, [cloudFileVersionId, captureContext]);
+  }, [cloudFileVersionId, captureContext, qc, pageIdx0]);
+
+  useEffect(() => {
+    setSummary("");
+    setReadingsTable([]);
+    setTableOfContents([]);
+    setChatMessages([]);
+    if (lastTocAnnotationIdsRef.current.length > 0) {
+      useViewerStore.getState().removeAnnotations(lastTocAnnotationIdsRef.current);
+      lastTocAnnotationIdsRef.current = [];
+    }
+  }, [cloudFileVersionId, currentPage]);
+
+  useEffect(() => {
+    if (!cloudFileVersionId || !sheetCacheReady || !sheetCache) return;
+    if (sheetCache.cached !== true) return;
+    setSummary(sheetCache.summaryMarkdown);
+    setReadingsTable(sheetCache.readingsTable);
+    setTableOfContents(sheetCache.tableOfContents);
+    setChatMessages(sheetCache.chatMessages ?? []);
+  }, [cloudFileVersionId, pageIdx0, sheetCache, sheetCacheReady]);
 
   const onTocItemClick = useCallback(
     (entry: SheetAiTocEntry, colorIndex: number) => {
@@ -183,6 +174,7 @@ export function SheetAiPanel() {
           { x: maxX, y: maxY },
         ],
         author: displayName,
+        fromSheetAi: true,
       });
       const labelY = Math.max(0.012, minY - 0.028);
       const sheetLabel = (() => {
@@ -203,6 +195,7 @@ export function SheetAiPanel() {
         textColor: color,
         textBoxFillFromFrame,
         author: displayName,
+        fromSheetAi: true,
       });
       lastTocAnnotationIdsRef.current = [rectId, textId];
 
@@ -214,14 +207,6 @@ export function SheetAiPanel() {
     },
     [displayName, textBoxFillFromFrame],
   );
-
-  useEffect(() => {
-    if (!cloudFileVersionId) return;
-    const t = window.setTimeout(() => {
-      void runSummary();
-    }, 500);
-    return () => window.clearTimeout(t);
-  }, [cloudFileVersionId, currentPage, runSummary]);
 
   const sendChat = useCallback(async () => {
     if (!cloudFileVersionId || !chatInput.trim()) return;
@@ -237,202 +222,16 @@ export function SheetAiPanel() {
         messages: nextThread,
       });
       setChatMessages((prev) => [...prev, { role: "model", content: reply }]);
+      void qc.invalidateQueries({
+        queryKey: qk.sheetAiSheetCache(cloudFileVersionId, pageIdx0),
+      });
     } catch (e) {
       setChatMessages((prev) => prev.slice(0, -1));
       toast.error(e instanceof Error ? e.message : "Chat failed");
     } finally {
       setChatLoading(false);
     }
-  }, [cloudFileVersionId, chatInput, chatMessages, captureContext]);
-
-  const runProposals = useCallback(async () => {
-    if (!cloudFileVersionId) return;
-    setProposeLoading(true);
-    setProposals(null);
-    try {
-      const ctx = await captureContext();
-      const { proposals: p } = await fetchSheetAiProposeActions(cloudFileVersionId, {
-        ...ctx,
-        userPrompt: proposePrompt.trim() || undefined,
-      });
-      setProposals(p);
-      const n = p.takeoffZones.length + p.issueDrafts.length + p.markups.length;
-      toast.success(
-        n ? `Received ${n} suggestion(s) — review and apply.` : "No suggestions returned.",
-      );
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Suggestions failed");
-    } finally {
-      setProposeLoading(false);
-    }
-  }, [cloudFileVersionId, captureContext, proposePrompt]);
-
-  const applyTakeoffZones = useCallback(
-    (zones: SheetAiProposals["takeoffZones"]) => {
-      const cal = calibrationByPage[pageIdx0];
-      const sz = pageSizePtByPage[pageIdx0];
-      if (!cal || !sz) {
-        toast.error("Calibrate this page before applying takeoff zones.");
-        return 0;
-      }
-      let n = 0;
-      for (let zi = 0; zi < zones.length; zi++) {
-        const z = zones[zi]!;
-        const st = useViewerStore.getState();
-        const cfv = st.cloudFileVersionId;
-        let pts = z.points.map((p) => ({ ...p }));
-        if (z.measurementType === "area" && pts.length === 2) {
-          pts = rectPolygonFromTwoCornersNorm(pts[0]!, pts[1]!);
-        }
-        const name = (z.suggestedItemName?.trim() || `AI — ${z.measurementType}`).slice(0, 200);
-        let itemId = st.takeoffItems.find(
-          (it) => it.name.trim().toLowerCase() === name.toLowerCase(),
-        )?.id;
-        if (!itemId) {
-          const color =
-            TAKEOFF_COLOR_PRESETS[zi % TAKEOFF_COLOR_PRESETS.length] ?? DEFAULT_TAKEOFF_COLOR;
-          itemId = takeoffAddItem({
-            name,
-            unit: defaultUnitFor(z.measurementType),
-            measurementType: z.measurementType,
-            color,
-          });
-        }
-        const item = useViewerStore.getState().takeoffItems.find((i) => i.id === itemId)!;
-        const rawGeom = computeRawQuantity(
-          z.measurementType,
-          pts,
-          sz.wPt,
-          sz.hPt,
-          cal.mmPerPdfUnit,
-        );
-        const computed = applyItemToRawQuantity(item, rawGeom);
-        const newId = takeoffAddZone({
-          itemId,
-          pageIndex: pageIdx0,
-          points: pts,
-          measurementType: z.measurementType,
-          rawQuantity: rawGeom,
-          computedQuantity: computed,
-          notes: z.notes?.trim() || undefined,
-          createdBy: displayName,
-        });
-        n++;
-        const st2 = useViewerStore.getState();
-        const zNew = st2.takeoffZones.find((x) => x.id === newId);
-        const itNew = st2.takeoffItems.find((i) => i.id === itemId);
-        if (cfv && zNew && itNew) publishTakeoffZoneToProjectLine(cfv, itNew, zNew);
-      }
-      return n;
-    },
-    [calibrationByPage, pageIdx0, pageSizePtByPage, takeoffAddItem, takeoffAddZone, displayName],
-  );
-
-  const applyMarkups = useCallback(
-    (markups: SheetAiProposals["markups"]) => {
-      let n = 0;
-      for (const m of markups) {
-        const color = m.color ?? "#fbbf24";
-        const sw = m.strokeWidth ?? strokeWidth;
-        let points = m.points.map((p) => ({ ...p }));
-        if (m.type === "highlight" && points.length === 2) {
-          const r = rectPolygonFromTwoCornersNorm(points[0]!, points[1]!);
-          points = [...r, { ...r[0]! }];
-        }
-        if (m.type === "text") {
-          if (points.length < 1) continue;
-          addAnnotation({
-            pageIndex: pageIdx0,
-            type: "text",
-            color,
-            strokeWidth: sw,
-            points: [points[0]!],
-            text: (m.text ?? "Note").slice(0, 4000),
-            fontSize: 11,
-            textColor: color,
-            author: displayName,
-          });
-          n++;
-          continue;
-        }
-        addAnnotation({
-          pageIndex: pageIdx0,
-          type: m.type,
-          color,
-          strokeWidth: sw,
-          points,
-          author: displayName,
-        });
-        n++;
-      }
-      return n;
-    },
-    [addAnnotation, displayName, pageIdx0, strokeWidth],
-  );
-
-  const applyIssueDrafts = useCallback(
-    async (drafts: SheetAiProposals["issueDrafts"]) => {
-      if (!workspaceId || !fileId || !cloudFileVersionId) {
-        toast.error("Missing project or file context for issues.");
-        return 0;
-      }
-      let n = 0;
-      for (const d of drafts) {
-        const pageNumber = d.pageNumber ?? currentPage;
-        try {
-          const row = await createIssue({
-            workspaceId,
-            fileId,
-            fileVersionId: cloudFileVersionId,
-            title: d.title.trim().slice(0, 300),
-            description: d.description?.trim() || undefined,
-            pageNumber,
-          });
-          if (d.pinNorm) {
-            const pinN = 0.006;
-            const x = d.pinNorm.x;
-            const y = d.pinNorm.y;
-            const strokeHex = issueStatusMarkerStrokeHex(row.status);
-            const annId = useViewerStore.getState().addAnnotation({
-              pageIndex: pageNumber - 1,
-              type: "ellipse",
-              color: strokeHex,
-              strokeWidth: 0,
-              points: [
-                { x: x - pinN, y: y - pinN },
-                { x: x + pinN, y: y + pinN },
-              ],
-              linkedIssueId: row.id,
-              issueStatus: row.status,
-              linkedIssueTitle: row.title,
-              author: displayName,
-            });
-            await patchIssue(row.id, { annotationId: annId });
-          }
-          n++;
-        } catch (e) {
-          toast.error(formatIssueLockHint(e));
-        }
-      }
-      void qc.invalidateQueries({ queryKey: qk.issuesForFileVersion(cloudFileVersionId) });
-      return n;
-    },
-    [workspaceId, fileId, cloudFileVersionId, currentPage, displayName, qc],
-  );
-
-  const applyAllProposals = useCallback(async () => {
-    if (!proposals) return;
-    setApplyBusy(true);
-    try {
-      const a = applyTakeoffZones(proposals.takeoffZones);
-      const b = applyMarkups(proposals.markups);
-      const c = await applyIssueDrafts(proposals.issueDrafts);
-      toast.success(`Applied ${a} takeoff zone(s), ${b} markup(s), ${c} issue(s).`);
-      setProposals(null);
-    } finally {
-      setApplyBusy(false);
-    }
-  }, [proposals, applyTakeoffZones, applyMarkups, applyIssueDrafts]);
+  }, [cloudFileVersionId, chatInput, chatMessages, captureContext, qc, pageIdx0]);
 
   if (!cloudFileVersionId) {
     return (
@@ -442,194 +241,271 @@ export function SheetAiPanel() {
     );
   }
 
+  const hasSmartSheet =
+    summary.trim().length > 0 || readingsTable.length > 0 || tableOfContents.length > 0;
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
-      <p className="shrink-0 text-[9px] leading-snug text-[#64748b]">
-        AI can misread drawings. Review suggestions — not professional advice.
-      </p>
-
-      <section className="shrink-0 rounded-md border border-[#334155] bg-[#1e293b]/60 p-1.5">
-        <div className="mb-0.5 flex items-center justify-between gap-2">
-          <h3 className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-[#94A3B8]">
-            <Sparkles className="h-3 w-3 text-violet-400" aria-hidden />
-            Summary
-          </h3>
-          <button
-            type="button"
-            disabled={summaryLoading}
-            onClick={() => void runSummary()}
-            className="text-[9px] font-medium text-sky-400 hover:text-sky-300 disabled:opacity-40"
-          >
-            {summaryLoading ? "…" : "Regenerate"}
-          </button>
-        </div>
-        {summaryLoading && !summary ? (
-          <div className="flex items-center gap-1.5 py-2 text-[10px] text-[#94A3B8]">
-            <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-            Analyzing…
-          </div>
-        ) : summary.trim() ? (
-          <div className="max-h-[min(28vh,200px)] min-h-0 overflow-y-auto [scrollbar-width:thin]">
-            <SheetAiMarkdown content={summary} variant="assistant" compact />
-          </div>
-        ) : (
-          <div className="max-h-28 overflow-y-auto text-[10px] leading-snug text-[#94a3b8] [scrollbar-width:thin]">
-            No summary yet.
-          </div>
-        )}
-        {tableOfContents.length > 0 ? (
-          <div className="mt-1.5 border-t border-[#334155] pt-1.5">
-            <p className="mb-1 text-[8px] font-semibold uppercase tracking-wide text-[#94A3B8]">
-              On sheet — click to zoom (MEP, envelope, details, notes…)
-            </p>
-            <ul className="max-h-[min(22vh,160px)] space-y-0.5 overflow-y-auto [scrollbar-width:thin]">
-              {tableOfContents.map((e, i) => (
-                <li key={`${e.title}-${i}`}>
-                  <button
-                    type="button"
-                    onClick={() => onTocItemClick(e, i)}
-                    className="flex w-full items-start gap-1.5 rounded border border-transparent px-1 py-0.5 text-left transition hover:border-slate-600 hover:bg-slate-800/80"
-                  >
-                    <span
-                      className="mt-0.5 h-2.5 w-0.5 shrink-0 rounded-sm"
-                      style={{
-                        backgroundColor:
-                          TAKEOFF_COLOR_PRESETS[i % TAKEOFF_COLOR_PRESETS.length] ??
-                          DEFAULT_TAKEOFF_COLOR,
-                      }}
-                      aria-hidden
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-0.5">
-                        <span className="text-[10px] font-medium leading-tight text-slate-100">
-                          {e.title}
-                        </span>
-                        {e.kind ? (
-                          <span className="rounded bg-slate-800/90 px-1 py-px text-[7px] font-semibold uppercase tracking-wide text-slate-400">
-                            {formatTocKind(e.kind)}
-                          </span>
-                        ) : null}
-                      </span>
-                      {e.snippet ? (
-                        <span className="mt-px line-clamp-2 block text-[9px] leading-tight text-slate-400">
-                          {e.snippet}
-                        </span>
-                      ) : null}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[#334155] bg-[#1e293b]/60">
-        <h3 className="shrink-0 border-b border-[#334155] px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-[#94A3B8]">
-          Chat
-        </h3>
-        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-1.5 py-1.5 [scrollbar-width:thin]">
-          {chatMessages.length === 0 ? (
-            <p className="text-[10px] text-[#64748b]">
-              Ask about MEP, wall sections, insulation, or quantities on this page.
-            </p>
-          ) : (
-            chatMessages.map((m, i) => (
-              <div
-                key={`${i}-${m.role}`}
-                className={`rounded px-1.5 py-1 text-[10px] leading-snug ${
-                  m.role === "user"
-                    ? "ml-3 bg-sky-950/50 text-sky-100"
-                    : "mr-3 bg-slate-800/80 text-slate-200"
-                }`}
-              >
-                <span className="mb-0.5 block text-[8px] font-semibold uppercase text-[#64748b]">
-                  {m.role === "user" ? "You" : "Sheet AI"}
-                </span>
-                <SheetAiMarkdown
-                  content={m.content}
-                  variant={m.role === "user" ? "user" : "assistant"}
-                  compact
-                />
-              </div>
-            ))
-          )}
-        </div>
-        <div className="shrink-0 border-t border-[#334155] p-1.5">
-          <div className="flex gap-1">
-            <textarea
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Message…"
-              rows={2}
-              className="min-h-0 flex-1 resize-none rounded border border-[#475569] bg-[#0f172a] px-1.5 py-1 text-[10px] text-[#f8fafc] placeholder:text-[#64748b] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500/40"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void sendChat();
-                }
-              }}
-            />
-            <button
-              type="button"
-              disabled={chatLoading || !chatInput.trim()}
-              onClick={() => void sendChat()}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-sky-600 text-white hover:bg-sky-500 disabled:opacity-40"
-              title="Send"
-            >
-              {chatLoading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Send className="h-3.5 w-3.5" />
-              )}
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="shrink-0 rounded-md border border-[#334155] bg-[#1e293b]/60 p-1.5">
-        <h3 className="mb-1 flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-[#94A3B8]">
-          <Wand2 className="h-3 w-3 text-amber-400" aria-hidden />
-          Suggestions
-        </h3>
-        <textarea
-          value={proposePrompt}
-          onChange={(e) => setProposePrompt(e.target.value)}
-          placeholder="Optional focus (e.g. duct insulation, wall types)…"
-          rows={2}
-          className="mb-1 w-full resize-none rounded border border-[#475569] bg-[#0f172a] px-1.5 py-1 text-[10px] text-[#f8fafc] placeholder:text-[#64748b]"
-        />
+    <div className="flex h-full min-h-0 flex-col gap-1 overflow-hidden">
+      <div
+        className="flex shrink-0 gap-1 rounded-lg bg-slate-950/90 p-1 ring-1 ring-slate-700/70"
+        role="tablist"
+        aria-label="Sheet AI: choose panel"
+      >
         <button
           type="button"
-          disabled={proposeLoading}
-          onClick={() => void runProposals()}
-          className="mb-1 w-full rounded bg-amber-600/90 py-1.5 text-[10px] font-semibold text-white hover:bg-amber-500 disabled:opacity-40"
+          role="tab"
+          aria-selected={drawerTab === "generate"}
+          id="sheet-ai-tab-generate"
+          aria-controls="sheet-ai-panel-generate"
+          onClick={() => setDrawerTab("generate")}
+          className={sheetAiDrawerTabClass(drawerTab === "generate")}
         >
-          {proposeLoading ? "Requesting…" : "Get suggestions"}
+          <Sparkles
+            className={`h-2.5 w-2.5 shrink-0 ${drawerTab === "generate" ? "text-violet-300" : "text-slate-500"}`}
+            aria-hidden
+          />
+          Smart sheet
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={drawerTab === "chat"}
+          id="sheet-ai-tab-chat"
+          aria-controls="sheet-ai-panel-chat"
+          onClick={() => setDrawerTab("chat")}
+          className={sheetAiDrawerTabClass(drawerTab === "chat")}
+        >
+          <MessageSquare
+            className={`h-2.5 w-2.5 shrink-0 ${drawerTab === "chat" ? "text-sky-300" : "text-slate-500"}`}
+            aria-hidden
+          />
+          Chat
+        </button>
+      </div>
+      <p className="shrink-0 px-0.5 text-[8px] leading-tight text-[#64748b]">
+        AI can misread drawings — verify on the sheet.
+      </p>
 
-        {proposals ? (
-          <div className="space-y-1 border-t border-[#334155] pt-1.5">
-            <p className="text-[9px] text-[#94A3B8]">
-              Takeoff: {proposals.takeoffZones.length} · Issues: {proposals.issueDrafts.length} ·
-              Markups: {proposals.markups.length}
-            </p>
-            <button
-              type="button"
-              disabled={
-                applyBusy ||
-                (proposals.takeoffZones.length === 0 &&
-                  proposals.issueDrafts.length === 0 &&
-                  proposals.markups.length === 0)
-              }
-              onClick={() => void applyAllProposals()}
-              className="w-full rounded border border-emerald-600/60 bg-emerald-950/40 py-1.5 text-[10px] font-semibold text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-40"
-            >
-              {applyBusy ? "Applying…" : "Apply all to sheet"}
-            </button>
-          </div>
-        ) : null}
-      </section>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {drawerTab === "generate" ? (
+          <section
+            id="sheet-ai-panel-generate"
+            role="tabpanel"
+            aria-labelledby="sheet-ai-tab-generate"
+            className="flex h-full min-h-0 flex-col overflow-hidden rounded border border-[#334155]/70 bg-[#1e293b]/40"
+          >
+            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-1 [scrollbar-width:thin]">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-1 text-[8px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                    <Sparkles className="h-2.5 w-2.5 text-violet-400" aria-hidden />
+                    Smart sheet
+                  </h3>
+                  {hasSmartSheet ? (
+                    <button
+                      type="button"
+                      disabled={summaryLoading}
+                      onClick={() => void runSummary()}
+                      className="shrink-0 text-[8px] font-medium text-sky-400 hover:text-sky-300 disabled:opacity-40"
+                    >
+                      {summaryLoading ? "…" : "Regenerate"}
+                    </button>
+                  ) : null}
+                </div>
+                {sheetCacheReady && sheetCache?.cached === true && hasSmartSheet ? (
+                  <p className="text-[7px] leading-tight text-[#64748b]">
+                    Saved on server — Regenerate runs the model again.
+                  </p>
+                ) : null}
+                {!hasSmartSheet ? (
+                  <button
+                    type="button"
+                    disabled={summaryLoading}
+                    onClick={() => void runSummary()}
+                    className="w-full rounded border border-violet-500/40 bg-violet-600/85 py-1 text-[9px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                  >
+                    {summaryLoading ? "Generating…" : "Generate smart sheet"}
+                  </button>
+                ) : null}
+              </div>
+              {summaryLoading && !hasSmartSheet ? (
+                <div className="flex items-center gap-1 py-1 text-[9px] text-[#94A3B8]">
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" aria-hidden />
+                  Analyzing…
+                </div>
+              ) : null}
+              {summary.trim() ? (
+                <div>
+                  <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                    Overview
+                  </p>
+                  <div className="max-h-[min(24vh,160px)] min-h-0 overflow-y-auto rounded border border-[#334155]/60 [scrollbar-width:thin]">
+                    <SheetAiMarkdown content={summary} variant="assistant" compact />
+                  </div>
+                </div>
+              ) : !summaryLoading && !hasSmartSheet ? (
+                <p className="text-[9px] leading-snug text-[#64748b]">
+                  Use <strong className="text-slate-400">Generate smart sheet</strong> for overview,
+                  tables, and zoom regions.
+                </p>
+              ) : null}
+              {readingsTable.length > 0 ? (
+                <div className="border-t border-[#334155] pt-1.5">
+                  <p className="mb-1 text-[8px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                    Elements & details
+                  </p>
+                  <div className="max-h-[min(32vh,260px)] overflow-auto rounded border border-[#334155] [scrollbar-width:thin]">
+                    <table className="w-full min-w-[280px] border-collapse text-left text-[9px] text-slate-200">
+                      <thead>
+                        <tr className="border-b border-[#334155] bg-slate-900/80">
+                          <th className="px-1.5 py-1 font-semibold text-[#94a3b8]">Element</th>
+                          <th className="px-1.5 py-1 font-semibold text-[#94a3b8]">Kind</th>
+                          <th className="px-1.5 py-1 font-semibold text-[#94a3b8]">Detail</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {readingsTable.map((row, i) => (
+                          <tr
+                            key={`${row.element}-${i}`}
+                            className="border-b border-[#334155]/80 align-top last:border-b-0 hover:bg-slate-800/40"
+                          >
+                            <td className="max-w-[100px] px-1.5 py-1 font-medium text-slate-100">
+                              {row.element}
+                            </td>
+                            <td className="whitespace-nowrap px-1.5 py-1 text-[8px] uppercase tracking-wide text-slate-500">
+                              {formatReadingKind(row.kind)}
+                            </td>
+                            <td className="px-1.5 py-1 text-slate-300">{row.detail}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+              {tableOfContents.length > 0 ? (
+                <div className="border-t border-[#334155] pt-1.5">
+                  <p className="mb-1 text-[8px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+                    On sheet — click row to zoom
+                  </p>
+                  <div className="max-h-[min(28vh,220px)] overflow-auto rounded border border-[#334155] [scrollbar-width:thin]">
+                    <table className="w-full min-w-[260px] border-collapse text-left text-[9px]">
+                      <thead>
+                        <tr className="border-b border-[#334155] bg-slate-900/80">
+                          <th className="w-2 px-1 py-1" aria-hidden />
+                          <th className="px-1 py-1 font-semibold text-[#94a3b8]">Region</th>
+                          <th className="px-1 py-1 font-semibold text-[#94a3b8]">Kind</th>
+                          <th className="px-1 py-1 font-semibold text-[#94a3b8]">Read</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableOfContents.map((e, i) => (
+                          <tr
+                            key={`${e.title}-${i}`}
+                            className="border-b border-[#334155]/80 align-top last:border-b-0"
+                          >
+                            <td className="px-1 py-1">
+                              <span
+                                className="inline-block h-3 w-1 rounded-sm"
+                                style={{
+                                  backgroundColor:
+                                    TAKEOFF_COLOR_PRESETS[i % TAKEOFF_COLOR_PRESETS.length] ??
+                                    DEFAULT_TAKEOFF_COLOR,
+                                }}
+                                aria-hidden
+                              />
+                            </td>
+                            <td className="px-1 py-1">
+                              <button
+                                type="button"
+                                onClick={() => onTocItemClick(e, i)}
+                                className="text-left font-medium text-sky-400 hover:text-sky-300 hover:underline"
+                              >
+                                {e.title}
+                              </button>
+                            </td>
+                            <td className="whitespace-nowrap px-1 py-1 text-[8px] uppercase text-slate-500">
+                              {e.kind ? formatTocKind(e.kind) : "—"}
+                            </td>
+                            <td className="max-w-[140px] px-1 py-1 text-slate-400">
+                              {e.snippet ? <span className="line-clamp-2">{e.snippet}</span> : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : (
+          <section
+            id="sheet-ai-panel-chat"
+            role="tabpanel"
+            aria-labelledby="sheet-ai-tab-chat"
+            className="flex h-full min-h-0 flex-col overflow-hidden rounded border border-[#334155]/70 bg-[#1e293b]/40"
+          >
+            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-1 [scrollbar-width:thin]">
+              {chatMessages.length === 0 ? (
+                <p className="text-[9px] leading-snug text-[#64748b]">
+                  Ask about this sheet — MEP, envelope, quantities.
+                </p>
+              ) : (
+                chatMessages.map((m, i) => (
+                  <div
+                    key={`${i}-${m.role}`}
+                    className={`rounded px-1.5 py-1 text-[10px] leading-snug ${
+                      m.role === "user"
+                        ? "ml-3 bg-sky-950/50 text-sky-100"
+                        : "mr-3 bg-slate-800/80 text-slate-200"
+                    }`}
+                  >
+                    <span className="mb-0.5 block text-[8px] font-semibold uppercase text-[#64748b]">
+                      {m.role === "user" ? "You" : "Sheet AI"}
+                    </span>
+                    <SheetAiMarkdown
+                      content={m.content}
+                      variant={m.role === "user" ? "user" : "assistant"}
+                      compact
+                    />
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="shrink-0 border-t border-[#334155]/70 p-1">
+              <div className="flex items-end gap-1">
+                <textarea
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Message…"
+                  rows={2}
+                  className="min-h-9 min-w-0 flex-1 resize-none rounded border border-[#475569] bg-[#0f172a] px-1.5 py-1 text-[9px] leading-snug text-[#f8fafc] placeholder:text-[#64748b] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500/30"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void sendChat();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={chatLoading || !chatInput.trim()}
+                  onClick={() => void sendChat()}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-sky-600 text-white hover:bg-sky-500 disabled:opacity-40"
+                  title="Send"
+                >
+                  {chatLoading ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Send className="h-3 w-3" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }

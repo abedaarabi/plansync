@@ -35,97 +35,9 @@ export const sheetChatBodySchema = sheetAiContextBundleSchema.extend({
   messages: z.array(chatMessageSchema).min(1).max(48),
 });
 
-export const sheetProposeBodySchema = sheetAiContextBundleSchema.extend({
-  userPrompt: z.string().max(2000).optional(),
-});
-
-/** Validated model output for propose-actions. */
-export const proposeActionsResultSchema = z.object({
-  takeoffZones: z.preprocess(
-    (v) => (Array.isArray(v) ? v : []),
-    z
-      .array(
-        z.object({
-          suggestedItemName: z.string().max(200).optional(),
-          measurementType: z.enum(["area", "linear", "count"]),
-          points: z.array(normPointSchema).min(1).max(200),
-          notes: z.string().max(2000).optional(),
-        }),
-      )
-      .max(80),
-  ),
-  issueDrafts: z.preprocess(
-    (v) => (Array.isArray(v) ? v : []),
-    z
-      .array(
-        z.object({
-          title: z.string().min(1).max(300),
-          description: z.string().max(8000).optional(),
-          pageNumber: z.number().int().min(1).max(10_000).optional(),
-          pinNorm: normPointSchema.optional(),
-        }),
-      )
-      .max(40),
-  ),
-  markups: z.preprocess(
-    (v) => (Array.isArray(v) ? v : []),
-    z
-      .array(
-        z.object({
-          type: z.enum(["rect", "ellipse", "cloud", "highlight", "line", "text", "polygon"]),
-          color: z
-            .string()
-            .regex(/^#[0-9A-Fa-f]{6}$/)
-            .optional(),
-          strokeWidth: z.number().finite().min(0).max(24).optional(),
-          points: z.array(normPointSchema).min(1).max(500),
-          text: z.string().max(4000).optional(),
-        }),
-      )
-      .max(60),
-  ),
-});
-
-export type ProposeActionsResult = z.infer<typeof proposeActionsResultSchema>;
-
 export function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.min(1, Math.max(0, n));
-}
-
-export function sanitizeProposeResult(raw: ProposeActionsResult): ProposeActionsResult {
-  const takeoffZones = raw.takeoffZones
-    .map((z) => ({
-      ...z,
-      points: z.points.map((p) => ({ x: clamp01(p.x), y: clamp01(p.y) })),
-    }))
-    .filter((z) => {
-      if (z.measurementType === "area") return z.points.length >= 3;
-      if (z.measurementType === "linear") return z.points.length >= 2;
-      return z.points.length >= 1;
-    });
-
-  const issueDrafts = raw.issueDrafts.map((i) => ({
-    ...i,
-    pinNorm: i.pinNorm ? { x: clamp01(i.pinNorm.x), y: clamp01(i.pinNorm.y) } : undefined,
-  }));
-
-  const markups = raw.markups
-    .map((m) => ({
-      ...m,
-      points: m.points.map((p) => ({ x: clamp01(p.x), y: clamp01(p.y) })),
-    }))
-    .filter((m) => {
-      if (m.type === "rect" || m.type === "ellipse" || m.type === "cloud")
-        return m.points.length >= 2;
-      if (m.type === "line") return m.points.length >= 2;
-      if (m.type === "polygon") return m.points.length >= 3;
-      if (m.type === "text") return m.points.length >= 1;
-      if (m.type === "highlight") return m.points.length >= 2;
-      return false;
-    });
-
-  return { takeoffZones, issueDrafts, markups };
 }
 
 export function assertImageSizeOk(
@@ -164,9 +76,34 @@ const tocEntryRawSchema = z.object({
   maxY: z.number().finite(),
 });
 
+const readingRowRawSchema = z.object({
+  /** Short label: wall type, equipment tag, detail key, note heading, etc. */
+  element: z.string().min(1).max(200),
+  /** What was read: dimensions, layers, spec line, visible text — be concrete. */
+  detail: z.string().max(800),
+  kind: sheetAiTocKindSchema.optional(),
+});
+
+/** One page’s persisted Sheet AI payload (`FileVersion.sheetAiCache.byPage`). */
+export const sheetAiPageCacheEntrySchema = z.object({
+  summaryMarkdown: z.string().max(100_000),
+  readingsTable: z.array(readingRowRawSchema).max(50),
+  tableOfContents: z.array(tocEntryRawSchema).max(45),
+  chatMessages: z.array(chatMessageSchema).max(48).optional(),
+  updatedAt: z.string().max(64),
+});
+
+export type SheetAiPageCacheEntry = z.infer<typeof sheetAiPageCacheEntrySchema>;
+
 /** Parsed model output for sheet summary + clickable TOC regions. */
 export const sheetSummaryResultSchema = z.object({
+  /** Short overview only (discipline, sheet intent, caveats). Put itemized reads in readingsTable. */
   summaryMarkdown: z.string().max(80_000),
+  /** Row per readable element on the sheet (for UI table). */
+  readingsTable: z.preprocess(
+    (v) => (Array.isArray(v) ? v : []),
+    z.array(readingRowRawSchema).max(45),
+  ),
   tableOfContents: z.preprocess(
     (v) => (Array.isArray(v) ? v : []),
     z.array(tocEntryRawSchema).max(40),
@@ -184,6 +121,12 @@ export type SheetSummaryTocEntry = {
   minY: number;
   maxX: number;
   maxY: number;
+};
+
+export type SheetSummaryReadingRow = {
+  element: string;
+  detail: string;
+  kind?: SheetAiTocKind;
 };
 
 /** Only expand boxes that are unrealistically tiny (click target), not full detail callouts. */
@@ -206,8 +149,26 @@ function ensureMinSpan1D(min: number, max: number): { min: number; max: number }
 export function sanitizeSheetSummaryResult(
   parsed: z.infer<typeof sheetSummaryResultSchema>,
   expectedPageIndex0: number,
-): { summaryMarkdown: string; tableOfContents: SheetSummaryTocEntry[] } {
+): {
+  summaryMarkdown: string;
+  readingsTable: SheetSummaryReadingRow[];
+  tableOfContents: SheetSummaryTocEntry[];
+} {
   const summaryMarkdown = parsed.summaryMarkdown.trim();
+  const readingsTable: SheetSummaryReadingRow[] = parsed.readingsTable
+    .map((r) => {
+      const element = r.element.trim().slice(0, 200);
+      const detail = r.detail.trim().slice(0, 800);
+      const kindParsed = sheetAiTocKindSchema.safeParse(r.kind);
+      if (!element) return null;
+      return {
+        element,
+        detail,
+        ...(kindParsed.success ? { kind: kindParsed.data } : {}),
+      };
+    })
+    .filter((x): x is SheetSummaryReadingRow => x != null);
+
   const toc = parsed.tableOfContents
     .map((e) => {
       let minX = clamp01(e.minX);
@@ -232,5 +193,5 @@ export function sanitizeSheetSummaryResult(
       };
     })
     .filter((e) => e.title.length > 0);
-  return { summaryMarkdown, tableOfContents: toc };
+  return { summaryMarkdown, readingsTable, tableOfContents: toc };
 }

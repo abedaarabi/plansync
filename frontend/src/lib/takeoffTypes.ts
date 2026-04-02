@@ -24,6 +24,8 @@ export type TakeoffItem = {
   rate?: number;
   color: string;
   notes?: string;
+  /** Created from Sheet AI flows (cleared with clearSheetAiFromDrawing). */
+  fromSheetAi?: boolean;
   createdAt: number;
   updatedAt: number;
 };
@@ -42,6 +44,8 @@ export type TakeoffZone = {
   notes?: string;
   tags?: string[];
   locked?: boolean;
+  /** Zone tagged from Sheet AI (cleared with clearSheetAiFromDrawing). */
+  fromSheetAi?: boolean;
   createdBy: string;
   createdAt: number;
   editedBy?: string;

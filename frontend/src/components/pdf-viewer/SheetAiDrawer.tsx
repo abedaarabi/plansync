@@ -43,7 +43,7 @@ export function SheetAiDrawer() {
     <span className="flex min-w-0 items-center gap-1.5 text-[10px] text-[#e2e8f0]">
       <Sparkles className="h-3 w-3 shrink-0 text-violet-400" aria-hidden />
       <span className="font-medium text-[#94a3b8]">Sheet AI</span>
-      <span className="text-[#cbd5e1]">Summary, chat, suggestions</span>
+      <span className="text-[#cbd5e1]">Summary &amp; chat</span>
     </span>
   );
 
@@ -62,7 +62,7 @@ export function SheetAiDrawer() {
           </span>
         }
       >
-        <div className="h-full min-h-0 overflow-hidden px-1 pb-1 sm:px-1.5">
+        <div className="h-full min-h-0 overflow-hidden px-0.5 pb-0.5 sm:px-1">
           <SheetAiPanel />
         </div>
       </BottomDrawer>

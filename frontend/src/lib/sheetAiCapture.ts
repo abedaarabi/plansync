@@ -1,10 +1,10 @@
 /**
  * Rasterize a PDF page canvas for Sheet AI (PNG base64, bounded size).
  */
-/** Default 2048 balances OCR/region accuracy vs payload size (Sheet AI). */
+/** Default 1536 limits vision-token cost; raise to 2048 if TOC regions feel imprecise. */
 export function captureCanvasToPngBase64(
   canvas: HTMLCanvasElement | null,
-  maxEdge = 2048,
+  maxEdge = 1536,
 ): { base64: string; mimeType: "image/png" } | null {
   if (!canvas || canvas.width < 2 || canvas.height < 2) return null;
   const w = canvas.width;

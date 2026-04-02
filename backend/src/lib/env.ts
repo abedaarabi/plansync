@@ -41,10 +41,10 @@ const schema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
   /**
-   * Vision model for Sheet AI. Default is Pro for better layout/TOC accuracy; override with
-   * `gemini-2.5-flash` or `gemini-2.0-flash` for lower cost/latency (less precise regions).
+   * Vision model for Sheet AI. Default is Flash (~much cheaper than Pro for image+text).
+   * Use `gemini-2.5-pro` when you need maximum TOC/region accuracy (expect roughly several× higher cost).
    */
-  GEMINI_MODEL: z.string().default("gemini-2.5-pro"),
+  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
 });
 
 export type Env = z.infer<typeof schema>;
