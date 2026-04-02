@@ -55,7 +55,7 @@ function redirectToNotInvited(request: NextRequest): NextResponse {
   return NextResponse.redirect(denied);
 }
 
-type SessionPayload = { user?: unknown; session?: unknown } | null;
+type SessionPayload = { user?: unknown } | null;
 
 async function canAccessProject(request: NextRequest, projectId: string): Promise<boolean> {
   const url = new URL(`/api/v1/projects/${encodeURIComponent(projectId)}`, request.nextUrl.origin);
@@ -75,7 +75,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const sessionUrl = new URL("/api/auth/get-session", request.nextUrl.origin);
+  const sessionUrl = new URL("/api/v1/me", request.nextUrl.origin);
   let res: Response;
   try {
     res = await fetch(sessionUrl, {
@@ -99,7 +99,7 @@ export async function proxy(request: NextRequest) {
     return redirectToSignIn(request);
   }
 
-  if (data && data.user && data.session) {
+  if (data && data.user) {
     const pathname = request.nextUrl.pathname;
     const projectIdInPath = extractProjectIdFromPath(pathname);
     if (projectIdInPath) {
