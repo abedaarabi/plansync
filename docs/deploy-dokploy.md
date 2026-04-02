@@ -7,11 +7,12 @@ The monorepo builds **from the repository root**. Image definitions:
 
 ## Compose file
 
-[`docker-compose.deploy.yml`](../docker-compose.deploy.yml) runs **postgres**, **backend**, and **frontend**. The frontend build receives `API_PROXY_TARGET=http://backend:8787` so Next can proxy `/api/*` to the API inside the Docker network.
+[`docker-compose.deploy.yml`](../docker-compose.deploy.yml) runs **backend** and **frontend**. **Postgres is not included** — set `DATABASE_URL` to your existing database (managed Postgres or another container on the same Docker network). The frontend build receives `API_PROXY_TARGET=http://backend:8787` so Next can proxy `/api/*` to the API inside the Docker network.
 
 Run locally:
 
 ```bash
+export DATABASE_URL="postgresql://user:pass@localhost:5432/plansync"
 export PUBLIC_APP_URL=https://your-domain.example   # no trailing slash
 export BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 docker compose -f docker-compose.deploy.yml up -d --build
@@ -21,11 +22,11 @@ docker compose -f docker-compose.deploy.yml up -d --build
 
 In Dokploy, create a Compose application pointing at this repo and set the compose file to **`docker-compose.deploy.yml`**. Define at least:
 
-| Variable             | Purpose                                                                                              |
-| -------------------- | ---------------------------------------------------------------------------------------------------- |
-| `PUBLIC_APP_URL`     | Public HTTPS origin of the app (same value for Better Auth and CORS), e.g. `https://app.example.com` |
-| `BETTER_AUTH_SECRET` | Long random string (32+ characters)                                                                  |
-| `POSTGRES_PASSWORD`  | Optional; defaults to `postgres` if unset                                                            |
+| Variable             | Purpose                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`       | Full Postgres connection string reachable from the **backend** container (host = service name or IP on shared network). |
+| `PUBLIC_APP_URL`     | Public HTTPS origin of the app (same value for Better Auth and CORS), e.g. `https://app.example.com`                    |
+| `BETTER_AUTH_SECRET` | Long random string (32+ characters)                                                                                     |
 
 Optional (same names as `.env.example`): `AWS_*`, `S3_BUCKET`, `STRIPE_*`, `RESEND_*`, `NEXT_PUBLIC_UMAMI_*`. For S3, configure bucket **CORS** for your public app origin — see [s3-setup.md](./s3-setup.md).
 

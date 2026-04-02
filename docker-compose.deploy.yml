@@ -1,10 +1,13 @@
 # Full stack for production / Dokploy (build from repo root).
+# Postgres is external: set DATABASE_URL to your managed DB or another container on the same Docker network.
+#
 # Usage:
+#   export DATABASE_URL="postgresql://user:pass@host:5432/plansync"
+#   export PUBLIC_APP_URL=https://your-domain.example
+#   export BETTER_AUTH_SECRET=...
 #   docker compose -f docker-compose.deploy.yml up -d --build
 #
-# Dokploy: set the same variables in the UI (or an env file). Traefik needs the
-# external network `dokploy-network` (created by Dokploy). For local runs without
-# Dokploy, use: docker network create dokploy-network  (or comment networks/labels).
+# Dokploy: set env in the UI. Traefik needs external network `dokploy-network`.
 
 networks:
   internal:
@@ -13,23 +16,6 @@ networks:
     external: true
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    networks:
-      - internal
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-plansync}
-    volumes:
-      - plansync_pg:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   backend:
     build:
       context: .
@@ -38,13 +24,10 @@ services:
     networks:
       - internal
       - dokploy-network
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${BACKEND_PORT:-8787}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-plansync}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL required}
       CORS_ORIGIN: ${CORS_ORIGIN:-${PUBLIC_APP_URL:?set PUBLIC_APP_URL}}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-${PUBLIC_APP_URL}}
@@ -56,7 +39,6 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       S3_BUCKET: ${S3_BUCKET:-}
-      # Override default (100 MiB) only if needed — must be a numeric string.
       MAX_DIRECT_UPLOAD_BYTES: ${MAX_DIRECT_UPLOAD_BYTES:-104857600}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
@@ -109,6 +91,3 @@ services:
       - "traefik.http.routers.plansync-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.plansync-web.service=plansync-web"
       - "traefik.http.services.plansync-web.loadbalancer.server.port=3000"
-
-volumes:
-  plansync_pg:
