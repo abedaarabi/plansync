@@ -42,7 +42,9 @@ export function ViewerSourceBootstrap() {
         versionParam != null && versionParam !== ""
           ? `?version=${encodeURIComponent(versionParam)}`
           : "";
-      const contentUrl = apiUrl(`/api/v1/files/${encodeURIComponent(fileId)}/content${v}`);
+      // Use same-origin for PDF bytes so browser cookies are always included for protected files.
+      // (Cross-origin api host can be fetched by app calls with credentials, but pdf.js URL loads are less reliable.)
+      const contentUrl = `/api/v1/files/${encodeURIComponent(fileId)}/content${v}`;
 
       let cloudFv: string | null =
         fileVersionIdParam != null && fileVersionIdParam !== "" ? fileVersionIdParam : null;
