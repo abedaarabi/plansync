@@ -8,15 +8,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Columns2,
-  FileDown,
-  FileJson,
   FolderOpen,
   Hand,
   HelpCircle,
-  Image as ImageIcon,
   Maximize2,
   MousePointer2,
-  Printer,
   Redo2,
   Search,
   Trash2,
@@ -25,17 +21,20 @@ import {
   BoxSelect,
   ZoomIn,
   ZoomOut,
-  Table,
-  MoreHorizontal,
-  Package,
+  Menu,
+  FileDown,
+  FileText,
+  Keyboard,
   Library,
 } from "lucide-react";
 import { fetchMe, fetchProject, putViewerState } from "@/lib/api-client";
+import {
+  defaultMeasureUnitForProject,
+  type ProjectMeasurementSystem,
+} from "@/lib/projectMeasurement";
 import { formatPageSizeTitle } from "@/lib/pagePaperInfo";
-import { meHasProWorkspace, viewerHasProSheetFeatures } from "@/lib/proWorkspace";
+import { meHasProWorkspace } from "@/lib/proWorkspace";
 import { qk } from "@/lib/queryKeys";
-import { downloadCanvasPng, downloadMarkupJson } from "@/lib/exportSheet";
-import { buildMeasuresCsv, downloadMeasuresCsv } from "@/lib/exportMeasuresCsv";
 import {
   calibrationFromPersisted,
   fileFingerprint,
@@ -46,8 +45,8 @@ import { saveDisplayNameToStorage } from "@/lib/sessionPersistence";
 import { useViewerStore, VIEWER_SCALE_MAX, VIEWER_SCALE_MIN } from "@/store/viewerStore";
 import type { Tool } from "@/store/viewerStore";
 import { ClearPersistedMarkupDialog } from "./ClearPersistedMarkupDialog";
-import { ExportPdfDialog } from "./ExportPdfDialog";
 import { PdfSearchPopover } from "./PdfSearchPopover";
+import { SheetExportDialog } from "./SheetExportDialog";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 
 const modeTools: {
@@ -112,7 +111,6 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const docInfoRef = useRef<HTMLDivElement>(null);
   const helpRef = useRef<HTMLDivElement>(null);
   const searchBtnRef = useRef<HTMLButtonElement>(null);
-  const exportPdfBtnRef = useRef<HTMLButtonElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const pdfUrl = useViewerStore((s) => s.pdfUrl);
@@ -147,13 +145,9 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const setCompareMode = useViewerStore((s) => s.setCompareMode);
   const deleteAllMarkupsOnPage = useViewerStore((s) => s.deleteAllMarkupsOnPage);
   const deleteAllMarkupsInDocument = useViewerStore((s) => s.deleteAllMarkupsInDocument);
-  const takeoffMode = useViewerStore((s) => s.takeoffMode);
-  const setTakeoffMode = useViewerStore((s) => s.setTakeoffMode);
-  const setTakeoffInventoryDrawerFromSidebar = useViewerStore(
-    (s) => s.setTakeoffInventoryDrawerFromSidebar,
-  );
   const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
+  const setMeasureUnit = useViewerStore((s) => s.setMeasureUnit);
 
   const { data: me, isPending: mePending } = useQuery({
     queryKey: qk.me(),
@@ -161,7 +155,6 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
     staleTime: 60_000,
   });
   const proBlocksLocalOpen = mePending || meHasProWorkspace(me ?? null);
-  const showTakeoffTool = viewerHasProSheetFeatures(me ?? null, cloudFileVersionId);
 
   const { data: viewerProject } = useQuery({
     queryKey: qk.project(viewerProjectId ?? ""),
@@ -169,6 +162,14 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
     enabled: Boolean(viewerProjectId) && meHasProWorkspace(me ?? null),
     staleTime: 60_000,
   });
+
+  useEffect(() => {
+    if (!viewerProjectId || !viewerProject?.measurementSystem) return;
+    setMeasureUnit(
+      defaultMeasureUnitForProject(viewerProject.measurementSystem as ProjectMeasurementSystem),
+    );
+  }, [viewerProjectId, viewerProject?.measurementSystem, setMeasureUnit]);
+
   const materialsHubHref =
     viewerProject?.workspaceId != null
       ? `/workspaces/${viewerProject.workspaceId}/materials`
@@ -181,8 +182,8 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const [helpOpen, setHelpOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [exportPdfOpen, setExportPdfOpen] = useState(false);
   const [clearMarkupDialogOpen, setClearMarkupDialogOpen] = useState(false);
+  const [sheetExportOpen, setSheetExportOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [zoomStr, setZoomStr] = useState("100");
 
@@ -215,8 +216,6 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
     setPdf(url, f.name, f.size);
     e.target.value = "";
   };
-
-  const handlePrint = () => window.print();
 
   const commitZoomFromInput = () => {
     const n = parseInt(zoomStr, 10);
@@ -264,7 +263,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             <button
               type="button"
               disabled
-              title="Loading account…"
+              title="Loading account"
               className="flex min-h-8 shrink-0 cursor-wait items-center justify-center gap-1.5 rounded-md border border-[#334155] bg-[#1E293B] px-2.5 text-[11px] font-medium tracking-tight text-[#94A3B8] opacity-80 sm:min-h-7"
             >
               <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
@@ -329,29 +328,6 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               </button>
             );
           })}
-          {showTakeoffTool ? (
-            <button
-              type="button"
-              disabled={!pdfUrl}
-              title="Quantity takeoff — draw zones on calibrated sheets"
-              aria-label="Takeoff"
-              aria-pressed={takeoffMode || tool === "takeoff"}
-              onClick={() => {
-                if (takeoffMode || tool === "takeoff") {
-                  setTakeoffMode(false);
-                  setTakeoffInventoryDrawerFromSidebar(false);
-                  setTool("select");
-                } else {
-                  setTakeoffMode(true);
-                  setTakeoffInventoryDrawerFromSidebar(true);
-                  setTool("takeoff");
-                }
-              }}
-              className={tb(takeoffMode || tool === "takeoff")}
-            >
-              <Package className="h-4 w-4" strokeWidth={1.75} />
-            </button>
-          ) : null}
         </div>
 
         <div className="flex min-w-[8rem] flex-1 justify-center px-1">
@@ -508,16 +484,6 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               anchorRef={searchBtnRef}
             />
           </div>
-          <button
-            type="button"
-            onClick={handlePrint}
-            disabled={!pdfUrl}
-            title="Print the current page (browser print dialog)"
-            className={tb(false)}
-            aria-label="Print"
-          >
-            <Printer className="h-4 w-4" strokeWidth={1.75} />
-          </button>
         </div>
       </div>
 
@@ -526,114 +492,78 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
         ref={moreMenuRef}
       >
         <button
-          ref={exportPdfBtnRef}
           type="button"
-          onClick={() => {
-            setMoreMenuOpen((o) => !o);
-          }}
-          className={tb(moreMenuOpen)}
+          onClick={() => setMoreMenuOpen((o) => !o)}
+          className={tb(moreMenuOpen || sheetExportOpen)}
           aria-expanded={moreMenuOpen}
-          aria-label="More actions"
-          title="Export, document info, shortcuts"
+          aria-haspopup="menu"
+          aria-label="Sheet menu"
+          title="Export, print, document, shortcuts"
         >
-          <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
+          <Menu className="h-4 w-4" strokeWidth={1.75} aria-hidden />
         </button>
-        {moreMenuOpen && (
+        {moreMenuOpen ? (
           <div
-            className="absolute right-0 top-full z-[80] mt-1 w-52 rounded-xl border border-[#334155] bg-[#1E293B] py-1 shadow-2xl ring-1 ring-black/25"
+            className="absolute right-0 top-full z-[85] mt-1 w-[min(calc(100vw-1rem),13rem)] min-w-[12rem] rounded-xl border border-[#334155] bg-[#1E293B] py-1 shadow-2xl ring-1 ring-black/25"
             role="menu"
           >
             <button
               type="button"
-              disabled={!pdfUrl}
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
               onClick={() => {
-                setExportPdfOpen(true);
+                setSheetExportOpen(true);
                 setMoreMenuOpen(false);
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155] disabled:opacity-40"
             >
-              <FileDown className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />
-              Export PDF…
+              <FileDown
+                className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]"
+                strokeWidth={2}
+                aria-hidden
+              />
+              Export & print
             </button>
             <button
               type="button"
-              disabled={!pdfUrl}
-              onClick={() => {
-                const canvas = exportCanvasRef?.current ?? null;
-                const idx = currentPage - 1;
-                const sz = pageSizePtByPage[idx];
-                const pageAnnotations = annotations.filter((a) => a.pageIndex === idx);
-                void downloadCanvasPng(canvas, fileName ?? "sheet", {
-                  pageAnnotations,
-                  pageW: sz?.wPt ?? 0,
-                  pageH: sz?.hPt ?? 0,
-                  measureUnit,
-                });
-                setMoreMenuOpen(false);
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155] disabled:opacity-40"
-            >
-              <ImageIcon className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />
-              Export PNG
-            </button>
-            <button
-              type="button"
-              disabled={!pdfUrl}
-              onClick={() => {
-                downloadMarkupJson(fileName ?? "sheet", annotations, calibrationByPage);
-                setMoreMenuOpen(false);
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155] disabled:opacity-40"
-            >
-              <FileJson className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />
-              Export JSON
-            </button>
-            <button
-              type="button"
-              disabled={!pdfUrl}
-              onClick={() => {
-                const csv = buildMeasuresCsv(annotations, measureUnit, null);
-                const base = (fileName ?? "sheet").replace(/\.pdf$/i, "");
-                downloadMeasuresCsv(`${base}-measures.csv`, csv);
-                setMoreMenuOpen(false);
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155] disabled:opacity-40"
-            >
-              <Table className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />
-              Export measures CSV
-            </button>
-            <div className="my-1 h-px bg-[#334155]" />
-            <button
-              type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
               onClick={() => {
                 setDocInfoOpen(true);
                 setHelpOpen(false);
                 setMoreMenuOpen(false);
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
             >
-              <Info className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />
-              Document…
+              <FileText
+                className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]"
+                strokeWidth={2}
+                aria-hidden
+              />
+              Document info
             </button>
             <button
               type="button"
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
               onClick={() => {
                 setHelpOpen(true);
                 setDocInfoOpen(false);
                 setMoreMenuOpen(false);
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
             >
-              <HelpCircle className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />
-              Shortcuts…
+              <Keyboard
+                className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]"
+                strokeWidth={2}
+                aria-hidden
+              />
+              Shortcuts
             </button>
           </div>
-        )}
-        <ExportPdfDialog
+        ) : null}
+        <SheetExportDialog
+          open={sheetExportOpen}
+          onClose={() => setSheetExportOpen(false)}
           pdfDoc={pdfDoc}
-          open={exportPdfOpen}
-          onClose={() => setExportPdfOpen(false)}
-          anchorRef={exportPdfBtnRef}
+          exportCanvasRef={exportCanvasRef}
         />
       </div>
 
@@ -867,7 +797,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                 onClick={() => backupInputRef.current?.click()}
                 className="rounded-lg border border-slate-600/60 bg-slate-800/50 px-2 py-1.5 text-[10px] font-medium text-slate-200 transition hover:bg-slate-700/75 disabled:opacity-40"
               >
-                Restore from JSON…
+                Restore from JSON
               </button>
               {backupError && (
                 <p className="text-[10px] leading-snug text-red-400">{backupError}</p>
@@ -1010,7 +940,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                 setHelpOpen(false);
               }}
             >
-              Full keyboard reference…
+              Full keyboard reference
             </button>
           </div>
         )}

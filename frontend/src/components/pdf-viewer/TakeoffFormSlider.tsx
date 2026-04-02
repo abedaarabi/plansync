@@ -22,6 +22,7 @@ import type { TakeoffMeasurementType, TakeoffUnit } from "@/lib/takeoffTypes";
 import { TAKEOFF_FOCUS_FIT_MARGIN, takeoffFocusRectForZone } from "@/lib/takeoffFocus";
 import { publishTakeoffZoneToProjectLine } from "@/lib/takeoffPublishCloud";
 import { DEFAULT_TAKEOFF_COLOR, TAKEOFF_COLOR_PRESETS } from "@/lib/takeoffUi";
+import { defaultTakeoffUnitForKind, type ProjectMeasurementSystem } from "@/lib/projectMeasurement";
 import { useViewerStore } from "@/store/viewerStore";
 import { toast } from "sonner";
 
@@ -118,9 +119,10 @@ export function TakeoffFormSlider() {
       return;
     }
     if (pending) {
+      const sys = (project?.measurementSystem as ProjectMeasurementSystem) || "METRIC";
       setName("");
       setCategory("");
-      setUnit(unitsForKind(pending.kind)[0]);
+      setUnit(defaultTakeoffUnitForKind(pending.kind, sys));
       setColor(useViewerStore.getState().takeoffPenColor);
       setNotes("");
       setTagsStr("");
@@ -142,7 +144,7 @@ export function TakeoffFormSlider() {
         }
       }
     }
-  }, [open, editZone, editItem, pending, selectedItemId, items]);
+  }, [open, editZone, editItem, pending, selectedItemId, items, project?.measurementSystem]);
 
   const kind: TakeoffMeasurementType | null = pending?.kind ?? editZone?.measurementType ?? null;
 

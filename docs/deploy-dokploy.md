@@ -34,7 +34,9 @@ The compose file does **not** publish Next on a host port; Traefik routes using 
 
 ## Database migrations (production)
 
-Use **migrate deploy**, not `db:push`:
+The **backend image** runs `prisma migrate deploy` on each container start (see `backend/docker-entrypoint.sh`), then starts the API. New migrations in `backend/prisma/migrations/` apply automatically when you deploy a new image, as long as `DATABASE_URL` is set and the migration history is valid.
+
+You can still run migrations manually if needed:
 
 ```bash
 # From repo root, with DATABASE_URL pointing at production Postgres:
@@ -49,6 +51,8 @@ docker compose -f docker-compose.deploy.yml exec backend \
 ```
 
 (Requires `DATABASE_URL` inside the container — the compose file already sets it for `backend`.)
+
+**Local dev:** if your database was created without Prisma migration history (`migrate deploy` fails with P3005), use `npm run db:push` once to sync the schema, or run a [baseline](https://www.pris.ly/d/migrate-baseline) so `migrate deploy` works.
 
 ## Notes
 

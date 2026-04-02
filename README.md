@@ -73,6 +73,7 @@
 | `npm run db:validate`       | `prisma validate`                                                             |
 | `npm run db:precommit`      | validate + `format --check` + `generate` (also runs on commit)                |
 | `npm run db:seed`           | Dev user + Pro workspace (see seed script)                                    |
+| `npm run db:seed:templates` | Folder structure presets only (`FolderStructureTemplate`) — local DB          |
 
 ## S3 (cloud PDF storage)
 

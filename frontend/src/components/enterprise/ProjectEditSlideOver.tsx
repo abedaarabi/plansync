@@ -6,11 +6,15 @@ import { toast } from "sonner";
 import { patchProject, type PatchProjectBody } from "@/lib/api-client";
 import { buildProjectChangeRows } from "@/lib/projectChangeSummary";
 import { PROJECT_STAGES, type ProjectStageValue } from "@/lib/projectStage";
+import type { ProjectCurrencyCode } from "@/lib/projectCurrency";
+import type { ProjectMeasurementSystem } from "@/lib/projectMeasurement";
 import { logoUrlFromWebsiteInput } from "@/lib/websiteUrl";
 import { qk } from "@/lib/queryKeys";
 import type { Project } from "@/types/projects";
 import { ConfirmProjectSaveDialog } from "./ConfirmProjectSaveDialog";
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
+import { ProjectCurrencyPicker } from "./ProjectCurrencyPicker";
+import { ProjectMeasurementSystemPicker } from "./ProjectMeasurementSystemPicker";
 import { ProjectProgressBar } from "./ProjectProgressBar";
 import { ProjectTypeSelect } from "./ProjectTypeSelect";
 
@@ -38,6 +42,9 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
   const [websiteEd, setWebsiteEd] = useState("");
   const [stageEd, setStageEd] = useState<ProjectStageValue>("NOT_STARTED");
   const [progressEd, setProgressEd] = useState(0);
+  const [currencyEd, setCurrencyEd] = useState<ProjectCurrencyCode>("USD");
+  const [measurementSystemEd, setMeasurementSystemEd] =
+    useState<ProjectMeasurementSystem>("METRIC");
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
 
   function handleClose() {
@@ -55,6 +62,10 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
     setWebsiteEd(p.websiteUrl ?? "");
     setStageEd((p.stage as ProjectStageValue) ?? "NOT_STARTED");
     setProgressEd(typeof p.progressPercent === "number" ? p.progressPercent : 0);
+    setCurrencyEd(((p.currency as ProjectCurrencyCode) || "USD") as ProjectCurrencyCode);
+    setMeasurementSystemEd(
+      ((p.measurementSystem as ProjectMeasurementSystem) || "METRIC") as ProjectMeasurementSystem,
+    );
   }
 
   useEffect(() => {
@@ -76,6 +87,8 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
       websiteEd,
       stageEd,
       progressEd,
+      currencyEd,
+      measurementSystemEd,
     });
   }, [
     project,
@@ -88,6 +101,8 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
     websiteEd,
     stageEd,
     progressEd,
+    currencyEd,
+    measurementSystemEd,
   ]);
 
   const formDirty = useMemo(() => {
@@ -99,6 +114,8 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
         ? String(project.localBudget).replace(/,/g, "")
         : "";
     const budgetEdNorm = localBudgetEd.trim().replace(/,/g, "");
+    const currencyCur = (project.currency as ProjectCurrencyCode) || "USD";
+    const msCur = (project.measurementSystem as ProjectMeasurementSystem) || "METRIC";
     return (
       nameEd.trim() !== project.name ||
       projectNumberEd.trim() !== (project.projectNumber ?? "").trim() ||
@@ -108,7 +125,9 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
       locationEd.trim() !== (project.location ?? "").trim() ||
       websiteEd.trim() !== (project.websiteUrl ?? "").trim() ||
       stageEd !== stageCur ||
-      progressEd !== progressCur
+      progressEd !== progressCur ||
+      currencyEd !== currencyCur ||
+      measurementSystemEd !== msCur
     );
   }, [
     project,
@@ -121,6 +140,8 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
     websiteEd,
     stageEd,
     progressEd,
+    currencyEd,
+    measurementSystemEd,
   ]);
 
   const saveMutation = useMutation({
@@ -155,6 +176,10 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
       if (stageEd !== stageCur) body.stage = stageEd;
       const progressCur = typeof project.progressPercent === "number" ? project.progressPercent : 0;
       if (progressEd !== progressCur) body.progressPercent = progressEd;
+      const currencyCur = (project.currency as ProjectCurrencyCode) || "USD";
+      if (currencyEd !== currencyCur) body.currency = currencyEd;
+      const msCur = (project.measurementSystem as ProjectMeasurementSystem) || "METRIC";
+      if (measurementSystemEd !== msCur) body.measurementSystem = measurementSystemEd;
       return patchProject(project.id, body);
     },
     onSuccess: () => {
@@ -229,6 +254,33 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
             />
           </div>
 
+          <div className="rounded-xl border border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/25 p-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
+              Currency &amp; units
+            </p>
+            <div className="mt-3 space-y-4">
+              <div>
+                <label className={labelClass}>Project currency</label>
+                <div className="mt-2">
+                  <ProjectCurrencyPicker
+                    value={currencyEd}
+                    onChange={setCurrencyEd}
+                    idPrefix="edit-slide-currency"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Measurement system</label>
+                <div className="mt-2">
+                  <ProjectMeasurementSystemPicker
+                    value={measurementSystemEd}
+                    onChange={setMeasurementSystemEd}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="edit-slide-number" className={labelClass}>
@@ -244,7 +296,7 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
             </div>
             <div>
               <label htmlFor="edit-slide-budget" className={labelClass}>
-                Local budget
+                Local budget ({currencyEd})
               </label>
               <input
                 id="edit-slide-budget"

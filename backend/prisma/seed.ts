@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { hashPassword } from "better-auth/crypto";
 import { PrismaClient, WorkspaceRole } from "@prisma/client";
+import { seedFolderStructureTemplates } from "./seed-folder-templates";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: resolve(__dirname, "../../.env") });
@@ -282,6 +283,9 @@ async function main() {
       },
     });
   }
+
+  await seedFolderStructureTemplates(prisma);
+  console.log("  Folder structure templates: ensured defaults (missing slugs only)");
 
   console.log("Seed complete.");
   console.log(`  Email:    ${email}`);

@@ -2,9 +2,10 @@
 
 import { apiUrl } from "@/lib/api-url";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   AlertCircle,
   ArrowRight,
@@ -16,11 +17,22 @@ import {
   Sparkles,
 } from "lucide-react";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { fetchProjects } from "@/lib/api-client";
+import {
+  applyFolderStructure,
+  fetchFolderStructureTemplates,
+  fetchProjects,
+  ProRequiredError,
+} from "@/lib/api-client";
 import type { ProjectStageValue } from "@/lib/projectStage";
+import type { ProjectCurrencyCode } from "@/lib/projectCurrency";
+import type { ProjectMeasurementSystem } from "@/lib/projectMeasurement";
 import { qk } from "@/lib/queryKeys";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
-import { NewProjectDialog, type NewProjectDialogValues } from "./NewProjectDialog";
+import {
+  NewProjectDialog,
+  type InitialFolderStructureOption,
+  type NewProjectDialogValues,
+} from "./NewProjectDialog";
 import { ProjectEditSlideOver } from "./ProjectEditSlideOver";
 import { ProjectLogo } from "./ProjectLogo";
 import { ProjectProgressBar } from "./ProjectProgressBar";
@@ -68,8 +80,16 @@ export function ProjectHubClient() {
     enabled: Boolean(wid && isPro),
   });
 
+  const { data: folderStructureTemplates = [] } = useQuery({
+    queryKey: qk.folderStructureTemplates(wid ?? ""),
+    queryFn: () => fetchFolderStructureTemplates(wid!),
+    enabled: Boolean(wid && isPro),
+  });
+
   const [projectModal, setProjectModal] = useState(false);
   const [projectName, setProjectName] = useState("");
+  const [currency, setCurrency] = useState<ProjectCurrencyCode>("USD");
+  const [measurementSystem, setMeasurementSystem] = useState<ProjectMeasurementSystem>("METRIC");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [projectNumber, setProjectNumber] = useState("");
@@ -80,6 +100,10 @@ export function ProjectHubClient() {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [projectStage, setProjectStage] = useState<ProjectStageValue>("NOT_STARTED");
   const [progressPercent, setProgressPercent] = useState(0);
+  const [initialFolderStructure, setInitialFolderStructure] =
+    useState<InitialFolderStructureOption>("none");
+  const [folderTemplateId, setFolderTemplateId] = useState("");
+  const [copyFromProjectId, setCopyFromProjectId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editProject, setEditProject] = useState<Project | null>(null);
@@ -97,7 +121,24 @@ export function ProjectHubClient() {
     setWebsiteUrl("");
     setProjectStage("NOT_STARTED");
     setProgressPercent(0);
+    setCurrency("USD");
+    setMeasurementSystem("METRIC");
+    setInitialFolderStructure("none");
+    setFolderTemplateId("");
+    setCopyFromProjectId("");
   }, []);
+
+  useEffect(() => {
+    if (folderStructureTemplates[0]?.id && !folderTemplateId) {
+      setFolderTemplateId(folderStructureTemplates[0].id);
+    }
+  }, [folderStructureTemplates, folderTemplateId]);
+
+  useEffect(() => {
+    if (projects[0]?.id && !copyFromProjectId) {
+      setCopyFromProjectId(projects[0].id);
+    }
+  }, [projects, copyFromProjectId]);
 
   const onNewProjectFieldChange = useCallback(
     (field: keyof NewProjectDialogValues, value: string | number) => {
@@ -107,6 +148,26 @@ export function ProjectHubClient() {
       }
       if (field === "projectStage") {
         setProjectStage(value as ProjectStageValue);
+        return;
+      }
+      if (field === "currency") {
+        setCurrency(value as ProjectCurrencyCode);
+        return;
+      }
+      if (field === "measurementSystem") {
+        setMeasurementSystem(value as ProjectMeasurementSystem);
+        return;
+      }
+      if (field === "initialFolderStructure") {
+        setInitialFolderStructure(value as InitialFolderStructureOption);
+        return;
+      }
+      if (field === "folderTemplateId") {
+        setFolderTemplateId(String(value));
+        return;
+      }
+      if (field === "copyFromProjectId") {
+        setCopyFromProjectId(String(value));
         return;
       }
       const v = String(value);
@@ -156,6 +217,9 @@ export function ProjectHubClient() {
     }
     setSaving(true);
     setError(null);
+    const ifs = initialFolderStructure;
+    const tplId = folderTemplateId;
+    const copyId = copyFromProjectId;
     try {
       const res = await fetch(apiUrl(`/api/v1/workspaces/${wid}/projects`), {
         method: "POST",
@@ -165,6 +229,8 @@ export function ProjectHubClient() {
           name: projectName.trim(),
           startDate,
           endDate,
+          currency,
+          measurementSystem,
           projectNumber: projectNumber.trim() || undefined,
           localBudget: localBudget.trim() || undefined,
           projectSize: projectSize.trim() || undefined,
@@ -187,6 +253,39 @@ export function ProjectHubClient() {
       setProjectModal(false);
       resetNewProjectForm();
       await queryClient.invalidateQueries({ queryKey: qk.projects(wid) });
+
+      if (ifs === "template" && tplId) {
+        try {
+          await applyFolderStructure(p.id, {
+            targetParentId: null,
+            source: { kind: "template", templateId: tplId },
+          });
+        } catch (err) {
+          if (err instanceof ProRequiredError) {
+            toast.error("Pro subscription required to apply folder template.");
+          } else {
+            toast.error(
+              err instanceof Error ? err.message : "Folder template could not be applied.",
+            );
+          }
+        }
+      } else if (ifs === "copy" && copyId) {
+        try {
+          await applyFolderStructure(p.id, {
+            targetParentId: null,
+            source: { kind: "project", sourceProjectId: copyId },
+          });
+        } catch (err) {
+          if (err instanceof ProRequiredError) {
+            toast.error("Pro subscription required to copy folder structure.");
+          } else {
+            toast.error(
+              err instanceof Error ? err.message : "Folder structure could not be copied.",
+            );
+          }
+        }
+      }
+
       router.push(`/projects/${p.id}`);
     } finally {
       setSaving(false);
@@ -390,6 +489,8 @@ export function ProjectHubClient() {
         saving={saving}
         values={{
           projectName,
+          currency,
+          measurementSystem,
           startDate,
           endDate,
           projectNumber,
@@ -400,7 +501,12 @@ export function ProjectHubClient() {
           websiteUrl,
           projectStage,
           progressPercent,
+          initialFolderStructure,
+          folderTemplateId,
+          copyFromProjectId,
         }}
+        templates={folderStructureTemplates}
+        copySourceProjects={projects}
         onChange={onNewProjectFieldChange}
         onSubmit={onCreateProject}
         onCancel={() => {

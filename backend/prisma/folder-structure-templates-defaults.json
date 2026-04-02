@@ -1,0 +1,315 @@
+[
+  {
+    "slug": "aec-standard",
+    "name": "AEC standard (ACC-style)",
+    "description": "Full design–construction phases: administration, contracts, multi-discipline design, CDs, specs, RFIs, submittals, field, BIM, archive.",
+    "sortOrder": 0,
+    "tree": [
+      {
+        "name": "00 Administration",
+        "children": [
+          { "name": "Correspondence" },
+          { "name": "Insurance & bonds" },
+          { "name": "Meeting minutes" }
+        ]
+      },
+      {
+        "name": "01 Contracts",
+        "children": [{ "name": "Agreements" }, { "name": "Change orders" }]
+      },
+      {
+        "name": "02 Design",
+        "children": [
+          { "name": "Architectural" },
+          { "name": "Structural" },
+          { "name": "Civil" },
+          { "name": "Landscape" },
+          { "name": "MEP" },
+          { "name": "Interiors" }
+        ]
+      },
+      {
+        "name": "03 Construction documents",
+        "children": [
+          { "name": "Issued for construction" },
+          { "name": "As-built" },
+          { "name": "Record drawings" }
+        ]
+      },
+      {
+        "name": "04 Specifications",
+        "children": [{ "name": "Divisions 00–49" }]
+      },
+      {
+        "name": "05 RFIs",
+        "children": [{ "name": "Open" }, { "name": "Closed" }]
+      },
+      {
+        "name": "06 Submittals",
+        "children": [{ "name": "Shop drawings" }, { "name": "Product data" }, { "name": "Samples" }]
+      },
+      {
+        "name": "07 Site & field",
+        "children": [
+          { "name": "Photos & video" },
+          { "name": "Daily reports" },
+          { "name": "Safety" },
+          { "name": "Survey" }
+        ]
+      },
+      {
+        "name": "08 BIM & coordination",
+        "children": [{ "name": "Models" }, { "name": "Clash reports" }, { "name": "Navisworks" }]
+      },
+      {
+        "name": "99 Archive",
+        "children": [{ "name": "Superseded" }]
+      }
+    ]
+  },
+  {
+    "slug": "aec-essential",
+    "name": "AEC essential (lightweight)",
+    "description": "Smaller set of top-level buckets: drawings, specs, RFIs, submittals, field, photos, closeout.",
+    "sortOrder": 10,
+    "tree": [
+      {
+        "name": "01 Drawings",
+        "children": [
+          { "name": "Architectural" },
+          { "name": "Structural" },
+          { "name": "MEP" },
+          { "name": "Civil" }
+        ]
+      },
+      { "name": "02 Specifications" },
+      {
+        "name": "03 RFIs",
+        "children": [{ "name": "Open" }, { "name": "Closed" }]
+      },
+      {
+        "name": "04 Submittals",
+        "children": [{ "name": "Log" }, { "name": "Approved" }]
+      },
+      {
+        "name": "05 Field",
+        "children": [{ "name": "Daily reports" }, { "name": "Safety" }, { "name": "Survey" }]
+      },
+      { "name": "06 Photos & video" },
+      { "name": "07 Closeout" }
+    ]
+  },
+  {
+    "slug": "residential-single-family",
+    "name": "Residential (single-family)",
+    "description": "Typical custom home workflow: selections, permits, construction phases, warranty.",
+    "sortOrder": 20,
+    "tree": [
+      {
+        "name": "01 Preconstruction",
+        "children": [
+          { "name": "Budget" },
+          { "name": "Selections & allowances" },
+          { "name": "Surveys" }
+        ]
+      },
+      {
+        "name": "02 Design",
+        "children": [
+          { "name": "Architectural" },
+          { "name": "Interior design" },
+          { "name": "Landscape" },
+          { "name": "MEP" }
+        ]
+      },
+      {
+        "name": "03 Permits & approvals",
+        "children": [{ "name": "Building permit" }, { "name": "HOA" }, { "name": "Utility" }]
+      },
+      {
+        "name": "04 Construction",
+        "children": [
+          { "name": "Foundations" },
+          { "name": "Framing" },
+          { "name": "Envelope" },
+          { "name": "MEP rough-in" },
+          { "name": "Finishes" }
+        ]
+      },
+      { "name": "05 Punch list" },
+      {
+        "name": "06 Warranty & closeout",
+        "children": [{ "name": "Manuals" }, { "name": "Warranty" }]
+      }
+    ]
+  },
+  {
+    "slug": "civil-infrastructure",
+    "name": "Civil & infrastructure",
+    "description": "Civil-heavy projects: ROW, survey, geotech, civil, drainage, utilities, traffic, structures.",
+    "sortOrder": 30,
+    "tree": [
+      {
+        "name": "01 Surveys & mapping",
+        "children": [{ "name": "Topographic" }, { "name": "As-built survey" }]
+      },
+      {
+        "name": "02 Geotechnical",
+        "children": [{ "name": "Reports" }, { "name": "Lab tests" }]
+      },
+      {
+        "name": "03 Environmental",
+        "children": [{ "name": "Permits" }, { "name": "Monitoring" }]
+      },
+      {
+        "name": "04 Right-of-way",
+        "children": [{ "name": "Easements" }, { "name": "Encroachments" }]
+      },
+      {
+        "name": "05 Civil",
+        "children": [{ "name": "Grading" }, { "name": "Paving" }, { "name": "Erosion control" }]
+      },
+      {
+        "name": "06 Drainage & stormwater",
+        "children": [{ "name": "Calculations" }, { "name": "BMP" }]
+      },
+      {
+        "name": "07 Utilities",
+        "children": [
+          { "name": "Water" },
+          { "name": "Sanitary" },
+          { "name": "Storm" },
+          { "name": "Electrical duct bank" }
+        ]
+      },
+      {
+        "name": "08 Traffic & ITS",
+        "children": [{ "name": "Signals" }, { "name": "Signing & striping" }]
+      },
+      {
+        "name": "09 Structures",
+        "children": [{ "name": "Bridge" }, { "name": "Retaining walls" }]
+      },
+      { "name": "10 As-builts & record" }
+    ]
+  },
+  {
+    "slug": "design-build-delivery",
+    "name": "Design-build delivery",
+    "description": "Owner requirements through commissioning, common in design-build and CMAR.",
+    "sortOrder": 40,
+    "tree": [
+      {
+        "name": "01 Owner requirements",
+        "children": [{ "name": "Program" }, { "name": "Criteria" }]
+      },
+      {
+        "name": "02 Design",
+        "children": [
+          { "name": "Schematic" },
+          { "name": "Design development" },
+          { "name": "Construction documents" }
+        ]
+      },
+      {
+        "name": "03 Estimating & procurement",
+        "children": [{ "name": "Budget" }, { "name": "Bid packages" }]
+      },
+      {
+        "name": "04 Submittals & RFIs",
+        "children": [{ "name": "RFIs" }, { "name": "Submittals" }]
+      },
+      {
+        "name": "05 Construction",
+        "children": [{ "name": "Schedule" }, { "name": "Field reports" }]
+      },
+      {
+        "name": "06 Commissioning & turnover",
+        "children": [{ "name": "Cx documents" }, { "name": "O&M manuals" }, { "name": "Training" }]
+      }
+    ]
+  },
+  {
+    "slug": "healthcare-facility",
+    "name": "Healthcare & lab",
+    "description": "Hospitals and clinics: regulatory, life safety, medical equipment, room data, above-ceiling.",
+    "sortOrder": 50,
+    "tree": [
+      {
+        "name": "01 Regulatory & compliance",
+        "children": [
+          { "name": "State / local filings" },
+          { "name": "NFPA / life safety" },
+          { "name": "Infection control" }
+        ]
+      },
+      {
+        "name": "02 Design & CDs",
+        "children": [
+          { "name": "Architectural" },
+          { "name": "Medical planning" },
+          { "name": "MEP" },
+          { "name": "Structural" }
+        ]
+      },
+      {
+        "name": "03 Medical equipment",
+        "children": [
+          { "name": "Planning" },
+          { "name": "Vendor submittals" },
+          { "name": "Installation" }
+        ]
+      },
+      {
+        "name": "04 Room data sheets",
+        "children": [{ "name": "By department" }, { "name": "FF&E" }]
+      },
+      {
+        "name": "05 Above ceiling & interstitial",
+        "children": [{ "name": "Access" }, { "name": "As-built" }]
+      },
+      {
+        "name": "06 Commissioning & validation",
+        "children": [{ "name": "Test reports" }, { "name": "Training" }]
+      }
+    ]
+  },
+  {
+    "slug": "commercial-tenant-improvement",
+    "name": "Commercial tenant improvement",
+    "description": "Office and retail TI: landlord vs tenant scope, demo, MEP, FF&E, punch.",
+    "sortOrder": 60,
+    "tree": [
+      {
+        "name": "01 Lease & base building",
+        "children": [{ "name": "Landlord drawings" }, { "name": "Work letter" }]
+      },
+      {
+        "name": "02 Design",
+        "children": [
+          { "name": "Architectural" },
+          { "name": "MEP" },
+          { "name": "Lighting" },
+          { "name": "Branding" }
+        ]
+      },
+      {
+        "name": "03 Permits",
+        "children": [{ "name": "Building" }, { "name": "Fire marshal" }]
+      },
+      {
+        "name": "04 Construction",
+        "children": [
+          { "name": "Demo" },
+          { "name": "Rough-in" },
+          { "name": "Finishes" },
+          { "name": "FF&E install" }
+        ]
+      },
+      {
+        "name": "05 Closeout",
+        "children": [{ "name": "Punch list" }, { "name": "O&M" }, { "name": "Warranty" }]
+      }
+    ]
+  }
+]

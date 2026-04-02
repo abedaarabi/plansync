@@ -19,12 +19,14 @@ import { Resend } from "resend";
 import {
   ActivityType,
   Prisma,
+  ProjectMeasurementSystem,
   ProjectStage,
   PunchPriority,
   PunchStatus,
   RfiStatus,
   WorkspaceRole,
 } from "@prisma/client";
+import { parseProjectCurrency } from "../../lib/projectSettings.js";
 import { fileVersionJson, projectRowJson, projectTreeJson, workspaceJson } from "../../lib/json.js";
 import {
   buildUploadObjectKey,
@@ -56,6 +58,11 @@ import {
 import { formatAuditPresentation } from "../../lib/auditFormat.js";
 import { fetchProjectAuditLogs } from "../../lib/projectAuditQuery.js";
 import { loadProjectForMember, isProjectScopedMember } from "../../lib/projectAccess.js";
+import {
+  applyFolderStructureFromTemplate,
+  copyFolderStructureBetweenProjects,
+} from "../../lib/applyFolderStructure.js";
+import { parseFolderTreeFromJson } from "../../lib/folderStructureTemplate.js";
 import { buildProjectTeamMembers } from "../../lib/projectTeamMembers.js";
 import {
   buildProjectInviteEmailHtml,
@@ -1227,11 +1234,18 @@ export function v1Routes(
         websiteUrl: z.string().max(2000).optional(),
         stage: z.nativeEnum(ProjectStage).optional(),
         progressPercent: z.number().int().min(0).max(100).optional(),
+        currency: z.string().length(3).optional(),
+        measurementSystem: z.nativeEnum(ProjectMeasurementSystem).optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
     if (body.data.endDate < body.data.startDate) {
       return c.json({ error: "End date must be on or after start date" }, 400);
+    }
+
+    const currency = parseProjectCurrency(body.data.currency ?? "USD");
+    if (!currency) {
+      return c.json({ error: "Invalid currency" }, 400);
     }
 
     const websiteRaw = body.data.websiteUrl?.trim() ?? "";
@@ -1264,6 +1278,8 @@ export function v1Routes(
         startDate: dateFromYmd(body.data.startDate),
         endDate: dateFromYmd(body.data.endDate),
         projectNumber: body.data.projectNumber?.trim() || null,
+        currency,
+        measurementSystem: body.data.measurementSystem ?? ProjectMeasurementSystem.METRIC,
         localBudget,
         projectSize: body.data.projectSize?.trim() || null,
         projectType: body.data.projectType?.trim() || null,
@@ -1312,6 +1328,36 @@ export function v1Routes(
       },
     });
     return c.json(projects.map(projectTreeJson));
+  });
+
+  /** Folder tree presets from DB (`FolderStructureTemplate`); list updates when rows change. */
+  r.get("/workspaces/:workspaceId/folder-structure-templates", needUser, async (c) => {
+    const workspaceId = c.req.param("workspaceId")!;
+    const m = await prisma.workspaceMember.findFirst({
+      where: { workspaceId, userId: c.get("user").id },
+    });
+    if (!m) return c.json({ error: "Forbidden" }, 403);
+    const rows = await prisma.folderStructureTemplate.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { slug: "asc" }],
+      select: { slug: true, name: true, description: true, tree: true },
+    });
+    return c.json(
+      rows.map((r) => {
+        let tree: ReturnType<typeof parseFolderTreeFromJson>;
+        try {
+          tree = parseFolderTreeFromJson(r.tree);
+        } catch {
+          tree = [];
+        }
+        return {
+          id: r.slug,
+          name: r.name,
+          description: r.description,
+          tree,
+        };
+      }),
+    );
   });
 
   r.get("/projects/:projectId/audit-logs", needUser, async (c) => {
@@ -1452,6 +1498,79 @@ export function v1Routes(
       metadata: { name: folder.name },
     });
     return c.json(folder);
+  });
+
+  /**
+   * Apply a built-in template or copy folder names only from another project (no files).
+   * Existing folders with the same name under the same parent are reused.
+   */
+  r.post("/projects/:projectId/folders/apply-structure", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const access = await loadProjectForMember(projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const project = access.project;
+    const gate = requirePro(project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const body = z
+      .object({
+        targetParentId: z.string().nullable().optional(),
+        source: z.discriminatedUnion("kind", [
+          z.object({ kind: z.literal("template"), templateId: z.string().min(1) }),
+          z.object({ kind: z.literal("project"), sourceProjectId: z.string().min(1) }),
+        ]),
+      })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    const targetParentId = body.data.targetParentId ?? null;
+    if (targetParentId) {
+      const dest = await prisma.folder.findFirst({
+        where: { id: targetParentId, projectId },
+      });
+      if (!dest) return c.json({ error: "Destination folder not found" }, 404);
+    }
+
+    const userId = c.get("user").id;
+    const wsId = project.workspaceId;
+
+    try {
+      if (body.data.source.kind === "template") {
+        const result = await applyFolderStructureFromTemplate({
+          projectId,
+          workspaceId: wsId,
+          actorUserId: userId,
+          targetParentId,
+          templateId: body.data.source.templateId,
+        });
+        return c.json(result);
+      }
+
+      const srcAccess = await loadProjectForMember(body.data.source.sourceProjectId, userId);
+      if ("error" in srcAccess) return c.json({ error: srcAccess.error }, srcAccess.status);
+      if (srcAccess.project.workspaceId !== project.workspaceId) {
+        return c.json({ error: "Source project must be in the same workspace." }, 400);
+      }
+
+      const result = await copyFolderStructureBetweenProjects({
+        targetProjectId: projectId,
+        sourceProjectId: body.data.source.sourceProjectId,
+        workspaceId: wsId,
+        actorUserId: userId,
+        targetParentId,
+      });
+      return c.json(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not apply folder structure.";
+      if (
+        msg === "Unknown folder template." ||
+        msg === "Invalid folder template data." ||
+        msg === "Folder template is empty."
+      )
+        return c.json({ error: msg }, 400);
+      if (msg === "Choose a different source project.") return c.json({ error: msg }, 400);
+      return c.json({ error: msg }, 400);
+    }
   });
 
   r.delete("/projects/:projectId/folders/:folderId", needUser, async (c) => {
@@ -2290,6 +2409,8 @@ export function v1Routes(
         name: project.name,
         workspaceId: project.workspaceId,
         projectNumber: project.projectNumber,
+        currency: project.currency,
+        measurementSystem: project.measurementSystem,
         localBudget: project.localBudget,
         projectSize: project.projectSize,
         projectType: project.projectType,
@@ -2409,12 +2530,23 @@ export function v1Routes(
           .regex(/^\d{4}-\d{2}-\d{2}$/)
           .nullable()
           .optional(),
+        currency: z.string().length(3).optional(),
+        measurementSystem: z.nativeEnum(ProjectMeasurementSystem).optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
 
     const b = body.data;
     const data: Prisma.ProjectUpdateInput = {};
+
+    if (b.currency !== undefined) {
+      const cur = parseProjectCurrency(b.currency);
+      if (!cur) {
+        return c.json({ error: "Invalid currency" }, 400);
+      }
+      data.currency = cur;
+    }
+    if (b.measurementSystem !== undefined) data.measurementSystem = b.measurementSystem;
 
     if (b.name !== undefined) data.name = b.name.trim();
 

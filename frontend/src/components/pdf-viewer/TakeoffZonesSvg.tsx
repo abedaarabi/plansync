@@ -20,36 +20,62 @@ function qtyLabelText(z: TakeoffZone, item: TakeoffItem | undefined): string {
   return item?.unit ? `${q} ${item.unit}` : q;
 }
 
+function truncateCanvasName(name: string, max = 30): string {
+  const t = name.trim();
+  if (t.length <= max) return t || "—";
+  return `${t.slice(0, Math.max(0, max - 1))}…`;
+}
+
 /** Renders outside multiply blend so it stays visible; fill matches takeoff item color. */
 function SelectedQuantityLabel({
   x,
   y,
-  text,
+  itemName,
+  qtyText,
   dy = 0,
   accentColor,
 }: {
   x: number;
   y: number;
-  text: string;
+  itemName: string;
+  qtyText: string;
   dy?: number;
   accentColor: string;
 }) {
+  const name = truncateCanvasName(itemName);
+  const lineGap = 15;
+  const baseY = y + dy;
   return (
-    <text
-      x={x}
-      y={y + dy}
-      textAnchor="middle"
-      dominantBaseline="middle"
-      fill={accentColor}
-      stroke="#f8fafc"
-      strokeWidth={3.5}
-      paintOrder="stroke fill"
-      fontSize={12}
-      fontWeight={700}
-      style={{ pointerEvents: "none", mixBlendMode: "normal" }}
-    >
-      {text}
-    </text>
+    <g style={{ pointerEvents: "none", mixBlendMode: "normal" }}>
+      <text
+        x={x}
+        y={baseY - lineGap / 2}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill={accentColor}
+        stroke="#f8fafc"
+        strokeWidth={3.5}
+        paintOrder="stroke fill"
+        fontSize={13}
+        fontWeight={600}
+      >
+        {name}
+      </text>
+      <text
+        x={x}
+        y={baseY + lineGap / 2}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill={accentColor}
+        stroke="#f8fafc"
+        strokeWidth={3.5}
+        paintOrder="stroke fill"
+        fontSize={14}
+        fontWeight={700}
+      >
+        {qtyText}
+      </text>
+    </g>
   );
 }
 
@@ -122,7 +148,8 @@ export function TakeoffZonesSvg({
                 <SelectedQuantityLabel
                   x={c.x}
                   y={c.y}
-                  text={qtyLabelText(z, item)}
+                  itemName={item?.name ?? ""}
+                  qtyText={qtyLabelText(z, item)}
                   accentColor={stroke}
                 />
               ) : null}
@@ -160,7 +187,8 @@ export function TakeoffZonesSvg({
                 <SelectedQuantityLabel
                   x={c.x}
                   y={c.y}
-                  text={qtyLabelText(z, item)}
+                  itemName={item?.name ?? ""}
+                  qtyText={qtyLabelText(z, item)}
                   dy={-6}
                   accentColor={stroke}
                 />
@@ -208,7 +236,8 @@ export function TakeoffZonesSvg({
                 <SelectedQuantityLabel
                   x={c.x}
                   y={c.y}
-                  text={qtyLabelText(z, item)}
+                  itemName={item?.name ?? ""}
+                  qtyText={qtyLabelText(z, item)}
                   dy={labelDy}
                   accentColor={stroke}
                 />

@@ -48,6 +48,62 @@ export async function fetchProjects(workspaceId: string): Promise<Project[]> {
   return res.json() as Promise<Project[]>;
 }
 
+export type FolderTemplateNode = {
+  name: string;
+  children?: FolderTemplateNode[];
+};
+
+/** Preset from `FolderStructureTemplate` — includes `tree` for UI preview before apply. */
+export type FolderStructureTemplateWithTree = {
+  id: string;
+  name: string;
+  description: string;
+  tree: FolderTemplateNode[];
+};
+
+export async function fetchFolderStructureTemplates(
+  workspaceId: string,
+): Promise<FolderStructureTemplateWithTree[]> {
+  const res = await fetch(apiUrl(`/api/v1/workspaces/${workspaceId}/folder-structure-templates`), {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Could not load folder templates.");
+  return res.json() as Promise<FolderStructureTemplateWithTree[]>;
+}
+
+export type ApplyFolderStructureResult = {
+  createdCount: number;
+  reusedCount: number;
+};
+
+export async function applyFolderStructure(
+  projectId: string,
+  body: {
+    targetParentId: string | null;
+    source: { kind: "template"; templateId: string } | { kind: "project"; sourceProjectId: string };
+  },
+): Promise<ApplyFolderStructureResult> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/folders/apply-structure`), {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+  } & ApplyFolderStructureResult;
+  if (!res.ok) {
+    throw new Error(
+      typeof data.error === "string" ? data.error : "Could not apply folder structure.",
+    );
+  }
+  return {
+    createdCount: data.createdCount,
+    reusedCount: data.reusedCount,
+  };
+}
+
 export type DashboardResponse = {
   workspace: {
     id: string;
@@ -421,6 +477,8 @@ export type ProjectMeta = {
   id: string;
   name: string;
   workspaceId: string;
+  currency?: string;
+  measurementSystem?: string;
   projectNumber?: string | null;
   localBudget?: string | null;
   projectSize?: string | null;
@@ -437,6 +495,8 @@ export type ProjectMeta = {
 export type PatchProjectBody = {
   name?: string;
   projectNumber?: string | null;
+  currency?: string;
+  measurementSystem?: string;
   localBudget?: number | string | null;
   projectSize?: string | null;
   projectType?: string | null;

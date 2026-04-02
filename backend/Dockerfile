@@ -14,8 +14,9 @@ COPY backend ./backend
 RUN npm ci
 RUN npm run db:generate -w backend
 RUN npm run build -w backend
+RUN chmod +x backend/docker-entrypoint.sh
 
 ENV NODE_ENV=production
 EXPOSE 8787
 
-CMD ["node", "backend/dist/index.js"]
+CMD ["./backend/docker-entrypoint.sh"]

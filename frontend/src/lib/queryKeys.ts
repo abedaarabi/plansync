@@ -2,6 +2,8 @@
 export const qk = {
   me: () => ["me"] as const,
   projects: (workspaceId: string) => ["projects", workspaceId] as const,
+  folderStructureTemplates: (workspaceId: string) =>
+    ["folderStructureTemplates", workspaceId] as const,
   project: (projectId: string) => ["project", projectId] as const,
   projectTeam: (projectId: string) => ["projectTeam", projectId] as const,
   projectRfis: (projectId: string) => ["projectRfis", projectId] as const,

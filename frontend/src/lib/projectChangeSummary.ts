@@ -1,11 +1,20 @@
 import type { Project } from "@/types/projects";
 import { projectStageLabel, type ProjectStageValue } from "@/lib/projectStage";
+import { formatProjectCurrencyLabel } from "@/lib/projectCurrency";
+import {
+  PROJECT_MEASUREMENT_SYSTEMS,
+  type ProjectMeasurementSystem,
+} from "@/lib/projectMeasurement";
 
 export type ProjectChangeRow = { label: string; before: string; after: string };
 
 function disp(s: string | null | undefined): string {
   const t = (s ?? "").trim();
   return t || "—";
+}
+
+function measurementSystemLabel(v: ProjectMeasurementSystem): string {
+  return PROJECT_MEASUREMENT_SYSTEMS.find((x) => x.value === v)?.title ?? v;
 }
 
 export function buildProjectChangeRows(
@@ -20,6 +29,8 @@ export function buildProjectChangeRows(
     websiteEd: string;
     stageEd: ProjectStageValue;
     progressEd: number;
+    currencyEd: string;
+    measurementSystemEd: ProjectMeasurementSystem;
   },
 ): ProjectChangeRow[] {
   const rows: ProjectChangeRow[] = [];
@@ -33,6 +44,8 @@ export function buildProjectChangeRows(
     websiteEd,
     stageEd,
     progressEd,
+    currencyEd,
+    measurementSystemEd,
   } = fields;
 
   const budgetCur =
@@ -48,6 +61,24 @@ export function buildProjectChangeRows(
       after: disp(nameEd),
     });
   }
+  const currencyCur = (project.currency as string) || "USD";
+  if (currencyEd !== currencyCur) {
+    rows.push({
+      label: "Currency",
+      before: formatProjectCurrencyLabel(currencyCur),
+      after: formatProjectCurrencyLabel(currencyEd),
+    });
+  }
+  const msCur = ((project.measurementSystem as ProjectMeasurementSystem) ||
+    "METRIC") as ProjectMeasurementSystem;
+  if (measurementSystemEd !== msCur) {
+    rows.push({
+      label: "Measurement system",
+      before: measurementSystemLabel(msCur),
+      after: measurementSystemLabel(measurementSystemEd),
+    });
+  }
+
   if (projectNumberEd.trim() !== (project.projectNumber ?? "").trim()) {
     rows.push({
       label: "Project number",

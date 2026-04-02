@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Info, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { sumZonesForItem } from "@/lib/takeoffCompute";
 import {
@@ -797,9 +797,14 @@ export function TakeoffInventoryPanel() {
             >
               Clear selection
             </button>
-            <span className="text-[9px] text-[#64748b]">
-              ⌘/Ctrl-click a zone on the sheet to toggle.
-            </span>
+            <button
+              type="button"
+              className="shrink-0 rounded p-0.5 text-[#64748b] hover:bg-[#1e293b] hover:text-[#94a3b8]"
+              title="⌘/Ctrl-click a zone on the sheet to add or remove from selection."
+              aria-label="Multi-select on sheet help"
+            >
+              <Info className="h-3 w-3" strokeWidth={2} aria-hidden />
+            </button>
           </div>
         ) : null}
       </div>

@@ -121,6 +121,16 @@ npm run db:seed
 
 Default credentials are documented in the seed script; you can override with `SEED_USER_EMAIL`, `SEED_USER_PASSWORD`, and `SEED_WORKSPACE_SLUG`.
 
+### Folder structure presets (optional)
+
+Inserts default **AEC folder tree** presets into `FolderStructureTemplate` (for the Projects UI). Safe to re-run: only **missing** slugs are added; existing rows are left as-is.
+
+```bash
+npm run db:seed:templates
+```
+
+Requires `DATABASE_URL` (same as other Prisma commands). Run after migrations or `db push` so the table exists.
+
 ### Local vs production Prisma commands
 
 | Goal                                                   | Command                          |

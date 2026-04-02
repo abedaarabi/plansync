@@ -31,10 +31,16 @@ export type Folder = {
 };
 
 import type { ProjectStageValue } from "@/lib/projectStage";
+import type { ProjectCurrencyCode } from "@/lib/projectCurrency";
+import type { ProjectMeasurementSystem } from "@/lib/projectMeasurement";
 
 export type Project = {
   id: string;
   name: string;
+  /** ISO 4217 — budget and cost display */
+  currency?: ProjectCurrencyCode | string;
+  /** Metric vs imperial for measurements and takeoff defaults */
+  measurementSystem?: ProjectMeasurementSystem | string;
   /** Lifecycle stage (planning → construction → completed, etc.) */
   stage?: ProjectStageValue | string;
   /** Manual overall completion 0–100 */

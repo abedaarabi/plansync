@@ -1,6 +1,8 @@
 import { buildAnnotationsSvgDocument } from "@/lib/annotationsSvgExport";
+import type { TakeoffItem, TakeoffZone } from "@/lib/takeoffTypes";
 import type { Annotation, Calibration } from "@/store/viewerStore";
 import type { MeasureUnit } from "@/lib/coords";
+import { buildTakeoffExportSvgDocument } from "@/lib/takeoffOverlaySvg";
 
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -48,21 +50,46 @@ export type CanvasPngOverlayOptions = {
   measureUnit: MeasureUnit;
 };
 
+export type CanvasPngTakeoffOptions = {
+  takeoffItems: TakeoffItem[];
+  takeoffZones: TakeoffZone[];
+  pageIndex0: number;
+  includeTakeoff: boolean;
+};
+
 /**
  * Raster PNG of the PDF canvas plus committed markups and measures (same geometry as on screen).
+ * Optional takeoff layer composites quantity zones when enabled.
  */
 export async function downloadCanvasPng(
   canvas: HTMLCanvasElement | null,
   fileName: string,
   overlay?: CanvasPngOverlayOptions | null,
+  takeoff?: CanvasPngTakeoffOptions | null,
 ): Promise<void> {
   if (!canvas || canvas.width < 2 || canvas.height < 2) return;
   const base = fileName.replace(/\.pdf$/i, "") || "sheet";
 
-  const useOverlay =
-    overlay && overlay.pageAnnotations.length > 0 && overlay.pageW > 0 && overlay.pageH > 0;
+  const cssW = canvas.width;
+  const cssH = canvas.height;
 
-  if (!useOverlay) {
+  const hasAnn = Boolean(
+    overlay && overlay.pageAnnotations.length > 0 && overlay.pageW > 0 && overlay.pageH > 0,
+  );
+
+  const takeoffSvg =
+    takeoff?.includeTakeoff && takeoff.takeoffZones.length > 0
+      ? buildTakeoffExportSvgDocument(
+          takeoff.takeoffZones,
+          new Map(takeoff.takeoffItems.map((i) => [i.id, i])),
+          takeoff.pageIndex0,
+          cssW,
+          cssH,
+        )
+      : "";
+  const hasTakeoff = Boolean(takeoffSvg);
+
+  if (!hasAnn && !hasTakeoff) {
     canvas.toBlob(
       (blob) => {
         if (blob) triggerDownload(blob, `${base}-page.png`);
@@ -73,24 +100,27 @@ export async function downloadCanvasPng(
     return;
   }
 
-  const { pageAnnotations, pageW, pageH, measureUnit } = overlay;
-  const cssW = canvas.width;
-  const cssH = canvas.height;
-  const scale = cssW / pageW;
+  const pageAnnotations = overlay?.pageAnnotations ?? [];
+  const pageW = overlay?.pageW ?? 0;
+  const pageH = overlay?.pageH ?? 0;
+  const measureUnit = overlay?.measureUnit ?? ("mm" as MeasureUnit);
+  const scale = pageW > 0 ? cssW / pageW : 1;
   const arrowId = `png-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-  const svg = buildAnnotationsSvgDocument(
-    pageAnnotations,
-    cssW,
-    cssH,
-    pageW,
-    pageH,
-    scale,
-    measureUnit,
-    arrowId,
-  );
+  const svg =
+    hasAnn && pageW > 0 && pageH > 0
+      ? buildAnnotationsSvgDocument(
+          pageAnnotations,
+          cssW,
+          cssH,
+          pageW,
+          pageH,
+          scale,
+          measureUnit,
+          arrowId,
+        )
+      : "";
 
   try {
-    const img = await svgDataUrlToImage(svg);
     const out = document.createElement("canvas");
     out.width = cssW;
     out.height = cssH;
@@ -106,7 +136,14 @@ export async function downloadCanvasPng(
       return;
     }
     ctx.drawImage(canvas, 0, 0);
-    ctx.drawImage(img, 0, 0, cssW, cssH);
+    if (hasAnn && svg) {
+      const img = await svgDataUrlToImage(svg);
+      ctx.drawImage(img, 0, 0, cssW, cssH);
+    }
+    if (hasTakeoff && takeoffSvg) {
+      const timg = await svgDataUrlToImage(takeoffSvg);
+      ctx.drawImage(timg, 0, 0, cssW, cssH);
+    }
     out.toBlob(
       (blob) => {
         if (blob) triggerDownload(blob, `${base}-page.png`);

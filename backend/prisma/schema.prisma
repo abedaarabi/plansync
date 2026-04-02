@@ -241,25 +241,36 @@ enum ProjectStage {
   ON_HOLD
 }
 
+/// Length / area display for measurements and takeoff defaults (metric vs US customary).
+enum ProjectMeasurementSystem {
+  METRIC
+  IMPERIAL
+}
+
 model Project {
   id          String @id @default(cuid())
   workspaceId String
   name        String
 
   /// Client or internal job reference (e.g. contract #).
-  projectNumber String?
+  projectNumber     String?
+  /// ISO 4217 (e.g. USD, DKK). Used for budget and cost display.
+  currency          String                   @default("USD")
+  /// Metric (m, m²) vs imperial (ft, ft²) for the project.
+  measurementSystem ProjectMeasurementSystem @default(METRIC)
+
   /// Local currency budget amount.
-  localBudget   Decimal? @db.Decimal(19, 2)
+  localBudget Decimal? @db.Decimal(19, 2)
   /// e.g. square footage, floors, or scope summary.
-  projectSize   String?
+  projectSize String?
   /// e.g. Commercial, Residential, Infrastructure.
-  projectType   String?
+  projectType String?
   /// Site or city (optional).
-  location      String?
+  location    String?
   /// Project or client website (https). Used to resolve a favicon for the project logo.
-  websiteUrl    String?
+  websiteUrl  String?
   /// Cached favicon image URL (typically Google favicons service for `websiteUrl` hostname).
-  logoUrl       String?
+  logoUrl     String?
 
   stage           ProjectStage @default(NOT_STARTED)
   /// Overall completion 0–100 (manual; not tied strictly to `stage`).
@@ -302,6 +313,20 @@ model Folder {
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
+}
+
+/// Folder tree presets (empty folders only). Listed and applied from DB so edits take effect without redeploy.
+model FolderStructureTemplate {
+  slug        String   @id
+  name        String
+  description String
+  tree        Json /// [{ "name": string, "children"?: ... }]
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
 }
 
 model File {

@@ -33,6 +33,8 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ["Context menu", "Right-click"],
       ["Escape", "Cancel in-progress tool"],
+      ["Toggle takeoff inventory height", "Ctrl+` · ⌘+J"],
+      ["Collapse inventory (when its panel is focused)", "Escape"],
     ],
   },
   {

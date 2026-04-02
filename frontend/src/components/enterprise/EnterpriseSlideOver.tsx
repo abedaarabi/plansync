@@ -4,9 +4,14 @@ import { useEffect, useRef, useState, type FormHTMLAttributes, type ReactNode } 
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
+const SLIDE_OVER_PANEL_TRANSITION =
+  "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]";
+
+/** Default width; use `panelMaxWidthClass` on `EnterpriseSlideOver` to override. */
+export const ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W = "max-w-[520px]";
+
 /** All enterprise slide-overs use this width for a consistent layout. */
-export const ENTERPRISE_SLIDE_OVER_PANEL_CLASS =
-  "w-full max-w-[520px] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]";
+export const ENTERPRISE_SLIDE_OVER_PANEL_CLASS = `w-full ${ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W} ${SLIDE_OVER_PANEL_TRANSITION}`;
 
 const TRANSITION_MS = 300;
 
@@ -22,12 +27,26 @@ export type EnterpriseSlideOverProps = {
   overlayZClass?: string;
   /** For `role="dialog"` + `aria-labelledby` on the panel. */
   ariaLabelledBy?: string;
+  /** Tailwind max-width classes for the panel (default: `max-w-[520px]`). */
+  panelMaxWidthClass?: string;
+  /** Extra classes for the scrollable body (padding, max-width wrapper). */
+  bodyClassName?: string;
+  /** Extra classes for the footer bar (padding, alignment). */
+  footerClassName?: string;
+  /** Extra classes for the header row (padding). */
+  headerClassName?: string;
+  /** Backdrop click closes (default: true). */
+  closeOnBackdrop?: boolean;
+  /** Escape key closes (default: true). */
+  closeOnEscape?: boolean;
+  /** Header X button (default: true). */
+  showHeaderCloseButton?: boolean;
 };
 
 /**
- * Right-edge slide-over with backdrop, body scroll lock, and Escape to close.
+ * Right-edge slide-over with backdrop and body scroll lock.
+ * By default: backdrop click, Escape, and header X call `onClose` — disable via props.
  * Portals to `document.body` for correct stacking above app chrome.
- * Enter/exit: backdrop fades; panel slides from the right with a smooth easing curve.
  */
 export function EnterpriseSlideOver({
   open,
@@ -38,6 +57,13 @@ export function EnterpriseSlideOver({
   form,
   overlayZClass = "z-[100]",
   ariaLabelledBy,
+  panelMaxWidthClass = ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W,
+  bodyClassName,
+  footerClassName,
+  headerClassName,
+  closeOnBackdrop = true,
+  closeOnEscape = true,
+  showHeaderCloseButton = true,
 }: EnterpriseSlideOverProps) {
   const [shouldRender, setShouldRender] = useState(open);
   const [panelActive, setPanelActive] = useState(false);
@@ -89,13 +115,13 @@ export function EnterpriseSlideOver({
   }, [shouldRender]);
 
   useEffect(() => {
-    if (!shouldRender) return;
+    if (!shouldRender || !closeOnEscape) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [shouldRender, onClose]);
+  }, [shouldRender, closeOnEscape, onClose]);
 
   if (!shouldRender || typeof document === "undefined") return null;
 
@@ -104,20 +130,34 @@ export function EnterpriseSlideOver({
     (panelActive ? "opacity-100" : "pointer-events-none opacity-0");
 
   const panelMotion =
-    ENTERPRISE_SLIDE_OVER_PANEL_CLASS +
-    " fixed inset-y-0 right-0 z-[101] flex h-dvh max-h-dvh flex-col border-l border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)] " +
+    `w-full ${panelMaxWidthClass} ${SLIDE_OVER_PANEL_TRANSITION} ` +
+    "fixed inset-y-0 right-0 z-[101] flex h-dvh max-h-dvh flex-col border-l border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)] " +
     (panelActive ? "translate-x-0" : "translate-x-full");
 
   const shell = (
     <div className={`fixed inset-0 ${overlayZClass}`} role="presentation">
-      <button type="button" className={backdropClass} aria-label="Close panel" onClick={onClose} />
+      <button
+        type="button"
+        className={backdropClass}
+        aria-label={closeOnBackdrop ? "Close panel" : "Background"}
+        onClick={closeOnBackdrop ? onClose : undefined}
+      />
       {form ? (
         <FormPanel form={form} panelClassName={panelMotion} ariaLabelledBy={ariaLabelledBy}>
-          <HeaderRow header={header} onClose={onClose} />
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+          <HeaderRow
+            header={header}
+            onClose={onClose}
+            showCloseButton={showHeaderCloseButton}
+            className={headerClassName}
+          />
+          <div
+            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${bodyClassName ?? "px-5 py-5"}`}
+          >
             {children}
           </div>
-          <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-5 py-4 sm:flex-row sm:justify-end">
+          <div
+            className={`flex shrink-0 flex-col-reverse gap-3 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 py-4 sm:flex-row sm:justify-end ${footerClassName ?? "px-5"}`}
+          >
             {footer}
           </div>
         </FormPanel>
@@ -128,11 +168,20 @@ export function EnterpriseSlideOver({
           aria-modal="true"
           {...(ariaLabelledBy ? { "aria-labelledby": ariaLabelledBy } : {})}
         >
-          <HeaderRow header={header} onClose={onClose} />
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+          <HeaderRow
+            header={header}
+            onClose={onClose}
+            showCloseButton={showHeaderCloseButton}
+            className={headerClassName}
+          />
+          <div
+            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${bodyClassName ?? "px-5 py-5"}`}
+          >
             {children}
           </div>
-          <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-5 py-4 sm:flex-row sm:justify-end">
+          <div
+            className={`flex shrink-0 flex-col-reverse gap-3 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 py-4 sm:flex-row sm:justify-end ${footerClassName ?? "px-5"}`}
+          >
             {footer}
           </div>
         </div>
@@ -168,18 +217,32 @@ function FormPanel({
   );
 }
 
-function HeaderRow({ header, onClose }: { header: ReactNode; onClose: () => void }) {
+function HeaderRow({
+  header,
+  onClose,
+  showCloseButton,
+  className,
+}: {
+  header: ReactNode;
+  onClose: () => void;
+  showCloseButton: boolean;
+  className?: string;
+}) {
   return (
-    <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-5 py-4">
+    <div
+      className={`flex shrink-0 items-start justify-between gap-3 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 py-4 ${className ?? "px-5"}`}
+    >
       <div className="min-w-0 flex-1">{header}</div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="shrink-0 rounded-lg p-2 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
-        aria-label="Close"
-      >
-        <X className="h-5 w-5" strokeWidth={1.75} />
-      </button>
+      {showCloseButton ? (
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 rounded-lg p-2 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" strokeWidth={1.75} />
+        </button>
+      ) : null}
     </div>
   );
 }

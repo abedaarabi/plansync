@@ -1,8 +1,10 @@
 import { PDFDocument } from "pdf-lib";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { MeasureUnit } from "@/lib/coords";
+import type { TakeoffItem, TakeoffZone } from "@/lib/takeoffTypes";
 import type { Annotation } from "@/store/viewerStore";
 import { buildAnnotationsSvgDocument } from "@/lib/annotationsSvgExport";
+import { buildTakeoffExportSvgDocument } from "@/lib/takeoffOverlaySvg";
 
 /** Raster multiplier vs PDF points — balances file size and legibility. */
 const EXPORT_RENDER_SCALE = 2.5;
@@ -42,6 +44,11 @@ async function renderPageToPngBytes(
   pageNumber: number,
   pageAnnotations: Annotation[],
   measureUnit: MeasureUnit,
+  takeoffComposite?: {
+    takeoffItems: TakeoffItem[];
+    takeoffZones: TakeoffZone[];
+    includeTakeoff: boolean;
+  },
 ): Promise<{ pngBytes: Uint8Array; widthPt: number; heightPt: number }> {
   const page = await pdfDoc.getPage(pageNumber);
   const base = page.getViewport({ scale: 1 });
@@ -79,6 +86,22 @@ async function renderPageToPngBytes(
     ctx.drawImage(img, 0, 0, cssW, cssH);
   }
 
+  const pageIdx0 = pageNumber - 1;
+  if (takeoffComposite?.includeTakeoff && takeoffComposite.takeoffZones.length > 0) {
+    const itemsById = new Map(takeoffComposite.takeoffItems.map((i) => [i.id, i]));
+    const takeSvg = buildTakeoffExportSvgDocument(
+      takeoffComposite.takeoffZones,
+      itemsById,
+      pageIdx0,
+      cssW,
+      cssH,
+    );
+    if (takeSvg) {
+      const timg = await svgDataUrlToImage(takeSvg);
+      ctx.drawImage(timg, 0, 0, cssW, cssH);
+    }
+  }
+
   const pngBytes = await canvasToPngBytes(canvas);
   return { pngBytes, widthPt: base.width, heightPt: base.height };
 }
@@ -93,8 +116,26 @@ export async function exportPdfWithMarkups(options: {
   pageNumbers: number[];
   fileNameBase: string;
   onProgress?: (p: ExportPdfProgress) => void;
+  takeoffItems?: TakeoffItem[];
+  takeoffZones?: TakeoffZone[];
+  /** When true, composites takeoff zones onto each exported page (Pro takeoff data). */
+  includeTakeoff?: boolean;
 }): Promise<void> {
-  const { pdfDoc, annotations, measureUnit, pageNumbers, fileNameBase, onProgress } = options;
+  const {
+    pdfDoc,
+    annotations,
+    measureUnit,
+    pageNumbers,
+    fileNameBase,
+    onProgress,
+    takeoffItems = [],
+    takeoffZones = [],
+    includeTakeoff = false,
+  } = options;
+  const takeoffComposite =
+    includeTakeoff && takeoffZones.length > 0
+      ? { takeoffItems, takeoffZones, includeTakeoff: true as const }
+      : undefined;
   const out = await PDFDocument.create();
   const total = pageNumbers.length;
   let done = 0;
@@ -106,6 +147,7 @@ export async function exportPdfWithMarkups(options: {
       pn,
       pageAnnotations,
       measureUnit,
+      takeoffComposite,
     );
     const pngImage = await out.embedPng(pngBytes);
     const page = out.addPage([widthPt, heightPt]);
