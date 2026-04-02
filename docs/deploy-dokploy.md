@@ -28,7 +28,7 @@ In Dokploy, create a Compose application pointing at this repo and set the compo
 | `PUBLIC_APP_URL`     | Public HTTPS origin of the app (same value for Better Auth and CORS), e.g. `https://app.example.com`                    |
 | `BETTER_AUTH_SECRET` | Long random string (32+ characters)                                                                                     |
 
-Optional (same names as `.env.example`): `AWS_*`, `S3_BUCKET`, `STRIPE_*`, `RESEND_*`, `NEXT_PUBLIC_UMAMI_*`. For S3, configure bucket **CORS** for your public app origin — see [s3-setup.md](./s3-setup.md).
+Optional (same names as `.env.example`): `AWS_*`, `S3_BUCKET`, `STRIPE_*`, `RESEND_*`, `GEMINI_API_KEY` (or `GOOGLE_GENERATIVE_AI_API_KEY`) and optional `GEMINI_MODEL` for Sheet AI, `NEXT_PUBLIC_UMAMI_*`. For S3, configure bucket **CORS** for your public app origin — see [s3-setup.md](./s3-setup.md).
 
 The compose file does **not** publish Next on a host port; Traefik routes using the Docker network and labels. To hit Next directly on the host for debugging, add a `ports:` override (e.g. `3001:3000`) in a local override file.
 

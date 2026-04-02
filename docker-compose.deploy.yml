@@ -51,6 +51,10 @@ services:
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:-}
       SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:-}
+      # Sheet AI (Gemini) — optional; omit or leave empty to disable (503 "not configured")
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dokploy-network"
