@@ -85,8 +85,6 @@ services:
       HOSTNAME: 0.0.0.0
       PORT: "3000"
       API_PROXY_TARGET: http://backend:${BACKEND_PORT:-8787}
-      # Runtime public URL for the API proxy (forwarded headers to Better Auth); mirrors build-time NEXT_PUBLIC_APP_URL.
-      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dokploy-network"
