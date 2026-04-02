@@ -34,20 +34,16 @@ const withPWA = withPWAInit({
   },
 });
 
-const apiProxy = process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8787";
-
 const nextConfig: NextConfig = {
   output: "standalone",
   /** Monorepo: trace from repo root (`frontend` sits directly under root). */
   outputFileTracingRoot: path.join(configDir, ".."),
   /** Next 16 defaults `next dev` to Turbopack; @ducanh2912/next-pwa injects webpack. Acknowledge both. */
   turbopack: {},
-  /** Proxy `/api/*` to Hono so Better Auth cookies stay on the app origin (see docs/api-proxy.md). */
-  async rewrites() {
-    return {
-      beforeFiles: [{ source: "/api/:path*", destination: `${apiProxy}/api/:path*` }],
-    };
-  },
+  /**
+   * `/api/*` is proxied to Hono via `app/api/[[...path]]/route.ts` (not rewrites) so multiple
+   * `Set-Cookie` headers from Better Auth are forwarded correctly in production.
+   */
 };
 
 export default withPWA(nextConfig);

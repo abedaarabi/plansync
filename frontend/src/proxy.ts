@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-/** Enterprise app routes — require a valid Better Auth session (see `next.config.ts` `/api` proxy). */
+/** Enterprise app routes — require a valid Better Auth session (see `app/api/[[...path]]/route.ts` → Hono). */
 const PROTECTED_PREFIXES = [
   "/dashboard",
   "/account",

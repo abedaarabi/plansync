@@ -1,10 +1,11 @@
 # API proxy (Next.js → Hono)
 
-In development and when `API_PROXY_TARGET` is set, the Next app rewrites:
+The Next app proxies **`/api/*`** to Hono using the App Router handler at [`frontend/src/app/api/[[...path]]/route.ts`](../frontend/src/app/api/[[...path]]/route.ts) (not `next.config` rewrites), so **multiple `Set-Cookie` headers** from Better Auth are forwarded correctly.
 
-- `http://localhost:3000/api/*` → `http://127.0.0.1:8787/api/*` (default)
+- Default target: `http://127.0.0.1:8787`
+- Override with **`API_PROXY_TARGET`** (required at **runtime** in Docker — see `docker-compose.deploy.yml`).
 
-This keeps **Better Auth** session cookies on the **same site** as the UI (`localhost:3000`), avoiding cross-origin cookie issues.
+This keeps **Better Auth** session cookies on the **same site** as the UI (`localhost:3000` or `https://plansync.dev`), avoiding cross-origin cookie issues for `/api/auth/*`.
 
 **Environment**
 

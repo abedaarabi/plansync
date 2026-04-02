@@ -65,6 +65,8 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG API_PROXY_TARGET=http://backend:8787
+ENV API_PROXY_TARGET=$API_PROXY_TARGET
 
 RUN groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs nextjs
