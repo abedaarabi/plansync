@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Minus,
   Package,
+  Sparkles,
   Paintbrush,
   Pencil,
   PenTool,
@@ -42,6 +43,7 @@ import { CalibrationGuide, CalibrateTargetRow } from "./CalibrationGuide";
 import { AnnotationListContextMenu } from "./AnnotationListContextMenu";
 import { SidebarIssuesTab } from "./sidebar/SidebarIssuesTab";
 import { SidebarTakeoffTab } from "./sidebar/SidebarTakeoffTab";
+import { SidebarSheetAiTab } from "./sidebar/SidebarSheetAiTab";
 
 const markupShapes: {
   id: MarkupShape;
@@ -232,7 +234,7 @@ export function ViewerSidebar() {
     id: string;
   } | null>(null);
   const [sidebarTab, setSidebarTab] = useState<
-    "draw" | "measure" | "pages" | "outline" | "issues" | "takeoff"
+    "draw" | "measure" | "pages" | "outline" | "issues" | "takeoff" | "sheetAi"
   >("draw");
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
   const pendingProSidebarTab = useViewerStore((s) => s.pendingProSidebarTab);
@@ -242,6 +244,8 @@ export function ViewerSidebar() {
   const setTakeoffInventoryDrawerFromSidebar = useViewerStore(
     (s) => s.setTakeoffInventoryDrawerFromSidebar,
   );
+  const setSheetAiDrawerFromSidebar = useViewerStore((s) => s.setSheetAiDrawerFromSidebar);
+  const bumpSheetAiExpand = useViewerStore((s) => s.bumpSheetAiExpand);
   const { enabled: proSheetFeatures } = useViewerProSheetFeatures();
   const showProTabs = Boolean(pdfUrl && proSheetFeatures && viewerProjectId);
 
@@ -306,7 +310,7 @@ export function ViewerSidebar() {
   useEffect(() => {
     if (!selectedAnn) return;
     setSidebarTab((t) => {
-      if (t === "pages" || t === "outline") return t;
+      if (t === "pages" || t === "outline" || t === "sheetAi") return t;
       if (annotationIsIssuePin(selectedAnn)) return "issues";
       if (t === "takeoff") return t;
       return selectedAnn.type === "measurement" ? "measure" : "draw";
@@ -323,7 +327,9 @@ export function ViewerSidebar() {
   useEffect(() => {
     if (tool !== "measure" && tool !== "calibrate") return;
     setSidebarTab((t) =>
-      t === "pages" || t === "outline" || t === "issues" || t === "takeoff" ? t : "measure",
+      t === "pages" || t === "outline" || t === "issues" || t === "takeoff" || t === "sheetAi"
+        ? t
+        : "measure",
     );
   }, [tool]);
 
@@ -335,7 +341,8 @@ export function ViewerSidebar() {
 
   useEffect(() => {
     if (showProTabs) return;
-    if (sidebarTab === "takeoff") setSidebarTab("draw");
+    if (sidebarTab === "takeoff" || sidebarTab === "issues" || sidebarTab === "sheetAi")
+      setSidebarTab("draw");
     if (takeoffMode) setTakeoffMode(false);
   }, [showProTabs, sidebarTab, takeoffMode, setTakeoffMode]);
 
@@ -350,6 +357,15 @@ export function ViewerSidebar() {
   useEffect(() => {
     if (sidebarTab !== "takeoff") setTakeoffInventoryDrawerFromSidebar(false);
   }, [sidebarTab, setTakeoffInventoryDrawerFromSidebar]);
+
+  useEffect(() => {
+    if (sidebarTab === "sheetAi") {
+      setSheetAiDrawerFromSidebar(true);
+      bumpSheetAiExpand();
+    } else {
+      setSheetAiDrawerFromSidebar(false);
+    }
+  }, [sidebarTab, setSheetAiDrawerFromSidebar, bumpSheetAiExpand]);
 
   const setStrokeWidth = useViewerStore((s) => s.setStrokeWidth);
   const textBoxFillFromFrame = useViewerStore((s) => s.textBoxFillFromFrame);
@@ -436,7 +452,7 @@ export function ViewerSidebar() {
               </button>
             </div>
             {pdfUrl ? (
-              <div className={`mt-1 grid gap-1 ${showProTabs ? "grid-cols-2" : "grid-cols-1"}`}>
+              <div className={`mt-1 grid gap-1 ${showProTabs ? "grid-cols-3" : "grid-cols-1"}`}>
                 {showProTabs ? (
                   <>
                     <button
@@ -465,6 +481,21 @@ export function ViewerSidebar() {
                       <Package className="h-3.5 w-3.5" strokeWidth={1.75} />
                       Takeoff
                     </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={sidebarTab === "sheetAi"}
+                      onClick={() => {
+                        setSidebarTab("sheetAi");
+                        setTakeoffMode(false);
+                        setTakeoffInventoryDrawerFromSidebar(false);
+                      }}
+                      title="Sheet AI — summary, chat, suggestions"
+                      className={sidebarPanelTabClass(sidebarTab === "sheetAi")}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      AI
+                    </button>
                   </>
                 ) : null}
               </div>
@@ -485,6 +516,7 @@ export function ViewerSidebar() {
         {pdfUrl && sidebarTab === "outline" && <SidebarOutlineTab />}
         {pdfUrl && sidebarTab === "issues" && showProTabs && <SidebarIssuesTab />}
         {pdfUrl && sidebarTab === "takeoff" && showProTabs && <SidebarTakeoffTab />}
+        {pdfUrl && sidebarTab === "sheetAi" && showProTabs && <SidebarSheetAiTab />}
 
         {pdfUrl && sidebarTab === "draw" && (
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:thin]">

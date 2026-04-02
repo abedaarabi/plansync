@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import {
   ArrowLeft,
   Building2,
@@ -23,6 +24,7 @@ import {
   House,
 } from "lucide-react";
 import { fetchProjects, fetchWorkspaceMembers } from "@/lib/api-client";
+import { faviconUrlFromHostname, normalizeWorkspaceWebsite } from "@/lib/workspaceBranding";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { qk } from "@/lib/queryKeys";
 
@@ -121,6 +123,16 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
   const maxSeats = membersData?.maxSeats ?? 5;
   const seatPressure = membersData?.seatPressure ?? 0;
   const seatPct = maxSeats > 0 ? Math.min(100, (seatPressure / maxSeats) * 100) : 0;
+
+  const sidebarLogoSrc = useMemo(() => {
+    if (!ws) return null;
+    const explicit = ws.logoUrl?.trim();
+    if (explicit) return explicit;
+    const site = ws.website?.trim();
+    if (!site) return null;
+    const n = normalizeWorkspaceWebsite(site);
+    return n.ok ? faviconUrlFromHostname(n.hostname) : null;
+  }, [ws?.logoUrl, ws?.website]);
 
   const GLOBAL_NAV = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -226,7 +238,7 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
         mobileOpen ? "translate-x-0" : "-translate-x-full"
       } lg:translate-x-0 ${!mobileOpen ? "pointer-events-none lg:pointer-events-auto" : ""}`}
     >
-      {/* Header — PlanSync logo */}
+      {/* Header — workspace logo or company favicon from website */}
       <div
         className={`enterprise-sidebar-header flex h-[3.25rem] shrink-0 items-center gap-3 px-4 ${
           collapsedDesktop ? "lg:justify-center lg:px-2" : ""
@@ -234,15 +246,15 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
       >
         <div
           className={
-            ws?.logoUrl
+            sidebarLogoSrc
               ? "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-500/30 bg-white ring-1 ring-black/5"
               : "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-white/15"
           }
           aria-hidden
         >
-          {ws?.logoUrl ? (
+          {sidebarLogoSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={ws.logoUrl} alt="" className="h-full w-full object-contain p-1" />
+            <img src={sidebarLogoSrc} alt="" className="h-full w-full object-contain p-1" />
           ) : (
             <Image
               src="/logo.svg"

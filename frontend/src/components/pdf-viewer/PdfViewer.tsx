@@ -20,6 +20,7 @@ import { parseServerViewerState } from "@/lib/viewerStateCloud";
 import { computeScaleToFitNormRect, scrollViewportToNorm } from "@/lib/viewScroll";
 import { useViewerStore, VIEWER_SCALE_MAX, VIEWER_SCALE_MIN } from "@/store/viewerStore";
 import { CollaborationSync } from "./CollaborationSync";
+import { ViewerCanvasContext } from "./ViewerCanvasContext";
 import { PdfPageMinimap, type MinimapFocusRect } from "./PdfPageMinimap";
 import { PdfPageView } from "./PdfPageView";
 import { ViewerOnboarding } from "./ViewerOnboarding";
@@ -28,6 +29,7 @@ import { ViewerSidebar } from "./ViewerSidebar";
 import { IssueFormSlider } from "./IssueFormSlider";
 import { TakeoffFormSlider } from "./TakeoffFormSlider";
 import { TakeoffInventoryDrawer } from "./TakeoffInventoryDrawer";
+import { SheetAiDrawer } from "./SheetAiDrawer";
 import { TakeoffSummaryModal } from "./TakeoffSummaryModal";
 import { ViewerTopBar } from "./ViewerTopBar";
 
@@ -62,6 +64,7 @@ export function PdfViewer() {
   const takeoffInventoryDrawerFromSidebar = useViewerStore(
     (s) => s.takeoffInventoryDrawerFromSidebar,
   );
+  const sheetAiDrawerFromSidebar = useViewerStore((s) => s.sheetAiDrawerFromSidebar);
   const setPendingProSidebarTab = useViewerStore((s) => s.setPendingProSidebarTab);
   const issuePlacementBanner = useViewerStore((s) => s.issuePlacement);
   const newIssuePlacementActive = useViewerStore((s) => s.newIssuePlacementActive);
@@ -601,321 +604,330 @@ export function PdfViewer() {
   }, []);
 
   return (
-    <div className="viewer-shell-bg relative grid min-h-0 min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)] gap-x-px gap-y-0 overflow-hidden bg-[var(--viewer-border)]">
-      <CollaborationSync roomId={roomId} />
-      <div className="col-span-3 row-start-1 min-h-0 min-w-0 self-start overflow-visible bg-[var(--viewer-chrome-top)]">
-        <ViewerTopBar pdfDoc={pdfDoc} exportCanvasRef={pageCanvasRef} />
-      </div>
-      <div className="col-start-1 row-start-2 row-end-3 min-h-0 min-w-0 self-stretch overflow-hidden bg-[var(--viewer-chrome-bottom)]">
-        <ViewerSidebar />
-      </div>
-      <div className="viewer-canvas-area relative col-start-2 row-start-2 row-end-3 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--viewer-canvas)] shadow-[inset_0_0_0_1px_rgba(226,232,240,0.9)] print:overflow-visible md:shadow-[inset_0_0_0_1px_rgba(51,65,85,0.08)]">
-        {newIssuePlacementActive ? (
-          <div
-            className="no-print pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
-            role="status"
-            aria-live="polite"
-          >
-            <div className="max-w-[min(100%,36rem)] rounded-lg border border-sky-500/45 bg-sky-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-sky-50 shadow-lg ring-1 ring-sky-500/25 backdrop-blur-sm">
-              <span className="text-sky-200/90">Click the plan to place a new issue pin —</span>{" "}
-              <span className="text-white">then fill in title, dates, and assignee</span>
-              <span className="text-sky-200/80"> · Esc to cancel</span>
+    <ViewerCanvasContext.Provider value={{ pageCanvasRef }}>
+      <div className="viewer-shell-bg relative grid min-h-0 min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)] gap-x-px gap-y-0 overflow-hidden bg-[var(--viewer-border)]">
+        <CollaborationSync roomId={roomId} />
+        <div className="col-span-3 row-start-1 min-h-0 min-w-0 self-start overflow-visible bg-[var(--viewer-chrome-top)]">
+          <ViewerTopBar pdfDoc={pdfDoc} exportCanvasRef={pageCanvasRef} />
+        </div>
+        <div className="col-start-1 row-start-2 row-end-3 min-h-0 min-w-0 self-stretch overflow-hidden bg-[var(--viewer-chrome-bottom)]">
+          <ViewerSidebar />
+        </div>
+        <div className="viewer-canvas-area relative col-start-2 row-start-2 row-end-3 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--viewer-canvas)] shadow-[inset_0_0_0_1px_rgba(226,232,240,0.9)] print:overflow-visible md:shadow-[inset_0_0_0_1px_rgba(51,65,85,0.08)]">
+          {newIssuePlacementActive ? (
+            <div
+              className="no-print pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="max-w-[min(100%,36rem)] rounded-lg border border-sky-500/45 bg-sky-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-sky-50 shadow-lg ring-1 ring-sky-500/25 backdrop-blur-sm">
+                <span className="text-sky-200/90">Click the plan to place a new issue pin —</span>{" "}
+                <span className="text-white">then fill in title, dates, and assignee</span>
+                <span className="text-sky-200/80"> · Esc to cancel</span>
+              </div>
             </div>
-          </div>
-        ) : issuePlacementBanner ? (
-          <div
-            className="no-print pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
-            role="status"
-            aria-live="polite"
-          >
-            <div className="max-w-[min(100%,36rem)] rounded-lg border border-amber-500/50 bg-amber-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-amber-50 shadow-lg ring-1 ring-amber-500/25 backdrop-blur-sm">
-              <span className="text-amber-200/90">Drop pin on the drawing —</span>{" "}
-              <span className="text-white">{issuePlacementBanner.title}</span>
-              <span className="text-amber-200/80"> · Esc to cancel</span>
+          ) : issuePlacementBanner ? (
+            <div
+              className="no-print pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="max-w-[min(100%,36rem)] rounded-lg border border-amber-500/50 bg-amber-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-amber-50 shadow-lg ring-1 ring-amber-500/25 backdrop-blur-sm">
+                <span className="text-amber-200/90">Drop pin on the drawing —</span>{" "}
+                <span className="text-white">{issuePlacementBanner.title}</span>
+                <span className="text-amber-200/80"> · Esc to cancel</span>
+              </div>
             </div>
-          </div>
-        ) : takeoffRedrawZoneId ? (
-          <div
-            className="no-print pointer-events-auto absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
-            role="status"
-          >
-            <div className="max-w-[min(100%,36rem)] rounded-lg border border-violet-500/45 bg-violet-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-violet-50 shadow-lg ring-1 ring-violet-500/25 backdrop-blur-sm">
-              <span className="text-violet-200/90">Redraw takeoff zone</span> —{" "}
-              {takeoffRedrawZoneKind === "count" ? (
-                <>
-                  place count marks with the takeoff tool, then in the sidebar choose{" "}
-                  <span className="text-white">Add to zone</span> or{" "}
-                  <span className="text-white">Replace all</span>.{" "}
-                </>
-              ) : (
-                <>draw the new shape with the takeoff tool. </>
-              )}
-              <button
-                type="button"
-                className="pointer-events-auto font-semibold text-white underline decoration-violet-300/70 underline-offset-2 hover:text-violet-100"
-                onClick={() => setTakeoffRedrawZoneId(null)}
-              >
-                Cancel
-              </button>
-              <span className="text-violet-200/75"> · Esc</span>
+          ) : takeoffRedrawZoneId ? (
+            <div
+              className="no-print pointer-events-auto absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
+              role="status"
+            >
+              <div className="max-w-[min(100%,36rem)] rounded-lg border border-violet-500/45 bg-violet-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-violet-50 shadow-lg ring-1 ring-violet-500/25 backdrop-blur-sm">
+                <span className="text-violet-200/90">Redraw takeoff zone</span> —{" "}
+                {takeoffRedrawZoneKind === "count" ? (
+                  <>
+                    place count marks with the takeoff tool, then in the sidebar choose{" "}
+                    <span className="text-white">Add to zone</span> or{" "}
+                    <span className="text-white">Replace all</span>.{" "}
+                  </>
+                ) : (
+                  <>draw the new shape with the takeoff tool. </>
+                )}
+                <button
+                  type="button"
+                  className="pointer-events-auto font-semibold text-white underline decoration-violet-300/70 underline-offset-2 hover:text-violet-100"
+                  onClick={() => setTakeoffRedrawZoneId(null)}
+                >
+                  Cancel
+                </button>
+                <span className="text-violet-200/75"> · Esc</span>
+              </div>
             </div>
-          </div>
-        ) : takeoffMoveZoneId ? (
-          <div
-            className="no-print pointer-events-auto absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
-            role="status"
-          >
-            <div className="max-w-[min(100%,36rem)] rounded-lg border border-cyan-500/45 bg-cyan-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-cyan-50 shadow-lg ring-1 ring-cyan-500/25 backdrop-blur-sm">
-              <span className="text-cyan-200/90">Move zone</span> — drag the highlighted shape.{" "}
-              <button
-                type="button"
-                className="pointer-events-auto font-semibold text-white underline decoration-cyan-300/70 underline-offset-2 hover:text-cyan-100"
-                onClick={() => setTakeoffMoveZoneId(null)}
-              >
-                Cancel
-              </button>
-              <span className="text-cyan-200/75"> · Esc</span>
+          ) : takeoffMoveZoneId ? (
+            <div
+              className="no-print pointer-events-auto absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
+              role="status"
+            >
+              <div className="max-w-[min(100%,36rem)] rounded-lg border border-cyan-500/45 bg-cyan-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-cyan-50 shadow-lg ring-1 ring-cyan-500/25 backdrop-blur-sm">
+                <span className="text-cyan-200/90">Move zone</span> — drag the highlighted shape.{" "}
+                <button
+                  type="button"
+                  className="pointer-events-auto font-semibold text-white underline decoration-cyan-300/70 underline-offset-2 hover:text-cyan-100"
+                  onClick={() => setTakeoffMoveZoneId(null)}
+                >
+                  Cancel
+                </button>
+                <span className="text-cyan-200/75"> · Esc</span>
+              </div>
             </div>
-          </div>
-        ) : takeoffVertexEditZoneId ? (
-          <div
-            className="no-print pointer-events-auto absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
-            role="status"
-          >
-            <div className="max-w-[min(100%,36rem)] rounded-lg border border-teal-500/45 bg-teal-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-teal-50 shadow-lg ring-1 ring-teal-500/25 backdrop-blur-sm">
-              <span className="text-teal-200/90">Edit corners</span> — drag white handles on
-              vertices.{" "}
-              <button
-                type="button"
-                className="pointer-events-auto font-semibold text-white underline decoration-teal-300/70 underline-offset-2 hover:text-teal-100"
-                onClick={() => setTakeoffVertexEditZoneId(null)}
-              >
-                Cancel
-              </button>
-              <span className="text-teal-200/75"> · Esc</span>
+          ) : takeoffVertexEditZoneId ? (
+            <div
+              className="no-print pointer-events-auto absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
+              role="status"
+            >
+              <div className="max-w-[min(100%,36rem)] rounded-lg border border-teal-500/45 bg-teal-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-teal-50 shadow-lg ring-1 ring-teal-500/25 backdrop-blur-sm">
+                <span className="text-teal-200/90">Edit corners</span> — drag white handles on
+                vertices.{" "}
+                <button
+                  type="button"
+                  className="pointer-events-auto font-semibold text-white underline decoration-teal-300/70 underline-offset-2 hover:text-teal-100"
+                  onClick={() => setTakeoffVertexEditZoneId(null)}
+                >
+                  Cancel
+                </button>
+                <span className="text-teal-200/75"> · Esc</span>
+              </div>
             </div>
-          </div>
-        ) : tool === "takeoff" && cloudFileVersionId && viewerProjectId ? (
-          <div
-            className="no-print pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
-            role="status"
-            aria-live="polite"
-          >
-            <div className="max-w-[min(100%,36rem)] rounded-lg border border-sky-500/45 bg-sky-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-sky-50 shadow-lg ring-1 ring-sky-500/25 backdrop-blur-sm">
-              <span className="text-sky-200/90">Drawing takeoff</span> —{" "}
-              <span className="text-white">
-                {takeoffDrawKind === "area"
-                  ? "Area"
-                  : takeoffDrawKind === "linear"
-                    ? "Linear"
-                    : "Count"}{" "}
-                mode
-              </span>
-              <span className="text-sky-200/85">
-                {" "}
-                · Click the sheet to place geometry · Inventory below
-              </span>
-              <span className="text-sky-200/75"> · Esc cancels some modes</span>
+          ) : tool === "takeoff" && cloudFileVersionId && viewerProjectId ? (
+            <div
+              className="no-print pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="max-w-[min(100%,36rem)] rounded-lg border border-sky-500/45 bg-sky-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-sky-50 shadow-lg ring-1 ring-sky-500/25 backdrop-blur-sm">
+                <span className="text-sky-200/90">Drawing takeoff</span> —{" "}
+                <span className="text-white">
+                  {takeoffDrawKind === "area"
+                    ? "Area"
+                    : takeoffDrawKind === "linear"
+                      ? "Linear"
+                      : "Count"}{" "}
+                  mode
+                </span>
+                <span className="text-sky-200/85">
+                  {" "}
+                  · Click the sheet to place geometry · Inventory below
+                </span>
+                <span className="text-sky-200/75"> · Esc cancels some modes</span>
+              </div>
             </div>
-          </div>
-        ) : null}
-        {issueCreateDraft ? (
-          <IssueFormSlider
-            variant="create"
-            open
-            annotationId={issueCreateDraft.annotationId}
-            onClose={onIssueCreateDialogClose}
-          />
-        ) : null}
-        {takeoffSliderOpen ? <TakeoffFormSlider /> : null}
-        <TakeoffSummaryModal />
-        {pdfLoading && (
-          <div
-            className="viewer-loading-canvas no-print absolute inset-0 z-40 flex flex-col items-center justify-center p-6"
-            role="status"
-            aria-live="polite"
-            aria-busy="true"
-          >
-            <div className="relative w-full max-w-[min(100%,22rem)] overflow-hidden rounded-2xl border border-[var(--viewer-border-strong)] bg-[var(--viewer-panel)]/98 p-6 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.5)] ring-1 ring-[var(--viewer-primary)]/25 backdrop-blur-md">
-              <div
-                className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[var(--viewer-primary)]/70 to-transparent"
-                aria-hidden
-              />
-              <div className="flex flex-col items-center gap-5 text-center">
-                <div className="relative flex h-[4.5rem] w-[4.5rem] items-center justify-center">
-                  <div
-                    className="absolute inset-0 rounded-2xl border border-[var(--viewer-border-strong)] bg-[color-mix(in_srgb,var(--viewer-input-bg)_90%,transparent)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
-                    aria-hidden
-                  />
-                  <div
-                    className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_50%_50%,rgba(37,99,235,0.12),transparent_65%)]"
-                    aria-hidden
-                  />
-                  <Loader2
-                    className="relative h-8 w-8 animate-spin text-[var(--viewer-primary)]"
-                    strokeWidth={2}
-                    aria-hidden
-                  />
-                  <span className="sr-only">Loading PDF</span>
-                </div>
-                <div className="w-full space-y-1">
-                  <p className="text-[15px] font-semibold tracking-tight text-[var(--viewer-text)]">
-                    Opening your plan
-                  </p>
-                  {fileName ? (
-                    <p className="text-[11px] leading-snug text-[var(--viewer-text-muted)] line-clamp-2 break-all">
-                      {fileName}
+          ) : null}
+          {issueCreateDraft ? (
+            <IssueFormSlider
+              variant="create"
+              open
+              annotationId={issueCreateDraft.annotationId}
+              onClose={onIssueCreateDialogClose}
+            />
+          ) : null}
+          {takeoffSliderOpen ? <TakeoffFormSlider /> : null}
+          <TakeoffSummaryModal />
+          {pdfLoading && (
+            <div
+              className="viewer-loading-canvas no-print absolute inset-0 z-40 flex flex-col items-center justify-center p-6"
+              role="status"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <div className="relative w-full max-w-[min(100%,22rem)] overflow-hidden rounded-2xl border border-[var(--viewer-border-strong)] bg-[var(--viewer-panel)]/98 p-6 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.5)] ring-1 ring-[var(--viewer-primary)]/25 backdrop-blur-md">
+                <div
+                  className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[var(--viewer-primary)]/70 to-transparent"
+                  aria-hidden
+                />
+                <div className="flex flex-col items-center gap-5 text-center">
+                  <div className="relative flex h-[4.5rem] w-[4.5rem] items-center justify-center">
+                    <div
+                      className="absolute inset-0 rounded-2xl border border-[var(--viewer-border-strong)] bg-[color-mix(in_srgb,var(--viewer-input-bg)_90%,transparent)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
+                      aria-hidden
+                    />
+                    <div
+                      className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_50%_50%,rgba(37,99,235,0.12),transparent_65%)]"
+                      aria-hidden
+                    />
+                    <Loader2
+                      className="relative h-8 w-8 animate-spin text-[var(--viewer-primary)]"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                    <span className="sr-only">Loading PDF</span>
+                  </div>
+                  <div className="w-full space-y-1">
+                    <p className="text-[15px] font-semibold tracking-tight text-[var(--viewer-text)]">
+                      Opening your plan
                     </p>
-                  ) : null}
-                  <p className="pt-1 text-[10px] leading-relaxed text-[var(--viewer-text-muted)]">
-                    Parsing pages and preparing the canvas…
-                  </p>
-                </div>
-                <div className="w-full overflow-hidden rounded-full bg-slate-800/80 py-px">
-                  <div className="h-1 w-full overflow-hidden rounded-full bg-slate-700/60">
-                    <div className="viewer-pdf-load-indeterminate h-full w-[42%] rounded-full bg-gradient-to-r from-[var(--viewer-primary)] to-[#60a5fa]" />
+                    {fileName ? (
+                      <p className="text-[11px] leading-snug text-[var(--viewer-text-muted)] line-clamp-2 break-all">
+                        {fileName}
+                      </p>
+                    ) : null}
+                    <p className="pt-1 text-[10px] leading-relaxed text-[var(--viewer-text-muted)]">
+                      Parsing pages and preparing the canvas…
+                    </p>
+                  </div>
+                  <div className="w-full overflow-hidden rounded-full bg-slate-800/80 py-px">
+                    <div className="h-1 w-full overflow-hidden rounded-full bg-slate-700/60">
+                      <div className="viewer-pdf-load-indeterminate h-full w-[42%] rounded-full bg-gradient-to-r from-[var(--viewer-primary)] to-[#60a5fa]" />
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-        {!pdfUrl && (
-          <div className="viewer-loading-canvas flex min-h-0 flex-1 cursor-crosshair flex-col items-center justify-center gap-5 p-8 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--viewer-border-strong)] bg-[color-mix(in_srgb,var(--viewer-input-bg)_92%,transparent)] shadow-[0_8px_32px_-12px_rgba(0,0,0,0.35)] ring-1 ring-[var(--viewer-primary)]/15">
-              <LayoutTemplate
-                className="h-9 w-9 text-[var(--viewer-text-muted)]"
-                strokeWidth={1.25}
-                aria-hidden
-              />
+          )}
+          {!pdfUrl && (
+            <div className="viewer-loading-canvas flex min-h-0 flex-1 cursor-crosshair flex-col items-center justify-center gap-5 p-8 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--viewer-border-strong)] bg-[color-mix(in_srgb,var(--viewer-input-bg)_92%,transparent)] shadow-[0_8px_32px_-12px_rgba(0,0,0,0.35)] ring-1 ring-[var(--viewer-primary)]/15">
+                <LayoutTemplate
+                  className="h-9 w-9 text-[var(--viewer-text-muted)]"
+                  strokeWidth={1.25}
+                  aria-hidden
+                />
+              </div>
+              <div>
+                <p className="text-[15px] font-semibold tracking-tight text-[var(--viewer-text)]">
+                  Open a PDF plan to get started
+                </p>
+                <p className="mt-2 max-w-sm text-[12px] leading-relaxed tracking-tight text-[var(--viewer-text-muted)]">
+                  Use <span className="font-medium text-[var(--viewer-text)]">Open</span> in the
+                  toolbar, then calibrate scale and measure. Markup tools live on the left; map and
+                  snap on the right.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-[15px] font-semibold tracking-tight text-[var(--viewer-text)]">
-                Open a PDF plan to get started
-              </p>
-              <p className="mt-2 max-w-sm text-[12px] leading-relaxed tracking-tight text-[var(--viewer-text-muted)]">
-                Use <span className="font-medium text-[var(--viewer-text)]">Open</span> in the
-                toolbar, then calibrate scale and measure. Markup tools live on the left; map and
-                snap on the right.
-              </p>
+          )}
+          {loadError && (
+            <div className="max-h-40 overflow-y-auto border-b border-red-900/40 bg-red-950/30 p-4 text-center text-sm text-red-200">
+              {loadError}
             </div>
-          </div>
-        )}
-        {loadError && (
-          <div className="max-h-40 overflow-y-auto border-b border-red-900/40 bg-red-950/30 p-4 text-center text-sm text-red-200">
-            {loadError}
-          </div>
-        )}
-        {pdfDoc && pdfUrl && (
-          <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col">
-            <ViewerOnboarding />
-            {compareMode ? (
-              <>
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col divide-y divide-slate-600/45 md:flex-row md:divide-x md:divide-y-0 print:hidden">
-                  <div
-                    ref={compareScrollOriginalRef}
-                    className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain"
-                  >
-                    <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        Original (reference)
-                      </p>
-                      <PdfPageView
-                        pdfDoc={pdfDoc}
+          )}
+          {pdfDoc && pdfUrl && (
+            <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col">
+              <ViewerOnboarding />
+              {compareMode ? (
+                <>
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col divide-y divide-slate-600/45 md:flex-row md:divide-x md:divide-y-0 print:hidden">
+                    <div
+                      ref={compareScrollOriginalRef}
+                      className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain"
+                    >
+                      <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                          Original (reference)
+                        </p>
+                        <PdfPageView
+                          pdfDoc={pdfDoc}
+                          pageNumber={currentPage}
+                          compareReferenceOnly
+                          scrollContainerRef={compareScrollOriginalRef}
+                          pageCanvasRef={pageCanvasCompareRef}
+                          pageWrapperRef={pageWrapperCompareRef}
+                        />
+                      </div>
+                    </div>
+                    <div
+                      ref={compareScrollMarkupRef}
+                      className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain"
+                    >
+                      <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                          With markups
+                        </p>
+                        <PdfPageView
+                          pdfDoc={pdfDoc}
+                          pageNumber={currentPage}
+                          scrollContainerRef={compareScrollMarkupRef}
+                          pageCanvasRef={pageCanvasRef}
+                          pageWrapperRef={pageWrapperRef}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Same floating position as single-view minimap (bottom-right of canvas, by the right drawer). */}
+                  <div className="pointer-events-none absolute bottom-4 right-4 z-20 flex max-w-[calc(100%-1rem)] flex-col items-end gap-2 sm:max-w-none sm:flex-row sm:items-end sm:gap-3 print:hidden">
+                    <div className="pointer-events-auto">
+                      <PdfPageMinimap
+                        scrollRef={compareScrollMarkupRef}
+                        viewportScrollRef={compareScrollOriginalRef}
+                        sourceCanvasRef={pageCanvasRef}
+                        pageWrapperRef={pageWrapperRef}
+                        compareCanvasRef={pageCanvasCompareRef}
+                        comparePageWrapperRef={pageWrapperCompareRef}
+                        scale={scale}
                         pageNumber={currentPage}
-                        compareReferenceOnly
-                        scrollContainerRef={compareScrollOriginalRef}
-                        pageCanvasRef={pageCanvasCompareRef}
-                        pageWrapperRef={pageWrapperCompareRef}
+                        comparePane="original"
+                        sharedFocusRef={compareMinimapFocusRef}
+                      />
+                    </div>
+                    <div className="pointer-events-auto">
+                      <PdfPageMinimap
+                        scrollRef={compareScrollMarkupRef}
+                        sourceCanvasRef={pageCanvasRef}
+                        pageWrapperRef={pageWrapperRef}
+                        compareCanvasRef={pageCanvasCompareRef}
+                        comparePageWrapperRef={pageWrapperCompareRef}
+                        scale={scale}
+                        pageNumber={currentPage}
+                        comparePane="markup"
+                        sharedFocusRef={compareMinimapFocusRef}
                       />
                     </div>
                   </div>
+                </>
+              ) : (
+                <>
                   <div
-                    ref={compareScrollMarkupRef}
-                    className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain"
+                    ref={pdfScrollRef}
+                    className="min-h-0 flex-1 overflow-auto overscroll-contain print:block print:overflow-visible"
                   >
-                    <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                        With markups
-                      </p>
+                    <div className="mx-auto max-w-[min(100%,1920px)] px-4 py-5 sm:px-6 sm:py-6 print:p-0 print:max-w-none">
                       <PdfPageView
                         pdfDoc={pdfDoc}
                         pageNumber={currentPage}
-                        scrollContainerRef={compareScrollMarkupRef}
+                        scrollContainerRef={pdfScrollRef}
                         pageCanvasRef={pageCanvasRef}
                         pageWrapperRef={pageWrapperRef}
                       />
                     </div>
                   </div>
-                </div>
-                {/* Same floating position as single-view minimap (bottom-right of canvas, by the right drawer). */}
-                <div className="pointer-events-none absolute bottom-4 right-4 z-20 flex max-w-[calc(100%-1rem)] flex-col items-end gap-2 sm:max-w-none sm:flex-row sm:items-end sm:gap-3 print:hidden">
-                  <div className="pointer-events-auto">
-                    <PdfPageMinimap
-                      scrollRef={compareScrollMarkupRef}
-                      viewportScrollRef={compareScrollOriginalRef}
-                      sourceCanvasRef={pageCanvasRef}
-                      pageWrapperRef={pageWrapperRef}
-                      compareCanvasRef={pageCanvasCompareRef}
-                      comparePageWrapperRef={pageWrapperCompareRef}
-                      scale={scale}
-                      pageNumber={currentPage}
-                      comparePane="original"
-                      sharedFocusRef={compareMinimapFocusRef}
-                    />
-                  </div>
-                  <div className="pointer-events-auto">
-                    <PdfPageMinimap
-                      scrollRef={compareScrollMarkupRef}
-                      sourceCanvasRef={pageCanvasRef}
-                      pageWrapperRef={pageWrapperRef}
-                      compareCanvasRef={pageCanvasCompareRef}
-                      comparePageWrapperRef={pageWrapperCompareRef}
-                      scale={scale}
-                      pageNumber={currentPage}
-                      comparePane="markup"
-                      sharedFocusRef={compareMinimapFocusRef}
-                    />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div
-                  ref={pdfScrollRef}
-                  className="min-h-0 flex-1 overflow-auto overscroll-contain print:block print:overflow-visible"
-                >
-                  <div className="mx-auto max-w-[min(100%,1920px)] px-4 py-5 sm:px-6 sm:py-6 print:p-0 print:max-w-none">
-                    <PdfPageView
-                      pdfDoc={pdfDoc}
-                      pageNumber={currentPage}
-                      scrollContainerRef={pdfScrollRef}
-                      pageCanvasRef={pageCanvasRef}
-                      pageWrapperRef={pageWrapperRef}
-                    />
-                  </div>
-                </div>
-                <PdfPageMinimap
-                  scrollRef={pdfScrollRef}
-                  sourceCanvasRef={pageCanvasRef}
-                  pageWrapperRef={pageWrapperRef}
-                  compareCanvasRef={pageCanvasCompareRef}
-                  comparePageWrapperRef={pageWrapperCompareRef}
-                  scale={scale}
-                  pageNumber={currentPage}
-                />
-              </>
-            )}
-          </div>
-        )}
-        {/* Drawer z-[25]: must stay below TakeoffFormSlider (z-[85]) and modals (z-[90]). */}
-        {cloudFileVersionId && viewerProjectId && takeoffInventoryDrawerFromSidebar ? (
-          <TakeoffInventoryDrawer />
-        ) : null}
+                  <PdfPageMinimap
+                    scrollRef={pdfScrollRef}
+                    sourceCanvasRef={pageCanvasRef}
+                    pageWrapperRef={pageWrapperRef}
+                    compareCanvasRef={pageCanvasCompareRef}
+                    comparePageWrapperRef={pageWrapperCompareRef}
+                    scale={scale}
+                    pageNumber={currentPage}
+                  />
+                </>
+              )}
+            </div>
+          )}
+          {/* Drawer z-[25]: must stay below TakeoffFormSlider (z-[85]) and modals (z-[90]). */}
+          {cloudFileVersionId &&
+          viewerProjectId &&
+          (takeoffInventoryDrawerFromSidebar || sheetAiDrawerFromSidebar) ? (
+            <div className="no-print pointer-events-none absolute inset-x-0 bottom-0 z-[25] flex flex-col-reverse items-stretch gap-px px-1 pb-0 sm:px-2">
+              {takeoffInventoryDrawerFromSidebar ? <TakeoffInventoryDrawer embedded /> : null}
+              {sheetAiDrawerFromSidebar ? (
+                <SheetAiDrawer key={cloudFileVersionId ?? "sheet-ai"} />
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        <div className="col-start-3 row-start-2 row-end-3 min-h-0 min-w-0 self-stretch overflow-hidden bg-[var(--viewer-chrome-bottom)] print:hidden">
+          <ViewerRightPanel />
+        </div>
       </div>
-      <div className="col-start-3 row-start-2 row-end-3 min-h-0 min-w-0 self-stretch overflow-hidden bg-[var(--viewer-chrome-bottom)] print:hidden">
-        <ViewerRightPanel />
-      </div>
-    </div>
+    </ViewerCanvasContext.Provider>
   );
 }

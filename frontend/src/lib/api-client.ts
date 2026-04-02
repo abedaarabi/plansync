@@ -1038,6 +1038,121 @@ export function viewerHrefForIssue(row: IssueRow): string {
   return `/viewer?${q.toString()}`;
 }
 
+// --- Sheet AI (Gemini, Pro) ---
+
+export type SheetAiViewerSnapshot = Record<string, unknown>;
+
+export type SheetAiContextPayload = {
+  pageIndex: number;
+  imageBase64: string;
+  mimeType: "image/png" | "image/jpeg";
+  viewerSnapshot?: SheetAiViewerSnapshot;
+  pdfTextSnippet?: string;
+};
+
+export type SheetAiChatMessage = { role: "user" | "model"; content: string };
+
+/** AI sheet summary — clickable regions on the captured page (normalized 0–1). */
+export type SheetAiTocKind =
+  | "area"
+  | "detail"
+  | "note"
+  | "schedule"
+  | "title_block"
+  | "legend"
+  | "mep"
+  | "envelope"
+  | "structure"
+  | "other";
+
+export type SheetAiTocEntry = {
+  title: string;
+  /** Readable text from that region (detail ref, note line, etc.). */
+  snippet?: string;
+  kind?: SheetAiTocKind;
+  pageIndex: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+export type SheetAiNormPoint = { x: number; y: number };
+
+export type SheetAiProposals = {
+  takeoffZones: {
+    suggestedItemName?: string;
+    measurementType: "area" | "linear" | "count";
+    points: SheetAiNormPoint[];
+    notes?: string;
+  }[];
+  issueDrafts: {
+    title: string;
+    description?: string;
+    pageNumber?: number;
+    pinNorm?: SheetAiNormPoint;
+  }[];
+  markups: {
+    type: "rect" | "ellipse" | "cloud" | "highlight" | "line" | "text" | "polygon";
+    color?: string;
+    strokeWidth?: number;
+    points: SheetAiNormPoint[];
+    text?: string;
+  }[];
+};
+
+async function sheetAiJson<T>(
+  fileVersionId: string,
+  aiPath: "ai/sheet-summary" | "ai/chat" | "ai/propose-actions",
+  body: unknown,
+): Promise<T> {
+  const res = await fetch(
+    apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/${aiPath}`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (res.status === 503) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? "Sheet AI is not configured.");
+  }
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown } & Partial<T>;
+  if (!res.ok) {
+    const msg = typeof j.error === "string" ? j.error : "Sheet AI request failed.";
+    throw new HttpError(res.status, msg);
+  }
+  return j as T;
+}
+
+export async function fetchSheetAiSummary(
+  fileVersionId: string,
+  body: SheetAiContextPayload,
+): Promise<{ summaryMarkdown: string; tableOfContents: SheetAiTocEntry[] }> {
+  return sheetAiJson<{ summaryMarkdown: string; tableOfContents: SheetAiTocEntry[] }>(
+    fileVersionId,
+    "ai/sheet-summary",
+    body,
+  );
+}
+
+export async function fetchSheetAiChat(
+  fileVersionId: string,
+  body: SheetAiContextPayload & { messages: SheetAiChatMessage[] },
+): Promise<{ reply: string }> {
+  return sheetAiJson<{ reply: string }>(fileVersionId, "ai/chat", body);
+}
+
+export async function fetchSheetAiProposeActions(
+  fileVersionId: string,
+  body: SheetAiContextPayload & { userPrompt?: string },
+): Promise<{ proposals: SheetAiProposals }> {
+  return sheetAiJson<{ proposals: SheetAiProposals }>(fileVersionId, "ai/propose-actions", body);
+}
+
 // --- Takeoff lines (Pro) ---
 
 export type TakeoffLineRow = {

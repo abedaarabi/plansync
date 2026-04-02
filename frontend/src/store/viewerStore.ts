@@ -223,8 +223,8 @@ interface ViewerState {
   cloudFileVersionId: string | null;
   /** From `/viewer?projectId=` when opened from Projects (Pro sheet tools). */
   viewerProjectId: string | null;
-  /** Open Issues / Takeoff tab once (e.g. `issueId` deep link). */
-  pendingProSidebarTab: null | "issues" | "takeoff";
+  /** Open Issues / Takeoff / Sheet AI tab once (e.g. `issueId` deep link). */
+  pendingProSidebarTab: null | "issues" | "takeoff" | "sheetAi";
   /** Click on PDF to drop a status-colored marker and link `annotationId` on the issue. */
   issuePlacement: null | {
     issueId: string;
@@ -375,6 +375,11 @@ interface ViewerState {
   /** Bumped after saving a new zone so the inventory drawer expands to half. */
   takeoffInventoryExpandNonce: number;
   bumpTakeoffInventoryExpand: () => void;
+  /** Bottom Sheet AI drawer: true while the Sheet AI sidebar tab is selected. */
+  sheetAiDrawerFromSidebar: boolean;
+  setSheetAiDrawerFromSidebar: (v: boolean) => void;
+  sheetAiExpandNonce: number;
+  bumpSheetAiExpand: () => void;
   takeoffPendingGeometry: TakeoffPendingGeometry | null;
   takeoffSliderOpen: boolean;
   takeoffEditingZoneId: string | null;
@@ -475,6 +480,8 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   takeoffPenColor: DEFAULT_TAKEOFF_COLOR,
   takeoffInventoryDrawerFromSidebar: false,
   takeoffInventoryExpandNonce: 0,
+  sheetAiDrawerFromSidebar: false,
+  sheetAiExpandNonce: 0,
   takeoffPendingGeometry: null,
   takeoffSliderOpen: false,
   takeoffEditingZoneId: null,
@@ -503,6 +510,8 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   setTakeoffHoverItemId: (takeoffHoverItemId) => set({ takeoffHoverItemId }),
   bumpTakeoffInventoryExpand: () =>
     set((s) => ({ takeoffInventoryExpandNonce: s.takeoffInventoryExpandNonce + 1 })),
+  setSheetAiDrawerFromSidebar: (sheetAiDrawerFromSidebar) => set({ sheetAiDrawerFromSidebar }),
+  bumpSheetAiExpand: () => set((s) => ({ sheetAiExpandNonce: s.sheetAiExpandNonce + 1 })),
   setTakeoffPendingGeometry: (takeoffPendingGeometry) => set({ takeoffPendingGeometry }),
 
   openTakeoffSlider: ({ editZoneId, pending }) =>
@@ -819,6 +828,8 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       takeoffPenColor: DEFAULT_TAKEOFF_COLOR,
       takeoffInventoryDrawerFromSidebar: false,
       takeoffInventoryExpandNonce: 0,
+      sheetAiDrawerFromSidebar: false,
+      sheetAiExpandNonce: 0,
       takeoffPendingGeometry: null,
       takeoffSliderOpen: false,
       takeoffEditingZoneId: null,
@@ -1166,6 +1177,8 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       takeoffPenColor: DEFAULT_TAKEOFF_COLOR,
       takeoffInventoryDrawerFromSidebar: false,
       takeoffInventoryExpandNonce: 0,
+      sheetAiDrawerFromSidebar: false,
+      sheetAiExpandNonce: 0,
       takeoffPendingGeometry: null,
       takeoffSliderOpen: false,
       takeoffEditingZoneId: null,
@@ -1209,6 +1222,8 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       takeoffHoverItemId: null,
       takeoffInventoryDrawerFromSidebar: false,
       takeoffInventoryExpandNonce: 0,
+      sheetAiDrawerFromSidebar: false,
+      sheetAiExpandNonce: 0,
       takeoffPendingGeometry: null,
       takeoffSliderOpen: false,
       takeoffEditingZoneId: null,

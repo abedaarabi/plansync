@@ -368,7 +368,7 @@ export function LandingPage() {
         {/* ═══════════ SECTION 2 — HERO (construction SaaS) ═══════════ */}
         <section
           id="hero"
-          className="relative isolate min-h-[min(36rem,90svh)] scroll-mt-20 overflow-hidden pt-28 pb-14 sm:min-h-[min(40rem,92svh)] sm:pt-36 sm:pb-20 lg:flex lg:items-center lg:py-24 xl:py-28"
+          className="relative isolate min-h-dvh scroll-mt-20 overflow-hidden pt-28 pb-14 sm:pt-36 sm:pb-20 lg:flex lg:items-center lg:py-24 xl:py-28"
         >
           <div className="pointer-events-none absolute inset-0" aria-hidden>
             <Image
@@ -459,19 +459,20 @@ export function LandingPage() {
 
                 <div className="mx-auto w-full max-w-lg lg:mx-0 lg:max-w-none">
                   <BrowserMockup className="shadow-[0_24px_80px_-12px_rgba(0,0,0,0.45)] ring-1 ring-white/10">
-                    <div className="relative aspect-[4/3] overflow-hidden bg-slate-900">
+                    <div className="relative aspect-video overflow-hidden bg-slate-900">
                       <Image
-                        src="/images/markup.png"
-                        alt="PlanSync viewer with issue pins on a construction drawing"
+                        src="/images/cta/gifcta.gif"
+                        alt="PlanSync viewer demo — open PDF, calibrate, measure, markup"
                         fill
-                        className="object-cover object-top-left"
+                        className="object-cover"
                         sizes="(max-width: 1024px) 100vw, 50vw"
-                        quality={90}
+                        unoptimized
                       />
                     </div>
                   </BrowserMockup>
                   <p className="mt-3 text-center text-xs leading-relaxed text-blue-200/75 lg:text-left">
-                    Real product: issue pins on the plan — the same viewer your team uses in Pro.
+                    The viewer in motion — open a PDF, calibrate scale, measure, and mark up. Same
+                    workflow your team uses in Pro.
                   </p>
                 </div>
               </div>
@@ -518,34 +519,6 @@ export function LandingPage() {
                   Open on YouTube &rarr;
                 </a>
               </p>
-            </AnimateIn>
-
-            <AnimateIn className="mx-auto mt-20 max-w-4xl" delay={200}>
-              <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-6 shadow-[var(--enterprise-shadow-card)] backdrop-blur-sm sm:p-8">
-                <p className="text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Quick preview
-                </p>
-                <h3 className="mt-2 text-center text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-                  The viewer in motion
-                </h3>
-                <p className="mx-auto mt-3 max-w-xl text-center text-sm leading-relaxed text-slate-600">
-                  A short, silent loop of the real workflow — open a PDF, calibrate scale, measure,
-                  and export. No sound needed.
-                </p>
-                <div className="mt-8">
-                  <BrowserMockup>
-                    <div className="relative aspect-video bg-slate-900">
-                      <Image
-                        src="/images/cta/gifcta.gif"
-                        alt="PlanSync viewer demo — open PDF, calibrate, measure, markup"
-                        fill
-                        className="object-cover"
-                        unoptimized
-                      />
-                    </div>
-                  </BrowserMockup>
-                </div>
-              </div>
             </AnimateIn>
           </div>
         </section>

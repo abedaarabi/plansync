@@ -13,6 +13,7 @@ function testEnv(): Env {
     BETTER_AUTH_SECRET: "test-secret-not-for-production-123",
     BETTER_AUTH_URL: "http://localhost:3000",
     MAX_DIRECT_UPLOAD_BYTES: 104857600n,
+    GEMINI_MODEL: "gemini-2.5-pro",
   };
 }
 

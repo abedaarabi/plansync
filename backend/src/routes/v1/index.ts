@@ -50,6 +50,7 @@ import {
 import { registerMaterialsRoutes } from "./materialsRoutes.js";
 import { registerIssuesRoutes } from "./issuesRoutes.js";
 import { registerTakeoffRoutes } from "./takeoffRoutes.js";
+import { registerSheetAiRoutes } from "./sheetAiRoutes.js";
 import {
   auditLogsToRows,
   buildAuditPdfBuffer,
@@ -2989,6 +2990,7 @@ export function v1Routes(
 
   registerIssuesRoutes(r, needUser, env);
   registerTakeoffRoutes(r, needUser);
+  registerSheetAiRoutes(r, needUser, env);
   registerMaterialsRoutes(r, needUser);
 
   return r;

@@ -38,6 +38,10 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
   /** Hide bottom-left dev “N” indicator in development (not shown in production). */
   devIndicators: false,
+  /** Allow `quality` values used by `next/image` (Next 16+ requires an explicit allowlist). */
+  images: {
+    qualities: [75, 82, 85, 90],
+  },
   output: "standalone",
   /** Monorepo: trace from repo root (`frontend` sits directly under root). */
   outputFileTracingRoot: path.join(configDir, ".."),

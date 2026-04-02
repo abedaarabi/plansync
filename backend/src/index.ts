@@ -13,12 +13,16 @@ config({ path: resolve(__dirname, "../../.env.local"), override: true });
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { buildCorsAllowList, loadEnv } from "./lib/env.js";
+import { buildCorsAllowList, loadEnv, resolveGeminiApiKey } from "./lib/env.js";
 import { createAuth } from "./auth.js";
 import { v1Routes } from "./routes/v1/index.js";
 import { stripeRoutes } from "./routes/stripe.js";
 
 const env = loadEnv();
+if (resolveGeminiApiKey(env)) {
+  const m = env.GEMINI_MODEL.trim() || "gemini-2.5-pro";
+  console.log(`[sheet-ai] Gemini model: ${m}`);
+}
 const auth = createAuth(env);
 
 const app = new Hono();

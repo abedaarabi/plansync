@@ -36,6 +36,15 @@ const schema = z.object({
   GITHUB_CLIENT_SECRET: z.string().optional(),
   SLACK_CLIENT_ID: z.string().optional(),
   SLACK_CLIENT_SECRET: z.string().optional(),
+
+  /** Google Gemini (Sheet AI). Use `GEMINI_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY`. */
+  GEMINI_API_KEY: z.string().optional(),
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
+  /**
+   * Vision model for Sheet AI. Default is Pro for better layout/TOC accuracy; override with
+   * `gemini-2.5-flash` or `gemini-2.0-flash` for lower cost/latency (less precise regions).
+   */
+  GEMINI_MODEL: z.string().default("gemini-2.5-pro"),
 });
 
 export type Env = z.infer<typeof schema>;
@@ -59,4 +68,12 @@ export function loadEnv(): Env {
     throw new Error("Invalid environment variables");
   }
   return parsed.data;
+}
+
+/** Resolved API key for Gemini (Sheet AI). */
+export function resolveGeminiApiKey(env: Env): string | undefined {
+  const a = env.GEMINI_API_KEY?.trim();
+  if (a) return a;
+  const b = env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
+  return b || undefined;
 }

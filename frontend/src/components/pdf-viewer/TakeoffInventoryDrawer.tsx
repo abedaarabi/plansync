@@ -18,7 +18,13 @@ const RESIZE_DEBOUNCE_MS = 120;
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-function TakeoffInventoryDrawerBody({ fileFingerprintKey }: { fileFingerprintKey: string }) {
+function TakeoffInventoryDrawerBody({
+  fileFingerprintKey,
+  embedded,
+}: {
+  fileFingerprintKey: string;
+  embedded?: boolean;
+}) {
   const takeoffItems = useViewerStore((s) => s.takeoffItems);
   const takeoffZones = useViewerStore((s) => s.takeoffZones);
   const expandNonce = useViewerStore((s) => s.takeoffInventoryExpandNonce);
@@ -190,57 +196,63 @@ function TakeoffInventoryDrawerBody({ fileFingerprintKey }: { fileFingerprintKey
       titleMain
     );
 
+  const inner = (
+    <div
+      className={`pointer-events-auto w-full max-w-full min-w-0 ${embedded ? "px-0 pb-0" : "px-1 pb-0 sm:px-2"}`}
+    >
+      <BottomDrawer
+        ref={drawerRef}
+        snapHeightsPx={snapHeightsPx}
+        initialSnap={initialSnap}
+        onSnapSettled={onSnapSettled}
+        expandRequestNonce={expandNonce}
+        expandFullscreenNonce={expandFullscreenNonce}
+        collapseToHalfNonce={collapseToHalfNonce}
+        inventoryFullscreen={inventoryFullscreen}
+        escapeToCollapseEnabled={
+          !takeoffRedrawZoneId && !takeoffMoveZoneId && !takeoffVertexEditZoneId
+        }
+        title={titleMain}
+        titleWhenCollapsed={titleCollapsed}
+        headerRight={
+          <div
+            className="flex shrink-0 items-center gap-1"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={toggleInventoryFullscreen}
+              title={inventoryFullscreen ? "Exit full screen (inventory)" : "Full screen inventory"}
+              aria-pressed={inventoryFullscreen}
+              className="viewer-focus-ring inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#475569] bg-[#0f172a] text-[#e2e8f0] transition-colors hover:bg-[#1e293b]"
+            >
+              {inventoryFullscreen ? (
+                <Minimize2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+              ) : (
+                <Maximize2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+              )}
+            </button>
+          </div>
+        }
+      >
+        <TakeoffInventoryPanel />
+      </BottomDrawer>
+    </div>
+  );
+
+  if (embedded) return inner;
+
   return (
     <div className="no-print pointer-events-none absolute inset-x-0 bottom-0 z-[25] flex justify-center px-0">
-      <div className="pointer-events-auto w-full max-w-full min-w-0 px-1 pb-0 sm:px-2">
-        <BottomDrawer
-          ref={drawerRef}
-          snapHeightsPx={snapHeightsPx}
-          initialSnap={initialSnap}
-          onSnapSettled={onSnapSettled}
-          expandRequestNonce={expandNonce}
-          expandFullscreenNonce={expandFullscreenNonce}
-          collapseToHalfNonce={collapseToHalfNonce}
-          inventoryFullscreen={inventoryFullscreen}
-          escapeToCollapseEnabled={
-            !takeoffRedrawZoneId && !takeoffMoveZoneId && !takeoffVertexEditZoneId
-          }
-          title={titleMain}
-          titleWhenCollapsed={titleCollapsed}
-          headerRight={
-            <div
-              className="flex shrink-0 items-center gap-1"
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                onClick={toggleInventoryFullscreen}
-                title={
-                  inventoryFullscreen ? "Exit full screen (inventory)" : "Full screen inventory"
-                }
-                aria-pressed={inventoryFullscreen}
-                className="viewer-focus-ring inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#475569] bg-[#0f172a] text-[#e2e8f0] transition-colors hover:bg-[#1e293b]"
-              >
-                {inventoryFullscreen ? (
-                  <Minimize2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                ) : (
-                  <Maximize2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                )}
-              </button>
-            </div>
-          }
-        >
-          <TakeoffInventoryPanel />
-        </BottomDrawer>
-      </div>
+      {inner}
     </div>
   );
 }
 
-export function TakeoffInventoryDrawer() {
+export function TakeoffInventoryDrawer({ embedded = false }: { embedded?: boolean }) {
   const fileName = useViewerStore((s) => s.fileName);
   const numPages = useViewerStore((s) => s.numPages);
   const fp = useMemo(() => fileFingerprint(fileName, numPages), [fileName, numPages]);
 
-  return <TakeoffInventoryDrawerBody key={fp} fileFingerprintKey={fp} />;
+  return <TakeoffInventoryDrawerBody key={fp} fileFingerprintKey={fp} embedded={embedded} />;
 }
