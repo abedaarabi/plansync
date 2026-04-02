@@ -39,11 +39,19 @@ function extractProjectIdFromPath(pathname: string): string | null {
   return null;
 }
 
-function redirectToSignIn(request: NextRequest): NextResponse {
+function redirectToSignIn(
+  request: NextRequest,
+  reason:
+    | "session_fetch_failed"
+    | "session_status_not_ok"
+    | "session_invalid_json"
+    | "session_missing_user",
+): NextResponse {
   const signIn = request.nextUrl.clone();
   signIn.pathname = "/sign-in";
   signIn.search = "";
   signIn.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  signIn.searchParams.set("reason", reason);
   return NextResponse.redirect(signIn);
 }
 
@@ -85,18 +93,18 @@ export async function proxy(request: NextRequest) {
       cache: "no-store",
     });
   } catch {
-    return redirectToSignIn(request);
+    return redirectToSignIn(request, "session_fetch_failed");
   }
 
   if (!res.ok) {
-    return redirectToSignIn(request);
+    return redirectToSignIn(request, "session_status_not_ok");
   }
 
   let data: SessionPayload;
   try {
     data = (await res.json()) as SessionPayload;
   } catch {
-    return redirectToSignIn(request);
+    return redirectToSignIn(request, "session_invalid_json");
   }
 
   if (data && data.user) {
@@ -116,7 +124,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  return redirectToSignIn(request);
+  return redirectToSignIn(request, "session_missing_user");
 }
 
 export const config = {
