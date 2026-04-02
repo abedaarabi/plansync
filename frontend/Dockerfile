@@ -17,7 +17,14 @@ ENV HUSKY=0
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
 COPY backend/package.json ./backend/package.json
-RUN npm ci --include=dev --include=optional
+# Optional platform bindings for lightningcss (Tailwind v4 / @tailwindcss/postcss) are often
+# missing after `npm ci` in workspaces; Next build fails without the matching .node binary.
+RUN npm ci --include=dev --include=optional \
+  && LC_VER="$(node -p "require('lightningcss/package.json').version")" \
+  && ARCH="$(uname -m)" \
+  && if [ "$ARCH" = "x86_64" ]; then npm install "lightningcss-linux-x64-gnu@${LC_VER}"; \
+     elif [ "$ARCH" = "aarch64" ]; then npm install "lightningcss-linux-arm64-gnu@${LC_VER}"; \
+     else echo "Unsupported arch: $ARCH" && exit 1; fi
 
 FROM base AS builder
 WORKDIR /app
