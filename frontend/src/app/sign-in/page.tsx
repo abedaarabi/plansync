@@ -51,7 +51,11 @@ export default function SignInPage() {
       } else {
         const { error: err } = await authClient.signIn.email({ email, password });
         if (err) setError(err.message ?? "Sign in failed");
-        else router.replace(next);
+        else {
+          // Full navigation: production (Traefik, cookies, PWA) is reliable; soft router.replace can
+          // navigate before the browser commits Set-Cookie from the auth response.
+          window.location.assign(next.startsWith("/") ? next : `/${next}`);
+        }
       }
     } catch (ex) {
       setError(ex instanceof Error ? ex.message : "Request failed");
@@ -219,6 +223,17 @@ export default function SignInPage() {
                     />
                   </div>
                 </div>
+
+                {mode === "sign-in" ? (
+                  <div className="-mt-1 text-right">
+                    <Link
+                      href="/forgot-password"
+                      className="text-[13px] font-medium text-[#2563EB] hover:underline"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+                ) : null}
 
                 {error && (
                   <div

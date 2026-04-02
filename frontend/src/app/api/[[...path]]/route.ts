@@ -17,6 +17,35 @@ function backendBase(): string {
   return (process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8787").replace(/\/$/, "");
 }
 
+function publicAppUrl(): string | undefined {
+  return process.env.PUBLIC_APP_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
+}
+
+/** So Better Auth behind internal `http://backend:8787` still sees the browser’s public HTTPS host. */
+function forwardedProto(req: NextRequest): "http" | "https" {
+  const raw = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  if (raw === "http" || raw === "https") return raw;
+  const app = publicAppUrl();
+  if (app?.startsWith("https://")) return "https";
+  return req.nextUrl.protocol === "https:" ? "https" : "http";
+}
+
+function forwardedHost(req: NextRequest): string | undefined {
+  const app = publicAppUrl();
+  if (process.env.NODE_ENV === "production" && app) {
+    try {
+      return new URL(app).host;
+    } catch {
+      /* fall through */
+    }
+  }
+  return (
+    req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ||
+    req.headers.get("host")?.split(",")[0]?.trim() ||
+    undefined
+  );
+}
+
 type Params = { path?: string[] };
 
 async function proxy(req: NextRequest, params: Params): Promise<Response> {
@@ -30,6 +59,10 @@ async function proxy(req: NextRequest, params: Params): Promise<Response> {
     if (kl === "host" || HOP_BY_HOP.has(kl)) return;
     headers.set(key, value);
   });
+
+  headers.set("x-forwarded-proto", forwardedProto(req));
+  const xfHost = forwardedHost(req);
+  if (xfHost) headers.set("x-forwarded-host", xfHost);
 
   const init: RequestInit = {
     method: req.method,

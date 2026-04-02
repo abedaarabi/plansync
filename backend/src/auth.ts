@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./lib/prisma.js";
 import { buildCorsAllowList, type Env } from "./lib/env.js";
+import { queuePasswordResetEmail } from "./lib/send-password-reset-email.js";
 
 function buildSocialProviders(env: Env) {
   const out: Record<string, { clientId: string; clientSecret: string }> = {};
@@ -34,18 +35,29 @@ export function createAuth(env: Env) {
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: buildCorsAllowList(env),
     database: prismaAdapter(prisma, { provider: "postgresql" }),
-    emailAndPassword: { enabled: true },
+    emailAndPassword: {
+      enabled: true,
+      sendResetPassword: async ({ user, url }) => {
+        queuePasswordResetEmail(env, {
+          to: user.email,
+          displayName: user.name,
+          resetUrl: url,
+        });
+      },
+      revokeSessionsOnPasswordReset: true,
+    },
     ...(socialProviders ? { socialProviders } : {}),
-    ...(cookieDomain
-      ? {
-          advanced: {
+    advanced: {
+      trustedProxyHeaders: true,
+      ...(cookieDomain
+        ? {
             crossSubDomainCookies: {
               enabled: true,
               domain: cookieDomain,
             },
-          },
-        }
-      : {}),
+          }
+        : {}),
+    },
     session: {
       cookieCache: { enabled: true, maxAge: 60 },
     },
