@@ -17,17 +17,22 @@ ENV HUSKY=0
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
 COPY backend/package.json ./backend/package.json
-# Optional platform bindings for lightningcss (Tailwind v4) are often missing after `npm ci`
-# in workspaces. npm rejects the wrong CPU (EBADPLATFORM), so install only the binding for this image arch.
+# Tailwind v4 pulls native optional deps (`lightningcss`, `@tailwindcss/oxide`) that npm workspaces
+# often omit. npm also rejects wrong CPU (EBADPLATFORM), so install only this image's Linux GNU bindings.
 RUN npm ci --include=dev --include=optional
 RUN LC_VER=$(node -p "require('./package-lock.json').packages['node_modules/lightningcss'].version") \
+  && OX_VER=$(node -p "require('./package-lock.json').packages['node_modules/@tailwindcss/oxide'].version") \
   && ARCH="$(uname -m)" \
   && if [ "$ARCH" = "x86_64" ]; then \
-       npm install --no-save --legacy-peer-deps "lightningcss-linux-x64-gnu@${LC_VER}"; \
+       npm install --no-save --legacy-peer-deps \
+         "lightningcss-linux-x64-gnu@${LC_VER}" \
+         "@tailwindcss/oxide-linux-x64-gnu@${OX_VER}"; \
      elif [ "$ARCH" = "aarch64" ]; then \
-       npm install --no-save --legacy-peer-deps "lightningcss-linux-arm64-gnu@${LC_VER}"; \
+       npm install --no-save --legacy-peer-deps \
+         "lightningcss-linux-arm64-gnu@${LC_VER}" \
+         "@tailwindcss/oxide-linux-arm64-gnu@${OX_VER}"; \
      else \
-       echo "Unsupported arch for lightningcss: $ARCH (add a branch in frontend/Dockerfile)" && exit 1; \
+       echo "Unsupported arch for Tailwind native deps: $ARCH" && exit 1; \
      fi
 
 FROM base AS builder
