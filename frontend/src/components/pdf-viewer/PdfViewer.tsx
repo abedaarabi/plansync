@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { LayoutTemplate, Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { FolderOpen, LayoutTemplate, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { fetchIssue, fetchViewerState, putViewerState } from "@/lib/api-client";
+import { fetchIssue, fetchMe, fetchViewerState, putViewerState } from "@/lib/api-client";
 import { findAnnotationById, normRectFromAnnotationPoints } from "@/lib/issueFocus";
+import { meHasProWorkspace } from "@/lib/proWorkspace";
 import { setupPdfWorker } from "@/lib/pdf";
 import {
   calibrationFromPersisted,
@@ -15,7 +17,9 @@ import {
   loadPersistedSession,
   savePersistedSession,
 } from "@/lib/sessionPersistence";
+import { qk } from "@/lib/queryKeys";
 import { getViewerStateSyncPayload } from "@/lib/syncViewerStatePayload";
+import { VIEWER_LOCAL_PDF_INPUT_ID } from "@/lib/viewerLocalPdfInput";
 import { parseServerViewerState } from "@/lib/viewerStateCloud";
 import { computeScaleToFitNormRect, scrollViewportToNorm } from "@/lib/viewScroll";
 import { useViewerStore, VIEWER_SCALE_MAX, VIEWER_SCALE_MIN } from "@/store/viewerStore";
@@ -89,6 +93,14 @@ export function PdfViewer() {
     [setIssueCreateDraft],
   );
   const searchParams = useSearchParams();
+
+  const { data: me, isPending: mePending } = useQuery({
+    queryKey: qk.me(),
+    queryFn: fetchMe,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const proBlocksLocalPdf = mePending || meHasProWorkspace(me ?? null);
 
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -797,11 +809,34 @@ export function PdfViewer() {
                 <p className="text-[15px] font-semibold tracking-tight text-[var(--viewer-text)]">
                   Open a PDF plan to get started
                 </p>
-                <p className="mt-2 max-w-sm text-[12px] leading-relaxed tracking-tight text-[var(--viewer-text-muted)]">
-                  Use <span className="font-medium text-[var(--viewer-text)]">Open</span> in the
-                  toolbar, then calibrate scale and measure. Markup tools live on the left; map and
-                  snap on the right.
-                </p>
+                {proBlocksLocalPdf ? (
+                  <p className="mt-2 max-w-sm text-[12px] leading-relaxed tracking-tight text-[var(--viewer-text-muted)]">
+                    Pro opens drawings from the cloud. Use{" "}
+                    <span className="font-medium text-[var(--viewer-text)]">Projects</span> in the
+                    toolbar to pick a file. Markup tools appear after the plan loads.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-2 max-w-sm text-[12px] leading-relaxed tracking-tight text-[var(--viewer-text-muted)]">
+                      Your PDF stays on this device. Choose a file below or use{" "}
+                      <span className="font-medium text-[var(--viewer-text)]">Open</span> in the
+                      toolbar — then calibrate scale and measure.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById(
+                          VIEWER_LOCAL_PDF_INPUT_ID,
+                        ) as HTMLInputElement | null;
+                        el?.click();
+                      }}
+                      className="viewer-focus-ring mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--viewer-primary)] px-5 py-2.5 text-[13px] font-semibold text-white shadow-[var(--viewer-primary-glow)] transition hover:bg-[var(--viewer-primary-hover)] active:scale-[0.98]"
+                    >
+                      <FolderOpen className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+                      Choose PDF…
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           )}

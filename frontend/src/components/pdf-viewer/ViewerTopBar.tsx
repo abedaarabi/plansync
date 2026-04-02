@@ -35,6 +35,7 @@ import {
 import { formatPageSizeTitle } from "@/lib/pagePaperInfo";
 import { meHasProWorkspace } from "@/lib/proWorkspace";
 import { qk } from "@/lib/queryKeys";
+import { VIEWER_LOCAL_PDF_INPUT_ID } from "@/lib/viewerLocalPdfInput";
 import {
   calibrationFromPersisted,
   fileFingerprint,
@@ -239,6 +240,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
       role="banner"
     >
       <input
+        id={VIEWER_LOCAL_PDF_INPUT_ID}
         ref={fileInputRef}
         type="file"
         accept="application/pdf"

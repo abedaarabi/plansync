@@ -4,23 +4,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, Cloud, Menu, Monitor, Play, X } from "lucide-react";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { fetchMe } from "@/lib/api-client";
 import { LANDING_FAQ } from "@/lib/landingContent";
 import { meHasProWorkspace } from "@/lib/proWorkspace";
 import { qk } from "@/lib/queryKeys";
-import { useViewerStore } from "@/store/viewerStore";
 
 /* ── Constants ─────────────────────────────────────────────── */
 
-const LANDING_PDF_INPUT_ID = "landing-pdf-input";
 const YOUTUBE_VIDEO_ID = "B3aR-qLvCFo";
-
-function isPdfFile(f: File): boolean {
-  return f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
-}
 
 /* ── YouTube embed (poster → iframe on click) ─────────────── */
 
@@ -52,6 +46,7 @@ function HeroYouTubeEmbed() {
         alt="PlanSync walkthrough video thumbnail"
         fill
         className="object-cover"
+        loading="lazy"
         unoptimized
       />
       <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--landing-cta)] shadow-xl shadow-blue-600/30 transition group-hover:scale-110 group-hover:bg-[var(--landing-cta-bright)] sm:h-20 sm:w-20">
@@ -59,6 +54,56 @@ function HeroYouTubeEmbed() {
       </div>
       <div className="absolute inset-0 bg-black/20 transition group-hover:bg-black/30" />
     </button>
+  );
+}
+
+/** ~12MB GIF — load only when the hero mockup is near the viewport. */
+function LandingHeroDemoGif() {
+  const ref = useRef<HTMLDivElement>(null);
+  const reducedMotion = usePrefersReducedMotion();
+  const [showGif, setShowGif] = useState(false);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) setShowGif(true);
+      },
+      { rootMargin: "180px", threshold: 0.01 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [reducedMotion]);
+
+  return (
+    <div ref={ref} className="relative aspect-video overflow-hidden bg-slate-900">
+      {reducedMotion ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-800 px-4 text-center text-[12px] leading-relaxed text-slate-400">
+          Plan viewer demo (animation reduced for your motion settings)
+        </div>
+      ) : showGif ? (
+        <Image
+          src="/images/cta/gifcta.gif"
+          alt="PlanSync viewer demo — open PDF, calibrate, measure, markup"
+          fill
+          className="object-cover"
+          sizes="(max-width: 1024px) 100vw, 50vw"
+          unoptimized
+        />
+      ) : (
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-800/95 px-4 text-center"
+          aria-hidden
+        >
+          <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+            Demo preview
+          </span>
+          <span className="max-w-[14rem] text-[12px] leading-snug text-slate-400">Loading…</span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -170,8 +215,6 @@ function BrowserMockup({
 
 export function LandingPage() {
   const router = useRouter();
-  const setPdf = useViewerStore((s) => s.setPdf);
-  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const { data: me } = useQuery({
     queryKey: qk.me(),
@@ -186,25 +229,12 @@ export function LandingPage() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
-  const handleFileChange = useCallback(
-    (files: FileList | null) => {
-      if (blockLocalPdf || !files) return;
-      const pdf = Array.from(files).find(isPdfFile);
-      if (!pdf) return;
-      setMobileOpen(false);
-      const url = URL.createObjectURL(pdf);
-      setPdf(url, pdf.name, pdf.size);
-      router.push("/viewer");
-    },
-    [blockLocalPdf, setPdf, router, setMobileOpen],
-  );
-
-  function openFreePdf() {
+  function goToFreeViewer() {
     if (blockLocalPdf) {
       router.push("/projects");
       return;
     }
-    pdfInputRef.current?.click();
+    router.push("/viewer");
   }
 
   useEffect(() => {
@@ -215,19 +245,6 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen landing-atmosphere">
-      {/* Hidden file input */}
-      <input
-        ref={pdfInputRef}
-        id={LANDING_PDF_INPUT_ID}
-        type="file"
-        accept=".pdf,application/pdf"
-        className="sr-only"
-        onChange={(e) => {
-          handleFileChange(e.target.files);
-          e.target.value = "";
-        }}
-      />
-
       {/* ═══════════ SECTION 1 — NAV ═══════════ */}
       <nav
         className={`fixed inset-x-0 top-0 z-50 border-b transition-[background,box-shadow,border-color] duration-300 ${
@@ -289,7 +306,7 @@ export function LandingPage() {
             )}
             <button
               type="button"
-              onClick={openFreePdf}
+              onClick={goToFreeViewer}
               className="btn-shine relative overflow-hidden rounded-full bg-[var(--landing-cta)] px-5 py-2 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_35%,transparent)] transition hover:bg-[var(--landing-cta-bright)] hover:ring-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)]"
             >
               Start Free &rarr;
@@ -353,7 +370,7 @@ export function LandingPage() {
                 type="button"
                 onClick={() => {
                   setMobileOpen(false);
-                  openFreePdf();
+                  goToFreeViewer();
                 }}
                 className="btn-shine relative overflow-hidden rounded-full bg-[var(--landing-cta)] px-5 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
               >
@@ -378,7 +395,7 @@ export function LandingPage() {
               sizes="100vw"
               className="object-cover object-[center_36%]"
               priority
-              quality={82}
+              quality={72}
             />
           </div>
 
@@ -431,10 +448,10 @@ export function LandingPage() {
                   <div className="mt-10 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-4 lg:justify-start">
                     <button
                       type="button"
-                      onClick={openFreePdf}
+                      onClick={goToFreeViewer}
                       className="btn-shine relative inline-flex min-h-12 flex-1 items-center justify-center gap-2 overflow-hidden rounded-xl bg-[var(--landing-cta)] px-8 py-3.5 text-base font-semibold text-[var(--landing-cta-text)] shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)] transition hover:bg-[var(--landing-cta-bright)] hover:shadow-xl hover:shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--landing-cta)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 active:scale-[0.98] sm:flex-none sm:px-9"
                     >
-                      Open a PDF Free <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+                      Open free viewer <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
                     </button>
                     <Link
                       href="/sign-in"
@@ -459,16 +476,7 @@ export function LandingPage() {
 
                 <div className="mx-auto w-full max-w-lg lg:mx-0 lg:max-w-none">
                   <BrowserMockup className="shadow-[0_24px_80px_-12px_rgba(0,0,0,0.45)] ring-1 ring-white/10">
-                    <div className="relative aspect-video overflow-hidden bg-slate-900">
-                      <Image
-                        src="/images/cta/gifcta.gif"
-                        alt="PlanSync viewer demo — open PDF, calibrate, measure, markup"
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 1024px) 100vw, 50vw"
-                        unoptimized
-                      />
-                    </div>
+                    <LandingHeroDemoGif />
                   </BrowserMockup>
                   <p className="mt-3 text-center text-xs leading-relaxed text-blue-200/75 lg:text-left">
                     The viewer in motion — open a PDF, calibrate scale, measure, and mark up. Same
@@ -582,10 +590,10 @@ export function LandingPage() {
 
                   <button
                     type="button"
-                    onClick={openFreePdf}
+                    onClick={goToFreeViewer}
                     className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
                   >
-                    Open PDF Free <ArrowRight className="h-4 w-4" />
+                    Open free viewer <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
               </AnimateIn>
@@ -670,6 +678,9 @@ export function LandingPage() {
                     alt="PlanSync free PDF viewer with measurement tools"
                     fill
                     className="object-cover"
+                    sizes="(max-width: 1024px) 100vw, 40vw"
+                    loading="lazy"
+                    quality={78}
                   />
                 </div>
               </BrowserMockup>
@@ -683,7 +694,7 @@ export function LandingPage() {
                 </p>
                 <button
                   type="button"
-                  onClick={openFreePdf}
+                  onClick={goToFreeViewer}
                   className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
                 >
                   Try the free viewer <ArrowRight className="h-4 w-4" />
@@ -716,6 +727,9 @@ export function LandingPage() {
                     alt="PlanSync issue pins on a construction drawing"
                     fill
                     className="object-cover"
+                    sizes="(max-width: 1024px) 100vw, 40vw"
+                    loading="lazy"
+                    quality={78}
                   />
                 </div>
               </BrowserMockup>
@@ -803,6 +817,9 @@ export function LandingPage() {
                     alt="PlanSync quantity takeoff with colored zones on a construction drawing"
                     fill
                     className="object-cover"
+                    sizes="(max-width: 1024px) 100vw, 40vw"
+                    loading="lazy"
+                    quality={78}
                   />
                 </div>
               </BrowserMockup>
@@ -858,7 +875,9 @@ export function LandingPage() {
               fill
               sizes="100vw"
               className="object-cover object-[center_32%] sm:object-[center_30%]"
-              quality={85}
+              loading="lazy"
+              fetchPriority="low"
+              quality={72}
             />
           </div>
           {/* Top: photo reads clearly; bottom ~half ramps to deep slate (content sits in dark band) */}
@@ -890,7 +909,7 @@ export function LandingPage() {
                 Start for free today
               </h2>
               <p className="mx-auto mt-5 max-w-lg text-base leading-relaxed text-blue-100/85">
-                Open a PDF in seconds — no signup needed.
+                Open the free viewer in seconds — no signup needed.
                 <br />
                 Upgrade to Pro when your team is ready.
               </p>
@@ -898,10 +917,10 @@ export function LandingPage() {
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
                 <button
                   type="button"
-                  onClick={openFreePdf}
+                  onClick={goToFreeViewer}
                   className="inline-flex items-center gap-2 rounded-xl bg-[var(--landing-cta)] px-7 py-3.5 text-base font-semibold text-[var(--landing-cta-text)] shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] transition hover:bg-[var(--landing-cta-bright)] hover:shadow-[color-mix(in_srgb,var(--landing-cta)_38%,transparent)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--landing-cta)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
                 >
-                  Open PDF Free <ArrowRight className="h-4 w-4" />
+                  Open free viewer <ArrowRight className="h-4 w-4" />
                 </button>
                 <Link
                   href="/sign-in"
@@ -966,10 +985,10 @@ export function LandingPage() {
                 <li>
                   <button
                     type="button"
-                    onClick={openFreePdf}
+                    onClick={goToFreeViewer}
                     className="text-sm text-slate-300 transition hover:text-white"
                   >
-                    Free Viewer
+                    Free viewer
                   </button>
                 </li>
                 <li>
@@ -1034,10 +1053,10 @@ export function LandingPage() {
             </p>
             <button
               type="button"
-              onClick={openFreePdf}
+              onClick={goToFreeViewer}
               className="inline-flex items-center gap-2 text-xs font-medium text-sky-400 transition hover:text-sky-300"
             >
-              Open public PDF viewer <ArrowRight className="h-3 w-3" />
+              Open free PDF viewer <ArrowRight className="h-3 w-3" />
             </button>
           </div>
         </div>
