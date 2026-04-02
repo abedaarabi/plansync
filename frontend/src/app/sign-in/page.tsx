@@ -51,7 +51,11 @@ export default function SignInPage() {
       } else {
         const { error: err } = await authClient.signIn.email({ email, password });
         if (err) setError(err.message ?? "Sign in failed");
-        else router.replace(next);
+        else {
+          // Full navigation so the next document load always sends the new session cookies (avoids
+          // soft-nav + cross-host API base edge cases after sign-in).
+          window.location.assign(next);
+        }
       }
     } catch (ex) {
       setError(ex instanceof Error ? ex.message : "Request failed");
