@@ -56,10 +56,6 @@ export default function SignInPage() {
     return false;
   }
 
-  useEffect(() => {
-    setError(null);
-  }, [mode]);
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -158,7 +154,10 @@ export default function SignInPage() {
                   type="button"
                   role="tab"
                   aria-selected={mode === "sign-in"}
-                  onClick={() => setMode("sign-in")}
+                  onClick={() => {
+                    setError(null);
+                    setMode("sign-in");
+                  }}
                   className={`relative flex-1 rounded-lg py-2.5 text-sm font-medium transition ${
                     mode === "sign-in"
                       ? "bg-white text-[#0F172A] shadow-sm"
@@ -171,7 +170,10 @@ export default function SignInPage() {
                   type="button"
                   role="tab"
                   aria-selected={mode === "sign-up"}
-                  onClick={() => setMode("sign-up")}
+                  onClick={() => {
+                    setError(null);
+                    setMode("sign-up");
+                  }}
                   className={`relative flex-1 rounded-lg py-2.5 text-sm font-medium transition ${
                     mode === "sign-up"
                       ? "bg-white text-[#0F172A] shadow-sm"
@@ -326,7 +328,10 @@ export default function SignInPage() {
                 Already have an account?{" "}
                 <button
                   type="button"
-                  onClick={() => setMode("sign-in")}
+                  onClick={() => {
+                    setError(null);
+                    setMode("sign-in");
+                  }}
                   className="font-medium text-[#64748B] underline underline-offset-2 hover:text-white"
                 >
                   Sign in
@@ -337,7 +342,10 @@ export default function SignInPage() {
                 New to PlanSync?{" "}
                 <button
                   type="button"
-                  onClick={() => setMode("sign-up")}
+                  onClick={() => {
+                    setError(null);
+                    setMode("sign-up");
+                  }}
                   className="font-medium text-[#64748B] underline underline-offset-2 hover:text-white"
                 >
                   Start free trial
