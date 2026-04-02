@@ -66,6 +66,24 @@ function redirectToNotInvited(request: NextRequest): NextResponse {
 type SessionPayload = { user?: unknown } | null;
 type AuthSessionPayload = { user?: unknown; session?: unknown } | null;
 
+function authCheckBase(request: NextRequest): string {
+  const internal = process.env.API_PROXY_TARGET?.trim();
+  if (internal) return internal.replace(/\/$/, "");
+  return request.nextUrl.origin.replace(/\/$/, "");
+}
+
+function authCheckHeaders(request: NextRequest): HeadersInit {
+  const headers = new Headers();
+  const cookie = request.headers.get("cookie");
+  if (cookie) headers.set("cookie", cookie);
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (host) headers.set("x-forwarded-host", host);
+  const proto =
+    request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");
+  if (proto) headers.set("x-forwarded-proto", proto);
+  return headers;
+}
+
 async function canAccessProject(request: NextRequest, projectId: string): Promise<boolean> {
   const url = new URL(`/api/v1/projects/${encodeURIComponent(projectId)}`, request.nextUrl.origin);
   try {
@@ -84,13 +102,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const meUrl = new URL("/api/v1/me", request.nextUrl.origin);
+  const base = authCheckBase(request);
+  const meUrl = `${base}/api/v1/me`;
+  const headers = authCheckHeaders(request);
   let res: Response;
   try {
     res = await fetch(meUrl, {
-      headers: {
-        cookie: request.headers.get("cookie") ?? "",
-      },
+      headers,
       cache: "no-store",
     });
   } catch {
@@ -100,13 +118,11 @@ export async function proxy(request: NextRequest) {
   if (!res.ok) {
     // Fallback: if Better Auth session endpoint is healthy, allow navigation.
     // This prevents false login loops when `/api/v1/me` fails for non-auth reasons.
-    const authSessionUrl = new URL("/api/auth/get-session", request.nextUrl.origin);
+    const authSessionUrl = `${base}/api/auth/get-session`;
     let authRes: Response;
     try {
       authRes = await fetch(authSessionUrl, {
-        headers: {
-          cookie: request.headers.get("cookie") ?? "",
-        },
+        headers,
         cache: "no-store",
       });
     } catch {
