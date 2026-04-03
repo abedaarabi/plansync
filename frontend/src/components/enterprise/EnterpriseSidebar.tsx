@@ -24,7 +24,7 @@ import {
   AlertCircle,
   House,
 } from "lucide-react";
-import { fetchProjects, fetchWorkspaceMembers } from "@/lib/api-client";
+import { fetchProjects } from "@/lib/api-client";
 import { faviconUrlFromHostname, normalizeWorkspaceWebsite } from "@/lib/workspaceBranding";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { qk } from "@/lib/queryKeys";
@@ -46,65 +46,16 @@ function extractProjectId(pathname: string): string | null {
   return segment;
 }
 
-function formatGiB(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0";
-  return (bytes / 1024 ** 3).toFixed(2);
-}
-
-function SidebarMeter({
-  label,
-  usedLabel,
-  pct,
-  warn,
-}: {
-  label: string;
-  usedLabel: string;
-  pct: number;
-  warn?: boolean;
-}) {
-  const clamped = Math.min(100, Math.max(0, pct));
-  return (
-    <div className="mb-3 last:mb-0">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8]/90">
-          {label}
-        </span>
-        <span
-          className={`shrink-0 text-[10px] font-medium tabular-nums ${warn ? "text-amber-200" : "text-[#CBD5E1]"}`}
-        >
-          {usedLabel}
-        </span>
-      </div>
-      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white/[0.08]">
-        <div
-          className={`h-full rounded-full transition-[width] duration-500 ease-out ${
-            warn ? "bg-amber-400" : "bg-[var(--enterprise-primary)]"
-          }`}
-          style={{ width: `${clamped}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: EnterpriseSidebarProps) {
   const pathname = usePathname();
   const { primary, loading } = useEnterpriseWorkspace();
   const ws = primary?.workspace;
   const wid = ws?.id;
   const isPro = isWorkspaceProClient(ws?.subscriptionStatus);
-  const isAdmin = primary?.role === "ADMIN";
-
   const { data: projects = [] } = useQuery({
     queryKey: qk.projects(wid ?? ""),
     queryFn: () => fetchProjects(wid!),
     enabled: Boolean(wid && isPro),
-  });
-
-  const { data: membersData } = useQuery({
-    queryKey: qk.workspaceMembers(wid ?? ""),
-    queryFn: () => fetchWorkspaceMembers(wid!),
-    enabled: Boolean(wid && isAdmin),
   });
 
   const projectId = extractProjectId(pathname);
@@ -113,18 +64,6 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
 
   const collapsedDesktop = !expanded;
   const afterNav = () => onCloseMobile();
-
-  const maxProjects = primary?.maxProjects ?? 5;
-  const projectCount =
-    primary?.projectCount !== undefined ? primary.projectCount : isPro ? projects.length : 0;
-  const projectPct = maxProjects > 0 ? Math.min(100, (projectCount / maxProjects) * 100) : 0;
-
-  const storageUsed = ws ? Number(ws.storageUsedBytes) : 0;
-  const storageQuota = ws ? Number(ws.storageQuotaBytes) : 0;
-  const storagePct = storageQuota > 0 ? Math.min(100, (storageUsed / storageQuota) * 100) : 0;
-  const maxSeats = membersData?.maxSeats ?? 5;
-  const seatPressure = membersData?.seatPressure ?? 0;
-  const seatPct = maxSeats > 0 ? Math.min(100, (seatPressure / maxSeats) * 100) : 0;
 
   const sidebarLogoSrc = useMemo(() => {
     if (!ws) return null;
@@ -436,39 +375,6 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
           />
           <span className={`truncate ${collapsedDesktop ? "lg:sr-only" : ""}`}>Account</span>
         </Link>
-
-        {ws && isAdmin ? (
-          <div
-            className={`mt-3 rounded-xl border border-white/[0.08] bg-black/25 px-3 py-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] ${
-              collapsedDesktop ? "lg:hidden" : ""
-            }`}
-          >
-            {loading ? (
-              <p className="text-[11px] text-[#94A3B8]">Loading usage…</p>
-            ) : (
-              <>
-                <SidebarMeter
-                  label="Storage"
-                  usedLabel={`${formatGiB(storageUsed)} / ${formatGiB(storageQuota)} GB`}
-                  pct={storagePct}
-                  warn={storagePct >= 85}
-                />
-                <SidebarMeter
-                  label="Members"
-                  usedLabel={`${seatPressure} / ${maxSeats}`}
-                  pct={seatPct}
-                  warn={seatPct >= 90}
-                />
-                <SidebarMeter
-                  label="Projects"
-                  usedLabel={`${projectCount} / ${maxProjects}`}
-                  pct={projectPct}
-                  warn={projectCount >= maxProjects}
-                />
-              </>
-            )}
-          </div>
-        ) : null}
       </div>
     </aside>
   );

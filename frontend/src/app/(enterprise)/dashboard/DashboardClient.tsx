@@ -17,7 +17,9 @@ import {
 } from "lucide-react";
 import { DashboardActivityChart } from "@/components/enterprise/DashboardActivityChart";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { fetchDashboard, fetchMe, fetchProjects } from "@/lib/api-client";
+import { WorkspaceUsageMeter, formatGiB } from "@/components/enterprise/WorkspaceUsageMeters";
+import { fetchDashboard, fetchMe, fetchProjects, fetchWorkspaceMembers } from "@/lib/api-client";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { computeWorkspaceHealthScore } from "@/lib/dashboardHealth";
 import { qk } from "@/lib/queryKeys";
 
@@ -41,10 +43,19 @@ export function DashboardClient() {
     enabled: Boolean(wid),
   });
 
+  const membership = me?.workspaces?.[0];
+  const isAdmin = membership?.role === "ADMIN";
+
   const { data: projects = [] } = useQuery({
     queryKey: qk.projects(wid ?? ""),
     queryFn: () => fetchProjects(wid!),
     enabled: Boolean(wid && me?.workspaces?.[0]?.workspace.subscriptionStatus === "active"),
+  });
+
+  const { data: membersData } = useQuery({
+    queryKey: qk.workspaceMembers(wid ?? ""),
+    queryFn: () => fetchWorkspaceMembers(wid!),
+    enabled: Boolean(wid && isAdmin),
   });
 
   const loading = meLoading || (Boolean(wid) && dashPending);
@@ -122,6 +133,18 @@ export function DashboardClient() {
         : 0;
 
   const sub = dash?.workspace?.subscriptionStatus ?? ws?.subscriptionStatus ?? null;
+  const maxProjects = membership?.maxProjects ?? 5;
+  const isPro = isWorkspaceProClient(sub);
+  const projectCountForUsage =
+    membership?.projectCount !== undefined ? membership.projectCount : isPro ? projects.length : 0;
+  const projectUsagePct =
+    maxProjects > 0 ? Math.min(100, (projectCountForUsage / maxProjects) * 100) : 0;
+  const maxSeats = membersData?.maxSeats ?? 5;
+  const seatPressure = membersData?.seatPressure ?? 0;
+  const seatUsagePct = maxSeats > 0 ? Math.min(100, (seatPressure / maxSeats) * 100) : 0;
+  const storageUsageBarPct =
+    storageQuota > 0 ? Math.min(100, (storageUsed / storageQuota) * 100) : 0;
+
   const checklist: { id: string; label: string; done: boolean }[] = [
     { id: "1", label: "Create account", done: true },
     { id: "2", label: "Create workspace", done: hasWorkspace },
@@ -273,6 +296,37 @@ export function DashboardClient() {
           </div>
         ))}
       </div>
+
+      {isAdmin && hasWorkspace && wid ? (
+        <section className="enterprise-card p-6">
+          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+            Workspace usage
+          </h2>
+          <p className="mt-1 text-[13px] text-[var(--enterprise-text-muted)]">
+            Storage, seats, and project limits for your plan.
+          </p>
+          <div className="mt-4 max-w-md">
+            <WorkspaceUsageMeter
+              label="Storage"
+              usedLabel={`${formatGiB(storageUsed)} / ${formatGiB(storageQuota)} GB`}
+              pct={storageUsageBarPct}
+              warn={storageUsageBarPct >= 85}
+            />
+            <WorkspaceUsageMeter
+              label="Members"
+              usedLabel={`${seatPressure} / ${maxSeats}`}
+              pct={seatUsagePct}
+              warn={seatUsagePct >= 90}
+            />
+            <WorkspaceUsageMeter
+              label="Projects"
+              usedLabel={`${projectCountForUsage} / ${maxProjects}`}
+              pct={projectUsagePct}
+              warn={projectCountForUsage >= maxProjects}
+            />
+          </div>
+        </section>
+      ) : null}
 
       {/* Chart + team snapshot */}
       <div className="grid gap-6 xl:grid-cols-3">
