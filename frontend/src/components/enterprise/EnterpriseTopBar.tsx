@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
@@ -22,8 +23,15 @@ import {
 import { UserMenu } from "./UserMenu";
 import { ProjectPicker } from "./ProjectPicker";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
-import { fetchProjects } from "@/lib/api-client";
+import {
+  fetchMeNotifications,
+  fetchProjects,
+  markAllNotificationsRead,
+  markNotificationsRead,
+  type MeNotificationRow,
+} from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
+import { userInitials } from "@/lib/user-initials";
 import Link from "next/link";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -86,6 +94,19 @@ function extractToolSegment(pathname: string): string | null {
   return match ? match[1] : null;
 }
 
+function formatNotifyTime(iso: string): string {
+  const d = new Date(iso);
+  const diff = Math.max(0, Date.now() - d.getTime());
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  if (h < 24) return `${h}h`;
+  const days = Math.floor(h / 24);
+  if (days < 7) return `${days}d`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 export function EnterpriseTopBar({
   onOpenCommandPalette,
   onOpenMobileNav,
@@ -93,15 +114,63 @@ export function EnterpriseTopBar({
   onToggleSidebar,
 }: EnterpriseTopBarProps) {
   const pathname = usePathname();
+  const qc = useQueryClient();
   const { primary } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
   const isPro = primary?.workspace.subscriptionStatus === "active";
+
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifWrapRef = useRef<HTMLDivElement>(null);
 
   const { data: projects = [] } = useQuery({
     queryKey: qk.projects(wid ?? ""),
     queryFn: () => fetchProjects(wid!),
     enabled: Boolean(wid && isPro),
   });
+
+  const notifQuery = useQuery({
+    queryKey: qk.meNotifications(),
+    queryFn: () => fetchMeNotifications(30),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const unreadCount = notifQuery.data?.unreadCount ?? 0;
+  const notifItems = notifQuery.data?.items ?? [];
+
+  const markReadMut = useMutation({
+    mutationFn: (ids: string[]) => markNotificationsRead(ids),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.meNotifications() }),
+  });
+
+  const markAllMut = useMutation({
+    mutationFn: () => markAllNotificationsRead(),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.meNotifications() }),
+  });
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const el = notifWrapRef.current;
+      if (el && !el.contains(e.target as Node)) setNotifOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [notifOpen]);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNotifOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [notifOpen]);
+
+  function onNotificationNavigate(n: MeNotificationRow) {
+    if (!n.readAt) markReadMut.mutate([n.id]);
+    setNotifOpen(false);
+  }
 
   const projectId = extractProjectId(pathname);
   const isProjectContext = Boolean(projectId);
@@ -219,14 +288,122 @@ export function EnterpriseTopBar({
         </button>
 
         {/* Notifications */}
-        <button
-          type="button"
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--enterprise-border)]/95 bg-[var(--enterprise-surface)]/90 text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25"
-          aria-label="Notifications"
-        >
-          <Bell className="h-4 w-4" strokeWidth={1.75} />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[var(--enterprise-primary)] shadow-[0_0_0_2px_rgba(255,255,255,0.95)]" />
-        </button>
+        <div ref={notifWrapRef} className="relative">
+          <button
+            type="button"
+            onClick={() => {
+              setNotifOpen((o) => !o);
+              void notifQuery.refetch();
+            }}
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--enterprise-border)]/95 bg-[var(--enterprise-surface)]/90 text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25"
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+            aria-expanded={notifOpen}
+            aria-haspopup="dialog"
+          >
+            <Bell className="h-4 w-4" strokeWidth={1.75} />
+            {unreadCount > 0 ? (
+              <span className="absolute -right-1 -top-1 flex min-h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-[var(--enterprise-primary)] px-1 text-[10px] font-bold leading-none text-white shadow-[0_0_0_2px_var(--enterprise-surface)]">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            ) : null}
+          </button>
+
+          {notifOpen ? (
+            <div
+              role="dialog"
+              aria-label="Notifications"
+              className="absolute right-0 top-[calc(100%+6px)] z-[100] w-[min(calc(100vw-1.5rem),22rem)] overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-lg sm:w-[24rem]"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-[var(--enterprise-border)] px-3 py-2.5">
+                <span className="text-sm font-semibold text-[var(--enterprise-text)]">
+                  Notifications
+                </span>
+                {unreadCount > 0 ? (
+                  <button
+                    type="button"
+                    disabled={markAllMut.isPending}
+                    onClick={() => markAllMut.mutate()}
+                    className="text-xs font-medium text-[var(--enterprise-primary)] hover:underline disabled:opacity-50"
+                  >
+                    Mark all read
+                  </button>
+                ) : null}
+              </div>
+              <div className="max-h-[min(24rem,70vh)] overflow-y-auto">
+                {notifQuery.isPending ? (
+                  <p className="px-3 py-6 text-center text-sm text-[var(--enterprise-text-muted)]">
+                    Loading…
+                  </p>
+                ) : notifQuery.isError ? (
+                  <p className="px-3 py-6 text-center text-sm text-red-600">
+                    Could not load notifications.
+                  </p>
+                ) : notifItems.length === 0 ? (
+                  <p className="px-3 py-6 text-center text-sm text-[var(--enterprise-text-muted)]">
+                    No notifications yet. RFI updates for your projects will appear here.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-[var(--enterprise-border)]">
+                    {notifItems.map((n) => (
+                      <li key={n.id}>
+                        <Link
+                          href={n.href}
+                          onClick={() => onNotificationNavigate(n)}
+                          className={`flex gap-2.5 px-3 py-2.5 transition hover:bg-[var(--enterprise-hover-surface)] ${
+                            n.readAt ? "" : "bg-[var(--enterprise-primary)]/[0.06]"
+                          }`}
+                        >
+                          <div className="relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[10px] font-semibold text-[var(--enterprise-text-muted)]">
+                            {n.actor ? (
+                              n.actor.image ? (
+                                // eslint-disable-next-line @next/next/no-img-element -- profile URL from auth
+                                <img
+                                  src={n.actor.image}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                userInitials(n.actor.name, n.actor.email ?? null)
+                              )
+                            ) : (
+                              <Bell className="h-4 w-4 opacity-70" strokeWidth={1.75} aria-hidden />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <p
+                                className={`text-sm leading-snug ${
+                                  n.readAt
+                                    ? "text-[var(--enterprise-text)]"
+                                    : "font-medium text-[var(--enterprise-text)]"
+                                }`}
+                              >
+                                {n.title}
+                              </p>
+                              <span className="shrink-0 text-[10px] text-[var(--enterprise-text-muted)]">
+                                {formatNotifyTime(n.createdAt)}
+                              </span>
+                            </div>
+                            {n.actor ? (
+                              <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
+                                {n.actor.name}
+                              </p>
+                            ) : null}
+                            {n.body ? (
+                              <p className="mt-1 line-clamp-2 text-xs text-[var(--enterprise-text-muted)]">
+                                {n.body}
+                              </p>
+                            ) : null}
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <UserMenu />
       </div>

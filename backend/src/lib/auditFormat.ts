@@ -153,6 +153,24 @@ export function formatAuditPresentation(
         detail: str(m.title) ? `RFI “${String(m.title)}”.` : "RFI created.",
       };
     case "RFI_UPDATED":
+      if (m.reopened === true) {
+        return {
+          actionLabel: "RFI reopened",
+          summary: str(m.title) ?? "RFI reopened",
+          detail: str(m.title)
+            ? `Reopened RFI “${String(m.title)}”.`
+            : "RFI reopened for further review.",
+        };
+      }
+      if (m.clearedRecordedAnswer === true) {
+        return {
+          actionLabel: "RFI answer removed",
+          summary: str(m.title) ?? "Recorded answer removed",
+          detail: str(m.title)
+            ? `Removed the recorded answer on “${String(m.title)}”.`
+            : "Recorded answer removed from the RFI.",
+        };
+      }
       return {
         actionLabel: "RFI updated",
         summary: str(m.title) ?? "RFI changed",
@@ -163,6 +181,52 @@ export function formatAuditPresentation(
         actionLabel: "RFI deleted",
         summary: str(m.title) ?? "RFI removed",
         detail: str(m.title) ? `Deleted RFI “${String(m.title)}”.` : "RFI removed.",
+      };
+    case "RFI_SENT_FOR_REVIEW":
+      return {
+        actionLabel: "RFI sent",
+        summary: str(m.title) ?? "RFI sent for review",
+        detail: str(m.title) ? `Sent RFI “${String(m.title)}” for review.` : "RFI sent for review.",
+      };
+    case "RFI_RESPONSE_SUBMITTED":
+      return {
+        actionLabel: "RFI response",
+        summary: str(m.title) ?? "Response submitted",
+        detail: str(m.title)
+          ? `Recorded answer (from discussion) on “${String(m.title)}”.`
+          : "RFI marked answered with a thread message.",
+      };
+    case "RFI_CLOSED":
+      return {
+        actionLabel: "RFI closed",
+        summary: str(m.title) ?? "RFI closed",
+        detail: str(m.title) ? `Closed RFI “${String(m.title)}”.` : "RFI closed.",
+      };
+    case "RFI_ATTACHMENT_ADDED":
+      return {
+        actionLabel: "RFI attachment",
+        summary: str(m.fileName) ?? "Attachment added",
+        detail: str(m.fileName)
+          ? `Attached “${String(m.fileName)}” to RFI.`
+          : "RFI attachment added.",
+      };
+    case "RFI_ATTACHMENT_REMOVED":
+      return {
+        actionLabel: "RFI attachment",
+        summary: str(m.fileName) ?? "Attachment removed",
+        detail: str(m.fileName)
+          ? `Removed “${String(m.fileName)}” from RFI.`
+          : "RFI attachment removed.",
+      };
+    case "RFI_MESSAGE_POSTED":
+      return {
+        actionLabel: "RFI message",
+        summary: str(m.title) ?? "Message posted",
+        detail: str(m.excerpt)
+          ? `“${String(m.excerpt)}”`
+          : str(m.title)
+            ? `New discussion message on “${String(m.title)}”.`
+            : "Discussion message posted on RFI.",
       };
     case "PUNCH_CREATED":
       return {

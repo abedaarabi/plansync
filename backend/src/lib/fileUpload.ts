@@ -52,3 +52,31 @@ export async function upsertFileForUpload(params: {
 export function newUploadId(): string {
   return randomUUID();
 }
+
+const SAFE_NAME_RE = /[^a-zA-Z0-9._-]/g;
+
+export function sanitizeAttachmentFileName(name: string): string {
+  const t = name.trim().replace(SAFE_NAME_RE, "_");
+  return t.length > 0 ? t.slice(0, 200) : "file";
+}
+
+export function buildRfiAttachmentKey(
+  workspaceId: string,
+  projectId: string,
+  rfiId: string,
+  uploadId: string,
+  fileName: string,
+): string {
+  const safe = sanitizeAttachmentFileName(fileName);
+  return `ws/${workspaceId}/p/${projectId}/rfi/${rfiId}/${uploadId}/${safe}`;
+}
+
+export function s3KeyMatchesRfiAttachment(
+  s3Key: string,
+  workspaceId: string,
+  projectId: string,
+  rfiId: string,
+): boolean {
+  const prefix = `ws/${workspaceId}/p/${projectId}/rfi/${rfiId}/`;
+  return s3Key.startsWith(prefix);
+}

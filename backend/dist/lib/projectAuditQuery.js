@@ -38,7 +38,17 @@ export async function fetchProjectAuditLogs(opts) {
           )
           OR (a.type::text = 'ISSUE_DELETED' AND a."projectId" = ${projectId})
           OR (
-            a.type::text IN ('RFI_CREATED', 'RFI_UPDATED')
+            a.type::text IN (
+              'RFI_CREATED',
+              'RFI_UPDATED',
+              'RFI_DELETED',
+              'RFI_SENT_FOR_REVIEW',
+              'RFI_RESPONSE_SUBMITTED',
+              'RFI_CLOSED',
+              'RFI_ATTACHMENT_ADDED',
+              'RFI_ATTACHMENT_REMOVED',
+              'RFI_MESSAGE_POSTED'
+            )
             AND a."entityId" IN (SELECT id FROM "Rfi" WHERE "projectId" = ${projectId})
           )
           OR (

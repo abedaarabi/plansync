@@ -13,7 +13,13 @@ import {
   STORAGE_WARN_95,
 } from "../../config/product.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
-import { getObjectStream, presignPut, presignGet, putObjectBuffer } from "../../lib/s3.js";
+import {
+  deleteObject,
+  getObjectStream,
+  presignPut,
+  presignGet,
+  putObjectBuffer,
+} from "../../lib/s3.js";
 import type { Env } from "../../lib/env.js";
 import { Resend } from "resend";
 import {
@@ -23,7 +29,6 @@ import {
   ProjectStage,
   PunchPriority,
   PunchStatus,
-  RfiStatus,
   WorkspaceRole,
 } from "@prisma/client";
 import { parseProjectCurrency } from "../../lib/projectSettings.js";
@@ -47,9 +52,12 @@ import {
   isGoogleFaviconUrl,
   normalizeWorkspaceWebsite,
 } from "../../lib/workspaceBranding.js";
+import { workspaceLogoUrlForClients } from "../../lib/workspaceLogo.js";
 import { registerMaterialsRoutes } from "./materialsRoutes.js";
 import { registerIssuesRoutes } from "./issuesRoutes.js";
+import { registerRfiRoutes } from "./rfiRoutes.js";
 import { registerTakeoffRoutes } from "./takeoffRoutes.js";
+import { registerProposalRoutes } from "./proposalRoutes.js";
 import { registerSheetAiRoutes } from "./sheetAiRoutes.js";
 import {
   auditLogsToRows,
@@ -202,6 +210,40 @@ export function v1Routes(
 
   r.get("/health", (c) => c.json({ ok: true }));
 
+  /** Public: workspace logo (S3 upload or redirect to external `logoUrl`). Cached briefly for proposals / emails. */
+  r.get("/public/workspaces/:workspaceId/logo", async (c) => {
+    const workspaceId = c.req.param("workspaceId")!;
+    const ws = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { logoS3Key: true, logoUrl: true },
+    });
+    if (!ws) return c.body(null, 404);
+    if (ws.logoS3Key) {
+      const st = await getObjectStream(env, ws.logoS3Key);
+      if (!st.ok) return c.body(null, 404);
+      const ext = ws.logoS3Key.split(".").pop()?.toLowerCase();
+      const fallbackCt =
+        ext === "png"
+          ? "image/png"
+          : ext === "jpg" || ext === "jpeg"
+            ? "image/jpeg"
+            : ext === "webp"
+              ? "image/webp"
+              : ext === "gif"
+                ? "image/gif"
+                : "application/octet-stream";
+      return new Response(st.stream, {
+        headers: {
+          "Content-Type": st.contentType || fallbackCt,
+          "Cache-Control": "public, max-age=3600",
+        },
+      });
+    }
+    const ext = ws.logoUrl?.trim();
+    if (ext?.startsWith("http")) return c.redirect(ext, 302);
+    return c.body(null, 404);
+  });
+
   /** Public: validate invite token for join page (no auth). */
   r.get("/invites/:token", async (c) => {
     const token = c.req.param("token")!;
@@ -221,7 +263,11 @@ export function v1Routes(
       workspace: {
         name: ws.name,
         slug: ws.slug,
-        logoUrl: ws.logoUrl,
+        logoUrl: workspaceLogoUrlForClients(env, {
+          id: ws.id,
+          logoS3Key: ws.logoS3Key,
+          logoUrl: ws.logoUrl,
+        }),
         description: ws.description,
         website: ws.website,
       },
@@ -257,7 +303,11 @@ export function v1Routes(
       workspace: {
         name: ws.name,
         slug: ws.slug,
-        logoUrl: ws.logoUrl,
+        logoUrl: workspaceLogoUrlForClients(env, {
+          id: ws.id,
+          logoS3Key: ws.logoS3Key,
+          logoUrl: ws.logoUrl,
+        }),
         description: ws.description,
         website: ws.website,
       },
@@ -290,7 +340,7 @@ export function v1Routes(
       return c.json({
         ok: true,
         alreadyMember: true,
-        workspace: workspaceJson(inv.workspace),
+        workspace: workspaceJson(inv.workspace, env),
       });
     }
 
@@ -312,7 +362,7 @@ export function v1Routes(
       metadata: { via: "invite_link" },
     });
     const ws = await prisma.workspace.findUniqueOrThrow({ where: { id: inv.workspaceId } });
-    return c.json({ ok: true, workspace: workspaceJson(ws) });
+    return c.json({ ok: true, workspace: workspaceJson(ws, env) });
   });
 
   r.post("/email-invites/:token/accept", needUser, async (c) => {
@@ -365,7 +415,7 @@ export function v1Routes(
         });
       }
       const ws = await prisma.workspace.findUniqueOrThrow({ where: { id: inv.workspaceId } });
-      return c.json({ ok: true, alreadyMember: true, workspace: workspaceJson(ws) });
+      return c.json({ ok: true, alreadyMember: true, workspace: workspaceJson(ws, env) });
     }
 
     const count = await prisma.workspaceMember.count({ where: { workspaceId: inv.workspaceId } });
@@ -402,7 +452,7 @@ export function v1Routes(
       metadata: { via: "email_invite", email: inv.email },
     });
     const ws = await prisma.workspace.findUniqueOrThrow({ where: { id: inv.workspaceId } });
-    return c.json({ ok: true, workspace: workspaceJson(ws) });
+    return c.json({ ok: true, workspace: workspaceJson(ws, env) });
   });
 
   r.get("/me", needUser, async (c) => {
@@ -427,11 +477,61 @@ export function v1Routes(
       user,
       workspaces: memberships.map((m) => ({
         ...m,
-        workspace: workspaceJson(m.workspace),
+        workspace: workspaceJson(m.workspace, env),
         projectCount: projectCountByWorkspace.get(m.workspaceId) ?? 0,
         maxProjects: MAX_WORKSPACE_PROJECTS,
       })),
     });
+  });
+
+  r.get("/me/notifications", needUser, async (c) => {
+    const userId = c.get("user").id;
+    const limitRaw = c.req.query("limit");
+    const limit = Math.min(50, Math.max(1, limitRaw ? Number(limitRaw) || 30 : 30));
+    const [items, unreadCount] = await Promise.all([
+      prisma.userNotification.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        include: { actor: { select: { id: true, name: true, email: true, image: true } } },
+      }),
+      prisma.userNotification.count({ where: { userId, readAt: null } }),
+    ]);
+    return c.json({
+      unreadCount,
+      items: items.map((n) => ({
+        id: n.id,
+        kind: n.kind,
+        title: n.title,
+        body: n.body,
+        href: n.href,
+        readAt: n.readAt?.toISOString() ?? null,
+        createdAt: n.createdAt.toISOString(),
+        actor: n.actor,
+      })),
+    });
+  });
+
+  r.patch("/me/notifications/read", needUser, async (c) => {
+    const body = z
+      .object({ ids: z.array(z.string()).min(1).max(100) })
+      .safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+    const userId = c.get("user").id;
+    const result = await prisma.userNotification.updateMany({
+      where: { userId, id: { in: body.data.ids }, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return c.json({ updated: result.count });
+  });
+
+  r.post("/me/notifications/read-all", needUser, async (c) => {
+    const userId = c.get("user").id;
+    await prisma.userNotification.updateMany({
+      where: { userId, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return c.json({ ok: true });
   });
 
   r.post("/workspaces", needUser, async (c) => {
@@ -454,7 +554,7 @@ export function v1Routes(
       actorUserId: c.get("user").id,
       entityId: ws.id,
     });
-    return c.json(workspaceJson(ws));
+    return c.json(workspaceJson(ws, env));
   });
 
   r.get("/workspaces/:workspaceId", needUser, async (c) => {
@@ -464,7 +564,7 @@ export function v1Routes(
       include: { workspace: true },
     });
     if (!m) return c.json({ error: "Forbidden" }, 403);
-    return c.json(workspaceJson(m.workspace));
+    return c.json(workspaceJson(m.workspace, env));
   });
 
   r.patch("/workspaces/:workspaceId", needUser, async (c) => {
@@ -518,6 +618,7 @@ export function v1Routes(
       name?: string;
       slug?: string;
       logoUrl?: string | null;
+      logoS3Key?: string | null;
       description?: string | null;
       website?: string | null;
     } = {};
@@ -542,13 +643,17 @@ export function v1Routes(
         const derived = faviconUrlFromHostname(host);
         if (!finalLogoCandidate) {
           data.logoUrl = derived;
+          data.logoS3Key = null;
         } else if (isGoogleFaviconUrl(finalLogoCandidate)) {
           data.logoUrl = derived;
+          data.logoS3Key = null;
         } else {
           data.logoUrl = finalLogoCandidate;
+          data.logoS3Key = null;
         }
       } else if (nextLogo !== undefined) {
         data.logoUrl = nextLogo;
+        data.logoS3Key = null;
       }
     }
 
@@ -558,8 +663,72 @@ export function v1Routes(
       where: { id: workspaceId },
       data,
     });
-    return c.json(workspaceJson(ws));
+    return c.json(workspaceJson(ws, env));
   });
+
+  r.post(
+    "/workspaces/:workspaceId/logo",
+    needUser,
+    bodyLimit({
+      maxSize: 3 * 1024 * 1024,
+      onError: (c) => c.json({ error: "Payload too large" }, 413),
+    }),
+    async (c) => {
+      const workspaceId = c.req.param("workspaceId")!;
+      const admin = await prisma.workspaceMember.findFirst({
+        where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      });
+      if (!admin) return c.json({ error: "Forbidden" }, 403);
+      let parsed: Record<string, string | File>;
+      try {
+        parsed = await c.req.parseBody();
+      } catch {
+        return c.json({ error: "Invalid multipart body" }, 400);
+      }
+      const raw = parsed["file"];
+      const file = Array.isArray(raw) ? raw[0] : raw;
+      if (!file || typeof file === "string" || !(file instanceof File)) {
+        return c.json({ error: "Missing file" }, 400);
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        return c.json({ error: "Logo must be 2 MB or smaller" }, 413);
+      }
+      const allowed = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+      const ct = (file.type || "").toLowerCase();
+      if (!allowed.includes(ct as (typeof allowed)[number])) {
+        return c.json({ error: "Use PNG, JPEG, WebP, or GIF" }, 400);
+      }
+      const ext =
+        ct === "image/png"
+          ? "png"
+          : ct === "image/jpeg"
+            ? "jpg"
+            : ct === "image/webp"
+              ? "webp"
+              : "gif";
+      const key = `ws/${workspaceId}/branding/logo.${ext}`;
+      const existing = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { logoS3Key: true },
+      });
+      if (existing?.logoS3Key && existing.logoS3Key !== key) {
+        await deleteObject(env, existing.logoS3Key);
+      }
+      const buf = Buffer.from(await file.arrayBuffer());
+      const put = await putObjectBuffer(env, key, buf, ct);
+      if (!put.ok) {
+        if (put.error === "S3 not configured") {
+          return c.json({ error: "File storage is not configured" }, 503);
+        }
+        return c.json({ error: put.error }, 502);
+      }
+      const ws = await prisma.workspace.update({
+        where: { id: workspaceId },
+        data: { logoS3Key: key, logoUrl: null },
+      });
+      return c.json(workspaceJson(ws, env));
+    },
+  );
 
   r.get("/workspaces/:workspaceId/invites", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
@@ -2328,7 +2497,7 @@ export function v1Routes(
     }));
 
     return c.json({
-      workspace: workspaceJson(m.workspace),
+      workspace: workspaceJson(m.workspace, env),
       projectCount: projects,
       fileCount,
       memberCount,
@@ -2426,6 +2595,44 @@ export function v1Routes(
     );
   });
 
+  /** 14-day activity trend scoped to this project (`ActivityLog.projectId`). */
+  r.get("/projects/:projectId/dashboard", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const access = await loadProjectForMember(projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const gate = requirePro(access.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+    const workspaceId = access.project.workspaceId;
+
+    const start14 = new Date();
+    start14.setUTCDate(start14.getUTCDate() - 13);
+    start14.setUTCHours(0, 0, 0, 0);
+
+    const activityForTrend = await prisma.activityLog.findMany({
+      where: { workspaceId, projectId, createdAt: { gte: start14 } },
+      select: { createdAt: true },
+    });
+
+    const dayKeys: string[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - i);
+      d.setUTCHours(0, 0, 0, 0);
+      dayKeys.push(d.toISOString().slice(0, 10));
+    }
+    const byDay = new Map(dayKeys.map((k) => [k, 0]));
+    for (const row of activityForTrend) {
+      const key = row.createdAt.toISOString().slice(0, 10);
+      if (byDay.has(key)) byDay.set(key, (byDay.get(key) ?? 0) + 1);
+    }
+    const activityLast14Days = dayKeys.map((date) => ({
+      date,
+      count: byDay.get(date) ?? 0,
+    }));
+
+    return c.json({ activityLast14Days });
+  });
+
   r.get("/projects/:projectId/team", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const res = await loadProjectForMember(projectId, c.get("user").id);
@@ -2436,7 +2643,7 @@ export function v1Routes(
     const [wsMembers, pmRows, pressure] = await Promise.all([
       prisma.workspaceMember.findMany({
         where: { workspaceId },
-        include: { user: { select: { id: true, name: true, email: true } } },
+        include: { user: { select: { id: true, name: true, email: true, image: true } } },
         orderBy: { createdAt: "asc" },
       }),
       prisma.projectMember.findMany({
@@ -2451,6 +2658,7 @@ export function v1Routes(
         userId: m.userId,
         name: m.user.name,
         email: m.user.email,
+        image: m.user.image,
         workspaceRole: m.role,
       })),
       pmRows,
@@ -2464,6 +2672,7 @@ export function v1Routes(
         userId: m.userId,
         name: m.name,
         email: m.email,
+        image: m.image,
         workspaceRole: m.workspaceRole,
         access: m.access,
         canRemoveFromProject: m.canRemoveFromProject,
@@ -2635,126 +2844,8 @@ export function v1Routes(
     return c.json(projectRowJson(updated));
   });
 
-  r.get("/projects/:projectId/rfis", needUser, async (c) => {
-    const projectId = c.req.param("projectId")!;
-    const res = await loadProjectForMember(projectId, c.get("user").id);
-    if ("error" in res) return c.json({ error: res.error }, res.status);
-    const list = await prisma.rfi.findMany({
-      where: { projectId },
-      orderBy: { updatedAt: "desc" },
-    });
-    return c.json(
-      list.map((row) => ({
-        ...row,
-        dueDate: row.dueDate?.toISOString() ?? null,
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-      })),
-    );
-  });
-
-  r.post("/projects/:projectId/rfis", needUser, async (c) => {
-    const projectId = c.req.param("projectId")!;
-    const res = await loadProjectForMember(projectId, c.get("user").id);
-    if ("error" in res) return c.json({ error: res.error }, res.status);
-    const gate = requirePro(res.project.workspace);
-    if (gate) return c.json({ error: gate.error }, gate.status);
-    const body = z
-      .object({
-        title: z.string().min(1).max(500),
-        description: z.string().max(5000).optional(),
-        status: z.nativeEnum(RfiStatus).optional(),
-        fromDiscipline: z.string().max(120).optional(),
-        dueDate: z.string().datetime().optional().nullable(),
-        risk: z.enum(["low", "med", "high"]).optional().nullable(),
-      })
-      .safeParse(await c.req.json());
-    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
-    const row = await prisma.rfi.create({
-      data: {
-        projectId,
-        title: body.data.title,
-        description: body.data.description,
-        status: body.data.status ?? RfiStatus.OPEN,
-        fromDiscipline: body.data.fromDiscipline,
-        dueDate: body.data.dueDate ? new Date(body.data.dueDate) : null,
-        risk: body.data.risk ?? null,
-      },
-    });
-    await logActivity(res.project.workspaceId, ActivityType.RFI_CREATED, {
-      actorUserId: c.get("user").id,
-      entityId: row.id,
-      projectId,
-      metadata: { title: row.title },
-    });
-    return c.json({
-      ...row,
-      dueDate: row.dueDate?.toISOString() ?? null,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    });
-  });
-
-  r.patch("/projects/:projectId/rfis/:rfiId", needUser, async (c) => {
-    const projectId = c.req.param("projectId")!;
-    const rfiId = c.req.param("rfiId")!;
-    const res = await loadProjectForMember(projectId, c.get("user").id);
-    if ("error" in res) return c.json({ error: res.error }, res.status);
-    const gate = requirePro(res.project.workspace);
-    if (gate) return c.json({ error: gate.error }, gate.status);
-    const existing = await prisma.rfi.findFirst({ where: { id: rfiId, projectId } });
-    if (!existing) return c.json({ error: "Not found" }, 404);
-    const body = z
-      .object({
-        title: z.string().min(1).max(500).optional(),
-        description: z.string().max(5000).nullable().optional(),
-        status: z.nativeEnum(RfiStatus).optional(),
-        fromDiscipline: z.string().max(120).nullable().optional(),
-        dueDate: z.string().datetime().nullable().optional(),
-        risk: z.enum(["low", "med", "high"]).nullable().optional(),
-      })
-      .safeParse(await c.req.json());
-    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
-    const { dueDate, ...rfiRest } = body.data;
-    const row = await prisma.rfi.update({
-      where: { id: rfiId },
-      data: {
-        ...rfiRest,
-        dueDate: dueDate === undefined ? undefined : dueDate === null ? null : new Date(dueDate),
-      },
-    });
-    await logActivity(res.project.workspaceId, ActivityType.RFI_UPDATED, {
-      actorUserId: c.get("user").id,
-      entityId: row.id,
-      projectId,
-      metadata: { title: row.title },
-    });
-    return c.json({
-      ...row,
-      dueDate: row.dueDate?.toISOString() ?? null,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    });
-  });
-
-  r.delete("/projects/:projectId/rfis/:rfiId", needUser, async (c) => {
-    const projectId = c.req.param("projectId")!;
-    const rfiId = c.req.param("rfiId")!;
-    const res = await loadProjectForMember(projectId, c.get("user").id);
-    if ("error" in res) return c.json({ error: res.error }, res.status);
-    const gate = requirePro(res.project.workspace);
-    if (gate) return c.json({ error: gate.error }, gate.status);
-    const existing = await prisma.rfi.findFirst({ where: { id: rfiId, projectId } });
-    if (!existing) return c.json({ error: "Not found" }, 404);
-    await logActivitySafe(res.project.workspaceId, ActivityType.RFI_DELETED, {
-      actorUserId: c.get("user").id,
-      entityId: existing.id,
-      projectId,
-      metadata: { title: existing.title },
-    });
-    await prisma.rfi.delete({ where: { id: rfiId } });
-    return c.json({ ok: true });
-  });
+  registerRfiRoutes(r, needUser, env);
+  registerProposalRoutes(r, needUser, env);
 
   r.get("/projects/:projectId/punch", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;

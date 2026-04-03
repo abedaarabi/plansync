@@ -45,6 +45,25 @@ ${input.viewerUrl}
 `;
 }
 
+/** In-app link (path + query only) for notifications / client navigation. */
+export function buildViewerIssuePath(input: {
+  issueId: string;
+  fileId: string;
+  fileVersionId: string;
+  projectId: string;
+  fileName: string;
+  version: number;
+}): string {
+  const q = new URLSearchParams();
+  q.set("fileId", input.fileId);
+  q.set("name", input.fileName);
+  q.set("projectId", input.projectId);
+  q.set("fileVersionId", input.fileVersionId);
+  q.set("version", String(input.version));
+  q.set("issueId", input.issueId);
+  return `/viewer?${q.toString()}`;
+}
+
 export function buildViewerIssueUrl(
   env: Env,
   input: {
@@ -57,12 +76,5 @@ export function buildViewerIssueUrl(
   },
 ): string {
   const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
-  const q = new URLSearchParams();
-  q.set("fileId", input.fileId);
-  q.set("name", input.fileName);
-  q.set("projectId", input.projectId);
-  q.set("fileVersionId", input.fileVersionId);
-  q.set("version", String(input.version));
-  q.set("issueId", input.issueId);
-  return `${base}/viewer?${q.toString()}`;
+  return `${base}${buildViewerIssuePath(input)}`;
 }

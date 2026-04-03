@@ -32,8 +32,8 @@ Open in viewer:
 ${input.viewerUrl}
 `;
 }
-export function buildViewerIssueUrl(env, input) {
-    const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
+/** In-app link (path + query only) for notifications / client navigation. */
+export function buildViewerIssuePath(input) {
     const q = new URLSearchParams();
     q.set("fileId", input.fileId);
     q.set("name", input.fileName);
@@ -41,5 +41,9 @@ export function buildViewerIssueUrl(env, input) {
     q.set("fileVersionId", input.fileVersionId);
     q.set("version", String(input.version));
     q.set("issueId", input.issueId);
-    return `${base}/viewer?${q.toString()}`;
+    return `/viewer?${q.toString()}`;
+}
+export function buildViewerIssueUrl(env, input) {
+    const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
+    return `${base}${buildViewerIssuePath(input)}`;
 }

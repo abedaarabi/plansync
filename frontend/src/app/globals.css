@@ -618,6 +618,19 @@ body {
   display: none;
 }
 
+/* Tiptap @mention: strip default tippy box so only our panel shows */
+.tippy-box[data-theme~="plansync-mention"] {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+}
+.tippy-box[data-theme~="plansync-mention"] .tippy-content {
+  padding: 0;
+}
+
 @media print {
   .no-print {
     display: none !important;

@@ -24,6 +24,8 @@ const schema = z.object({
     RESEND_API_KEY: z.string().optional(),
     RESEND_FROM: z.string().optional(),
     PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+    /** Optional secret for POST /api/v1/internal/rfi-overdue-reminders (x-plansync-cron-secret). */
+    INTERNAL_CRON_SECRET: z.string().optional(),
     /** OAuth — optional; set both id + secret to enable each provider */
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
@@ -31,6 +33,14 @@ const schema = z.object({
     GITHUB_CLIENT_SECRET: z.string().optional(),
     SLACK_CLIENT_ID: z.string().optional(),
     SLACK_CLIENT_SECRET: z.string().optional(),
+    /** Google Gemini (Sheet AI). Use `GEMINI_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY`. */
+    GEMINI_API_KEY: z.string().optional(),
+    GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
+    /**
+     * Vision model for Sheet AI. Default is Flash (~much cheaper than Pro for image+text).
+     * Use `gemini-2.5-pro` when you need maximum TOC/region accuracy (expect roughly several× higher cost).
+     */
+    GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
 });
 export function buildCorsAllowList(env) {
     const list = [env.CORS_ORIGIN, env.PUBLIC_APP_URL];
@@ -52,4 +62,12 @@ export function loadEnv() {
         throw new Error("Invalid environment variables");
     }
     return parsed.data;
+}
+/** Resolved API key for Gemini (Sheet AI). */
+export function resolveGeminiApiKey(env) {
+    const a = env.GEMINI_API_KEY?.trim();
+    if (a)
+        return a;
+    const b = env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
+    return b || undefined;
 }

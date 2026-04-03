@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Gauge,
   MessageSquareQuote,
+  Play,
   Target,
 } from "lucide-react";
 import {
@@ -19,7 +20,10 @@ import {
   fetchIssuesForProject,
   fetchProjectRfis,
   fetchProjectPunch,
+  fetchProjectDashboard,
 } from "@/lib/api-client";
+import { DashboardActivityChart } from "@/components/enterprise/DashboardActivityChart";
+import { ProjectHomeOverviewCharts } from "@/components/enterprise/ProjectHomeOverviewCharts";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { PdfFileIcon } from "@/components/icons/PdfFileIcon";
@@ -58,6 +62,20 @@ function formatDateLabel(iso?: string | null): string {
     month: "short",
     day: "numeric",
   });
+}
+
+/** Sort key: prefer last viewer open, then upload/update, then created. */
+function fileRecencySortKey(f: CloudFile): number {
+  const iso = f.lastOpenedAt ?? f.updatedAt ?? f.createdAt;
+  if (!iso) return 0;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+function fileActivityLabel(f: CloudFile, nowMs: number): string | null {
+  const iso = f.lastOpenedAt ?? f.updatedAt;
+  if (!iso) return null;
+  return relativeTime(iso, nowMs);
 }
 
 type Props = {
@@ -108,6 +126,12 @@ export function ProjectDashboardClient({ projectId }: Props) {
     enabled: Boolean(projectId && isPro),
   });
 
+  const { data: projectDash, isPending: projectDashPending } = useQuery({
+    queryKey: qk.projectDashboard(projectId),
+    queryFn: () => fetchProjectDashboard(projectId),
+    enabled: Boolean(projectId && isPro),
+  });
+
   const loading = ctxLoading || projPending;
 
   if (loading) {
@@ -128,7 +152,10 @@ export function ProjectDashboardClient({ projectId }: Props) {
     );
   }
 
-  const openRfis = rfis.filter((r) => r.status === "OPEN" || r.status === "open").length;
+  const openRfis = rfis.filter((r) => {
+    const s = r.status.toUpperCase();
+    return s === "OPEN" || s === "IN_REVIEW";
+  }).length;
   const openIssues = issues.filter((i) => i.status !== "closed" && i.status !== "CLOSED").length;
   const highPriorityIssues = issues.filter((i) => i.priority?.toLowerCase() === "high").length;
   const overdueIssues = issues.filter((i) => {
@@ -182,12 +209,13 @@ export function ProjectDashboardClient({ projectId }: Props) {
   ];
 
   const recentFiles = [...project.files]
-    .sort((a, b) => {
-      const aDate = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      const bDate = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      return bDate - aDate;
-    })
+    .sort((a, b) => fileRecencySortKey(b) - fileRecencySortKey(a))
     .slice(0, 5);
+
+  const continueFile =
+    recentFiles[0]?.lastOpenedAt != null && recentFiles[0].lastOpenedAt !== ""
+      ? recentFiles[0]
+      : null;
 
   const recentIssues = [...punchItems]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
@@ -278,6 +306,43 @@ export function ProjectDashboardClient({ projectId }: Props) {
         ))}
       </div>
 
+      <ProjectHomeOverviewCharts
+        projectId={projectId}
+        issues={issues}
+        punchItems={punchItems}
+        rfis={rfis}
+      />
+
+      <section
+        className="border border-[#E2E8F0] bg-white p-5 sm:p-6"
+        style={{
+          borderRadius: "12px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+        }}
+      >
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
+            Project activity
+          </h2>
+          <p className="text-[11px] text-[#94A3B8]">
+            Audit events tied to this project (last 14 days)
+          </p>
+        </div>
+        <div className="mt-4">
+          {projectDashPending && !projectDash ? (
+            <div className="flex h-44 items-center justify-center rounded-lg border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-sm text-[var(--enterprise-text-muted)]">
+              Loading activity…
+            </div>
+          ) : (
+            <DashboardActivityChart
+              data={projectDash?.activityLast14Days ?? []}
+              ariaLabel="14-day project activity chart"
+              caption="Daily project events (blue) · 7-day average (green)"
+            />
+          )}
+        </div>
+      </section>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <section
           className="border border-[#E2E8F0] bg-white p-6"
@@ -287,9 +352,14 @@ export function ProjectDashboardClient({ projectId }: Props) {
           }}
         >
           <div className="flex items-start justify-between gap-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
-              Recent Files
-            </h2>
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
+                Recently opened
+              </h2>
+              <p className="mt-1 text-[11px] text-[#94A3B8]">
+                Last open time is shared for the project (any teammate)
+              </p>
+            </div>
             <Link
               href={`/projects/${projectId}/files`}
               className="shrink-0 text-[12px] font-semibold text-[#2563EB] transition hover:text-[#1d4ed8] hover:underline"
@@ -297,8 +367,30 @@ export function ProjectDashboardClient({ projectId }: Props) {
               View all
             </Link>
           </div>
+          {continueFile ? (
+            <button
+              type="button"
+              onClick={() => openFile(continueFile)}
+              className="mt-4 flex w-full items-center gap-3 rounded-xl border border-[#2563EB]/25 bg-[#EFF6FF] px-4 py-3 text-left transition hover:border-[#2563EB]/40 hover:bg-[#DBEAFE]/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/35"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#2563EB] shadow-sm">
+                <Play className="h-5 w-5" fill="currentColor" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11px] font-semibold uppercase tracking-wide text-[#2563EB]">
+                  Continue viewing
+                </span>
+                <span className="mt-0.5 block truncate text-sm font-semibold text-[#0F172A]">
+                  {continueFile.name}
+                </span>
+              </span>
+              <span className="shrink-0 text-xs text-[#64748B]">
+                {continueFile.lastOpenedAt ? relativeTime(continueFile.lastOpenedAt, nowMs) : ""}
+              </span>
+            </button>
+          ) : null}
           {recentFiles.length > 0 ? (
-            <ul className="mt-4 divide-y divide-[#E2E8F0]">
+            <ul className={`divide-y divide-[#E2E8F0] ${continueFile ? "mt-3" : "mt-4"}`}>
               {recentFiles.map((f) => (
                 <li key={f.id}>
                   <button
@@ -316,7 +408,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
                       {f.name}
                     </span>
                     <span className="shrink-0 text-xs text-[#94A3B8]">
-                      {f.updatedAt ? relativeTime(f.updatedAt, nowMs) : "—"}
+                      {fileActivityLabel(f, nowMs) ?? "—"}
                     </span>
                   </button>
                 </li>

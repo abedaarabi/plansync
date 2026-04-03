@@ -250,7 +250,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                   </span>
                 )}
                 <span className="rounded-full bg-[var(--enterprise-bg)] px-2 py-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
-                  {m.access === "project_only" ? "Project only" : "Workspace"}
+                  {m.access === "project" ? "Project only" : "Workspace"}
                 </span>
                 {isAdmin ? (
                   <select

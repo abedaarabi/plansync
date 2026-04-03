@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 
 type Point = { date: string; count: number };
 
 type Props = {
   data: Point[];
   className?: string;
+  /** Defaults to workspace-oriented copy when omitted. */
+  ariaLabel?: string;
+  caption?: string;
 };
 
 function formatDay(isoDate: string): string {
@@ -26,7 +29,13 @@ function rolling7Avg(data: Point[]): number[] {
   });
 }
 
-export function DashboardActivityChart({ data, className = "" }: Props) {
+export function DashboardActivityChart({
+  data,
+  className = "",
+  ariaLabel = "14-day workspace activity chart",
+  caption = "Daily events (blue) · 7-day average (green)",
+}: Props) {
+  const gradId = useId().replace(/:/g, "");
   const { lineD, avgD, areaD, points, w, h, pad } = useMemo(() => {
     const w = 520;
     const h = 168;
@@ -86,14 +95,14 @@ export function DashboardActivityChart({ data, className = "" }: Props) {
         viewBox={`0 0 ${w} ${h}`}
         className="max-h-[200px] h-auto w-full text-[var(--enterprise-primary)]"
         role="img"
-        aria-label="14-day workspace activity chart"
+        aria-label={ariaLabel}
       >
         <defs>
-          <linearGradient id="dash-area" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`${gradId}-dash-area`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="rgb(37 99 235)" stopOpacity="0.2" />
             <stop offset="100%" stopColor="rgb(37 99 235)" stopOpacity="0" />
           </linearGradient>
-          <linearGradient id="dash-line" x1="0" y1="0" x2="1" y2="0">
+          <linearGradient id={`${gradId}-dash-line`} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor="rgb(96 165 250)" />
             <stop offset="100%" stopColor="rgb(37 99 235)" />
           </linearGradient>
@@ -115,12 +124,12 @@ export function DashboardActivityChart({ data, className = "" }: Props) {
           );
         })}
 
-        <path d={areaD} fill="url(#dash-area)" />
+        <path d={areaD} fill={`url(#${gradId}-dash-area)`} />
 
         <path
           d={lineD}
           fill="none"
-          stroke="url(#dash-line)"
+          stroke={`url(#${gradId}-dash-line)`}
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -165,7 +174,7 @@ export function DashboardActivityChart({ data, className = "" }: Props) {
         })}
 
         <text x={pad.l} y={14} fill="var(--enterprise-text-muted)" style={{ fontSize: "10px" }}>
-          Daily events (blue) · 7-day average (green)
+          {caption}
         </text>
       </svg>
     </div>

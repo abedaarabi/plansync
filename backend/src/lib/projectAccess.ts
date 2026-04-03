@@ -1,4 +1,5 @@
 import type { Project, Workspace } from "@prisma/client";
+import { WorkspaceRole } from "@prisma/client";
 import { prisma } from "./prisma.js";
 
 export type ProjectForMember =
@@ -62,4 +63,12 @@ export async function assertUserAssignableToProject(
     return { error: "Assignee does not have access to this project", status: 400 };
   }
   return { ok: true };
+}
+
+export async function isWorkspaceAdmin(workspaceId: string, userId: string): Promise<boolean> {
+  const m = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId, userId } },
+    select: { role: true },
+  });
+  return m?.role === WorkspaceRole.ADMIN;
 }

@@ -8,8 +8,8 @@ type Props = { params: Promise<{ projectId: string; rfiId: string }> };
 export default async function RfiDetailPage({ params }: Props) {
   const { projectId, rfiId } = await params;
   return (
-    <div className="enterprise-animate-in p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-4xl">
+    <div className="enterprise-animate-in p-4 pb-10 sm:p-6 sm:pb-12 lg:p-8">
+      <div className="mx-auto max-w-6xl">
         <RfiDetailClient projectId={projectId} rfiId={rfiId} />
       </div>
     </div>

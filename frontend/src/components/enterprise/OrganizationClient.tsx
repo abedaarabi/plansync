@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { patchWorkspace } from "@/lib/api-client";
+import { patchWorkspace, uploadWorkspaceLogo } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import type { MeResponse } from "@/types/enterprise";
 import {
@@ -34,6 +34,7 @@ export function OrganizationClient() {
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [websiteFieldError, setWebsiteFieldError] = useState<string | null>(null);
   const [websitePreviewHost, setWebsitePreviewHost] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   const [tab, setTabState] = useState<OrgTab>("organization");
 
@@ -239,8 +240,8 @@ export function OrganizationClient() {
                   Website
                 </label>
                 <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
-                  We check the URL and use your site&apos;s favicon as the workspace logo (unless
-                  you set a custom logo below).
+                  We resolve your site&apos;s favicon (Google) as the logo when you don&apos;t
+                  upload an image. The same branding appears on client proposal pages and emails.
                 </p>
                 <input
                   value={website}
@@ -298,11 +299,48 @@ export function OrganizationClient() {
               </div>
               <div>
                 <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
+                  Upload logo
+                </label>
+                <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
+                  PNG, JPEG, WebP, or GIF — max 2 MB. Replaces the favicon until you clear it via
+                  URL field or save website-only branding.
+                </p>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="mt-1.5 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2"
+                  disabled={logoUploading}
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!f || !wid) return;
+                    setLogoUploading(true);
+                    setMsg(null);
+                    try {
+                      await uploadWorkspaceLogo(wid, f);
+                      await queryClient.invalidateQueries({ queryKey: qk.me() });
+                      setLogoUrl("");
+                      setMsg({
+                        type: "ok",
+                        text: "Logo uploaded. It appears on proposals and in the sidebar.",
+                      });
+                    } catch (err) {
+                      setMsg({
+                        type: "err",
+                        text: err instanceof Error ? err.message : "Upload failed.",
+                      });
+                    } finally {
+                      setLogoUploading(false);
+                    }
+                  }}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
                   Logo URL (optional)
                 </label>
                 <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
-                  Override the favicon with any image URL. Leave empty to keep using the favicon
-                  from your website.
+                  Override with any public image URL (replaces an uploaded file when you save).
                 </p>
                 <input
                   value={logoUrl}

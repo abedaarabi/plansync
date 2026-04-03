@@ -1,12 +1,13 @@
 import { z } from "zod";
-import { ActivityType, IssuePriority, IssueStatus } from "@prisma/client";
+import { ActivityType, IssuePriority, IssueStatus, RfiStatus } from "@prisma/client";
 import { Resend } from "resend";
 import { prisma } from "../../lib/prisma.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectForMember, assertUserAssignableToProject } from "../../lib/projectAccess.js";
 import { logActivity } from "../../lib/activity.js";
 import { inviteFromAddress } from "../../lib/inviteEmail.js";
-import { buildIssueAssignedEmailHtml, buildIssueAssignedEmailText, buildViewerIssueUrl, } from "../../lib/issueAssignEmail.js";
+import { buildIssueAssignedEmailHtml, buildIssueAssignedEmailText, buildViewerIssuePath, buildViewerIssueUrl, } from "../../lib/issueAssignEmail.js";
+import { createUserNotifications } from "../../lib/userNotifications.js";
 function requirePro(workspace) {
     if (!isWorkspacePro(workspace)) {
         return { error: "Pro subscription required", status: 402 };
@@ -23,6 +24,12 @@ const issueInclude = {
     creator: { select: { id: true, name: true, email: true } },
     file: { select: { name: true } },
     fileVersion: { select: { version: true } },
+    rfiLinks: {
+        include: {
+            rfi: { select: { id: true, rfiNumber: true, title: true, status: true } },
+        },
+        orderBy: { createdAt: "asc" },
+    },
 };
 const CARRY_FORWARD_META_KEY = "__carryForwardFromFileVersionId";
 function issueRowJson(row) {
@@ -63,6 +70,12 @@ function issueRowJson(row) {
             : null,
         file: { name: row.file.name },
         fileVersion: { version: row.fileVersion.version },
+        linkedRfis: row.rfiLinks.map((l) => ({
+            id: l.rfi.id,
+            rfiNumber: l.rfi.rfiNumber,
+            title: l.rfi.title,
+            status: l.rfi.status,
+        })),
     };
 }
 function asObject(v) {
@@ -176,6 +189,9 @@ export function registerIssuesRoutes(r, needUser, env) {
             dueDate: optionalYmd,
             location: z.string().max(500).nullable().optional(),
             pageNumber: z.number().int().min(1).optional(),
+            /** Link new issue to one or more project RFIs (merged with `rfiId` if both sent). */
+            rfiId: z.string().optional(),
+            rfiIds: z.array(z.string()).max(50).optional(),
         })
             .safeParse(await c.req.json());
         if (!body.success)
@@ -200,6 +216,20 @@ export function registerIssuesRoutes(r, needUser, env) {
         if (await fileVersionWriteBlocked(fv.id, c.get("user").id)) {
             return c.json({ error: "File is locked by another user" }, 409);
         }
+        const rfiIdsToLink = [
+            ...new Set([...(body.data.rfiIds ?? []), ...(body.data.rfiId ? [body.data.rfiId] : [])]),
+        ];
+        if (rfiIdsToLink.length > 0) {
+            const linkRfis = await prisma.rfi.findMany({
+                where: { id: { in: rfiIdsToLink }, projectId: file.projectId },
+            });
+            if (linkRfis.length !== rfiIdsToLink.length) {
+                return c.json({ error: "One or more RFIs were not found in this project" }, 400);
+            }
+            if (linkRfis.some((r) => r.status === RfiStatus.CLOSED)) {
+                return c.json({ error: "Cannot link a closed RFI" }, 400);
+            }
+        }
         if (body.data.assigneeId) {
             const a = await assertUserAssignableToProject(body.data.assigneeId, file.projectId, body.data.workspaceId);
             if ("error" in a)
@@ -215,27 +245,56 @@ export function registerIssuesRoutes(r, needUser, env) {
             : body.data.dueDate === null
                 ? null
                 : dateFromYmd(body.data.dueDate);
-        const issue = await prisma.issue.create({
-            data: {
-                workspaceId: body.data.workspaceId,
-                projectId: file.projectId,
-                fileId: body.data.fileId,
-                fileVersionId: body.data.fileVersionId,
-                title: body.data.title,
-                description: body.data.description,
-                annotationId: body.data.annotationId,
-                assigneeId: body.data.assigneeId,
-                creatorId: c.get("user").id,
-                status: body.data.status ?? IssueStatus.OPEN,
-                priority: body.data.priority ?? IssuePriority.MEDIUM,
-                ...(startDate !== undefined ? { startDate } : {}),
-                ...(dueDate !== undefined ? { dueDate } : {}),
-                ...(body.data.location !== undefined ? { location: body.data.location } : {}),
-                sheetName: file.name,
-                sheetVersion: fv.version,
-                ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
-            },
-            include: issueInclude,
+        const issue = await prisma.$transaction(async (tx) => {
+            const iss = await tx.issue.create({
+                data: {
+                    workspaceId: body.data.workspaceId,
+                    projectId: file.projectId,
+                    fileId: body.data.fileId,
+                    fileVersionId: body.data.fileVersionId,
+                    title: body.data.title,
+                    description: body.data.description,
+                    annotationId: body.data.annotationId,
+                    assigneeId: body.data.assigneeId,
+                    creatorId: c.get("user").id,
+                    status: body.data.status ?? IssueStatus.OPEN,
+                    priority: body.data.priority ?? IssuePriority.MEDIUM,
+                    ...(startDate !== undefined ? { startDate } : {}),
+                    ...(dueDate !== undefined ? { dueDate } : {}),
+                    ...(body.data.location !== undefined ? { location: body.data.location } : {}),
+                    sheetName: file.name,
+                    sheetVersion: fv.version,
+                    ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
+                },
+            });
+            if (rfiIdsToLink.length > 0) {
+                await tx.rfiIssueLink.createMany({
+                    data: rfiIdsToLink.map((rfiId) => ({ rfiId, issueId: iss.id })),
+                    skipDuplicates: true,
+                });
+                for (const rfiId of rfiIdsToLink) {
+                    const linkRfi = await tx.rfi.findUnique({
+                        where: { id: rfiId },
+                        select: { fileId: true, fileVersionId: true },
+                    });
+                    if (linkRfi && !linkRfi.fileId && !linkRfi.fileVersionId) {
+                        await tx.rfi.update({
+                            where: { id: rfiId },
+                            data: {
+                                fileId: iss.fileId,
+                                fileVersionId: iss.fileVersionId,
+                                pageNumber: iss.pageNumber,
+                                pinNormX: null,
+                                pinNormY: null,
+                            },
+                        });
+                    }
+                }
+            }
+            return tx.issue.findUniqueOrThrow({
+                where: { id: iss.id },
+                include: issueInclude,
+            });
         });
         await logActivity(body.data.workspaceId, ActivityType.ISSUE_CREATED, {
             actorUserId: c.get("user").id,
@@ -249,14 +308,15 @@ export function registerIssuesRoutes(r, needUser, env) {
         });
         const assignerName = actor?.name?.trim() || "Someone";
         if (issue.assigneeId && issue.assignee?.email) {
-            const viewerUrl = buildViewerIssueUrl(env, {
+            const viewerParams = {
                 issueId: issue.id,
                 fileId: issue.fileId,
                 fileVersionId: issue.fileVersionId,
                 projectId: issue.projectId,
                 fileName: issue.file.name,
                 version: issue.fileVersion.version,
-            });
+            };
+            const viewerUrl = buildViewerIssueUrl(env, viewerParams);
             void sendIssueAssignedEmail(env, {
                 assigneeEmail: issue.assignee.email,
                 assignerName,
@@ -264,6 +324,16 @@ export function registerIssuesRoutes(r, needUser, env) {
                 fileName: issue.file.name,
                 viewerUrl,
             }).catch((e) => console.error("[issue-email]", e));
+            void createUserNotifications({
+                workspaceId: issue.workspaceId,
+                projectId: issue.projectId,
+                recipientUserIds: [issue.assigneeId],
+                kind: "ISSUE_ASSIGNED",
+                title: `Assigned: ${issue.title.length > 120 ? `${issue.title.slice(0, 120)}…` : issue.title}`,
+                body: issue.file.name,
+                href: buildViewerIssuePath(viewerParams),
+                actorUserId: c.get("user").id,
+            }).catch((e) => console.error("[issue-notification]", e));
         }
         return c.json(issueRowJson(issue));
     });
@@ -425,6 +495,8 @@ export function registerIssuesRoutes(r, needUser, env) {
             dueDate: optionalYmdPatch,
             location: z.string().max(500).nullable().optional(),
             pageNumber: z.number().int().min(1).nullable().optional(),
+            /** Replace RFIs linked to this issue (same project). */
+            rfiIds: z.array(z.string()).max(50).optional(),
         })
             .safeParse(await c.req.json());
         if (!body.success)
@@ -454,23 +526,42 @@ export function registerIssuesRoutes(r, needUser, env) {
                 select: { version: true },
             }),
         ]);
-        const updated = await prisma.issue.update({
-            where: { id: issue.id },
-            data: {
-                sheetName: fileFresh?.name ?? issue.file.name,
-                sheetVersion: fvFresh?.version ?? issue.fileVersion.version,
-                ...(body.data.status !== undefined ? { status: body.data.status } : {}),
-                ...(body.data.title !== undefined ? { title: body.data.title } : {}),
-                ...(body.data.description !== undefined ? { description: body.data.description } : {}),
-                ...(nextAssigneeId !== undefined ? { assigneeId: nextAssigneeId } : {}),
-                ...(nextAnnotationId !== undefined ? { annotationId: nextAnnotationId } : {}),
-                ...(body.data.priority !== undefined ? { priority: body.data.priority } : {}),
-                ...(patchStart !== undefined ? { startDate: patchStart } : {}),
-                ...(patchDue !== undefined ? { dueDate: patchDue } : {}),
-                ...(body.data.location !== undefined ? { location: body.data.location } : {}),
-                ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
-            },
-            include: issueInclude,
+        const patchRfiIds = body.data.rfiIds !== undefined ? [...new Set(body.data.rfiIds)] : undefined;
+        if (patchRfiIds !== undefined && patchRfiIds.length > 0) {
+            const n = await prisma.rfi.count({
+                where: { id: { in: patchRfiIds }, projectId: issue.projectId },
+            });
+            if (n !== patchRfiIds.length) {
+                return c.json({ error: "One or more RFIs not found in this project" }, 400);
+            }
+        }
+        const updated = await prisma.$transaction(async (tx) => {
+            const u = await tx.issue.update({
+                where: { id: issue.id },
+                data: {
+                    sheetName: fileFresh?.name ?? issue.file.name,
+                    sheetVersion: fvFresh?.version ?? issue.fileVersion.version,
+                    ...(body.data.status !== undefined ? { status: body.data.status } : {}),
+                    ...(body.data.title !== undefined ? { title: body.data.title } : {}),
+                    ...(body.data.description !== undefined ? { description: body.data.description } : {}),
+                    ...(nextAssigneeId !== undefined ? { assigneeId: nextAssigneeId } : {}),
+                    ...(nextAnnotationId !== undefined ? { annotationId: nextAnnotationId } : {}),
+                    ...(body.data.priority !== undefined ? { priority: body.data.priority } : {}),
+                    ...(patchStart !== undefined ? { startDate: patchStart } : {}),
+                    ...(patchDue !== undefined ? { dueDate: patchDue } : {}),
+                    ...(body.data.location !== undefined ? { location: body.data.location } : {}),
+                    ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
+                },
+            });
+            if (patchRfiIds !== undefined) {
+                await tx.rfiIssueLink.deleteMany({ where: { issueId: issue.id } });
+                if (patchRfiIds.length > 0) {
+                    await tx.rfiIssueLink.createMany({
+                        data: patchRfiIds.map((rfiId) => ({ rfiId, issueId: issue.id })),
+                    });
+                }
+            }
+            return tx.issue.findUniqueOrThrow({ where: { id: u.id }, include: issueInclude });
         });
         await logActivity(issue.workspaceId, ActivityType.ISSUE_UPDATED, {
             actorUserId: c.get("user").id,
@@ -479,20 +570,21 @@ export function registerIssuesRoutes(r, needUser, env) {
             metadata: { title: updated.title },
         });
         const shouldNotifyAssignee = nextAssigneeId !== undefined && nextAssigneeId !== null && nextAssigneeId !== prevAssigneeId;
-        if (shouldNotifyAssignee && updated.assignee?.email) {
+        if (shouldNotifyAssignee && updated.assigneeId && updated.assignee?.email) {
             const actor = await prisma.user.findUnique({
                 where: { id: c.get("user").id },
                 select: { name: true },
             });
             const assignerName = actor?.name?.trim() || "Someone";
-            const viewerUrl = buildViewerIssueUrl(env, {
+            const viewerParams = {
                 issueId: updated.id,
                 fileId: updated.fileId,
                 fileVersionId: updated.fileVersionId,
                 projectId: updated.projectId,
                 fileName: updated.file.name,
                 version: updated.fileVersion.version,
-            });
+            };
+            const viewerUrl = buildViewerIssueUrl(env, viewerParams);
             void sendIssueAssignedEmail(env, {
                 assigneeEmail: updated.assignee.email,
                 assignerName,
@@ -500,6 +592,16 @@ export function registerIssuesRoutes(r, needUser, env) {
                 fileName: updated.file.name,
                 viewerUrl,
             }).catch((e) => console.error("[issue-email]", e));
+            void createUserNotifications({
+                workspaceId: updated.workspaceId,
+                projectId: updated.projectId,
+                recipientUserIds: [updated.assigneeId],
+                kind: "ISSUE_ASSIGNED",
+                title: `Assigned: ${updated.title.length > 120 ? `${updated.title.slice(0, 120)}…` : updated.title}`,
+                body: updated.file.name,
+                href: buildViewerIssuePath(viewerParams),
+                actorUserId: c.get("user").id,
+            }).catch((e) => console.error("[issue-notification]", e));
         }
         return c.json(issueRowJson(updated));
     });

@@ -4,6 +4,8 @@ export type WorkspaceMemberRow = {
   userId: string;
   name: string;
   email: string;
+  /** Profile image URL from auth (nullable). */
+  image: string | null;
   workspaceRole: WorkspaceRole;
 };
 

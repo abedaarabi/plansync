@@ -15,6 +15,7 @@ import {
   MessageSquareQuote,
   Package,
   Ruler,
+  FileSpreadsheet,
   ScrollText,
   Settings,
   UserRound,
@@ -27,6 +28,7 @@ import { fetchProjects, fetchWorkspaceMembers } from "@/lib/api-client";
 import { faviconUrlFromHostname, normalizeWorkspaceWebsite } from "@/lib/workspaceBranding";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { qk } from "@/lib/queryKeys";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 
 type EnterpriseSidebarProps = {
   mobileOpen: boolean;
@@ -90,7 +92,7 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
   const { primary, loading } = useEnterpriseWorkspace();
   const ws = primary?.workspace;
   const wid = ws?.id;
-  const isPro = ws?.subscriptionStatus === "active";
+  const isPro = isWorkspaceProClient(ws?.subscriptionStatus);
   const isAdmin = primary?.role === "ADMIN";
 
   const { data: projects = [] } = useQuery({
@@ -165,6 +167,13 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
           href: wid ? `/workspaces/${wid}/projects/${projectId}/takeoff` : "#",
           label: "Quantity Takeoff",
           icon: Ruler,
+        },
+        {
+          href: wid
+            ? `/workspaces/${wid}/projects/${projectId}/proposals`
+            : `/projects/${projectId}/proposals`,
+          label: "Proposals",
+          icon: FileSpreadsheet,
         },
         {
           href: `/projects/${projectId}/punch`,

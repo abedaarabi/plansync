@@ -12,6 +12,55 @@ export async function fetchMe(): Promise<MeResponse | null> {
   return res.json() as Promise<MeResponse>;
 }
 
+export type MeNotificationRow = {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  href: string;
+  readAt: string | null;
+  createdAt: string;
+  actor: {
+    id: string;
+    name: string;
+    email?: string;
+    image?: string | null;
+  } | null;
+};
+
+export type MeNotificationsResponse = {
+  unreadCount: number;
+  items: MeNotificationRow[];
+};
+
+export async function fetchMeNotifications(limit = 30): Promise<MeNotificationsResponse> {
+  const res = await fetch(
+    apiUrl(`/api/v1/me/notifications?limit=${encodeURIComponent(String(limit))}`),
+    { credentials: "include" },
+  );
+  if (res.status === 401) return { unreadCount: 0, items: [] };
+  if (!res.ok) throw new Error("Could not load notifications.");
+  return res.json() as Promise<MeNotificationsResponse>;
+}
+
+export async function markNotificationsRead(ids: string[]): Promise<void> {
+  const res = await fetch(apiUrl("/api/v1/me/notifications/read"), {
+    method: "PATCH",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) throw new Error("Could not update notifications.");
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  const res = await fetch(apiUrl("/api/v1/me/notifications/read-all"), {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Could not mark all notifications read.");
+}
+
 export class ProRequiredError extends Error {
   readonly code = "PRO" as const;
   constructor() {
@@ -136,6 +185,19 @@ export async function fetchDashboard(workspaceId: string): Promise<DashboardResp
   return res.json() as Promise<DashboardResponse>;
 }
 
+export type ProjectDashboardResponse = {
+  activityLast14Days: { date: string; count: number }[];
+};
+
+export async function fetchProjectDashboard(projectId: string): Promise<ProjectDashboardResponse> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/dashboard`), {
+    credentials: "include",
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load project dashboard.");
+  return res.json() as Promise<ProjectDashboardResponse>;
+}
+
 export type InviteRow = {
   id: string;
   token: string;
@@ -181,6 +243,19 @@ export async function patchWorkspace(
       text = "Check fields and try again.";
     throw new Error(text);
   }
+}
+
+/** Admin-only; stores logo in S3 and clears custom logo URL (website favicon unchanged until you save org form). */
+export async function uploadWorkspaceLogo(workspaceId: string, file: File): Promise<void> {
+  const fd = new FormData();
+  fd.set("file", file);
+  const res = await fetch(apiUrl(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/logo`), {
+    method: "POST",
+    credentials: "include",
+    body: fd,
+  });
+  const j = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(j.error ?? "Could not upload logo.");
 }
 
 export type CreateInviteResponse = {
@@ -540,8 +615,10 @@ export type ProjectTeamMemberRow = {
   userId: string;
   name: string;
   email: string;
+  /** Profile image URL when available (e.g. OAuth avatar). */
+  image?: string | null;
   workspaceRole: "ADMIN" | "MEMBER";
-  access: "full_workspace" | "project_only" | "no_access";
+  access: "full" | "project";
   canRemoveFromProject: boolean;
 };
 
@@ -559,17 +636,87 @@ export async function fetchProjectTeam(projectId: string): Promise<ProjectTeamRe
   return res.json() as Promise<ProjectTeamResponse>;
 }
 
+export type RfiUserRef = { id: string; name: string; email: string };
+
+export type RfiAttachmentRow = {
+  id: string;
+  rfiId: string;
+  s3Key: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: string;
+  uploadedById: string | null;
+  uploadedBy: { id: string; name: string } | null;
+  createdAt: string;
+};
+
+export type RfiIssueRef = {
+  id: string;
+  title: string;
+  fileId: string;
+  fileVersionId: string;
+  pageNumber: number | null;
+  sheetName: string | null;
+  sheetVersion: number | null;
+};
+
 export type RfiRow = {
   id: string;
   projectId: string;
+  rfiNumber: number;
   title: string;
   description: string | null;
+  officialResponse: string | null;
+  /** Designated answer message id (discussion thread). */
+  answerMessageId?: string | null;
+  answerMessage?: {
+    id: string;
+    body: string;
+    createdAt: string;
+    author: { id: string; name: string; email: string; image: string | null } | null;
+  } | null;
   status: string;
   fromDiscipline: string | null;
+  /** Everyone designated to respond (any may submit the official answer). */
+  assignees?: RfiUserRef[];
+  assignedToUserId: string | null;
+  /** First assignee; kept for list views and legacy use. */
+  assignedTo: RfiUserRef | null;
+  creatorId: string | null;
+  creator: RfiUserRef | null;
   dueDate: string | null;
+  priority: string;
   risk: string | null;
+  /** Referenced site issues (many-to-many). */
+  issues: RfiIssueRef[];
+  fileId: string | null;
+  file: { id: string; name: string } | null;
+  fileVersionId: string | null;
+  fileVersion: { id: string; version: number; fileId: string } | null;
+  pageNumber: number | null;
+  pinNormX: number | null;
+  pinNormY: number | null;
+  voidReason: string | null;
+  lastOverdueNotifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  attachments: RfiAttachmentRow[];
+};
+
+export type RfiActivityRow = {
+  id: string;
+  type: string;
+  createdAt: string;
+  metadata: unknown;
+  actor: { id: string; name: string; email: string; image: string | null } | null;
+};
+
+export type RfiMessageRow = {
+  id: string;
+  rfiId: string;
+  body: string;
+  createdAt: string;
+  author: { id: string; name: string; email: string; image: string | null } | null;
 };
 
 export async function fetchProjectRfis(projectId: string): Promise<RfiRow[]> {
@@ -580,13 +727,82 @@ export async function fetchProjectRfis(projectId: string): Promise<RfiRow[]> {
   return res.json() as Promise<RfiRow[]>;
 }
 
+export async function fetchProjectRfi(projectId: string, rfiId: string): Promise<RfiRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}`),
+    { credentials: "include" },
+  );
+  if (!res.ok) throw new Error("Could not load RFI.");
+  return res.json() as Promise<RfiRow>;
+}
+
+export async function fetchRfiActivity(
+  projectId: string,
+  rfiId: string,
+): Promise<RfiActivityRow[]> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/activity`,
+    ),
+    { credentials: "include" },
+  );
+  if (!res.ok) throw new Error("Could not load RFI activity.");
+  return res.json() as Promise<RfiActivityRow[]>;
+}
+
+export async function fetchRfiMessages(projectId: string, rfiId: string): Promise<RfiMessageRow[]> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/messages`,
+    ),
+    { credentials: "include" },
+  );
+  if (!res.ok) throw new Error("Could not load RFI messages.");
+  return res.json() as Promise<RfiMessageRow[]>;
+}
+
+export async function postRfiMessage(
+  projectId: string,
+  rfiId: string,
+  body: { body: string },
+): Promise<RfiMessageRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/messages`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    const msg = typeof j.error === "string" ? j.error : "Could not post message.";
+    throw new HttpError(res.status, msg);
+  }
+  return j as RfiMessageRow;
+}
+
 export async function createProjectRfi(
   projectId: string,
   body: {
     title: string;
-    description?: string;
+    description: string;
     fromDiscipline?: string;
+    assignedToUserId?: string;
+    assigneeUserIds?: string[];
+    dueDate?: string | null;
+    priority?: "LOW" | "MEDIUM" | "HIGH";
     risk?: "low" | "med" | "high" | null;
+    issueIds?: string[];
+    fileId?: string;
+    fileVersionId?: string;
+    pageNumber?: number;
+    pinNormX?: number;
+    pinNormY?: number;
   },
 ): Promise<RfiRow> {
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/rfis`), {
@@ -599,6 +815,168 @@ export async function createProjectRfi(
   const j = (await res.json().catch(() => ({}))) as { error?: unknown };
   if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not create RFI.");
   return j as RfiRow;
+}
+
+export async function patchProjectRfi(
+  projectId: string,
+  rfiId: string,
+  body: Record<string, unknown>,
+): Promise<RfiRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}`),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    const msg = typeof j.error === "string" ? j.error : "Could not update RFI.";
+    throw new HttpError(res.status, msg);
+  }
+  return j as RfiRow;
+}
+
+export async function deleteProjectRfi(projectId: string, rfiId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}`),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not delete RFI.");
+}
+
+export async function presignRfiAttachmentUpload(
+  projectId: string,
+  rfiId: string,
+  body: { fileName: string; contentType?: string; sizeBytes: string | number | bigint },
+): Promise<{ uploadUrl: string; key: string }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/attachments/presign`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        fileName: body.fileName,
+        contentType: body.contentType ?? "application/octet-stream",
+        sizeBytes: String(body.sizeBytes),
+      }),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    uploadUrl?: string;
+    key?: string;
+  };
+  if (!res.ok) {
+    const err = j.error;
+    const msg =
+      typeof err === "string"
+        ? err
+        : res.status === 503
+          ? "File uploads are not configured (S3). Set AWS_* and S3_BUCKET on the server."
+          : "Could not presign upload.";
+    throw new Error(msg);
+  }
+  return { uploadUrl: j.uploadUrl!, key: j.key! };
+}
+
+export async function completeRfiAttachmentUpload(
+  projectId: string,
+  rfiId: string,
+  body: {
+    key: string;
+    fileName: string;
+    mimeType?: string;
+    sizeBytes: string | number | bigint;
+  },
+): Promise<RfiAttachmentRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/attachments/complete`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        key: body.key,
+        fileName: body.fileName,
+        mimeType: body.mimeType ?? "application/octet-stream",
+        sizeBytes: String(body.sizeBytes),
+      }),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    const msg =
+      typeof j.error === "string"
+        ? j.error
+        : res.status === 503
+          ? "File storage is not configured on the server."
+          : "Could not save attachment after upload.";
+    throw new Error(msg);
+  }
+  return j as RfiAttachmentRow;
+}
+
+export async function deleteRfiAttachment(
+  projectId: string,
+  rfiId: string,
+  attachmentId: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    const msg =
+      typeof j.error === "string"
+        ? j.error
+        : res.status === 503
+          ? "Could not delete file from storage."
+          : "Could not remove attachment.";
+    throw new Error(msg);
+  }
+}
+
+export async function presignReadRfiAttachment(
+  projectId: string,
+  rfiId: string,
+  attachmentId: string,
+): Promise<string> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/rfis/${encodeURIComponent(rfiId)}/attachments/${encodeURIComponent(attachmentId)}/presign-read`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown; url?: string };
+  if (!res.ok) {
+    const msg =
+      typeof j.error === "string"
+        ? j.error
+        : res.status === 503
+          ? "File storage is not configured."
+          : "Could not open attachment.";
+    throw new Error(msg);
+  }
+  if (!j.url) throw new Error("Could not open attachment.");
+  return j.url;
 }
 
 export type PunchRow = {
@@ -900,6 +1278,8 @@ export type IssueRow = {
   creator: IssueUserRef | null;
   file: { name: string };
   fileVersion: { version: number };
+  /** RFIs linked to this issue (many-to-many). */
+  linkedRfis: { id: string; rfiNumber: number; title: string; status: string }[];
 };
 
 export async function fetchIssuesForFileVersion(fileVersionId: string): Promise<IssueRow[]> {
@@ -950,6 +1330,8 @@ export async function createIssue(body: {
   dueDate?: string | null;
   location?: string | null;
   pageNumber?: number;
+  rfiId?: string;
+  rfiIds?: string[];
 }): Promise<IssueRow> {
   const res = await fetch(apiUrl("/api/v1/issues"), {
     method: "POST",
@@ -979,6 +1361,8 @@ export async function patchIssue(
     dueDate?: string | null;
     location?: string | null;
     pageNumber?: number | null;
+    /** Replace linked RFIs for this issue. */
+    rfiIds?: string[];
   },
 ): Promise<IssueRow> {
   const res = await fetch(apiUrl(`/api/v1/issues/${encodeURIComponent(issueId)}`), {
@@ -1035,6 +1419,25 @@ export function viewerHrefForIssue(row: IssueRow): string {
   q.set("fileVersionId", row.fileVersionId);
   q.set("version", String(row.fileVersion.version));
   q.set("issueId", row.id);
+  return `/viewer?${q.toString()}`;
+}
+
+/** RFI drawing link; passes `issueId` for the first referenced issue when present (viewer zoom). */
+export function viewerHrefForRfi(rfi: RfiRow, projectId: string): string | null {
+  const ref = rfi.issues[0];
+  const fileId = rfi.fileId ?? ref?.fileId ?? null;
+  const fileVersionId = rfi.fileVersionId ?? ref?.fileVersionId ?? null;
+  if (!fileId || !fileVersionId) return null;
+  const q = new URLSearchParams();
+  q.set("fileId", fileId);
+  q.set("fileVersionId", fileVersionId);
+  q.set("projectId", projectId);
+  q.set("name", rfi.file?.name ?? ref?.sheetName ?? "Sheet");
+  const ver = rfi.fileVersion?.version ?? ref?.sheetVersion;
+  if (ver != null && Number.isFinite(Number(ver))) q.set("version", String(ver));
+  const issueId = ref?.id;
+  if (issueId) q.set("issueId", issueId);
+  else if (rfi.pageNumber != null) q.set("page", String(rfi.pageNumber));
   return `/viewer?${q.toString()}`;
 }
 
@@ -1349,4 +1752,678 @@ export async function carryForwardIssues(
     copiedIssueCount: j.copiedIssueCount ?? 0,
     idempotent: Boolean(j.idempotent),
   };
+}
+
+// --- Proposals ---
+
+export type ProposalListRow = {
+  id: string;
+  sequenceNumber: number;
+  reference: string;
+  title: string;
+  status: string;
+  clientName: string;
+  clientEmail: string;
+  sentAt: string | null;
+  total: string;
+  currency: string;
+  createdAt: string;
+  createdByName: string;
+};
+
+export type ProposalsListResponse = {
+  proposals: ProposalListRow[];
+  stats: {
+    pipelineTotal: string;
+    accepted: number;
+    sent: number;
+    draft: number;
+    declined: number;
+  };
+};
+
+export type ProposalItemRow = {
+  id: string;
+  itemName: string;
+  quantity: string;
+  unit: string;
+  rate: string;
+  lineTotal: string;
+  sortOrder: number;
+  sourceTakeoffLineId: string | null;
+};
+
+export type ProposalDetail = {
+  id: string;
+  projectId: string;
+  workspaceId: string;
+  templateId: string | null;
+  /** Linked takeoff sheet revisions (merge order matches this array). */
+  sourceFileVersionIds?: string[];
+  /** First linked revision; prefer sourceFileVersionIds */
+  sourceFileVersionId: string | null;
+  takeoffSources?: { fileVersionId: string; fileName: string; version: number }[];
+  sequenceNumber: number;
+  reference: string;
+  title: string;
+  status: string;
+  clientName: string;
+  clientEmail: string;
+  clientCompany: string | null;
+  clientPhone: string | null;
+  validUntil: string;
+  currency: string;
+  subtotal: string;
+  taxPercent: string;
+  discount: string;
+  total: string;
+  coverNote: string;
+  publicToken: string | null;
+  signerName: string | null;
+  acceptedAt: string | null;
+  declinedAt: string | null;
+  declineReason: string | null;
+  declineComment: string | null;
+  changeRequestComment: string | null;
+  changeRequestedAt: string | null;
+  sentAt: string | null;
+  firstViewedAt: string | null;
+  items: ProposalItemRow[];
+  attachments: { fileVersionId: string; fileName: string; version: number }[];
+  template: { id: string; name: string; defaultsJson: unknown } | null;
+  createdBy: { id: string; name: string; email: string };
+  workspaceName: string;
+  /** Resolved URL for &lt;img src&gt; (hosted or external) */
+  workspaceLogoUrl?: string | null;
+  projectName: string;
+  sourceFileVersion: { id: string; version: number; fileName: string } | null;
+};
+
+export async function fetchProposalTakeoffFileVersions(projectId: string): Promise<{
+  fileVersions: { id: string; label: string; fileId: string; fileName: string; version: number }[];
+}> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/proposals/takeoff-file-versions`),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load takeoff versions.");
+  return res.json() as Promise<{
+    fileVersions: {
+      id: string;
+      label: string;
+      fileId: string;
+      fileName: string;
+      version: number;
+    }[];
+  }>;
+}
+
+export async function fetchProposalsList(projectId: string): Promise<ProposalsListResponse> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/proposals`), {
+    credentials: "include",
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load proposals.");
+  return res.json() as Promise<ProposalsListResponse>;
+}
+
+export async function createProposal(
+  projectId: string,
+  body: {
+    title: string;
+    clientName: string;
+    clientEmail: string;
+    clientCompany?: string | null;
+    clientPhone?: string | null;
+    currency?: string;
+    validUntil?: string;
+    templateId?: string | null;
+    sourceFileVersionId?: string | null;
+  },
+): Promise<ProposalDetail> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/proposals`), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok)
+    throw new Error(typeof j.error === "string" ? j.error : "Could not create proposal.");
+  return j as ProposalDetail;
+}
+
+export async function fetchProposalDetail(
+  projectId: string,
+  proposalId: string,
+): Promise<ProposalDetail> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load proposal.");
+  return res.json() as Promise<ProposalDetail>;
+}
+
+export async function patchProposal(
+  projectId: string,
+  proposalId: string,
+  body: Record<string, unknown>,
+): Promise<ProposalDetail> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}`,
+    ),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not save proposal.");
+  return j as ProposalDetail;
+}
+
+export async function syncProposalFromTakeoff(
+  projectId: string,
+  proposalId: string,
+  fileVersionIds: string[],
+  mode?: "replace" | "quantities_only",
+): Promise<ProposalDetail> {
+  const body =
+    fileVersionIds.length === 1
+      ? { fileVersionId: fileVersionIds[0]!, mode }
+      : { fileVersionIds, mode };
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/items/sync-from-takeoff`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not sync takeoff.");
+  return j as ProposalDetail;
+}
+
+export type ProposalPreviewPayload = {
+  html: string;
+  takeoffTableHtml: string;
+  letterMarkdown: string;
+  letterHtml: string | null;
+};
+
+export async function previewProposalHtml(
+  projectId: string,
+  proposalId: string,
+): Promise<ProposalPreviewPayload> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/preview`,
+    ),
+    { method: "POST", credentials: "include", headers: jsonHeaders, body: "{}" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not preview.");
+  return res.json() as Promise<ProposalPreviewPayload>;
+}
+
+export async function fetchProposalPdfBlob(projectId: string, proposalId: string): Promise<Blob> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/pdf`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load PDF.");
+  return res.blob();
+}
+
+export async function sendProposalToClient(
+  projectId: string,
+  proposalId: string,
+): Promise<ProposalDetail> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/send`,
+    ),
+    { method: "POST", credentials: "include", headers: jsonHeaders, body: "{}" },
+  );
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not send proposal.");
+  return j as ProposalDetail;
+}
+
+export async function resendProposal(projectId: string, proposalId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/resend`,
+    ),
+    { method: "POST", credentials: "include", headers: jsonHeaders, body: "{}" },
+  );
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not resend.");
+}
+
+export async function duplicateProposal(
+  projectId: string,
+  proposalId: string,
+): Promise<ProposalDetail> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/duplicate`,
+    ),
+    { method: "POST", credentials: "include", headers: jsonHeaders, body: "{}" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not duplicate.");
+  return res.json() as Promise<ProposalDetail>;
+}
+
+export async function deleteProposal(projectId: string, proposalId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  const j = (await res.json().catch(() => ({}))) as { error?: string };
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok)
+    throw new Error(typeof j.error === "string" ? j.error : "Could not delete proposal.");
+}
+
+export async function proposalAiDraft(
+  projectId: string,
+  proposalId: string,
+  body: { userPrompt?: string; section?: "cover" | "executive_summary" },
+): Promise<{ text: string }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/ai-draft`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as { error?: string; text?: string };
+  if (res.status === 503) throw new Error(j.error ?? "AI not configured.");
+  if (!res.ok) throw new Error(j.error ?? "AI draft failed.");
+  return { text: j.text ?? "" };
+}
+
+export type ProposalTemplateRow = {
+  id: string;
+  name: string;
+  body: string;
+  defaultsJson: unknown;
+  updatedAt: string;
+};
+
+export async function fetchProposalTemplates(workspaceId: string): Promise<{
+  templates: ProposalTemplateRow[];
+}> {
+  const res = await fetch(
+    apiUrl(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/proposal-templates`),
+    { credentials: "include" },
+  );
+  if (!res.ok) throw new Error("Could not load templates.");
+  return res.json() as Promise<{ templates: ProposalTemplateRow[] }>;
+}
+
+export async function createProposalTemplate(
+  workspaceId: string,
+  body: { name: string; body: string; defaultsJson?: Record<string, unknown> | null },
+): Promise<{ id: string }> {
+  const res = await fetch(
+    apiUrl(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/proposal-templates`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) throw new Error("Could not create template.");
+  return res.json() as Promise<{ id: string }>;
+}
+
+export async function patchProposalTemplate(
+  workspaceId: string,
+  templateId: string,
+  body: Partial<{ name: string; body: string; defaultsJson: Record<string, unknown> | null }>,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/proposal-templates/${encodeURIComponent(templateId)}`,
+    ),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) throw new Error("Could not save template.");
+}
+
+export async function deleteProposalTemplate(
+  workspaceId: string,
+  templateId: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/proposal-templates/${encodeURIComponent(templateId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (!res.ok) throw new Error("Could not delete template.");
+}
+
+export type PublicProposalPayload = {
+  reference: string;
+  title: string;
+  status: string;
+  workspaceName: string;
+  workspaceLogoUrl?: string | null;
+  clientName: string;
+  validUntil: string;
+  currency: string;
+  coverHtml: string;
+  subtotal: string;
+  taxPercent: string;
+  taxAmount: string;
+  discount: string;
+  total: string;
+  items: ProposalItemRow[];
+  attachments: {
+    fileVersionId: string;
+    fileName: string;
+    version: number;
+    readUrl: string | null;
+  }[];
+  expired: boolean;
+};
+
+export async function fetchPublicProposal(token: string): Promise<PublicProposalPayload> {
+  const res = await fetch(apiUrl(`/api/v1/public/proposals/${encodeURIComponent(token)}`), {
+    credentials: "omit",
+  });
+  if (!res.ok) throw new Error("Proposal not found.");
+  return res.json() as Promise<PublicProposalPayload>;
+}
+
+export async function postPublicProposalView(token: string): Promise<void> {
+  await fetch(apiUrl(`/api/v1/public/proposals/${encodeURIComponent(token)}/view`), {
+    method: "POST",
+    credentials: "omit",
+    headers: jsonHeaders,
+    body: "{}",
+  });
+}
+
+export async function postPublicProposalAccept(
+  token: string,
+  body: { signerName: string; signatureData: string },
+): Promise<void> {
+  const res = await fetch(apiUrl(`/api/v1/public/proposals/${encodeURIComponent(token)}/accept`), {
+    method: "POST",
+    credentials: "omit",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  const j = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(j.error ?? "Could not accept.");
+}
+
+export async function postPublicProposalDecline(
+  token: string,
+  body: { reason: string; comment?: string | null },
+): Promise<void> {
+  const res = await fetch(apiUrl(`/api/v1/public/proposals/${encodeURIComponent(token)}/decline`), {
+    method: "POST",
+    credentials: "omit",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  const j = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(j.error ?? "Could not decline.");
+}
+
+export async function postPublicProposalRequestChanges(
+  token: string,
+  comment: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(`/api/v1/public/proposals/${encodeURIComponent(token)}/request-changes`),
+    {
+      method: "POST",
+      credentials: "omit",
+      headers: jsonHeaders,
+      body: JSON.stringify({ comment }),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(j.error ?? "Could not submit.");
+}
+
+export async function fetchPublicProposalMessages(
+  token: string,
+): Promise<{ messages: { id: string; body: string; isFromClient: boolean; createdAt: string }[] }> {
+  const res = await fetch(
+    apiUrl(`/api/v1/public/proposals/${encodeURIComponent(token)}/messages`),
+    {
+      credentials: "omit",
+    },
+  );
+  if (!res.ok) throw new Error("Could not load messages.");
+  return res.json() as Promise<{
+    messages: { id: string; body: string; isFromClient: boolean; createdAt: string }[];
+  }>;
+}
+
+export async function postPublicProposalMessage(token: string, body: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(`/api/v1/public/proposals/${encodeURIComponent(token)}/messages`),
+    {
+      method: "POST",
+      credentials: "omit",
+      headers: jsonHeaders,
+      body: JSON.stringify({ body }),
+    },
+  );
+  if (!res.ok) throw new Error("Could not send message.");
+}
+
+export async function downloadProposalPdf(projectId: string, proposalId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/pdf`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not download PDF.");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `proposal-${proposalId}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export type ProposalAnalyticsSummary = {
+  totalProposals: number;
+  accepted: number;
+  declined: number;
+  sent: number;
+  winRate: number | null;
+};
+
+export async function fetchProposalAnalyticsSummary(
+  projectId: string,
+): Promise<ProposalAnalyticsSummary> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/proposals/analytics/summary`),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load analytics.");
+  return res.json() as Promise<ProposalAnalyticsSummary>;
+}
+
+export type ProposalRevisionRow = {
+  id: string;
+  sentAt: string;
+  snapshot: {
+    reference?: string;
+    title?: string;
+    total?: string;
+    subtotal?: string;
+    taxPercent?: string;
+    discount?: string;
+    sentAt?: string;
+  };
+};
+
+export async function fetchProposalRevisions(
+  projectId: string,
+  proposalId: string,
+): Promise<{ revisions: ProposalRevisionRow[] }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/revisions`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load revisions.");
+  return res.json() as Promise<{ revisions: ProposalRevisionRow[] }>;
+}
+
+export type ProposalPortalMessageRow = {
+  id: string;
+  body: string;
+  isFromClient: boolean;
+  createdAt: string;
+};
+
+export async function fetchProposalPortalMessages(
+  projectId: string,
+  proposalId: string,
+): Promise<{ messages: ProposalPortalMessageRow[] }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/portal-messages`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load messages.");
+  return res.json() as Promise<{ messages: ProposalPortalMessageRow[] }>;
+}
+
+export async function postProposalPortalMessageStaff(
+  projectId: string,
+  proposalId: string,
+  messageBody: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/portal-messages`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify({ body: messageBody }),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not send message.");
+}
+
+export async function downloadProposalCsvExport(
+  projectId: string,
+  proposalId: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/export-csv`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not export CSV.");
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition");
+  let filename = `proposal-${proposalId}-lines.csv`;
+  const m = cd?.match(/filename="([^"]+)"/);
+  if (m?.[1]) filename = m[1];
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export type ProposalRateHint = {
+  itemName: string;
+  avgRate: number;
+  sampleSize: number;
+  currency: string;
+};
+
+export async function fetchWorkspaceProposalRateHints(
+  workspaceId: string,
+  q: string,
+): Promise<{ hints: ProposalRateHint[] }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/proposals/rate-hints?q=${encodeURIComponent(q)}`,
+    ),
+    { credentials: "include" },
+  );
+  if (!res.ok) throw new Error("Could not load rate hints.");
+  return res.json() as Promise<{ hints: ProposalRateHint[] }>;
+}
+
+export async function postProposalExternalSignExport(
+  projectId: string,
+  proposalId: string,
+): Promise<{ configured: boolean; message?: string }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/external-sign-export`,
+    ),
+    { method: "POST", credentials: "include", headers: jsonHeaders },
+  );
+  const j = (await res.json().catch(() => ({}))) as {
+    configured?: boolean;
+    message?: string;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(j.error ?? "Request failed.");
+  return { configured: Boolean(j.configured), message: j.message };
 }

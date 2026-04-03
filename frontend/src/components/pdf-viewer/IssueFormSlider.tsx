@@ -10,6 +10,8 @@ import {
   createIssue,
   deleteIssue,
   fetchProject,
+  fetchProjectRfis,
+  fetchResolvedFileRevision,
   fetchWorkspaceMembers,
   formatIssueLockHint,
   patchIssue,
@@ -48,6 +50,7 @@ export function IssueFormSlider(props: Props) {
   const variant = props.variant;
   const searchParams = useSearchParams();
   const fileId = searchParams.get("fileId");
+  const projectIdFromUrl = searchParams.get("projectId")?.trim() || null;
   const versionParam = searchParams.get("version");
   const viewerFileName = useViewerStore((s) => s.fileName);
   const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
@@ -66,6 +69,21 @@ export function IssueFormSlider(props: Props) {
     const n = Number.parseInt(versionParam, 10);
     return Number.isFinite(n) ? n : null;
   }, [versionParam]);
+
+  /** Project id when store/URL lack it: resolve file revision (create flow only). */
+  const { data: revisionResolve, isPending: resolveProjectPending } =
+    useResolvedFileRevisionProjectQuery({
+      fileId,
+      parsedUrlVersion,
+      enabled: Boolean(
+        variant === "create" && open && fileId && !viewerProjectId && !projectIdFromUrl,
+      ),
+    });
+
+  const resolvedProjectId = useMemo(() => {
+    if (variant === "edit") return props.issue.projectId;
+    return viewerProjectId ?? projectIdFromUrl ?? revisionResolve?.projectId ?? null;
+  }, [variant, props, viewerProjectId, projectIdFromUrl, revisionResolve?.projectId]);
 
   const sheetContext = useMemo(() => {
     if (variant === "edit") {
@@ -96,9 +114,9 @@ export function IssueFormSlider(props: Props) {
   }, [annotations, parsedUrlVersion, props, variant, viewerFileName]);
 
   const { data: project } = useQuery({
-    queryKey: qk.project(viewerProjectId ?? ""),
-    queryFn: () => fetchProject(viewerProjectId!),
-    enabled: Boolean(viewerProjectId),
+    queryKey: qk.project(resolvedProjectId ?? ""),
+    queryFn: () => fetchProject(resolvedProjectId!),
+    enabled: Boolean(resolvedProjectId && open),
   });
   const workspaceId = project?.workspaceId;
 
@@ -118,6 +136,23 @@ export function IssueFormSlider(props: Props) {
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [location, setLocation] = useState("");
+  /** Optional: attach this issue to one or more project RFIs (create + edit). */
+  const [rfiLinkIds, setRfiLinkIds] = useState<string[]>([]);
+
+  const {
+    data: projectRfis = [],
+    isPending: rfisPending,
+    isError: rfisError,
+  } = useQuery({
+    queryKey: qk.projectRfis(resolvedProjectId ?? ""),
+    queryFn: () => fetchProjectRfis(resolvedProjectId!),
+    enabled: Boolean(open && resolvedProjectId && (variant === "create" || variant === "edit")),
+  });
+
+  const linkableRfis = useMemo(() => {
+    const norm = (s: string) => s.trim().toUpperCase();
+    return projectRfis.filter((r) => norm(r.status) !== "CLOSED");
+  }, [projectRfis]);
 
   useEffect(() => {
     setMounted(true);
@@ -139,6 +174,7 @@ export function IssueFormSlider(props: Props) {
       setStartDate(issueDateToInputValue(i.startDate));
       setDueDate(issueDateToInputValue(i.dueDate));
       setLocation(i.location ?? "");
+      setRfiLinkIds(i.linkedRfis.map((r) => r.id));
     } else {
       setTitle("");
       setDescription("");
@@ -148,8 +184,14 @@ export function IssueFormSlider(props: Props) {
       setStartDate("");
       setDueDate("");
       setLocation("");
+      setRfiLinkIds([]);
     }
-  }, [open, props]);
+  }, [
+    open,
+    props.variant,
+    props.variant === "edit" ? props.issue.id : props.annotationId,
+    props.variant === "edit" ? props.issue.updatedAt : "",
+  ]);
 
   useEffect(() => {
     if (variant !== "create" || !open) return;
@@ -178,11 +220,14 @@ export function IssueFormSlider(props: Props) {
         dueDate: dueDate.trim() || undefined,
         ...(location.trim() ? { location: location.trim() } : {}),
         pageNumber: page,
+        ...(rfiLinkIds.length > 0 ? { rfiIds: rfiLinkIds } : {}),
       });
     },
     onSuccess: (row) => {
       void qc.invalidateQueries({ queryKey: issuesQueryKey });
       void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
+      if (resolvedProjectId)
+        void qc.invalidateQueries({ queryKey: qk.projectRfis(resolvedProjectId) });
       if (variant === "create") {
         updateAnnotation(props.annotationId, {
           linkedIssueId: row.id,
@@ -216,6 +261,7 @@ export function IssueFormSlider(props: Props) {
         dueDate: dueDate.trim() || null,
         location: location.trim() ? location.trim() : null,
         ...(pageNumber !== undefined ? { pageNumber } : {}),
+        rfiIds: rfiLinkIds,
       });
     },
     onSuccess: (row) => {
@@ -224,6 +270,8 @@ export function IssueFormSlider(props: Props) {
         return old.map((i) => (i.id === row.id ? row : i));
       });
       void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
+      if (resolvedProjectId)
+        void qc.invalidateQueries({ queryKey: qk.projectRfis(resolvedProjectId) });
       const ann = useViewerStore.getState().annotations.find((a) => a.linkedIssueId === row.id);
       if (ann) {
         updateAnnotation(ann.id, {
@@ -352,6 +400,64 @@ export function IssueFormSlider(props: Props) {
                   className="w-full resize-none rounded-md border border-[#475569] bg-[#0F172A] px-2.5 py-2 text-[12px] text-[#F8FAFC] placeholder:text-[#64748B] outline-none focus:border-[var(--viewer-primary)]/50 focus:ring-1 focus:ring-[var(--viewer-primary)]/35"
                 />
               </label>
+              <div className="rounded-md border border-[#334155]/90 bg-[#0f172a]/60 p-2.5">
+                <span className="mb-1.5 block text-[10px] font-medium uppercase tracking-wide text-[#94A3B8]">
+                  Link to RFIs (optional)
+                </span>
+                {variant === "create" && !resolvedProjectId ? (
+                  resolveProjectPending ? (
+                    <p className="text-[11px] text-[#94a3b8]">Finding project…</p>
+                  ) : (
+                    <p className="text-[11px] leading-snug text-[#64748b]">
+                      Open this drawing from the project’s Files tab (or use a viewer link that
+                      includes the project) so we can list RFIs for this job.
+                    </p>
+                  )
+                ) : rfisPending ? (
+                  <p className="text-[11px] text-[#94a3b8]">Loading RFIs…</p>
+                ) : rfisError ? (
+                  <p className="text-[11px] text-amber-200/90">
+                    Could not load RFIs. A Pro subscription and project access are required.
+                  </p>
+                ) : linkableRfis.length === 0 ? (
+                  <p className="text-[11px] leading-snug text-[#64748b]">
+                    No open RFIs in this project yet. Create RFIs under the project’s RFIs page,
+                    then link them here.
+                  </p>
+                ) : (
+                  <>
+                    <div className="max-h-36 space-y-1.5 overflow-y-auto pr-0.5 [scrollbar-width:thin]">
+                      {linkableRfis.map((r) => (
+                        <label
+                          key={r.id}
+                          className="flex cursor-pointer items-start gap-2 text-[11px] leading-snug text-[#e2e8f0]"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 rounded border-[#475569]"
+                            checked={rfiLinkIds.includes(r.id)}
+                            onChange={() => {
+                              setRfiLinkIds((prev) =>
+                                prev.includes(r.id)
+                                  ? prev.filter((x) => x !== r.id)
+                                  : [...prev, r.id],
+                              );
+                            }}
+                          />
+                          <span className="min-w-0">
+                            RFI #{String(r.rfiNumber).padStart(3, "0")} — {r.title}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-[10px] leading-snug text-[#64748b]">
+                      {variant === "create"
+                        ? "RFIs without a sheet yet will use this drawing and page. You can link several RFIs to one issue."
+                        : "Replace linked RFIs for this issue. RFIs without a sheet may adopt this drawing when saved."}
+                    </p>
+                  </>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="block">
                   <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#94A3B8]">
@@ -498,4 +604,17 @@ export function IssueFormSlider(props: Props) {
     </>,
     document.body,
   );
+}
+
+function useResolvedFileRevisionProjectQuery(opts: {
+  fileId: string | null;
+  parsedUrlVersion: number | null;
+  enabled: boolean;
+}) {
+  return useQuery({
+    queryKey: ["fileResolvedRevision", opts.fileId, opts.parsedUrlVersion] as const,
+    queryFn: () => fetchResolvedFileRevision(opts.fileId!, opts.parsedUrlVersion ?? undefined),
+    enabled: opts.enabled,
+    retry: false,
+  });
 }

@@ -1,10 +1,19 @@
 import type { FileVersion, Workspace } from "@prisma/client";
+import type { Env } from "./env.js";
+import { workspaceLogoUrlForClients } from "./workspaceLogo.js";
 
-export function workspaceJson(ws: Workspace) {
+/** JSON-safe workspace row; `logoUrl` is a browser-loadable URL (hosted or external). Omits `logoS3Key`. */
+export function workspaceJson(ws: Workspace, env?: Env) {
+  const { logoS3Key, logoUrl: _rawLogo, storageUsedBytes, storageQuotaBytes, ...rest } = ws;
+  const logoUrl =
+    env != null
+      ? workspaceLogoUrlForClients(env, { id: ws.id, logoS3Key, logoUrl: ws.logoUrl })
+      : ws.logoUrl;
   return {
-    ...ws,
-    storageUsedBytes: ws.storageUsedBytes.toString(),
-    storageQuotaBytes: ws.storageQuotaBytes.toString(),
+    ...rest,
+    logoUrl,
+    storageUsedBytes: storageUsedBytes.toString(),
+    storageQuotaBytes: storageQuotaBytes.toString(),
   };
 }
 

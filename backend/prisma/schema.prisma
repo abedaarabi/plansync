@@ -23,13 +23,21 @@ model User {
   sessions Session[]
   accounts Account[]
 
-  workspaceMembers WorkspaceMember[]
-  projectMembers   ProjectMember[]
-  emailInvitesSent EmailInvite[]     @relation("EmailInviteInviter")
-  activityLogs     ActivityLog[]     @relation("ActivityActor")
-  issuesAssigned   Issue[]           @relation("IssueAssignee")
-  issuesCreated    Issue[]           @relation("IssueCreator")
-  fileVersions     FileVersion[]
+  workspaceMembers     WorkspaceMember[]
+  projectMembers       ProjectMember[]
+  emailInvitesSent     EmailInvite[]      @relation("EmailInviteInviter")
+  activityLogs         ActivityLog[]      @relation("ActivityActor")
+  issuesAssigned       Issue[]            @relation("IssueAssignee")
+  issuesCreated        Issue[]            @relation("IssueCreator")
+  fileVersions         FileVersion[]
+  rfisCreated          Rfi[]              @relation("RfiCreator")
+  rfisAssigned         Rfi[]              @relation("RfiAssignee")
+  rfiAssigneeLinks     RfiAssigneeLink[]
+  rfiAttachments       RfiAttachment[]    @relation("RfiAttachmentUploader")
+  rfiMessages          RfiMessage[]       @relation("RfiMessageAuthor")
+  notifications        UserNotification[] @relation("NotificationRecipient")
+  notificationsAsActor UserNotification[] @relation("NotificationActor")
+  proposalsCreated     Proposal[]         @relation("ProposalCreator")
 }
 
 model Session {
@@ -81,8 +89,10 @@ model Workspace {
   name String
   slug String @unique
 
-  /// Public org branding (dashboard, invites, sidebar)
+  /// Public org branding (dashboard, invites, sidebar, proposals)
   logoUrl     String?
+  /// Uploaded logo in S3 (`ws/{id}/branding/logo`); served via GET /public/workspaces/:id/logo
+  logoS3Key   String?
   description String?
   website     String?
 
@@ -108,6 +118,9 @@ model Workspace {
   materialCategories MaterialCategory[]
   materials          Material[]
   takeoffLines       TakeoffLine[]
+  userNotifications  UserNotification[]
+  proposalTemplates  ProposalTemplate[]
+  proposals          Proposal[]
 }
 
 /// Grouping label (e.g. Concrete, Steel, Finishes). Unique per workspace (case-insensitive via nameKey).
@@ -291,6 +304,8 @@ model Project {
   punchItems          PunchItem[]
   fieldReports        FieldReport[]
   auditLogs           ActivityLog[]
+  userNotifications   UserNotification[]
+  proposals           Proposal[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -344,6 +359,7 @@ model File {
   versions     FileVersion[]
   issues       Issue[]
   takeoffLines TakeoffLine[]
+  rfisDrawing  Rfi[]         @relation("RfiDrawingFile")
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -374,9 +390,12 @@ model FileVersion {
   lockedAt       DateTime?
   lockExpiresAt  DateTime?
 
-  createdAt    DateTime      @default(now())
-  issues       Issue[]
-  takeoffLines TakeoffLine[]
+  createdAt              DateTime                @default(now())
+  issues                 Issue[]
+  takeoffLines           TakeoffLine[]
+  rfisDrawing            Rfi[]                   @relation("RfiDrawingVersion")
+  proposalTakeoffSources ProposalTakeoffSource[]
+  proposalAttachments    ProposalAttachment[]
 
   @@unique([fileId, version])
   @@index([fileId])
@@ -433,6 +452,8 @@ model Issue {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  rfiLinks RfiIssueLink[]
+
   @@index([workspaceId])
   @@index([projectId])
   @@index([fileId])
@@ -478,20 +499,112 @@ enum RfiStatus {
   CLOSED
 }
 
-model Rfi {
-  id             String    @id @default(cuid())
-  projectId      String
-  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title          String
-  description    String?
-  status         RfiStatus @default(OPEN)
-  fromDiscipline String?
-  dueDate        DateTime?
-  risk           String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+enum RfiPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
 
+/// Many-to-many: one RFI can reference multiple issues; one issue can spawn multiple RFIs.
+model RfiIssueLink {
+  id        String   @id @default(cuid())
+  rfiId     String
+  issueId   String
+  rfi       Rfi      @relation(fields: [rfiId], references: [id], onDelete: Cascade)
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([rfiId, issueId])
+  @@index([issueId])
+  @@index([rfiId])
+}
+
+/// Many-to-many: RFI can have multiple designated responders (any can submit the official answer).
+model RfiAssigneeLink {
+  id        String   @id @default(cuid())
+  rfiId     String
+  userId    String
+  rfi       Rfi      @relation(fields: [rfiId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([rfiId, userId])
+  @@index([rfiId])
+  @@index([userId])
+}
+
+model Rfi {
+  id                    String       @id @default(cuid())
+  projectId             String
+  /// Per-project sequential number for display (#001). Never reused after delete.
+  rfiNumber             Int
+  project               Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title                 String
+  description           String?
+  officialResponse      String?
+  /// Discussion message designated as the formal answer (plain-text copy also in officialResponse for email/legacy).
+  answerMessageId       String?      @unique
+  answerMessage         RfiMessage?  @relation("RfiAnswerMessage", fields: [answerMessageId], references: [id], onDelete: SetNull)
+  status                RfiStatus    @default(OPEN)
+  fromDiscipline        String?
+  assignedToUserId      String?
+  assignedTo            User?        @relation("RfiAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  creatorId             String?
+  creator               User?        @relation("RfiCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  dueDate               DateTime?
+  priority              RfiPriority  @default(MEDIUM)
+  risk                  String?
+  fileId                String?
+  file                  File?        @relation("RfiDrawingFile", fields: [fileId], references: [id], onDelete: SetNull)
+  fileVersionId         String?
+  fileVersion           FileVersion? @relation("RfiDrawingVersion", fields: [fileVersionId], references: [id], onDelete: SetNull)
+  pageNumber            Int?
+  pinNormX              Float?
+  pinNormY              Float?
+  voidReason            String?
+  lastOverdueNotifiedAt DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  attachments   RfiAttachment[]
+  issueLinks    RfiIssueLink[]
+  assigneeLinks RfiAssigneeLink[]
+  messages      RfiMessage[]
+
+  @@unique([projectId, rfiNumber])
   @@index([projectId])
+  @@index([assignedToUserId])
+  @@index([creatorId])
+}
+
+model RfiAttachment {
+  id           String   @id @default(cuid())
+  rfiId        String
+  rfi          Rfi      @relation(fields: [rfiId], references: [id], onDelete: Cascade)
+  s3Key        String
+  fileName     String
+  mimeType     String   @default("application/octet-stream")
+  sizeBytes    BigInt
+  uploadedById String?
+  uploadedBy   User?    @relation("RfiAttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@index([rfiId])
+}
+
+/// In-app discussion thread on an RFI (clarifications before/after official response).
+model RfiMessage {
+  id        String   @id @default(cuid())
+  rfiId     String
+  rfi       Rfi      @relation(fields: [rfiId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation("RfiMessageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  body      String
+  createdAt DateTime @default(now())
+
+  officialAnswerForRfi Rfi? @relation("RfiAnswerMessage")
+
+  @@index([rfiId])
 }
 
 enum PunchPriority {
@@ -538,6 +651,154 @@ model FieldReport {
   @@index([projectId])
 }
 
+enum ProposalStatus {
+  DRAFT
+  SENT
+  VIEWED
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CHANGE_REQUESTED
+}
+
+enum ProposalDeclineReason {
+  PRICE_TOO_HIGH
+  TIMING
+  SCOPE
+  OTHER_COMPANY
+  OTHER
+}
+
+/// Workspace-scoped letter templates with {{variable}} placeholders.
+model ProposalTemplate {
+  id           String     @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name         String
+  body         String     @db.Text
+  /// e.g. { "taxPercent": 15, "validUntilDays": 14 }
+  defaultsJson Json?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  proposals    Proposal[]
+
+  @@index([workspaceId])
+}
+
+/// Sheet revisions whose takeoff lines feed this proposal (order = merge order).
+model ProposalTakeoffSource {
+  proposalId    String
+  fileVersionId String
+  sortOrder     Int         @default(0)
+  proposal      Proposal    @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  fileVersion   FileVersion @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
+
+  @@id([proposalId, fileVersionId])
+  @@index([fileVersionId])
+}
+
+model Proposal {
+  id                   String                 @id @default(cuid())
+  workspaceId          String
+  projectId            String
+  createdById          String
+  templateId           String?
+  sequenceNumber       Int
+  reference            String
+  title                String
+  status               ProposalStatus         @default(DRAFT)
+  clientName           String
+  clientEmail          String
+  clientCompany        String?
+  clientPhone          String?
+  validUntil           DateTime
+  currency             String                 @default("USD")
+  subtotal             Decimal                @db.Decimal(19, 2)
+  taxPercent           Decimal                @default(0) @db.Decimal(5, 2)
+  discount             Decimal                @default(0) @db.Decimal(19, 2)
+  total                Decimal                @db.Decimal(19, 2)
+  coverNote            String                 @db.Text
+  /// Opaque token for client portal; set when sent.
+  publicToken          String?                @unique
+  signatureData        String?                @db.Text
+  signerName           String?
+  acceptedAt           DateTime?
+  declinedAt           DateTime?
+  declineReason        ProposalDeclineReason?
+  declineComment       String?
+  changeRequestComment String?
+  changeRequestedAt    DateTime?
+  sentAt               DateTime?
+  firstViewedAt        DateTime?
+  pdfS3Key             String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  workspace      Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project        Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy      User                    @relation("ProposalCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  template       ProposalTemplate?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  takeoffSources ProposalTakeoffSource[]
+  items          ProposalItem[]
+  attachments    ProposalAttachment[]
+  revisions      ProposalRevision[]
+  portalMessages ProposalPortalMessage[]
+
+  @@unique([projectId, sequenceNumber])
+  @@index([projectId, status])
+  @@index([projectId, createdAt])
+  @@index([workspaceId])
+}
+
+model ProposalItem {
+  id                  String   @id @default(cuid())
+  proposalId          String
+  itemName            String
+  quantity            Decimal  @db.Decimal(19, 4)
+  unit                String
+  rate                Decimal  @db.Decimal(19, 4)
+  lineTotal           Decimal  @db.Decimal(19, 2)
+  sortOrder           Int      @default(0)
+  sourceTakeoffLineId String?
+  proposal            Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+}
+
+model ProposalAttachment {
+  proposalId    String
+  fileVersionId String
+  proposal      Proposal    @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  fileVersion   FileVersion @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
+
+  @@id([proposalId, fileVersionId])
+  @@index([fileVersionId])
+}
+
+/// Snapshot each time a proposal is sent (Phase 2 revisions / audit).
+model ProposalRevision {
+  id         String   @id @default(cuid())
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  sentAt     DateTime @default(now())
+  snapshot   Json
+
+  @@index([proposalId, sentAt])
+}
+
+/// Token-scoped discussion on the client portal (no login).
+model ProposalPortalMessage {
+  id           String   @id @default(cuid())
+  proposalId   String
+  proposal     Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  body         String   @db.Text
+  /// true = client (anonymous), false = company reply (requires internal note or future staff portal)
+  isFromClient Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([proposalId, createdAt])
+}
+
 enum ActivityType {
   WORKSPACE_CREATED
   MEMBER_INVITED
@@ -562,10 +823,25 @@ enum ActivityType {
   FIELD_REPORT_UPDATED
   FIELD_REPORT_DELETED
   RFI_DELETED
+  RFI_SENT_FOR_REVIEW
+  RFI_RESPONSE_SUBMITTED
+  RFI_CLOSED
+  RFI_ATTACHMENT_ADDED
+  RFI_ATTACHMENT_REMOVED
+  RFI_MESSAGE_POSTED
   PUNCH_DELETED
   PROJECT_UPDATED
   SUBSCRIPTION_UPDATED
   STORAGE_THRESHOLD
+  PROPOSAL_CREATED
+  PROPOSAL_SENT
+  PROPOSAL_VIEWED
+  PROPOSAL_ACCEPTED
+  PROPOSAL_DECLINED
+  PROPOSAL_CHANGE_REQUESTED
+  PROPOSAL_EXPIRED
+  PROPOSAL_RESENT
+  PROPOSAL_DELETED
 }
 
 model ActivityLog {
@@ -587,6 +863,30 @@ model ActivityLog {
 
   @@index([workspaceId, createdAt])
   @@index([projectId, createdAt])
+}
+
+/// In-app notification (e.g. RFI activity). Shown in the enterprise top bar.
+model UserNotification {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// e.g. RFI_MESSAGE, RFI_REVIEW, RFI_RESPONSE, RFI_CLOSED
+  kind        String
+  title       String
+  body        String?
+  /// In-app path (e.g. /projects/{id}/rfi/{rfiId})
+  href        String
+  actorUserId String?
+  actor       User?     @relation("NotificationActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
 }
 
 /// Idempotent Stripe webhook processing
