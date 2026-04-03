@@ -20,20 +20,27 @@ COPY backend/package.json ./backend/package.json
 # Tailwind v4 pulls native optional deps (`lightningcss`, `@tailwindcss/oxide`) that npm workspaces
 # often omit. npm also rejects wrong CPU (EBADPLATFORM), so install only this image's Linux GNU bindings.
 RUN npm ci --include=dev --include=optional
-RUN LC_VER=$(node -p "require('./package-lock.json').packages['node_modules/lightningcss'].version") \
-  && OX_VER=$(node -p "require('./package-lock.json').packages['node_modules/@tailwindcss/oxide'].version") \
-  && ARCH="$(uname -m)" \
-  && if [ "$ARCH" = "x86_64" ]; then \
-       npm install --no-save --legacy-peer-deps \
-         "lightningcss-linux-x64-gnu@${LC_VER}" \
-         "@tailwindcss/oxide-linux-x64-gnu@${OX_VER}"; \
-     elif [ "$ARCH" = "aarch64" ]; then \
-       npm install --no-save --legacy-peer-deps \
-         "lightningcss-linux-arm64-gnu@${LC_VER}" \
-         "@tailwindcss/oxide-linux-arm64-gnu@${OX_VER}"; \
-     else \
-       echo "Unsupported arch for Tailwind native deps: $ARCH" && exit 1; \
-     fi
+# Read versions from the root lockfile (lockfile v3 `packages` keys). Fails fast if Tailwind drops these entries.
+RUN set -eu; \
+  LC_VER=$(node -p "require('./package-lock.json').packages['node_modules/lightningcss']?.version ?? ''"); \
+  OX_VER=$(node -p "require('./package-lock.json').packages['node_modules/@tailwindcss/oxide']?.version ?? ''"); \
+  if [ -z "$LC_VER" ] || [ -z "$OX_VER" ]; then \
+    echo "Dockerfile: could not read lightningcss / @tailwindcss/oxide versions from package-lock.json"; \
+    exit 1; \
+  fi; \
+  ARCH="$(uname -m)"; \
+  if [ "$ARCH" = "x86_64" ]; then \
+    npm install --no-save --legacy-peer-deps \
+      "lightningcss-linux-x64-gnu@${LC_VER}" \
+      "@tailwindcss/oxide-linux-x64-gnu@${OX_VER}"; \
+  elif [ "$ARCH" = "aarch64" ]; then \
+    npm install --no-save --legacy-peer-deps \
+      "lightningcss-linux-arm64-gnu@${LC_VER}" \
+      "@tailwindcss/oxide-linux-arm64-gnu@${OX_VER}"; \
+  else \
+    echo "Unsupported arch for Tailwind native deps: $ARCH (need x86_64 or aarch64)"; \
+    exit 1; \
+  fi
 
 FROM base AS builder
 WORKDIR /app
