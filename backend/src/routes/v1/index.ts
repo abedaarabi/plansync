@@ -90,6 +90,24 @@ function requirePro(workspace: { subscriptionStatus: string | null }) {
   return null;
 }
 
+/** Unaccepted invites block `POST .../email-invites`; revoke when membership ends or user is added another way. */
+async function revokePendingEmailInvitesForWorkspaceEmail(
+  db: Pick<typeof prisma, "emailInvite">,
+  workspaceId: string,
+  rawEmail: string,
+) {
+  const email = rawEmail.toLowerCase().trim();
+  await db.emailInvite.updateMany({
+    where: {
+      workspaceId,
+      email,
+      revokedAt: null,
+      acceptedAt: null,
+    },
+    data: { revokedAt: new Date() },
+  });
+}
+
 function dateFromYmd(ymd: string): Date {
   return new Date(`${ymd}T00:00:00.000Z`);
 }
@@ -1309,11 +1327,19 @@ export function v1Routes(
       }
     }
 
+    const removedUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { email: true },
+    });
+
     await prisma.$transaction(async (tx) => {
       await tx.projectMember.deleteMany({
         where: { userId: targetUserId, project: { workspaceId } },
       });
       await tx.workspaceMember.delete({ where: { id: target.id } });
+      if (removedUser?.email) {
+        await revokePendingEmailInvitesForWorkspaceEmail(tx, workspaceId, removedUser.email);
+      }
     });
 
     await logActivity(workspaceId, ActivityType.MEMBER_REMOVED, {
@@ -1353,12 +1379,15 @@ export function v1Routes(
       );
     }
 
-    await prisma.workspaceMember.create({
-      data: {
-        workspaceId,
-        userId: invitee.id,
-        role: WorkspaceRole.MEMBER,
-      },
+    await prisma.$transaction(async (tx) => {
+      await revokePendingEmailInvitesForWorkspaceEmail(tx, workspaceId, invitee.email);
+      await tx.workspaceMember.create({
+        data: {
+          workspaceId,
+          userId: invitee.id,
+          role: WorkspaceRole.MEMBER,
+        },
+      });
     });
     await logActivity(workspaceId, ActivityType.MEMBER_INVITED, {
       actorUserId: c.get("user").id,

@@ -2,13 +2,13 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    id: "/viewer",
+    id: "/dashboard",
     name: "PlanSync",
     short_name: "PlanSync",
     description:
-      "Open construction PDFs in the browser: calibrate, measure, and mark up. Files stay local.",
-    /** Installed PWA opens straight to the viewer (Open in the top bar to pick a PDF). */
-    start_url: "/viewer",
+      "Construction workspace: projects, drawings, RFIs, takeoff, and PDF viewer — cloud or local.",
+    /** Home screen / installed app opens the signed-in workspace dashboard (not the public viewer). */
+    start_url: "/dashboard",
     scope: "/",
     display: "standalone",
     display_override: ["standalone", "browser"],
