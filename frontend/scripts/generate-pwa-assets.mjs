@@ -10,8 +10,8 @@ const iconDir = join(root, "public/icons");
 const splashDir = join(root, "public/splash");
 const iconSizes = [180, 192, 512];
 
-/** Matches enterprise shell / PWA splash (see manifest.background_color). */
-const SPLASH_BG = "#0f172a";
+/** Matches dashboard shell (`--enterprise-bg`) so iOS/Android splashes match the first paint. */
+const SPLASH_BG = "#f8fafc";
 
 async function allIconsPresent() {
   try {
@@ -68,7 +68,7 @@ if (regenIcons) {
 
 if (regenSplash) {
   for (const { w, h } of splashScreens) {
-    const logoSize = Math.min(420, Math.round(Math.min(w, h) * 0.19));
+    const logoSize = Math.min(440, Math.round(Math.min(w, h) * 0.22));
     const logoPng = await sharp(svg).resize(logoSize, logoSize).png().toBuffer();
     await sharp({
       create: {

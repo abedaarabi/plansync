@@ -75,7 +75,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0f172a",
+  themeColor: "#f8fafc",
+  colorScheme: "light",
 };
 
 export default function RootLayout({
@@ -90,6 +91,7 @@ export default function RootLayout({
     >
       <body
         className="flex min-h-dvh min-w-0 flex-col overflow-x-hidden bg-[var(--enterprise-bg)] font-sans text-[var(--enterprise-text)] antialiased"
+        style={{ backgroundColor: "#f8fafc" }}
         suppressHydrationWarning
       >
         <UmamiAnalytics />

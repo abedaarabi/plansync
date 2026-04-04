@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:pwa": "PWA_IN_DEV=1 next dev --webpack",
     "pwa:assets": "node scripts/generate-pwa-assets.mjs",
     "prebuild": "npm run pwa:assets",
     "build": "next build --webpack",

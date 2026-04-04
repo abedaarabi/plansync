@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* PWA / WebView: avoid black flash before CSS variables paint (especially standalone iOS). */
+html {
+  background-color: #f8fafc;
+  color-scheme: light;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

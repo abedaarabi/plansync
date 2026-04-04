@@ -13,7 +13,8 @@ loadEnv({ path: path.join(repoRoot, ".env.local"), override: true });
 
 const withPWA = withPWAInit({
   dest: "public",
-  disable: process.env.NODE_ENV === "development",
+  /** Normal `next dev` (Turbopack): off. Use `npm run dev:pwa` or `npm run build && npm start` to test install / SW. */
+  disable: process.env.NODE_ENV === "development" && process.env.PWA_IN_DEV !== "1",
   register: true,
   /** Avoid precaching very large marketing assets */
   publicExcludes: ["!images/**/*"],

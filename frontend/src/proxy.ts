@@ -93,7 +93,50 @@ async function canAccessProject(request: NextRequest, projectId: string): Promis
   }
 }
 
+/** Same session signals as protected-route auth: `/api/v1/me` or Better Auth `get-session` fallback. */
+async function requestHasSession(request: NextRequest): Promise<boolean> {
+  const base = authCheckBase(request);
+  const headers = authCheckHeaders(request);
+  let res: Response;
+  try {
+    res = await fetch(`${base}/api/v1/me`, {
+      headers,
+      cache: "no-store",
+    });
+  } catch {
+    return false;
+  }
+
+  if (res.ok) {
+    try {
+      const data = (await res.json()) as SessionPayload;
+      return Boolean(data?.user);
+    } catch {
+      return false;
+    }
+  }
+
+  try {
+    const authRes = await fetch(`${base}/api/auth/get-session`, {
+      headers,
+      cache: "no-store",
+    });
+    if (!authRes.ok) return false;
+    const authData = (await authRes.json()) as AuthSessionPayload;
+    return Boolean(authData?.user && authData?.session);
+  } catch {
+    return false;
+  }
+}
+
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname === "/") {
+    if (await requestHasSession(request)) {
+      return NextResponse.redirect(new URL("/projects", request.url));
+    }
+    return NextResponse.next();
+  }
+
   if (!isProtectedPath(request.nextUrl.pathname) && !isCloudViewerRequest(request)) {
     return NextResponse.next();
   }
@@ -168,6 +211,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/dashboard",
     "/dashboard/:path*",
     "/account",

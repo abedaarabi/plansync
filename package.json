@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "concurrently -n frontend,backend -c cyan,magenta \"npm run dev -w @plansync/web\" \"npm run dev -w backend\"",
     "dev:frontend": "npm run dev -w @plansync/web",
+    "dev:pwa:frontend": "npm run dev:pwa -w @plansync/web",
     "dev:backend": "npm run dev -w backend",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",

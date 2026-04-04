@@ -50,6 +50,16 @@
     "media": "(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
   },
   {
+    "w": 1206,
+    "h": 2622,
+    "media": "(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+  },
+  {
+    "w": 1320,
+    "h": 2868,
+    "media": "(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+  },
+  {
     "w": 1536,
     "h": 2048,
     "media": "(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
