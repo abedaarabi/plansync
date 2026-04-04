@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useMemo } from "react";
 import { fetchMe } from "@/lib/api-client";
+import { workspaceEnterpriseCssVars } from "@/lib/enterpriseTheme";
 import { qk } from "@/lib/queryKeys";
 import type { MeResponse, MeWorkspace } from "@/types/enterprise";
 
@@ -33,9 +34,16 @@ export function EnterpriseWorkspaceProvider({ children }: { children: React.Reac
 
   const value = useMemo(() => ({ loading, me, primary, refetch }), [loading, me, primary, refetch]);
 
+  const themeStyle = useMemo(
+    () => workspaceEnterpriseCssVars(primary?.workspace.primaryColor),
+    [primary?.workspace.primaryColor],
+  );
+
   return (
     <EnterpriseWorkspaceContext.Provider value={value}>
-      {children}
+      <div className="contents" style={themeStyle}>
+        {children}
+      </div>
     </EnterpriseWorkspaceContext.Provider>
   );
 }

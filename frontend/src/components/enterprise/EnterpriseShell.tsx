@@ -2,37 +2,49 @@
 
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+
+const ENTERPRISE_SIDEBAR_COLLAPSED_KEY = "plansync-enterprise-sidebar-collapsed";
 import { CommandPalette } from "./CommandPalette";
 import { EnterpriseSidebar } from "./EnterpriseSidebar";
 import { EnterpriseTopBar } from "./EnterpriseTopBar";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { EnterpriseWorkspaceProvider } from "./EnterpriseWorkspaceContext";
+import { ProjectSessionRedirect } from "./ProjectSessionRedirect";
 import { UploadProgressDock } from "./UploadProgressDock";
-
-const SIDEBAR_STORAGE_KEY = "plansync-enterprise-sidebar-v1";
 
 export function EnterpriseShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
+  const [sidebarPrefsReady, setSidebarPrefsReady] = useState(false);
 
   const openPalette = useCallback(() => setCommandOpen(true), []);
   const closePalette = useCallback(() => setCommandOpen(false), []);
-  const openMobileNav = useCallback(() => setMobileNavOpen(true), []);
+  const toggleMobileNav = useCallback(() => setMobileNavOpen((o) => !o), []);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
-
-  const toggleSidebar = useCallback(() => {
-    setSidebarExpanded((e) => {
-      const next = !e;
-      try {
-        localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "expanded" : "collapsed");
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
+  const toggleDesktopSidebar = useCallback(() => {
+    setDesktopSidebarCollapsed((c) => !c);
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ENTERPRISE_SIDEBAR_COLLAPSED_KEY);
+      setDesktopSidebarCollapsed(raw === "1");
+    } catch {
+      /* private mode / quota */
+    }
+    setSidebarPrefsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarPrefsReady) return;
+    try {
+      localStorage.setItem(ENTERPRISE_SIDEBAR_COLLAPSED_KEY, desktopSidebarCollapsed ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [desktopSidebarCollapsed, sidebarPrefsReady]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -41,17 +53,25 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
         setCommandOpen((o) => !o);
       }
       if (e.key === "Escape") setMobileNavOpen(false);
+
       if (e.key === "[" || e.key === "]") {
-        const t = e.target as HTMLElement | null;
-        if (t?.closest?.("input, textarea, select, [contenteditable]")) return;
-        if (!window.matchMedia("(min-width: 1024px)").matches) return;
+        const el = e.target;
+        if (
+          el instanceof HTMLElement &&
+          (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")
+        ) {
+          return;
+        }
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        const mq = window.matchMedia("(min-width: 1024px)");
+        if (!mq.matches) return;
         e.preventDefault();
-        toggleSidebar();
+        setDesktopSidebarCollapsed((c) => !c);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggleSidebar]);
+  }, []);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
@@ -75,22 +95,10 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
     setMobileNavOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
-    try {
-      if (
-        typeof window !== "undefined" &&
-        localStorage.getItem(SIDEBAR_STORAGE_KEY) === "collapsed"
-      ) {
-        setSidebarExpanded(false);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
   return (
     <QueryProvider>
       <EnterpriseWorkspaceProvider>
+        <ProjectSessionRedirect />
         <div
           className="flex h-dvh min-h-0 w-full flex-col bg-[var(--enterprise-bg)] text-[var(--enterprise-text)] lg:flex-row"
           style={{ fontFamily: "var(--font-inter), ui-sans-serif, system-ui, sans-serif" }}
@@ -106,14 +114,14 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
           <EnterpriseSidebar
             mobileOpen={mobileNavOpen}
             onCloseMobile={closeMobileNav}
-            expanded={sidebarExpanded}
+            desktopCollapsed={desktopSidebarCollapsed}
+            onToggleDesktopCollapse={toggleDesktopSidebar}
           />
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:border-l lg:border-[var(--enterprise-border-subtle)]/80 lg:shadow-[var(--enterprise-shadow-inner)]">
             <EnterpriseTopBar
               onOpenCommandPalette={openPalette}
-              onOpenMobileNav={openMobileNav}
-              sidebarExpanded={sidebarExpanded}
-              onToggleSidebar={toggleSidebar}
+              onToggleMobileNav={toggleMobileNav}
+              mobileNavOpen={mobileNavOpen}
             />
             <main className="enterprise-scrollbar enterprise-main-canvas min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
               <div className="enterprise-main-inner min-h-full">{children}</div>

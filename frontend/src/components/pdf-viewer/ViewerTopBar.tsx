@@ -26,6 +26,8 @@ import {
   FileText,
   Keyboard,
   Library,
+  PanelLeft,
+  X,
 } from "lucide-react";
 import { fetchMe, fetchProject, putViewerState } from "@/lib/api-client";
 import {
@@ -149,6 +151,8 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
   const setMeasureUnit = useViewerStore((s) => s.setMeasureUnit);
+  const mobileLeftToolsOpen = useViewerStore((s) => s.mobileLeftToolsOpen);
+  const toggleMobileLeftTools = useViewerStore((s) => s.toggleMobileLeftTools);
 
   const { data: me, isPending: mePending } = useQuery({
     queryKey: qk.me(),
@@ -261,6 +265,28 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               Sync
             </span>
           </div>
+          {pdfUrl ? (
+            <button
+              type="button"
+              className={`viewer-focus-ring flex min-h-8 shrink-0 items-center justify-center rounded-md border border-[#334155] bg-[#1E293B] p-1.5 text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155] active:scale-[0.98] lg:hidden ${
+                mobileLeftToolsOpen
+                  ? "border-[var(--viewer-primary)]/50 bg-[#1e3a5f] text-white"
+                  : ""
+              }`}
+              aria-label={
+                mobileLeftToolsOpen ? "Close sheet tools sidebar" : "Open sheet tools sidebar"
+              }
+              aria-expanded={mobileLeftToolsOpen}
+              title={mobileLeftToolsOpen ? "Close tools" : "Draw, measure, pages, outline"}
+              onClick={() => toggleMobileLeftTools()}
+            >
+              {mobileLeftToolsOpen ? (
+                <X className="h-4 w-4 shrink-0" strokeWidth={2} />
+              ) : (
+                <PanelLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
+              )}
+            </button>
+          ) : null}
           {mePending ? (
             <button
               type="button"

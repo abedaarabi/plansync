@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 
 type Point = { date: string; count: number };
 
@@ -9,6 +9,7 @@ type Props = {
   className?: string;
   /** Defaults to workspace-oriented copy when omitted. */
   ariaLabel?: string;
+  /** Shown in legend; omit to use default caption. */
   caption?: string;
 };
 
@@ -16,6 +17,19 @@ function formatDay(isoDate: string): string {
   try {
     const d = new Date(isoDate + "T12:00:00Z");
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return isoDate;
+  }
+}
+
+function formatDayLong(isoDate: string): string {
+  try {
+    const d = new Date(isoDate + "T12:00:00Z");
+    return d.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
   } catch {
     return isoDate;
   }
@@ -29,154 +43,350 @@ function rolling7Avg(data: Point[]): number[] {
   });
 }
 
+function axisCeiling(dataMax: number, avgMax: number): number {
+  const raw = Math.max(1, dataMax, avgMax);
+  const padded = raw + Math.max(1, raw * 0.1);
+  const c = Math.ceil(padded);
+  return Math.max(4, c);
+}
+
 export function DashboardActivityChart({
   data,
   className = "",
   ariaLabel = "14-day workspace activity chart",
-  caption = "Daily events (blue) · 7-day average (green)",
+  caption,
 }: Props) {
   const gradId = useId().replace(/:/g, "");
-  const { lineD, avgD, areaD, points, w, h, pad } = useMemo(() => {
-    const w = 520;
-    const h = 168;
-    const pad = { l: 36, r: 14, t: 20, b: 34 };
-    const innerW = w - pad.l - pad.r;
-    const innerH = h - pad.t - pad.b;
-    const n = Math.max(1, data.length - 1);
-    const avg = rolling7Avg(data);
-    const maxC = Math.max(1, ...data.map((d) => d.count), ...avg);
+  const [hovered, setHovered] = useState<number | null>(null);
 
-    const points = data.map((d, i) => {
-      const x = pad.l + (i / n) * innerW;
-      const y = pad.t + innerH - (d.count / maxC) * innerH;
-      return { x, y, ...d };
-    });
+  const legendDaily =
+    caption ?? "Daily events use your workspace primary color; the dashed line is a 7-day average.";
 
-    const avgPoints = avg.map((v, i) => {
-      const x = pad.l + (i / n) * innerW;
-      const y = pad.t + innerH - (v / maxC) * innerH;
-      return { x, y, v };
-    });
-
-    const lineD = points
-      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-      .join(" ");
-    const avgD = avgPoints
-      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-      .join(" ");
-
-    const areaD =
-      points.length > 0
-        ? `M ${points[0].x} ${pad.t + innerH} ` +
-          points.map((p) => `L ${p.x} ${p.y}`).join(" ") +
-          ` L ${points[points.length - 1].x} ${pad.t + innerH} Z`
-        : "";
-
-    return { lineD, avgD, areaD, points, w, h, pad };
+  const stats = useMemo(() => {
+    if (!data.length) return null;
+    const total = data.reduce((a, x) => a + x.count, 0);
+    let peak = data[0]!;
+    for (const x of data) {
+      if (x.count > peak.count) peak = x;
+    }
+    const mid = Math.floor(data.length / 2);
+    const firstHalf = data.slice(0, mid).reduce((a, x) => a + x.count, 0);
+    const secondHalf = data.slice(mid).reduce((a, x) => a + x.count, 0);
+    const delta = secondHalf - firstHalf;
+    return { total, peak, delta };
   }, [data]);
+
+  const { lineD, avgD, areaD, points, avg, axisMax, yTicks, w, h, pad, innerW, innerH, labelIdx } =
+    useMemo(() => {
+      const w = 560;
+      const h = 196;
+      const pad = { l: 40, r: 12, t: 16, b: 40 };
+      const innerW = w - pad.l - pad.r;
+      const innerH = h - pad.t - pad.b;
+      const n = Math.max(1, data.length - 1);
+      const avg = rolling7Avg(data);
+      const dataMax = Math.max(0, ...data.map((d) => d.count));
+      const avgMax = Math.max(0, ...avg);
+      const axisMax = axisCeiling(dataMax, avgMax);
+
+      const points = data.map((d, i) => {
+        const x = pad.l + (i / n) * innerW;
+        const y = pad.t + innerH - (d.count / axisMax) * innerH;
+        return { x, y, ...d };
+      });
+
+      const avgPoints = avg.map((v, i) => {
+        const x = pad.l + (i / n) * innerW;
+        const y = pad.t + innerH - (v / axisMax) * innerH;
+        return { x, y, v };
+      });
+
+      const lineD = points
+        .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+        .join(" ");
+      const avgD = avgPoints
+        .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+        .join(" ");
+
+      const areaD =
+        points.length > 0
+          ? `M ${points[0].x} ${pad.t + innerH} ` +
+            points.map((p) => `L ${p.x} ${p.y}`).join(" ") +
+            ` L ${points[points.length - 1].x} ${pad.t + innerH} Z`
+          : "";
+
+      const yTicks = [0, 0.5, 1].map((t) => ({
+        key: String(t),
+        t,
+        value: Math.round(axisMax * (1 - t)),
+        y: pad.t + t * innerH,
+      }));
+
+      const labelIdx =
+        data.length <= 7
+          ? data.map((_, i) => i)
+          : [0, Math.floor((data.length - 1) / 2), data.length - 1].filter(
+              (v, i, a) => a.indexOf(v) === i,
+            );
+
+      return {
+        lineD,
+        avgD,
+        areaD,
+        points,
+        avg,
+        axisMax,
+        yTicks,
+        w,
+        h,
+        pad,
+        innerW,
+        innerH,
+        labelIdx,
+      };
+    }, [data]);
+
+  const clearHover = useCallback(() => setHovered(null), []);
 
   if (!data.length) {
     return (
       <div
-        className={`flex h-44 items-center justify-center rounded-lg border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-sm text-[var(--enterprise-text-muted)] ${className}`}
+        className={`flex min-h-[11rem] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 px-4 py-8 text-center ${className}`}
       >
-        No activity in the last 14 days yet.
+        <p className="text-sm font-medium text-[var(--enterprise-text)]">No activity yet</p>
+        <p className="max-w-sm text-[13px] leading-relaxed text-[var(--enterprise-text-muted)]">
+          Uploads, issues, invites, and other workspace events will appear here for the last 14
+          days.
+        </p>
       </div>
     );
   }
 
-  const labelIdx = [0, Math.floor((data.length - 1) / 2), data.length - 1].filter(
-    (v, i, a) => a.indexOf(v) === i,
-  );
+  const hi = hovered != null && data[hovered] ? hovered : null;
+  const hiPoint = hi != null ? points[hi] : null;
+  const hiAvg = hi != null ? avg[hi] : null;
 
   return (
-    <div className={className}>
-      <svg
-        viewBox={`0 0 ${w} ${h}`}
-        className="max-h-[200px] h-auto w-full text-[var(--enterprise-primary)]"
-        role="img"
-        aria-label={ariaLabel}
+    <div className={`space-y-3 ${className}`}>
+      {stats ? (
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-[var(--enterprise-text-muted)]">
+          <span>
+            <span className="font-semibold tabular-nums text-[var(--enterprise-text)]">
+              {stats.total}
+            </span>{" "}
+            events (14 days)
+          </span>
+          <span>
+            Busiest:{" "}
+            <span className="font-semibold text-[var(--enterprise-text)]">
+              {formatDay(stats.peak.date)}
+            </span>{" "}
+            <span className="tabular-nums">({stats.peak.count})</span>
+          </span>
+          {data.length > 3 ? (
+            <span>
+              vs first half:{" "}
+              <span
+                className={`font-semibold tabular-nums ${
+                  stats.delta > 0
+                    ? "text-[var(--enterprise-success)]"
+                    : stats.delta < 0
+                      ? "text-[var(--enterprise-text-muted)]"
+                      : "text-[var(--enterprise-text)]"
+                }`}
+              >
+                {stats.delta > 0 ? "+" : ""}
+                {stats.delta}
+              </span>
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div
+        className="relative w-full"
+        onPointerLeave={clearHover}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) clearHover();
+        }}
       >
-        <defs>
-          <linearGradient id={`${gradId}-dash-area`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgb(37 99 235)" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="rgb(37 99 235)" stopOpacity="0" />
-          </linearGradient>
-          <linearGradient id={`${gradId}-dash-line`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="rgb(96 165 250)" />
-            <stop offset="100%" stopColor="rgb(37 99 235)" />
-          </linearGradient>
-        </defs>
+        <svg
+          viewBox={`0 0 ${w} ${h}`}
+          className="h-auto w-full max-h-[220px] touch-manipulation"
+          role="img"
+          aria-label={ariaLabel}
+        >
+          <title>{ariaLabel}</title>
+          <defs>
+            <linearGradient id={`${gradId}-dash-area`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--enterprise-primary)" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="var(--enterprise-primary)" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id={`${gradId}-dash-line`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="var(--enterprise-primary)" stopOpacity="0.75" />
+              <stop offset="100%" stopColor="var(--enterprise-primary)" stopOpacity="1" />
+            </linearGradient>
+          </defs>
 
-        {[0, 0.5, 1].map((t) => {
-          const y = pad.t + (1 - t) * (h - pad.t - pad.b);
-          return (
-            <line
-              key={t}
-              x1={pad.l}
-              y1={y}
-              x2={w - pad.r}
-              y2={y}
-              stroke="var(--enterprise-border)"
-              strokeWidth="1"
-              strokeOpacity={t === 1 ? 0.4 : 0.18}
-            />
-          );
-        })}
+          {yTicks.map(({ key, t, value, y }) => (
+            <g key={key}>
+              <line
+                x1={pad.l}
+                y1={y}
+                x2={w - pad.r}
+                y2={y}
+                stroke="var(--enterprise-border)"
+                strokeWidth="1"
+                strokeOpacity={t === 1 ? 0.45 : 0.14}
+              />
+              <text
+                x={pad.l - 8}
+                y={y + 4}
+                textAnchor="end"
+                fill="var(--enterprise-text-muted)"
+                style={{ fontSize: "10px", fontVariantNumeric: "tabular-nums" }}
+                pointerEvents="none"
+              >
+                {value}
+              </text>
+            </g>
+          ))}
 
-        <path d={areaD} fill={`url(#${gradId}-dash-area)`} />
+          <path d={areaD} fill={`url(#${gradId}-dash-area)`} pointerEvents="none" />
 
-        <path
-          d={lineD}
-          fill="none"
-          stroke={`url(#${gradId}-dash-line)`}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        <path
-          d={avgD}
-          fill="none"
-          stroke="rgb(16 185 129)"
-          strokeWidth="2"
-          strokeDasharray="6 5"
-          strokeLinecap="round"
-          opacity={0.9}
-        />
-
-        {points.map((p) => (
-          <circle
-            key={p.date}
-            cx={p.x}
-            cy={p.y}
-            r="3.5"
-            fill="var(--enterprise-surface)"
-            stroke="rgb(37 99 235)"
-            strokeWidth="2"
+          <path
+            d={lineD}
+            fill="none"
+            stroke={`url(#${gradId}-dash-line)`}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            pointerEvents="none"
           />
-        ))}
 
-        {labelIdx.map((i) => {
-          const x = points[i]?.x ?? pad.l;
-          return (
-            <text
-              key={data[i].date}
-              x={x}
-              y={h - 8}
-              textAnchor={i === 0 ? "start" : i === data.length - 1 ? "end" : "middle"}
-              fill="var(--enterprise-text-muted)"
-              style={{ fontSize: "10px" }}
-            >
-              {formatDay(data[i].date)}
-            </text>
-          );
-        })}
+          <path
+            d={avgD}
+            fill="none"
+            stroke="var(--enterprise-success)"
+            strokeWidth="2"
+            strokeDasharray="6 5"
+            strokeLinecap="round"
+            opacity={0.92}
+            pointerEvents="none"
+          />
 
-        <text x={pad.l} y={14} fill="var(--enterprise-text-muted)" style={{ fontSize: "10px" }}>
-          {caption}
-        </text>
-      </svg>
+          {hi != null && hiPoint ? (
+            <line
+              x1={hiPoint.x}
+              y1={pad.t}
+              x2={hiPoint.x}
+              y2={pad.t + innerH}
+              stroke="var(--enterprise-primary)"
+              strokeWidth="1"
+              strokeOpacity={0.35}
+              strokeDasharray="4 3"
+              pointerEvents="none"
+            />
+          ) : null}
+
+          {points.map((p, i) => (
+            <circle
+              key={p.date}
+              cx={p.x}
+              cy={p.y}
+              r={hi === i ? 5.5 : 3.5}
+              fill="var(--enterprise-surface)"
+              stroke="var(--enterprise-primary)"
+              strokeWidth={hi === i ? 2.5 : 2}
+              pointerEvents="none"
+              className="transition-[r,stroke-width] duration-150 ease-out"
+            />
+          ))}
+
+          {labelIdx.map((i) => {
+            const x = points[i]?.x ?? pad.l;
+            return (
+              <text
+                key={data[i].date}
+                x={x}
+                y={h - 10}
+                textAnchor={i === 0 ? "start" : i === data.length - 1 ? "end" : "middle"}
+                fill="var(--enterprise-text-muted)"
+                style={{ fontSize: "10px" }}
+                pointerEvents="none"
+              >
+                {formatDay(data[i].date)}
+              </text>
+            );
+          })}
+
+          {/* Hit targets on top for hover / touch */}
+          {data.map((d, i) => {
+            const x0 = i === 0 ? pad.l : (points[i - 1].x + points[i].x) / 2;
+            const x1 = i === data.length - 1 ? w - pad.r : (points[i].x + points[i + 1].x) / 2;
+            return (
+              <rect
+                key={`hit-${d.date}`}
+                x={x0}
+                y={pad.t}
+                width={Math.max(4, x1 - x0)}
+                height={innerH + pad.b}
+                fill="transparent"
+                className="cursor-crosshair"
+                onPointerEnter={() => setHovered(i)}
+                onPointerDown={() => setHovered(i)}
+              />
+            );
+          })}
+        </svg>
+
+        {hi != null && hiPoint && data[hi] != null && hiAvg != null ? (
+          <div
+            className="pointer-events-none absolute z-10 min-w-[9.5rem] rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-md)]"
+            style={{
+              left: `${(hiPoint.x / w) * 100}%`,
+              top: "4px",
+              transform: "translateX(-50%)",
+            }}
+            role="status"
+            aria-live="polite"
+          >
+            <p className="text-[11px] font-semibold text-[var(--enterprise-text)]">
+              {formatDayLong(data[hi].date)}
+            </p>
+            <p className="mt-1 text-[12px] tabular-nums text-[var(--enterprise-text-muted)]">
+              <span className="font-semibold text-[var(--enterprise-primary)]">
+                {data[hi].count}
+              </span>{" "}
+              events
+            </p>
+            <p className="mt-0.5 text-[11px] tabular-nums text-[var(--enterprise-text-muted)]">
+              7-day avg:{" "}
+              <span className="font-medium text-[var(--enterprise-success)]">
+                {hiAvg.toFixed(1)}
+              </span>
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[var(--enterprise-border)]/70 pt-3 text-[11px] text-[var(--enterprise-text-muted)]">
+        <span className="inline-flex items-center gap-2">
+          <span
+            className="h-2 w-5 shrink-0 rounded-full bg-[var(--enterprise-primary)]"
+            aria-hidden
+          />
+          Daily count
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span
+            className="h-0.5 w-5 border-t-2 border-dashed border-[var(--enterprise-success)]"
+            aria-hidden
+          />
+          7-day average
+        </span>
+        <span className="min-w-0 text-[10px] leading-snug opacity-90">{legendDaily}</span>
+      </div>
     </div>
   );
 }

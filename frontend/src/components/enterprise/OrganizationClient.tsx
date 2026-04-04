@@ -1,19 +1,27 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { patchWorkspace, uploadWorkspaceLogo } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
-import type { MeResponse } from "@/types/enterprise";
+import type { MeResponse, MeWorkspace } from "@/types/enterprise";
+import {
+  isValidWorkspacePrimaryHex,
+  normalizeWorkspacePrimaryHex,
+  workspaceEnterpriseCssVars,
+} from "@/lib/enterpriseTheme";
 import {
   faviconUrlFromHostname,
   isGoogleFaviconUrl,
+  isWorkspaceHostedLogoPath,
   normalizeWorkspaceWebsite,
 } from "@/lib/workspaceBranding";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { WorkspaceTeamClient } from "@/components/enterprise/WorkspaceTeamClient";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
+import { isSuperAdmin, isWorkspaceManager } from "@/lib/workspaceRole";
 
 type OrgTab = "organization" | "people" | "invite-member";
 
@@ -23,7 +31,8 @@ export function OrganizationClient() {
   const searchParams = useSearchParams();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isAdmin = primary?.role === "ADMIN";
+  const isManager = isWorkspaceManager(primary?.role);
+  const superAdmin = isSuperAdmin(primary?.role);
   const ws = primary?.workspace;
 
   const [name, setName] = useState("");
@@ -35,22 +44,23 @@ export function OrganizationClient() {
   const [websiteFieldError, setWebsiteFieldError] = useState<string | null>(null);
   const [websitePreviewHost, setWebsitePreviewHost] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [primaryColor, setPrimaryColor] = useState("#2563EB");
 
   const [tab, setTabState] = useState<OrgTab>("organization");
 
   useEffect(() => {
     const t = searchParams.get("tab");
-    if (t === "invite-member" && isAdmin) setTabState("invite-member");
+    if (t === "invite-member" && isManager) setTabState("invite-member");
     else if (t === "people") setTabState("people");
     else if (t === "organization") setTabState("organization");
-  }, [searchParams, isAdmin]);
+  }, [searchParams, isManager]);
 
   useEffect(() => {
-    if (!isAdmin && tab === "invite-member") {
+    if (!isManager && tab === "invite-member") {
       setTabState("organization");
       router.replace("/organization?tab=organization", { scroll: false });
     }
-  }, [isAdmin, tab, router]);
+  }, [isManager, tab, router]);
 
   function setTab(id: OrgTab) {
     setTabState(id);
@@ -61,9 +71,11 @@ export function OrganizationClient() {
     if (!ws) return;
     setName(ws.name);
     setSlug(ws.slug);
-    setLogoUrl(ws.logoUrl ?? "");
+    const lu = ws.logoUrl ?? "";
+    setLogoUrl(isWorkspaceHostedLogoPath(lu) ? "" : lu);
     setDescription(ws.description ?? "");
     setWebsite(ws.website ?? "");
+    setPrimaryColor(ws.primaryColor ?? "#2563EB");
     setWebsiteFieldError(null);
     if (ws.website) {
       const n = normalizeWorkspaceWebsite(ws.website);
@@ -81,6 +93,7 @@ export function OrganizationClient() {
         logoUrl: logoUrl.trim() || null,
         description: description.trim() || null,
         website: website.trim() || null,
+        primaryColor: isValidWorkspacePrimaryHex(primaryColor) ? primaryColor.trim() : undefined,
       }),
     onMutate: async () => {
       const prev = queryClient.getQueryData<MeResponse | null>(qk.me());
@@ -99,6 +112,7 @@ export function OrganizationClient() {
                   logoUrl: logoUrl.trim() || null,
                   description: description.trim() || null,
                   website: website.trim() || null,
+                  primaryColor: normalizeWorkspacePrimaryHex(primaryColor.trim() || undefined),
                 },
               },
         ),
@@ -119,7 +133,7 @@ export function OrganizationClient() {
 
   function onSaveOrg(e: React.FormEvent) {
     e.preventDefault();
-    if (!wid || !isAdmin) return;
+    if (!wid || !superAdmin) return;
     const w = website.trim();
     if (w) {
       const n = normalizeWorkspaceWebsite(w);
@@ -128,6 +142,14 @@ export function OrganizationClient() {
         setMsg({ type: "err", text: n.message });
         return;
       }
+    }
+    const pc = primaryColor.trim();
+    if (pc && !isValidWorkspacePrimaryHex(pc)) {
+      setMsg({
+        type: "err",
+        text: "Primary color must be a hex value like #2563EB (6 digits after #).",
+      });
+      return;
     }
     setMsg(null);
     saveMutation.mutate();
@@ -153,7 +175,8 @@ export function OrganizationClient() {
     );
   }
 
-  const roleLabel = primary.role === "ADMIN" ? "Admin" : "Member";
+  const roleLabel =
+    primary.role === "SUPER_ADMIN" ? "Super Admin" : primary.role === "ADMIN" ? "Admin" : "Member";
 
   const tabBtn = (id: OrgTab, label: string) => (
     <button
@@ -175,7 +198,7 @@ export function OrganizationClient() {
       <div className="flex flex-wrap gap-1 border-b border-[var(--enterprise-border)]">
         {tabBtn("organization", "Branding")}
         {tabBtn("people", "People")}
-        {isAdmin ? tabBtn("invite-member", "Invite member") : null}
+        {isManager ? tabBtn("invite-member", "Invite member") : null}
       </div>
 
       {tab === "organization" ? (
@@ -198,8 +221,12 @@ export function OrganizationClient() {
             ) : null}
           </div>
 
-          {isAdmin ? (
-            <form onSubmit={onSaveOrg} className="mt-8 space-y-4">
+          {superAdmin ? (
+            <form
+              onSubmit={onSaveOrg}
+              className="mt-8 space-y-4"
+              style={workspaceEnterpriseCssVars(primaryColor)}
+            >
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
@@ -234,6 +261,46 @@ export function OrganizationClient() {
                   rows={3}
                   className="mt-1.5 w-full resize-y rounded-lg border border-[var(--enterprise-border)] px-3 py-2 text-sm"
                 />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
+                  Primary color
+                </label>
+                <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
+                  Buttons, links, and focus accents across the app. Pick a color or paste{" "}
+                  <span className="font-mono">#RRGGBB</span>.
+                </p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                  <input
+                    type="color"
+                    value={
+                      isValidWorkspacePrimaryHex(primaryColor)
+                        ? primaryColor.trim()
+                        : normalizeWorkspacePrimaryHex(undefined)
+                    }
+                    onChange={(e) => setPrimaryColor(e.target.value.toUpperCase())}
+                    className="h-11 w-14 cursor-pointer rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-1 shadow-[var(--enterprise-shadow-xs)]"
+                    aria-label="Choose primary brand color"
+                  />
+                  <input
+                    value={primaryColor}
+                    onChange={(e) => setPrimaryColor(e.target.value)}
+                    onBlur={() => {
+                      const t = primaryColor.trim();
+                      if (t === "") {
+                        setPrimaryColor(normalizeWorkspacePrimaryHex(undefined));
+                        return;
+                      }
+                      if (isValidWorkspacePrimaryHex(t)) {
+                        setPrimaryColor(t.toUpperCase());
+                      }
+                    }}
+                    placeholder="#2563EB"
+                    spellCheck={false}
+                    className="w-full min-w-[9rem] max-w-[11rem] rounded-lg border border-[var(--enterprise-border)] px-3 py-2 font-mono text-sm"
+                    autoComplete="off"
+                  />
+                </div>
               </div>
               <div>
                 <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
@@ -317,8 +384,24 @@ export function OrganizationClient() {
                     setLogoUploading(true);
                     setMsg(null);
                     try {
-                      await uploadWorkspaceLogo(wid, f);
-                      await queryClient.invalidateQueries({ queryKey: qk.me() });
+                      const updated = await uploadWorkspaceLogo(wid, f);
+                      queryClient.setQueryData<MeResponse | null>(qk.me(), (prev) => {
+                        if (!prev) return prev;
+                        return {
+                          ...prev,
+                          workspaces: prev.workspaces.map((mw) =>
+                            mw.workspace.id !== wid
+                              ? mw
+                              : {
+                                  ...mw,
+                                  workspace: {
+                                    ...mw.workspace,
+                                    ...updated,
+                                  } as MeWorkspace["workspace"],
+                                },
+                          ),
+                        };
+                      });
                       setLogoUrl("");
                       setMsg({
                         type: "ok",
@@ -390,16 +473,35 @@ export function OrganizationClient() {
                 </div>
               ) : null}
               <p className="text-xs text-[var(--enterprise-text-muted)]">
-                Only admins can edit organization details and send invites.
+                Only the Super Admin can edit branding. Admins can manage people and invites.
               </p>
             </dl>
           )}
+          {superAdmin ? (
+            <div className="mt-8 border-t border-[var(--enterprise-border)] pt-6">
+              <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">
+                Material catalog
+              </h3>
+              <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+                Custom columns (for example CO₂ or certifications) are configured per workspace in
+                the{" "}
+                <Link
+                  href={`/workspaces/${ws.id}/materials`}
+                  className="font-medium text-[var(--enterprise-primary)] hover:underline"
+                >
+                  Material Hub
+                </Link>{" "}
+                under{" "}
+                <span className="font-medium text-[var(--enterprise-text)]">Catalog fields</span>.
+              </p>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
       {tab === "people" ? <WorkspaceTeamClient embedded variant="full" /> : null}
 
-      {tab === "invite-member" && isAdmin ? (
+      {tab === "invite-member" && isManager ? (
         <WorkspaceTeamClient embedded variant="inviteOnly" />
       ) : null}
     </div>

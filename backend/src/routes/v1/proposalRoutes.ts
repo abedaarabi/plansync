@@ -1308,7 +1308,9 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
       where: { workspaceId_userId: { workspaceId, userId: c.get("user").id } },
     });
     if (!m) return c.json({ error: "Forbidden" }, 403);
-    if (m.role !== WorkspaceRole.ADMIN) return c.json({ error: "Admin only" }, 403);
+    if (m.role !== WorkspaceRole.ADMIN && m.role !== WorkspaceRole.SUPER_ADMIN) {
+      return c.json({ error: "Admin only" }, 403);
+    }
     const t = await prisma.proposalTemplate.findFirst({ where: { id: templateId, workspaceId } });
     if (!t) return c.json({ error: "Not found" }, 404);
     await prisma.proposalTemplate.delete({ where: { id: templateId } });

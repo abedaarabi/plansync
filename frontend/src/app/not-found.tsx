@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <div className="landing-atmosphere landing-dots flex min-h-dvh flex-col items-center justify-center px-5 py-16 font-sans">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white/90 px-8 py-12 text-center shadow-[0_1px_0_0_rgba(255,255,255,0.8)_inset,0_8px_32px_-8px_rgba(15,23,42,0.12)] backdrop-blur-md sm:px-10">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white/90 px-8 py-12 text-center shadow-[0_1px_0_0_rgba(255,255,255,0.8)_inset,0_10px_40px_-14px_rgba(15,23,42,0.06)] backdrop-blur-md sm:px-10">
         <div className="mb-6 flex justify-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-md shadow-slate-900/10 ring-1 ring-slate-200/70">
             <Image

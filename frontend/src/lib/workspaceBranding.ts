@@ -42,3 +42,9 @@ export function normalizeWorkspaceWebsite(
   }
   return { ok: true, url, hostname };
 }
+
+/** Same-origin path returned by the API for an uploaded workspace logo (not a user override URL). */
+export function isWorkspaceHostedLogoPath(url: string | null | undefined): boolean {
+  const t = url?.trim() ?? "";
+  return t.startsWith("/api/v1/public/workspaces/") && t.endsWith("/logo");
+}

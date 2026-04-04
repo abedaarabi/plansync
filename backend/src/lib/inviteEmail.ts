@@ -1,17 +1,75 @@
 import type { Env } from "./env.js";
+import { faviconUrlFromHostname, normalizeWorkspaceWebsite } from "./workspaceBranding.js";
 
-type InviteEmailInput = {
+export type InviteEmailKind = "INTERNAL" | "CLIENT" | "CONTRACTOR" | "SUBCONTRACTOR";
+
+export type InviteEmailInput = {
   to: string;
   inviterName: string;
   inviterImage: string | null;
   workspaceName: string;
+  /** Resolved image URL for the workspace (uploaded logo, relative resolved, or favicon from website). */
   workspaceLogoUrl: string | null;
   /** App origin (no trailing slash) — used for PlanSync assets and relative workspace logos */
   publicAppUrl: string;
   projectNames: string[];
   joinUrl: string;
   expiresLabel: string;
+  inviteKind?: InviteEmailKind;
+  trade?: string | null;
+  inviteeName?: string | null;
+  inviteeCompany?: string | null;
 };
+
+/** Logo URL, else favicon from workspace website (Google s2 resolver), for email `<img src>`. */
+export function resolveWorkspaceEmailLogoUrl(
+  publicAppUrl: string,
+  logoUrl: string | null | undefined,
+  website: string | null | undefined,
+  opts?: { workspaceId: string; logoS3Key: string | null | undefined },
+): string | null {
+  const base = publicAppUrl.replace(/\/$/, "");
+  if (opts?.logoS3Key && opts.workspaceId) {
+    return `${base}/api/v1/public/workspaces/${encodeURIComponent(opts.workspaceId)}/logo`;
+  }
+  const logo = logoUrl?.trim();
+  if (logo) {
+    if (logo.startsWith("https://") || logo.startsWith("http://")) return logo;
+    if (logo.startsWith("/")) return `${base}${logo}`;
+    return `${base}/${logo}`;
+  }
+  const site = website?.trim();
+  if (site) {
+    const n = normalizeWorkspaceWebsite(site);
+    if (n.ok) return faviconUrlFromHostname(n.hostname);
+  }
+  return null;
+}
+
+function inviteKindDisplay(kind: InviteEmailKind | undefined): string {
+  switch (kind) {
+    case "CLIENT":
+      return "Client";
+    case "CONTRACTOR":
+      return "Contractor";
+    case "SUBCONTRACTOR":
+      return "Subcontractor";
+    default:
+      return "Team member";
+  }
+}
+
+function inviteKindBlurb(kind: InviteEmailKind | undefined): string {
+  switch (kind) {
+    case "CLIENT":
+      return "You’ll use the client portal for the projects listed below.";
+    case "CONTRACTOR":
+    case "SUBCONTRACTOR":
+      return "You’ll collaborate on the projects below with a trade-scoped view where applicable.";
+    default:
+      return "You’ll join as part of the internal team for this workspace.";
+  }
+}
 
 /** Absolute http(s) URL for email clients; supports relative paths from the app. */
 function resolvePublicAssetUrl(publicAppUrl: string, url: string | null): string | null {
@@ -37,6 +95,31 @@ export function buildProjectInviteEmailHtml(input: InviteEmailInput): string {
   /** App icon from `public/icons` (same as PWA); PNG loads reliably in email. */
   const planSyncIconUrl = `${base}/icons/icon-192.png`;
   const workspaceResolved = resolvePublicAssetUrl(base, input.workspaceLogoUrl);
+
+  const kind = input.inviteKind ?? "INTERNAL";
+  const roleTitle = inviteKindDisplay(kind);
+  const roleBlurb = inviteKindBlurb(kind);
+  const greetName = input.inviteeName?.trim();
+  const company = input.inviteeCompany?.trim();
+  const trade = input.trade?.trim();
+  const greetingBlock = greetName
+    ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#0f172a">Hi ${escapeHtml(greetName)},</p>`
+    : "";
+
+  const accessDetails: string[] = [
+    `<strong style="color:#0f172a">${escapeHtml(roleTitle)}</strong>`,
+  ];
+  if (trade) accessDetails.push(`Discipline: ${escapeHtml(trade)}`);
+  if (company) accessDetails.push(`Organization: ${escapeHtml(company)}`);
+  const accessBlock = `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eff6ff;border-radius:14px;border:1px solid #bfdbfe;margin:0 0 4px 0">
+    <tr>
+      <td style="padding:14px 18px">
+        <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.06em">Your access</p>
+        <p style="margin:0;font-size:14px;line-height:1.55;color:#334155">${accessDetails.join(" · ")}</p>
+        <p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:#64748b">${escapeHtml(roleBlurb)}</p>
+      </td>
+    </tr>
+  </table>`;
 
   const workspaceBlock = workspaceResolved
     ? `<img src="${escapeHtml(workspaceResolved)}" alt="" width="64" height="64" style="display:block;border-radius:14px;border:1px solid #e2e8f0;background:#ffffff;object-fit:contain;padding:6px" />`
@@ -72,13 +155,21 @@ export function buildProjectInviteEmailHtml(input: InviteEmailInput): string {
     <tr>
       <td align="center">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;border-collapse:separate;border-radius:20px;overflow:hidden;background:#ffffff;box-shadow:0 25px 50px -12px rgba(15,23,42,0.12),0 0 0 1px rgba(15,23,42,0.04)">
-          <!-- Brand: icon only -->
+          <!-- Brand: PlanSync logo + wordmark -->
           <tr>
-            <td style="background:linear-gradient(160deg,#0f172a 0%,#1e293b 55%,#0f172a 100%);padding:36px 32px 32px;text-align:center">
+            <td style="background:linear-gradient(160deg,#0f172a 0%,#1e293b 55%,#0f172a 100%);padding:32px 32px 28px;text-align:center">
               <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:0 auto">
                 <tr>
                   <td style="background:#ffffff;border-radius:16px;padding:14px;box-shadow:0 10px 40px rgba(0,0,0,0.25)">
                     <img src="${escapeHtml(planSyncIconUrl)}" alt="PlanSync" width="48" height="48" style="display:block;width:48px;height:48px;border:0;outline:none" />
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top:18px">
+                    <p style="margin:0;font-size:22px;font-weight:800;letter-spacing:-0.03em;line-height:1.2">
+                      <span style="color:#f8fafc">Plan</span><span style="color:#3b82f6">Sync</span>
+                    </p>
+                    <p style="margin:6px 0 0;font-size:12px;font-weight:500;color:#94a3b8;letter-spacing:0.04em;text-transform:uppercase">Construction collaboration</p>
                   </td>
                 </tr>
               </table>
@@ -91,14 +182,22 @@ export function buildProjectInviteEmailHtml(input: InviteEmailInput): string {
               <h1 style="margin:0;font-size:22px;font-weight:700;color:#0f172a;line-height:1.25;letter-spacing:-0.02em">Join ${escapeHtml(input.workspaceName)}</h1>
             </td>
           </tr>
+          <tr>
+            <td style="padding:12px 32px 0;background:#ffffff">
+              ${greetingBlock}
+              ${accessBlock}
+            </td>
+          </tr>
           <!-- Workspace mark -->
           <tr>
-            <td style="padding:8px 32px 0;background:#ffffff">
+            <td style="padding:16px 32px 0;background:#ffffff">
+              <p style="margin:0 0 10px;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em">Workspace</p>
               <table role="presentation" cellspacing="0" cellpadding="0">
                 <tr>
                   <td style="vertical-align:middle;padding-right:16px">${workspaceBlock}</td>
                   <td style="vertical-align:middle">
-                    <p style="margin:0;font-size:13px;color:#64748b;line-height:1.5">You’ve been invited to collaborate on this workspace.</p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a">${escapeHtml(input.workspaceName)}</p>
+                    <p style="margin:6px 0 0;font-size:13px;color:#64748b;line-height:1.5">You’ve been invited to collaborate on this workspace.</p>
                   </td>
                 </tr>
               </table>
@@ -164,15 +263,30 @@ export function buildProjectInviteEmailText(input: InviteEmailInput): string {
     input.projectNames.length === 0
       ? "Projects: full workspace access."
       : `Projects:\n${input.projectNames.map((n) => `- ${n}`).join("\n")}`;
-  return `You're invited to ${input.workspaceName} on PlanSync
-
-${input.inviterName} invited you (${input.to}).
-
-${projects}
-
-Accept (expires ${input.expiresLabel}):
-${input.joinUrl}
-`;
+  const kind = input.inviteKind ?? "INTERNAL";
+  const lines: string[] = [
+    "PlanSync — construction collaboration",
+    "",
+    `You're invited to ${input.workspaceName} on PlanSync`,
+    "",
+  ];
+  const greet = input.inviteeName?.trim();
+  if (greet) lines.push(`Hi ${greet},`, "");
+  lines.push(`Your access: ${inviteKindDisplay(kind)}`);
+  if (input.trade?.trim()) lines.push(`Discipline: ${input.trade.trim()}`);
+  if (input.inviteeCompany?.trim()) lines.push(`Organization: ${input.inviteeCompany.trim()}`);
+  lines.push(
+    "",
+    inviteKindBlurb(kind),
+    "",
+    `${input.inviterName} invited you (${input.to}).`,
+    "",
+    projects,
+    "",
+    `Accept (expires ${input.expiresLabel}):`,
+    input.joinUrl,
+  );
+  return lines.join("\n");
 }
 
 export function inviteFromAddress(env: Env): string | null {

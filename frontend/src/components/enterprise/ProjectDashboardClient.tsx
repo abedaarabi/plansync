@@ -281,7 +281,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
           <Link
             key={s.label}
             href={s.href}
-            className="group border border-[#E2E8F0] bg-white outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-[#2563EB]/25 hover:shadow-[0_8px_24px_-8px_rgba(12,18,34,0.12)] focus-visible:ring-2 focus-visible:ring-[#2563EB]/35"
+            className="group border border-[#E2E8F0] bg-white outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-[#2563EB]/25 hover:shadow-[var(--enterprise-shadow-md)] focus-visible:ring-2 focus-visible:ring-[#2563EB]/35"
             style={{
               borderRadius: "12px",
               boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
@@ -313,31 +313,25 @@ export function ProjectDashboardClient({ projectId }: Props) {
         rfis={rfis}
       />
 
-      <section
-        className="border border-[#E2E8F0] bg-white p-5 sm:p-6"
-        style={{
-          borderRadius: "12px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-        }}
-      >
+      <section className="enterprise-card p-5 sm:p-6">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
             Project activity
           </h2>
-          <p className="text-[11px] text-[#94A3B8]">
-            Audit events tied to this project (last 14 days)
+          <p className="text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
+            Audit events for this project · hover or tap the chart for each day
           </p>
         </div>
         <div className="mt-4">
           {projectDashPending && !projectDash ? (
-            <div className="flex h-44 items-center justify-center rounded-lg border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-sm text-[var(--enterprise-text-muted)]">
+            <div className="flex min-h-[11rem] items-center justify-center rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 text-sm text-[var(--enterprise-text-muted)]">
               Loading activity…
             </div>
           ) : (
             <DashboardActivityChart
               data={projectDash?.activityLast14Days ?? []}
               ariaLabel="14-day project activity chart"
-              caption="Daily project events (blue) · 7-day average (green)"
+              caption="Only events recorded for this project (not the whole workspace)."
             />
           )}
         </div>

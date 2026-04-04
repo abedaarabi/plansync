@@ -48,7 +48,7 @@ export function EnterpriseAuthLayout({
             ) : null}
           </div>
 
-          <div className="rounded-2xl border border-slate-200/12 bg-white/98 p-6 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.45)] ring-1 ring-white/10 sm:p-8">
+          <div className="rounded-2xl border border-slate-200/12 bg-white/98 p-6 shadow-[var(--enterprise-shadow-floating)] ring-1 ring-white/10 sm:p-8">
             {children}
           </div>
 

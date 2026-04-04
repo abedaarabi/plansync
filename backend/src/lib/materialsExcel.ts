@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { parseMaterialTemplateJson } from "./materialTemplate.js";
 
 export const MATERIAL_TEMPLATE_HEADERS = [
   "Material Type",
@@ -24,11 +25,25 @@ export type MaterialsImportRow = {
   manufacturer: string;
   specification: string;
   notes: string;
+  /** Raw cell strings keyed by MaterialTemplateField.key */
+  customValues: Record<string, string>;
 };
 
-export function buildMaterialsTemplateBuffer(): Buffer {
-  const wb = XLSX.utils.book_new();
-  const exampleRow = [
+function cellStr(v: unknown): string {
+  if (v === undefined || v === null) return "";
+  if (typeof v === "number") return String(v);
+  return String(v).trim();
+}
+
+function normHeaderLabel(s: string): string {
+  return cellStr(s).toLowerCase().replace(/\s+/g, " ");
+}
+
+export function buildMaterialsTemplateBuffer(templateRaw: unknown): Buffer {
+  const template = parseMaterialTemplateJson(templateRaw);
+  const sorted = [...template.fields].sort((a, b) => a.order - b.order);
+  const headers = [...MATERIAL_TEMPLATE_HEADERS, ...sorted.map((f) => f.label)];
+  const exampleCore = [
     "Concrete",
     "Ready-mix 25 MPa",
     "RM-25-001",
@@ -40,11 +55,15 @@ export function buildMaterialsTemplateBuffer(): Buffer {
     "ASTM C94",
     "Include air entrainment",
   ];
-  const ws = XLSX.utils.aoa_to_sheet([
-    MATERIAL_TEMPLATE_HEADERS as unknown as string[],
-    exampleRow,
-  ]);
-  ws["!cols"] = [
+  const exampleCustom = sorted.map((f) => {
+    if (f.type === "number") return "12.5";
+    if (f.type === "currency") return "0.00";
+    return "—";
+  });
+  const exampleRow = [...exampleCore, ...exampleCustom];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
+  const colWidths = [
     { wch: 18 },
     { wch: 28 },
     { wch: 14 },
@@ -55,22 +74,22 @@ export function buildMaterialsTemplateBuffer(): Buffer {
     { wch: 18 },
     { wch: 24 },
     { wch: 30 },
+    ...sorted.map(() => ({ wch: 16 })),
   ];
+  ws["!cols"] = colWidths;
   XLSX.utils.book_append_sheet(wb, ws, "Materials");
   return Buffer.from(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
 }
 
-function cellStr(v: unknown): string {
-  if (v === undefined || v === null) return "";
-  if (typeof v === "number") return String(v);
-  return String(v).trim();
-}
-
 /** Parse uploaded workbook; first sheet, first row = headers. */
-export function parseMaterialsImportBuffer(buf: Buffer): {
+export function parseMaterialsImportBuffer(
+  buf: Buffer,
+  templateRaw: unknown,
+): {
   rows: MaterialsImportRow[];
   errors: string[];
 } {
+  const template = parseMaterialTemplateJson(templateRaw);
   const errors: string[] = [];
   let wb: XLSX.WorkBook;
   try {
@@ -86,7 +105,8 @@ export function parseMaterialsImportBuffer(buf: Buffer): {
     return { rows: [], errors: ["Add at least one data row below the header row."] };
   }
 
-  const header = (aoa[0] as unknown[]).map((c) => cellStr(c).toLowerCase().replace(/\s+/g, " "));
+  const headerCells = (aoa[0] as unknown[]).map((c) => cellStr(c));
+  const header = headerCells.map((h) => normHeaderLabel(h));
   const findCol = (aliases: string[]) => {
     const normAliases = aliases.map((a) => a.toLowerCase().replace(/\s+/g, " "));
     for (let i = 0; i < header.length; i++) {
@@ -114,6 +134,37 @@ export function parseMaterialsImportBuffer(buf: Buffer): {
   const iSpec = findCol(["specification", "spec", "grade"]);
   const iNotes = findCol(["notes", "comments"]);
 
+  const usedIndices = new Set<number>(
+    [iType, iName, iSku, iUnit, iPrice, iCur, iSup, iMfg, iSpec, iNotes].filter((i) => i >= 0),
+  );
+
+  const sortedFields = [...template.fields].sort((a, b) => a.order - b.order);
+  const customColByKey: Record<string, number> = {};
+  for (const f of sortedFields) {
+    const aliases = [
+      normHeaderLabel(f.label),
+      f.key.toLowerCase(),
+      normHeaderLabel(f.key.replace(/_/g, " ")),
+    ];
+    const idx = findCol(aliases);
+    if (idx >= 0) {
+      customColByKey[f.key] = idx;
+      usedIndices.add(idx);
+    }
+  }
+
+  let unknownWarn = 0;
+  const MAX_UNKNOWN = 15;
+  for (let i = 0; i < header.length; i++) {
+    if (usedIndices.has(i)) continue;
+    const raw = headerCells[i]?.trim();
+    if (!raw) continue;
+    if (unknownWarn < MAX_UNKNOWN) {
+      errors.push(`Ignoring unrecognized column: ${raw}`);
+      unknownWarn++;
+    }
+  }
+
   const rows: MaterialsImportRow[] = [];
   for (let r = 1; r < aoa.length; r++) {
     const row = aoa[r] as unknown[];
@@ -124,6 +175,13 @@ export function parseMaterialsImportBuffer(buf: Buffer): {
     if (!materialType || !materialName) {
       errors.push(`Row ${r + 1}: Material Type and Material Name are required.`);
       continue;
+    }
+    const customValues: Record<string, string> = {};
+    for (const f of sortedFields) {
+      const col = customColByKey[f.key];
+      if (col !== undefined && col >= 0) {
+        customValues[f.key] = cellStr(row[col]);
+      }
     }
     rows.push({
       materialType,
@@ -136,6 +194,7 @@ export function parseMaterialsImportBuffer(buf: Buffer): {
       manufacturer: iMfg >= 0 ? cellStr(row[iMfg]) : "",
       specification: iSpec >= 0 ? cellStr(row[iSpec]) : "",
       notes: iNotes >= 0 ? cellStr(row[iNotes]) : "",
+      customValues,
     });
   }
 

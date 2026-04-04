@@ -1,9 +1,18 @@
 import type { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import { Prisma, WorkspaceRole } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
+import {
+  jsonObjectForResponse,
+  mergeCustomAttributes,
+  normalizeCustomAttributes,
+  parseMaterialTemplateJson,
+  parseMaterialTemplatePatchBody,
+  templateToDbJson,
+  type MaterialTemplate,
+} from "../../lib/materialTemplate.js";
 import {
   buildMaterialsTemplateBuffer,
   parseMaterialsImportBuffer,
@@ -33,6 +42,7 @@ function materialJson(m: {
   manufacturer: string | null;
   specification: string | null;
   notes: string | null;
+  customAttributes: Prisma.JsonValue;
   createdAt: Date;
   updatedAt: Date;
   category: { id: string; name: string; nameKey: string };
@@ -50,10 +60,19 @@ function materialJson(m: {
     manufacturer: m.manufacturer,
     specification: m.specification,
     notes: m.notes,
+    customAttributes: jsonObjectForResponse(m.customAttributes),
     createdAt: m.createdAt.toISOString(),
     updatedAt: m.updatedAt.toISOString(),
     category: { id: m.category.id, name: m.category.name },
   };
+}
+
+async function loadWorkspaceMaterialTemplate(workspaceId: string): Promise<MaterialTemplate> {
+  const w = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { materialTemplateJson: true },
+  });
+  return parseMaterialTemplateJson(w?.materialTemplateJson);
 }
 
 async function loadWorkspaceMember(workspaceId: string, userId: string) {
@@ -66,6 +85,34 @@ async function loadWorkspaceMember(workspaceId: string, userId: string) {
 }
 
 export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
+  r.get("/workspaces/:workspaceId/material-template", needUser, async (c) => {
+    const workspaceId = c.req.param("workspaceId")!;
+    const res = await loadWorkspaceMember(workspaceId, c.get("user").id);
+    if ("error" in res) return c.json({ error: res.error }, res.status);
+    const gate = requirePro(res.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+    const template = await loadWorkspaceMaterialTemplate(workspaceId);
+    return c.json(template);
+  });
+
+  r.patch("/workspaces/:workspaceId/material-template", needUser, async (c) => {
+    const workspaceId = c.req.param("workspaceId")!;
+    const res = await loadWorkspaceMember(workspaceId, c.get("user").id);
+    if ("error" in res) return c.json({ error: res.error }, res.status);
+    const gate = requirePro(res.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+    if (res.member.role !== WorkspaceRole.SUPER_ADMIN) {
+      return c.json({ error: "Only workspace super admins can edit the material template" }, 403);
+    }
+    const parsed = parseMaterialTemplatePatchBody(await c.req.json());
+    if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { materialTemplateJson: templateToDbJson(parsed.template) },
+    });
+    return c.json(parsed.template);
+  });
+
   r.get("/workspaces/:workspaceId/materials/paged", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
     const res = await loadWorkspaceMember(workspaceId, c.get("user").id);
@@ -177,7 +224,11 @@ export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
     const gate = requirePro(res.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
-    const buf = buildMaterialsTemplateBuffer();
+    const w = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { materialTemplateJson: true },
+    });
+    const buf = buildMaterialsTemplateBuffer(w?.materialTemplateJson ?? {});
     return new Response(new Uint8Array(buf), {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -198,6 +249,7 @@ export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
     manufacturer: z.string().max(500).optional().nullable(),
     specification: z.string().max(2000).optional().nullable(),
     notes: z.string().max(10000).optional().nullable(),
+    customAttributes: z.record(z.string(), z.unknown()).optional(),
   });
 
   r.post("/workspaces/:workspaceId/materials", needUser, async (c) => {
@@ -238,6 +290,10 @@ export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
       update: {},
     });
 
+    const template = await loadWorkspaceMaterialTemplate(workspaceId);
+    const customNorm = normalizeCustomAttributes(body.data.customAttributes ?? {}, template);
+    if (!customNorm.ok) return c.json({ error: customNorm.error }, 400);
+
     const row = await prisma.material.upsert({
       where: {
         workspaceId_categoryId_nameKey: {
@@ -259,6 +315,7 @@ export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
         manufacturer: body.data.manufacturer?.trim() || null,
         specification: body.data.specification?.trim() || null,
         notes: body.data.notes?.trim() || null,
+        customAttributes: customNorm.attributes,
       },
       update: {
         name: body.data.name.trim(),
@@ -270,6 +327,7 @@ export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
         manufacturer: body.data.manufacturer?.trim() || null,
         specification: body.data.specification?.trim() || null,
         notes: body.data.notes?.trim() || null,
+        customAttributes: customNorm.attributes,
       },
       include: { category: true },
     });
@@ -344,6 +402,18 @@ export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
       }
     }
 
+    const template = await loadWorkspaceMaterialTemplate(workspaceId);
+    let nextCustom: Prisma.InputJsonValue | undefined = undefined;
+    if (body.data.customAttributes !== undefined) {
+      const merged = mergeCustomAttributes(
+        existing.customAttributes,
+        body.data.customAttributes,
+        template,
+      );
+      if (!merged.ok) return c.json({ error: merged.error }, 400);
+      nextCustom = merged.attributes;
+    }
+
     const updated = await prisma.material.update({
       where: { id: materialId },
       data: {
@@ -365,6 +435,7 @@ export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
             ? body.data.specification?.trim() || null
             : undefined,
         notes: body.data.notes !== undefined ? body.data.notes?.trim() || null : undefined,
+        ...(nextCustom !== undefined ? { customAttributes: nextCustom } : {}),
       },
       include: { category: true },
     });
@@ -406,7 +477,11 @@ export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
     }
     const ab = await blob.arrayBuffer();
     const buf = Buffer.from(ab);
-    const { rows, errors } = parseMaterialsImportBuffer(buf);
+    const wJson = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { materialTemplateJson: true },
+    });
+    const { rows, errors } = parseMaterialsImportBuffer(buf, wJson?.materialTemplateJson ?? {});
     if (errors.length && rows.length === 0) {
       return c.json({ error: "Import failed", details: errors }, 400);
     }
@@ -414,6 +489,7 @@ export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
     let created = 0;
     let updated = 0;
     const rowErrors: string[] = [...errors];
+    const template = await loadWorkspaceMaterialTemplate(workspaceId);
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!;
@@ -454,6 +530,19 @@ export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
         },
       });
 
+      const patch: Record<string, unknown> = {};
+      for (const f of template.fields) {
+        const v = row.customValues[f.key];
+        if (v !== undefined && String(v).trim() !== "") {
+          patch[f.key] = v;
+        }
+      }
+      const customMerged = mergeCustomAttributes(existing?.customAttributes ?? {}, patch, template);
+      if (!customMerged.ok) {
+        rowErrors.push(`Row ${i + 2}: ${customMerged.error}`);
+        continue;
+      }
+
       const data = {
         name: row.materialName.trim(),
         nameKey,
@@ -465,6 +554,7 @@ export function registerMaterialsRoutes(r: Hono, needUser: MiddlewareHandler) {
         manufacturer: row.manufacturer.trim() || null,
         specification: row.specification.trim() || null,
         notes: row.notes.trim() || null,
+        customAttributes: customMerged.attributes,
       };
 
       if (existing) {

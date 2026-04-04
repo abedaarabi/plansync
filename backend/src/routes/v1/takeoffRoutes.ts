@@ -3,6 +3,7 @@ import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
+import { jsonObjectForResponse } from "../../lib/materialTemplate.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectForMember } from "../../lib/projectAccess.js";
 
@@ -23,6 +24,7 @@ const takeoffInclude = {
       unit: true,
       unitPrice: true,
       currency: true,
+      customAttributes: true,
       category: { select: { name: true } },
     },
   },
@@ -56,6 +58,7 @@ function takeoffRowJson(row: TakeoffRow) {
           unitPrice: row.material.unitPrice != null ? row.material.unitPrice.toString() : null,
           currency: row.material.currency,
           categoryName: row.material.category.name,
+          customAttributes: jsonObjectForResponse(row.material.customAttributes),
         }
       : null,
   };

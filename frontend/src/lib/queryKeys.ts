@@ -6,6 +6,8 @@ export const qk = {
   folderStructureTemplates: (workspaceId: string) =>
     ["folderStructureTemplates", workspaceId] as const,
   project: (projectId: string) => ["project", projectId] as const,
+  /** RBAC + module toggles for sidebar and shells */
+  projectSession: (projectId: string) => ["projectSession", projectId] as const,
   projectTeam: (projectId: string) => ["projectTeam", projectId] as const,
   projectRfis: (projectId: string) => ["projectRfis", projectId] as const,
   projectRfi: (projectId: string, rfiId: string) => ["projectRfi", projectId, rfiId] as const,
@@ -33,6 +35,7 @@ export const qk = {
     categoryId: string,
   ) => ["materialsPaged", workspaceId, page, pageSize, q, categoryId] as const,
   materialCategories: (workspaceId: string) => ["materialCategories", workspaceId] as const,
+  materialTemplate: (workspaceId: string) => ["materialTemplate", workspaceId] as const,
   issuesForFileVersion: (fileVersionId: string) =>
     ["issues", "fileVersion", fileVersionId] as const,
   issuesForProject: (projectId: string, fileVersionId?: string) =>

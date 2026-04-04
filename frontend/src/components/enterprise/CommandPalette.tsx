@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
   ClipboardList,
@@ -13,11 +14,31 @@ import {
   Search,
   UserRound,
   Users,
+  House,
+  MapPin,
+  FileSpreadsheet,
+  Ruler,
+  ScrollText,
+  Settings,
 } from "lucide-react";
 import { useProjectNavHref } from "./useProjectNavHref";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
+import { fetchProjectSession } from "@/lib/api-client";
+import { qk } from "@/lib/queryKeys";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { isSuperAdmin } from "@/lib/workspaceRole";
 
 type Cmd = { id: string; label: string; hint?: string; href: string; icon: typeof LayoutDashboard };
+
+function extractProjectId(pathname: string): string | null {
+  const match =
+    pathname.match(/^\/projects\/([^/]+)/) ??
+    pathname.match(/^\/workspaces\/[^/]+\/projects\/([^/]+)/);
+  if (!match) return null;
+  const segment = match[1];
+  if (segment === "new") return null;
+  return segment;
+}
 
 type CommandPaletteProps = {
   open: boolean;
@@ -26,15 +47,38 @@ type CommandPaletteProps = {
 
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { primary } = useEnterpriseWorkspace();
-  const wid = primary?.workspace.id;
-  const { hrefFor } = useProjectNavHref();
+  const ws = primary?.workspace;
+  const wid = ws?.id;
+  const workspaceRole = primary?.role;
+  const isPro = isWorkspaceProClient(ws?.subscriptionStatus);
+  const { projectId: lastProjectId } = useProjectNavHref();
+  const projectId = extractProjectId(pathname) ?? lastProjectId;
+
+  const { data: projectSession } = useQuery({
+    queryKey: qk.projectSession(projectId ?? ""),
+    queryFn: () => fetchProjectSession(projectId!),
+    enabled: Boolean(wid && projectId && isPro),
+    staleTime: 30_000,
+  });
+
+  const defaultModules = {
+    issues: true,
+    rfis: true,
+    takeoff: true,
+    proposals: true,
+    punch: true,
+    fieldReports: true,
+  };
+  const mod = projectSession?.settings.modules ?? defaultModules;
+
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commands = useMemo((): Cmd[] => {
-    return [
+    const out: Cmd[] = [
       {
         id: "dash",
         label: "Go to Dashboard",
@@ -50,56 +94,187 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         icon: UserRound,
       },
       {
-        id: "org",
-        label: "Organization",
-        hint: "Branding & invites",
-        href: "/organization",
-        icon: Building2,
-      },
-      {
         id: "projects",
         label: "Projects",
         hint: "PDFs & folders",
         href: "/projects",
         icon: FileStack,
       },
-      {
-        id: "invite-member",
-        label: "Invite member",
-        hint: "Email invites & seats",
-        href: "/organization?tab=invite-member",
-        icon: Users,
-      },
-      {
+    ];
+
+    if (wid) {
+      out.push({
         id: "materials",
         label: "Materials database",
         hint: "Catalog, Excel import",
-        href: wid ? `/workspaces/${wid}/materials` : "#",
+        href: `/workspaces/${wid}/materials`,
         icon: Package,
+      });
+    }
+
+    if (isSuperAdmin(workspaceRole)) {
+      out.push(
+        {
+          id: "org",
+          label: "Organization",
+          hint: "Branding & invites",
+          href: "/organization",
+          icon: Building2,
+        },
+        {
+          id: "invite-member",
+          label: "Invite member",
+          hint: "Email invites & seats",
+          href: "/organization?tab=invite-member",
+          icon: Users,
+        },
+      );
+    }
+
+    if (!projectId) return out;
+
+    const ui = projectSession?.uiMode;
+    if (ui === "contractor" || ui === "sub") {
+      out.push(
+        {
+          id: "phome",
+          label: "Project home",
+          hint: "Home",
+          href: `/projects/${projectId}/home`,
+          icon: House,
+        },
+        {
+          id: "files",
+          label: "My Drawings",
+          hint: "Project files",
+          href: `/projects/${projectId}/files`,
+          icon: FileStack,
+        },
+      );
+      if (mod.issues) {
+        out.push({
+          id: "issues",
+          label: "Open My Issues",
+          hint: "Issues",
+          href: `/projects/${projectId}/issues`,
+          icon: MapPin,
+        });
+      }
+      if (mod.punch) {
+        out.push({
+          id: "punch",
+          label: "Open Punch List",
+          hint: "Field punch items",
+          href: `/projects/${projectId}/punch`,
+          icon: ClipboardCheck,
+        });
+      }
+      return out;
+    }
+
+    const showProposals = mod.proposals && workspaceRole !== "MEMBER";
+    const showAudit = workspaceRole !== "MEMBER";
+
+    out.push(
+      {
+        id: "phome",
+        label: "Project home",
+        hint: "Home",
+        href: `/projects/${projectId}/home`,
+        icon: House,
       },
       {
+        id: "files",
+        label: "Files & Drawings",
+        hint: "Project files",
+        href: `/projects/${projectId}/files`,
+        icon: FileStack,
+      },
+    );
+    if (mod.issues) {
+      out.push({
+        id: "issues",
+        label: "Open Issues",
+        hint: "Issues",
+        href: `/projects/${projectId}/issues`,
+        icon: MapPin,
+      });
+    }
+    if (mod.rfis) {
+      out.push({
         id: "rfi",
         label: "Open RFIs",
         hint: "Requests for information",
-        href: hrefFor("rfi"),
+        href: `/projects/${projectId}/rfi`,
         icon: MessageSquareQuote,
-      },
-      {
+      });
+    }
+    if (mod.takeoff) {
+      out.push({
+        id: "takeoff",
+        label: "Quantity Takeoff",
+        hint: "Measurements",
+        href: wid ? `/workspaces/${wid}/projects/${projectId}/takeoff` : "#",
+        icon: Ruler,
+      });
+    }
+    if (showProposals) {
+      out.push({
+        id: "proposals",
+        label: "Proposals",
+        hint: "Estimates & bids",
+        href: wid
+          ? `/workspaces/${wid}/projects/${projectId}/proposals`
+          : `/projects/${projectId}/proposals`,
+        icon: FileSpreadsheet,
+      });
+    }
+    if (mod.punch) {
+      out.push({
         id: "punch",
         label: "Open Punch List",
         hint: "Field punch items",
-        href: hrefFor("punch"),
+        href: `/projects/${projectId}/punch`,
         icon: ClipboardCheck,
-      },
-      {
+      });
+    }
+    if (mod.fieldReports) {
+      out.push({
         id: "reports",
         label: "Open Field Reports",
         hint: "Daily logs & photos",
-        href: hrefFor("reports"),
+        href: `/projects/${projectId}/reports`,
         icon: ClipboardList,
-      },
-    ];
-  }, [hrefFor, wid]);
+      });
+    }
+    out.push({
+      id: "team",
+      label: "Team",
+      hint: "Project team",
+      href: wid ? `/workspaces/${wid}/projects/${projectId}/team` : `/projects/${projectId}/team`,
+      icon: Users,
+    });
+    if (showAudit) {
+      out.push({
+        id: "audit",
+        label: "Audit log",
+        hint: "Activity history",
+        href: `/projects/${projectId}/audit`,
+        icon: ScrollText,
+      });
+    }
+    if (isSuperAdmin(workspaceRole)) {
+      out.push({
+        id: "proj-settings",
+        label: "Project Settings",
+        hint: "Currency & modules",
+        href: `/projects/${projectId}/settings`,
+        icon: Settings,
+      });
+    }
+
+    return out;
+  }, [wid, workspaceRole, projectId, projectSession?.uiMode, projectSession?.settings, mod]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -111,6 +286,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   const run = useCallback(
     (href: string) => {
+      if (href === "#") return;
       router.push(href);
       onClose();
       setQ("");
@@ -200,16 +376,20 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           {filtered.map((c, i) => {
             const Icon = c.icon;
             const active = i === idx;
+            const dead = c.href === "#";
             return (
               <li key={c.id}>
                 <button
                   type="button"
+                  disabled={dead}
                   onMouseEnter={() => setIdx(i)}
                   onClick={() => run(c.href)}
                   className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
-                    active
-                      ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-text)] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]"
-                      : "text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+                    dead
+                      ? "cursor-not-allowed opacity-40"
+                      : active
+                        ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-text)] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]"
+                        : "text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
                   }`}
                 >
                   <Icon className="h-4 w-4 shrink-0 opacity-90" strokeWidth={1.75} />

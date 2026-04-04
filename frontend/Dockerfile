@@ -2,7 +2,7 @@
 # Build from repository root:
 #   docker build -f frontend/Dockerfile .
 #
-# Debian-based image: `sharp` (PWA icon script + Next image optimization) is unreliable
+# Debian-based image: `sharp` (PWA asset script + Next image optimization) is unreliable
 # on Alpine/musl under npm workspaces; glibc `linux-x64` binaries work consistently.
 
 FROM node:22-bookworm-slim AS base

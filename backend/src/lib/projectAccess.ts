@@ -1,45 +1,21 @@
 import type { Project, Workspace } from "@prisma/client";
 import { WorkspaceRole } from "@prisma/client";
 import { prisma } from "./prisma.js";
+import {
+  isWorkspaceAdmin as isWorkspaceAdminFromPermissions,
+  loadProjectForMember as loadProjectForMemberFromPermissions,
+} from "./permissions.js";
 
-export type ProjectForMember =
+export type ProjectForMemberLegacy =
   | { project: Project & { workspace: Workspace } }
   | { error: string; status: 403 | 404 };
 
-/** Workspace member + optional project scope (403 if limited user lacks project). */
-export async function loadProjectForMember(
-  projectId: string,
-  userId: string,
-): Promise<ProjectForMember> {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: { workspace: true },
-  });
-  if (!project) return { error: "Not found", status: 404 };
-  const m = await prisma.workspaceMember.findFirst({
-    where: { workspaceId: project.workspaceId, userId },
-  });
-  if (!m) return { error: "Forbidden", status: 403 };
+/** @deprecated Prefer loadProjectWithAuth from permissions.js for full RBAC context. */
+export const loadProjectForMember = loadProjectForMemberFromPermissions;
 
-  const limited = await prisma.projectMember.findMany({
-    where: { userId, project: { workspaceId: project.workspaceId } },
-    select: { projectId: true },
-  });
-  if (limited.length > 0 && !limited.some((r) => r.projectId === projectId)) {
-    return { error: "Forbidden", status: 403 };
-  }
-  return { project };
-}
+export { isWorkspaceAdminFromPermissions as isWorkspaceAdmin };
 
-/** True if the user is restricted to a subset of projects in this workspace. */
-export async function isProjectScopedMember(userId: string, workspaceId: string): Promise<boolean> {
-  const n = await prisma.projectMember.count({
-    where: { userId, project: { workspaceId } },
-  });
-  return n > 0;
-}
-
-/** Workspace member with email, and project access if they are project-scoped in this workspace. */
+/** Workspace member + email, and project access if they are project-scoped in this workspace. */
 export async function assertUserAssignableToProject(
   assigneeId: string,
   projectId: string,
@@ -65,10 +41,10 @@ export async function assertUserAssignableToProject(
   return { ok: true };
 }
 
-export async function isWorkspaceAdmin(workspaceId: string, userId: string): Promise<boolean> {
-  const m = await prisma.workspaceMember.findUnique({
-    where: { workspaceId_userId: { workspaceId, userId } },
-    select: { role: true },
+/** True if the user is restricted to a subset of projects in this workspace. */
+export async function isProjectScopedMember(userId: string, workspaceId: string): Promise<boolean> {
+  const n = await prisma.projectMember.count({
+    where: { userId, project: { workspaceId } },
   });
-  return m?.role === WorkspaceRole.ADMIN;
+  return n > 0;
 }

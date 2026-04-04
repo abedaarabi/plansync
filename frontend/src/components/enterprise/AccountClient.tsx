@@ -239,7 +239,11 @@ export function AccountClient() {
                 {primary.workspace.name}
               </span>
               {" · "}
-              {primary.role === "ADMIN" ? "Admin" : "Member"}
+              {primary.role === "SUPER_ADMIN"
+                ? "Super Admin"
+                : primary.role === "ADMIN"
+                  ? "Admin"
+                  : "Member"}
             </p>
           ) : null}
           <button

@@ -67,7 +67,7 @@ export function UserMenu() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-9 max-w-[200px] items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-white pl-1 pr-2 text-left shadow-sm transition hover:border-[var(--enterprise-primary)]/40"
+        className="flex h-9 max-w-[200px] items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-white pl-1 pr-1.5 text-left shadow-sm transition hover:border-[var(--enterprise-primary)]/40 sm:gap-2 sm:pr-2"
         aria-expanded={open}
         aria-haspopup="menu"
       >
@@ -83,15 +83,16 @@ export function UserMenu() {
           {name || email.split("@")[0] || "Account"}
         </span>
         <ChevronDown
-          className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)]"
+          className="hidden h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)] sm:block"
           strokeWidth={1.75}
+          aria-hidden
         />
       </button>
 
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 overflow-hidden rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)] py-1 shadow-[var(--enterprise-shadow-floating)]"
+          className="fixed right-2 top-[3.5rem] z-50 w-[min(14rem,calc(100vw-1rem))] overflow-hidden rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)] py-1 shadow-[var(--enterprise-shadow-floating)] sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-[calc(100%+8px)] sm:mt-0 sm:w-56"
         >
           <div className="border-b border-[var(--enterprise-border)]/80 bg-[var(--enterprise-bg)]/50 px-3 py-2.5">
             <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">

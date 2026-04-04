@@ -14,8 +14,10 @@ import {
   FileText,
   Filter,
   Flag,
+  FolderOpen,
   LayoutGrid,
   MapPin,
+  RotateCcw,
   SortAsc,
   UserRound,
   Users,
@@ -63,32 +65,66 @@ function StatCell({
   icon: Icon,
   value,
   label,
+  selected,
+  onClick,
+  ariaLabel,
 }: {
   icon: LucideIcon;
   value: number;
   label: string;
+  selected?: boolean;
+  onClick?: () => void;
+  ariaLabel?: string;
 }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-3 py-2.5 sm:px-4 sm:py-3">
+  const inner = (
+    <>
       <div
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]"
         aria-hidden
       >
         <Icon className="h-4 w-4" strokeWidth={1.75} />
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 text-left">
         <p className="text-lg font-semibold tabular-nums leading-none text-[var(--enterprise-text)]">
           {value}
         </p>
         <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">{label}</p>
       </div>
-    </div>
+    </>
   );
+
+  const shellClass = `flex w-full items-center gap-3 rounded-lg border bg-[var(--enterprise-bg)]/50 px-3 py-2.5 sm:px-4 sm:py-3 ${
+    selected
+      ? "border-[var(--enterprise-primary)]/35 bg-[var(--enterprise-primary-soft)]/40 ring-2 ring-[var(--enterprise-primary)]/20"
+      : "border-[var(--enterprise-border)]"
+  } ${
+    onClick
+      ? "cursor-pointer transition-colors hover:bg-[var(--enterprise-hover-surface)]/60 hover:border-[var(--enterprise-border)]"
+      : ""
+  }`;
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={selected}
+        aria-label={
+          ariaLabel ?? `${label}: ${value} issues. Filter list by ${label.toLowerCase()}.`
+        }
+        className={shellClass}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return <div className={shellClass}>{inner}</div>;
 }
 
-function IssueEmptyState({ noRows }: { noRows: boolean }) {
+function IssueEmptyState({ noRows, projectId }: { noRows: boolean; projectId: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center sm:py-12">
+    <div className="flex flex-col items-center justify-center gap-4 px-4 py-10 text-center sm:py-12">
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
         <MapPin
           className="h-7 w-7 text-[var(--enterprise-primary)]"
@@ -106,6 +142,15 @@ function IssueEmptyState({ noRows }: { noRows: boolean }) {
             : "Try another status filter or assignee, or reset filters to see all issues."}
         </p>
       </div>
+      {noRows ? (
+        <Link
+          href={`/projects/${projectId}/files`}
+          className="inline-flex items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/30 hover:bg-[var(--enterprise-hover-surface)]"
+        >
+          <FolderOpen className="h-4 w-4 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
+          Open project files
+        </Link>
+      ) : null}
     </div>
   );
 }
@@ -222,6 +267,7 @@ const ProjectIssueTableRow = memo(function ProjectIssueTableRow({
       <td className="px-4 py-3 align-top">
         <Link
           href={viewerHrefForIssue(issue)}
+          title={`Open “${issue.title}” in the viewer`}
           className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/30 hover:bg-[var(--enterprise-primary-soft)]"
         >
           Open
@@ -349,9 +395,17 @@ export function ProjectIssuesClient({ projectId }: { projectId: string }) {
     return { open, inProgress, resolved, closed, total: items.length };
   }, [items]);
 
+  const filtersActive = filter !== "ALL" || assigneeFilter !== "ALL" || sort !== "newest";
+
+  const clearFilters = useCallback(() => {
+    setFilter("ALL");
+    setAssigneeFilter("ALL");
+    setSort("newest");
+  }, []);
+
   return (
-    <div className="space-y-8">
-      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-8 sm:flex-row sm:items-start sm:justify-between">
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-4">
           <div
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
@@ -363,126 +417,217 @@ export function ProjectIssuesClient({ projectId }: { projectId: string }) {
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
               Issues
             </h1>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
-              Create issues and place{" "}
-              <span className="font-medium text-[var(--enterprise-subtitle)]">
-                status-colored pins
-              </span>{" "}
-              in the{" "}
-              <Link
-                href="/viewer"
-                className="font-semibold text-[var(--enterprise-primary)] underline-offset-2 hover:underline"
-              >
-                viewer
-              </Link>
-              . Track status here or jump to the exact sheet revision.
-            </p>
+            {!isPending ? (
+              <p className="mt-1.5 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
+                {stats.total === 0
+                  ? "No issues recorded for this project yet."
+                  : `${stats.total} issue${stats.total === 1 ? "" : "s"} in this project`}
+              </p>
+            ) : null}
           </div>
         </div>
+        <Link
+          href={`/projects/${projectId}/files`}
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 self-stretch rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] sm:h-10 sm:w-auto sm:min-h-0 sm:self-start sm:rounded-lg sm:px-3 sm:text-xs"
+        >
+          <FolderOpen className="h-4 w-4 sm:h-3.5 sm:w-3.5" strokeWidth={1.75} />
+          Project files
+        </Link>
       </header>
 
-      <div className="enterprise-card p-4 sm:p-5">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <StatCell icon={LayoutGrid} value={stats.total} label="Total" />
-          <StatCell icon={CircleDot} value={stats.open} label="Open" />
-          <StatCell icon={Activity} value={stats.inProgress} label="In progress" />
-          <StatCell icon={CheckCircle2} value={stats.resolved} label="Resolved" />
-          <StatCell icon={Archive} value={stats.closed} label="Closed" />
-        </div>
-      </div>
-
-      <div className="enterprise-card p-4 sm:p-5">
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-          <Filter className="h-3.5 w-3.5 opacity-80" aria-hidden />
-          Filters
-        </div>
-        <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
-          <div className="min-w-0 flex-1">
-            <div className="mb-2 text-xs font-medium text-[var(--enterprise-text-muted)]">
-              Status
-            </div>
-            <div
-              className="-mx-1 flex flex-wrap gap-1.5"
-              role="tablist"
-              aria-label="Filter by status"
-            >
-              {ISSUE_FILTER_DEFS.map((f) => {
-                const TabIcon = f.Icon;
-                const selected = filter === f.key;
-                return (
-                  <button
-                    key={f.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => setFilter(f.key)}
-                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2.5 text-xs font-medium transition sm:py-2 ${
-                      selected
-                        ? "bg-[var(--enterprise-primary)] text-white shadow-sm [&_svg]:text-white"
-                        : "border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] [&_svg]:opacity-80"
-                    }`}
-                  >
-                    <TabIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-                    {f.label}
-                  </button>
-                );
-              })}
-            </div>
+      <div className="sticky top-0 z-10 space-y-4 border-b border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/90 py-1 pb-4 backdrop-blur-md supports-[backdrop-filter]:bg-[var(--enterprise-bg)]/80">
+        <div className="enterprise-card p-4 sm:p-5">
+          <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+            Overview — click to filter
           </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <StatCell
+              icon={LayoutGrid}
+              value={stats.total}
+              label="All"
+              selected={filter === "ALL"}
+              onClick={() => setFilter("ALL")}
+            />
+            <StatCell
+              icon={CircleDot}
+              value={stats.open}
+              label="Open"
+              selected={filter === "OPEN"}
+              onClick={() => setFilter("OPEN")}
+            />
+            <StatCell
+              icon={Activity}
+              value={stats.inProgress}
+              label="In progress"
+              selected={filter === "IN_PROGRESS"}
+              onClick={() => setFilter("IN_PROGRESS")}
+            />
+            <StatCell
+              icon={CheckCircle2}
+              value={stats.resolved}
+              label="Resolved"
+              selected={filter === "RESOLVED"}
+              onClick={() => setFilter("RESOLVED")}
+            />
+            <StatCell
+              icon={Archive}
+              value={stats.closed}
+              label="Closed"
+              selected={filter === "CLOSED"}
+              onClick={() => setFilter("CLOSED")}
+            />
+          </div>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--enterprise-border)]/80 pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
-            <Users className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]" aria-hidden />
-            <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]">
-                Assignee
-              </label>
-              <select
-                value={assigneeFilter}
-                onChange={(e) => setAssigneeFilter(e.target.value as AssigneeFilter)}
-                className="min-w-[11rem] rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] outline-none focus:border-[var(--enterprise-primary)] focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+        <div className="enterprise-card p-4 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+              <Filter className="h-3.5 w-3.5 opacity-80" aria-hidden />
+              Refine list
+            </div>
+            {filtersActive ? (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/25 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
               >
-                <option value="ALL">All assignees</option>
-                <option value="UNASSIGNED">Unassigned</option>
-                {members.map((m) => (
-                  <option key={m.userId} value={m.userId}>
-                    {m.name || m.email || m.userId}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <RotateCcw className="h-3.5 w-3.5 opacity-80" strokeWidth={2} aria-hidden />
+                Reset filters
+              </button>
+            ) : null}
           </div>
+          <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 text-xs font-medium text-[var(--enterprise-text-muted)]">
+                Status
+              </div>
+              <div
+                className="-mx-1 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap"
+                role="tablist"
+                aria-label="Filter by status"
+              >
+                {ISSUE_FILTER_DEFS.map((f) => {
+                  const TabIcon = f.Icon;
+                  const selected = filter === f.key;
+                  return (
+                    <button
+                      key={f.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => setFilter(f.key)}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2.5 text-xs font-medium transition sm:py-2 ${
+                        selected
+                          ? "bg-[var(--enterprise-primary)] text-white shadow-sm [&_svg]:text-white"
+                          : "border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] [&_svg]:opacity-80"
+                      }`}
+                    >
+                      <TabIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                      {f.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-          <div className="flex flex-wrap items-end gap-2 lg:ml-auto">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]">
-                Sort
-              </label>
-              <div className="flex items-center gap-2">
-                <SortAsc
-                  className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]"
-                  aria-hidden
-                />
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as SortKey)}
-                  className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] outline-none focus:border-[var(--enterprise-primary)] focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+            <div className="flex flex-wrap items-center gap-2 border-t border-[var(--enterprise-border)]/80 pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+              <Users className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]" aria-hidden />
+              <div>
+                <label
+                  htmlFor="issues-assignee-filter"
+                  className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]"
                 >
-                  <option value="newest">Newest first</option>
-                  <option value="file">File name</option>
-                  <option value="status">Status</option>
+                  Assignee
+                </label>
+                <select
+                  id="issues-assignee-filter"
+                  value={assigneeFilter}
+                  onChange={(e) => setAssigneeFilter(e.target.value as AssigneeFilter)}
+                  className="min-w-[11rem] rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] outline-none focus:border-[var(--enterprise-primary)] focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+                >
+                  <option value="ALL">All assignees</option>
+                  <option value="UNASSIGNED">Unassigned</option>
+                  {members.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.name || m.email || m.userId}
+                    </option>
+                  ))}
                 </select>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2 lg:ml-auto">
+              <div>
+                <label
+                  htmlFor="issues-sort"
+                  className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]"
+                >
+                  Sort
+                </label>
+                <div className="flex items-center gap-2">
+                  <SortAsc
+                    className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]"
+                    aria-hidden
+                  />
+                  <select
+                    id="issues-sort"
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as SortKey)}
+                    className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] outline-none focus:border-[var(--enterprise-primary)] focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+                  >
+                    <option value="newest">Newest first</option>
+                    <option value="file">File name</option>
+                    <option value="status">Status</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {!isPending && items.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--enterprise-text-muted)]">
+          <p>
+            Showing{" "}
+            <span className="font-semibold text-[var(--enterprise-text)] tabular-nums">
+              {filtered.length}
+            </span>
+            {filtered.length !== items.length ? (
+              <>
+                {" "}
+                of{" "}
+                <span className="font-semibold text-[var(--enterprise-text)] tabular-nums">
+                  {items.length}
+                </span>
+              </>
+            ) : null}{" "}
+            {filtered.length === 1 ? "issue" : "issues"}
+            {filtersActive ? (
+              <span className="text-[var(--enterprise-text-muted)]"> (filtered)</span>
+            ) : null}
+          </p>
+          {patchMut.isPending ? (
+            <span className="text-xs font-medium text-[var(--enterprise-text-muted)]">
+              Updating status…
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
       {msg ? (
         <div
-          className="rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-3 text-sm text-red-900"
+          className="flex items-start justify-between gap-3 rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-3 text-sm text-red-900"
           role="alert"
         >
-          {msg}
+          <span className="min-w-0 flex-1 leading-relaxed">{msg}</span>
+          <button
+            type="button"
+            onClick={() => setMsg(null)}
+            className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-red-900/80 underline-offset-2 hover:bg-red-100/60 hover:text-red-950 hover:underline"
+          >
+            Dismiss
+          </button>
         </div>
       ) : null}
 
@@ -552,7 +697,7 @@ export function ProjectIssuesClient({ projectId }: { projectId: string }) {
                 {filtered.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="p-0">
-                      <IssueEmptyState noRows={items.length === 0} />
+                      <IssueEmptyState noRows={items.length === 0} projectId={projectId} />
                     </td>
                   </tr>
                 ) : (

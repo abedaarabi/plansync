@@ -23,14 +23,41 @@ import type { Env } from "../../lib/env.js";
 import { Resend } from "resend";
 import {
   ActivityType,
+  EmailInviteKind,
   Prisma,
   ProjectMeasurementSystem,
+  ProjectMemberRole,
   ProjectStage,
   PunchPriority,
   PunchStatus,
   WorkspaceRole,
 } from "@prisma/client";
-import { parseProjectCurrency } from "../../lib/projectSettings.js";
+import { loadProjectWithAuth } from "../../lib/permissions.js";
+
+/** Workspace roles that can manage members, invites, and project-level admin actions. */
+const WORKSPACE_MANAGER_ROLES: WorkspaceRole[] = [WorkspaceRole.SUPER_ADMIN, WorkspaceRole.ADMIN];
+
+function isWorkspaceManagerRole(role: WorkspaceRole): boolean {
+  return WORKSPACE_MANAGER_ROLES.includes(role);
+}
+
+function projectRoleFromInviteKind(kind: EmailInviteKind): ProjectMemberRole {
+  switch (kind) {
+    case EmailInviteKind.CLIENT:
+      return ProjectMemberRole.CLIENT;
+    case EmailInviteKind.CONTRACTOR:
+      return ProjectMemberRole.CONTRACTOR;
+    case EmailInviteKind.SUBCONTRACTOR:
+      return ProjectMemberRole.SUBCONTRACTOR;
+    default:
+      return ProjectMemberRole.INTERNAL;
+  }
+}
+import {
+  mergeProjectSettingsPatch,
+  parseProjectCurrency,
+  parseProjectSettingsJson,
+} from "../../lib/projectSettings.js";
 import { fileVersionJson, projectRowJson, projectTreeJson, workspaceJson } from "../../lib/json.js";
 import {
   buildUploadObjectKey,
@@ -78,6 +105,8 @@ import {
   buildProjectInviteEmailHtml,
   buildProjectInviteEmailText,
   inviteFromAddress,
+  resolveWorkspaceEmailLogoUrl,
+  type InviteEmailKind,
 } from "../../lib/inviteEmail.js";
 
 function newInviteToken(): string {
@@ -151,7 +180,7 @@ async function logFileOpenedActivity(
 async function countSeatPressure(workspaceId: string): Promise<number> {
   const now = new Date();
   const [members, linkInvites, emailInvites] = await Promise.all([
-    prisma.workspaceMember.count({ where: { workspaceId } }),
+    prisma.workspaceMember.count({ where: { workspaceId, isExternal: false } }),
     prisma.workspaceInvite.count({
       where: { workspaceId, revokedAt: null, expiresAt: { gt: now } },
     }),
@@ -352,6 +381,9 @@ export function v1Routes(
       where: { workspaceId_userId: { workspaceId: inv.workspaceId, userId } },
     });
 
+    const ext = inv.inviteKind !== EmailInviteKind.INTERNAL;
+    const pr = projectRoleFromInviteKind(inv.inviteKind);
+
     if (existing) {
       if (inv.projects.length > 0) {
         await prisma.$transaction(async (tx) => {
@@ -360,8 +392,19 @@ export function v1Routes(
               where: {
                 projectId_userId: { projectId: p.projectId, userId },
               },
-              create: { projectId: p.projectId, userId },
-              update: {},
+              create: {
+                projectId: p.projectId,
+                userId,
+                projectRole: pr,
+                trade: inv.trade,
+              },
+              update: { projectRole: pr, trade: inv.trade },
+            });
+          }
+          if (ext) {
+            await tx.workspaceMember.update({
+              where: { id: existing.id },
+              data: { isExternal: true },
             });
           }
           await tx.emailInvite.update({
@@ -379,9 +422,13 @@ export function v1Routes(
       return c.json({ ok: true, alreadyMember: true, workspace: workspaceJson(ws, env) });
     }
 
-    const count = await prisma.workspaceMember.count({ where: { workspaceId: inv.workspaceId } });
-    if (count >= MAX_WORKSPACE_MEMBERS) {
-      return c.json({ error: "Workspace is full" }, 400);
+    if (!ext) {
+      const count = await prisma.workspaceMember.count({
+        where: { workspaceId: inv.workspaceId, isExternal: false },
+      });
+      if (count >= MAX_WORKSPACE_MEMBERS) {
+        return c.json({ error: "Workspace is full" }, 400);
+      }
     }
 
     await prisma.$transaction(async (tx) => {
@@ -390,6 +437,7 @@ export function v1Routes(
           workspaceId: inv.workspaceId,
           userId,
           role: inv.role,
+          isExternal: ext,
         },
       });
       if (inv.projects.length > 0) {
@@ -397,6 +445,8 @@ export function v1Routes(
           data: inv.projects.map((p) => ({
             projectId: p.projectId,
             userId,
+            projectRole: pr,
+            trade: inv.trade,
           })),
           skipDuplicates: true,
         });
@@ -437,7 +487,10 @@ export function v1Routes(
     return c.json({
       user,
       workspaces: memberships.map((m) => ({
-        ...m,
+        workspaceId: m.workspaceId,
+        role: m.role,
+        isExternal: m.isExternal,
+        seatEligible: !m.isExternal,
         workspace: workspaceJson(m.workspace, env),
         projectCount: projectCountByWorkspace.get(m.workspaceId) ?? 0,
         maxProjects: MAX_WORKSPACE_PROJECTS,
@@ -507,7 +560,7 @@ export function v1Routes(
         slug,
         storageQuotaBytes: DEFAULT_STORAGE_QUOTA_BYTES,
         members: {
-          create: { userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+          create: { userId: c.get("user").id, role: WorkspaceRole.SUPER_ADMIN },
         },
       },
     });
@@ -531,7 +584,7 @@ export function v1Routes(
   r.patch("/workspaces/:workspaceId", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.SUPER_ADMIN },
       include: { workspace: true },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
@@ -551,6 +604,10 @@ export function v1Routes(
         website: z
           .union([z.string().max(2048), z.literal("")])
           .nullable()
+          .optional(),
+        primaryColor: z
+          .string()
+          .regex(/^#[0-9A-Fa-f]{6}$/)
           .optional(),
       })
       .safeParse(await c.req.json());
@@ -582,6 +639,7 @@ export function v1Routes(
       logoS3Key?: string | null;
       description?: string | null;
       website?: string | null;
+      primaryColor?: string;
     } = {};
     if (p.name !== undefined) data.name = p.name;
     if (p.slug !== undefined) {
@@ -594,6 +652,7 @@ export function v1Routes(
     }
     if (p.description !== undefined) data.description = p.description === "" ? null : p.description;
     if (nextWebsite !== undefined) data.website = nextWebsite;
+    if (p.primaryColor !== undefined) data.primaryColor = p.primaryColor;
 
     const shouldSyncLogo = p.website !== undefined || p.logoUrl !== undefined;
     if (shouldSyncLogo) {
@@ -637,7 +696,7 @@ export function v1Routes(
     async (c) => {
       const workspaceId = c.req.param("workspaceId")!;
       const admin = await prisma.workspaceMember.findFirst({
-        where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+        where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.SUPER_ADMIN },
       });
       if (!admin) return c.json({ error: "Forbidden" }, 403);
       let parsed: Record<string, string | File>;
@@ -655,9 +714,24 @@ export function v1Routes(
         return c.json({ error: "Logo must be 2 MB or smaller" }, 413);
       }
       const allowed = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
-      const ct = (file.type || "").toLowerCase();
+      let ct = (file.type || "").trim().toLowerCase();
+      if (ct === "image/jpg") ct = "image/jpeg";
+      if (!ct || ct === "application/octet-stream") {
+        const ext = file.name.split(".").pop()?.toLowerCase();
+        if (ext === "png") ct = "image/png";
+        else if (ext === "jpg" || ext === "jpeg") ct = "image/jpeg";
+        else if (ext === "webp") ct = "image/webp";
+        else if (ext === "gif") ct = "image/gif";
+        else ct = "";
+      }
       if (!allowed.includes(ct as (typeof allowed)[number])) {
-        return c.json({ error: "Use PNG, JPEG, WebP, or GIF" }, 400);
+        return c.json(
+          {
+            error:
+              "Use PNG, JPEG, WebP, or GIF (2 MB max). If the type is missing, name the file with a .png / .jpg / .webp / .gif extension.",
+          },
+          400,
+        );
       }
       const ext =
         ct === "image/png"
@@ -694,7 +768,7 @@ export function v1Routes(
   r.get("/workspaces/:workspaceId/invites", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
     const list = await prisma.workspaceInvite.findMany({
@@ -717,7 +791,7 @@ export function v1Routes(
   r.post("/workspaces/:workspaceId/invites", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
       include: { workspace: true },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
@@ -753,7 +827,7 @@ export function v1Routes(
     const workspaceId = c.req.param("workspaceId")!;
     const inviteId = c.req.param("inviteId")!;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
     const inv = await prisma.workspaceInvite.findFirst({
@@ -770,7 +844,7 @@ export function v1Routes(
   r.get("/workspaces/:workspaceId/email-invites", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
     const forProjectId = c.req.query("forProjectId")?.trim() || undefined;
@@ -802,6 +876,10 @@ export function v1Routes(
         id: inv.id,
         email: inv.email,
         role: inv.role,
+        inviteKind: inv.inviteKind,
+        trade: inv.trade,
+        inviteeName: inv.inviteeName,
+        inviteeCompany: inv.inviteeCompany,
         expiresAt: inv.expiresAt,
         acceptedAt: inv.acceptedAt,
         createdAt: inv.createdAt,
@@ -813,7 +891,7 @@ export function v1Routes(
   r.post("/workspaces/:workspaceId/email-invites", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
       include: { workspace: true },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
@@ -826,6 +904,10 @@ export function v1Routes(
         email: z.string().email(),
         projectIds: z.array(z.string()).max(50).optional().default([]),
         role: z.nativeEnum(WorkspaceRole).optional(),
+        inviteKind: z.nativeEnum(EmailInviteKind).optional(),
+        trade: z.string().max(120).optional(),
+        inviteeName: z.string().max(200).optional(),
+        inviteeCompany: z.string().max(200).optional(),
         expiresInDays: z.number().min(1).max(90).optional(),
       })
       .safeParse(await c.req.json());
@@ -833,6 +915,11 @@ export function v1Routes(
 
     const emailNorm = body.data.email.toLowerCase().trim();
     const projectIds = [...new Set(body.data.projectIds)];
+    const inviteKind = body.data.inviteKind ?? EmailInviteKind.INTERNAL;
+
+    if (inviteKind !== EmailInviteKind.INTERNAL && projectIds.length === 0) {
+      return c.json({ error: "External invites require at least one project." }, 400);
+    }
 
     if (projectIds.length > 0) {
       const projCount = await prisma.project.count({
@@ -868,9 +955,11 @@ export function v1Routes(
       return c.json({ error: "An active invite already exists for this email." }, 400);
     }
 
-    const pressure = await countSeatPressure(workspaceId);
-    if (pressure >= MAX_WORKSPACE_MEMBERS) {
-      return c.json({ error: "Workspace is full" }, 400);
+    if (inviteKind === EmailInviteKind.INTERNAL) {
+      const pressure = await countSeatPressure(workspaceId);
+      if (pressure >= MAX_WORKSPACE_MEMBERS) {
+        return c.json({ error: "Workspace is full" }, 400);
+      }
     }
 
     const days = body.data.expiresInDays ?? 14;
@@ -896,6 +985,10 @@ export function v1Routes(
         email: emailNorm,
         invitedById: c.get("user").id,
         role: body.data.role ?? WorkspaceRole.MEMBER,
+        inviteKind,
+        trade: body.data.trade?.trim() || null,
+        inviteeName: body.data.inviteeName?.trim() || null,
+        inviteeCompany: body.data.inviteeCompany?.trim() || null,
         expiresAt,
         projects: {
           create: projectIds.map((projectId) => ({ projectId })),
@@ -922,18 +1015,33 @@ export function v1Routes(
       inviterName: inviter.name,
       inviterImage: inviter.image,
       workspaceName: invite.workspace.name,
-      workspaceLogoUrl: invite.workspace.logoUrl,
+      workspaceLogoUrl: resolveWorkspaceEmailLogoUrl(
+        base,
+        invite.workspace.logoUrl,
+        invite.workspace.website,
+        { workspaceId: invite.workspace.id, logoS3Key: invite.workspace.logoS3Key },
+      ),
       publicAppUrl: base,
       projectNames,
       joinUrl,
       expiresLabel,
+      inviteKind: inviteKind as InviteEmailKind,
+      trade: invite.trade,
+      inviteeName: invite.inviteeName,
+      inviteeCompany: invite.inviteeCompany,
     };
 
     const resend = new Resend(env.RESEND_API_KEY);
+    const subjectTag =
+      inviteKind === EmailInviteKind.CLIENT
+        ? " (Client portal)"
+        : inviteKind === EmailInviteKind.CONTRACTOR || inviteKind === EmailInviteKind.SUBCONTRACTOR
+          ? " (Project collaboration)"
+          : "";
     const sendResult = await resend.emails.send({
       from,
       to: emailNorm,
-      subject: `${inviter.name} invited you to ${invite.workspace.name} on PlanSync`,
+      subject: `${inviter.name} invited you to ${invite.workspace.name} on PlanSync${subjectTag}`,
       html: buildProjectInviteEmailHtml(emailInput),
       text: buildProjectInviteEmailText(emailInput),
     });
@@ -960,7 +1068,7 @@ export function v1Routes(
     const workspaceId = c.req.param("workspaceId")!;
     const inviteId = c.req.param("inviteId")!;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
       include: { workspace: true },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
@@ -1004,18 +1112,34 @@ export function v1Routes(
       inviterName: invite.invitedBy.name,
       inviterImage: invite.invitedBy.image,
       workspaceName: invite.workspace.name,
-      workspaceLogoUrl: invite.workspace.logoUrl,
+      workspaceLogoUrl: resolveWorkspaceEmailLogoUrl(
+        base,
+        invite.workspace.logoUrl,
+        invite.workspace.website,
+        { workspaceId: invite.workspace.id, logoS3Key: invite.workspace.logoS3Key },
+      ),
       publicAppUrl: base,
       projectNames,
       joinUrl,
       expiresLabel,
+      inviteKind: invite.inviteKind as InviteEmailKind,
+      trade: invite.trade,
+      inviteeName: invite.inviteeName,
+      inviteeCompany: invite.inviteeCompany,
     };
 
     const resendClient = new Resend(env.RESEND_API_KEY);
+    const subjectTag =
+      invite.inviteKind === EmailInviteKind.CLIENT
+        ? " (Client portal)"
+        : invite.inviteKind === EmailInviteKind.CONTRACTOR ||
+            invite.inviteKind === EmailInviteKind.SUBCONTRACTOR
+          ? " (Project collaboration)"
+          : "";
     const sendResult = await resendClient.emails.send({
       from,
       to: invite.email,
-      subject: `${invite.invitedBy.name} invited you to ${invite.workspace.name} on PlanSync`,
+      subject: `${invite.invitedBy.name} invited you to ${invite.workspace.name} on PlanSync${subjectTag}`,
       html: buildProjectInviteEmailHtml(emailInput),
       text: buildProjectInviteEmailText(emailInput),
     });
@@ -1036,7 +1160,7 @@ export function v1Routes(
     const workspaceId = c.req.param("workspaceId")!;
     const inviteId = c.req.param("inviteId")!;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
       include: { workspace: true },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
@@ -1100,7 +1224,7 @@ export function v1Routes(
     const workspaceId = c.req.param("workspaceId")!;
     const inviteId = c.req.param("inviteId")!;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
     const inv = await prisma.emailInvite.findFirst({
@@ -1130,7 +1254,7 @@ export function v1Routes(
     ]);
 
     const scopedByUser = new Map<string, { id: string; name: string }[]>();
-    if (m.role === WorkspaceRole.ADMIN) {
+    if (isWorkspaceManagerRole(m.role)) {
       const userIds = list.map((x) => x.userId);
       const pmRows =
         userIds.length > 0
@@ -1155,7 +1279,7 @@ export function v1Routes(
         name: x.user.name,
         email: x.user.email,
         role: x.role,
-        ...(m.role === WorkspaceRole.ADMIN
+        ...(isWorkspaceManagerRole(m.role)
           ? { scopedProjects: scopedByUser.get(x.userId) ?? [] }
           : {}),
       })),
@@ -1165,27 +1289,65 @@ export function v1Routes(
   r.patch("/workspaces/:workspaceId/members/:userId", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
     const targetUserId = c.req.param("userId")!;
+    const actorUserId = c.get("user").id;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: actorUserId, role: { in: WORKSPACE_MANAGER_ROLES } },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
     const body = z.object({ role: z.nativeEnum(WorkspaceRole) }).safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+    const newRole = body.data.role;
     const target = await prisma.workspaceMember.findFirst({
       where: { workspaceId, userId: targetUserId },
     });
     if (!target) return c.json({ error: "Not found" }, 404);
-    if (target.role === WorkspaceRole.ADMIN && body.data.role === WorkspaceRole.MEMBER) {
-      const adminCount = await prisma.workspaceMember.count({
-        where: { workspaceId, role: WorkspaceRole.ADMIN },
+
+    const superAdminCount = await prisma.workspaceMember.count({
+      where: { workspaceId, role: WorkspaceRole.SUPER_ADMIN },
+    });
+
+    if (newRole === WorkspaceRole.SUPER_ADMIN) {
+      if (admin.role !== WorkspaceRole.SUPER_ADMIN && superAdminCount > 0) {
+        return c.json({ error: "Only a Super Admin can assign the Super Admin role" }, 403);
+      }
+    }
+
+    if (
+      target.role === WorkspaceRole.SUPER_ADMIN &&
+      newRole !== WorkspaceRole.SUPER_ADMIN &&
+      admin.role !== WorkspaceRole.SUPER_ADMIN
+    ) {
+      return c.json({ error: "Only a Super Admin can change another Super Admin's role" }, 403);
+    }
+
+    if (
+      target.role === WorkspaceRole.SUPER_ADMIN &&
+      newRole !== WorkspaceRole.SUPER_ADMIN &&
+      superAdminCount <= 1
+    ) {
+      return c.json(
+        {
+          error: "Cannot remove the last Super Admin. Promote another member to Super Admin first.",
+        },
+        400,
+      );
+    }
+
+    if (newRole === WorkspaceRole.MEMBER && isWorkspaceManagerRole(target.role)) {
+      const otherManagers = await prisma.workspaceMember.count({
+        where: {
+          workspaceId,
+          role: { in: WORKSPACE_MANAGER_ROLES },
+          NOT: { userId: targetUserId },
+        },
       });
-      if (adminCount <= 1) {
+      if (otherManagers === 0) {
         return c.json({ error: "Cannot remove the last workspace admin" }, 400);
       }
     }
     await prisma.workspaceMember.update({
       where: { id: target.id },
-      data: { role: body.data.role },
+      data: { role: newRole },
     });
     return c.json({ ok: true });
   });
@@ -1194,7 +1356,7 @@ export function v1Routes(
     const workspaceId = c.req.param("workspaceId")!;
     const targetUserId = c.req.param("userId")!;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
       include: { workspace: true },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
@@ -1245,7 +1407,7 @@ export function v1Routes(
     const actorId = c.get("user").id;
 
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: actorId, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: actorId, role: { in: WORKSPACE_MANAGER_ROLES } },
       include: { workspace: true },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
@@ -1261,11 +1423,15 @@ export function v1Routes(
     });
     if (!target) return c.json({ error: "Not found" }, 404);
 
-    if (target.role === WorkspaceRole.ADMIN) {
-      const adminCount = await prisma.workspaceMember.count({
-        where: { workspaceId, role: WorkspaceRole.ADMIN },
+    if (isWorkspaceManagerRole(target.role)) {
+      const otherManagers = await prisma.workspaceMember.count({
+        where: {
+          workspaceId,
+          role: { in: WORKSPACE_MANAGER_ROLES },
+          NOT: { userId: targetUserId },
+        },
       });
-      if (adminCount <= 1) {
+      if (otherManagers === 0) {
         return c.json({ error: "Cannot remove the last workspace admin" }, 400);
       }
     }
@@ -1296,7 +1462,7 @@ export function v1Routes(
   r.post("/workspaces/:workspaceId/members", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
     const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.ADMIN },
+      where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);
     const ws = await prisma.workspace.findUnique({ where: { id: workspaceId } });
@@ -1472,6 +1638,70 @@ export function v1Routes(
     return c.json(projects.map(projectTreeJson));
   });
 
+  /** Auth session for this project: role, module toggles, and UI mode (internal vs client vs contractor). */
+  r.get("/projects/:projectId/session", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const res = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in res) return c.json({ error: res.error }, res.status);
+    const { ctx } = res;
+    return c.json({
+      projectId: ctx.project.id,
+      projectName: ctx.project.name,
+      workspaceId: ctx.project.workspaceId,
+      workspaceRole: ctx.workspaceMember.role,
+      isExternal: ctx.workspaceMember.isExternal,
+      projectRole: ctx.projectMember?.projectRole ?? null,
+      trade: ctx.projectMember?.trade ?? null,
+      settings: ctx.settings,
+      uiMode: ctx.uiMode,
+    });
+  });
+
+  /** Super Admin only: project module + client visibility toggles. */
+  r.patch("/projects/:projectId/settings", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const res = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in res) return c.json({ error: res.error }, res.status);
+    const { ctx } = res;
+    if (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN) {
+      return c.json({ error: "Super Admin only" }, 403);
+    }
+    const body = z
+      .object({
+        modules: z
+          .object({
+            issues: z.boolean().optional(),
+            rfis: z.boolean().optional(),
+            takeoff: z.boolean().optional(),
+            proposals: z.boolean().optional(),
+            punch: z.boolean().optional(),
+            fieldReports: z.boolean().optional(),
+          })
+          .optional(),
+        clientVisibility: z
+          .object({
+            showIssues: z.boolean().optional(),
+            showRfis: z.boolean().optional(),
+            showFieldReports: z.boolean().optional(),
+            showPunchList: z.boolean().optional(),
+            allowClientComment: z.boolean().optional(),
+          })
+          .optional(),
+      })
+      .safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+    const current = parseProjectSettingsJson(ctx.project.settingsJson);
+    const merged = mergeProjectSettingsPatch(current, body.data);
+    const updated = await prisma.project.update({
+      where: { id: projectId },
+      data: { settingsJson: merged as object },
+    });
+    return c.json({
+      projectId: updated.id,
+      settings: parseProjectSettingsJson(updated.settingsJson),
+    });
+  });
+
   /** Folder tree presets from DB (`FolderStructureTemplate`); list updates when rows change. */
   r.get("/workspaces/:workspaceId/folder-structure-templates", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
@@ -1579,7 +1809,7 @@ export function v1Routes(
       where: {
         workspaceId: project.workspaceId,
         userId: c.get("user").id,
-        role: WorkspaceRole.ADMIN,
+        role: { in: WORKSPACE_MANAGER_ROLES },
       },
     });
     if (!admin) return c.json({ error: "Admin only" }, 403);
@@ -2674,7 +2904,7 @@ export function v1Routes(
       where: {
         workspaceId: access.project.workspaceId,
         userId: c.get("user").id,
-        role: WorkspaceRole.ADMIN,
+        role: { in: WORKSPACE_MANAGER_ROLES },
       },
     });
     if (!admin) return c.json({ error: "Forbidden" }, 403);

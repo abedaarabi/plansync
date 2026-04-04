@@ -102,7 +102,7 @@ export function ProjectsClient() {
   const queryClient = useQueryClient();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isAdmin = primary?.role === "ADMIN";
+  const isAdmin = primary?.role === "ADMIN" || primary?.role === "SUPER_ADMIN";
   const isPro = primary?.workspace.subscriptionStatus === "active";
 
   const {

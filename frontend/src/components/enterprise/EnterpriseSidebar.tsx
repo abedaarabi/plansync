@@ -4,10 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Building2,
+  ChevronLeft,
+  ChevronRight,
   ClipboardCheck,
   ClipboardList,
   FileStack,
@@ -24,16 +26,19 @@ import {
   House,
   MapPin,
 } from "lucide-react";
-import { fetchProjects } from "@/lib/api-client";
+import { fetchProjects, fetchProjectSession } from "@/lib/api-client";
 import { faviconUrlFromHostname, normalizeWorkspaceWebsite } from "@/lib/workspaceBranding";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { isSuperAdmin } from "@/lib/workspaceRole";
 
 type EnterpriseSidebarProps = {
   mobileOpen: boolean;
   onCloseMobile: () => void;
-  expanded: boolean;
+  /** Desktop (lg+) only — icon rail; mobile drawer always shows full labels. */
+  desktopCollapsed: boolean;
+  onToggleDesktopCollapse: () => void;
 };
 
 function extractProjectId(pathname: string): string | null {
@@ -46,8 +51,24 @@ function extractProjectId(pathname: string): string | null {
   return segment;
 }
 
-export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: EnterpriseSidebarProps) {
+export function EnterpriseSidebar({
+  mobileOpen,
+  onCloseMobile,
+  desktopCollapsed,
+  onToggleDesktopCollapse,
+}: EnterpriseSidebarProps) {
   const pathname = usePathname();
+  const [isDesktopLg, setIsDesktopLg] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsDesktopLg(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const railCollapsed = Boolean(desktopCollapsed && isDesktopLg);
   const { primary, loading } = useEnterpriseWorkspace();
   const ws = primary?.workspace;
   const wid = ws?.id;
@@ -60,9 +81,25 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
 
   const projectId = extractProjectId(pathname);
   const isProjectContext = Boolean(projectId);
-  const activeProject = projectId ? projects.find((p) => p.id === projectId) : null;
 
-  const collapsedDesktop = !expanded;
+  const { data: projectSession } = useQuery({
+    queryKey: qk.projectSession(projectId ?? ""),
+    queryFn: () => fetchProjectSession(projectId!),
+    enabled: Boolean(wid && projectId && isPro && isProjectContext),
+    staleTime: 30_000,
+  });
+  const activeProject = projectId ? projects.find((p) => p.id === projectId) : null;
+  const workspaceRole = primary?.role;
+  const defaultModules = {
+    issues: true,
+    rfis: true,
+    takeoff: true,
+    proposals: true,
+    punch: true,
+    fieldReports: true,
+  };
+  const mod = projectSession?.settings.modules ?? defaultModules;
+
   const afterNav = () => onCloseMobile();
 
   const sidebarLogoSrc = useMemo(() => {
@@ -80,70 +117,86 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
     { href: "/projects", label: "Projects", icon: FileStack },
   ];
 
-  const PROJECT_NAV = projectId
-    ? [
-        {
-          href: `/projects/${projectId}/home`,
-          label: "Home",
-          icon: House,
-        },
-        {
-          href: `/projects/${projectId}/files`,
-          label: "Files & Drawings",
-          icon: FileStack,
-        },
-        {
-          href: `/projects/${projectId}/issues`,
-          label: "Issues",
-          icon: MapPin,
-        },
-        {
-          href: `/projects/${projectId}/rfi`,
-          label: "RFIs",
-          icon: MessageSquareQuote,
-        },
-        {
-          href: wid ? `/workspaces/${wid}/projects/${projectId}/takeoff` : "#",
-          label: "Quantity Takeoff",
-          icon: Ruler,
-        },
-        {
-          href: wid
-            ? `/workspaces/${wid}/projects/${projectId}/proposals`
-            : `/projects/${projectId}/proposals`,
-          label: "Proposals",
-          icon: FileSpreadsheet,
-        },
-        {
+  const PROJECT_NAV = useMemo(() => {
+    if (!projectId) return [];
+    const ui = projectSession?.uiMode;
+    if (ui === "contractor" || ui === "sub") {
+      const items: Array<{ href: string; label: string; icon: typeof House; disabled?: boolean }> =
+        [
+          { href: `/projects/${projectId}/home`, label: "Home", icon: House },
+          { href: `/projects/${projectId}/files`, label: "My Drawings", icon: FileStack },
+        ];
+      if (mod.issues)
+        items.push({ href: `/projects/${projectId}/issues`, label: "My Issues", icon: MapPin });
+      if (mod.punch)
+        items.push({
           href: `/projects/${projectId}/punch`,
           label: "Punch List",
           icon: ClipboardCheck,
-        },
-        {
-          href: `/projects/${projectId}/reports`,
-          label: "Field Reports",
-          icon: ClipboardList,
-        },
-        {
-          href: wid
-            ? `/workspaces/${wid}/projects/${projectId}/team`
-            : `/projects/${projectId}/team`,
-          label: "Team",
-          icon: Users,
-        },
-        {
-          href: `/projects/${projectId}/audit`,
-          label: "Audit log",
-          icon: ScrollText,
-        },
-        {
-          href: `/projects/${projectId}/settings`,
-          label: "Project Settings",
-          icon: Settings,
-          disabled: true,
-        },
-      ]
-    : [];
+        });
+      return items;
+    }
+    const showProposals = mod.proposals && workspaceRole !== "MEMBER";
+    const showAudit = workspaceRole !== "MEMBER";
+    const items: Array<{
+      href: string;
+      label: string;
+      icon: typeof House;
+      disabled?: boolean;
+    }> = [
+      { href: `/projects/${projectId}/home`, label: "Home", icon: House },
+      { href: `/projects/${projectId}/files`, label: "Files & Drawings", icon: FileStack },
+    ];
+    if (mod.issues)
+      items.push({ href: `/projects/${projectId}/issues`, label: "Issues", icon: MapPin });
+    if (mod.rfis)
+      items.push({ href: `/projects/${projectId}/rfi`, label: "RFIs", icon: MessageSquareQuote });
+    if (mod.takeoff) {
+      items.push({
+        href: wid ? `/workspaces/${wid}/projects/${projectId}/takeoff` : "#",
+        label: "Quantity Takeoff",
+        icon: Ruler,
+        disabled: !wid,
+      });
+    }
+    if (showProposals) {
+      items.push({
+        href: wid
+          ? `/workspaces/${wid}/projects/${projectId}/proposals`
+          : `/projects/${projectId}/proposals`,
+        label: "Proposals",
+        icon: FileSpreadsheet,
+        disabled: !wid,
+      });
+    }
+    if (mod.punch)
+      items.push({
+        href: `/projects/${projectId}/punch`,
+        label: "Punch List",
+        icon: ClipboardCheck,
+      });
+    if (mod.fieldReports)
+      items.push({
+        href: `/projects/${projectId}/reports`,
+        label: "Field Reports",
+        icon: ClipboardList,
+      });
+    items.push({
+      href: wid ? `/workspaces/${wid}/projects/${projectId}/team` : `/projects/${projectId}/team`,
+      label: "Team",
+      icon: Users,
+    });
+    if (showAudit) {
+      items.push({ href: `/projects/${projectId}/audit`, label: "Audit log", icon: ScrollText });
+    }
+    items.push({
+      href: `/projects/${projectId}/settings`,
+      label: "Project Settings",
+      icon: Settings,
+      disabled: !isSuperAdmin(workspaceRole),
+    });
+    return items;
+  }, [projectId, wid, mod, workspaceRole, primary, projectSession?.uiMode]);
 
   function isNavActive(href: string, exact?: boolean): boolean {
     if (exact) return pathname === href;
@@ -162,8 +215,8 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
   }
 
   const navLinkClass = (active: boolean, disabled?: boolean) =>
-    `enterprise-sidebar-nav-link group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] font-medium tracking-[-0.01em] transition-colors duration-200 ${
-      collapsedDesktop ? "lg:justify-center lg:px-2" : ""
+    `enterprise-sidebar-nav-link group flex items-center rounded-xl py-2.5 text-[13.5px] font-medium tracking-[-0.01em] transition-colors duration-200 ${
+      railCollapsed ? "justify-center gap-0 px-2" : "gap-3 px-3"
     } ${
       active
         ? "enterprise-nav-active"
@@ -179,17 +232,18 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
 
   return (
     <aside
-      data-sidebar-collapsed={collapsedDesktop ? "true" : undefined}
+      id="enterprise-sidebar-panel"
+      data-sidebar-collapsed={railCollapsed ? "true" : "false"}
       className={`enterprise-sidebar-panel fixed bottom-0 left-0 top-[3.25rem] z-40 flex min-h-0 w-[min(280px,88vw)] shrink-0 flex-col overflow-hidden transition-[transform,width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:static lg:top-auto lg:z-auto lg:h-auto lg:min-h-0 lg:max-h-none lg:translate-x-0 lg:self-stretch lg:border-b-0 lg:shadow-none ${
-        expanded ? "lg:w-[264px]" : "lg:w-[72px]"
+        railCollapsed ? "lg:w-[72px]" : "lg:w-[264px]"
       } ${
         mobileOpen ? "translate-x-0" : "-translate-x-full"
       } lg:translate-x-0 ${!mobileOpen ? "pointer-events-none lg:pointer-events-auto" : ""}`}
     >
       {/* Header — workspace logo or company favicon from website */}
       <div
-        className={`enterprise-sidebar-header flex h-[3.25rem] shrink-0 items-center gap-3 px-4 ${
-          collapsedDesktop ? "lg:justify-center lg:px-2" : ""
+        className={`enterprise-sidebar-header flex h-[3.25rem] shrink-0 items-center px-4 ${
+          railCollapsed ? "justify-center gap-0 lg:px-2" : "gap-3"
         }`}
       >
         <div
@@ -213,23 +267,36 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
             />
           )}
         </div>
-        <div className={`min-w-0 flex-1 leading-tight ${collapsedDesktop ? "lg:hidden" : ""}`}>
-          <p className="truncate text-[14px] font-semibold text-[#F8FAFC]">
-            {loading ? (
-              "…"
-            ) : ws?.name ? (
-              ws.name
-            ) : (
-              <>
-                <span className="text-[#F8FAFC]">Plan</span>
-                <span className="text-[var(--enterprise-primary)]">Sync</span>
-              </>
-            )}
-          </p>
-          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#94A3B8]">
-            Workspace
-          </p>
-        </div>
+        {!railCollapsed ? (
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="truncate text-[14px] font-semibold text-[#F8FAFC]">
+              {loading ? (
+                "…"
+              ) : ws?.name ? (
+                ws.name
+              ) : (
+                <>
+                  <span className="text-[#F8FAFC]">Plan</span>
+                  <span className="text-[var(--enterprise-primary)]">Sync</span>
+                </>
+              )}
+            </p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#94A3B8]">
+              Workspace
+            </p>
+          </div>
+        ) : null}
+        {!railCollapsed ? (
+          <button
+            type="button"
+            onClick={onToggleDesktopCollapse}
+            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#94A3B8] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[#F8FAFC] lg:flex"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar — [ or ]"
+          >
+            <ChevronLeft className="h-[18px] w-[18px]" strokeWidth={1.75} />
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onCloseMobile}
@@ -248,24 +315,23 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
             <Link
               href="/projects"
               onClick={afterNav}
-              className={`mb-1 flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium text-[#94A3B8] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[#F8FAFC] ${
-                collapsedDesktop ? "lg:justify-center lg:px-2" : ""
+              title="Projects"
+              className={`mb-1 flex items-center rounded-xl py-2 text-[13px] font-medium text-[#94A3B8] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[#F8FAFC] ${
+                railCollapsed ? "justify-center px-2" : "gap-2.5 px-3"
               }`}
             >
               <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-              <span className={collapsedDesktop ? "lg:sr-only" : ""}>Projects</span>
+              <span className={railCollapsed ? "sr-only" : ""}>Projects</span>
             </Link>
 
             {/* Project name divider */}
-            {!collapsedDesktop && (
-              <div className="mb-2 px-3">
-                <div className="border-t border-white/[0.08] pt-3">
-                  <p className="truncate text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]/60">
-                    {activeProject?.name ?? "Project"}
-                  </p>
-                </div>
+            <div className={`mb-2 px-3 ${railCollapsed ? "hidden" : ""}`}>
+              <div className="border-t border-white/[0.08] pt-3">
+                <p className="truncate text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]/60">
+                  {activeProject?.name ?? "Project"}
+                </p>
               </div>
-            )}
+            </div>
 
             {/* Project-scoped nav */}
             <div className="space-y-0.5">
@@ -277,17 +343,15 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
                   <Link
                     key={item.href}
                     href={disabled ? "#" : item.href}
-                    title={collapsedDesktop ? item.label : undefined}
                     onClick={(e) => {
                       if (disabled) e.preventDefault();
                       else afterNav();
                     }}
+                    title={item.label}
                     className={navLinkClass(active, disabled)}
                   >
                     <Icon className={iconClass(active)} strokeWidth={1.75} />
-                    <span className={`truncate ${collapsedDesktop ? "lg:sr-only" : ""}`}>
-                      {item.label}
-                    </span>
+                    <span className={railCollapsed ? "sr-only" : "truncate"}>{item.label}</span>
                   </Link>
                 );
               })}
@@ -297,11 +361,13 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
           <>
             {/* Global nav */}
             <div className="mb-2">
-              {!collapsedDesktop && (
-                <div className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]/60">
-                  Global
-                </div>
-              )}
+              <div
+                className={`mb-1.5 px-3 text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]/60 ${
+                  railCollapsed ? "hidden" : ""
+                }`}
+              >
+                Global
+              </div>
               {GLOBAL_NAV.map((item) => {
                 const active = isGlobalActive(item.href);
                 const Icon = item.icon;
@@ -309,14 +375,12 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
                   <Link
                     key={item.href}
                     href={item.href}
-                    title={collapsedDesktop ? item.label : undefined}
                     onClick={afterNav}
+                    title={item.label}
                     className={navLinkClass(active)}
                   >
                     <Icon className={iconClass(active)} strokeWidth={1.75} />
-                    <span className={`truncate ${collapsedDesktop ? "lg:sr-only" : ""}`}>
-                      {item.label}
-                    </span>
+                    <span className={railCollapsed ? "sr-only" : "truncate"}>{item.label}</span>
                   </Link>
                 );
               })}
@@ -325,12 +389,23 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
         )}
       </nav>
 
-      {/* Footer — Material Hub + Organization + Account */}
+      {/* Footer — expand (collapsed desktop) + Material Hub + Organization + Account */}
       <div className="enterprise-sidebar-footer p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {railCollapsed ? (
+          <button
+            type="button"
+            onClick={onToggleDesktopCollapse}
+            className="mb-2 hidden w-full items-center justify-center rounded-lg py-2 text-[#94A3B8] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[#F8FAFC] lg:flex"
+            aria-label="Expand sidebar"
+            title="Expand sidebar — [ or ]"
+          >
+            <ChevronRight className="h-[18px] w-[18px]" strokeWidth={1.75} />
+          </button>
+        ) : null}
         <Link
           href={wid ? `/workspaces/${wid}/materials` : "#"}
-          title={collapsedDesktop ? "Material Hub" : undefined}
           onClick={afterNav}
+          title="Material Hub"
           className={navLinkClass(
             pathname === "/materials" ||
               pathname.startsWith("/materials/") ||
@@ -345,35 +420,37 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
             )}
             strokeWidth={1.75}
           />
-          <span className={`truncate ${collapsedDesktop ? "lg:sr-only" : ""}`}>Material Hub</span>
+          <span className={railCollapsed ? "sr-only" : "truncate"}>Material Hub</span>
         </Link>
-        <Link
-          href="/organization"
-          title={collapsedDesktop ? "Organization" : undefined}
-          onClick={afterNav}
-          className={navLinkClass(
-            pathname === "/organization" || pathname.startsWith("/organization/"),
-          )}
-        >
-          <Building2
-            className={iconClass(
+        {isSuperAdmin(workspaceRole) ? (
+          <Link
+            href="/organization"
+            onClick={afterNav}
+            title="Organization"
+            className={navLinkClass(
               pathname === "/organization" || pathname.startsWith("/organization/"),
             )}
-            strokeWidth={1.75}
-          />
-          <span className={`truncate ${collapsedDesktop ? "lg:sr-only" : ""}`}>Organization</span>
-        </Link>
+          >
+            <Building2
+              className={iconClass(
+                pathname === "/organization" || pathname.startsWith("/organization/"),
+              )}
+              strokeWidth={1.75}
+            />
+            <span className={railCollapsed ? "sr-only" : "truncate"}>Organization</span>
+          </Link>
+        ) : null}
         <Link
           href="/account"
-          title={collapsedDesktop ? "Account" : undefined}
           onClick={afterNav}
+          title="Account"
           className={navLinkClass(pathname === "/account" || pathname.startsWith("/account/"))}
         >
           <UserRound
             className={iconClass(pathname === "/account" || pathname.startsWith("/account/"))}
             strokeWidth={1.75}
           />
-          <span className={`truncate ${collapsedDesktop ? "lg:sr-only" : ""}`}>Account</span>
+          <span className={railCollapsed ? "sr-only" : "truncate"}>Account</span>
         </Link>
       </div>
     </aside>

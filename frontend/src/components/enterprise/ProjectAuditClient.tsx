@@ -131,7 +131,7 @@ function buildActorOptions(items: AuditRow[]) {
 
 export function ProjectAuditClient({ projectId, subhead }: { projectId: string; subhead: string }) {
   const { primary } = useEnterpriseWorkspace();
-  const isAdmin = primary?.role === "ADMIN";
+  const isAdmin = primary?.role === "ADMIN" || primary?.role === "SUPER_ADMIN";
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<AuditCategory>("all");
@@ -237,7 +237,7 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
       </header>
 
       <section
-        className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)]"
+        className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-white shadow-[var(--enterprise-shadow-xs)]"
         aria-label="Audit events"
       >
         {isPending ? (

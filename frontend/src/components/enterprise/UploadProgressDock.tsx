@@ -18,7 +18,7 @@ export function UploadProgressDock() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-[200] flex w-[min(100vw-2rem,360px)] flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-[0_12px_40px_-12px_rgba(15,23,42,0.35)]"
+      className="fixed bottom-4 right-4 z-[200] flex w-[min(100vw-2rem,360px)] flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-[var(--enterprise-shadow-floating)]"
       role="region"
       aria-label="Upload progress"
     >

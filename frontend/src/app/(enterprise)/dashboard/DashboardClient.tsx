@@ -44,7 +44,7 @@ export function DashboardClient() {
   });
 
   const membership = me?.workspaces?.[0];
-  const isAdmin = membership?.role === "ADMIN";
+  const isAdmin = membership?.role === "ADMIN" || membership?.role === "SUPER_ADMIN";
 
   const { data: projects = [] } = useQuery({
     queryKey: qk.projects(wid ?? ""),

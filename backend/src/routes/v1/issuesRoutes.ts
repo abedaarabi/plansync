@@ -6,6 +6,7 @@ import { Resend } from "resend";
 import { prisma } from "../../lib/prisma.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectForMember, assertUserAssignableToProject } from "../../lib/projectAccess.js";
+import { canCreateIssues, issuesWhereForAuth, loadProjectWithAuth } from "../../lib/permissions.js";
 import { logActivity } from "../../lib/activity.js";
 import type { Env } from "../../lib/env.js";
 import { inviteFromAddress } from "../../lib/inviteEmail.js";
@@ -163,15 +164,22 @@ export function registerIssuesRoutes(r: Hono, needUser: MiddlewareHandler, env: 
   r.get("/projects/:projectId/issues", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const fileVersionId = c.req.query("fileVersionId")?.trim() || undefined;
-    const access = await loadProjectForMember(projectId, c.get("user").id);
-    if ("error" in access) return c.json({ error: access.error }, access.status);
-    const gate = requirePro(access.project.workspace);
+    const userId = c.get("user").id;
+    const auth = await loadProjectWithAuth(projectId, userId);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (!ctx.settings.modules.issues) {
+      return c.json([]);
+    }
+    const gate = requirePro(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
+    const scope = issuesWhereForAuth(ctx, userId);
     const rows = await prisma.issue.findMany({
       where: {
         projectId,
         ...(fileVersionId ? { fileVersionId } : {}),
+        ...scope,
       },
       include: issueInclude,
       orderBy: { createdAt: "desc" },
@@ -186,10 +194,20 @@ export function registerIssuesRoutes(r: Hono, needUser: MiddlewareHandler, env: 
       include: issueInclude,
     });
     if (!row) return c.json({ error: "Not found" }, 404);
-    const access = await loadProjectForMember(row.projectId, c.get("user").id);
-    if ("error" in access) return c.json({ error: access.error }, access.status);
-    const gate = requirePro(access.project.workspace);
+    const userId = c.get("user").id;
+    const auth = await loadProjectWithAuth(row.projectId, userId);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (!ctx.settings.modules.issues) {
+      return c.json({ error: "Not found" }, 404);
+    }
+    const gate = requirePro(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
+    const scope = issuesWhereForAuth(ctx, userId);
+    const allowed = await prisma.issue.count({
+      where: { id: issueId, projectId: row.projectId, ...scope },
+    });
+    if (allowed === 0) return c.json({ error: "Not found" }, 404);
     return c.json(issueRowJson(row));
   });
 
@@ -222,8 +240,15 @@ export function registerIssuesRoutes(r: Hono, needUser: MiddlewareHandler, env: 
       include: { project: { include: { workspace: true } } },
     });
     if (!file) return c.json({ error: "File not found" }, 404);
-    const issueAccess = await loadProjectForMember(file.projectId, c.get("user").id);
-    if ("error" in issueAccess) return c.json({ error: issueAccess.error }, issueAccess.status);
+    const auth = await loadProjectWithAuth(file.projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (!ctx.settings.modules.issues) {
+      return c.json({ error: "Issues are disabled for this project" }, 403);
+    }
+    if (!canCreateIssues(ctx)) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
     const gate = requirePro(file.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 

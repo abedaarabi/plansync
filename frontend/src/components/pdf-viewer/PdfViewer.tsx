@@ -83,6 +83,8 @@ export function PdfViewer() {
   const setIssueCreateDraft = useViewerStore((s) => s.setIssueCreateDraft);
   const tool = useViewerStore((s) => s.tool);
   const takeoffDrawKind = useViewerStore((s) => s.takeoffDrawKind);
+  const mobileLeftToolsOpen = useViewerStore((s) => s.mobileLeftToolsOpen);
+  const setMobileLeftToolsOpen = useViewerStore((s) => s.setMobileLeftToolsOpen);
 
   const takeoffRedrawZoneKind = useMemo(() => {
     if (!takeoffRedrawZoneId) return null;
@@ -146,6 +148,10 @@ export function PdfViewer() {
   useEffect(() => {
     setCloudHydrated(false);
   }, [cloudFileVersionId]);
+
+  useEffect(() => {
+    if (!pdfUrl) setMobileLeftToolsOpen(false);
+  }, [pdfUrl, setMobileLeftToolsOpen]);
 
   useEffect(() => {
     if (!pdfUrl) {
@@ -615,15 +621,57 @@ export function PdfViewer() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => {
+      if (mq.matches) setMobileLeftToolsOpen(false);
+    };
+    mq.addEventListener("change", onChange);
+    onChange();
+    return () => mq.removeEventListener("change", onChange);
+  }, [setMobileLeftToolsOpen]);
+
+  useEffect(() => {
+    if (!mobileLeftToolsOpen || !pdfUrl) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const el = e.target;
+      if (
+        el instanceof HTMLElement &&
+        (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")
+      ) {
+        return;
+      }
+      setMobileLeftToolsOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileLeftToolsOpen, pdfUrl, setMobileLeftToolsOpen]);
+
   return (
     <ViewerCanvasContext.Provider value={{ pageCanvasRef }}>
-      <div className="viewer-shell-bg relative grid min-h-0 min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)] gap-x-px gap-y-0 overflow-hidden bg-[var(--viewer-border)]">
+      <div className="viewer-shell-bg relative grid min-h-0 min-w-0 flex-1 grid-cols-[0_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)] gap-x-px gap-y-0 overflow-hidden bg-[var(--viewer-border)] lg:grid-cols-[auto_minmax(0,1fr)_auto]">
         <CollaborationSync roomId={roomId} />
+        {pdfUrl && mobileLeftToolsOpen ? (
+          <button
+            type="button"
+            className="no-print fixed inset-0 top-10 z-[34] bg-black/45 lg:hidden"
+            aria-label="Close tools sidebar"
+            onClick={() => setMobileLeftToolsOpen(false)}
+          />
+        ) : null}
         <div className="col-span-3 row-start-1 min-h-0 min-w-0 self-start overflow-visible bg-[var(--viewer-chrome-top)]">
           <ViewerTopBar pdfDoc={pdfDoc} exportCanvasRef={pageCanvasRef} />
         </div>
-        <div className="col-start-1 row-start-2 row-end-3 min-h-0 min-w-0 self-stretch overflow-hidden bg-[var(--viewer-chrome-bottom)]">
-          <ViewerSidebar />
+        <div className="relative z-[36] col-start-1 row-start-2 row-end-3 min-h-0 max-lg:min-w-0 max-lg:overflow-visible lg:min-w-min lg:overflow-hidden lg:self-stretch lg:bg-[var(--viewer-chrome-bottom)]">
+          <div
+            className={`h-full max-lg:fixed max-lg:top-10 max-lg:bottom-0 max-lg:left-0 max-lg:z-[36] max-lg:w-[min(280px,88vw)] max-lg:border-r max-lg:border-[#334155] max-lg:bg-[var(--viewer-chrome-bottom)] max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-200 max-lg:ease-out ${
+              mobileLeftToolsOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-full"
+            } lg:relative lg:inset-auto lg:z-auto lg:w-full lg:translate-x-0 lg:border-0 lg:shadow-none`}
+          >
+            <ViewerSidebar />
+          </div>
         </div>
         <div className="viewer-canvas-area relative col-start-2 row-start-2 row-end-3 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--viewer-canvas)] shadow-[inset_0_0_0_1px_rgba(226,232,240,0.9)] print:overflow-visible md:shadow-[inset_0_0_0_1px_rgba(51,65,85,0.08)]">
           {newIssuePlacementActive ? (

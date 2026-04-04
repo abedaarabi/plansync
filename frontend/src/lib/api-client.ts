@@ -1,4 +1,4 @@
-import type { MeResponse } from "@/types/enterprise";
+import type { MeResponse, WorkspaceRole } from "@/types/enterprise";
 import type { Project } from "@/types/projects";
 import type { ViewerStatePayload } from "@/lib/viewerStateCloud";
 import { apiUrl } from "@/lib/api-url";
@@ -10,6 +10,74 @@ export async function fetchMe(): Promise<MeResponse | null> {
   if (res.status === 401) return null;
   if (!res.ok) throw new Error("Could not load session.");
   return res.json() as Promise<MeResponse>;
+}
+
+export type ProjectSessionModules = {
+  issues: boolean;
+  rfis: boolean;
+  takeoff: boolean;
+  proposals: boolean;
+  punch: boolean;
+  fieldReports: boolean;
+};
+
+export type ProjectSessionClientVisibility = {
+  showIssues: boolean;
+  showRfis: boolean;
+  showFieldReports: boolean;
+  showPunchList: boolean;
+  allowClientComment: boolean;
+};
+
+export type ProjectSessionResponse = {
+  projectId: string;
+  projectName: string;
+  workspaceId: string;
+  workspaceRole: WorkspaceRole;
+  isExternal: boolean;
+  projectRole: string | null;
+  trade: string | null;
+  settings: {
+    modules: ProjectSessionModules;
+    clientVisibility: ProjectSessionClientVisibility;
+  };
+  uiMode: "internal" | "client" | "contractor" | "sub";
+};
+
+export async function fetchProjectSession(projectId: string): Promise<ProjectSessionResponse> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/session`), {
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not load project session.");
+  }
+  return res.json() as Promise<ProjectSessionResponse>;
+}
+
+export async function patchProjectSettings(
+  projectId: string,
+  body: {
+    modules?: Partial<ProjectSessionModules>;
+    clientVisibility?: Partial<ProjectSessionClientVisibility>;
+  },
+): Promise<{ projectId: string; settings: ProjectSessionResponse["settings"] }> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/settings`), {
+    method: "PATCH",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    projectId?: string;
+    settings?: ProjectSessionResponse["settings"];
+  };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not save project settings.");
+  }
+  if (!j.settings || !j.projectId) throw new Error("Invalid response.");
+  return { projectId: j.projectId, settings: j.settings };
 }
 
 export type MeNotificationRow = {
@@ -223,6 +291,7 @@ export async function patchWorkspace(
     logoUrl: string | null;
     description: string | null;
     website: string | null;
+    primaryColor?: string;
   },
 ): Promise<void> {
   const res = await fetch(apiUrl(`/api/v1/workspaces/${workspaceId}`), {
@@ -234,7 +303,7 @@ export async function patchWorkspace(
   const j = (await res.json().catch(() => ({}))) as { error?: unknown };
   if (!res.ok) {
     if (res.status === 403) {
-      throw new Error("Only admins can update the organization.");
+      throw new Error("Only the workspace owner (Super Admin) can update organization branding.");
     }
     const err = j.error;
     let text = "Could not save.";
@@ -245,8 +314,19 @@ export async function patchWorkspace(
   }
 }
 
+/** Workspace row as returned by `workspaceJson` (e.g. after logo upload). */
+export type WorkspaceBrandingJson = Record<string, unknown> & {
+  id: string;
+  logoUrl: string | null;
+  storageQuotaBytes: string;
+  storageUsedBytes: string;
+};
+
 /** Admin-only; stores logo in S3 and clears custom logo URL (website favicon unchanged until you save org form). */
-export async function uploadWorkspaceLogo(workspaceId: string, file: File): Promise<void> {
+export async function uploadWorkspaceLogo(
+  workspaceId: string,
+  file: File,
+): Promise<WorkspaceBrandingJson> {
   const fd = new FormData();
   fd.set("file", file);
   const res = await fetch(apiUrl(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/logo`), {
@@ -254,8 +334,14 @@ export async function uploadWorkspaceLogo(workspaceId: string, file: File): Prom
     credentials: "include",
     body: fd,
   });
-  const j = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new Error(j.error ?? "Could not upload logo.");
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+  } & Partial<WorkspaceBrandingJson>;
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not upload logo.");
+  if (!j.id || typeof j.storageQuotaBytes !== "string" || typeof j.storageUsedBytes !== "string") {
+    throw new Error("Invalid response from logo upload.");
+  }
+  return j as WorkspaceBrandingJson;
 }
 
 export type CreateInviteResponse = {
@@ -291,10 +377,16 @@ export async function revokeInvite(workspaceId: string, inviteId: string): Promi
   if (!res.ok) throw new Error("Could not revoke invite.");
 }
 
+export type EmailInviteKind = "INTERNAL" | "CLIENT" | "CONTRACTOR" | "SUBCONTRACTOR";
+
 export type EmailInviteRow = {
   id: string;
   email: string;
-  role: "ADMIN" | "MEMBER";
+  role: WorkspaceRole;
+  inviteKind?: EmailInviteKind;
+  trade?: string | null;
+  inviteeName?: string | null;
+  inviteeCompany?: string | null;
   expiresAt: string;
   acceptedAt: string | null;
   createdAt: string;
@@ -321,7 +413,7 @@ export type WorkspaceMemberRow = {
   userId: string;
   name: string;
   email: string;
-  role: "ADMIN" | "MEMBER";
+  role: WorkspaceRole;
   /** Present for workspace admins only. Empty = full workspace; non-empty = limited to these projects. */
   scopedProjects?: { id: string; name: string }[];
 };
@@ -345,7 +437,7 @@ export async function fetchWorkspaceMembers(
 export async function patchWorkspaceMemberRole(
   workspaceId: string,
   userId: string,
-  role: "ADMIN" | "MEMBER",
+  role: WorkspaceRole,
 ): Promise<void> {
   const res = await fetch(
     apiUrl(`/api/v1/workspaces/${workspaceId}/members/${encodeURIComponent(userId)}`),
@@ -380,7 +472,11 @@ export async function sendProjectEmailInvite(
   body: {
     email: string;
     projectIds: string[];
-    role?: "ADMIN" | "MEMBER";
+    role?: WorkspaceRole;
+    inviteKind?: EmailInviteKind;
+    trade?: string;
+    inviteeName?: string;
+    inviteeCompany?: string;
     expiresInDays?: number;
   },
 ): Promise<{ id: string; email: string; expiresAt: string }> {
@@ -617,7 +713,7 @@ export type ProjectTeamMemberRow = {
   email: string;
   /** Profile image URL when available (e.g. OAuth avatar). */
   image?: string | null;
-  workspaceRole: "ADMIN" | "MEMBER";
+  workspaceRole: WorkspaceRole;
   access: "full" | "project";
   canRemoveFromProject: boolean;
 };
@@ -1065,6 +1161,22 @@ export async function createFieldReport(
   return j as FieldReportRow;
 }
 
+export type MaterialCustomFieldType = "text" | "number" | "currency";
+
+export type MaterialTemplateField = {
+  id: string;
+  key: string;
+  label: string;
+  type: MaterialCustomFieldType;
+  required: boolean;
+  order: number;
+};
+
+export type MaterialTemplate = {
+  version: number;
+  fields: MaterialTemplateField[];
+};
+
 export type MaterialRow = {
   id: string;
   workspaceId: string;
@@ -1078,6 +1190,7 @@ export type MaterialRow = {
   manufacturer: string | null;
   specification: string | null;
   notes: string | null;
+  customAttributes: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
   category: { id: string; name: string };
@@ -1137,6 +1250,42 @@ export async function fetchMaterialCategories(workspaceId: string): Promise<Mate
   return res.json() as Promise<MaterialCategoryRow[]>;
 }
 
+export async function fetchMaterialTemplate(workspaceId: string): Promise<MaterialTemplate> {
+  const res = await fetch(apiUrl(`/api/v1/workspaces/${workspaceId}/material-template`), {
+    credentials: "include",
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load material template.");
+  return res.json() as Promise<MaterialTemplate>;
+}
+
+export async function patchMaterialTemplate(
+  workspaceId: string,
+  template: MaterialTemplate,
+): Promise<MaterialTemplate> {
+  const res = await fetch(apiUrl(`/api/v1/workspaces/${workspaceId}/material-template`), {
+    method: "PATCH",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({
+      version: template.version,
+      fields: template.fields.map((f) => ({
+        id: f.id,
+        key: f.key,
+        label: f.label,
+        type: f.type,
+        required: f.required,
+        order: f.order,
+      })),
+    }),
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok)
+    throw new Error(typeof j.error === "string" ? j.error : "Could not save material template.");
+  return j as MaterialTemplate;
+}
+
 export async function createMaterial(
   workspaceId: string,
   body: {
@@ -1150,6 +1299,7 @@ export async function createMaterial(
     manufacturer?: string | null;
     specification?: string | null;
     notes?: string | null;
+    customAttributes?: Record<string, unknown>;
   },
 ): Promise<MaterialRow> {
   const res = await fetch(apiUrl(`/api/v1/workspaces/${workspaceId}/materials`), {
@@ -1178,6 +1328,7 @@ export async function patchMaterial(
     manufacturer: string | null;
     specification: string | null;
     notes: string | null;
+    customAttributes?: Record<string, unknown>;
   }>,
 ): Promise<MaterialRow> {
   const res = await fetch(apiUrl(`/api/v1/workspaces/${workspaceId}/materials/${materialId}`), {

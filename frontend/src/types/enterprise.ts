@@ -1,6 +1,11 @@
+export type WorkspaceRole = "SUPER_ADMIN" | "ADMIN" | "MEMBER";
+
 export type MeWorkspace = {
   workspaceId: string;
-  role: "ADMIN" | "MEMBER";
+  role: WorkspaceRole;
+  /** External collaborators (client, contractor, etc.) — do not consume paid seats. */
+  isExternal?: boolean;
+  seatEligible?: boolean;
   workspace: {
     id: string;
     name: string;
@@ -8,6 +13,7 @@ export type MeWorkspace = {
     logoUrl?: string | null;
     description?: string | null;
     website?: string | null;
+    primaryColor?: string;
     storageQuotaBytes: string;
     storageUsedBytes: string;
     subscriptionStatus?: string | null;

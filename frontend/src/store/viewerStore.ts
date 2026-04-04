@@ -259,6 +259,13 @@ interface ViewerState {
   rightSidebarOpen: boolean;
   setRightSidebarOpen: (open: boolean) => void;
   toggleRightSidebar: () => void;
+  /**
+   * Left tools rail (Draw / Measure / Pages / …). Used below `lg` only — wide layouts always show the panel;
+   * this flag is ignored for layout at lg+.
+   */
+  mobileLeftToolsOpen: boolean;
+  setMobileLeftToolsOpen: (open: boolean) => void;
+  toggleMobileLeftTools: () => void;
   /** Side-by-side second page for plan/detail comparison */
   compareMode: boolean;
   comparePage: number;
@@ -469,6 +476,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   showMinimap: true,
   minimapOnlyWhenZoomed: false,
   rightSidebarOpen: true,
+  mobileLeftToolsOpen: false,
   compareMode: false,
   comparePage: 1,
   fitRequest: null,
@@ -767,6 +775,8 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       comparePage: Math.min(Math.max(1, comparePage), s.numPages || 1),
     })),
   toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
+  setMobileLeftToolsOpen: (open) => set({ mobileLeftToolsOpen: open }),
+  toggleMobileLeftTools: () => set((s) => ({ mobileLeftToolsOpen: !s.mobileLeftToolsOpen })),
 
   setViewerProjectId: (viewerProjectId) => set({ viewerProjectId }),
   setPendingProSidebarTab: (pendingProSidebarTab) => set({ pendingProSidebarTab }),
@@ -1195,6 +1205,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       takeoffRedrawZoneId: null,
       takeoffMoveZoneId: null,
       takeoffVertexEditZoneId: null,
+      mobileLeftToolsOpen: false,
     }),
 
   clearPersistedMarkupForCurrentDocument: () => {

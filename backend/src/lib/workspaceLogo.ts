@@ -9,16 +9,22 @@ export function apiPublicOrigin(env: Env): string {
   return env.PUBLIC_APP_URL.replace(/\/$/, "");
 }
 
-/** Stable URL for workspace-hosted logo (S3 behind this route). */
+/** Absolute URL (emails, server-side fetch). Prefer `workspaceLogoUrlForClients` for browser JSON. */
 export function workspaceHostedLogoAbsoluteUrl(env: Env, workspaceId: string): string {
   return `${apiPublicOrigin(env)}/api/v1/public/workspaces/${encodeURIComponent(workspaceId)}/logo`;
 }
 
+/**
+ * Browser-safe logo URL for API JSON. S3-hosted logos use a same-origin path so `<img src>`
+ * works when `PUBLIC_API_URL` is an internal hostname (Docker) while the app is served elsewhere.
+ */
 export function workspaceLogoUrlForClients(
-  env: Env,
+  _env: Env,
   ws: { id: string; logoS3Key: string | null; logoUrl: string | null },
 ): string | null {
-  if (ws.logoS3Key) return workspaceHostedLogoAbsoluteUrl(env, ws.id);
+  if (ws.logoS3Key) {
+    return `/api/v1/public/workspaces/${encodeURIComponent(ws.id)}/logo`;
+  }
   const u = ws.logoUrl?.trim();
   return u || null;
 }

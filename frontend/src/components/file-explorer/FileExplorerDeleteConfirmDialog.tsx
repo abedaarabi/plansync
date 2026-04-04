@@ -39,7 +39,7 @@ export function FileExplorerDeleteConfirmDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="file-explorer-delete-title"
-        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-[0_24px_48px_-12px_rgba(15,23,42,0.25)]"
+        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-[var(--enterprise-shadow-floating)]"
       >
         <div className="border-b border-[#F1F5F9] bg-gradient-to-br from-[#FFF7ED] to-white px-6 py-5">
           <div className="flex items-start gap-3">

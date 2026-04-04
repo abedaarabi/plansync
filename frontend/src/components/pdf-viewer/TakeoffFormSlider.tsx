@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Copy, MapPin, Pencil, Search, Shapes, X } from "lucide-react";
-import { fetchMaterials, fetchProject, type MaterialRow } from "@/lib/api-client";
+import {
+  fetchMaterials,
+  fetchMaterialTemplate,
+  fetchProject,
+  type MaterialRow,
+  type MaterialTemplate,
+} from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { clamp01 } from "@/lib/coords";
 import {
@@ -25,6 +31,21 @@ import { DEFAULT_TAKEOFF_COLOR, TAKEOFF_COLOR_PRESETS } from "@/lib/takeoffUi";
 import { defaultTakeoffUnitForKind, type ProjectMeasurementSystem } from "@/lib/projectMeasurement";
 import { useViewerStore } from "@/store/viewerStore";
 import { toast } from "sonner";
+
+function materialCustomSubtitle(
+  m: MaterialRow,
+  template: MaterialTemplate | undefined,
+): string | null {
+  if (!template?.fields?.length) return null;
+  const parts: string[] = [];
+  const sorted = [...template.fields].sort((a, b) => a.order - b.order);
+  for (const f of sorted.slice(0, 4)) {
+    const v = m.customAttributes?.[f.key];
+    if (v == null || v === "") continue;
+    parts.push(`${f.label}: ${v}`);
+  }
+  return parts.length ? parts.join(" · ") : null;
+}
 
 function unitsForKind(kind: TakeoffMeasurementType): TakeoffUnit[] {
   switch (kind) {
@@ -72,6 +93,11 @@ export function TakeoffFormSlider() {
   const { data: materials = [], isPending: materialsLoading } = useQuery({
     queryKey: qk.materials(workspaceId ?? ""),
     queryFn: () => fetchMaterials(workspaceId!),
+    enabled: Boolean(workspaceId),
+  });
+  const { data: materialTemplate } = useQuery({
+    queryKey: qk.materialTemplate(workspaceId ?? ""),
+    queryFn: () => fetchMaterialTemplate(workspaceId!),
     enabled: Boolean(workspaceId),
   });
 
@@ -645,25 +671,33 @@ export function TakeoffFormSlider() {
                       className="absolute left-0 right-0 top-full z-[1] mt-1 max-h-44 overflow-y-auto rounded-md border border-[#334155] bg-[#0f172a] py-1 shadow-lg [scrollbar-width:thin]"
                       role="listbox"
                     >
-                      {filteredMaterials.map((m) => (
-                        <li key={m.id}>
-                          <button
-                            type="button"
-                            className="w-full px-2 py-1.5 text-left text-[11px] hover:bg-[#1e293b]"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => applyMaterial(m)}
-                          >
-                            <span className="font-medium text-[#f8fafc]">{m.name}</span>
-                            <span className="block text-[10px] text-[#94a3b8]">
-                              {m.category.name}
-                              {m.sku ? ` · ${m.sku}` : ""}
-                              {m.unitPrice != null && m.unitPrice !== ""
-                                ? ` · ${m.currency} ${m.unitPrice}/${m.unit}`
-                                : ""}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
+                      {filteredMaterials.map((m) => {
+                        const customSub = materialCustomSubtitle(m, materialTemplate);
+                        return (
+                          <li key={m.id}>
+                            <button
+                              type="button"
+                              className="w-full px-2 py-1.5 text-left text-[11px] hover:bg-[#1e293b]"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => applyMaterial(m)}
+                            >
+                              <span className="font-medium text-[#f8fafc]">{m.name}</span>
+                              <span className="block text-[10px] text-[#94a3b8]">
+                                {m.category.name}
+                                {m.sku ? ` · ${m.sku}` : ""}
+                                {m.unitPrice != null && m.unitPrice !== ""
+                                  ? ` · ${m.currency} ${m.unitPrice}/${m.unit}`
+                                  : ""}
+                              </span>
+                              {customSub ? (
+                                <span className="block text-[9px] leading-snug text-[#64748b]">
+                                  {customSub}
+                                </span>
+                              ) : null}
+                            </button>
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : null}
                 </div>

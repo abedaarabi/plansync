@@ -279,7 +279,7 @@ function BrowserMockup({
 }) {
   return (
     <div
-      className={`overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_28px_72px_-20px_rgba(15,23,42,0.14),0_0_0_1px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.03] ${className}`}
+      className={`overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[var(--enterprise-shadow-card)] ring-1 ring-slate-900/[0.03] ${className}`}
     >
       <div className="flex items-center gap-2 border-b border-slate-100/95 bg-linear-to-b from-slate-50 to-white px-4 py-2.5">
         <div className="flex gap-1.5" aria-hidden>
@@ -335,7 +335,7 @@ export function LandingPage() {
       <nav
         className={`fixed inset-x-0 top-0 z-50 border-b transition-[background,box-shadow,border-color] duration-300 ${
           scrolled
-            ? "border-slate-200/90 bg-white/98 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.1)] backdrop-blur-md"
+            ? "border-slate-200/90 bg-white/98 shadow-[0_10px_36px_-14px_rgba(15,23,42,0.055)] backdrop-blur-md"
             : "border-slate-200/70 bg-white/96 shadow-[0_1px_0_rgba(15,23,42,0.04)] backdrop-blur-xl"
         }`}
       >
@@ -705,7 +705,7 @@ export function LandingPage() {
                   <AnimateIn key={s.slug} delay={80 + i * 60}>
                     <div
                       id={`solution-${s.slug}`}
-                      className="flex h-full scroll-mt-24 flex-col rounded-2xl border border-slate-200/90 bg-white p-6 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.12),var(--enterprise-shadow-card)] transition hover:border-slate-200"
+                      className="flex h-full scroll-mt-24 flex-col rounded-2xl border border-slate-200/90 bg-white p-6 shadow-[var(--enterprise-shadow-card)] transition hover:border-slate-200"
                     >
                       <div
                         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_22%,transparent)]"
@@ -765,7 +765,7 @@ export function LandingPage() {
             <div className="mt-16 grid gap-8 lg:grid-cols-2 lg:gap-10">
               {/* Free */}
               <AnimateIn delay={100}>
-                <div className="flex h-full flex-col rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[0_20px_50px_-24px_rgba(15,23,42,0.1),var(--enterprise-shadow-card)] sm:p-9">
+                <div className="flex h-full flex-col rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[var(--enterprise-shadow-card)] sm:p-9">
                   <div className="flex items-start gap-4">
                     <div
                       className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 ring-1 ring-slate-200/80"
@@ -812,7 +812,7 @@ export function LandingPage() {
 
               {/* Pro */}
               <AnimateIn delay={200}>
-                <div className="relative flex h-full flex-col rounded-3xl border-2 border-[var(--landing-cta)] bg-white p-8 shadow-[0_24px_60px_-20px_rgba(37,99,235,0.22),var(--enterprise-shadow-card)] ring-4 ring-[color-mix(in_srgb,var(--landing-cta)_12%,transparent)] sm:p-9">
+                <div className="relative flex h-full flex-col rounded-3xl border-2 border-[var(--landing-cta)] bg-white p-8 shadow-[0_28px_56px_-24px_rgba(37,99,235,0.11),var(--enterprise-shadow-card)] ring-4 ring-[color-mix(in_srgb,var(--landing-cta)_12%,transparent)] sm:p-9">
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-[var(--landing-cta)] px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-blue-600/25">
                     Most Popular
                   </div>

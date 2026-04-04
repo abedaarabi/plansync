@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { AppToaster } from "@/components/AppToaster";
 import { UmamiAnalytics } from "@/components/UmamiAnalytics";
+import appleSplashScreens from "@/lib/pwaAppleSplashScreens.json";
 import { getSiteOrigin } from "@/lib/siteUrl";
 import "./globals.css";
 
@@ -63,6 +64,10 @@ export const metadata: Metadata = {
     capable: true,
     title: "PlanSync",
     statusBarStyle: "default",
+    startupImage: appleSplashScreens.map(({ w, h, media }) => ({
+      url: `/splash/apple-splash-${w}x${h}.png`,
+      media,
+    })),
   },
 };
 
@@ -70,7 +75,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0a0f1e",
+  themeColor: "#0f172a",
 };
 
 export default function RootLayout({

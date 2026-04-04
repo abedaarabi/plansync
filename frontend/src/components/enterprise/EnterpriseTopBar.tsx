@@ -8,8 +8,6 @@ import {
   AlertCircle,
   Bell,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   ClipboardCheck,
   ClipboardList,
   FileStack,
@@ -19,6 +17,7 @@ import {
   Search,
   Settings,
   Users,
+  X,
 } from "lucide-react";
 import { UserMenu } from "./UserMenu";
 import { ProjectPicker } from "./ProjectPicker";
@@ -30,6 +29,7 @@ import {
   markNotificationsRead,
   type MeNotificationRow,
 } from "@/lib/api-client";
+import { DEFAULT_ENTERPRISE_PRIMARY_HEX } from "@/lib/enterpriseTheme";
 import { qk } from "@/lib/queryKeys";
 import { userInitials } from "@/lib/user-initials";
 import Link from "next/link";
@@ -72,9 +72,9 @@ function resolveGlobalTitle(pathname: string): string | null {
 
 type EnterpriseTopBarProps = {
   onOpenCommandPalette: () => void;
-  onOpenMobileNav: () => void;
-  sidebarExpanded: boolean;
-  onToggleSidebar: () => void;
+  onToggleMobileNav: () => void;
+  /** Mobile drawer open — drives menu button `aria-expanded`. Desktop nav is a separate column. */
+  mobileNavOpen: boolean;
 };
 
 function extractProjectId(pathname: string): string | null {
@@ -109,9 +109,8 @@ function formatNotifyTime(iso: string): string {
 
 export function EnterpriseTopBar({
   onOpenCommandPalette,
-  onOpenMobileNav,
-  sidebarExpanded,
-  onToggleSidebar,
+  onToggleMobileNav,
+  mobileNavOpen,
 }: EnterpriseTopBarProps) {
   const pathname = usePathname();
   const qc = useQueryClient();
@@ -182,64 +181,58 @@ export function EnterpriseTopBar({
   const projectHomeHref = projectId ? `/projects/${projectId}/home` : "/projects";
 
   return (
-    <header className="sticky top-0 z-50 flex h-[3.25rem] shrink-0 items-center justify-between gap-3 border-b border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_88%,transparent)] px-3 shadow-[0_1px_0_0_rgba(255,255,255,0.72)_inset,0_4px_24px_-16px_rgba(15,23,42,0.06)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--enterprise-surface)_78%,transparent)] sm:gap-4 sm:px-6">
-      <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px] sm:text-sm">
+    <header className="sticky top-0 z-50 flex h-[3.25rem] shrink-0 items-center justify-between gap-1.5 border-b border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_88%,transparent)] px-2 shadow-[0_1px_0_0_rgba(255,255,255,0.72)_inset,0_8px_36px_-22px_rgba(15,23,42,0.04)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--enterprise-surface)_78%,transparent)] sm:gap-3 sm:px-4 lg:gap-4 lg:px-6">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px] sm:gap-2 sm:text-[13px] md:text-sm">
         {/* Mobile menu */}
         <button
           type="button"
-          onClick={onOpenMobileNav}
+          onClick={onToggleMobileNav}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30 lg:hidden"
-          aria-label="Open navigation menu"
+          aria-label={mobileNavOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-expanded={mobileNavOpen}
+          aria-controls="enterprise-sidebar-panel"
         >
-          <Menu className="h-[18px] w-[18px]" strokeWidth={1.75} />
-        </button>
-
-        {/* Sidebar toggle (desktop) */}
-        <button
-          type="button"
-          onClick={onToggleSidebar}
-          title={sidebarExpanded ? "Collapse sidebar (more space)" : "Expand sidebar"}
-          className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30 lg:inline-flex"
-          aria-label={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
-          aria-expanded={sidebarExpanded}
-        >
-          {sidebarExpanded ? (
-            <ChevronsLeft className="h-[18px] w-[18px]" strokeWidth={1.75} />
+          {mobileNavOpen ? (
+            <X className="h-[18px] w-[18px]" strokeWidth={1.75} />
           ) : (
-            <ChevronsRight className="h-[18px] w-[18px]" strokeWidth={1.75} />
+            <Menu className="h-[18px] w-[18px]" strokeWidth={1.75} />
           )}
         </button>
 
         {/* Breadcrumb */}
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 md:gap-3">
           <span
-            className="flex shrink-0 select-none items-baseline gap-0 font-bold tracking-tight"
+            className="hidden shrink-0 select-none items-baseline gap-0 font-bold tracking-tight sm:inline-flex"
             aria-label="PlanSync"
           >
             <span className="text-[var(--enterprise-text)]">Plan</span>
-            <span className="text-[var(--enterprise-primary)]">Sync</span>
+            <span style={{ color: DEFAULT_ENTERPRISE_PRIMARY_HEX }}>Sync</span>
           </span>
-          <div className="hidden h-4 w-px bg-[var(--enterprise-border)] sm:block" />
+          <div className="hidden h-4 w-px shrink-0 bg-[var(--enterprise-border)] sm:block" />
 
           {isProjectContext ? (
-            <nav className="flex min-w-0 items-center gap-1 text-[13px]" aria-label="Breadcrumb">
+            <nav
+              className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden text-[12px] sm:gap-1 sm:text-[13px]"
+              aria-label="Breadcrumb"
+            >
               <Link
                 href="/projects"
-                className="shrink-0 font-medium text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-text)]"
+                className="hidden min-[400px]:inline shrink-0 font-medium text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-text)]"
               >
                 Projects
               </Link>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)] opacity-50" />
+              <ChevronRight className="hidden min-[400px]:inline h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)] opacity-50" />
               <Link
                 href={projectHomeHref}
-                className="max-w-[180px] truncate font-medium text-[var(--enterprise-text)] transition hover:opacity-80"
+                className="min-w-0 max-w-[9rem] flex-1 truncate font-medium text-[var(--enterprise-text)] transition hover:opacity-80 sm:max-w-[11rem] md:max-w-[180px] md:flex-none"
+                title={activeProject?.name ?? undefined}
               >
                 {activeProject?.name ?? "…"}
               </Link>
               {toolLabel && (
                 <>
                   <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)] opacity-50" />
-                  <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="flex min-w-0 max-w-[5.5rem] shrink-0 items-center gap-1 sm:max-w-[10rem] md:max-w-none">
                     {ToolIcon ? (
                       <ToolIcon
                         className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)]"
@@ -256,12 +249,12 @@ export function EnterpriseTopBar({
             </nav>
           ) : (
             <nav
-              className="flex min-w-0 items-center gap-1 text-[13px]"
+              className="flex min-w-0 flex-1 items-center gap-1 text-[12px] sm:text-[13px]"
               aria-label="Workspace context"
             >
               {resolveGlobalTitle(pathname) ? (
                 <>
-                  <span className="max-w-[200px] truncate font-medium text-[var(--enterprise-text)]">
+                  <span className="max-w-[7rem] truncate font-medium text-[var(--enterprise-text)] sm:max-w-[200px]">
                     {resolveGlobalTitle(pathname)}
                   </span>
                   <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)] opacity-50" />
@@ -273,16 +266,17 @@ export function EnterpriseTopBar({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-2.5">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2 md:gap-2.5">
         {/* Search / Command Palette */}
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          className="group flex h-9 max-w-[min(100%,280px)] items-center gap-2 rounded-xl border border-[var(--enterprise-border)]/95 bg-[var(--enterprise-surface)]/90 px-3 text-left text-[13px] text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25"
+          aria-label="Search"
+          className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)]/95 bg-[var(--enterprise-surface)]/90 text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:w-auto sm:max-w-[min(100%,280px)] sm:justify-start sm:gap-2 sm:px-3 sm:text-left sm:text-[13px]"
         >
           <Search className="h-3.5 w-3.5 shrink-0 opacity-80" strokeWidth={1.75} />
           <span className="hidden flex-1 sm:inline">Search…</span>
-          <kbd className="ml-auto hidden rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--enterprise-text-muted)] sm:inline">
+          <kbd className="ml-auto hidden rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--enterprise-text-muted)] md:inline">
             ⌘K
           </kbd>
         </button>
@@ -312,7 +306,7 @@ export function EnterpriseTopBar({
             <div
               role="dialog"
               aria-label="Notifications"
-              className="absolute right-0 top-[calc(100%+6px)] z-[100] w-[min(calc(100vw-1.5rem),22rem)] overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-lg sm:w-[24rem]"
+              className="fixed left-2 right-2 top-[3.5rem] z-[100] max-h-[min(24rem,70vh)] w-auto overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-lg sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-[calc(100%+6px)] sm:mt-0 sm:max-h-[min(24rem,70vh)] sm:w-[min(calc(100vw-1.5rem),22rem)] md:w-[24rem]"
             >
               <div className="flex items-center justify-between gap-2 border-b border-[var(--enterprise-border)] px-3 py-2.5">
                 <span className="text-sm font-semibold text-[var(--enterprise-text)]">

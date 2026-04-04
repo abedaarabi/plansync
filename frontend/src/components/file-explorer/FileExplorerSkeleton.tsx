@@ -5,7 +5,7 @@
  */
 export function FileExplorerPageSkeleton() {
   return (
-    <div className="enterprise-animate-in flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200/85 bg-white shadow-[0_12px_35px_-18px_rgba(15,23,42,0.22)] ring-1 ring-slate-900/[0.04]">
+    <div className="enterprise-animate-in flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200/85 bg-white shadow-[var(--enterprise-shadow-card)] ring-1 ring-slate-900/[0.04]">
       {/* Indeterminate progress strip */}
       <div className="h-1 w-full overflow-hidden bg-slate-100/90">
         <div className="viewer-pdf-load-indeterminate h-full w-2/5 rounded-full bg-gradient-to-r from-[var(--enterprise-primary)]/25 via-[var(--enterprise-primary)]/55 to-[var(--enterprise-primary)]/25" />

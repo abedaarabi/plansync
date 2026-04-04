@@ -11,11 +11,16 @@ import Link from "next/link";
 
 const MENU_WIDTH = 280;
 
-function clampMenuLeft(left: number): number {
+function clampMenuLeft(left: number, menuWidth: number): number {
   if (typeof window === "undefined") return left;
   const pad = 12;
-  const maxLeft = window.innerWidth - MENU_WIDTH - pad;
+  const maxLeft = window.innerWidth - menuWidth - pad;
   return Math.max(pad, Math.min(left, maxLeft));
+}
+
+function menuWidthForViewport(): number {
+  if (typeof window === "undefined") return MENU_WIDTH;
+  return Math.min(MENU_WIDTH, Math.max(240, window.innerWidth - 24));
 }
 
 export function ProjectPicker() {
@@ -25,7 +30,7 @@ export function ProjectPicker() {
   const [search, setSearch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const q = search.toLowerCase();
   const filteredProjects = projects.filter((p) => {
@@ -39,9 +44,11 @@ export function ProjectPicker() {
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
+    const width = menuWidthForViewport();
     setMenuPos({
       top: r.bottom + 6,
-      left: clampMenuLeft(r.left),
+      left: clampMenuLeft(r.left, width),
+      width,
     });
   };
 
@@ -98,7 +105,7 @@ export function ProjectPicker() {
             style={{
               top: menuPos.top,
               left: menuPos.left,
-              width: MENU_WIDTH,
+              width: menuPos.width,
             }}
           >
             <div className="relative mb-1.5 px-2 pt-1">
@@ -173,14 +180,14 @@ export function ProjectPicker() {
       : null;
 
   return (
-    <div className="relative shrink-0">
+    <div className="relative min-w-0 flex-1 sm:w-[260px] sm:flex-none sm:shrink-0">
       <button
         ref={triggerRef}
         type="button"
         onClick={() => {
           setIsOpen((o) => !o);
         }}
-        className="flex h-9 w-[260px] max-w-[calc(100vw-5rem)] shrink-0 items-center justify-between gap-2 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 px-3 text-[13.5px] font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30"
+        className="flex h-9 w-full min-w-0 max-w-full items-center justify-between gap-1.5 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 px-2.5 text-[13px] font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30 sm:w-[260px] sm:max-w-[260px] sm:gap-2 sm:px-3 sm:text-[13.5px]"
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {activeProject ? (

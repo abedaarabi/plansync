@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "icons:pwa": "node scripts/generate-pwa-icons.mjs",
-    "prebuild": "npm run icons:pwa",
+    "pwa:assets": "node scripts/generate-pwa-assets.mjs",
+    "prebuild": "npm run pwa:assets",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",

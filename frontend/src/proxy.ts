@@ -8,6 +8,7 @@ const PROTECTED_PREFIXES = [
   "/organization",
   "/projects",
   "/workspaces",
+  "/client",
   "/sheets",
   "/rfi",
   "/punch",
@@ -36,6 +37,8 @@ function extractProjectIdFromPath(pathname: string): string | null {
   if (legacy) return legacy[1] ?? null;
   const workspaceScoped = pathname.match(/^\/workspaces\/[^/]+\/projects\/([^/]+)/);
   if (workspaceScoped) return workspaceScoped[1] ?? null;
+  const client = pathname.match(/^\/client\/([^/]+)/);
+  if (client) return client[1] ?? null;
   return null;
 }
 
@@ -175,6 +178,8 @@ export const config = {
     "/projects/:path*",
     "/workspaces",
     "/workspaces/:path*",
+    "/client",
+    "/client/:path*",
     "/sheets",
     "/sheets/:path*",
     "/rfi",
