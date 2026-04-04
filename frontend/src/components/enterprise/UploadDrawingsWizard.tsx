@@ -150,7 +150,7 @@ export function UploadDrawingsWizard(props: {
 
   async function runPreview() {
     if (staged.length === 0) {
-      toast.error("Add at least one PDF.");
+      toast.error("Add at least one file.");
       return;
     }
     setLoadingPreview(true);
@@ -363,33 +363,28 @@ export function UploadDrawingsWizard(props: {
         <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-3 text-sm font-medium text-slate-700">
-              Add PDFs
+              Add files
             </div>
             <div className="p-4">
               <label className="block rounded-xl border-2 border-dashed border-slate-300 bg-white p-7 text-center text-sm text-slate-600 transition hover:border-slate-400">
                 <input
                   type="file"
-                  accept="application/pdf,.pdf"
                   multiple
                   className="hidden"
                   onChange={(e) => {
                     const incoming = e.currentTarget.files ? Array.from(e.currentTarget.files) : [];
                     if (incoming.length === 0) return;
-                    const pdfs = incoming.filter(
-                      (f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"),
-                    );
-                    if (pdfs.length === 0) {
-                      toast.error("Only PDF files are supported.");
-                      return;
-                    }
                     setStaged((prev) => [
                       ...prev,
-                      ...pdfs.map((file, i) => ({ id: stageIdFor(file, prev.length + i), file })),
+                      ...incoming.map((file, i) => ({
+                        id: stageIdFor(file, prev.length + i),
+                        file,
+                      })),
                     ]);
                     e.currentTarget.value = "";
                   }}
                 />
-                Drop PDF files here or click to browse
+                Drop files here or click to browse
               </label>
             </div>
           </div>

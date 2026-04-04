@@ -21,8 +21,8 @@ import {
   UserRound,
   Users,
   X,
-  AlertCircle,
   House,
+  MapPin,
 } from "lucide-react";
 import { fetchProjects } from "@/lib/api-client";
 import { faviconUrlFromHostname, normalizeWorkspaceWebsite } from "@/lib/workspaceBranding";
@@ -95,7 +95,7 @@ export function EnterpriseSidebar({ mobileOpen, onCloseMobile, expanded }: Enter
         {
           href: `/projects/${projectId}/issues`,
           label: "Issues",
-          icon: AlertCircle,
+          icon: MapPin,
         },
         {
           href: `/projects/${projectId}/rfi`,

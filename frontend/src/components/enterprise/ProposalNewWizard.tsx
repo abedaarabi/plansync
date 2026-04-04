@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { ProposalLetterPreviewBlock } from "@/components/enterprise/ProposalLetterPreviewBlock";
@@ -107,6 +107,22 @@ export function ProposalNewWizard({
     enabled: Boolean(wid && isPro),
   });
   const project = projects.find((p) => p.id === projectId);
+  const newDraftCurrencySyncedFor = useRef<string | null>(null);
+
+  /** New drafts default to the project currency once (avoid clobbering edits when the list refetches). */
+  useEffect(() => {
+    if (existingProposalId) {
+      newDraftCurrencySyncedFor.current = null;
+      return;
+    }
+    if (!project?.id) return;
+    if (newDraftCurrencySyncedFor.current === project.id) return;
+    const c = project.currency;
+    if (typeof c === "string" && c.trim().length === 3) {
+      setCurrency(c.trim().toUpperCase());
+    }
+    newDraftCurrencySyncedFor.current = project.id;
+  }, [existingProposalId, project?.currency, project?.id]);
 
   useEffect(() => {
     if (!existingProposalId || !wid || !isPro || !project) {

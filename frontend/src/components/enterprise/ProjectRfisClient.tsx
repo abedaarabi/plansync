@@ -4,7 +4,26 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageSquareQuote, Plus } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  Archive,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  CircleDot,
+  Eye,
+  FileText,
+  Filter,
+  Flag,
+  Hash,
+  LayoutGrid,
+  Lock,
+  MessageSquareQuote,
+  Plus,
+  Users,
+} from "lucide-react";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
@@ -56,10 +75,19 @@ const PRI_LABEL: Record<string, string> = {
 };
 
 const PRI_BADGE: Record<string, string> = {
-  LOW: "bg-slate-100 text-slate-600",
-  MEDIUM: "bg-amber-50 text-amber-800",
-  HIGH: "bg-red-50 text-red-700",
+  LOW: "bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:text-slate-300",
+  MEDIUM: "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
+  HIGH: "bg-red-50 text-red-700 dark:bg-red-950/35 dark:text-red-200",
 };
+
+const FILTER_DEFS: { key: StatusFilter; label: string; Icon: LucideIcon }[] = [
+  { key: "ALL", label: "All", Icon: LayoutGrid },
+  { key: "OPEN", label: "Open", Icon: CircleDot },
+  { key: "IN_REVIEW", label: "In review", Icon: Eye },
+  { key: "ANSWERED", label: "Answered", Icon: CheckCircle2 },
+  { key: "CLOSED", label: "Closed", Icon: Archive },
+  { key: "OVERDUE", label: "Overdue", Icon: AlertTriangle },
+];
 
 function rfiRespondersDisplay(r: RfiRow): string {
   const names = (r.assignees ?? []).map((a) => a.name).filter(Boolean);
@@ -116,6 +144,57 @@ function groupSheetRows(rows: SheetPickRow[]): { group: string; items: SheetPick
   return [...map.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([group, items]) => ({ group, items }));
+}
+
+function StatCell({
+  icon: Icon,
+  value,
+  label,
+}: {
+  icon: LucideIcon;
+  value: number;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-3 py-2.5 sm:px-4 sm:py-3">
+      <div
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]"
+        aria-hidden
+      >
+        <Icon className="h-4 w-4" strokeWidth={1.75} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-lg font-semibold tabular-nums leading-none text-[var(--enterprise-text)]">
+          {value}
+        </p>
+        <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function RfiEmptyState({ noRows }: { noRows: boolean }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center sm:py-12">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
+        <MessageSquareQuote
+          className="h-7 w-7 text-[var(--enterprise-primary)]"
+          strokeWidth={1.5}
+          aria-hidden
+        />
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-[var(--enterprise-text)]">
+          {noRows ? "No RFIs yet" : "No matches"}
+        </p>
+        <p className="mt-1 max-w-sm text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
+          {noRows
+            ? "Create your first RFI to capture questions and official responses."
+            : "Try another filter or reset to show all RFIs."}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export function ProjectRfisClient({ projectId }: { projectId: string }) {
@@ -251,15 +330,6 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
     },
   });
 
-  const FILTERS: { key: StatusFilter; label: string }[] = [
-    { key: "ALL", label: "All" },
-    { key: "OPEN", label: "Open" },
-    { key: "IN_REVIEW", label: "In review" },
-    { key: "ANSWERED", label: "Answered" },
-    { key: "CLOSED", label: "Closed" },
-    { key: "OVERDUE", label: "Overdue" },
-  ];
-
   function formatDate(iso: string | null): string {
     if (!iso) return "—";
     return new Date(iso).toLocaleDateString(undefined, {
@@ -275,14 +345,23 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
     <div className="enterprise-animate-in p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-6xl space-y-6 sm:space-y-8">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
-              RFIs
-            </h1>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
-              Formal requests for information — send for review, capture the official response, then
-              close.
-            </p>
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
+              <MessageSquareQuote
+                className="h-5 w-5 text-[var(--enterprise-primary)]"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
+                RFIs
+              </h1>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
+                Formal requests for information — send for review, capture the official response,
+                then close.
+              </p>
+            </div>
           </div>
           <button
             type="button"
@@ -299,48 +378,62 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
         </header>
 
         {!isPro ? (
-          <p className="text-sm text-[var(--enterprise-text-muted)]">
-            Pro subscription required to create and manage RFIs.
-          </p>
+          <div className="flex items-start gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 shadow-[var(--enterprise-shadow-xs)]">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]"
+              aria-hidden
+            >
+              <Lock className="h-4 w-4" strokeWidth={1.75} />
+            </div>
+            <p className="text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
+              Pro subscription required to create and manage RFIs.
+            </p>
+          </div>
         ) : null}
 
-        <div className="sticky top-0 z-10 -mx-4 space-y-3 border-b border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/90 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-[var(--enterprise-bg)]/80 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <div className="flex flex-wrap gap-2">
-            <span className="inline-flex min-h-9 items-center rounded-lg border border-blue-200/80 bg-blue-50/90 px-3 py-1.5 text-xs font-medium text-blue-900">
-              {stats.open} Open
-            </span>
-            <span className="inline-flex min-h-9 items-center rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-1.5 text-xs font-medium text-amber-950">
-              {stats.inReview} In review
-            </span>
-            <span className="inline-flex min-h-9 items-center rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-1.5 text-xs font-medium text-emerald-900">
-              {stats.answered} Answered
-            </span>
-            <span className="inline-flex min-h-9 items-center rounded-lg border border-red-200/80 bg-red-50/90 px-3 py-1.5 text-xs font-medium text-red-900">
-              {stats.overdue} Overdue
-            </span>
+        <div className="sticky top-0 z-10 -mx-4 space-y-4 border-b border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/90 px-4 py-4 backdrop-blur-md supports-[backdrop-filter]:bg-[var(--enterprise-bg)]/80 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <div className="enterprise-card p-4 sm:p-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <StatCell icon={CircleDot} value={stats.open} label="Open" />
+              <StatCell icon={Eye} value={stats.inReview} label="In review" />
+              <StatCell icon={CheckCircle2} value={stats.answered} label="Answered" />
+              <StatCell icon={Archive} value={stats.closed} label="Closed" />
+              <StatCell icon={AlertTriangle} value={stats.overdue} label="Overdue" />
+            </div>
           </div>
 
-          <div
-            className="-mx-1 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            role="tablist"
-            aria-label="Filter by status"
-          >
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                role="tab"
-                aria-selected={filter === f.key}
-                onClick={() => setFilter(f.key)}
-                className={`shrink-0 rounded-lg px-3.5 py-2.5 text-xs font-medium transition sm:py-2 ${
-                  filter === f.key
-                    ? "bg-[var(--enterprise-primary)] text-white shadow-sm"
-                    : "border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+          <div>
+            <div className="mb-2.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+              <Filter className="h-3.5 w-3.5 opacity-80" aria-hidden />
+              Filter by status
+            </div>
+            <div
+              className="-mx-1 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              role="tablist"
+              aria-label="Filter by status"
+            >
+              {FILTER_DEFS.map((f) => {
+                const TabIcon = f.Icon;
+                const selected = filter === f.key;
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setFilter(f.key)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2.5 text-xs font-medium transition sm:py-2 ${
+                      selected
+                        ? "bg-[var(--enterprise-primary)] text-white shadow-sm [&_svg]:text-white"
+                        : "border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] [&_svg]:opacity-80"
+                    }`}
+                  >
+                    <TabIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -606,10 +699,8 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
           <>
             <ul className="space-y-3 md:hidden" aria-label="RFI list">
               {filtered.length === 0 ? (
-                <li className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-12 text-center text-sm text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)]">
-                  {rows.length === 0
-                    ? "No RFIs yet. Create one to get started."
-                    : "No RFIs match this filter."}
+                <li className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
+                  <RfiEmptyState noRows={rows.length === 0} />
                 </li>
               ) : (
                 filtered.map((r) => {
@@ -637,15 +728,22 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
                               </span>
                             </span>
                             {overdue ? (
-                              <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+                              <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 dark:border-red-900/45 dark:bg-red-950/30 dark:text-red-300">
                                 Overdue
                               </span>
                             ) : null}
                           </span>
                         </div>
-                        <p className="mt-2 text-base font-semibold leading-snug text-[var(--enterprise-text)]">
-                          {r.title}
-                        </p>
+                        <div className="mt-2 flex items-start justify-between gap-2">
+                          <p className="min-w-0 flex-1 text-base font-semibold leading-snug text-[var(--enterprise-text)]">
+                            {r.title}
+                          </p>
+                          <ChevronRight
+                            className="mt-0.5 h-5 w-5 shrink-0 text-[var(--enterprise-text-muted)]/45"
+                            strokeWidth={1.75}
+                            aria-hidden
+                          />
+                        </div>
                         <dl className="mt-3 grid grid-cols-1 gap-2 text-xs text-[var(--enterprise-text-muted)] sm:grid-cols-3">
                           <div className="flex gap-1.5">
                             <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">
@@ -681,27 +779,71 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
 
             <div className="enterprise-card hidden overflow-hidden p-0 md:block">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-sm text-[var(--enterprise-text)]">
+                <table className="w-full min-w-[760px] text-left text-sm text-[var(--enterprise-text)]">
                   <thead>
                     <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                      <th className="w-16 px-4 py-3">#</th>
-                      <th className="px-4 py-3">Title</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Assigned</th>
-                      <th className="px-4 py-3">Due</th>
-                      <th className="px-4 py-3">Priority</th>
+                      <th className="w-16 px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Hash className="h-3.5 w-3.5 opacity-70" strokeWidth={1.75} aria-hidden />
+                          #
+                        </span>
+                      </th>
+                      <th className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <FileText
+                            className="h-3.5 w-3.5 opacity-70"
+                            strokeWidth={1.75}
+                            aria-hidden
+                          />
+                          Title
+                        </span>
+                      </th>
+                      <th className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Activity
+                            className="h-3.5 w-3.5 opacity-70"
+                            strokeWidth={1.75}
+                            aria-hidden
+                          />
+                          Status
+                        </span>
+                      </th>
+                      <th className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Users
+                            className="h-3.5 w-3.5 opacity-70"
+                            strokeWidth={1.75}
+                            aria-hidden
+                          />
+                          Assigned
+                        </span>
+                      </th>
+                      <th className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Calendar
+                            className="h-3.5 w-3.5 opacity-70"
+                            strokeWidth={1.75}
+                            aria-hidden
+                          />
+                          Due
+                        </span>
+                      </th>
+                      <th className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Flag className="h-3.5 w-3.5 opacity-70" strokeWidth={1.75} aria-hidden />
+                          Priority
+                        </span>
+                      </th>
+                      <th className="w-12 px-2 py-3" aria-hidden>
+                        <span className="sr-only">Open</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr>
-                        <td
-                          colSpan={6}
-                          className="px-4 py-14 text-center text-sm text-[var(--enterprise-text-muted)]"
-                        >
-                          {rows.length === 0
-                            ? "No RFIs yet. Create one to get started."
-                            : "No RFIs match this filter."}
+                        <td colSpan={7} className="p-0">
+                          <RfiEmptyState noRows={rows.length === 0} />
                         </td>
                       </tr>
                     ) : (
@@ -732,7 +874,7 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
                                   </span>
                                 </span>
                                 {overdue ? (
-                                  <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+                                  <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 dark:border-red-900/45 dark:bg-red-950/30 dark:text-red-300">
                                     Overdue
                                   </span>
                                 ) : null}
@@ -746,10 +888,17 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
                             </td>
                             <td className="px-4 py-3">
                               <span
-                                className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold ${PRI_BADGE[pri] ?? "bg-slate-100 text-slate-600"}`}
+                                className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold ${PRI_BADGE[pri] ?? "bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:text-slate-300"}`}
                               >
                                 {PRI_LABEL[pri] ?? pri}
                               </span>
+                            </td>
+                            <td className="px-2 py-3 text-[var(--enterprise-text-muted)]/50">
+                              <ChevronRight
+                                className="mx-auto h-4 w-4"
+                                strokeWidth={1.75}
+                                aria-hidden
+                              />
                             </td>
                           </tr>
                         );

@@ -34,6 +34,12 @@ const schema = z.object({
   /** OAuth — optional; set both id + secret to enable each provider */
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  /** OneDrive import (Graph). Register redirect: `{BETTER_AUTH_URL}/api/v1/cloud/microsoft/callback` */
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  MICROSOFT_CLIENT_SECRET: z.string().optional(),
+  /** Dropbox import. Register redirect: `{BETTER_AUTH_URL}/api/v1/cloud/dropbox/callback` */
+  DROPBOX_APP_KEY: z.string().optional(),
+  DROPBOX_APP_SECRET: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
   SLACK_CLIENT_ID: z.string().optional(),

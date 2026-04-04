@@ -1,6 +1,8 @@
 "use client";
 
 import { apiUrl } from "@/lib/api-url";
+import { downloadProjectFileVersion } from "@/lib/downloadProjectFile";
+import { isImageThumbnailFile, isPdfFile } from "@/lib/isPdfFile";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -23,7 +25,9 @@ import {
   useUploadQueueStore,
 } from "@/store/uploadQueueStore";
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
+import { ProjectFileImageLightbox } from "./ProjectFileImageLightbox";
 import { UploadDrawingsWizard } from "./UploadDrawingsWizard";
+import { CloudImportModal } from "./CloudImportModal";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import {
   FileExplorerContent,
@@ -104,6 +108,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   const [folderName, setFolderName] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState("");
@@ -115,6 +120,12 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   const [uploadWizardOpen, setUploadWizardOpen] = useState(false);
   const [uploadWizardInitialFiles, setUploadWizardInitialFiles] = useState<File[]>([]);
   const [uploadWizardFolderId, setUploadWizardFolderId] = useState<string | null>(folderId);
+  const [imageLightbox, setImageLightbox] = useState<{
+    fileId: string;
+    fileName: string;
+    version: number;
+  } | null>(null);
+  const [cloudImportOpen, setCloudImportOpen] = useState(false);
 
   const toggleTreeExpand = useCallback((id: string) => {
     setTreeExpanded((prev) => {
@@ -138,6 +149,24 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   useEffect(() => {
     setSelectedItemKey(null);
   }, [folderId]);
+
+  useEffect(() => {
+    const ok = searchParams.get("cloud_import");
+    const err = searchParams.get("cloud_import_error");
+    if (!ok && !err) return;
+    if (ok === "connected") {
+      toast.success("Cloud storage connected. You can import files.");
+      setCloudImportOpen(true);
+    }
+    if (err) {
+      toast.error(decodeURIComponent(err));
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("cloud_import");
+    params.delete("cloud_import_error");
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  }, [searchParams, pathname, router]);
 
   const [fileVersionPick, setFileVersionPick] = useState<Record<string, number>>({});
   useEffect(() => {
@@ -262,20 +291,24 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     }
     const list = Array.from(files);
     if (list.length === 0) return;
-    const validFiles = list.filter(
-      (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
-    );
-    const invalidCount = list.length - validFiles.length;
-    if (invalidCount > 0) {
-      toast.error(
-        invalidCount === 1
-          ? "1 file was skipped (only PDF files are allowed)."
-          : `${invalidCount} files were skipped (only PDF files are allowed).`,
-      );
+
+    const pdfs = list.filter((file) => isPdfFile(file));
+    const nonPdfs = list.filter((file) => !isPdfFile(file));
+
+    if (nonPdfs.length > 0) {
+      useUploadQueueStore.getState().enqueue({
+        workspaceId: wid,
+        projectId,
+        folderId: targetFolderId,
+        files: nonPdfs,
+        queryClient,
+      });
     }
-    if (validFiles.length === 0) return;
+
+    if (pdfs.length === 0) return;
+
     if (SMART_UPLOAD_FLOW_ENABLED) {
-      setUploadWizardInitialFiles(validFiles);
+      setUploadWizardInitialFiles(pdfs);
       setUploadWizardFolderId(targetFolderId);
       setUploadWizardOpen(true);
       return;
@@ -284,7 +317,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
       workspaceId: wid,
       projectId,
       folderId: targetFolderId,
-      files: validFiles,
+      files: pdfs,
       queryClient,
     });
   }
@@ -295,6 +328,24 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     const pick = fileVersionPick[f.id];
     const v = pick != null && sorted.some((x) => x.version === pick) ? pick : fallback;
     const verRow = sorted.find((x) => x.version === v) ?? sorted[0];
+
+    const ver = verRow?.version ?? v;
+
+    if (isImageThumbnailFile(f)) {
+      setImageLightbox({ fileId: f.id, fileName: f.name, version: ver });
+      return;
+    }
+
+    if (!isPdfFile(f)) {
+      const base = apiUrl(`/api/v1/files/${encodeURIComponent(f.id)}/content`);
+      window.open(
+        `${base}?version=${encodeURIComponent(String(ver))}`,
+        "_blank",
+        "noopener,noreferrer",
+      );
+      return;
+    }
+
     const q = new URLSearchParams({ fileId: f.id, name: f.name });
     q.set("projectId", projectId);
     if (verRow) {
@@ -439,6 +490,26 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     if (snapshot.length > 0) enqueueUploads(snapshot, targetFolderId);
   }
 
+  async function downloadFile(file: CloudFile) {
+    const sorted = sortedVersions(file);
+    const fallback = sorted[0]?.version ?? 1;
+    const pick = fileVersionPick[file.id];
+    const v = pick != null && sorted.some((x) => x.version === pick) ? pick : fallback;
+    const key = `file:${file.id}`;
+    setDownloadingKey(key);
+    try {
+      await downloadProjectFileVersion({
+        fileId: file.id,
+        fileName: file.name,
+        version: v,
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Download failed.");
+    } finally {
+      setDownloadingKey(null);
+    }
+  }
+
   function requestDeleteFile(file: CloudFile) {
     setDeleteConfirmValue("");
     setPendingDeletion({ type: "file", file });
@@ -519,11 +590,10 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
       <input
         id={UPLOAD_INPUT_ID}
         type="file"
-        accept="application/pdf,.pdf"
         multiple
         className="sr-only"
         onChange={onUploadInput}
-        aria-label="Upload PDF file"
+        aria-label="Upload files"
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_12px_35px_-18px_rgba(15,23,42,0.25)]">
@@ -533,10 +603,11 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           searchValue={searchQuery}
           onSearchChange={setSearchQuery}
           onNewFolder={() => setFolderModal(true)}
-          uploadLabel="Upload PDF"
+          uploadLabel="Upload files"
           uploadDisabled={false}
           uploading={false}
           uploadInputId={UPLOAD_INPUT_ID}
+          onImportFromCloud={() => setCloudImportOpen(true)}
         />
 
         <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] md:grid-cols-[290px_minmax(0,1fr)]">
@@ -571,6 +642,8 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             onOpenFile={openFile}
             onDeleteFolder={requestDeleteFolder}
             onDeleteFile={requestDeleteFile}
+            onDownloadFile={(f) => void downloadFile(f)}
+            downloadingKey={downloadingKey}
             deletingKey={deletingKey}
             isDragOver={isDragOver}
             onDragEnter={handleDragEnter}
@@ -675,6 +748,27 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           projectId={projectId}
           folderId={uploadWizardFolderId}
           existingFiles={project.files.filter((f) => f.folderId === uploadWizardFolderId)}
+        />
+      ) : null}
+      {imageLightbox ? (
+        <ProjectFileImageLightbox
+          fileId={imageLightbox.fileId}
+          fileName={imageLightbox.fileName}
+          version={imageLightbox.version}
+          onClose={() => setImageLightbox(null)}
+        />
+      ) : null}
+      {wid ? (
+        <CloudImportModal
+          open={cloudImportOpen}
+          onClose={() => setCloudImportOpen(false)}
+          workspaceId={wid}
+          projectId={projectId}
+          folderId={folderId}
+          oauthReturnPath={`${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
+          onImported={() => {
+            void invalidate();
+          }}
         />
       ) : null}
     </div>

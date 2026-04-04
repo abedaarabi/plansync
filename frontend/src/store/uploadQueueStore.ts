@@ -105,9 +105,7 @@ export const useUploadQueueStore = create<UploadQueueState>((set) => ({
       jobs: s.jobs.filter((j) => j.status !== "done" && j.status !== "error"),
     })),
   enqueue: ({ workspaceId, projectId, folderId, files, queryClient }) => {
-    const valid = files.filter(
-      (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
-    );
+    const valid = Array.from(files);
     const jobEntries: UploadJob[] = valid.map((file) => ({
       id: nanoid(),
       fileName: file.name,

@@ -5,12 +5,11 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { sessionMiddleware } from "../../middleware/session.js";
 import { logActivity, logActivitySafe } from "../../lib/activity.js";
+import { maybeSendStorageAlerts } from "../../lib/storageAlerts.js";
 import {
   DEFAULT_STORAGE_QUOTA_BYTES,
   MAX_WORKSPACE_MEMBERS,
   MAX_WORKSPACE_PROJECTS,
-  STORAGE_WARN_80,
-  STORAGE_WARN_95,
 } from "../../config/product.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import {
@@ -40,6 +39,7 @@ import {
   s3KeyMatchesFileUpload,
   upsertFileForUpload,
 } from "../../lib/fileUpload.js";
+import { resolvedMimeType } from "../../lib/mime.js";
 import { findBestUploadMatch } from "../../lib/uploadMatch.js";
 import {
   deleteFileFromS3AndDb,
@@ -59,6 +59,7 @@ import { registerRfiRoutes } from "./rfiRoutes.js";
 import { registerTakeoffRoutes } from "./takeoffRoutes.js";
 import { registerProposalRoutes } from "./proposalRoutes.js";
 import { registerSheetAiRoutes } from "./sheetAiRoutes.js";
+import { registerCloudRoutes } from "./cloudRoutes.js";
 import {
   auditLogsToRows,
   buildAuditPdfBuffer,
@@ -159,64 +160,6 @@ async function countSeatPressure(workspaceId: string): Promise<number> {
     }),
   ]);
   return members + linkInvites + emailInvites;
-}
-
-async function maybeSendStorageAlerts(
-  env: Env,
-  workspaceId: string,
-  prevUsed: bigint,
-  newUsed: bigint,
-  quota: bigint,
-) {
-  const prevR = Number(prevUsed) / Number(quota);
-  const newR = Number(newUsed) / Number(quota);
-  if (!env.RESEND_API_KEY || !env.RESEND_FROM) {
-    if (newR >= STORAGE_WARN_80 && prevR < STORAGE_WARN_80) {
-      await logActivity(workspaceId, ActivityType.STORAGE_THRESHOLD, {
-        metadata: { level: 80, used: newUsed.toString(), quota: quota.toString() },
-      });
-    }
-    return;
-  }
-  const ws = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    include: {
-      members: { where: { role: "ADMIN" }, include: { user: true } },
-    },
-  });
-  if (!ws) return;
-  const adminEmails = ws.members.map((m) => m.user.email).filter(Boolean);
-  if (adminEmails.length === 0) return;
-
-  const resend = new Resend(env.RESEND_API_KEY);
-  const gb = (n: bigint) => (Number(n) / 1024 ** 3).toFixed(2);
-  const from = env.RESEND_FROM!;
-
-  const send = async (level: 80 | 95, subject: string, body: string) => {
-    await logActivity(workspaceId, ActivityType.STORAGE_THRESHOLD, {
-      metadata: { level, used: newUsed.toString(), quota: quota.toString() },
-    });
-    await resend.emails.send({
-      from,
-      to: adminEmails,
-      subject,
-      text: body,
-    });
-  };
-
-  if (newR >= STORAGE_WARN_95 && prevR < STORAGE_WARN_95) {
-    await send(
-      95,
-      "PlanSync: storage almost full (95%)",
-      `Your workspace "${ws.name}" is using ${gb(newUsed)} GB of ${gb(quota)} GB.`,
-    );
-  } else if (newR >= STORAGE_WARN_80 && prevR < STORAGE_WARN_80) {
-    await send(
-      80,
-      "PlanSync: storage warning (80%)",
-      `Your workspace "${ws.name}" is using ${gb(newUsed)} GB of ${gb(quota)} GB.`,
-    );
-  }
 }
 
 export function v1Routes(
@@ -2038,7 +1981,7 @@ export function v1Routes(
         projectId: z.string(),
         folderId: z.string().optional(),
         fileName: z.string().min(1),
-        contentType: z.string().default("application/pdf"),
+        contentType: z.string().default("application/octet-stream"),
         sizeBytes: z.coerce.bigint(),
       })
       .safeParse(await c.req.json());
@@ -2151,7 +2094,7 @@ export function v1Routes(
         file.id,
         uploadId,
       );
-      const contentType = uploaded.type || "application/pdf";
+      const contentType = resolvedMimeType(uploaded.type, fields.data.fileName);
 
       const buf = Buffer.from(await uploaded.arrayBuffer());
       const put = await putObjectBuffer(env, key, buf, contentType);
@@ -2178,12 +2121,18 @@ export function v1Routes(
             uploadedById: c.get("user").id,
           },
         });
+        await tx.file.update({
+          where: { id: file.id },
+          data: { mimeType: contentType },
+        });
         const updatedWs = await tx.workspace.update({
           where: { id: fields.data.workspaceId },
           data: { storageUsedBytes: { increment: sizeBytes } },
         });
         return { fv, updatedWs };
       });
+
+      const fileRow = await prisma.file.findUniqueOrThrow({ where: { id: file.id } });
 
       await logActivitySafe(fields.data.workspaceId, ActivityType.FILE_VERSION_ADDED, {
         actorUserId: c.get("user").id,
@@ -2200,7 +2149,7 @@ export function v1Routes(
         updatedWs.storageQuotaBytes,
       );
 
-      return c.json({ file, fileVersion: fileVersionJson(fv) });
+      return c.json({ file: fileRow, fileVersion: fileVersionJson(fv) });
     },
   );
 
@@ -2215,6 +2164,7 @@ export function v1Routes(
         s3Key: z.string(),
         sizeBytes: z.coerce.bigint(),
         sha256: z.string().optional(),
+        mimeType: z.string().optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
@@ -2292,7 +2242,13 @@ export function v1Routes(
       updatedWs.storageQuotaBytes,
     );
 
-    return c.json({ file, fileVersion: fileVersionJson(fv) });
+    const mt = resolvedMimeType(body.data.mimeType, file.name);
+    const fileOut = await prisma.file.update({
+      where: { id: file.id },
+      data: { mimeType: mt },
+    });
+
+    return c.json({ file: fileOut, fileVersion: fileVersionJson(fv) });
   });
 
   r.get("/files/:fileId/presign-read", needUser, async (c) => {
@@ -2873,6 +2829,7 @@ export function v1Routes(
     return c.json(projectRowJson(updated));
   });
 
+  registerCloudRoutes(r, needUser, env, auth);
   registerRfiRoutes(r, needUser, env);
   registerProposalRoutes(r, needUser, env);
 

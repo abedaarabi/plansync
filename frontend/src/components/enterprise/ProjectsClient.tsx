@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ChevronRight,
+  Download,
   Folder,
   FolderPlus,
   LayoutGrid,
@@ -23,6 +24,7 @@ import {
   fetchProjects,
   ProRequiredError,
 } from "@/lib/api-client";
+import { downloadProjectFileVersion } from "@/lib/downloadProjectFile";
 import { getLastProjectId, setLastProjectId } from "@/lib/lastProject";
 import {
   addFolderToProjectCache,
@@ -32,7 +34,7 @@ import {
   replaceOptimisticFolder,
 } from "@/lib/projectsCache";
 import { PdfFileIcon } from "@/components/icons/PdfFileIcon";
-import { isPdfFile } from "@/lib/isPdfFile";
+import { guessFileMimeType, isImageThumbnailFile, isPdfFile } from "@/lib/isPdfFile";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { qk } from "@/lib/queryKeys";
 import { nanoid } from "nanoid";
@@ -51,6 +53,7 @@ import { ProjectLogo } from "./ProjectLogo";
 import { ProjectProgressBar } from "./ProjectProgressBar";
 import { ProjectStageBadge } from "./ProjectStageBadge";
 import { PdfFileThumbnail } from "./PdfFileThumbnail";
+import { ProjectFileImageLightbox } from "./ProjectFileImageLightbox";
 
 function formatBytes(n: string | number | bigint): string {
   const v = typeof n === "bigint" ? Number(n) : Number(n);
@@ -257,6 +260,12 @@ export function ProjectsClient() {
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   /** Which revision to open in the viewer when a file has multiple versions */
   const [versionPick, setVersionPick] = useState<Record<string, number>>({});
+  const [imageLightbox, setImageLightbox] = useState<{
+    fileId: string;
+    fileName: string;
+    version: number;
+  } | null>(null);
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -464,11 +473,6 @@ export function ProjectsClient() {
       toast.error("Select a project first.");
       return;
     }
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Please choose a PDF file.");
-      return;
-    }
-
     /** Matches backend `MAX_DIRECT_UPLOAD_BYTES` default (same-origin upload avoids S3 CORS). */
     const maxDirect = 100 * 1024 * 1024;
     setUploading(true);
@@ -533,7 +537,7 @@ export function ProjectsClient() {
               projectId: selectedProjectId,
               folderId: selectedFolderId ?? undefined,
               fileName: file.name,
-              contentType: file.type || "application/pdf",
+              contentType: guessFileMimeType(file),
               sizeBytes: file.size,
             }),
           });
@@ -557,7 +561,7 @@ export function ProjectsClient() {
           const put = await fetch(pj.uploadUrl, {
             method: "PUT",
             body: file,
-            headers: { "Content-Type": file.type || "application/pdf" },
+            headers: { "Content-Type": guessFileMimeType(file) },
           });
           if (!put.ok) {
             throw new Error("Upload to storage failed. Check S3 CORS and credentials.");
@@ -574,6 +578,7 @@ export function ProjectsClient() {
               fileId: pj.fileId,
               s3Key: pj.key,
               sizeBytes: String(file.size),
+              mimeType: guessFileMimeType(file),
             }),
           });
           if (!done.ok) {
@@ -629,16 +634,51 @@ export function ProjectsClient() {
     return fallback;
   }
 
+  async function downloadFile(f: CloudFile) {
+    const sorted = sortedFileVersions(f);
+    const v = getSelectedVersion(f);
+    const key = `file:${f.id}`;
+    setDownloadingKey(key);
+    try {
+      await downloadProjectFileVersion({
+        fileId: f.id,
+        fileName: f.name,
+        version: v,
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Download failed.");
+    } finally {
+      setDownloadingKey(null);
+    }
+  }
+
   function openFile(f: CloudFile, versionOverride?: number) {
     const sorted = sortedFileVersions(f);
     const v = versionOverride ?? getSelectedVersion(f);
+    const verRow = sorted.find((x) => x.version === v) ?? sorted[0];
+    const ver = verRow?.version ?? v;
+
+    if (isImageThumbnailFile(f)) {
+      setImageLightbox({ fileId: f.id, fileName: f.name, version: ver });
+      return;
+    }
+
+    if (!isPdfFile(f)) {
+      const base = apiUrl(`/api/v1/files/${encodeURIComponent(f.id)}/content`);
+      window.open(
+        `${base}?version=${encodeURIComponent(String(ver))}`,
+        "_blank",
+        "noopener,noreferrer",
+      );
+      return;
+    }
+
     const q = new URLSearchParams({
       fileId: f.id,
       name: f.name,
     });
     if (selectedProjectId) q.set("projectId", selectedProjectId);
     if (sorted.length > 0) q.set("version", String(v));
-    const verRow = sorted.find((x) => x.version === v) ?? sorted[0];
     if (verRow?.id) q.set("fileVersionId", verRow.id);
     router.push(`/viewer?${q.toString()}`);
   }
@@ -850,7 +890,7 @@ export function ProjectsClient() {
                   <p className="text-xs text-[var(--enterprise-text-muted)]">
                     {itemCount} item{itemCount === 1 ? "" : "s"} in this folder
                     {sortedFiles.length > 0
-                      ? ` · ${sortedFiles.length} PDF${sortedFiles.length === 1 ? "" : "s"}`
+                      ? ` · ${sortedFiles.length} file${sortedFiles.length === 1 ? "" : "s"}`
                       : ""}
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
@@ -893,10 +933,9 @@ export function ProjectsClient() {
                       ) : (
                         <Upload className="h-3.5 w-3.5 shrink-0" />
                       )}
-                      {uploading ? "Uploading…" : "Upload PDF"}
+                      {uploading ? "Uploading…" : "Upload file"}
                       <input
                         type="file"
-                        accept="application/pdf,.pdf"
                         className="sr-only"
                         disabled={uploading}
                         onChange={onUpload}
@@ -916,7 +955,7 @@ export function ProjectsClient() {
                       No files yet
                     </p>
                     <p className="mt-1 max-w-sm text-[14px] text-[var(--enterprise-subtitle)]">
-                      Upload your first PDF to get started
+                      Upload your first file to get started
                     </p>
                     <label
                       className={`mt-6 inline-flex select-none items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition ${
@@ -931,10 +970,9 @@ export function ProjectsClient() {
                       ) : (
                         <Upload className="h-4 w-4 shrink-0" />
                       )}
-                      {uploading ? "Uploading…" : "Upload PDF"}
+                      {uploading ? "Uploading…" : "Upload file"}
                       <input
                         type="file"
-                        accept="application/pdf,.pdf"
                         className="sr-only"
                         disabled={uploading}
                         onChange={onUpload}
@@ -950,7 +988,7 @@ export function ProjectsClient() {
                           <th className="pb-2 pr-4">Modified</th>
                           <th className="pb-2 pr-4">Size</th>
                           <th className="pb-2 pr-4">Version</th>
-                          <th className="w-12 pb-2" aria-label="Actions" />
+                          <th className="min-w-[4.5rem] pb-2" aria-label="Actions" />
                         </tr>
                       </thead>
                       <tbody>
@@ -1043,22 +1081,40 @@ export function ProjectsClient() {
                                 )}
                               </td>
                               <td className="py-2.5">
-                                <button
-                                  type="button"
-                                  className="rounded-lg p-1.5 text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600"
-                                  disabled={deletingKey === `file:${f.id}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void deleteFile(f);
-                                  }}
-                                  aria-label={`Delete ${f.name}`}
-                                >
-                                  {deletingKey === `file:${f.id}` ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-4 w-4" />
-                                  )}
-                                </button>
+                                <div className="flex items-center justify-end gap-0.5">
+                                  <button
+                                    type="button"
+                                    className="rounded-lg p-1.5 text-[var(--enterprise-text-muted)] hover:bg-slate-100 hover:text-[var(--enterprise-text)]"
+                                    disabled={downloadingKey === `file:${f.id}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void downloadFile(f);
+                                    }}
+                                    aria-label={`Download ${f.name}`}
+                                  >
+                                    {downloadingKey === `file:${f.id}` ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Download className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="rounded-lg p-1.5 text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600"
+                                    disabled={deletingKey === `file:${f.id}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void deleteFile(f);
+                                    }}
+                                    aria-label={`Delete ${f.name}`}
+                                  >
+                                    {deletingKey === `file:${f.id}` ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1133,6 +1189,8 @@ export function ProjectsClient() {
                               <div className="relative h-[160px] w-full overflow-hidden bg-[var(--enterprise-bg)]">
                                 <PdfFileThumbnail
                                   fileId={f.id}
+                                  fileName={f.name}
+                                  mimeType={f.mimeType}
                                   isPdf={isPdfFile(f)}
                                   className="h-full w-full"
                                 />
@@ -1142,7 +1200,7 @@ export function ProjectsClient() {
                                   </div>
                                 ) : null}
                               </div>
-                              <div className="border-t border-[var(--enterprise-border)] p-3 pr-10">
+                              <div className="border-t border-[var(--enterprise-border)] p-3 pr-[4.25rem]">
                                 <p className="truncate text-[13px] font-semibold text-[var(--enterprise-text)]">
                                   {f.name}
                                 </p>
@@ -1175,22 +1233,42 @@ export function ProjectsClient() {
                               </div>
                             ) : null}
                           </div>
-                          <button
-                            type="button"
-                            className="absolute right-2 top-2 rounded-lg bg-white/95 p-1.5 text-[var(--enterprise-text-muted)] opacity-0 shadow-md ring-1 ring-slate-200 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                            disabled={deletingKey === `file:${f.id}`}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              void deleteFile(f);
-                            }}
-                            aria-label={`Delete ${f.name}`}
-                          >
-                            {deletingKey === `file:${f.id}` ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </button>
+                          <div className="absolute right-2 top-2 z-10 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
+                            <button
+                              type="button"
+                              className="rounded-lg bg-white/95 p-1.5 text-[var(--enterprise-text-muted)] ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-[var(--enterprise-text)]"
+                              disabled={downloadingKey === `file:${f.id}`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                void downloadFile(f);
+                              }}
+                              aria-label={`Download ${f.name}`}
+                            >
+                              {downloadingKey === `file:${f.id}` ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg bg-white/95 p-1.5 text-[var(--enterprise-text-muted)] ring-1 ring-slate-200 transition hover:bg-red-50 hover:text-red-600"
+                              disabled={deletingKey === `file:${f.id}`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                void deleteFile(f);
+                              }}
+                              aria-label={`Delete ${f.name}`}
+                            >
+                              {deletingKey === `file:${f.id}` ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
                         </li>
                       );
                     })}
@@ -1202,7 +1280,7 @@ export function ProjectsClient() {
             <div className="enterprise-card p-10 text-center text-sm text-[var(--enterprise-text-muted)]">
               {projects.length === 0
                 ? isAdmin
-                  ? "Create your first project to upload PDFs."
+                  ? "Create your first project to upload files."
                   : "No projects available."
                 : "Select a project."}
             </div>
@@ -1297,6 +1375,15 @@ export function ProjectsClient() {
           />
         </div>
       </EnterpriseSlideOver>
+
+      {imageLightbox ? (
+        <ProjectFileImageLightbox
+          fileId={imageLightbox.fileId}
+          fileName={imageLightbox.fileName}
+          version={imageLightbox.version}
+          onClose={() => setImageLightbox(null)}
+        />
+      ) : null}
     </div>
   );
 }

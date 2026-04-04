@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
-import { ChevronRight, FolderPlus, Home, Loader2, Search, Upload } from "lucide-react";
+import { ChevronRight, Cloud, FolderPlus, Home, Loader2, Search, Upload } from "lucide-react";
 
 export type BreadcrumbItem = {
   id: string | null;
@@ -19,6 +19,8 @@ export type FileExplorerTopBarProps = {
   uploading?: boolean;
   /** Must match the id of a single shared `<input type="file" />` in the parent. */
   uploadInputId: string;
+  /** Optional: copy files from Google Drive / OneDrive / Dropbox into the project. */
+  onImportFromCloud?: () => void;
 };
 
 /**
@@ -34,6 +36,7 @@ export function FileExplorerTopBar({
   uploadDisabled,
   uploading,
   uploadInputId,
+  onImportFromCloud,
 }: FileExplorerTopBarProps) {
   return (
     <header className="flex flex-col gap-4 border-b border-slate-200/75 bg-white/95 px-5 py-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:gap-6 lg:px-7">
@@ -93,6 +96,16 @@ export function FileExplorerTopBar({
             <FolderPlus className="h-4 w-4 text-slate-500" strokeWidth={2} />
             New folder
           </button>
+          {onImportFromCloud ? (
+            <button
+              type="button"
+              onClick={onImportFromCloud}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-3.5 py-2 text-sm font-medium text-[var(--enterprise-text)] shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--enterprise-primary)]"
+            >
+              <Cloud className="h-4 w-4 text-slate-500" strokeWidth={2} aria-hidden />
+              Import from cloud
+            </button>
+          ) : null}
           <label
             htmlFor={uploadInputId}
             className={`inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-blue-500/15 transition hover:bg-[var(--enterprise-primary-deep)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--enterprise-primary)]/35 ${

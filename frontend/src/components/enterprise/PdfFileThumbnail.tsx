@@ -4,6 +4,7 @@ import { apiUrl } from "@/lib/api-url";
 import { useEffect, useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
 import { PdfFileIcon } from "@/components/icons/PdfFileIcon";
+import { isImageThumbnailFile } from "@/lib/isPdfFile";
 import { setupPdfWorker } from "@/lib/pdf";
 
 type Props = {
@@ -11,6 +12,9 @@ type Props = {
   className?: string;
   /** When false, show a generic file tile (no PDF.js / no PDF glyph). */
   isPdf?: boolean;
+  /** With `mimeType`, non-PDF images may show a real thumbnail. */
+  fileName?: string;
+  mimeType?: string | null;
 };
 
 function NonPdfPlaceholder({ className }: { className?: string }) {
@@ -20,6 +24,67 @@ function NonPdfPlaceholder({ className }: { className?: string }) {
     >
       <FileText className="h-12 w-12 text-slate-400" strokeWidth={1.25} aria-hidden />
     </div>
+  );
+}
+
+/** Raster image bytes via authenticated fetch (needed when the API is on another origin). */
+function ImageFileThumbnailInner({ fileId, className }: { fileId: string; className?: string }) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [phase, setPhase] = useState<"loading" | "ready" | "fallback">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    let blobUrl: string | null = null;
+    setPhase("loading");
+    setObjectUrl(null);
+
+    void (async () => {
+      try {
+        const res = await fetch(apiUrl(`/api/v1/files/${encodeURIComponent(fileId)}/content`), {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("bad response");
+        const blob = await res.blob();
+        const u = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(u);
+          return;
+        }
+        blobUrl = u;
+        setObjectUrl(u);
+        setPhase("ready");
+      } catch {
+        if (!cancelled) setPhase("fallback");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [fileId]);
+
+  if (phase === "loading") {
+    return (
+      <div
+        className={`flex items-center justify-center bg-slate-100 text-slate-400 ${className ?? ""}`}
+      >
+        <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+      </div>
+    );
+  }
+
+  if (phase === "fallback" || !objectUrl) {
+    return <NonPdfPlaceholder className={className} />;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- blob URL from authenticated fetch
+    <img
+      src={objectUrl}
+      alt=""
+      className={`h-full w-full object-cover object-center ${className ?? ""}`}
+    />
   );
 }
 
@@ -38,7 +103,7 @@ function PdfFileThumbnailInner({ fileId, className }: { fileId: string; classNam
         const pdfUrl = apiUrl(`/api/v1/files/${encodeURIComponent(fileId)}/content`);
         const pdfjs = await import("pdfjs-dist");
         setupPdfWorker(pdfjs);
-        const doc = await pdfjs.getDocument({ url: pdfUrl }).promise;
+        const doc = await pdfjs.getDocument({ url: pdfUrl, withCredentials: true }).promise;
         const page = await doc.getPage(1);
         const base = page.getViewport({ scale: 1 });
         const maxW = 200;
@@ -94,9 +159,12 @@ function PdfFileThumbnailInner({ fileId, className }: { fileId: string; classNam
   );
 }
 
-export function PdfFileThumbnail({ fileId, className, isPdf = true }: Props) {
-  if (!isPdf) {
-    return <NonPdfPlaceholder className={className} />;
+export function PdfFileThumbnail({ fileId, className, isPdf = true, fileName, mimeType }: Props) {
+  if (isPdf) {
+    return <PdfFileThumbnailInner fileId={fileId} className={className} />;
   }
-  return <PdfFileThumbnailInner fileId={fileId} className={className} />;
+  if (isImageThumbnailFile({ name: fileName ?? "", mimeType })) {
+    return <ImageFileThumbnailInner fileId={fileId} className={className} />;
+  }
+  return <NonPdfPlaceholder className={className} />;
 }

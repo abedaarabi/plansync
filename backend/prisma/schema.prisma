@@ -23,21 +23,49 @@ model User {
   sessions Session[]
   accounts Account[]
 
-  workspaceMembers     WorkspaceMember[]
-  projectMembers       ProjectMember[]
-  emailInvitesSent     EmailInvite[]      @relation("EmailInviteInviter")
-  activityLogs         ActivityLog[]      @relation("ActivityActor")
-  issuesAssigned       Issue[]            @relation("IssueAssignee")
-  issuesCreated        Issue[]            @relation("IssueCreator")
-  fileVersions         FileVersion[]
-  rfisCreated          Rfi[]              @relation("RfiCreator")
-  rfisAssigned         Rfi[]              @relation("RfiAssignee")
-  rfiAssigneeLinks     RfiAssigneeLink[]
-  rfiAttachments       RfiAttachment[]    @relation("RfiAttachmentUploader")
-  rfiMessages          RfiMessage[]       @relation("RfiMessageAuthor")
-  notifications        UserNotification[] @relation("NotificationRecipient")
-  notificationsAsActor UserNotification[] @relation("NotificationActor")
-  proposalsCreated     Proposal[]         @relation("ProposalCreator")
+  workspaceMembers        WorkspaceMember[]
+  projectMembers          ProjectMember[]
+  emailInvitesSent        EmailInvite[]            @relation("EmailInviteInviter")
+  activityLogs            ActivityLog[]            @relation("ActivityActor")
+  issuesAssigned          Issue[]                  @relation("IssueAssignee")
+  issuesCreated           Issue[]                  @relation("IssueCreator")
+  fileVersions            FileVersion[]
+  rfisCreated             Rfi[]                    @relation("RfiCreator")
+  rfisAssigned            Rfi[]                    @relation("RfiAssignee")
+  rfiAssigneeLinks        RfiAssigneeLink[]
+  rfiAttachments          RfiAttachment[]          @relation("RfiAttachmentUploader")
+  rfiMessages             RfiMessage[]             @relation("RfiMessageAuthor")
+  notifications           UserNotification[]       @relation("NotificationRecipient")
+  notificationsAsActor    UserNotification[]       @relation("NotificationActor")
+  proposalsCreated        Proposal[]               @relation("ProposalCreator")
+  cloudStorageConnections CloudStorageConnection[]
+}
+
+enum CloudStorageProvider {
+  GOOGLE_DRIVE
+  ONEDRIVE
+  DROPBOX
+}
+
+/// OAuth tokens for importing files from Google Drive / OneDrive / Dropbox (per user).
+model CloudStorageConnection {
+  id       String               @id @default(cuid())
+  userId   String
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider CloudStorageProvider
+
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  scope        String?
+  /// e.g. email or display name from the provider
+  accountLabel String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
 }
 
 model Session {

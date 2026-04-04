@@ -4,6 +4,7 @@ import {
   CalendarClock,
   ChevronRight,
   Clock,
+  Download,
   Eye,
   FileText,
   Folder,
@@ -19,6 +20,7 @@ import { isPdfFile } from "@/lib/isPdfFile";
 import { PdfFileThumbnail } from "@/components/enterprise/PdfFileThumbnail";
 import {
   countDirectChildren,
+  fileExplorerDisplayName,
   formatBytes,
   formatItemDateOrDash,
   sortedVersions,
@@ -40,6 +42,9 @@ export type FileExplorerContentProps = {
   onOpenFile: (f: CloudFile) => void;
   onDeleteFolder: (f: ProjectFolder) => void;
   onDeleteFile: (f: CloudFile) => void;
+  /** When set, grid/list show a download control for the selected revision. */
+  onDownloadFile?: (f: CloudFile) => void;
+  downloadingKey?: string | null;
   deletingKey: string | null;
   isDragOver: boolean;
   onDragEnter: (e: React.DragEvent) => void;
@@ -82,6 +87,8 @@ export function FileExplorerContent({
   onOpenFile,
   onDeleteFolder,
   onDeleteFile,
+  onDownloadFile,
+  downloadingKey,
   deletingKey,
   isDragOver,
   onDragEnter,
@@ -175,7 +182,7 @@ export function FileExplorerContent({
         {isDragOver ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-[var(--enterprise-primary)]/50 bg-white/40 backdrop-blur-[1px]">
             <p className="text-sm font-semibold text-[var(--enterprise-primary-deep)]">
-              Drop PDF here or onto a folder
+              Drop files here or onto a folder
             </p>
           </div>
         ) : null}
@@ -191,8 +198,8 @@ export function FileExplorerContent({
           ) : (
             <FileExplorerEmptyState
               title="No files yet"
-              description="Upload your first PDF to get started, or add a folder from the toolbar."
-              uploadLabel="Upload PDF"
+              description="Upload files to get started, or add a folder from the toolbar."
+              uploadLabel="Upload files"
               uploadDisabled={uploadDisabled}
               uploadInputId={uploadInputId}
             />
@@ -317,6 +324,8 @@ export function FileExplorerContent({
                     <div className="relative aspect-[5/3] w-full overflow-hidden bg-slate-50">
                       <PdfFileThumbnail
                         fileId={f.id}
+                        fileName={f.name}
+                        mimeType={f.mimeType}
                         isPdf={isPdfFile(f)}
                         className="h-full w-full"
                       />
@@ -334,7 +343,7 @@ export function FileExplorerContent({
                     </div>
                     <div className="border-t border-slate-100 bg-slate-50/50 p-2.5">
                       <p className="truncate text-[13px] font-semibold leading-tight text-[var(--enterprise-text)]">
-                        {f.name.replace(/\.pdf$/i, "")}
+                        {fileExplorerDisplayName(f)}
                       </p>
                       <p className="mt-1 text-[10px] text-slate-500">
                         {displayVer ? (
@@ -395,22 +404,42 @@ export function FileExplorerContent({
                       </select>
                     </div>
                   ) : null}
-                  <button
-                    type="button"
-                    className="pointer-events-none absolute right-1.5 top-1.5 z-20 rounded-md bg-white/95 p-1 text-slate-400 opacity-0 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-red-50 hover:text-red-600 group-hover:pointer-events-auto group-hover:opacity-100"
-                    disabled={deletingKey === `file:${f.id}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void onDeleteFile(f);
-                    }}
-                    aria-label={`Delete ${f.name}`}
-                  >
-                    {deletingKey === `file:${f.id}` ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </button>
+                  <div className="pointer-events-none absolute right-1.5 top-1.5 z-20 flex gap-0.5 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100">
+                    {onDownloadFile ? (
+                      <button
+                        type="button"
+                        className="pointer-events-auto rounded-md bg-white/95 p-1 text-slate-400 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-slate-100 hover:text-slate-700"
+                        disabled={downloadingKey === `file:${f.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void onDownloadFile(f);
+                        }}
+                        aria-label={`Download ${f.name}`}
+                      >
+                        {downloadingKey === `file:${f.id}` ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4" />
+                        )}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="pointer-events-auto rounded-md bg-white/95 p-1 text-slate-400 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-red-50 hover:text-red-600"
+                      disabled={deletingKey === `file:${f.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void onDeleteFile(f);
+                      }}
+                      aria-label={`Delete ${f.name}`}
+                    >
+                      {deletingKey === `file:${f.id}` ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -438,7 +467,7 @@ export function FileExplorerContent({
                   <th className="min-w-[4.5rem] py-2.5 pr-3" scope="col">
                     Size
                   </th>
-                  <th className="w-10 py-2.5 pr-4" scope="col">
+                  <th className="min-w-[4.5rem] py-2.5 pr-4" scope="col">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
@@ -524,7 +553,11 @@ export function FileExplorerContent({
                       key={f.id}
                       draggable={Boolean(onDragStartMove)}
                       onDragStart={(e) => {
-                        if ((e.target as HTMLElement).closest('button[aria-label^="Delete"]')) {
+                        if (
+                          (e.target as HTMLElement).closest(
+                            'button[aria-label^="Delete"], button[aria-label^="Download"]',
+                          )
+                        ) {
                           e.preventDefault();
                           return;
                         }
@@ -587,22 +620,42 @@ export function FileExplorerContent({
                         {displayVer ? formatBytes(displayVer.sizeBytes) : "—"}
                       </td>
                       <td className="py-2">
-                        <button
-                          type="button"
-                          className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                          disabled={deletingKey === `file:${f.id}`}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            void onDeleteFile(f);
-                          }}
-                          aria-label={`Delete ${f.name}`}
-                        >
-                          {deletingKey === `file:${f.id}` ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </button>
+                        <div className="flex items-center justify-end gap-0.5">
+                          {onDownloadFile ? (
+                            <button
+                              type="button"
+                              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              disabled={downloadingKey === `file:${f.id}`}
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                void onDownloadFile(f);
+                              }}
+                              aria-label={`Download ${f.name}`}
+                            >
+                              {downloadingKey === `file:${f.id}` ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            disabled={deletingKey === `file:${f.id}`}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              void onDeleteFile(f);
+                            }}
+                            aria-label={`Delete ${f.name}`}
+                          >
+                            {deletingKey === `file:${f.id}` ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

@@ -1,4 +1,5 @@
 import type { CloudFile, FileVersion, Folder, Project } from "@/types/projects";
+import { isPdfFile } from "@/lib/isPdfFile";
 
 export function formatBytes(n: string | number | bigint): string {
   const v = typeof n === "bigint" ? Number(n) : Number(n);
@@ -61,4 +62,10 @@ export function filterByName<T extends { name: string }>(items: T[], query: stri
   const q = query.trim().toLowerCase();
   if (!q) return items;
   return items.filter((i) => i.name.toLowerCase().includes(q));
+}
+
+/** Grid title: hide “.pdf” for drawings; keep full name for other types. */
+export function fileExplorerDisplayName(file: { name: string; mimeType: string }): string {
+  if (isPdfFile(file)) return file.name.replace(/\.pdf$/i, "");
+  return file.name;
 }

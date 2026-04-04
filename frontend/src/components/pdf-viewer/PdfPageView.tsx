@@ -2013,28 +2013,12 @@ export function PdfPageView({
             e.preventDefault();
             return;
           }
-          if (measurePreview) {
-            const dP = distNormPx(raw, measurePreview, cssW, cssH);
-            if (dP <= hitPt && dP < dS0) {
-              measureLineDragRef.current = { pointerId: e.pointerId, mode: "moveEndPreview" };
-              el.setPointerCapture(e.pointerId);
-              e.preventDefault();
-              return;
-            }
-            const dSeg = distNormPointToSegmentPx(raw, measureStart, measurePreview, cssW, cssH);
-            if (dSeg <= hitSeg && dS0 > hitPt && dP > hitPt) {
-              measureLineDragRef.current = {
-                pointerId: e.pointerId,
-                mode: "translatePreview",
-                originStart: { ...measureStart },
-                originPreview: { ...measurePreview },
-                anchorN: { x: raw.x, y: raw.y },
-              };
-              el.setPointerCapture(e.pointerId);
-              e.preventDefault();
-              return;
-            }
-          }
+          /**
+           * Before the second point is fixed (`!measureEnd`), do not treat hits on the rubber-band
+           * preview as drags. Those modes only clear on pointerup without ever setting `measureEnd`,
+           * so clicking on/near the preview line (the natural place to finish) looked broken.
+           * Preview still follows the cursor via pointermove; click empty space to place the end.
+           */
 
           if (Math.hypot(sn.x - measureStart.x, sn.y - measureStart.y) < 0.001) return;
           const end2 = snapMeasureLineEndpoint(
