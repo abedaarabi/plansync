@@ -5,10 +5,29 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, ChevronDown, Cloud, Menu, Monitor, Play, X } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  ChevronDown,
+  ClipboardList,
+  Cloud,
+  MapPin,
+  Menu,
+  Monitor,
+  Play,
+  Ruler,
+  X,
+} from "lucide-react";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { fetchMe } from "@/lib/api-client";
-import { LANDING_FAQ } from "@/lib/landingContent";
+import {
+  LANDING_FAQ,
+  LANDING_FEATURE_BULLETS,
+  LANDING_HOW_IT_WORKS,
+  LANDING_HOW_IT_WORKS_SECTION,
+  LANDING_SOLUTIONS,
+  LANDING_SOLUTIONS_SECTION,
+} from "@/lib/landingContent";
 import { meHasProWorkspace } from "@/lib/proWorkspace";
 import { qk } from "@/lib/queryKeys";
 
@@ -115,11 +134,13 @@ function AnimateIn({
   delay = 0,
   /** Above-the-fold: no opacity-0 flash (better LCP / no “blank hero”). */
   instant = false,
+  id,
 }: {
   children: React.ReactNode;
   className?: string;
   delay?: number;
   instant?: boolean;
+  id?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const reducedMotion = usePrefersReducedMotion();
@@ -152,7 +173,7 @@ function AnimateIn({
         };
 
   return (
-    <div ref={ref} className={className} style={style}>
+    <div ref={ref} id={id} className={className} style={style}>
       {children}
     </div>
   );
@@ -183,6 +204,71 @@ const PRO_FEATURES = [
 ];
 
 /* ── Browser Mockup ────────────────────────────────────────── */
+
+const SOLUTION_ICONS = {
+  viewer: Monitor,
+  issues: MapPin,
+  rfis: ClipboardList,
+  takeoff: Ruler,
+} as const;
+
+function SolutionsDropdown() {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className="flex items-center gap-0.5 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+      >
+        Solutions
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`}
+          strokeWidth={2}
+          aria-hidden
+        />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute left-0 top-[calc(100%+8px)] z-50 w-[min(calc(100vw-2rem),15rem)] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1 shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/[0.04]"
+        >
+          {LANDING_SOLUTIONS.map((s) => (
+            <a
+              key={s.slug}
+              href={`#solution-${s.slug}`}
+              role="menuitem"
+              className="block px-3 py-2.5 text-sm font-medium text-slate-800 transition hover:bg-slate-50"
+              onClick={() => setOpen(false)}
+            >
+              {s.title}
+            </a>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function BrowserMockup({
   children,
@@ -261,6 +347,7 @@ export function LandingPage() {
 
           {/* Desktop links */}
           <div className="hidden items-center gap-8 md:flex">
+            <SolutionsDropdown />
             <a
               href="#walkthrough"
               className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
@@ -328,6 +415,21 @@ export function LandingPage() {
         {mobileOpen && (
           <div className="border-t border-slate-200/80 bg-white px-6 pb-6 pt-4 md:hidden">
             <div className="flex flex-col gap-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Solutions
+              </p>
+              <div className="flex flex-col gap-2 border-b border-slate-100 pb-4">
+                {LANDING_SOLUTIONS.map((s) => (
+                  <a
+                    key={s.slug}
+                    href={`#solution-${s.slug}`}
+                    className="text-sm font-medium text-slate-700"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    {s.title}
+                  </a>
+                ))}
+              </div>
               <a
                 href="#walkthrough"
                 className="text-sm text-slate-600"
@@ -531,6 +633,116 @@ export function LandingPage() {
           </div>
         </section>
 
+        {/* ═══════════ HOW IT WORKS ═══════════ */}
+        <section
+          id="how-it-works"
+          className="relative scroll-mt-20 border-t border-slate-200/70 bg-slate-50/80 py-24 sm:py-32"
+        >
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.4] landing-dots"
+            aria-hidden
+          />
+          <div className="relative mx-auto max-w-6xl px-6">
+            <AnimateIn className="text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
+                {LANDING_HOW_IT_WORKS_SECTION.eyebrow}
+              </p>
+              <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                {LANDING_HOW_IT_WORKS_SECTION.title}
+              </h2>
+              <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
+                {LANDING_HOW_IT_WORKS_SECTION.description}
+              </p>
+            </AnimateIn>
+
+            <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+              {LANDING_HOW_IT_WORKS.map((step, i) => (
+                <AnimateIn key={step.title} delay={60 + i * 50}>
+                  <div className="relative flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--landing-cta)_12%,white)] text-sm font-bold text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_25%,transparent)]"
+                      aria-hidden
+                    >
+                      {i + 1}
+                    </span>
+                    <h3 className="mt-4 text-base font-bold tracking-tight text-slate-900">
+                      {step.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-600">{step.body}</p>
+                  </div>
+                </AnimateIn>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════ SOLUTIONS (summary) ═══════════ */}
+        <section
+          id="solutions"
+          className="relative scroll-mt-20 border-t border-slate-200/70 bg-white py-24 sm:py-32"
+        >
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.35] landing-dots"
+            aria-hidden
+          />
+          <div className="relative mx-auto max-w-6xl px-6">
+            <AnimateIn className="text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
+                {LANDING_SOLUTIONS_SECTION.eyebrow}
+              </p>
+              <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                {LANDING_SOLUTIONS_SECTION.title}
+              </h2>
+              <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
+                {LANDING_SOLUTIONS_SECTION.description}
+              </p>
+            </AnimateIn>
+
+            <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
+              {LANDING_SOLUTIONS.map((s, i) => {
+                const Icon = SOLUTION_ICONS[s.slug];
+                return (
+                  <AnimateIn key={s.slug} delay={80 + i * 60}>
+                    <div
+                      id={`solution-${s.slug}`}
+                      className="flex h-full scroll-mt-24 flex-col rounded-2xl border border-slate-200/90 bg-white p-6 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.12),var(--enterprise-shadow-card)] transition hover:border-slate-200"
+                    >
+                      <div
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_22%,transparent)]"
+                        aria-hidden
+                      >
+                        <Icon className="h-5 w-5" strokeWidth={1.75} />
+                      </div>
+                      <h3 className="mt-4 text-lg font-bold tracking-tight text-slate-900">
+                        {s.title}
+                      </h3>
+                      <p className="mt-2 text-sm leading-relaxed text-slate-600">{s.description}</p>
+                      <ul className="mt-4 flex flex-1 flex-col gap-2">
+                        {s.bullets.map((b) => (
+                          <li key={b} className="flex gap-2 text-sm leading-snug text-slate-600">
+                            <Check
+                              className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_70%,#64748b)]"
+                              strokeWidth={2.5}
+                              aria-hidden
+                            />
+                            <span>{b}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <a
+                        href={`#feature-${s.slug}`}
+                        className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
+                      >
+                        Learn more <ArrowRight className="h-4 w-4 shrink-0" />
+                      </a>
+                    </div>
+                  </AnimateIn>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
         {/* ═══════════ SECTION 3 — FREE vs PRO ═══════════ */}
         <section
           className="landing-band-pricing relative scroll-mt-20 border-t border-slate-200/60 py-24 sm:py-32"
@@ -670,7 +882,10 @@ export function LandingPage() {
             </AnimateIn>
 
             {/* Feature 1 — Viewer (image left, text right) */}
-            <AnimateIn className="mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <AnimateIn
+              id="feature-viewer"
+              className="mt-20 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+            >
               <BrowserMockup>
                 <div className="relative aspect-4/3 overflow-hidden">
                   <Image
@@ -692,6 +907,18 @@ export function LandingPage() {
                   Open any PDF instantly in your browser. Calibrate scale, measure distances and
                   areas, annotate, and export — all locally. No files leave your device. Ever.
                 </p>
+                <ul className="mt-5 flex flex-col gap-2.5">
+                  {LANDING_FEATURE_BULLETS.viewer.map((b) => (
+                    <li key={b} className="flex gap-3">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                    </li>
+                  ))}
+                </ul>
                 <button
                   type="button"
                   onClick={goToFreeViewer}
@@ -703,7 +930,10 @@ export function LandingPage() {
             </AnimateIn>
 
             {/* Feature 2 — Issues (text left, image right) */}
-            <AnimateIn className="mt-24 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <AnimateIn
+              id="feature-issues"
+              className="mt-24 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+            >
               <div className="order-2 lg:order-1 lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
                 <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                   Pin issues directly on the drawing
@@ -713,6 +943,18 @@ export function LandingPage() {
                   photos. Your team gets notified instantly. Track from Open to Resolved without
                   leaving PlanSync.
                 </p>
+                <ul className="mt-5 flex flex-col gap-2.5">
+                  {LANDING_FEATURE_BULLETS.issues.map((b) => (
+                    <li key={b} className="flex gap-3">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                    </li>
+                  ))}
+                </ul>
                 <Link
                   href="/sign-in"
                   className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
@@ -736,7 +978,10 @@ export function LandingPage() {
             </AnimateIn>
 
             {/* Feature 3 — RFIs (image left, text right) */}
-            <AnimateIn className="mt-24 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <AnimateIn
+              id="feature-rfis"
+              className="mt-24 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+            >
               <BrowserMockup>
                 <div className="p-5 sm:p-6">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -784,6 +1029,18 @@ export function LandingPage() {
                   Convert any issue into a formal RFI. Track responses, attach drawings, and close
                   them out — all in one place. No more RFIs buried in email threads.
                 </p>
+                <ul className="mt-5 flex flex-col gap-2.5">
+                  {LANDING_FEATURE_BULLETS.rfis.map((b) => (
+                    <li key={b} className="flex gap-3">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                    </li>
+                  ))}
+                </ul>
                 <Link
                   href="/sign-in"
                   className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
@@ -794,7 +1051,10 @@ export function LandingPage() {
             </AnimateIn>
 
             {/* Feature 4 — Takeoff (text left, image right) */}
-            <AnimateIn className="mt-24 grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <AnimateIn
+              id="feature-takeoff"
+              className="mt-24 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+            >
               <div className="order-2 lg:order-1 lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
                 <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                   Measure once. Take off everywhere.
@@ -803,6 +1063,18 @@ export function LandingPage() {
                   Draw measurement zones directly on your drawings. PlanSync calculates quantities
                   automatically. Export to CSV or PDF in one click.
                 </p>
+                <ul className="mt-5 flex flex-col gap-2.5">
+                  {LANDING_FEATURE_BULLETS.takeoff.map((b) => (
+                    <li key={b} className="flex gap-3">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                    </li>
+                  ))}
+                </ul>
                 <Link
                   href="/sign-in"
                   className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
@@ -969,6 +1241,22 @@ export function LandingPage() {
                 Product
               </h4>
               <ul className="mt-4 flex flex-col gap-3">
+                <li>
+                  <a
+                    href="#how-it-works"
+                    className="text-sm text-slate-300 transition hover:text-white"
+                  >
+                    How it works
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="#solutions"
+                    className="text-sm text-slate-300 transition hover:text-white"
+                  >
+                    Solutions
+                  </a>
+                </li>
                 <li>
                   <a
                     href="#features"
