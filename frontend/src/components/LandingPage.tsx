@@ -33,22 +33,33 @@ import { qk } from "@/lib/queryKeys";
 
 /* ── Constants ─────────────────────────────────────────────── */
 
-const YOUTUBE_VIDEO_ID = "B3aR-qLvCFo";
+const YOUTUBE_WALKTHROUGH_ID = "B3aR-qLvCFo";
+const YOUTUBE_HERO_DEMO_ID = "iaMkrdq1kko";
 
 /* ── YouTube embed (poster → iframe on click) ─────────────── */
 
-function HeroYouTubeEmbed() {
+function YouTubePosterEmbed({
+  videoId,
+  title,
+  playAriaLabel,
+  posterAlt,
+}: {
+  videoId: string;
+  title: string;
+  playAriaLabel: string;
+  posterAlt: string;
+}) {
   const [playing, setPlaying] = useState(false);
-  const posterUrl = `https://img.youtube.com/vi/${YOUTUBE_VIDEO_ID}/maxresdefault.jpg`;
+  const posterUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
 
   if (playing) {
     return (
       <iframe
-        src={`https://www.youtube-nocookie.com/embed/${YOUTUBE_VIDEO_ID}?autoplay=1&rel=0`}
-        title="PlanSync walkthrough"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`}
+        title={title}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         allowFullScreen
-        className="absolute inset-0 h-full w-full"
+        className="absolute inset-0 h-full w-full border-0"
       />
     );
   }
@@ -58,14 +69,15 @@ function HeroYouTubeEmbed() {
       type="button"
       onClick={() => setPlaying(true)}
       className="group absolute inset-0 flex items-center justify-center"
-      aria-label="Play walkthrough video"
+      aria-label={playAriaLabel}
     >
       <Image
         src={posterUrl}
-        alt="PlanSync walkthrough video thumbnail"
+        alt={posterAlt}
         fill
         className="object-cover"
         loading="lazy"
+        sizes="(max-width: 1024px) 100vw, 50vw"
         unoptimized
       />
       <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--landing-cta)] shadow-xl shadow-blue-600/30 transition group-hover:scale-110 group-hover:bg-[var(--landing-cta-bright)] sm:h-20 sm:w-20">
@@ -76,11 +88,22 @@ function HeroYouTubeEmbed() {
   );
 }
 
-/** ~12MB GIF — load only when the hero mockup is near the viewport. */
-function LandingHeroDemoGif() {
+function HeroYouTubeEmbed() {
+  return (
+    <YouTubePosterEmbed
+      videoId={YOUTUBE_WALKTHROUGH_ID}
+      title="PlanSync walkthrough"
+      playAriaLabel="Play walkthrough video"
+      posterAlt="PlanSync walkthrough video thumbnail"
+    />
+  );
+}
+
+/** YouTube demo — poster loads first; iframe only after play (no multi‑MB GIF). */
+function LandingHeroDemoVideo() {
   const ref = useRef<HTMLDivElement>(null);
   const reducedMotion = usePrefersReducedMotion();
-  const [showGif, setShowGif] = useState(false);
+  const [nearViewport, setNearViewport] = useState(false);
 
   useEffect(() => {
     if (reducedMotion) return;
@@ -88,7 +111,7 @@ function LandingHeroDemoGif() {
     if (!el) return;
     const obs = new IntersectionObserver(
       ([e]) => {
-        if (e.isIntersecting) setShowGif(true);
+        if (e.isIntersecting) setNearViewport(true);
       },
       { rootMargin: "180px", threshold: 0.01 },
     );
@@ -99,17 +122,23 @@ function LandingHeroDemoGif() {
   return (
     <div ref={ref} className="relative aspect-video overflow-hidden bg-slate-900">
       {reducedMotion ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-800 px-4 text-center text-[12px] leading-relaxed text-slate-400">
-          Plan viewer demo (animation reduced for your motion settings)
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-800 px-4 text-center text-[12px] leading-relaxed text-slate-400">
+          <span>Plan viewer demo (animation reduced for your motion settings)</span>
+          <a
+            href={`https://youtu.be/${YOUTUBE_HERO_DEMO_ID}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-sky-400 underline decoration-sky-400/50 underline-offset-2 transition hover:text-sky-300"
+          >
+            Watch on YouTube
+          </a>
         </div>
-      ) : showGif ? (
-        <Image
-          src="/images/cta/gifcta.gif"
-          alt="PlanSync viewer demo — open PDF, calibrate, measure, markup"
-          fill
-          className="object-cover"
-          sizes="(max-width: 1024px) 100vw, 50vw"
-          unoptimized
+      ) : nearViewport ? (
+        <YouTubePosterEmbed
+          videoId={YOUTUBE_HERO_DEMO_ID}
+          title="PlanSync viewer demo — open PDF, calibrate, measure, markup"
+          playAriaLabel="Play PlanSync viewer demo video"
+          posterAlt="PlanSync viewer demo video thumbnail"
         />
       ) : (
         <div
@@ -578,7 +607,7 @@ export function LandingPage() {
 
                 <div className="mx-auto w-full max-w-lg lg:mx-0 lg:max-w-none">
                   <BrowserMockup className="shadow-[0_24px_80px_-12px_rgba(0,0,0,0.45)] ring-1 ring-white/10">
-                    <LandingHeroDemoGif />
+                    <LandingHeroDemoVideo />
                   </BrowserMockup>
                   <p className="mt-3 text-center text-xs leading-relaxed text-blue-200/75 lg:text-left">
                     The viewer in motion — open a PDF, calibrate scale, measure, and mark up. Same
@@ -621,7 +650,7 @@ export function LandingPage() {
               </BrowserMockup>
               <p className="mt-4 text-center text-xs text-slate-500">
                 <a
-                  href={`https://www.youtube.com/watch?v=${YOUTUBE_VIDEO_ID}`}
+                  href={`https://www.youtube.com/watch?v=${YOUTUBE_WALKTHROUGH_ID}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 transition hover:text-[var(--landing-cta)] hover:decoration-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)]"
