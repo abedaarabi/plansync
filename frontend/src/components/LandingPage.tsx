@@ -43,11 +43,14 @@ function YouTubePosterEmbed({
   title,
   playAriaLabel,
   posterAlt,
+  /** Above-the-fold hero: no lazy + hints LCP (walkthrough stays lazy). */
+  posterPriority = false,
 }: {
   videoId: string;
   title: string;
   playAriaLabel: string;
   posterAlt: string;
+  posterPriority?: boolean;
 }) {
   const [playing, setPlaying] = useState(false);
   const posterUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
@@ -76,7 +79,9 @@ function YouTubePosterEmbed({
         alt={posterAlt}
         fill
         className="object-cover"
-        loading="lazy"
+        priority={posterPriority}
+        loading={posterPriority ? undefined : "lazy"}
+        fetchPriority={posterPriority ? "high" : undefined}
         sizes="(max-width: 1024px) 100vw, 50vw"
         unoptimized
       />
@@ -99,28 +104,12 @@ function HeroYouTubeEmbed() {
   );
 }
 
-/** YouTube demo — poster loads first; iframe only after play (no multi‑MB GIF). */
+/** YouTube demo — poster loads with the hero (no observer flash); iframe only after play. */
 function LandingHeroDemoVideo() {
-  const ref = useRef<HTMLDivElement>(null);
   const reducedMotion = usePrefersReducedMotion();
-  const [nearViewport, setNearViewport] = useState(false);
-
-  useEffect(() => {
-    if (reducedMotion) return;
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) setNearViewport(true);
-      },
-      { rootMargin: "180px", threshold: 0.01 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [reducedMotion]);
 
   return (
-    <div ref={ref} className="relative aspect-video overflow-hidden bg-slate-900">
+    <div className="relative aspect-video overflow-hidden bg-slate-900">
       {reducedMotion ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-800 px-4 text-center text-[12px] leading-relaxed text-slate-400">
           <span>Plan viewer demo (animation reduced for your motion settings)</span>
@@ -133,23 +122,14 @@ function LandingHeroDemoVideo() {
             Watch on YouTube
           </a>
         </div>
-      ) : nearViewport ? (
+      ) : (
         <YouTubePosterEmbed
           videoId={YOUTUBE_HERO_DEMO_ID}
           title="PlanSync viewer demo — open PDF, calibrate, measure, markup"
           playAriaLabel="Play PlanSync viewer demo video"
           posterAlt="PlanSync viewer demo video thumbnail"
+          posterPriority
         />
-      ) : (
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-800/95 px-4 text-center"
-          aria-hidden
-        >
-          <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
-            Demo preview
-          </span>
-          <span className="max-w-[14rem] text-[12px] leading-snug text-slate-400">Loading…</span>
-        </div>
       )}
     </div>
   );
@@ -520,13 +500,13 @@ export function LandingPage() {
         >
           <div className="pointer-events-none absolute inset-0" aria-hidden>
             <Image
-              src="/images/cta/CTA-constraction.jpg"
+              src="/images/cta/CTA-constraction-hero.webp"
               alt=""
               fill
               sizes="100vw"
               className="object-cover object-[center_36%]"
               priority
-              quality={72}
+              quality={75}
             />
           </div>
 
@@ -1171,14 +1151,14 @@ export function LandingPage() {
         >
           <div className="pointer-events-none absolute inset-0" aria-hidden>
             <Image
-              src="/images/cta/CTA-constraction.jpg"
+              src="/images/cta/CTA-constraction-hero.webp"
               alt=""
               fill
               sizes="100vw"
               className="object-cover object-[center_32%] sm:object-[center_30%]"
               loading="lazy"
               fetchPriority="low"
-              quality={72}
+              quality={75}
             />
           </div>
           {/* Top: photo reads clearly; bottom ~half ramps to deep slate (content sits in dark band) */}
