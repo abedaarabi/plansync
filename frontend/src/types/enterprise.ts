@@ -14,6 +14,8 @@ export type MeWorkspace = {
     description?: string | null;
     website?: string | null;
     primaryColor?: string;
+    /** When false, realtime viewer collaboration is disabled for this workspace. */
+    viewerCollaborationEnabled?: boolean;
     storageQuotaBytes: string;
     storageUsedBytes: string;
     subscriptionStatus?: string | null;
@@ -24,6 +26,12 @@ export type MeWorkspace = {
 };
 
 export type MeResponse = {
-  user: { id: string; name: string; email: string; image?: string | null };
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    image?: string | null;
+    hideViewerPresence?: boolean;
+  };
   workspaces: MeWorkspace[];
 };

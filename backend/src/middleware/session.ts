@@ -24,5 +24,7 @@ declare module "hono" {
   interface ContextVariableMap {
     user: { id: string; email: string; name: string; image?: string | null };
     session: { id: string; userId: string; expiresAt: Date };
+    /** Set by viewer-collab WebSocket guard middleware */
+    viewerCollabWs?: { fileVersionId: string; listInPresence: boolean };
   }
 }

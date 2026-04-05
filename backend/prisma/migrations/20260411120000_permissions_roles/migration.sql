@@ -36,9 +36,6 @@ ALTER TABLE "EmailInvite" ADD COLUMN IF NOT EXISTS "inviteeCompany" TEXT;
 -- AlterTable File
 ALTER TABLE "File" ADD COLUMN IF NOT EXISTS "disciplines" TEXT[] DEFAULT ARRAY[]::TEXT[];
 
--- AlterTable Issue (BIM anchor — may already exist from prior migration)
-ALTER TABLE "Issue" ADD COLUMN IF NOT EXISTS "bimAnchor" JSONB;
-
 -- AlterTable PunchItem
 ALTER TABLE "PunchItem" ADD COLUMN IF NOT EXISTS "assigneeId" TEXT;
 

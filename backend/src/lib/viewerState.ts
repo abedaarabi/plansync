@@ -38,4 +38,5 @@ export const fileVersionPublicSelect = {
   lockedAt: true,
   lockExpiresAt: true,
   createdAt: true,
+  annotationBlobRevision: true,
 } as const;

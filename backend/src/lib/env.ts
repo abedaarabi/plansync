@@ -53,6 +53,16 @@ const schema = z.object({
    * Use `gemini-2.5-pro` when you need maximum TOC/region accuracy (expect roughly several× higher cost).
    */
   GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+
+  /**
+   * PDF viewer live collaboration (SSE/WebSocket). Set to `0`, `false`, `off`, or `no` to disable
+   * globally (workspace flags are ignored when off).
+   */
+  COLLABORATION_ENABLED: z.preprocess((v) => {
+    if (v === undefined || v === null || String(v).trim() === "") return true;
+    const t = String(v).trim().toLowerCase();
+    return t !== "0" && t !== "false" && t !== "off" && t !== "no";
+  }, z.boolean()),
 });
 
 export type Env = z.infer<typeof schema>;

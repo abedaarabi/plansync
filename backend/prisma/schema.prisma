@@ -40,6 +40,9 @@ model User {
   proposalsCreated        Proposal[]               @relation("ProposalCreator")
   cloudStorageConnections CloudStorageConnection[]
   punchItemsAssigned      PunchItem[]              @relation("PunchAssignee")
+
+  /// When true, omit this user from PDF viewer presence / collaborator lists (still can edit).
+  hideViewerPresence Boolean @default(false)
 }
 
 enum CloudStorageProvider {
@@ -155,6 +158,9 @@ model Workspace {
   userNotifications  UserNotification[]
   proposalTemplates  ProposalTemplate[]
   proposals          Proposal[]
+
+  /// PDF viewer live collaboration (SSE/WebSocket rooms). Env COLLABORATION_ENABLED must also allow.
+  viewerCollaborationEnabled Boolean @default(true)
 }
 
 /// Grouping label (e.g. Concrete, Steel, Finishes). Unique per workspace (case-insensitive via nameKey).
@@ -451,12 +457,14 @@ model FileVersion {
   file       File  @relation(fields: [fileId], references: [id], onDelete: Cascade)
   uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
-  annotationBlob Json? /// persisted Zustand-compatible annotation JSON per version
+  annotationBlob         Json? /// persisted Zustand-compatible annotation JSON per version
+  /// Incremented on each successful viewer-state PUT (multi-user sync + conflict detection).
+  annotationBlobRevision Int       @default(0)
   /// Sheet AI: cached smart sheet + chat per PDF page (see `sheetAiCache` shape in backend).
-  sheetAiCache   Json?
-  lockedByUserId String?
-  lockedAt       DateTime?
-  lockExpiresAt  DateTime?
+  sheetAiCache           Json?
+  lockedByUserId         String?
+  lockedAt               DateTime?
+  lockExpiresAt          DateTime?
 
   createdAt              DateTime                @default(now())
   issues                 Issue[]
@@ -916,6 +924,7 @@ enum ActivityType {
   PROPOSAL_EXPIRED
   PROPOSAL_RESENT
   PROPOSAL_DELETED
+  VIEWER_MARKUP_SAVED
 }
 
 model ActivityLog {

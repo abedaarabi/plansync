@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
@@ -17,6 +17,7 @@ import {
   Search,
   Trash2,
   Undo2,
+  UserX,
   Info,
   BoxSelect,
   ZoomIn,
@@ -29,7 +30,7 @@ import {
   PanelLeft,
   X,
 } from "lucide-react";
-import { fetchMe, fetchProject, putViewerState } from "@/lib/api-client";
+import { fetchMe, fetchProject, patchMeViewerPresence, putViewerState } from "@/lib/api-client";
 import {
   defaultMeasureUnitForProject,
   type ProjectMeasurementSystem,
@@ -47,6 +48,8 @@ import { buildSessionBackupJson, parseSessionBackupJson, saveBookmarks } from "@
 import { saveDisplayNameToStorage } from "@/lib/sessionPersistence";
 import { useViewerStore, VIEWER_SCALE_MAX, VIEWER_SCALE_MIN } from "@/store/viewerStore";
 import type { Tool } from "@/store/viewerStore";
+import { toast } from "sonner";
+import { useViewerCollabDesktop } from "@/hooks/useViewerCollabDesktop";
 import { ClearPersistedMarkupDialog } from "./ClearPersistedMarkupDialog";
 import { PdfSearchPopover } from "./PdfSearchPopover";
 import { SheetExportDialog } from "./SheetExportDialog";
@@ -154,6 +157,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const mobileLeftToolsOpen = useViewerStore((s) => s.mobileLeftToolsOpen);
   const toggleMobileLeftTools = useViewerStore((s) => s.toggleMobileLeftTools);
 
+  const queryClient = useQueryClient();
   const { data: me, isPending: mePending } = useQuery({
     queryKey: qk.me(),
     queryFn: fetchMe,
@@ -167,6 +171,19 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
     enabled: Boolean(viewerProjectId) && meHasProWorkspace(me ?? null),
     staleTime: 60_000,
   });
+
+  const collabDesktop = useViewerCollabDesktop();
+  const workspaceCollabEnabled = useMemo(() => {
+    if (!viewerProject?.workspaceId || !me?.workspaces) return true;
+    const row = me.workspaces.find((w) => w.workspaceId === viewerProject.workspaceId);
+    return row?.workspace.viewerCollaborationEnabled !== false;
+  }, [viewerProject?.workspaceId, me?.workspaces]);
+
+  const collabPresenceMenuVisible =
+    collabDesktop &&
+    workspaceCollabEnabled &&
+    Boolean(cloudFileVersionId) &&
+    meHasProWorkspace(me ?? null);
 
   useEffect(() => {
     if (!viewerProjectId || !viewerProject?.measurementSystem) return;
@@ -585,6 +602,37 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               />
               Shortcuts
             </button>
+            {collabPresenceMenuVisible ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
+                onClick={() => {
+                  void (async () => {
+                    const hide = !me?.user.hideViewerPresence;
+                    try {
+                      await patchMeViewerPresence(hide);
+                      await queryClient.invalidateQueries({ queryKey: qk.me() });
+                      toast.success(
+                        hide
+                          ? "You are hidden from the viewer presence list."
+                          : "Others can see you in the viewer again.",
+                      );
+                    } catch {
+                      toast.error("Could not update presence.");
+                    }
+                  })();
+                  setMoreMenuOpen(false);
+                }}
+              >
+                <UserX
+                  className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+                {me?.user.hideViewerPresence ? "Show my presence on sheets" : "Hide my presence"}
+              </button>
+            ) : null}
           </div>
         ) : null}
         <SheetExportDialog
@@ -764,20 +812,24 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   });
                   const cfv = ns.cloudFileVersionId;
                   if (cfv) {
-                    void putViewerState(cfv, {
-                      annotations: ns.annotations,
-                      calibrationByPage: Object.fromEntries(
-                        Object.entries(ns.calibrationByPage).map(([k, v]) => [String(k), v]),
-                      ),
-                      currentPage: ns.currentPage,
-                      scale: ns.scale,
-                      measureUnit: ns.measureUnit,
-                      snapToGeometry: ns.snapToGeometry,
-                      snapRadiusPx: ns.snapRadiusPx,
-                      takeoffItems: ns.takeoffItems,
-                      takeoffZones: ns.takeoffZones,
-                      takeoffPackageStatus: ns.takeoffPackageStatus,
-                    }).catch(() => {});
+                    void putViewerState(
+                      cfv,
+                      {
+                        annotations: ns.annotations,
+                        calibrationByPage: Object.fromEntries(
+                          Object.entries(ns.calibrationByPage).map(([k, v]) => [String(k), v]),
+                        ),
+                        currentPage: ns.currentPage,
+                        scale: ns.scale,
+                        measureUnit: ns.measureUnit,
+                        snapToGeometry: ns.snapToGeometry,
+                        snapRadiusPx: ns.snapRadiusPx,
+                        takeoffItems: ns.takeoffItems,
+                        takeoffZones: ns.takeoffZones,
+                        takeoffPackageStatus: ns.takeoffPackageStatus,
+                      },
+                      { skipRevisionCheck: true },
+                    ).catch(() => {});
                   }
                   if (parsed.bookmarks?.length) {
                     saveBookmarks(s.fileName, s.numPages, parsed.bookmarks);

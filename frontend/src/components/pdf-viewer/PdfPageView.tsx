@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { setupPdfWorker } from "@/lib/pdf";
 import {
@@ -65,9 +66,11 @@ import {
 import { computePdfPageRenderScale, getMaxCanvasDpr } from "@/lib/pdfCanvasRenderScale";
 import { highlightStrokeWidthPx } from "@/lib/highlightStroke";
 import { cloudRectPathD } from "@/lib/cloudPath";
-import { formatIssueLockHint, patchIssue } from "@/lib/api-client";
+import { fetchProjectTeam, formatIssueLockHint, patchIssue } from "@/lib/api-client";
+import { qk } from "@/lib/queryKeys";
 import { normRectFromAnnotationPoints } from "@/lib/issueFocus";
 import { issueStatusMarkerStrokeHex } from "@/lib/issueStatusStyle";
+import { MousePointer2 } from "lucide-react";
 import { toast } from "sonner";
 import { loadLastCalibrationKnownMm, saveLastCalibrationKnownMm } from "@/lib/sessionPersistence";
 import { CalibrateDialog } from "./CalibrateDialog";
@@ -76,6 +79,12 @@ import { TextCommentDialog } from "./TextCommentDialog";
 import { CommittedAnnotationsSvg } from "./CommittedAnnotationsSvg";
 import { TakeoffZonesSvg } from "./TakeoffZonesSvg";
 import { SheetContextMenu } from "./SheetContextMenu";
+import {
+  collabColorForUser,
+  collabCursorLabelNudgeY,
+  useViewerCollab,
+} from "./viewerCollabContext";
+import { ViewerUserThumb } from "./ViewerUserThumb";
 
 /** PDF bitmap scale for print only — independent of on-screen zoom. */
 const PRINT_PDF_SCALE = 1;
@@ -463,6 +472,22 @@ export function PdfPageView({
   );
   const setPendingProSidebarTab = useViewerStore((s) => s.setPendingProSidebarTab);
   const setIssuesSidebarFocusIssueId = useViewerStore((s) => s.setIssuesSidebarFocusIssueId);
+  const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
+  const viewerCollab = useViewerCollab();
+
+  const { data: collabProjectTeam } = useQuery({
+    queryKey: qk.projectTeam(viewerProjectId ?? ""),
+    queryFn: () => fetchProjectTeam(viewerProjectId!),
+    enabled: Boolean(viewerCollab?.collabFeatureEnabled && viewerProjectId),
+    staleTime: 30_000,
+  });
+  const collabPeerByUserId = useMemo(() => {
+    const m = new Map<string, { name: string; email: string; image?: string | null }>();
+    for (const row of collabProjectTeam?.members ?? []) {
+      m.set(row.userId, { name: row.name, email: row.email, image: row.image });
+    }
+    return m;
+  }, [collabProjectTeam?.members]);
 
   const [pageSize, setPageSize] = useState({ w: 1, h: 1 });
   const [draftPoints, setDraftPoints] = useState<{ x: number; y: number }[] | null>(null);
@@ -2227,7 +2252,6 @@ export function PdfPageView({
     (e: React.PointerEvent<HTMLDivElement>) => {
       const el = overlayRef.current;
       if (!el) return;
-      if (compareReferenceOnly && tool !== "pan") return;
       if (textCommentOpen) {
         setSnapHoverPathIndex(null);
         setBrushHoverNorm(null);
@@ -2235,6 +2259,8 @@ export function PdfPageView({
         return;
       }
       const raw = normFromEvent(e, el);
+      viewerCollab?.reportPointer(pageIdx0, raw.x, raw.y);
+      if (compareReferenceOnly && tool !== "pan") return;
       if (
         selectMarquee &&
         selectMarquee.pointerId === e.pointerId &&
@@ -2694,6 +2720,7 @@ export function PdfPageView({
       pageIdx0,
       resizeActive,
       compareReferenceOnly,
+      viewerCollab,
     ],
   );
 
@@ -3033,6 +3060,32 @@ export function PdfPageView({
       scale,
     );
   }, [selectedAnnotationIds, tool, annotations, cssW, cssH, pageSize.w, pageSize.h, scale]);
+
+  const remoteCollabSelectionRects = useMemo(() => {
+    if (!viewerCollab?.collabActive || viewerCollab.remoteSelections.length === 0) return [];
+    type B = NonNullable<ReturnType<typeof unionAnnotationSelectionBounds>>;
+    const out: { userId: string; color: string; bounds: B }[] = [];
+    for (const rs of viewerCollab.remoteSelections) {
+      const anns = annotations.filter(
+        (a) => a.pageIndex === pageIdx0 && rs.annotationIds.includes(a.id),
+      );
+      if (anns.length === 0) continue;
+      const b = unionAnnotationSelectionBounds(anns, cssW, cssH, pageSize.w, pageSize.h, scale);
+      if (!b) continue;
+      out.push({ userId: rs.userId, color: collabColorForUser(rs.userId), bounds: b });
+    }
+    return out;
+  }, [
+    viewerCollab?.collabActive,
+    viewerCollab?.remoteSelections,
+    annotations,
+    pageIdx0,
+    cssW,
+    cssH,
+    pageSize.w,
+    pageSize.h,
+    scale,
+  ]);
 
   const markupHoverHighlight = useMemo(() => {
     if (tool !== "select" || !markupHoverId || selectedAnnotationIds.includes(markupHoverId)) {
@@ -3564,6 +3617,22 @@ export function PdfPageView({
                     vectorEffect="non-scaling-stroke"
                   />
                 )}
+                {remoteCollabSelectionRects.map(({ userId, color, bounds: b }) => (
+                  <rect
+                    key={`remote-sel-${userId}`}
+                    className="pointer-events-none print:hidden"
+                    x={b.minX}
+                    y={b.minY}
+                    width={b.maxX - b.minX}
+                    height={b.maxY - b.minY}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    opacity={0.92}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
                 {selectionBounds && (
                   <rect
                     className="print:hidden"
@@ -4057,6 +4126,80 @@ export function PdfPageView({
               ) : null}
             </Fragment>
           )}
+          {viewerCollab?.collabActive &&
+            viewerCollab.remoteCursors.some((c) => c.pageIndex === pageIdx0) && (
+              <div className="pointer-events-none absolute inset-0 z-[6] print:hidden" aria-hidden>
+                {viewerCollab.remoteCursors
+                  .filter((c) => c.pageIndex === pageIdx0)
+                  .map((c) => {
+                    const peer = collabPeerByUserId.get(c.userId);
+                    const peerName = peer?.name ?? `Teammate ${c.userId.slice(0, 6)}`;
+                    const fill = collabColorForUser(c.userId);
+                    const labelNudgeY = collabCursorLabelNudgeY(c.userId);
+                    const pointerFilter = `drop-shadow(0 1px 2px rgb(0 0 0 / 0.55)) drop-shadow(0 0 10px ${fill}b3)`;
+                    /** Lucide 24×24 path tip ≈ (4.037, 4.688) — anchor broadcast point to tip. */
+                    const pointerSize = 28;
+                    const pointerTipX = (4.037 * pointerSize) / 24;
+                    const pointerTipY = (4.688 * pointerSize) / 24;
+                    return (
+                      <div
+                        key={c.userId}
+                        className="absolute motion-safe:transition-[left,top] motion-safe:duration-100 motion-safe:ease-out motion-reduce:transition-none"
+                        style={{
+                          left: `${c.x * 100}%`,
+                          top: `${c.y * 100}%`,
+                        }}
+                        title={`${peerName} — on this page`}
+                      >
+                        <div
+                          className="relative block"
+                          style={{
+                            transform: `translate(-${pointerTipX}px, -${pointerTipY}px)`,
+                            filter: pointerFilter,
+                          }}
+                        >
+                          <MousePointer2
+                            size={pointerSize}
+                            aria-hidden
+                            fill={fill}
+                            color="#0f172a"
+                            strokeWidth={1.5}
+                            className="block"
+                          />
+                        </div>
+                        <div
+                          className="absolute flex max-w-[min(220px,60vw)] items-center gap-1.5 rounded-lg border bg-[#0f172a]/95 py-1 pl-1 pr-2 shadow-lg ring-1 ring-black/20 backdrop-blur-sm"
+                          style={{
+                            left: 16,
+                            top: 12 + labelNudgeY,
+                            borderColor: `${fill}73`,
+                            boxShadow: `0 4px 14px rgb(0 0 0 / 0.35), 0 0 0 1px ${fill}40`,
+                          }}
+                        >
+                          <span
+                            className="shrink-0 rounded-full p-0.5 ring-2 ring-white/95"
+                            style={{
+                              boxShadow: `0 0 0 1px ${fill}cc`,
+                              backgroundColor: fill,
+                            }}
+                          >
+                            <ViewerUserThumb
+                              shape="circle"
+                              name={peerName}
+                              email={peer?.email}
+                              image={peer?.image}
+                              className="h-7 w-7 border-0 text-[10px]"
+                            />
+                          </span>
+                          <span className="min-w-0 truncate text-[11px] font-semibold leading-tight tracking-tight text-slate-100">
+                            {peerName}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
         </div>
       </div>
 

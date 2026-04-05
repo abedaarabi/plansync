@@ -2,6 +2,7 @@ import type { MeResponse, WorkspaceRole } from "@/types/enterprise";
 import type { Project } from "@/types/projects";
 import type { ViewerStatePayload } from "@/lib/viewerStateCloud";
 import { apiUrl } from "@/lib/api-url";
+import { getViewerCollabRevision, setViewerCollabRevision } from "@/lib/viewerCollabRevision";
 
 const jsonHeaders = { "Content-Type": "application/json" };
 
@@ -292,6 +293,7 @@ export async function patchWorkspace(
     description: string | null;
     website: string | null;
     primaryColor?: string;
+    viewerCollaborationEnabled?: boolean;
   },
 ): Promise<void> {
   const res = await fetch(apiUrl(`/api/v1/workspaces/${workspaceId}`), {
@@ -574,40 +576,147 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
   }
 }
 
+/** Thrown when server revision does not match `baseRevision` (concurrent edit). */
+export class ViewerStateConflictError extends Error {
+  readonly currentRevision: number;
+  readonly viewerState: unknown;
+  constructor(currentRevision: number, viewerState: unknown) {
+    super("revision_conflict");
+    this.name = "ViewerStateConflictError";
+    this.currentRevision = currentRevision;
+    this.viewerState = viewerState;
+  }
+}
+
 /** Pro cloud: load persisted markups / measurements / calibration for a file revision. */
-export async function fetchViewerState(fileVersionId: string): Promise<unknown | null> {
+export async function fetchViewerState(fileVersionId: string): Promise<{
+  viewerState: unknown | null;
+  revision: number;
+}> {
   const res = await fetch(
     apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/viewer-state`),
     { credentials: "include" },
   );
-  if (res.status === 404) return null;
+  if (res.status === 404) return { viewerState: null, revision: 0 };
   if (res.status === 402) throw new ProRequiredError();
   if (!res.ok) {
     const t = await res.text();
     throw new Error(t || "Could not load viewer state.");
   }
-  const j = (await res.json()) as { viewerState?: unknown | null };
-  return j.viewerState ?? null;
+  const j = (await res.json()) as { viewerState?: unknown | null; revision?: number };
+  const revision = typeof j.revision === "number" ? j.revision : 0;
+  return { viewerState: j.viewerState ?? null, revision };
 }
 
 /** Pro cloud: persist viewer state (debounced by caller). */
 export async function putViewerState(
   fileVersionId: string,
   body: ViewerStatePayload,
-): Promise<void> {
+  opts?: { skipRevisionCheck?: boolean },
+): Promise<{ revision: number }> {
+  const payload: Record<string, unknown> = { ...body };
+  if (!opts?.skipRevisionCheck) {
+    const br = getViewerCollabRevision();
+    if (br >= 0) payload.baseRevision = br;
+  }
   const res = await fetch(
     apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/viewer-state`),
     {
       method: "PUT",
       credentials: "include",
       headers: jsonHeaders,
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     },
   );
   if (res.status === 402) throw new ProRequiredError();
+  if (res.status === 409) {
+    const j = (await res.json().catch(() => ({}))) as {
+      currentRevision?: number;
+      viewerState?: unknown;
+    };
+    throw new ViewerStateConflictError(j.currentRevision ?? 0, j.viewerState ?? null);
+  }
   if (!res.ok) {
     const t = await res.text();
     throw new Error(t || "Could not save viewer state.");
+  }
+  const j = (await res.json().catch(() => ({}))) as { revision?: number };
+  const revision = typeof j.revision === "number" ? j.revision : 0;
+  setViewerCollabRevision(revision);
+  return { revision };
+}
+
+export async function postViewerCollabHeartbeat(
+  fileVersionId: string,
+  connectionId: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/viewer-collab/heartbeat`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify({ connectionId }),
+    },
+  );
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(t || "Heartbeat failed.");
+  }
+}
+
+/** Session host only; notifies all viewers to disconnect live collaboration. */
+export async function postViewerCollabEndSession(fileVersionId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/viewer-collab/end-session`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: "{}",
+    },
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    const err = j.error;
+    const msg = typeof err === "string" ? err : "Could not end session.";
+    throw new Error(msg);
+  }
+}
+
+/**
+ * Best-effort notify server to drop this SSE collab connection immediately (tab close / navigate).
+ * Uses `keepalive` so the request can finish while the page tears down.
+ */
+export function postViewerCollabLeaveKeepalive(fileVersionId: string, connectionId: string): void {
+  try {
+    void fetch(
+      apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/viewer-collab/leave`),
+      {
+        method: "POST",
+        credentials: "include",
+        headers: jsonHeaders,
+        body: JSON.stringify({ connectionId }),
+        keepalive: true,
+      },
+    ).catch(() => {
+      /* best-effort during unload / HMR; Failed to fetch must not be unhandled */
+    });
+  } catch {
+    /* ignore sync errors from fetch() */
+  }
+}
+
+export async function patchMeViewerPresence(hideViewerPresence: boolean): Promise<void> {
+  const res = await fetch(apiUrl("/api/v1/me/viewer-presence"), {
+    method: "PATCH",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({ hideViewerPresence }),
+  });
+  const j = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not update presence.");
   }
 }
 

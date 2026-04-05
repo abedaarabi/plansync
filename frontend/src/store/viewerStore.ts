@@ -226,7 +226,7 @@ interface ViewerState {
   /** From `/viewer?projectId=` when opened from Projects (Pro sheet tools). */
   viewerProjectId: string | null;
   /** Open Issues / Takeoff / Sheet AI tab once (e.g. `issueId` deep link). */
-  pendingProSidebarTab: null | "issues" | "takeoff" | "sheetAi";
+  pendingProSidebarTab: null | "issues" | "takeoff" | "sheetAi" | "collab";
   /** Click on PDF to drop a status-colored marker and link `annotationId` on the issue. */
   issuePlacement: null | {
     issueId: string;
@@ -289,7 +289,7 @@ interface ViewerState {
     opts?: { cloudFileVersionId?: string | null; viewerProjectId?: string | null },
   ) => void;
   setViewerProjectId: (id: string | null) => void;
-  setPendingProSidebarTab: (tab: null | "issues" | "takeoff") => void;
+  setPendingProSidebarTab: (tab: null | "issues" | "takeoff" | "sheetAi" | "collab") => void;
   setIssuePlacement: (
     p: null | {
       issueId: string;
@@ -1211,13 +1211,17 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   clearPersistedMarkupForCurrentDocument: () => {
     const fvId = get().cloudFileVersionId;
     if (fvId && typeof window !== "undefined") {
-      void putViewerState(fvId, {
-        annotations: [],
-        calibrationByPage: {},
-        takeoffItems: [],
-        takeoffZones: [],
-        takeoffPackageStatus: "draft",
-      }).catch(() => {
+      void putViewerState(
+        fvId,
+        {
+          annotations: [],
+          calibrationByPage: {},
+          takeoffItems: [],
+          takeoffZones: [],
+          takeoffPackageStatus: "draft",
+        },
+        { skipRevisionCheck: true },
+      ).catch(() => {
         /* offline / quota */
       });
     }

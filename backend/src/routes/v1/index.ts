@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { Hono } from "hono";
+import type { MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
@@ -94,6 +95,24 @@ import {
 } from "../../lib/projectAuditExport.js";
 import { formatAuditPresentation } from "../../lib/auditFormat.js";
 import { fetchProjectAuditLogs } from "../../lib/projectAuditQuery.js";
+import { createNodeWebSocket } from "@hono/node-ws";
+import {
+  allowSseConnect,
+  broadcastIssuesChanged,
+  broadcastViewerState,
+  buildViewerCollabWsHandler,
+  collabMetrics,
+  disconnectViewerCollabSse,
+  endViewerCollabSession,
+  getCollabMetricsSnapshot,
+  registerSseConnection,
+  touchHeartbeat,
+  unregisterSseConnection,
+} from "../../lib/viewerCollabHub.js";
+import {
+  collaborationEnabledForWorkspace,
+  collaborationGloballyEnabled,
+} from "../../lib/viewerCollabPolicy.js";
 import { loadProjectForMember, isProjectScopedMember } from "../../lib/projectAccess.js";
 import {
   applyFolderStructureFromTemplate,
@@ -101,6 +120,8 @@ import {
 } from "../../lib/applyFolderStructure.js";
 import { parseFolderTreeFromJson } from "../../lib/folderStructureTemplate.js";
 import { buildProjectTeamMembers } from "../../lib/projectTeamMembers.js";
+
+type ViewerCollabUpgradeWebSocket = ReturnType<typeof createNodeWebSocket>["upgradeWebSocket"];
 import {
   buildProjectInviteEmailHtml,
   buildProjectInviteEmailText,
@@ -194,6 +215,9 @@ async function countSeatPressure(workspaceId: string): Promise<number> {
 export function v1Routes(
   auth: { api: { getSession: (o: { headers: Headers }) => Promise<unknown> } },
   env: Env,
+  deps?: {
+    upgradeWebSocket?: ViewerCollabUpgradeWebSocket;
+  },
 ) {
   const r = new Hono();
   const needUser = sessionMiddleware(auth);
@@ -468,6 +492,10 @@ export function v1Routes(
 
   r.get("/me", needUser, async (c) => {
     const user = c.get("user");
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { hideViewerPresence: true },
+    });
     const memberships = await prisma.workspaceMember.findMany({
       where: { userId: user.id },
       include: { workspace: true },
@@ -485,7 +513,7 @@ export function v1Routes(
       projectCounts.map((row) => [row.workspaceId, row._count._all]),
     );
     return c.json({
-      user,
+      user: { ...user, hideViewerPresence: dbUser?.hideViewerPresence ?? false },
       workspaces: memberships.map((m) => ({
         workspaceId: m.workspaceId,
         role: m.role,
@@ -546,6 +574,19 @@ export function v1Routes(
       data: { readAt: new Date() },
     });
     return c.json({ ok: true });
+  });
+
+  r.patch("/me/viewer-presence", needUser, async (c) => {
+    const body = z
+      .object({ hideViewerPresence: z.boolean() })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+    const userId = c.get("user").id;
+    await prisma.user.update({
+      where: { id: userId },
+      data: { hideViewerPresence: body.data.hideViewerPresence },
+    });
+    return c.json({ ok: true as const, hideViewerPresence: body.data.hideViewerPresence });
   });
 
   r.post("/workspaces", needUser, async (c) => {
@@ -609,6 +650,7 @@ export function v1Routes(
           .string()
           .regex(/^#[0-9A-Fa-f]{6}$/)
           .optional(),
+        viewerCollaborationEnabled: z.boolean().optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
@@ -640,6 +682,7 @@ export function v1Routes(
       description?: string | null;
       website?: string | null;
       primaryColor?: string;
+      viewerCollaborationEnabled?: boolean;
     } = {};
     if (p.name !== undefined) data.name = p.name;
     if (p.slug !== undefined) {
@@ -653,6 +696,9 @@ export function v1Routes(
     if (p.description !== undefined) data.description = p.description === "" ? null : p.description;
     if (nextWebsite !== undefined) data.website = nextWebsite;
     if (p.primaryColor !== undefined) data.primaryColor = p.primaryColor;
+    if (p.viewerCollaborationEnabled !== undefined) {
+      data.viewerCollaborationEnabled = p.viewerCollaborationEnabled;
+    }
 
     const shouldSyncLogo = p.website !== undefined || p.logoUrl !== undefined;
     if (shouldSyncLogo) {
@@ -2623,7 +2669,10 @@ export function v1Routes(
     const gate = requirePro(fv.file.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
-    return c.json({ viewerState: fv.annotationBlob });
+    return c.json({
+      viewerState: fv.annotationBlob,
+      revision: fv.annotationBlobRevision,
+    });
   });
 
   /** Pro: persist viewer state for a file revision. */
@@ -2636,8 +2685,15 @@ export function v1Routes(
     }),
     async (c) => {
       const fileVersionId = c.req.param("fileVersionId")!;
-      const raw = await c.req.json().catch(() => null);
-      const body = viewerStatePutSchema.safeParse(raw);
+      const raw = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!raw || typeof raw !== "object") return c.json({ error: "Invalid JSON" }, 400);
+      const baseRevisionRaw = raw.baseRevision;
+      const baseRevision =
+        typeof baseRevisionRaw === "number" && Number.isFinite(baseRevisionRaw)
+          ? baseRevisionRaw
+          : undefined;
+      const { baseRevision: _br, ...rest } = raw;
+      const body = viewerStatePutSchema.safeParse(rest);
       if (!body.success) return c.json({ error: body.error.flatten() }, 400);
 
       const fv = await prisma.fileVersion.findUnique({
@@ -2650,14 +2706,166 @@ export function v1Routes(
       const gate = requirePro(fv.file.project.workspace);
       if (gate) return c.json({ error: gate.error }, gate.status);
 
+      if (baseRevision !== undefined && baseRevision !== fv.annotationBlobRevision) {
+        collabMetrics.put409Count++;
+        return c.json(
+          {
+            error: "revision_conflict",
+            currentRevision: fv.annotationBlobRevision,
+            viewerState: fv.annotationBlob,
+          },
+          409,
+        );
+      }
+
       const blob = { v: 1 as const, ...body.data };
-      await prisma.fileVersion.update({
+      const updated = await prisma.fileVersion.update({
         where: { id: fv.id },
-        data: { annotationBlob: blob },
+        data: {
+          annotationBlob: blob,
+          annotationBlobRevision: { increment: 1 },
+        },
+        select: { annotationBlobRevision: true },
       });
-      return c.json({ ok: true });
+      const userId = c.get("user").id;
+      if (collaborationGloballyEnabled(env)) {
+        broadcastViewerState(fileVersionId, updated.annotationBlobRevision, userId);
+      }
+      void logActivitySafe(fv.file.project.workspaceId, ActivityType.VIEWER_MARKUP_SAVED, {
+        actorUserId: userId,
+        projectId: fv.file.projectId,
+        entityType: "file_version",
+        entityId: fv.id,
+        metadata: {
+          fileId: fv.fileId,
+          version: fv.version,
+          revision: updated.annotationBlobRevision,
+        },
+      });
+      return c.json({ ok: true as const, revision: updated.annotationBlobRevision });
     },
   );
+
+  /** SSE: viewer-state revision + presence (desktop collaboration). */
+  r.get("/file-versions/:fileVersionId/viewer-collab/events", needUser, async (c) => {
+    const fileVersionId = c.req.param("fileVersionId")!;
+    const userId = c.get("user").id;
+    const fv = await prisma.fileVersion.findUnique({
+      where: { id: fileVersionId },
+      include: { file: { include: { project: { include: { workspace: true } } } } },
+    });
+    if (!fv) return c.json({ error: "Not found" }, 404);
+    const access = await loadProjectForMember(fv.file.projectId, userId);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const gate = requirePro(fv.file.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+    if (!collaborationEnabledForWorkspace(env, fv.file.project.workspace)) {
+      return c.json({ error: "Collaboration disabled" }, 403);
+    }
+    if (!allowSseConnect(userId)) {
+      return c.json({ error: "Too many connections" }, 429);
+    }
+    const userRow = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { hideViewerPresence: true },
+    });
+    const listInPresence = !userRow?.hideViewerPresence;
+
+    let connectionId = "";
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        connectionId = registerSseConnection(fileVersionId, userId, controller, listInPresence);
+      },
+      cancel() {
+        if (connectionId) unregisterSseConnection(fileVersionId, connectionId);
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  });
+
+  r.post("/file-versions/:fileVersionId/viewer-collab/heartbeat", needUser, async (c) => {
+    const fileVersionId = c.req.param("fileVersionId")!;
+    const parsed = z
+      .object({ connectionId: z.string().min(1) })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    const fv = await prisma.fileVersion.findUnique({
+      where: { id: fileVersionId },
+      include: { file: { include: { project: { include: { workspace: true } } } } },
+    });
+    if (!fv) return c.json({ error: "Not found" }, 404);
+    const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const gate = requirePro(fv.file.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+    if (!collaborationEnabledForWorkspace(env, fv.file.project.workspace)) {
+      return c.json({ error: "Collaboration disabled" }, 403);
+    }
+    const ok = touchHeartbeat(fileVersionId, parsed.data.connectionId, c.get("user").id);
+    if (!ok) return c.json({ error: "Unknown connection" }, 404);
+    return c.json({ ok: true as const });
+  });
+
+  r.post("/file-versions/:fileVersionId/viewer-collab/leave", needUser, async (c) => {
+    const fileVersionId = c.req.param("fileVersionId")!;
+    const parsed = z
+      .object({ connectionId: z.string().min(1) })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    const fv = await prisma.fileVersion.findUnique({
+      where: { id: fileVersionId },
+      include: { file: { include: { project: { include: { workspace: true } } } } },
+    });
+    if (!fv) return c.json({ error: "Not found" }, 404);
+    const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const gate = requirePro(fv.file.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+    if (!collaborationEnabledForWorkspace(env, fv.file.project.workspace)) {
+      return c.json({ error: "Collaboration disabled" }, 403);
+    }
+    disconnectViewerCollabSse(fileVersionId, parsed.data.connectionId, c.get("user").id);
+    return c.json({ ok: true as const });
+  });
+
+  r.post("/file-versions/:fileVersionId/viewer-collab/end-session", needUser, async (c) => {
+    const fileVersionId = c.req.param("fileVersionId")!;
+    const fv = await prisma.fileVersion.findUnique({
+      where: { id: fileVersionId },
+      include: { file: { include: { project: { include: { workspace: true } } } } },
+    });
+    if (!fv) return c.json({ error: "Not found" }, 404);
+    const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const gate = requirePro(fv.file.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+    if (!collaborationEnabledForWorkspace(env, fv.file.project.workspace)) {
+      return c.json({ error: "Collaboration disabled" }, 403);
+    }
+    const ended = endViewerCollabSession(fileVersionId, c.get("user").id);
+    if (!ended) {
+      return c.json(
+        { error: "Only the live session host can end the session for everyone on this sheet." },
+        403,
+      );
+    }
+    return c.json({ ok: true as const });
+  });
+
+  r.get("/internal/collab-metrics", async (c) => {
+    const secret = env.INTERNAL_CRON_SECRET?.trim();
+    const q = c.req.query("secret")?.trim();
+    if (!secret || q !== secret) return c.json({ error: "Forbidden" }, 403);
+    return c.json(getCollabMetricsSnapshot());
+  });
 
   r.get("/workspaces/:workspaceId/dashboard", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
@@ -3296,7 +3504,56 @@ export function v1Routes(
     return c.json({ ok: true });
   });
 
-  registerIssuesRoutes(r, needUser, env);
+  if (deps?.upgradeWebSocket) {
+    const viewerCollabWsGuard: MiddlewareHandler = async (c, next) => {
+      const fileVersionId = c.req.param("fileVersionId")!;
+      const fv = await prisma.fileVersion.findUnique({
+        where: { id: fileVersionId },
+        include: { file: { include: { project: { include: { workspace: true } } } } },
+      });
+      if (!fv) return c.json({ error: "Not found" }, 404);
+      const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+      if ("error" in access) return c.json({ error: access.error }, access.status);
+      const gate = requirePro(fv.file.project.workspace);
+      if (gate) return c.json({ error: gate.error }, gate.status);
+      if (!collaborationEnabledForWorkspace(env, fv.file.project.workspace)) {
+        return c.json({ error: "Collaboration disabled" }, 403);
+      }
+      const userRow = await prisma.user.findUnique({
+        where: { id: c.get("user").id },
+        select: { hideViewerPresence: true },
+      });
+      c.set("viewerCollabWs", {
+        fileVersionId,
+        listInPresence: !userRow?.hideViewerPresence,
+      });
+      await next();
+    };
+    r.get(
+      "/file-versions/:fileVersionId/viewer-collab/ws",
+      needUser,
+      viewerCollabWsGuard,
+      deps.upgradeWebSocket((c) => {
+        const ctx = c.get("viewerCollabWs");
+        if (!ctx) {
+          return { onOpen() {}, onMessage() {}, onClose() {} };
+        }
+        return buildViewerCollabWsHandler({
+          fileVersionId: ctx.fileVersionId,
+          userId: c.get("user").id,
+          listInPresence: ctx.listInPresence,
+        });
+      }),
+    );
+  }
+
+  registerIssuesRoutes(r, needUser, env, {
+    onIssuesMutated: (fileVersionId) => {
+      if (collaborationGloballyEnabled(env)) {
+        broadcastIssuesChanged(fileVersionId);
+      }
+    },
+  });
   registerTakeoffRoutes(r, needUser);
   registerSheetAiRoutes(r, needUser, env);
   registerMaterialsRoutes(r, needUser);

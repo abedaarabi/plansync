@@ -142,7 +142,13 @@ async function sendIssueAssignedEmail(
   });
 }
 
-export function registerIssuesRoutes(r: Hono, needUser: MiddlewareHandler, env: Env) {
+export function registerIssuesRoutes(
+  r: Hono,
+  needUser: MiddlewareHandler,
+  env: Env,
+  opts?: { onIssuesMutated?: (fileVersionId: string) => void },
+) {
+  const notifyIssues = (fileVersionId: string) => opts?.onIssuesMutated?.(fileVersionId);
   r.get("/file-versions/:fileVersionId/issues", needUser, async (c) => {
     const fileVersionId = c.req.param("fileVersionId")!;
     const fv = await prisma.fileVersion.findUnique({
@@ -394,6 +400,7 @@ export function registerIssuesRoutes(r: Hono, needUser: MiddlewareHandler, env: 
       }).catch((e) => console.error("[issue-notification]", e));
     }
 
+    notifyIssues(issue.fileVersionId);
     return c.json(issueRowJson(issue));
   });
 
@@ -437,6 +444,7 @@ export function registerIssuesRoutes(r: Hono, needUser: MiddlewareHandler, env: 
 
     const toBlobObj = asObject(toVersion.annotationBlob);
     if (toBlobObj?.[CARRY_FORWARD_META_KEY] === body.data.fromFileVersionId) {
+      notifyIssues(newFileVersionId);
       return c.json({ ok: true as const, copiedIssueCount: 0, idempotent: true as const });
     }
 
@@ -455,6 +463,7 @@ export function registerIssuesRoutes(r: Hono, needUser: MiddlewareHandler, env: 
           } as Prisma.InputJsonValue,
         },
       });
+      notifyIssues(newFileVersionId);
       return c.json({ ok: true as const, copiedIssueCount: 0, idempotent: false as const });
     }
 
@@ -525,6 +534,8 @@ export function registerIssuesRoutes(r: Hono, needUser: MiddlewareHandler, env: 
       },
     });
 
+    notifyIssues(newFileVersionId);
+    notifyIssues(body.data.fromFileVersionId);
     return c.json({ ok: true as const, copiedIssueCount: result, idempotent: false as const });
   });
 
@@ -689,6 +700,7 @@ export function registerIssuesRoutes(r: Hono, needUser: MiddlewareHandler, env: 
       }).catch((e) => console.error("[issue-notification]", e));
     }
 
+    notifyIssues(issue.fileVersionId);
     return c.json(issueRowJson(updated));
   });
 
@@ -718,6 +730,7 @@ export function registerIssuesRoutes(r: Hono, needUser: MiddlewareHandler, env: 
       metadata: { title },
     });
 
+    notifyIssues(issue.fileVersionId);
     return c.json({ ok: true as const });
   });
 }

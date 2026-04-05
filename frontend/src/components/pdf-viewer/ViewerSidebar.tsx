@@ -24,6 +24,7 @@ import {
   ListTree,
   Triangle,
   Type,
+  Users,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -44,6 +45,8 @@ import { AnnotationListContextMenu } from "./AnnotationListContextMenu";
 import { SidebarIssuesTab } from "./sidebar/SidebarIssuesTab";
 import { SidebarTakeoffTab } from "./sidebar/SidebarTakeoffTab";
 import { SidebarSheetAiTab } from "./sidebar/SidebarSheetAiTab";
+import { SidebarCollabTab } from "./sidebar/SidebarCollabTab";
+import { useViewerCollab } from "./viewerCollabContext";
 
 const markupShapes: {
   id: MarkupShape;
@@ -234,8 +237,9 @@ export function ViewerSidebar() {
     id: string;
   } | null>(null);
   const [sidebarTab, setSidebarTab] = useState<
-    "draw" | "measure" | "pages" | "outline" | "issues" | "takeoff" | "sheetAi"
+    "draw" | "measure" | "pages" | "outline" | "issues" | "takeoff" | "sheetAi" | "collab"
   >("draw");
+  const collabCtx = useViewerCollab();
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
   const pendingProSidebarTab = useViewerStore((s) => s.pendingProSidebarTab);
   const setPendingProSidebarTab = useViewerStore((s) => s.setPendingProSidebarTab);
@@ -248,6 +252,7 @@ export function ViewerSidebar() {
   const bumpSheetAiExpand = useViewerStore((s) => s.bumpSheetAiExpand);
   const { enabled: proSheetFeatures } = useViewerProSheetFeatures();
   const showProTabs = Boolean(pdfUrl && proSheetFeatures && viewerProjectId);
+  const showCollabTab = showProTabs && Boolean(collabCtx?.collabFeatureEnabled);
 
   const pageIdx0 = currentPage - 1;
   const selectedOnPageIds = useMemo(
@@ -310,7 +315,7 @@ export function ViewerSidebar() {
   useEffect(() => {
     if (!selectedAnn) return;
     setSidebarTab((t) => {
-      if (t === "pages" || t === "outline" || t === "sheetAi") return t;
+      if (t === "pages" || t === "outline" || t === "sheetAi" || t === "collab") return t;
       if (annotationIsIssuePin(selectedAnn)) return "issues";
       if (t === "takeoff") return t;
       return selectedAnn.type === "measurement" ? "measure" : "draw";
@@ -327,7 +332,12 @@ export function ViewerSidebar() {
   useEffect(() => {
     if (tool !== "measure" && tool !== "calibrate") return;
     setSidebarTab((t) =>
-      t === "pages" || t === "outline" || t === "issues" || t === "takeoff" || t === "sheetAi"
+      t === "pages" ||
+      t === "outline" ||
+      t === "issues" ||
+      t === "takeoff" ||
+      t === "sheetAi" ||
+      t === "collab"
         ? t
         : "measure",
     );
@@ -341,10 +351,20 @@ export function ViewerSidebar() {
 
   useEffect(() => {
     if (showProTabs) return;
-    if (sidebarTab === "takeoff" || sidebarTab === "issues" || sidebarTab === "sheetAi")
+    if (
+      sidebarTab === "takeoff" ||
+      sidebarTab === "issues" ||
+      sidebarTab === "sheetAi" ||
+      sidebarTab === "collab"
+    )
       setSidebarTab("draw");
     if (takeoffMode) setTakeoffMode(false);
   }, [showProTabs, sidebarTab, takeoffMode, setTakeoffMode]);
+
+  useEffect(() => {
+    if (showCollabTab || sidebarTab !== "collab") return;
+    setSidebarTab("draw");
+  }, [showCollabTab, sidebarTab]);
 
   useEffect(() => {
     if (takeoffMode) setSidebarTab("takeoff");
@@ -452,7 +472,11 @@ export function ViewerSidebar() {
               </button>
             </div>
             {pdfUrl ? (
-              <div className={`mt-1 grid gap-1 ${showProTabs ? "grid-cols-3" : "grid-cols-1"}`}>
+              <div
+                className={`mt-1 grid gap-1 ${
+                  showProTabs ? (showCollabTab ? "grid-cols-2" : "grid-cols-3") : "grid-cols-1"
+                }`}
+              >
                 {showProTabs ? (
                   <>
                     <button
@@ -496,6 +520,23 @@ export function ViewerSidebar() {
                       <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />
                       AI
                     </button>
+                    {showCollabTab ? (
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={sidebarTab === "collab"}
+                        onClick={() => {
+                          setSidebarTab("collab");
+                          setTakeoffMode(false);
+                          setTakeoffInventoryDrawerFromSidebar(false);
+                        }}
+                        title="Live collaboration — who is on this sheet"
+                        className={sidebarPanelTabClass(sidebarTab === "collab")}
+                      >
+                        <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        Live
+                      </button>
+                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -519,6 +560,11 @@ export function ViewerSidebar() {
         {pdfUrl && sidebarTab === "sheetAi" && showProTabs && (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <SidebarSheetAiTab />
+          </div>
+        )}
+        {pdfUrl && sidebarTab === "collab" && showCollabTab && (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-0.5">
+            <SidebarCollabTab />
           </div>
         )}
 
