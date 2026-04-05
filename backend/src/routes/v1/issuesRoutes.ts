@@ -32,8 +32,8 @@ function dateFromYmd(s: string): Date {
 }
 
 const issueInclude = {
-  assignee: { select: { id: true, name: true, email: true } },
-  creator: { select: { id: true, name: true, email: true } },
+  assignee: { select: { id: true, name: true, email: true, image: true } },
+  creator: { select: { id: true, name: true, email: true, image: true } },
   file: { select: { name: true } },
   fileVersion: { select: { version: true } },
   rfiLinks: {
@@ -74,6 +74,7 @@ function issueRowJson(row: IssueRow) {
           id: row.assignee.id,
           name: row.assignee.name,
           email: row.assignee.email,
+          image: row.assignee.image,
         }
       : null,
     creator: row.creator
@@ -81,6 +82,7 @@ function issueRowJson(row: IssueRow) {
           id: row.creator.id,
           name: row.creator.name,
           email: row.creator.email,
+          image: row.creator.image,
         }
       : null,
     file: { name: row.file.name },

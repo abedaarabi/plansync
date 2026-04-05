@@ -1247,7 +1247,7 @@ export function v1Routes(
     const [list, pressure] = await Promise.all([
       prisma.workspaceMember.findMany({
         where: { workspaceId },
-        include: { user: { select: { id: true, name: true, email: true } } },
+        include: { user: { select: { id: true, name: true, email: true, image: true } } },
         orderBy: { createdAt: "asc" },
       }),
       countSeatPressure(workspaceId),
@@ -1278,6 +1278,7 @@ export function v1Routes(
         userId: x.userId,
         name: x.user.name,
         email: x.user.email,
+        image: x.user.image,
         role: x.role,
         ...(isWorkspaceManagerRole(m.role)
           ? { scopedProjects: scopedByUser.get(x.userId) ?? [] }

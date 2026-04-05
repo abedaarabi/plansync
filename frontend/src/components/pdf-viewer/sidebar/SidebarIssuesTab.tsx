@@ -13,6 +13,7 @@ import {
 } from "@/lib/api-client";
 import { DeleteIssueConfirmDialog } from "@/components/pdf-viewer/DeleteIssueConfirmDialog";
 import { IssueFormSlider } from "@/components/pdf-viewer/IssueFormSlider";
+import { ViewerUserThumb } from "@/components/pdf-viewer/ViewerUserThumb";
 import { findAnnotationById, normRectFromAnnotationPoints } from "@/lib/issueFocus";
 import {
   ISSUE_PRIORITY_LABEL,
@@ -82,9 +83,17 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
               <p className="mt-0.5 truncate text-[9px] text-[#64748B]">{issue.location}</p>
             ) : null}
             {issue.assignee ? (
-              <p className="mt-1 truncate text-[9px] text-[#94A3B8]">
-                {issue.assignee.name || issue.assignee.email}
-              </p>
+              <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                <ViewerUserThumb
+                  name={issue.assignee.name}
+                  email={issue.assignee.email}
+                  image={issue.assignee.image}
+                  className="h-5 w-5 text-[8px]"
+                />
+                <p className="min-w-0 flex-1 truncate text-[9px] text-[#94A3B8]">
+                  {issue.assignee.name || issue.assignee.email}
+                </p>
+              </div>
             ) : null}
             <div className="mt-1 flex flex-wrap gap-1">
               <span className="rounded bg-[#0F172A] px-1.5 py-px text-[8px] font-medium uppercase tracking-wide text-[#94A3B8]">

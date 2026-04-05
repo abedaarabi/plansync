@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { FileStack, Hash, Trash2 } from "lucide-react";
+import { ChevronDown, FileStack, Hash, Link2, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   createIssue,
@@ -28,6 +28,7 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { useViewerStore } from "@/store/viewerStore";
 import { DeleteIssueConfirmDialog } from "./DeleteIssueConfirmDialog";
+import { ViewerUserThumb } from "./ViewerUserThumb";
 
 type CreateProps = {
   variant: "create";
@@ -138,6 +139,10 @@ export function IssueFormSlider(props: Props) {
   const [location, setLocation] = useState("");
   /** Optional: attach this issue to one or more project RFIs (create + edit). */
   const [rfiLinkIds, setRfiLinkIds] = useState<string[]>([]);
+  const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
+  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState("");
+  const assigneePickerRef = useRef<HTMLDivElement>(null);
+  const assigneeSearchInputRef = useRef<HTMLInputElement>(null);
 
   const {
     data: projectRfis = [],
@@ -308,7 +313,57 @@ export function IssueFormSlider(props: Props) {
 
   const assignableMembers = (membersRes?.members ?? []).filter((m) => m.email?.trim());
 
-  /** Only Cancel / successful Save / Delete — not backdrop or Escape. */
+  const assigneePickerMembersFiltered = useMemo(() => {
+    const q = assigneeSearchQuery.trim().toLowerCase();
+    if (!q) return assignableMembers;
+    return assignableMembers.filter(
+      (m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q),
+    );
+  }, [assignableMembers, assigneeSearchQuery]);
+
+  const issueAssignee = props.variant === "edit" ? props.issue.assignee : null;
+  const issueAssigneeId = props.variant === "edit" ? props.issue.assigneeId : null;
+
+  const assigneeDisplay = useMemo(() => {
+    if (!assigneeId) return null;
+    const fromMembers = assignableMembers.find((m) => m.userId === assigneeId);
+    if (fromMembers) {
+      return {
+        name: fromMembers.name,
+        email: fromMembers.email,
+        image: fromMembers.image ?? null,
+      };
+    }
+    if (issueAssigneeId === assigneeId && issueAssignee) {
+      return {
+        name: issueAssignee.name,
+        email: issueAssignee.email,
+        image: issueAssignee.image ?? null,
+      };
+    }
+    return { name: "Teammate", email: "", image: null as string | null };
+  }, [assigneeId, assignableMembers, issueAssignee, issueAssigneeId]);
+
+  useEffect(() => {
+    if (!assigneePickerOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!assigneePickerRef.current?.contains(e.target as Node)) setAssigneePickerOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [assigneePickerOpen]);
+
+  useEffect(() => {
+    if (!open) setAssigneePickerOpen(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!assigneePickerOpen) setAssigneeSearchQuery("");
+  }, [assigneePickerOpen]);
+
+  /** Only Cancel / successful Save / Delete — backdrop and Escape use the same handler. */
   const onCancel = useCallback(() => {
     if (deleteDialogOpen) return;
     if (createMut.isPending || saveEditMut.isPending || deleteMut.isPending) return;
@@ -329,112 +384,177 @@ export function IssueFormSlider(props: Props) {
     deleteDialogOpen,
   ]);
 
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (deleteDialogOpen) return;
+      if (assigneePickerOpen) {
+        e.preventDefault();
+        setAssigneePickerOpen(false);
+        return;
+      }
+      e.preventDefault();
+      onCancelRef.current();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, assigneePickerOpen, deleteDialogOpen]);
+
   if (!open || !mounted || typeof document === "undefined") return null;
 
   const versionLabel =
     sheetContext.sheetVersion != null ? `v${sheetContext.sheetVersion}` : "Version —";
   const pageLabel = sheetContext.pageNumber != null ? `Page ${sheetContext.pageNumber}` : "Page —";
 
+  const fieldClass =
+    "w-full rounded-lg border border-slate-600/70 bg-slate-900/60 px-2.5 py-2 text-[12px] leading-snug text-slate-100 shadow-sm placeholder:text-slate-500 outline-none transition focus:border-[var(--viewer-primary)]/55 focus:ring-2 focus:ring-[var(--viewer-primary)]/20";
+  /** Native date picker icon: align with dark chrome (WebKit + `color-scheme`). */
+  /** Calendar glyph → solid white (WebKit); `color-scheme: dark` helps Firefox/native chrome. */
+  const dateFieldClass = `${fieldClass} tabular-nums [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:[filter:brightness(0)_invert(1)]`;
+  const labelClass = "mb-1 block text-[10px] font-medium text-slate-400";
+  const sectionTitleClass = "text-[10px] font-semibold uppercase tracking-wider text-slate-500";
+
   return createPortal(
     <>
       <div className="fixed inset-0 z-[120]" role="presentation">
-        <div
-          className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
-          aria-hidden
+        <button
+          type="button"
+          aria-label="Close issue form"
+          className="absolute inset-0 bg-slate-950/60 backdrop-blur-[3px] transition hover:bg-slate-950/70"
+          onClick={onCancel}
           onMouseDown={(e) => e.preventDefault()}
         />
         <aside
           role="dialog"
           aria-modal
           aria-labelledby="issue-form-title"
-          className="absolute right-0 top-0 flex h-full w-full max-w-[420px] flex-col border-l border-[#334155] bg-[#0f172a] shadow-[0_0_40px_rgba(0,0,0,0.45)]"
+          className="absolute right-0 top-0 flex h-full w-full max-w-[min(640px,calc(100vw-1rem))] flex-col border-l border-slate-700/80 bg-slate-950 shadow-[-16px_0_48px_-12px_rgba(0,0,0,0.55)]"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div className="flex shrink-0 items-center border-b border-[#334155] px-4 py-3">
-            <h2 id="issue-form-title" className="text-[13px] font-semibold text-[#F8FAFC]">
-              {variant === "create" ? "New issue" : "Edit issue"}
-            </h2>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 [scrollbar-width:thin]">
-            <div className="mb-4 space-y-2 rounded-lg border border-[#334155] bg-[#1e293b]/80 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748b]">
-                Saved on sheet
+          <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-800/90 bg-slate-950 px-5 py-3.5">
+            <div className="min-w-0 space-y-0.5 pr-2">
+              <h2
+                id="issue-form-title"
+                className="text-[15px] font-semibold tracking-tight text-white"
+              >
+                {variant === "create" ? "New issue" : "Edit issue"}
+              </h2>
+              <p className="text-[11px] leading-relaxed text-slate-500">
+                {variant === "create"
+                  ? "The pin is saved on the sheet. Add a title and any details below."
+                  : "Update this issue and save your changes."}
               </p>
-              <div className="flex items-start gap-2 text-[11px] leading-snug text-[#e2e8f0]">
-                <FileStack className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#94a3b8]" strokeWidth={2} />
-                <span className="min-w-0 break-all font-medium">{sheetContext.sheetName}</span>
+            </div>
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={createMut.isPending || saveEditMut.isPending || deleteMut.isPending}
+              className="viewer-focus-ring shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </header>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 [scrollbar-color:rgba(71,85,105,0.5)_transparent] [scrollbar-width:thin]">
+            <div
+              className="mb-4 flex flex-col gap-1.5 rounded-lg border border-slate-800/90 bg-slate-900/50 px-3 py-2 ring-1 ring-white/[0.03] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3 sm:gap-y-1"
+              role="group"
+              aria-label="Sheet context"
+            >
+              <div className="flex min-w-0 items-start gap-2 sm:items-center">
+                <FileStack
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500 sm:mt-0"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+                <p className="min-w-0 text-[11px] font-medium leading-snug text-slate-200 [overflow-wrap:anywhere]">
+                  {sheetContext.sheetName}
+                </p>
               </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#94a3b8]">
-                <span className="inline-flex items-center gap-1 tabular-nums">
-                  <span className="text-[#64748b]">Revision</span> {versionLabel}
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
+                <span className="inline-flex items-center rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-400">
+                  Rev {versionLabel}
                 </span>
-                <span className="inline-flex items-center gap-1 tabular-nums">
-                  <Hash className="h-3 w-3 text-[#64748b]" strokeWidth={2} />
+                <span className="inline-flex items-center gap-0.5 rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-400">
+                  <Hash className="h-2.5 w-2.5 text-slate-500" strokeWidth={2} aria-hidden />
                   {pageLabel}
                 </span>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <label className="block">
-                <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#94A3B8]">
-                  Title
-                </span>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Issue title"
-                  className="w-full rounded-md border border-[#475569] bg-[#0F172A] px-2.5 py-2 text-[12px] text-[#F8FAFC] placeholder:text-[#64748B] outline-none focus:border-[var(--viewer-primary)]/50 focus:ring-1 focus:ring-[var(--viewer-primary)]/35"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#94A3B8]">
-                  Description
-                </span>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Details, steps to reproduce…"
-                  rows={3}
-                  className="w-full resize-none rounded-md border border-[#475569] bg-[#0F172A] px-2.5 py-2 text-[12px] text-[#F8FAFC] placeholder:text-[#64748B] outline-none focus:border-[var(--viewer-primary)]/50 focus:ring-1 focus:ring-[var(--viewer-primary)]/35"
-                />
-              </label>
-              <div className="rounded-md border border-[#334155]/90 bg-[#0f172a]/60 p-2.5">
-                <span className="mb-1.5 block text-[10px] font-medium uppercase tracking-wide text-[#94A3B8]">
-                  Link to RFIs (optional)
-                </span>
+            <div className="space-y-6 pb-2">
+              <section className="space-y-3" aria-labelledby="issue-section-details">
+                <h3 id="issue-section-details" className={sectionTitleClass}>
+                  Details
+                </h3>
+                <label className="block">
+                  <span className={labelClass}>Title</span>
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Short summary of the issue"
+                    className={fieldClass}
+                  />
+                </label>
+                <label className="block">
+                  <span className={labelClass}>Description</span>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Context, scope, or steps to reproduce…"
+                    rows={3}
+                    className={`${fieldClass} min-h-[4.75rem] resize-y`}
+                  />
+                </label>
+              </section>
+
+              <section
+                className="rounded-xl border border-slate-800/80 bg-slate-900/25 p-3 ring-1 ring-white/[0.02]"
+                aria-labelledby="issue-section-rfis"
+              >
+                <div className="mb-2 flex items-center gap-2">
+                  <Link2 className="h-3 w-3 text-slate-500" strokeWidth={2} aria-hidden />
+                  <h3 id="issue-section-rfis" className={sectionTitleClass}>
+                    Related RFIs{" "}
+                    <span className="font-normal normal-case text-slate-600">(optional)</span>
+                  </h3>
+                </div>
                 {variant === "create" && !resolvedProjectId ? (
                   resolveProjectPending ? (
-                    <p className="text-[11px] text-[#94a3b8]">Finding project…</p>
+                    <p className="text-[12px] text-slate-500">Finding project…</p>
                   ) : (
-                    <p className="text-[11px] leading-snug text-[#64748b]">
-                      Open this drawing from the project’s Files tab (or use a viewer link that
-                      includes the project) so we can list RFIs for this job.
+                    <p className="text-[12px] leading-relaxed text-slate-500">
+                      Open this drawing from the project’s Files tab (or a viewer link with the
+                      project) to list RFIs for this job.
                     </p>
                   )
                 ) : rfisPending ? (
-                  <p className="text-[11px] text-[#94a3b8]">Loading RFIs…</p>
+                  <p className="text-[12px] text-slate-500">Loading RFIs…</p>
                 ) : rfisError ? (
-                  <p className="text-[11px] text-amber-200/90">
+                  <p className="text-[12px] leading-relaxed text-amber-200/90">
                     Could not load RFIs. A Pro subscription and project access are required.
                   </p>
                 ) : linkableRfis.length === 0 ? (
-                  <p className="text-[11px] leading-snug text-[#64748b]">
-                    No open RFIs in this project yet. Create RFIs under the project’s RFIs page,
-                    then link them here.
+                  <p className="text-[12px] leading-relaxed text-slate-500">
+                    No open RFIs in this project. Create RFIs from the project RFIs page, then link
+                    them here.
                   </p>
                 ) : (
                   <>
-                    <div className="max-h-36 space-y-1.5 overflow-y-auto pr-0.5 [scrollbar-width:thin]">
+                    <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-800/60 bg-slate-950/40 p-1 [scrollbar-width:thin]">
                       {linkableRfis.map((r) => (
                         <label
                           key={r.id}
-                          className="flex cursor-pointer items-start gap-2 text-[11px] leading-snug text-[#e2e8f0]"
+                          className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-[12px] leading-snug text-slate-200 transition hover:bg-slate-800/50"
                         >
                           <input
                             type="checkbox"
-                            className="mt-0.5 rounded border-[#475569]"
+                            className="viewer-focus-ring mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 accent-[var(--viewer-primary)]"
                             checked={rfiLinkIds.includes(r.id)}
                             onChange={() => {
                               setRfiLinkIds((prev) =>
@@ -445,128 +565,250 @@ export function IssueFormSlider(props: Props) {
                             }}
                           />
                           <span className="min-w-0">
-                            RFI #{String(r.rfiNumber).padStart(3, "0")} — {r.title}
+                            <span className="font-medium text-slate-300">
+                              RFI #{String(r.rfiNumber).padStart(3, "0")}
+                            </span>
+                            <span className="text-slate-500"> — </span>
+                            {r.title}
                           </span>
                         </label>
                       ))}
                     </div>
-                    <p className="mt-1.5 text-[10px] leading-snug text-[#64748b]">
+                    <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
                       {variant === "create"
-                        ? "RFIs without a sheet yet will use this drawing and page. You can link several RFIs to one issue."
-                        : "Replace linked RFIs for this issue. RFIs without a sheet may adopt this drawing when saved."}
+                        ? "Linked RFIs without a sheet use this drawing and page. You can attach several RFIs to one issue."
+                        : "This replaces linked RFIs for the issue. RFIs without a sheet may adopt this drawing when you save."}
                     </p>
                   </>
                 )}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                  <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#94A3B8]">
-                    Status
+              </section>
+
+              <section className="space-y-3" aria-labelledby="issue-section-workflow">
+                <h3 id="issue-section-workflow" className={sectionTitleClass}>
+                  Status & assignment
+                </h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className={labelClass}>Status</span>
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value)}
+                      className="viewer-input-select w-full max-w-none rounded-lg py-2 text-[12px]"
+                    >
+                      {ISSUE_STATUS_ORDER.map((s) => (
+                        <option key={s} value={s}>
+                          {ISSUE_STATUS_LABEL[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className={labelClass}>Priority</span>
+                    <select
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value)}
+                      className="viewer-input-select w-full max-w-none rounded-lg py-2 text-[12px]"
+                    >
+                      {ISSUE_PRIORITY_ORDER.map((p) => (
+                        <option key={p} value={p}>
+                          {ISSUE_PRIORITY_LABEL[p]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div ref={assigneePickerRef} className="relative block">
+                  <span className={labelClass} id="issue-form-assignee-label">
+                    Assignee
                   </span>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="viewer-input-select w-full max-w-none py-2 text-[11px]"
+                  <button
+                    type="button"
+                    id="issue-form-assignee-trigger"
+                    aria-labelledby="issue-form-assignee-label"
+                    aria-haspopup="listbox"
+                    aria-expanded={assigneePickerOpen}
+                    onClick={() => {
+                      setAssigneePickerOpen((o) => {
+                        const next = !o;
+                        if (next) queueMicrotask(() => assigneeSearchInputRef.current?.focus());
+                        return next;
+                      });
+                    }}
+                    className="viewer-focus-ring flex w-full items-center gap-2 rounded-lg border border-slate-600/70 bg-slate-900/60 px-2.5 py-2 text-left text-[12px] text-slate-100 shadow-sm outline-none transition focus:border-[var(--viewer-primary)]/55 focus:ring-2 focus:ring-[var(--viewer-primary)]/20"
                   >
-                    {ISSUE_STATUS_ORDER.map((s) => (
-                      <option key={s} value={s}>
-                        {ISSUE_STATUS_LABEL[s]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    {assigneeDisplay ? (
+                      <>
+                        <ViewerUserThumb
+                          name={assigneeDisplay.name}
+                          email={assigneeDisplay.email}
+                          image={assigneeDisplay.image}
+                          className="h-7 w-7 text-[9px]"
+                        />
+                        <span className="min-w-0 flex-1 truncate">
+                          {assigneeDisplay.name || assigneeDisplay.email}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="min-w-0 flex-1 truncate text-slate-500">
+                        Choose a teammate…
+                      </span>
+                    )}
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 shrink-0 text-slate-500 transition ${assigneePickerOpen ? "rotate-180" : ""}`}
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                  </button>
+                  {assigneePickerOpen ? (
+                    <div
+                      className="absolute left-0 right-0 z-30 mt-1.5 overflow-hidden rounded-xl border border-slate-700/90 bg-slate-900 shadow-[0_16px_40px_-8px_rgba(0,0,0,0.65)] ring-1 ring-black/20"
+                      role="presentation"
+                    >
+                      <div className="border-b border-slate-800 p-2.5">
+                        <div className="relative">
+                          <Search
+                            className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-500"
+                            strokeWidth={2}
+                            aria-hidden
+                          />
+                          <input
+                            ref={assigneeSearchInputRef}
+                            type="search"
+                            value={assigneeSearchQuery}
+                            onChange={(e) => setAssigneeSearchQuery(e.target.value)}
+                            placeholder="Search by name or email…"
+                            autoComplete="off"
+                            aria-label="Filter assignees by name or email"
+                            className="viewer-focus-ring w-full rounded-lg border border-slate-700/80 bg-slate-950 py-1.5 pl-8 pr-2.5 text-[11px] text-slate-100 placeholder:text-slate-500 outline-none focus:border-[var(--viewer-primary)]/50 focus:ring-2 focus:ring-[var(--viewer-primary)]/15"
+                          />
+                        </div>
+                      </div>
+                      <ul
+                        role="listbox"
+                        aria-labelledby="issue-form-assignee-label"
+                        className="max-h-48 overflow-y-auto py-1 [scrollbar-width:thin]"
+                      >
+                        <li role="presentation">
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={assigneeId === ""}
+                            onClick={() => {
+                              setAssigneeId("");
+                              setAssigneePickerOpen(false);
+                            }}
+                            className={`flex w-full items-center gap-2 px-2.5 py-2 text-left text-[12px] transition ${
+                              assigneeId === ""
+                                ? "bg-[var(--viewer-primary-muted)] text-white"
+                                : "text-slate-200 hover:bg-slate-800/80"
+                            }`}
+                          >
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-slate-600 text-[10px] text-slate-500">
+                              —
+                            </span>
+                            <span>Unassigned</span>
+                          </button>
+                        </li>
+                        {assigneePickerMembersFiltered.map((m) => {
+                          const selected = assigneeId === m.userId;
+                          return (
+                            <li key={m.userId} role="presentation">
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={selected}
+                                onClick={() => {
+                                  setAssigneeId(m.userId);
+                                  setAssigneePickerOpen(false);
+                                }}
+                                className={`flex w-full items-center gap-2 px-2.5 py-2 text-left text-[12px] transition ${
+                                  selected
+                                    ? "bg-[var(--viewer-primary-muted)] text-white"
+                                    : "text-slate-200 hover:bg-slate-800/80"
+                                }`}
+                              >
+                                <ViewerUserThumb
+                                  name={m.name}
+                                  email={m.email}
+                                  image={m.image}
+                                  className="h-7 w-7 text-[9px]"
+                                />
+                                <span className="min-w-0 flex-1 truncate">{m.name || m.email}</span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                        {assignableMembers.length > 0 &&
+                        assigneePickerMembersFiltered.length === 0 ? (
+                          <li className="px-3 py-5 text-center text-[12px] text-slate-500">
+                            No matches for &ldquo;{assigneeSearchQuery.trim()}&rdquo;
+                          </li>
+                        ) : null}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="space-y-3" aria-labelledby="issue-section-schedule">
+                <h3 id="issue-section-schedule" className={sectionTitleClass}>
+                  Location & dates
+                </h3>
                 <label className="block">
-                  <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#94A3B8]">
-                    Priority
-                  </span>
-                  <select
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value)}
-                    className="viewer-input-select w-full max-w-none py-2 text-[11px]"
-                  >
-                    {ISSUE_PRIORITY_ORDER.map((p) => (
-                      <option key={p} value={p}>
-                        {ISSUE_PRIORITY_LABEL[p]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <label className="block">
-                <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#94A3B8]">
-                  Location / grid ref
-                </span>
-                <input
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="e.g. Grid B-2, Level 3"
-                  className="w-full rounded-md border border-[#475569] bg-[#0F172A] px-2.5 py-2 text-[12px] text-[#F8FAFC] placeholder:text-[#64748B] outline-none focus:border-[var(--viewer-primary)]/50 focus:ring-1 focus:ring-[var(--viewer-primary)]/35"
-                />
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                  <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#94A3B8]">
-                    Start date
-                  </span>
+                  <span className={labelClass}>Location / grid reference</span>
                   <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full rounded-md border border-[#475569] bg-[#0F172A] px-2 py-2 text-[11px] text-[#F8FAFC] outline-none focus:border-[var(--viewer-primary)]/50 focus:ring-1 focus:ring-[var(--viewer-primary)]/35"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="e.g. Grid B-2, Level 3"
+                    className={fieldClass}
                   />
                 </label>
-                <label className="block">
-                  <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#94A3B8]">
-                    Due date
-                  </span>
-                  <input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="w-full rounded-md border border-[#475569] bg-[#0F172A] px-2 py-2 text-[11px] text-[#F8FAFC] outline-none focus:border-[var(--viewer-primary)]/50 focus:ring-1 focus:ring-[var(--viewer-primary)]/35"
-                  />
-                </label>
-              </div>
-              <label className="block">
-                <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#94A3B8]">
-                  Assignee
-                </span>
-                <select
-                  value={assigneeId}
-                  onChange={(e) => setAssigneeId(e.target.value)}
-                  className="w-full rounded-md border border-[#475569] bg-[#0F172A] px-2.5 py-2 text-[12px] text-[#F8FAFC] outline-none focus:border-[var(--viewer-primary)]/50 focus:ring-1 focus:ring-[var(--viewer-primary)]/35"
-                >
-                  <option value="">Unassigned</option>
-                  {assignableMembers.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.name || m.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className={labelClass}>Start date</span>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className={dateFieldClass}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className={labelClass}>Due date</span>
+                    <input
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className={dateFieldClass}
+                    />
+                  </label>
+                </div>
+              </section>
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-[#334155] px-4 py-3">
+          <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-800/90 bg-slate-950/95 px-5 py-3.5 backdrop-blur-sm supports-[backdrop-filter]:bg-slate-950/80">
             {variant === "edit" ? (
               <button
                 type="button"
                 disabled={deleteMut.isPending}
                 onClick={() => setDeleteDialogOpen(true)}
-                className="viewer-focus-ring inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-red-950/50 px-2.5 py-1.5 text-[11px] font-semibold text-red-100 hover:bg-red-950/80 disabled:opacity-40"
+                className="viewer-focus-ring inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-950/40 px-2.5 py-1.5 text-[11px] font-semibold text-red-100 transition hover:bg-red-950/65 disabled:opacity-40"
               >
-                <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                 Delete
               </button>
             ) : (
-              <span />
+              <span className="hidden min-[480px]:inline text-[10px] text-slate-600">
+                Click outside to close
+              </span>
             )}
-            <div className="flex gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={onCancel}
                 disabled={createMut.isPending || saveEditMut.isPending}
-                className="viewer-focus-ring rounded-md border border-[#475569] px-3 py-1.5 text-[11px] font-medium text-[#E2E8F0] hover:bg-[#334155] disabled:opacity-40"
+                className="viewer-focus-ring rounded-lg border border-slate-600/80 bg-transparent px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-slate-800/80 disabled:opacity-40"
               >
                 Cancel
               </button>
@@ -577,16 +819,16 @@ export function IssueFormSlider(props: Props) {
                   if (variant === "create") createMut.mutate();
                   else if (variant === "edit") saveEditMut.mutate(props.issue.id);
                 }}
-                className="viewer-focus-ring rounded-md bg-[#2563EB] px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40"
+                className="viewer-focus-ring rounded-lg bg-[var(--viewer-primary)] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-[var(--viewer-primary-hover)] disabled:opacity-40"
               >
                 {createMut.isPending || saveEditMut.isPending
                   ? "Saving…"
                   : variant === "create"
                     ? "Create issue"
-                    : "Save"}
+                    : "Save changes"}
               </button>
             </div>
-          </div>
+          </footer>
         </aside>
       </div>
       {variant === "edit" ? (

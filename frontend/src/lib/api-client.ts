@@ -413,6 +413,8 @@ export type WorkspaceMemberRow = {
   userId: string;
   name: string;
   email: string;
+  /** Profile image URL when available (e.g. OAuth avatar). */
+  image?: string | null;
   role: WorkspaceRole;
   /** Present for workspace admins only. Empty = full workspace; non-empty = limited to these projects. */
   scopedProjects?: { id: string; name: string }[];
@@ -1402,7 +1404,12 @@ export async function importMaterialsExcel(
 
 // --- Issues (Pro, sheet-scoped) ---
 
-export type IssueUserRef = { id: string; name: string; email: string };
+export type IssueUserRef = {
+  id: string;
+  name: string;
+  email: string;
+  image?: string | null;
+};
 
 export type IssueRow = {
   id: string;
