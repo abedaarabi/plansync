@@ -82,6 +82,10 @@ COPY --from=builder /app/frontend/.next/standalone ./
 COPY --from=builder /app/frontend/.next/static ./frontend/.next/static
 COPY --from=builder /app/frontend/public ./frontend/public
 
+# Standalone image is copied as root; Next may write `.next/cache` (e.g. `next/image`) at runtime.
+RUN mkdir -p /app/frontend/.next/cache \
+  && chown -R nextjs:nodejs /app/frontend
+
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
