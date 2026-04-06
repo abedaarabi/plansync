@@ -655,6 +655,50 @@ body {
   padding: 0;
 }
 
+/* RFI / workspace hover hints — light enterprise card (not dark library-tooltip chrome) */
+.enterprise-hint-tip {
+  position: relative;
+}
+.enterprise-hint-tip::after {
+  content: attr(data-hint);
+  position: absolute;
+  z-index: 100;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: min(260px, 72vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  background: var(--enterprise-surface);
+  color: var(--enterprise-text);
+  box-shadow: var(--enterprise-shadow-floating);
+  border: 1px solid color-mix(in srgb, var(--enterprise-border) 88%, var(--enterprise-text));
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    visibility 0s linear 0.2s;
+}
+.enterprise-hint-tip:hover::after,
+.enterprise-hint-tip:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+  transition-delay: 0.35s;
+}
+.enterprise-hint-tip:focus-visible::after {
+  transition-delay: 0.06s;
+}
+
 @media print {
   .no-print {
     display: none !important;

@@ -1,5 +1,7 @@
 import { Resend } from "resend";
 import { inviteFromAddress } from "./inviteEmail.js";
+import { buildTransactionalEmailHtml, escapeHtml, } from "./transactionalEmailLayout.js";
+import { resolveWorkspaceLogoUrlForEmail } from "./workspaceLogo.js";
 /** Throws if API env cannot send mail (call before committing proposal to SENT). */
 export function assertProposalEmailReady(env) {
     if (!env.RESEND_API_KEY?.trim()) {
@@ -9,12 +11,11 @@ export function assertProposalEmailReady(env) {
         throw new Error("Email is not configured: add RESEND_FROM (verified sender in Resend, e.g. onboarding@resend.dev for testing).");
     }
 }
-function escapeHtml(s) {
-    return s
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+function workspaceLogoBrandingHtml(env, workspaceLogoUrl) {
+    const abs = resolveWorkspaceLogoUrlForEmail(env, workspaceLogoUrl);
+    if (!abs)
+        return undefined;
+    return `<div style="margin:0 0 16px"><img src="${escapeHtml(abs)}" alt="" style="max-height:56px;max-width:200px;width:auto;height:auto;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0" /></div>`;
 }
 export function proposalPortalUrl(env, token) {
     const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
@@ -36,19 +37,16 @@ async function sendMail(opts) {
         throw new Error("No valid recipient email addresses.");
     }
     const resend = new Resend(opts.env.RESEND_API_KEY);
-    const base = opts.env.PUBLIC_APP_URL.replace(/\/$/, "");
-    const linesHtml = opts.lines.map((l) => `<p style="margin:0 0 8px;color:#334155;font:15px/1.5 Inter,system-ui,sans-serif">${escapeHtml(l)}</p>`);
-    const actionBlock = opts.actionUrl && opts.actionLabel
-        ? `<p style="margin:20px 0 0"><a href="${escapeHtml(opts.actionUrl)}" style="display:inline-block;background:#2563eb;color:#fff;font:600 14px Inter,system-ui,sans-serif;padding:12px 20px;border-radius:8px;text-decoration:none">${escapeHtml(opts.actionLabel)}</a></p>`
-        : "";
-    const html = `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#f8fafc">
-  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:28px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
-    ${opts.brandingHtml ?? ""}
-    <h1 style="margin:0 0 16px;font:700 20px Inter,system-ui,sans-serif;color:#0f172a">${escapeHtml(opts.heading)}</h1>
-    ${linesHtml.join("")}
-    ${actionBlock}
-    <p style="margin:24px 0 0;font:12px Inter,system-ui,sans-serif;color:#94a3b8">${escapeHtml(base)}</p>
-  </div></body></html>`;
+    const html = buildTransactionalEmailHtml(opts.env, {
+        eyebrow: "PlanSync",
+        title: opts.heading,
+        preBodyHtml: opts.brandingHtml,
+        bodyLines: opts.lines,
+        primaryAction: opts.actionUrl && opts.actionLabel
+            ? { url: opts.actionUrl, label: opts.actionLabel }
+            : undefined,
+        fallbackUrl: opts.actionUrl,
+    });
     const textParts = [opts.heading, "", ...opts.lines];
     if (opts.actionUrl)
         textParts.push("", opts.actionUrl);
@@ -73,10 +71,7 @@ function portalMessageEmailPreview(body, maxChars = 500) {
 }
 export async function sendProposalPortalReplyToClient(opts) {
     const preview = portalMessageEmailPreview(opts.messagePreview);
-    const brandingHtml = opts.workspaceLogoUrl?.trim() &&
-        (opts.workspaceLogoUrl.startsWith("http://") || opts.workspaceLogoUrl.startsWith("https://"))
-        ? `<div style="margin:0 0 16px"><img src="${escapeHtml(opts.workspaceLogoUrl.trim())}" alt="" style="max-height:56px;max-width:200px;width:auto;height:auto;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0" /></div>`
-        : undefined;
+    const brandingHtml = workspaceLogoBrandingHtml(opts.env, opts.workspaceLogoUrl);
     await sendMail({
         env: opts.env,
         to: [opts.toEmail],
@@ -95,10 +90,7 @@ export async function sendProposalPortalReplyToClient(opts) {
     });
 }
 export async function sendProposalSentToClient(opts) {
-    const brandingHtml = opts.workspaceLogoUrl?.trim() &&
-        (opts.workspaceLogoUrl.startsWith("http://") || opts.workspaceLogoUrl.startsWith("https://"))
-        ? `<div style="margin:0 0 16px"><img src="${escapeHtml(opts.workspaceLogoUrl.trim())}" alt="" style="max-height:56px;max-width:200px;width:auto;height:auto;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0" /></div>`
-        : undefined;
+    const brandingHtml = workspaceLogoBrandingHtml(opts.env, opts.workspaceLogoUrl);
     await sendMail({
         env: opts.env,
         to: [opts.toEmail],
@@ -145,7 +137,12 @@ export async function sendProposalAcceptedToSender(opts) {
         actionUrl: opts.appUrl,
         actionLabel: "View in PlanSync",
         attachments: opts.pdfAttachment
-            ? [{ filename: `${opts.reference.replace(/[^a-z0-9-_]/gi, "_")}-signed.pdf`, content: opts.pdfAttachment.toString("base64") }]
+            ? [
+                {
+                    filename: `${opts.reference.replace(/[^a-z0-9-_]/gi, "_")}-signed.pdf`,
+                    content: opts.pdfAttachment.toString("base64"),
+                },
+            ]
             : undefined,
     });
 }
@@ -156,10 +153,7 @@ export async function sendProposalAcceptedToClient(opts) {
     if (!opts.pdfAttachment?.length)
         return;
     const sender = opts.senderName?.trim() || "your project team";
-    const brandingHtml = opts.workspaceLogoUrl?.trim() &&
-        (opts.workspaceLogoUrl.startsWith("http://") || opts.workspaceLogoUrl.startsWith("https://"))
-        ? `<div style="margin:0 0 16px"><img src="${escapeHtml(opts.workspaceLogoUrl.trim())}" alt="" style="max-height:56px;max-width:200px;width:auto;height:auto;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0" /></div>`
-        : undefined;
+    const brandingHtml = workspaceLogoBrandingHtml(opts.env, opts.workspaceLogoUrl);
     const lines = [
         `Hi ${opts.clientName},`,
         `Thank you for accepting and signing. We're pleased to confirm ${opts.title} (reference ${opts.reference}) with ${opts.workspaceName}.`,

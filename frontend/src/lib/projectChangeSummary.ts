@@ -13,6 +13,22 @@ function disp(s: string | null | undefined): string {
   return t || "—";
 }
 
+function pinLabel(lat: number | null, lng: number | null): string {
+  if (lat == null || lng == null) return "—";
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+
+function pinsEqual(
+  aLat: number | null,
+  aLng: number | null,
+  bLat: number | null,
+  bLng: number | null,
+): boolean {
+  if (aLat == null && aLng == null && bLat == null && bLng == null) return true;
+  if (aLat == null || aLng == null || bLat == null || bLng == null) return false;
+  return Math.abs(aLat - bLat) < 1e-6 && Math.abs(aLng - bLng) < 1e-6;
+}
+
 function measurementSystemLabel(v: ProjectMeasurementSystem): string {
   return PROJECT_MEASUREMENT_SYSTEMS.find((x) => x.value === v)?.title ?? v;
 }
@@ -26,6 +42,8 @@ export function buildProjectChangeRows(
     projectSizeEd: string;
     projectTypeEd: string;
     locationEd: string;
+    latitudeEd: number | null;
+    longitudeEd: number | null;
     websiteEd: string;
     stageEd: ProjectStageValue;
     progressEd: number;
@@ -41,6 +59,8 @@ export function buildProjectChangeRows(
     projectSizeEd,
     projectTypeEd,
     locationEd,
+    latitudeEd,
+    longitudeEd,
     websiteEd,
     stageEd,
     progressEd,
@@ -112,6 +132,15 @@ export function buildProjectChangeRows(
       label: "Location",
       before: disp(project.location),
       after: disp(locationEd),
+    });
+  }
+  const curLat = project.latitude ?? null;
+  const curLng = project.longitude ?? null;
+  if (!pinsEqual(curLat, curLng, latitudeEd, longitudeEd)) {
+    rows.push({
+      label: "Map pin",
+      before: pinLabel(curLat, curLng),
+      after: pinLabel(latitudeEd, longitudeEd),
     });
   }
   if (websiteEd.trim() !== (project.websiteUrl ?? "").trim()) {

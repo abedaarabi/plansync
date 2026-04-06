@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { patchProject, type PatchProjectBody } from "@/lib/api-client";
 import { buildProjectChangeRows } from "@/lib/projectChangeSummary";
@@ -17,6 +17,9 @@ import { ProjectCurrencyPicker } from "./ProjectCurrencyPicker";
 import { ProjectMeasurementSystemPicker } from "./ProjectMeasurementSystemPicker";
 import { ProjectProgressBar } from "./ProjectProgressBar";
 import { ProjectTypeSelect } from "./ProjectTypeSelect";
+import { ProjectLocationMap } from "./ProjectLocationMap";
+import { geocodeLocationName } from "@/lib/openMeteoGeocode";
+import { parseCoord } from "@/lib/projectGeo";
 
 const inputClass =
   "mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] placeholder:text-[var(--enterprise-text-muted)]/75 transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20";
@@ -39,6 +42,8 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
   const [projectSizeEd, setProjectSizeEd] = useState("");
   const [projectTypeEd, setProjectTypeEd] = useState("");
   const [locationEd, setLocationEd] = useState("");
+  const [latitudeEd, setLatitudeEd] = useState<number | null>(null);
+  const [longitudeEd, setLongitudeEd] = useState<number | null>(null);
   const [websiteEd, setWebsiteEd] = useState("");
   const [stageEd, setStageEd] = useState<ProjectStageValue>("NOT_STARTED");
   const [progressEd, setProgressEd] = useState(0);
@@ -46,6 +51,18 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
   const [measurementSystemEd, setMeasurementSystemEd] =
     useState<ProjectMeasurementSystem>("METRIC");
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
+  const [geocodingLocation, setGeocodingLocation] = useState(false);
+
+  /** When true, map clicks set the pin; typing location again switches back to address-based pin. */
+  const manualPinRef = useRef(false);
+  const locationEdRef = useRef(locationEd);
+  locationEdRef.current = locationEd;
+  const latitudeEdRef = useRef(latitudeEd);
+  const longitudeEdRef = useRef(longitudeEd);
+  latitudeEdRef.current = latitudeEd;
+  longitudeEdRef.current = longitudeEd;
+  const projectRef = useRef(project);
+  projectRef.current = project;
 
   function handleClose() {
     setConfirmSaveOpen(false);
@@ -59,6 +76,8 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
     setProjectSizeEd(p.projectSize ?? "");
     setProjectTypeEd(p.projectType ?? "");
     setLocationEd(p.location ?? "");
+    setLatitudeEd(parseCoord(p.latitude));
+    setLongitudeEd(parseCoord(p.longitude));
     setWebsiteEd(p.websiteUrl ?? "");
     setStageEd((p.stage as ProjectStageValue) ?? "NOT_STARTED");
     setProgressEd(typeof p.progressPercent === "number" ? p.progressPercent : 0);
@@ -66,12 +85,64 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
     setMeasurementSystemEd(
       ((p.measurementSystem as ProjectMeasurementSystem) || "METRIC") as ProjectMeasurementSystem,
     );
+    manualPinRef.current = false;
   }
 
   useEffect(() => {
     if (!project) return;
     hydrate(project);
   }, [project]);
+
+  /** Debounced geocode from the Location field (English address / city) → map pin. */
+  useEffect(() => {
+    if (!open) return;
+    const q = locationEd.trim();
+    if (!q) {
+      setLatitudeEd(null);
+      setLongitudeEd(null);
+      setGeocodingLocation(false);
+      return;
+    }
+    if (manualPinRef.current) return;
+
+    const p = projectRef.current;
+    if (p) {
+      const pq = (p.location ?? "").trim();
+      const slat = parseCoord(p.latitude);
+      const slng = parseCoord(p.longitude);
+      const curLat = latitudeEdRef.current;
+      const curLng = longitudeEdRef.current;
+      if (
+        q === pq &&
+        slat != null &&
+        slng != null &&
+        curLat != null &&
+        curLng != null &&
+        Math.abs(curLat - slat) < 1e-5 &&
+        Math.abs(curLng - slng) < 1e-5
+      ) {
+        return;
+      }
+    }
+
+    const t = window.setTimeout(() => {
+      const latest = locationEdRef.current.trim();
+      if (!latest || manualPinRef.current) return;
+      setGeocodingLocation(true);
+      void (async () => {
+        try {
+          const geo = await geocodeLocationName(latest);
+          if (!geo || manualPinRef.current) return;
+          if (locationEdRef.current.trim() !== latest) return;
+          setLatitudeEd(geo.lat);
+          setLongitudeEd(geo.lng);
+        } finally {
+          setGeocodingLocation(false);
+        }
+      })();
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, [locationEd, open]);
 
   const websiteLogoPreview = useMemo(() => logoUrlFromWebsiteInput(websiteEd), [websiteEd]);
 
@@ -84,6 +155,8 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
       projectSizeEd,
       projectTypeEd,
       locationEd,
+      latitudeEd,
+      longitudeEd,
       websiteEd,
       stageEd,
       progressEd,
@@ -98,6 +171,8 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
     projectSizeEd,
     projectTypeEd,
     locationEd,
+    latitudeEd,
+    longitudeEd,
     websiteEd,
     stageEd,
     progressEd,
@@ -116,6 +191,18 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
     const budgetEdNorm = localBudgetEd.trim().replace(/,/g, "");
     const currencyCur = (project.currency as ProjectCurrencyCode) || "USD";
     const msCur = (project.measurementSystem as ProjectMeasurementSystem) || "METRIC";
+    const curLat = parseCoord(project.latitude);
+    const curLng = parseCoord(project.longitude);
+    const pinSaved = curLat != null && curLng != null;
+    const pinEdit = latitudeEd != null && longitudeEd != null;
+    const pinUnchanged =
+      (!pinSaved && !pinEdit) ||
+      (pinSaved &&
+        pinEdit &&
+        Math.abs(curLat! - latitudeEd!) < 1e-6 &&
+        Math.abs(curLng! - longitudeEd!) < 1e-6);
+    const pinChanged = !pinUnchanged;
+
     return (
       nameEd.trim() !== project.name ||
       projectNumberEd.trim() !== (project.projectNumber ?? "").trim() ||
@@ -123,6 +210,7 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
       projectSizeEd.trim() !== (project.projectSize ?? "").trim() ||
       projectTypeEd.trim() !== (project.projectType ?? "").trim() ||
       locationEd.trim() !== (project.location ?? "").trim() ||
+      pinChanged ||
       websiteEd.trim() !== (project.websiteUrl ?? "").trim() ||
       stageEd !== stageCur ||
       progressEd !== progressCur ||
@@ -137,6 +225,8 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
     projectSizeEd,
     projectTypeEd,
     locationEd,
+    latitudeEd,
+    longitudeEd,
     websiteEd,
     stageEd,
     progressEd,
@@ -169,6 +259,43 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
       if (locationEd.trim() !== (project.location ?? "").trim()) {
         body.location = locationEd.trim() || null;
       }
+      const curLat0 = parseCoord(project.latitude);
+      const curLng0 = parseCoord(project.longitude);
+
+      let latOut = latitudeEd;
+      let lngOut = longitudeEd;
+      if (!locationEd.trim()) {
+        latOut = null;
+        lngOut = null;
+      } else if (latOut == null || lngOut == null) {
+        const geo = await geocodeLocationName(locationEd.trim());
+        if (geo) {
+          latOut = geo.lat;
+          lngOut = geo.lng;
+        }
+      }
+
+      const pinSaved0 = curLat0 != null && curLng0 != null;
+      const pinEdit0 = latOut != null && lngOut != null;
+      const pinUnchanged0 =
+        (!pinSaved0 && !pinEdit0) ||
+        (pinSaved0 &&
+          pinEdit0 &&
+          curLat0 != null &&
+          curLng0 != null &&
+          latOut != null &&
+          lngOut != null &&
+          Math.abs(curLat0 - latOut) < 1e-6 &&
+          Math.abs(curLng0 - lngOut) < 1e-6);
+      if (!pinUnchanged0) {
+        if (latOut == null || lngOut == null) {
+          body.latitude = null;
+          body.longitude = null;
+        } else {
+          body.latitude = latOut;
+          body.longitude = lngOut;
+        }
+      }
       if (websiteEd.trim() !== (project.websiteUrl ?? "").trim()) {
         body.websiteUrl = websiteEd.trim() ? websiteEd.trim() : null;
       }
@@ -186,6 +313,7 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
       toast.success("Project saved");
       setConfirmSaveOpen(false);
       if (workspaceId) void queryClient.invalidateQueries({ queryKey: qk.projects(workspaceId) });
+      if (project) void queryClient.invalidateQueries({ queryKey: qk.project(project.id) });
       onClose();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -340,10 +468,56 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
               <input
                 id="edit-slide-location"
                 value={locationEd}
-                onChange={(e) => setLocationEd(e.target.value)}
+                onChange={(e) => {
+                  manualPinRef.current = false;
+                  setLocationEd(e.target.value);
+                }}
                 className={inputClass}
-                placeholder="Site or city"
+                placeholder="City or address in English (e.g. Austin, TX)"
               />
+              <p className="mt-1 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
+                The map pin updates automatically from this text. You can still click the map to
+                fine-tune.
+              </p>
+              <div className="mt-3 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className={labelClass}>Map preview (OpenStreetMap)</p>
+                  {latitudeEd != null && longitudeEd != null ? (
+                    <button
+                      type="button"
+                      className="text-[12px] font-semibold text-[var(--enterprise-primary)] hover:underline"
+                      onClick={() => {
+                        manualPinRef.current = false;
+                        setLatitudeEd(null);
+                        setLongitudeEd(null);
+                      }}
+                    >
+                      Clear pin
+                    </button>
+                  ) : null}
+                </div>
+                {geocodingLocation ? (
+                  <p className="text-[11px] text-[var(--enterprise-text-muted)]" aria-live="polite">
+                    Looking up address…
+                  </p>
+                ) : (
+                  <p className="text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
+                    Shown on the project overview with live weather.
+                  </p>
+                )}
+                <ProjectLocationMap
+                  height={220}
+                  latitude={latitudeEd ?? 39.8283}
+                  longitude={longitudeEd ?? -98.5795}
+                  zoom={latitudeEd != null && longitudeEd != null ? 14 : 4}
+                  showMarker={latitudeEd != null && longitudeEd != null}
+                  onPick={(lat, lng) => {
+                    manualPinRef.current = true;
+                    setLatitudeEd(lat);
+                    setLongitudeEd(lng);
+                  }}
+                />
+              </div>
             </div>
             <div className="sm:col-span-2">
               <label htmlFor="edit-slide-website" className={labelClass}>

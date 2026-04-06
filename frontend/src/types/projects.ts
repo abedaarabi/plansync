@@ -54,6 +54,9 @@ export type Project = {
   /** e.g. Commercial, Residential */
   projectType?: string | null;
   location?: string | null;
+  /** WGS84 map pin (both set or both absent). */
+  latitude?: number | null;
+  longitude?: number | null;
   /** Normalized project / client website */
   websiteUrl?: string | null;
   /** Favicon URL for display (derived from website hostname) */

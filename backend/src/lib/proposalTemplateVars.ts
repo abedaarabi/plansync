@@ -25,6 +25,9 @@ export function formatMoneyAmount(amount: string, currency: string): string {
 export function buildTakeoffTableHtml(input: {
   items: ProposalLineForTable[];
   subtotal: string;
+  /** When > 0, a “Work (n%)” row is shown before tax. */
+  workPricePercent?: string;
+  workAmount?: string;
   taxPercent: string;
   taxAmount: string;
   discount: string;
@@ -43,12 +46,17 @@ export function buildTakeoffTableHtml(input: {
         `<tr><td ${td}>${esc(it.itemName)}</td><td ${tdNum}>${esc(it.quantity)}</td><td ${td}>${esc(it.unit)}</td><td ${tdNum}>${esc(it.rate)}</td><td ${tdNum}>${esc(it.lineTotal)}</td></tr>`,
     )
     .join("");
+  const wp = Number(input.workPricePercent ?? "0");
+  const workRow =
+    wp > 0 && input.workAmount
+      ? `<tr><td colspan="4" style="text-align:right;padding:10px 12px;font:14px Inter,system-ui,sans-serif">Work (${esc(input.workPricePercent ?? "0")}%)</td><td style="text-align:right;padding:10px 12px;font:14px Inter,system-ui,sans-serif">${esc(input.workAmount)}</td></tr>`
+      : "";
   const html = `<table style="width:100%;border-collapse:collapse;margin:16px 0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden" cellpadding="0" cellspacing="0">
 <thead><tr><th ${th}>Item</th><th ${th} style="text-align:right">Qty</th><th ${th}>Unit</th><th ${th} style="text-align:right">Rate</th><th ${th} style="text-align:right">Total</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot>
 <tr><td colspan="4" style="text-align:right;padding:10px 12px;font:600 14px Inter,system-ui,sans-serif">Subtotal</td><td style="text-align:right;padding:10px 12px;font:600 14px Inter,system-ui,sans-serif">${esc(input.subtotal)}</td></tr>
-<tr><td colspan="4" style="text-align:right;padding:10px 12px;font:14px Inter,system-ui,sans-serif">Tax (${esc(input.taxPercent)}%)</td><td style="text-align:right;padding:10px 12px;font:14px Inter,system-ui,sans-serif">${esc(input.taxAmount)}</td></tr>
+${workRow}<tr><td colspan="4" style="text-align:right;padding:10px 12px;font:14px Inter,system-ui,sans-serif">Tax (${esc(input.taxPercent)}%)</td><td style="text-align:right;padding:10px 12px;font:14px Inter,system-ui,sans-serif">${esc(input.taxAmount)}</td></tr>
 <tr><td colspan="4" style="text-align:right;padding:10px 12px;font:14px Inter,system-ui,sans-serif">Discount</td><td style="text-align:right;padding:10px 12px;font:14px Inter,system-ui,sans-serif">${esc(input.discount)}</td></tr>
 <tr><td colspan="4" style="text-align:right;padding:12px 12px;font:700 16px Inter,system-ui,sans-serif">Total</td><td style="text-align:right;padding:12px 12px;font:700 16px Inter,system-ui,sans-serif;color:#2563eb">${esc(input.total)}</td></tr>
 </tfoot>

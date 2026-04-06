@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { ActivityType, RfiPriority, RfiStatus, } from "@prisma/client";
+import { ActivityType, RfiPriority, RfiStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
-import { assertUserAssignableToProject, isWorkspaceAdmin, loadProjectForMember, } from "../../lib/projectAccess.js";
+import { assertUserAssignableToProject, isWorkspaceAdmin } from "../../lib/projectAccess.js";
+import { canAccessRfisList, canCreateRfis, loadProjectWithAuth } from "../../lib/permissions.js";
 import { logActivity, logActivitySafe } from "../../lib/activity.js";
 import { deleteObject, presignGet, presignPut } from "../../lib/s3.js";
 import { buildRfiAttachmentKey, newUploadId, s3KeyMatchesRfiAttachment, } from "../../lib/fileUpload.js";
@@ -212,9 +213,13 @@ function dateFromYmd(s) {
 export function registerRfiRoutes(r, needUser, env) {
     r.get("/projects/:projectId/rfis", needUser, async (c) => {
         const projectId = c.req.param("projectId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canAccessRfisList(ctx)) {
+            return c.json([]);
+        }
         const list = await prisma.rfi.findMany({
             where: { projectId },
             include: rfiInclude,
@@ -225,9 +230,13 @@ export function registerRfiRoutes(r, needUser, env) {
     r.get("/projects/:projectId/rfis/:rfiId", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const rfiId = c.req.param("rfiId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canAccessRfisList(ctx)) {
+            return c.json({ error: "Not found" }, 404);
+        }
         const row = await prisma.rfi.findFirst({
             where: { id: rfiId, projectId },
             include: rfiInclude,
@@ -239,13 +248,20 @@ export function registerRfiRoutes(r, needUser, env) {
     r.get("/projects/:projectId/rfis/:rfiId/activity", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const rfiId = c.req.param("rfiId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const exists = await prisma.rfi.findFirst({ where: { id: rfiId, projectId }, select: { id: true } });
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canAccessRfisList(ctx)) {
+            return c.json({ error: "Not found" }, 404);
+        }
+        const exists = await prisma.rfi.findFirst({
+            where: { id: rfiId, projectId },
+            select: { id: true },
+        });
         if (!exists)
             return c.json({ error: "Not found" }, 404);
-        const wsId = res.project.workspaceId;
+        const wsId = ctx.project.workspaceId;
         const types = [
             ActivityType.RFI_CREATED,
             ActivityType.RFI_UPDATED,
@@ -278,10 +294,17 @@ export function registerRfiRoutes(r, needUser, env) {
     r.get("/projects/:projectId/rfis/:rfiId/messages", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const rfiId = c.req.param("rfiId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const exists = await prisma.rfi.findFirst({ where: { id: rfiId, projectId }, select: { id: true } });
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canAccessRfisList(ctx)) {
+            return c.json({ error: "Not found" }, 404);
+        }
+        const exists = await prisma.rfi.findFirst({
+            where: { id: rfiId, projectId },
+            select: { id: true },
+        });
         if (!exists)
             return c.json({ error: "Not found" }, 404);
         const rows = await prisma.rfiMessage.findMany({
@@ -301,10 +324,14 @@ export function registerRfiRoutes(r, needUser, env) {
     r.post("/projects/:projectId/rfis/:rfiId/messages", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const rfiId = c.req.param("rfiId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canCreateRfis(ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const gate = requirePro(ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
         const existing = await prisma.rfi.findFirst({
@@ -341,7 +368,7 @@ export function registerRfiRoutes(r, needUser, env) {
             });
             return created;
         });
-        await logActivity(res.project.workspaceId, ActivityType.RFI_MESSAGE_POSTED, {
+        await logActivity(ctx.project.workspaceId, ActivityType.RFI_MESSAGE_POSTED, {
             actorUserId: userId,
             entityId: rfiId,
             projectId,
@@ -384,7 +411,7 @@ export function registerRfiRoutes(r, needUser, env) {
             });
         }
         await createUserNotifications({
-            workspaceId: res.project.workspaceId,
+            workspaceId: ctx.project.workspaceId,
             projectId,
             recipientUserIds: rfiParticipantUserIds(existing),
             excludeUserId: userId,
@@ -404,10 +431,14 @@ export function registerRfiRoutes(r, needUser, env) {
     });
     r.post("/projects/:projectId/rfis", needUser, async (c) => {
         const projectId = c.req.param("projectId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canCreateRfis(ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const gate = requirePro(ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
         const body = z
@@ -432,27 +463,29 @@ export function registerRfiRoutes(r, needUser, env) {
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
-        const effectiveAssigneeIds = [...new Set(body.data.assigneeUserIds?.length
+        const effectiveAssigneeIds = [
+            ...new Set(body.data.assigneeUserIds?.length
                 ? body.data.assigneeUserIds
                 : body.data.assignedToUserId
                     ? [body.data.assignedToUserId]
-                    : [])];
+                    : []),
+        ];
         for (const uid of effectiveAssigneeIds) {
-            const a = await assertUserAssignableToProject(uid, projectId, res.project.workspaceId);
+            const a = await assertUserAssignableToProject(uid, projectId, ctx.project.workspaceId);
             if (!("ok" in a))
                 return c.json({ error: a.error }, a.status);
         }
         const issueIds = [...new Set(body.data.issueIds ?? [])];
         if (issueIds.length > 0) {
             const n = await prisma.issue.count({
-                where: { id: { in: issueIds }, projectId, workspaceId: res.project.workspaceId },
+                where: { id: { in: issueIds }, projectId, workspaceId: ctx.project.workspaceId },
             });
             if (n !== issueIds.length) {
                 return c.json({ error: "One or more issues not found in this project" }, 400);
             }
         }
         const primaryIssueId = issueIds[0] ?? null;
-        const draw = await resolveDrawingFields(projectId, res.project.workspaceId, primaryIssueId, body.data.fileId ?? null, body.data.fileVersionId ?? null, body.data.pageNumber ?? null, body.data.pinNormX ?? null, body.data.pinNormY ?? null);
+        const draw = await resolveDrawingFields(projectId, ctx.project.workspaceId, primaryIssueId, body.data.fileId ?? null, body.data.fileVersionId ?? null, body.data.pageNumber ?? null, body.data.pinNormX ?? null, body.data.pinNormY ?? null);
         if ("error" in draw)
             return c.json({ error: draw.error }, 400);
         const userId = c.get("user").id;
@@ -486,7 +519,7 @@ export function registerRfiRoutes(r, needUser, env) {
             await syncRfiIssueLinks(tx, created.id, issueIds);
             return tx.rfi.findUniqueOrThrow({ where: { id: created.id }, include: rfiInclude });
         });
-        await logActivity(res.project.workspaceId, ActivityType.RFI_CREATED, {
+        await logActivity(ctx.project.workspaceId, ActivityType.RFI_CREATED, {
             actorUserId: userId,
             entityId: row.id,
             projectId,
@@ -495,7 +528,7 @@ export function registerRfiRoutes(r, needUser, env) {
         const initialResponderIds = rfiAssigneeUserIds(row);
         if (initialResponderIds.length > 0) {
             await createUserNotifications({
-                workspaceId: res.project.workspaceId,
+                workspaceId: ctx.project.workspaceId,
                 projectId,
                 recipientUserIds: initialResponderIds,
                 excludeUserId: userId,
@@ -511,10 +544,14 @@ export function registerRfiRoutes(r, needUser, env) {
     r.patch("/projects/:projectId/rfis/:rfiId", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const rfiId = c.req.param("rfiId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canCreateRfis(ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const gate = requirePro(ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
         const existing = await prisma.rfi.findFirst({
@@ -549,7 +586,7 @@ export function registerRfiRoutes(r, needUser, env) {
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
         const userId = c.get("user").id;
-        const admin = await isWorkspaceAdmin(res.project.workspaceId, userId);
+        const admin = await isWorkspaceAdmin(ctx.project.workspaceId, userId);
         const data = body.data;
         if (existing.status === RfiStatus.CLOSED) {
             const mayReopen = isRfiCreator(existing, userId) || admin || canRespond(existing, userId, false);
@@ -565,7 +602,7 @@ export function registerRfiRoutes(r, needUser, env) {
                     data: { status: RfiStatus.IN_REVIEW },
                     include: rfiInclude,
                 });
-                await logActivity(res.project.workspaceId, ActivityType.RFI_UPDATED, {
+                await logActivity(ctx.project.workspaceId, ActivityType.RFI_UPDATED, {
                     actorUserId: userId,
                     entityId: row.id,
                     projectId,
@@ -592,7 +629,7 @@ export function registerRfiRoutes(r, needUser, env) {
                     });
                 }
                 await createUserNotifications({
-                    workspaceId: res.project.workspaceId,
+                    workspaceId: ctx.project.workspaceId,
                     projectId,
                     recipientUserIds: rfiParticipantUserIds(row),
                     kind: "RFI_REOPENED",
@@ -615,7 +652,9 @@ export function registerRfiRoutes(r, needUser, env) {
                 return c.json({ error: "No recorded answer to remove" }, 400);
             }
             if (!isRfiCreator(existing, userId) && !admin && !canRespond(existing, userId, false)) {
-                return c.json({ error: "Only the creator, a responder, or a workspace admin can remove the recorded answer" }, 403);
+                return c.json({
+                    error: "Only the creator, a responder, or a workspace admin can remove the recorded answer",
+                }, 403);
             }
             const downgraded = existing.status === RfiStatus.ANSWERED;
             const row = await prisma.rfi.update({
@@ -627,7 +666,7 @@ export function registerRfiRoutes(r, needUser, env) {
                 },
                 include: rfiInclude,
             });
-            await logActivity(res.project.workspaceId, ActivityType.RFI_UPDATED, {
+            await logActivity(ctx.project.workspaceId, ActivityType.RFI_UPDATED, {
                 actorUserId: userId,
                 entityId: row.id,
                 projectId,
@@ -652,9 +691,7 @@ export function registerRfiRoutes(r, needUser, env) {
                             ? [data.assignedToUserId]
                             : []
                         : null;
-                const willHaveResponder = nextAssigneeIds !== null
-                    ? nextAssigneeIds.length > 0
-                    : rfiHasResponder(existing);
+                const willHaveResponder = nextAssigneeIds !== null ? nextAssigneeIds.length > 0 : rfiHasResponder(existing);
                 if (!willHaveResponder) {
                     return c.json({ error: "Assign at least one responder before sending for review" }, 400);
                 }
@@ -711,7 +748,7 @@ export function registerRfiRoutes(r, needUser, env) {
         }
         if (assigneeIdsToSync !== undefined) {
             for (const uid of assigneeIdsToSync) {
-                const a = await assertUserAssignableToProject(uid, projectId, res.project.workspaceId);
+                const a = await assertUserAssignableToProject(uid, projectId, ctx.project.workspaceId);
                 if (!("ok" in a))
                     return c.json({ error: a.error }, a.status);
             }
@@ -719,7 +756,7 @@ export function registerRfiRoutes(r, needUser, env) {
         const patchIssueIds = data.issueIds !== undefined ? [...new Set(data.issueIds)] : undefined;
         if (patchIssueIds !== undefined && patchIssueIds.length > 0) {
             const n = await prisma.issue.count({
-                where: { id: { in: patchIssueIds }, projectId, workspaceId: res.project.workspaceId },
+                where: { id: { in: patchIssueIds }, projectId, workspaceId: ctx.project.workspaceId },
             });
             if (n !== patchIssueIds.length) {
                 return c.json({ error: "One or more issues not found in this project" }, 400);
@@ -731,7 +768,7 @@ export function registerRfiRoutes(r, needUser, env) {
             data.pageNumber !== undefined ||
             data.pinNormX !== undefined ||
             data.pinNormY !== undefined) {
-            const draw = await resolveDrawingFields(projectId, res.project.workspaceId, null, data.fileId !== undefined ? data.fileId : existing.fileId, data.fileVersionId !== undefined ? data.fileVersionId : existing.fileVersionId, data.pageNumber !== undefined ? data.pageNumber : existing.pageNumber, data.pinNormX !== undefined ? data.pinNormX : existing.pinNormX, data.pinNormY !== undefined ? data.pinNormY : existing.pinNormY);
+            const draw = await resolveDrawingFields(projectId, ctx.project.workspaceId, null, data.fileId !== undefined ? data.fileId : existing.fileId, data.fileVersionId !== undefined ? data.fileVersionId : existing.fileVersionId, data.pageNumber !== undefined ? data.pageNumber : existing.pageNumber, data.pinNormX !== undefined ? data.pinNormX : existing.pinNormX, data.pinNormY !== undefined ? data.pinNormY : existing.pinNormY);
             if ("error" in draw)
                 return c.json({ error: draw.error }, 400);
             drawPatch = draw;
@@ -782,7 +819,7 @@ export function registerRfiRoutes(r, needUser, env) {
         const url = rfiDetailUrl(env, projectId, row.id);
         const actorName = c.get("user").name?.trim() || "Someone";
         if (statusRequested === RfiStatus.IN_REVIEW && existing.status === RfiStatus.OPEN) {
-            await logActivity(res.project.workspaceId, ActivityType.RFI_SENT_FOR_REVIEW, {
+            await logActivity(ctx.project.workspaceId, ActivityType.RFI_SENT_FOR_REVIEW, {
                 actorUserId: userId,
                 entityId: row.id,
                 projectId,
@@ -811,7 +848,7 @@ export function registerRfiRoutes(r, needUser, env) {
                 });
             }
             await createUserNotifications({
-                workspaceId: res.project.workspaceId,
+                workspaceId: ctx.project.workspaceId,
                 projectId,
                 recipientUserIds: rfiAssigneeUserIds(row),
                 excludeUserId: userId,
@@ -823,7 +860,7 @@ export function registerRfiRoutes(r, needUser, env) {
             });
         }
         else if (statusRequested === RfiStatus.ANSWERED && existing.status === RfiStatus.IN_REVIEW) {
-            await logActivity(res.project.workspaceId, ActivityType.RFI_RESPONSE_SUBMITTED, {
+            await logActivity(ctx.project.workspaceId, ActivityType.RFI_RESPONSE_SUBMITTED, {
                 actorUserId: userId,
                 entityId: row.id,
                 projectId,
@@ -850,7 +887,7 @@ export function registerRfiRoutes(r, needUser, env) {
             const respExcerpt = respText.length > 200 ? `${respText.slice(0, 200)}…` : respText || null;
             if (row.creatorId && row.creatorId !== userId) {
                 await createUserNotifications({
-                    workspaceId: res.project.workspaceId,
+                    workspaceId: ctx.project.workspaceId,
                     projectId,
                     recipientUserIds: [row.creatorId],
                     kind: "RFI_RESPONSE",
@@ -862,7 +899,7 @@ export function registerRfiRoutes(r, needUser, env) {
             }
         }
         else if (statusRequested === RfiStatus.CLOSED) {
-            await logActivity(res.project.workspaceId, ActivityType.RFI_CLOSED, {
+            await logActivity(ctx.project.workspaceId, ActivityType.RFI_CLOSED, {
                 actorUserId: userId,
                 entityId: row.id,
                 projectId,
@@ -892,7 +929,7 @@ export function registerRfiRoutes(r, needUser, env) {
                 });
             }
             await createUserNotifications({
-                workspaceId: res.project.workspaceId,
+                workspaceId: ctx.project.workspaceId,
                 projectId,
                 recipientUserIds: rfiParticipantUserIds(row),
                 excludeUserId: userId,
@@ -904,7 +941,7 @@ export function registerRfiRoutes(r, needUser, env) {
             });
         }
         else {
-            await logActivity(res.project.workspaceId, ActivityType.RFI_UPDATED, {
+            await logActivity(ctx.project.workspaceId, ActivityType.RFI_UPDATED, {
                 actorUserId: userId,
                 entityId: row.id,
                 projectId,
@@ -916,7 +953,7 @@ export function registerRfiRoutes(r, needUser, env) {
             const addedResponders = assigneeIdsToSync.filter((id) => !before.has(id));
             if (addedResponders.length > 0) {
                 await createUserNotifications({
-                    workspaceId: res.project.workspaceId,
+                    workspaceId: ctx.project.workspaceId,
                     projectId,
                     recipientUserIds: addedResponders,
                     excludeUserId: userId,
@@ -933,10 +970,14 @@ export function registerRfiRoutes(r, needUser, env) {
     r.delete("/projects/:projectId/rfis/:rfiId", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const rfiId = c.req.param("rfiId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canCreateRfis(ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const gate = requirePro(ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
         const existing = await prisma.rfi.findFirst({
@@ -946,7 +987,7 @@ export function registerRfiRoutes(r, needUser, env) {
         if (!existing)
             return c.json({ error: "Not found" }, 404);
         const bytes = existing.attachments.reduce((acc, a) => acc + a.sizeBytes, 0n);
-        await logActivitySafe(res.project.workspaceId, ActivityType.RFI_DELETED, {
+        await logActivitySafe(ctx.project.workspaceId, ActivityType.RFI_DELETED, {
             actorUserId: c.get("user").id,
             entityId: existing.id,
             projectId,
@@ -955,7 +996,7 @@ export function registerRfiRoutes(r, needUser, env) {
         await prisma.$transaction([
             prisma.rfi.delete({ where: { id: rfiId } }),
             prisma.workspace.update({
-                where: { id: res.project.workspaceId },
+                where: { id: ctx.project.workspaceId },
                 data: { storageUsedBytes: { decrement: bytes } },
             }),
         ]);
@@ -964,10 +1005,14 @@ export function registerRfiRoutes(r, needUser, env) {
     r.post("/projects/:projectId/rfis/:rfiId/attachments/presign", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const rfiId = c.req.param("rfiId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canCreateRfis(ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const gate = requirePro(ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
         const rfi = await prisma.rfi.findFirst({ where: { id: rfiId, projectId } });
@@ -990,13 +1035,13 @@ export function registerRfiRoutes(r, needUser, env) {
         if (body.data.sizeBytes > MAX_RFI_ATTACHMENT_BYTES) {
             return c.json({ error: "File too large (max 25 MB per attachment)" }, 400);
         }
-        const ws = res.project.workspace;
+        const ws = ctx.project.workspace;
         const newUsed = ws.storageUsedBytes + body.data.sizeBytes;
         if (newUsed > ws.storageQuotaBytes) {
             return c.json({ error: "Storage quota exceeded" }, 400);
         }
         const uploadId = newUploadId();
-        const key = buildRfiAttachmentKey(res.project.workspaceId, projectId, rfiId, uploadId, body.data.fileName);
+        const key = buildRfiAttachmentKey(ctx.project.workspaceId, projectId, rfiId, uploadId, body.data.fileName);
         let url;
         try {
             url = await presignPut(env, key, body.data.contentType);
@@ -1013,10 +1058,14 @@ export function registerRfiRoutes(r, needUser, env) {
     r.post("/projects/:projectId/rfis/:rfiId/attachments/complete", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const rfiId = c.req.param("rfiId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canCreateRfis(ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const gate = requirePro(ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
         const rfi = await prisma.rfi.findFirst({ where: { id: rfiId, projectId } });
@@ -1040,10 +1089,10 @@ export function registerRfiRoutes(r, needUser, env) {
         if (body.data.sizeBytes > MAX_RFI_ATTACHMENT_BYTES) {
             return c.json({ error: "File too large (max 25 MB per attachment)" }, 400);
         }
-        if (!s3KeyMatchesRfiAttachment(body.data.key, res.project.workspaceId, projectId, rfiId)) {
+        if (!s3KeyMatchesRfiAttachment(body.data.key, ctx.project.workspaceId, projectId, rfiId)) {
             return c.json({ error: "Invalid upload key" }, 400);
         }
-        const ws = res.project.workspace;
+        const ws = ctx.project.workspace;
         const newUsed = ws.storageUsedBytes + body.data.sizeBytes;
         if (newUsed > ws.storageQuotaBytes) {
             return c.json({ error: "Storage quota exceeded" }, 400);
@@ -1061,11 +1110,11 @@ export function registerRfiRoutes(r, needUser, env) {
                 include: { uploadedBy: { select: { id: true, name: true } } },
             }),
             prisma.workspace.update({
-                where: { id: res.project.workspaceId },
+                where: { id: ctx.project.workspaceId },
                 data: { storageUsedBytes: { increment: body.data.sizeBytes } },
             }),
         ]);
-        await logActivity(res.project.workspaceId, ActivityType.RFI_ATTACHMENT_ADDED, {
+        await logActivity(ctx.project.workspaceId, ActivityType.RFI_ATTACHMENT_ADDED, {
             actorUserId: c.get("user").id,
             entityId: rfiId,
             projectId,
@@ -1087,9 +1136,13 @@ export function registerRfiRoutes(r, needUser, env) {
         const projectId = c.req.param("projectId");
         const rfiId = c.req.param("rfiId");
         const attachmentId = c.req.param("attachmentId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canAccessRfisList(ctx)) {
+            return c.json({ error: "Not found" }, 404);
+        }
         const att = await prisma.rfiAttachment.findFirst({
             where: { id: attachmentId, rfiId, rfi: { projectId } },
         });
@@ -1111,10 +1164,14 @@ export function registerRfiRoutes(r, needUser, env) {
         const projectId = c.req.param("projectId");
         const rfiId = c.req.param("rfiId");
         const attachmentId = c.req.param("attachmentId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!canCreateRfis(ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const gate = requirePro(ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
         const rfi = await prisma.rfi.findFirst({ where: { id: rfiId, projectId } });
@@ -1134,11 +1191,11 @@ export function registerRfiRoutes(r, needUser, env) {
         await prisma.$transaction([
             prisma.rfiAttachment.delete({ where: { id: att.id } }),
             prisma.workspace.update({
-                where: { id: res.project.workspaceId },
+                where: { id: ctx.project.workspaceId },
                 data: { storageUsedBytes: { decrement: att.sizeBytes } },
             }),
         ]);
-        await logActivity(res.project.workspaceId, ActivityType.RFI_ATTACHMENT_REMOVED, {
+        await logActivity(ctx.project.workspaceId, ActivityType.RFI_ATTACHMENT_REMOVED, {
             actorUserId: c.get("user").id,
             entityId: rfiId,
             projectId,

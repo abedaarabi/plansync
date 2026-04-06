@@ -1,15 +1,97 @@
 import PDFDocument from "pdfkit";
+import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
-function plainFromHtml(html) {
-    return sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} })
-        .replace(/\s+/g, " ")
-        .trim();
+import { getEmailBrandIconPngBytes } from "./emailBrandIcon.js";
+marked.use({ gfm: true, breaks: true });
+/** Same heuristic as the app preview / client portal (proposalRoutes preview, ProposalLetterPreviewBlock). */
+function looksLikeProposalCoverHtml(raw) {
+    const t = raw.trim();
+    return /^\s*</.test(t) && /<[a-z]/i.test(t);
+}
+/**
+ * Turn stored cover (Markdown or sanitized HTML) into plain text with real newlines for PDFKit.
+ * Previously we stripped all tags and collapsed whitespace, which broke Markdown and paragraphs.
+ */
+export function proposalCoverPlainForPdf(raw) {
+    const input = raw.trim();
+    if (!input)
+        return "";
+    const html = looksLikeProposalCoverHtml(input) ? input : marked.parse(input);
+    return htmlCoverToPdfPlain(html);
+}
+function htmlCoverToPdfPlain(html) {
+    let s = html
+        .replace(/<\s*br\s*\/?>/gi, "\n")
+        .replace(/<\/\s*p\s*>/gi, "\n\n")
+        .replace(/<\s*p[^>]*>/gi, "")
+        .replace(/<\/\s*h[1-6]\s*>/gi, "\n\n")
+        .replace(/<\s*h[1-6][^>]*>/gi, "")
+        .replace(/<\/\s*blockquote\s*>/gi, "\n\n")
+        .replace(/<\s*blockquote[^>]*>/gi, "")
+        .replace(/<\s*hr\s*\/?>/gi, "\n———\n")
+        .replace(/<\/\s*ul\s*>/gi, "\n")
+        .replace(/<\/\s*ol\s*>/gi, "\n")
+        .replace(/<\/\s*li\s*>/gi, "\n")
+        .replace(/<\s*li[^>]*>/gi, "• ")
+        .replace(/<\s*pre[^>]*>/gi, "\n")
+        .replace(/<\/\s*pre\s*>/gi, "\n\n")
+        .replace(/<\s*code[^>]*>/gi, "")
+        .replace(/<\/\s*code\s*>/gi, "")
+        .replace(/<\s*table[^>]*>/gi, "\n")
+        .replace(/<\/\s*table\s*>/gi, "\n\n")
+        .replace(/<\s*\/?\s*(thead|tbody|tfoot|colgroup|col)[^>]*>/gi, "")
+        .replace(/<\s*tr[^>]*>/gi, "\n")
+        .replace(/<\/\s*tr\s*>/gi, "\n")
+        .replace(/<\s*t[hd][^>]*>/gi, "")
+        .replace(/<\/\s*t[hd]\s*>/gi, "\t");
+    const stripped = sanitizeHtml(s, { allowedTags: [], allowedAttributes: {} });
+    const lines = stripped.split("\n").map((l) => l.replace(/[ \t]+/g, " ").trimEnd());
+    const collapsed = [];
+    let blankRun = 0;
+    for (const line of lines) {
+        if (line === "") {
+            blankRun++;
+            if (blankRun <= 2)
+                collapsed.push("");
+        }
+        else {
+            blankRun = 0;
+            collapsed.push(line);
+        }
+    }
+    return collapsed.join("\n").trim();
 }
 function truncateLine(s, max) {
     const t = s.replace(/\s+/g, " ").trim();
     if (t.length <= max)
         return t;
     return `${t.slice(0, max - 1)}…`;
+}
+/** Human-friendly UTC line for signed proposal PDFs (avoids raw ISO). */
+export function formatProposalAcceptanceTimestamp(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime()))
+        return iso;
+    try {
+        const dateLine = new Intl.DateTimeFormat("en-GB", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+            timeZone: "UTC",
+        }).format(d);
+        const timeLine = new Intl.DateTimeFormat("en-GB", {
+            hour: "numeric",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true,
+            timeZone: "UTC",
+        }).format(d);
+        return `${dateLine} · ${timeLine} UTC`;
+    }
+    catch {
+        return d.toUTCString();
+    }
 }
 const C = {
     accent: "#2563eb",
@@ -24,20 +106,6 @@ const C = {
     slate900: "#0f172a",
     white: "#ffffff",
 };
-/** Matches frontend `public/logo-mark.svg` (two L-shapes). */
-function drawPlansyncMark(doc, x, y, size) {
-    const u = size / 48;
-    doc.save();
-    doc.fillColor(C.accent);
-    doc.rect(x + 7 * u, y + 7 * u, 15 * u, 4 * u).fill();
-    doc.rect(x + 7 * u, y + 11 * u, 4 * u, 11 * u).fill();
-    doc.fillColor(C.accent);
-    doc.opacity(0.38);
-    doc.rect(x + 26 * u, y + 37 * u, 15 * u, 4 * u).fill();
-    doc.rect(x + 37 * u, y + 26 * u, 4 * u, 11 * u).fill();
-    doc.opacity(1);
-    doc.restore();
-}
 /** PDFKit supports PNG, JPEG, GIF, WebP — not SVG. */
 function isLikelyPdfKitRasterBuffer(buf) {
     if (buf.length < 12)
@@ -69,39 +137,18 @@ function drawWorkspaceLogoFallback(doc, x, y, box, workspaceName) {
     doc.save();
     doc.fillColor(C.slate50).roundedRect(x, y, box, box, 8).fill();
     doc.strokeColor(C.slate200).lineWidth(0.75).roundedRect(x, y, box, box, 8).stroke();
-    doc.fillColor(C.accent).font("Helvetica-Bold").fontSize(box * 0.36);
+    doc
+        .fillColor(C.accent)
+        .font("Helvetica-Bold")
+        .fontSize(box * 0.36);
     doc.text(initials, x, y + box * 0.28, { width: box, align: "center" });
     doc.restore();
-}
-function drawPoweredByPlansyncFooter(doc, pageW, pageH, margin) {
-    const lineY = pageH - 42;
-    const textY = pageH - 24;
-    doc.save();
-    doc.strokeColor(C.slate200).lineWidth(0.5).moveTo(margin, lineY).lineTo(pageW - margin, lineY).stroke();
-    doc.restore();
-    const markSize = 18;
-    const part1 = "Powered by";
-    const part2 = "PlanSync";
-    doc.font("Helvetica").fontSize(8.5).fillColor(C.slate500);
-    const w1 = doc.widthOfString(part1);
-    const gap1 = 7;
-    const gap2 = 7;
-    doc.font("Helvetica-Bold");
-    const w2 = doc.widthOfString(part2);
-    const total = w1 + gap1 + markSize + gap2 + w2;
-    const startX = (pageW - total) / 2;
-    doc.font("Helvetica").fillColor(C.slate500).text(part1, startX, textY);
-    const markY = textY - 13;
-    drawPlansyncMark(doc, startX + w1 + gap1, markY, markSize);
-    doc.font("Helvetica-Bold").fillColor(C.slate700).text(part2, startX + w1 + gap1 + markSize + gap2, textY);
 }
 export function buildProposalPdfBuffer(input) {
     return new Promise((resolve, reject) => {
         const sideMargin = 48;
-        /** Extra bottom margin so PDFKit’s text wrap stops above the footer band (same as RFI-style layout). */
-        const footerBand = 46;
+        const footerBand = 20;
         const doc = new PDFDocument({
-            bufferPages: true,
             margins: {
                 top: sideMargin,
                 left: sideMargin,
@@ -132,6 +179,39 @@ export function buildProposalPdfBuffer(input) {
             doc.rect(0, 0, pageW, 7).fill(C.accent);
             doc.restore();
         };
+        const planSyncHeaderPng = getEmailBrandIconPngBytes();
+        const planSyncHeaderSize = 34;
+        doc.font("Helvetica-Bold").fontSize(8);
+        const planSyncWordW = doc.widthOfString("Plan") + doc.widthOfString("Sync");
+        /** Column wide enough for icon and centered wordmark. */
+        const planSyncHeaderColW = Math.max(planSyncHeaderSize, planSyncWordW + 4);
+        /** PlanSync mark + “Plan” / “Sync” (blue) — top-right of the content area (every page). */
+        const drawPlanSyncTopRight = (topY) => {
+            const colRight = margin + innerW;
+            const colLeft = colRight - planSyncHeaderColW;
+            const wPlan = doc.widthOfString("Plan");
+            const wSync = doc.widthOfString("Sync");
+            const wordW = wPlan + wSync;
+            const wordX = colLeft + (planSyncHeaderColW - wordW) / 2;
+            let wordmarkY = topY;
+            if (planSyncHeaderPng?.length && isLikelyPdfKitRasterBuffer(planSyncHeaderPng)) {
+                try {
+                    const imgX = colLeft + (planSyncHeaderColW - planSyncHeaderSize) / 2;
+                    doc.image(planSyncHeaderPng, imgX, topY, {
+                        width: planSyncHeaderSize,
+                        height: planSyncHeaderSize,
+                        fit: [planSyncHeaderSize, planSyncHeaderSize],
+                    });
+                    wordmarkY = topY + planSyncHeaderSize + 4;
+                }
+                catch {
+                    /* fall through: wordmark only */
+                }
+            }
+            doc.font("Helvetica-Bold").fontSize(8);
+            doc.fillColor(C.slate900).text("Plan", wordX, wordmarkY, { lineBreak: false });
+            doc.fillColor(C.accent).text("Sync", wordX + wPlan, wordmarkY, { lineBreak: false });
+        };
         const drawTableHeader = (yTop) => {
             const h = 24;
             doc.save();
@@ -151,13 +231,14 @@ export function buildProposalPdfBuffer(input) {
         };
         drawTopAccent();
         let y = margin + 6;
+        drawPlanSyncTopRight(y);
         const logoBox = 58;
         const afterLogoGap = 12;
         const headerTextX = margin + logoBox + afterLogoGap;
-        const headerTextW = innerW - logoBox - afterLogoGap;
+        const headerRightReserve = planSyncHeaderColW + 12;
+        const headerTextW = innerW - logoBox - afterLogoGap - headerRightReserve;
         let workspaceLogoOk = false;
-        if (input.logoImageBuffer?.length &&
-            isLikelyPdfKitRasterBuffer(input.logoImageBuffer)) {
+        if (input.logoImageBuffer?.length && isLikelyPdfKitRasterBuffer(input.logoImageBuffer)) {
             try {
                 doc.image(input.logoImageBuffer, margin, y, {
                     fit: [logoBox, logoBox],
@@ -176,7 +257,10 @@ export function buildProposalPdfBuffer(input) {
         doc.fontSize(8).fillColor(C.accent).font("Helvetica-Bold").text("PROPOSAL", headerTextX, y, {
             characterSpacing: 1.2,
         });
-        doc.fontSize(20).fillColor(C.slate900).text(input.title, headerTextX, y + 12, {
+        doc
+            .fontSize(20)
+            .fillColor(C.slate900)
+            .text(input.title, headerTextX, y + 12, {
             width: headerTextW,
             lineGap: 2,
         });
@@ -220,16 +304,25 @@ export function buildProposalPdfBuffer(input) {
             doc.addPage();
             drawTopAccent();
             y = margin + 12;
+            drawPlanSyncTopRight(y);
             doc.x = margin;
             doc.y = y;
         }
         doc.save();
         doc.fillColor(C.accent).rect(margin, y, 3, 14).fill();
         doc.restore();
-        doc.fontSize(12).fillColor(C.slate900).font("Helvetica-Bold").text("Cover letter", margin + 10, y);
+        doc
+            .fontSize(12)
+            .fillColor(C.slate900)
+            .font("Helvetica-Bold")
+            .text("Cover letter", margin + 10, y);
         y += 22;
-        const letter = plainFromHtml(input.coverHtml);
-        doc.fontSize(10).font("Helvetica").fillColor(C.slate700).text(letter || "—", margin, y, {
+        const letter = proposalCoverPlainForPdf(input.coverHtml);
+        doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fillColor(C.slate700)
+            .text(letter || "—", margin, y, {
             width: innerW,
             align: "left",
             lineGap: 3,
@@ -240,10 +333,15 @@ export function buildProposalPdfBuffer(input) {
             doc.addPage();
             drawTopAccent();
             y = margin + 12;
+            drawPlanSyncTopRight(y);
             doc.x = margin;
             doc.y = y;
         }
-        doc.fontSize(12).fillColor(C.slate900).font("Helvetica-Bold").text("Price breakdown", margin, y);
+        doc
+            .fontSize(12)
+            .fillColor(C.slate900)
+            .font("Helvetica-Bold")
+            .text("Price breakdown", margin, y);
         y += 18;
         const minSpaceForRow = 28;
         y = drawTableHeader(y);
@@ -256,6 +354,7 @@ export function buildProposalPdfBuffer(input) {
                 doc.addPage();
                 drawTopAccent();
                 y = margin + 12;
+                drawPlanSyncTopRight(y);
                 y = drawTableHeader(y);
                 doc.x = margin;
                 doc.y = y;
@@ -280,7 +379,12 @@ export function buildProposalPdfBuffer(input) {
                 width: colTot,
                 align: "right",
             });
-            doc.strokeColor(C.slate200).lineWidth(0.35).moveTo(margin, rowY + rowH).lineTo(margin + innerW, rowY + rowH).stroke();
+            doc
+                .strokeColor(C.slate200)
+                .lineWidth(0.35)
+                .moveTo(margin, rowY + rowH)
+                .lineTo(margin + innerW, rowY + rowH)
+                .stroke();
             y = rowY + rowH;
         });
         y += 8;
@@ -288,73 +392,140 @@ export function buildProposalPdfBuffer(input) {
             doc.addPage();
             drawTopAccent();
             y = margin + 12;
+            drawPlanSyncTopRight(y);
             doc.x = margin;
             doc.y = y;
         }
         const totalsBoxW = 240;
         const totalsX = margin + innerW - totalsBoxW;
+        const hasWorkFee = Boolean(input.workFeeLabel && input.workFeeAmount);
+        const totalsBoxH = hasWorkFee ? 104 : 88;
         doc.save();
-        doc.fillColor(C.slate50).roundedRect(totalsX - 12, y - 6, totalsBoxW + 24, 88, 6).fill();
-        doc.strokeColor(C.slate200).lineWidth(0.5).roundedRect(totalsX - 12, y - 6, totalsBoxW + 24, 88, 6).stroke();
+        doc
+            .fillColor(C.slate50)
+            .roundedRect(totalsX - 12, y - 6, totalsBoxW + 24, totalsBoxH, 6)
+            .fill();
+        doc
+            .strokeColor(C.slate200)
+            .lineWidth(0.5)
+            .roundedRect(totalsX - 12, y - 6, totalsBoxW + 24, totalsBoxH, 6)
+            .stroke();
         doc.restore();
         const rightX = totalsX;
         const labelW = 100;
         const valW = totalsBoxW - labelW;
         doc.fontSize(9).font("Helvetica").fillColor(C.slate600);
         doc.text("Subtotal", rightX, y, { width: labelW, align: "right" });
-        doc.fillColor(C.slate900).text(input.subtotal, rightX + labelW, y, { width: valW, align: "right" });
+        doc
+            .fillColor(C.slate900)
+            .text(input.subtotal, rightX + labelW, y, { width: valW, align: "right" });
         y += 16;
+        if (hasWorkFee) {
+            doc.fillColor(C.slate600).text(input.workFeeLabel, rightX, y, { width: labelW, align: "right" });
+            doc
+                .fillColor(C.slate900)
+                .text(input.workFeeAmount, rightX + labelW, y, { width: valW, align: "right" });
+            y += 16;
+        }
         doc.fillColor(C.slate600).text(input.taxLabel, rightX, y, { width: labelW, align: "right" });
-        doc.fillColor(C.slate900).text(input.taxAmount, rightX + labelW, y, { width: valW, align: "right" });
+        doc
+            .fillColor(C.slate900)
+            .text(input.taxAmount, rightX + labelW, y, { width: valW, align: "right" });
         y += 16;
         doc.fillColor(C.slate600).text("Discount", rightX, y, { width: labelW, align: "right" });
-        doc.fillColor(C.slate900).text(input.discount, rightX + labelW, y, { width: valW, align: "right" });
+        doc
+            .fillColor(C.slate900)
+            .text(input.discount, rightX + labelW, y, { width: valW, align: "right" });
         y += 18;
-        doc.moveTo(rightX, y).lineTo(rightX + totalsBoxW, y).strokeColor(C.slate200).lineWidth(0.75).stroke();
+        doc
+            .moveTo(rightX, y)
+            .lineTo(rightX + totalsBoxW, y)
+            .strokeColor(C.slate200)
+            .lineWidth(0.75)
+            .stroke();
         y += 10;
         doc.font("Helvetica-Bold").fontSize(12).fillColor(C.accent);
         doc.text("Total", rightX, y, { width: labelW, align: "right" });
         doc.text(input.total, rightX + labelW, y, { width: valW, align: "right" });
         y += 36;
         if (input.signerName || input.signedAtIso || input.signaturePngBuffer) {
-            if (y > contentBottomY() - 140) {
+            const pad = 14;
+            const innerPad = margin + pad;
+            const textW = innerW - pad * 2;
+            const whenFormatted = input.signedAtIso
+                ? formatProposalAcceptanceTimestamp(input.signedAtIso)
+                : "";
+            let boxH = pad + 22 + 6;
+            if (input.signerName) {
+                doc.font("Helvetica").fontSize(10);
+                boxH += doc.heightOfString(`Signed by: ${input.signerName}`, { width: textW }) + 4;
+            }
+            if (input.signedAtIso) {
+                doc.font("Helvetica-Bold").fontSize(9);
+                boxH += doc.heightOfString("Signed on (UTC)", { width: textW }) + 2;
+                doc.font("Helvetica").fontSize(10);
+                boxH += doc.heightOfString(whenFormatted, { width: textW, lineGap: 2 }) + 6;
+            }
+            boxH += input.signaturePngBuffer?.length ? 88 : 8;
+            boxH += pad;
+            if (y > contentBottomY() - boxH) {
                 doc.addPage();
                 drawTopAccent();
                 y = margin + 12;
+                drawPlanSyncTopRight(y);
                 doc.x = margin;
                 doc.y = y;
             }
+            const blockTop = y;
             doc.save();
-            doc.fillColor(C.slate50).roundedRect(margin, y, innerW, 120, 8).fill();
-            doc.strokeColor(C.slate200).lineWidth(0.75).roundedRect(margin, y, innerW, 120, 8).stroke();
+            doc.fillColor(C.slate50).roundedRect(margin, blockTop, innerW, boxH, 8).fill();
+            doc
+                .strokeColor(C.slate200)
+                .lineWidth(0.75)
+                .roundedRect(margin, blockTop, innerW, boxH, 8)
+                .stroke();
             doc.restore();
-            y += 14;
-            doc.fillColor(C.slate900).font("Helvetica-Bold").fontSize(11).text("Acceptance", margin + 14, y);
-            y += 18;
+            y = blockTop + pad;
+            const titleRowY = y;
+            doc
+                .fillColor(C.slate900)
+                .font("Helvetica-Bold")
+                .fontSize(11)
+                .text("Acceptance", innerPad, titleRowY, { width: textW });
+            y = titleRowY + 22 + 6;
             doc.font("Helvetica").fontSize(10).fillColor(C.slate700);
             if (input.signerName) {
-                doc.text(`Signed by: ${input.signerName}`, margin + 14, y);
-                y += 14;
+                doc.text(`Signed by: ${input.signerName}`, innerPad, y, { width: textW });
+                y = doc.y + 4;
             }
             if (input.signedAtIso) {
-                doc.text(`Timestamp (UTC): ${input.signedAtIso}`, margin + 14, y);
-                y += 14;
+                doc
+                    .font("Helvetica-Bold")
+                    .fontSize(9)
+                    .fillColor(C.slate500)
+                    .text("Signed on (UTC)", innerPad, y, { width: textW });
+                y = doc.y + 2;
+                doc.font("Helvetica").fontSize(10).fillColor(C.slate700).text(whenFormatted, innerPad, y, {
+                    width: textW,
+                    lineGap: 2,
+                });
+                y = doc.y + 6;
             }
             if (input.signaturePngBuffer && input.signaturePngBuffer.length > 0) {
                 try {
-                    doc.image(input.signaturePngBuffer, margin + 14, y, { width: 220, height: 80, fit: [220, 80] });
+                    doc.image(input.signaturePngBuffer, innerPad, y, {
+                        width: 220,
+                        height: 80,
+                        fit: [220, 80],
+                    });
                     y += 88;
                 }
                 catch {
-                    doc.text("(Signature image could not be embedded)", margin + 14, y);
-                    y += 14;
+                    doc.text("(Signature image could not be embedded)", innerPad, y, { width: textW });
+                    y = doc.y + 8;
                 }
             }
-        }
-        const pageRange = doc.bufferedPageRange();
-        for (let pi = 0; pi < pageRange.count; pi++) {
-            doc.switchToPage(pageRange.start + pi);
-            drawPoweredByPlansyncFooter(doc, pageW, doc.page.height, margin);
+            y = blockTop + boxH + 8;
         }
         doc.end();
     });

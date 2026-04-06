@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,6 +24,7 @@ import {
   fetchMaterials,
   fetchProject,
   fetchTakeoffLinesForProject,
+  patchProject,
   patchTakeoffLine,
   type ProjectMeta,
   type TakeoffLineRow,
@@ -32,6 +33,40 @@ import {
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { PROJECT_TAKEOFF_INVALIDATE_CHANNEL } from "@/lib/takeoffPublishCloud";
+
+function takeoffLineGroupKey(row: TakeoffLineRow): string {
+  return row.materialId ?? `${row.label}::${row.unit}`;
+}
+
+function lineGross(row: TakeoffLineRow): number {
+  const q = Number(row.quantity) || 0;
+  const p = Number(row.material?.unitPrice ?? 0) || 0;
+  return q * p;
+}
+
+function lineItemDiscPct(
+  row: TakeoffLineRow,
+  itemDiscountPctByKey: Record<string, string>,
+): number {
+  const k = takeoffLineGroupKey(row);
+  return Math.max(0, Number(itemDiscountPctByKey[k] ?? "0") || 0);
+}
+
+function lineNetAfterItemDisc(
+  row: TakeoffLineRow,
+  itemDiscountPctByKey: Record<string, string>,
+): number {
+  const g = lineGross(row);
+  const d = lineItemDiscPct(row, itemDiscountPctByKey);
+  return g * (1 - d / 100);
+}
+
+function serializeTakeoffDiscountState(proj: string, items: Record<string, string>): string {
+  const keys = Object.keys(items).sort();
+  const normalized: Record<string, string> = {};
+  for (const k of keys) normalized[k] = items[k] ?? "0";
+  return JSON.stringify({ proj, items: normalized });
+}
 
 export function ProjectTakeoffClient({
   projectId,
@@ -54,6 +89,7 @@ export function ProjectTakeoffClient({
   const materialCurrencySyncedFor = useRef<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [lineSearch, setLineSearch] = useState("");
+  const takeoffDiscountsBaselineRef = useRef<string | null>(null);
 
   const {
     data: lines = [],
@@ -83,6 +119,50 @@ export function ProjectTakeoffClient({
     queryFn: () => fetchProject(projectId),
   });
   const workspaceId = workspaceIdProp ?? project?.workspaceId;
+
+  const takeoffPricingSignature = project?.takeoffPricing
+    ? `${project.takeoffPricing.projectDiscountPct}:${JSON.stringify(project.takeoffPricing.itemDiscountPctByKey)}`
+    : "";
+
+  useLayoutEffect(() => {
+    if (!project?.id) return;
+    const tp = project.takeoffPricing;
+    const proj = tp?.projectDiscountPct ?? "0";
+    const items = { ...(tp?.itemDiscountPctByKey ?? {}) };
+    setProjectDiscountPct(proj);
+    setItemDiscountPctByKey(items);
+    takeoffDiscountsBaselineRef.current = serializeTakeoffDiscountState(proj, items);
+  }, [project?.id, takeoffPricingSignature]);
+
+  const discountsSerialized = serializeTakeoffDiscountState(
+    projectDiscountPct,
+    itemDiscountPctByKey,
+  );
+
+  useEffect(() => {
+    if (!project?.id) return;
+    const baseline = takeoffDiscountsBaselineRef.current;
+    if (baseline == null) return;
+    if (discountsSerialized === baseline) return;
+
+    const t = window.setTimeout(() => {
+      void patchProject(projectId, {
+        takeoffPricing: {
+          projectDiscountPct,
+          itemDiscountPctByKey,
+        },
+      })
+        .then((meta) => {
+          qc.setQueryData(qk.project(projectId), meta);
+          const tp = meta.takeoffPricing;
+          const proj = tp?.projectDiscountPct ?? "0";
+          const items = { ...(tp?.itemDiscountPctByKey ?? {}) };
+          takeoffDiscountsBaselineRef.current = serializeTakeoffDiscountState(proj, items);
+        })
+        .catch((e: Error) => toast.error(e.message));
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [discountsSerialized, project?.id, projectId, projectDiscountPct, itemDiscountPctByKey, qc]);
 
   useEffect(() => {
     if (!project?.id) return;
@@ -189,39 +269,29 @@ export function ProjectTakeoffClient({
   }, [visibleLines, lineSearch]);
 
   const totalsBySheet = useMemo(() => {
-    const gross = (r: TakeoffLineRow) => {
-      const q = Number(r.quantity) || 0;
-      const p = Number(r.material?.unitPrice ?? 0) || 0;
-      return q * p;
-    };
     const m = new Map<string, { label: string; total: number }>();
     for (const r of tableLines) {
       const key = r.fileId;
       const prev = m.get(key);
-      const g = gross(r);
-      if (prev) prev.total += g;
-      else m.set(key, { label: r.fileName, total: g });
+      const net = lineNetAfterItemDisc(r, itemDiscountPctByKey);
+      if (prev) prev.total += net;
+      else m.set(key, { label: r.fileName, total: net });
     }
     return [...m.entries()]
       .map(([fileId, v]) => ({ fileId, ...v }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [tableLines]);
+  }, [tableLines, itemDiscountPctByKey]);
 
   const totalsByPrimaryTag = useMemo(() => {
-    const gross = (r: TakeoffLineRow) => {
-      const q = Number(r.quantity) || 0;
-      const p = Number(r.material?.unitPrice ?? 0) || 0;
-      return q * p;
-    };
     const m = new Map<string, number>();
     for (const r of tableLines) {
       const tags = r.tags ?? [];
       const primary = tags.length > 0 ? tags[0]!.trim() : "Untagged";
       const k = primary || "Untagged";
-      m.set(k, (m.get(k) ?? 0) + gross(r));
+      m.set(k, (m.get(k) ?? 0) + lineNetAfterItemDisc(r, itemDiscountPctByKey));
     }
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [tableLines]);
+  }, [tableLines, itemDiscountPctByKey]);
 
   const grouped = useMemo(() => {
     const map = new Map<
@@ -236,7 +306,7 @@ export function ProjectTakeoffClient({
       }
     >();
     for (const row of lines) {
-      const key = row.materialId ?? `${row.label}::${row.unit}`;
+      const key = takeoffLineGroupKey(row);
       const prev = map.get(key);
       const qty = Number(row.quantity) || 0;
       const rate = Number(row.material?.unitPrice ?? 0) || 0;
@@ -292,7 +362,9 @@ export function ProjectTakeoffClient({
       "Unit",
       "Rate",
       "Currency",
-      "Line Total",
+      "Line gross",
+      "Disc %",
+      "Line net (after item disc)",
       "Tags",
       "Notes",
     ];
@@ -306,11 +378,9 @@ export function ProjectTakeoffClient({
         r.unit,
         r.material?.unitPrice ?? "",
         r.material?.currency ?? "",
-        (() => {
-          const q = Number(r.quantity) || 0;
-          const p = Number(r.material?.unitPrice ?? 0) || 0;
-          return (q * p).toFixed(2);
-        })(),
+        lineGross(r).toFixed(2),
+        lineItemDiscPct(r, itemDiscountPctByKey).toFixed(2),
+        lineNetAfterItemDisc(r, itemDiscountPctByKey).toFixed(2),
         (r.tags ?? []).join("; "),
         r.notes ?? "",
       ]
@@ -427,6 +497,10 @@ export function ProjectTakeoffClient({
           <Calculator className="h-4 w-4 text-[#2563EB]" />
           <h2 className="text-sm font-semibold text-[#0F172A]">Costing and discounts</h2>
         </div>
+        <p className="mb-2 text-xs text-[#64748B]">
+          Item and project discounts save automatically to the project. Line totals below use item
+          discount %; the project discount applies once on the subtotal.
+        </p>
         <div className="space-y-2">
           {pricing.itemRows.length > 0 ? (
             <div className="grid grid-cols-[minmax(0,1fr)_90px_120px_120px] items-end gap-2 px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
@@ -528,7 +602,7 @@ export function ProjectTakeoffClient({
           {lines.length > 0 ? (
             <div className="border-b border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
-                By sheet (line totals, pre-discount)
+                By sheet (net of item discount %)
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {totalsBySheet.map((s) => (
@@ -544,7 +618,7 @@ export function ProjectTakeoffClient({
                 ))}
               </div>
               <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
-                By primary tag (first tag per line)
+                By primary tag (first tag per line, net of item discount %)
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {totalsByPrimaryTag.map(([tag, total]) => (
@@ -601,13 +675,17 @@ export function ProjectTakeoffClient({
             </div>
           ) : null}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full min-w-[1040px] text-left text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-semibold uppercase tracking-wide text-[#64748B] shadow-[0_1px_0_#E2E8F0]">
                   <th className="px-4 py-3">File</th>
                   <th className="px-4 py-3">Item</th>
                   <th className="px-4 py-3 text-right">Qty</th>
                   <th className="px-4 py-3">Unit</th>
+                  <th className="px-4 py-3 text-right">Rate</th>
+                  <th className="px-4 py-3 text-right">Gross</th>
+                  <th className="px-4 py-3 text-right">Disc %</th>
+                  <th className="px-4 py-3 text-right">Net</th>
                   <th className="px-4 py-3">Tags</th>
                   <th className="px-4 py-3">Notes</th>
                   <th className="px-4 py-3">Sheet</th>
@@ -617,7 +695,7 @@ export function ProjectTakeoffClient({
               <tbody>
                 {lines.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-[#64748B]">
+                    <td colSpan={12} className="px-4 py-12 text-center text-[#64748B]">
                       <p className="mx-auto max-w-lg">
                         No takeoff lines yet. Open a drawing from{" "}
                         <Link
@@ -638,7 +716,7 @@ export function ProjectTakeoffClient({
                   </tr>
                 ) : tableLines.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-[#64748B]">
+                    <td colSpan={12} className="px-4 py-10 text-center text-[#64748B]">
                       No lines match your search or tag filter.{" "}
                       <button
                         type="button"
@@ -683,6 +761,20 @@ export function ProjectTakeoffClient({
                         ) : null}
                       </td>
                       <td className="px-4 py-3 text-[#64748B]">{row.unit}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-[#64748B]">
+                        {row.material?.unitPrice != null
+                          ? Number(row.material.unitPrice).toFixed(2)
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-[#64748B]">
+                        {lineGross(row).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-[#64748B]">
+                        {lineItemDiscPct(row, itemDiscountPctByKey).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-medium text-[#0F172A]">
+                        {lineNetAfterItemDisc(row, itemDiscountPctByKey).toFixed(2)}
+                      </td>
                       <td className="max-w-[140px] px-4 py-3 text-[#64748B]">
                         <span className="line-clamp-2 text-xs">
                           {(row.tags ?? []).length ? (row.tags ?? []).join(", ") : "—"}

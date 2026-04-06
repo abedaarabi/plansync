@@ -1,13 +1,6 @@
 import { Resend } from "resend";
 import type { Env } from "./env.js";
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+import { buildTransactionalEmailHtml } from "./transactionalEmailLayout.js";
 
 /**
  * Sends the Better Auth password-reset link. In development without Resend, logs the URL.
@@ -22,12 +15,23 @@ export function queuePasswordResetEmail(
     const subject = "Reset your PlanSync password";
     const greetingText = displayName?.trim() ? `Hi ${displayName.trim()},` : "Hi,";
     const text = `${greetingText}\n\nReset your password (link expires in one hour):\n${resetUrl}\n\nIf you did not request this, you can ignore this email.\n`;
-    const greetingHtml =
+    const greet =
       displayName?.trim() != null && displayName.trim() !== ""
-        ? `Hi ${escapeHtml(displayName.trim())},`
+        ? `Hi ${displayName.trim()},`
         : "Hi,";
-    const href = resetUrl.replace(/"/g, "%22");
-    const html = `<p>${greetingHtml}</p><p><a href="${href}">Reset your password</a></p><p>This link expires in one hour. If you did not request a reset, you can ignore this email.</p>`;
+    const html = buildTransactionalEmailHtml(env, {
+      eyebrow: "Security",
+      title: "Reset your password",
+      bodyLines: [
+        greet,
+        "We received a request to reset your PlanSync password. Use the button below to choose a new password.",
+        "This link expires in one hour. If you did not request a reset, you can safely ignore this email.",
+      ],
+      primaryAction: { url: resetUrl, label: "Reset password" },
+      fallbackUrl: resetUrl,
+      footerNote:
+        "If you didn't request a password reset, someone may have entered your email by mistake — you can ignore this message.",
+    });
 
     const key = env.RESEND_API_KEY?.trim();
     const from = env.RESEND_FROM?.trim();

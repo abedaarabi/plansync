@@ -7,7 +7,7 @@ import { loadProjectForMember } from "../../lib/projectAccess.js";
 import { logActivitySafe } from "../../lib/activity.js";
 import { createUserNotifications } from "../../lib/userNotifications.js";
 import { deleteObject, presignGet } from "../../lib/s3.js";
-import { computeProposalTotals, lineTotalFor, sumLineTotals, toDec, } from "../../lib/proposalMath.js";
+import { lineTotalFor, proposalMoneyBreakdown, sumLineTotals, toDec, } from "../../lib/proposalMath.js";
 import { sanitizeProposalCoverHtml } from "../../lib/proposalSanitize.js";
 import { applyProposalTemplate, buildTakeoffTableHtml, formatMoneyAmount, } from "../../lib/proposalTemplateVars.js";
 import { buildProposalPdfBuffer, dataUrlToPngBuffer } from "../../lib/proposalPdf.js";
@@ -60,7 +60,9 @@ const proposalFullInclude = {
     takeoffSources: {
         orderBy: { sortOrder: "asc" },
         include: {
-            fileVersion: { select: { id: true, version: true, file: { select: { id: true, name: true } } } },
+            fileVersion: {
+                select: { id: true, version: true, file: { select: { id: true, name: true } } },
+            },
         },
     },
 };
@@ -104,6 +106,7 @@ function proposalJson(p, env) {
     }));
     const sourceFileVersionIds = takeoffList.map((t) => t.fileVersionId);
     const primaryTakeoff = takeoffList[0];
+    const money = proposalBreakdown(p);
     return {
         id: p.id,
         workspaceId: p.workspaceId,
@@ -126,6 +129,10 @@ function proposalJson(p, env) {
         currency: p.currency,
         subtotal: p.subtotal.toString(),
         taxPercent: p.taxPercent.toString(),
+        workPricePercent: p.workPricePercent.toString(),
+        workAmount: money.workAmount.toString(),
+        taxableSubtotal: money.taxableBase.toString(),
+        taxAmount: money.taxAmount.toString(),
         discount: p.discount.toString(),
         total: p.total.toString(),
         coverNote: p.coverNote,
@@ -201,6 +208,34 @@ function buildTemplateContext(p, takeoffTableHtml) {
         takeoffTableHtml,
     };
 }
+function proposalBreakdown(p) {
+    return proposalMoneyBreakdown({
+        lineSubtotal: p.subtotal,
+        taxPercent: p.taxPercent,
+        discount: p.discount,
+        workPricePercent: p.workPricePercent,
+    });
+}
+function takeoffTableHtmlFromProposalFull(p) {
+    const br = proposalBreakdown(p);
+    return buildTakeoffTableHtml({
+        items: p.items.map((it) => ({
+            itemName: it.itemName,
+            quantity: it.quantity.toString(),
+            unit: it.unit,
+            rate: formatMoneyAmount(it.rate.toString(), p.currency),
+            lineTotal: formatMoneyAmount(it.lineTotal.toString(), p.currency),
+        })),
+        subtotal: formatMoneyAmount(p.subtotal.toString(), p.currency),
+        workPricePercent: p.workPricePercent.toString(),
+        workAmount: formatMoneyAmount(br.workAmount.toString(), p.currency),
+        taxPercent: p.taxPercent.toString(),
+        taxAmount: formatMoneyAmount(br.taxAmount.toString(), p.currency),
+        discount: formatMoneyAmount(p.discount.toString(), p.currency),
+        total: formatMoneyAmount(p.total.toString(), p.currency),
+        currency: p.currency,
+    });
+}
 async function recalcAndSaveProposalTotals(proposalId) {
     const items = await prisma.proposalItem.findMany({
         where: { proposalId },
@@ -209,17 +244,14 @@ async function recalcAndSaveProposalTotals(proposalId) {
     const subtotal = sumLineTotals(items);
     const prop = await prisma.proposal.findUniqueOrThrow({
         where: { id: proposalId },
-        select: { taxPercent: true, discount: true },
+        select: { taxPercent: true, discount: true, workPricePercent: true },
     });
-    const { total } = computeProposalTotals({
-        subtotal,
+    const { total } = proposalMoneyBreakdown({
+        lineSubtotal: subtotal,
         taxPercent: prop.taxPercent,
         discount: prop.discount,
+        workPricePercent: prop.workPricePercent,
     });
-    const taxAmount = subtotal
-        .mul(prop.taxPercent)
-        .div(100)
-        .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     await prisma.proposal.update({
         where: { id: proposalId },
         data: { subtotal, total, discount: prop.discount },
@@ -396,7 +428,10 @@ export function registerProposalRoutes(r, needUser, env) {
                 total: zdec,
                 coverNote: "",
                 takeoffSources: {
-                    create: uniqueTakeoffFvIds.map((fileVersionId, sortOrder) => ({ fileVersionId, sortOrder })),
+                    create: uniqueTakeoffFvIds.map((fileVersionId, sortOrder) => ({
+                        fileVersionId,
+                        sortOrder,
+                    })),
                 },
             },
             include: proposalFullInclude,
@@ -457,6 +492,7 @@ export function registerProposalRoutes(r, needUser, env) {
             sourceFileVersionId: z.string().optional().nullable(),
             sourceFileVersionIds: z.array(z.string()).optional(),
             taxPercent: z.union([z.number(), z.string()]).optional(),
+            workPricePercent: z.union([z.number(), z.string()]).optional(),
             discount: z.union([z.number(), z.string()]).optional(),
             coverNote: z.string().max(200_000).optional(),
             attachmentFileVersionIds: z.array(z.string()).optional(),
@@ -491,7 +527,9 @@ export function registerProposalRoutes(r, needUser, env) {
         if (body.data.validUntil !== undefined)
             data.validUntil = new Date(body.data.validUntil);
         if (body.data.templateId !== undefined)
-            data.template = body.data.templateId ? { connect: { id: body.data.templateId } } : { disconnect: true };
+            data.template = body.data.templateId
+                ? { connect: { id: body.data.templateId } }
+                : { disconnect: true };
         const patchTakeoffIds = body.data.sourceFileVersionIds !== undefined
             ? body.data.sourceFileVersionIds
             : body.data.sourceFileVersionId !== undefined
@@ -511,11 +549,17 @@ export function registerProposalRoutes(r, needUser, env) {
             }
             await prisma.proposalTakeoffSource.deleteMany({ where: { proposalId } });
             await prisma.proposalTakeoffSource.createMany({
-                data: patchTakeoffIds.map((fileVersionId, sortOrder) => ({ proposalId, fileVersionId, sortOrder })),
+                data: patchTakeoffIds.map((fileVersionId, sortOrder) => ({
+                    proposalId,
+                    fileVersionId,
+                    sortOrder,
+                })),
             });
         }
         if (body.data.taxPercent !== undefined)
             data.taxPercent = toDec(body.data.taxPercent);
+        if (body.data.workPricePercent !== undefined)
+            data.workPricePercent = toDec(body.data.workPricePercent);
         if (body.data.discount !== undefined)
             data.discount = toDec(body.data.discount);
         if (body.data.coverNote !== undefined) {
@@ -591,7 +635,10 @@ export function registerProposalRoutes(r, needUser, env) {
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
         const ids = [
-            ...new Set([...(body.data.fileVersionIds ?? []), ...(body.data.fileVersionId ? [body.data.fileVersionId] : [])].filter(Boolean)),
+            ...new Set([
+                ...(body.data.fileVersionIds ?? []),
+                ...(body.data.fileVersionId ? [body.data.fileVersionId] : []),
+            ].filter(Boolean)),
         ];
         const mode = body.data.mode ?? "replace";
         if (mode === "replace" && ids.length === 0) {
@@ -630,10 +677,7 @@ export function registerProposalRoutes(r, needUser, env) {
                 for (const tl of lines) {
                     let rate = new Prisma.Decimal(0);
                     if (tl.materialId && tl.material?.unitPrice != null) {
-                        const matCur = (tl.material.currency ?? "USD").toUpperCase();
-                        if (matCur === p.currency.toUpperCase()) {
-                            rate = tl.material.unitPrice;
-                        }
+                        rate = tl.material.unitPrice;
                     }
                     const qty = tl.quantity;
                     const lt = lineTotalFor(qty, rate);
@@ -660,7 +704,9 @@ export function registerProposalRoutes(r, needUser, env) {
             });
             const effectiveIds = ids.length > 0 ? ids : links.map((l) => l.fileVersionId);
             if (effectiveIds.length === 0) {
-                return c.json({ error: "No takeoff revisions linked — run a full load (replace) first or pass fileVersionIds" }, 400);
+                return c.json({
+                    error: "No takeoff revisions linked — run a full load (replace) first or pass fileVersionIds",
+                }, 400);
             }
             const bad = await assertFvsInProject(effectiveIds);
             if (bad)
@@ -678,7 +724,12 @@ export function registerProposalRoutes(r, needUser, env) {
                     const lt = lineTotalFor(qty, ex.rate);
                     await prisma.proposalItem.update({
                         where: { id: ex.id },
-                        data: { quantity: qty, lineTotal: lt, itemName: tl.label?.trim() || ex.itemName, unit: tl.unit },
+                        data: {
+                            quantity: qty,
+                            lineTotal: lt,
+                            itemName: tl.label?.trim() || ex.itemName,
+                            unit: tl.unit,
+                        },
                     });
                 }
             }
@@ -701,25 +752,7 @@ export function registerProposalRoutes(r, needUser, env) {
         });
         if (!p)
             return c.json({ error: "Not found" }, 404);
-        const taxAmount = p.subtotal
-            .mul(p.taxPercent)
-            .div(100)
-            .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-        const table = buildTakeoffTableHtml({
-            items: p.items.map((it) => ({
-                itemName: it.itemName,
-                quantity: it.quantity.toString(),
-                unit: it.unit,
-                rate: formatMoneyAmount(it.rate.toString(), p.currency),
-                lineTotal: formatMoneyAmount(it.lineTotal.toString(), p.currency),
-            })),
-            subtotal: formatMoneyAmount(p.subtotal.toString(), p.currency),
-            taxPercent: p.taxPercent.toString(),
-            taxAmount: formatMoneyAmount(taxAmount.toString(), p.currency),
-            discount: formatMoneyAmount(p.discount.toString(), p.currency),
-            total: formatMoneyAmount(p.total.toString(), p.currency),
-            currency: p.currency,
-        });
+        const table = takeoffTableHtmlFromProposalFull(p);
         const ctx = buildTemplateContext(p, table);
         let bodyText = p.template?.body ?? p.coverNote;
         if (p.template?.body) {
@@ -787,25 +820,7 @@ export function registerProposalRoutes(r, needUser, env) {
             return c.json({ error: e instanceof Error ? e.message : "Email not configured" }, 400);
         }
         const token = p.publicToken ?? newPublicToken();
-        const taxAmount = p.subtotal
-            .mul(p.taxPercent)
-            .div(100)
-            .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-        const table = buildTakeoffTableHtml({
-            items: p.items.map((it) => ({
-                itemName: it.itemName,
-                quantity: it.quantity.toString(),
-                unit: it.unit,
-                rate: formatMoneyAmount(it.rate.toString(), p.currency),
-                lineTotal: formatMoneyAmount(it.lineTotal.toString(), p.currency),
-            })),
-            subtotal: formatMoneyAmount(p.subtotal.toString(), p.currency),
-            taxPercent: p.taxPercent.toString(),
-            taxAmount: formatMoneyAmount(taxAmount.toString(), p.currency),
-            discount: formatMoneyAmount(p.discount.toString(), p.currency),
-            total: formatMoneyAmount(p.total.toString(), p.currency),
-            currency: p.currency,
-        });
+        const table = takeoffTableHtmlFromProposalFull(p);
         const ctx = buildTemplateContext(p, table);
         let letter = p.template?.body ? applyProposalTemplate(p.template.body, ctx) : p.coverNote;
         letter = applyProposalTemplate(letter, ctx);
@@ -829,6 +844,7 @@ export function registerProposalRoutes(r, needUser, env) {
             })),
             subtotal: p.subtotal.toString(),
             taxPercent: p.taxPercent.toString(),
+            workPricePercent: p.workPricePercent.toString(),
             discount: p.discount.toString(),
             total: p.total.toString(),
             sentAt: new Date().toISOString(),
@@ -918,7 +934,11 @@ export function registerProposalRoutes(r, needUser, env) {
         }
         catch (e) {
             console.error("[proposal] resend email failed", e);
-            return c.json({ error: e instanceof Error ? e.message : "Could not send email. Check RESEND_API_KEY and RESEND_FROM." }, 502);
+            return c.json({
+                error: e instanceof Error
+                    ? e.message
+                    : "Could not send email. Check RESEND_API_KEY and RESEND_FROM.",
+            }, 502);
         }
         await logActivitySafe(access.project.workspaceId, ActivityType.PROPOSAL_RESENT, {
             actorUserId: c.get("user").id,
@@ -939,7 +959,11 @@ export function registerProposalRoutes(r, needUser, env) {
             return c.json({ error: gate.error }, gate.status);
         const p = await prisma.proposal.findFirst({
             where: { id: proposalId, projectId },
-            include: { items: true, attachments: true, takeoffSources: { orderBy: { sortOrder: "asc" } } },
+            include: {
+                items: true,
+                attachments: true,
+                takeoffSources: { orderBy: { sortOrder: "asc" } },
+            },
         });
         if (!p)
             return c.json({ error: "Not found" }, 404);
@@ -1045,10 +1069,7 @@ export function registerProposalRoutes(r, needUser, env) {
         });
         if (!p)
             return c.json({ error: "Not found" }, 404);
-        const taxAmount = p.subtotal
-            .mul(p.taxPercent)
-            .div(100)
-            .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+        const br = proposalBreakdown(p);
         const rawLogo = await fetchWorkspaceLogoImageBuffer(env, p.workspace);
         const logoBuf = await prepareWorkspaceLogoBufferForPdf(rawLogo);
         const buf = await buildProposalPdfBuffer({
@@ -1072,8 +1093,14 @@ export function registerProposalRoutes(r, needUser, env) {
                 lineTotal: formatMoneyAmount(it.lineTotal.toString(), p.currency),
             })),
             subtotal: formatMoneyAmount(p.subtotal.toString(), p.currency),
+            workFeeLabel: p.workPricePercent.gt(0)
+                ? `Work (${p.workPricePercent.toString()}%)`
+                : undefined,
+            workFeeAmount: p.workPricePercent.gt(0)
+                ? formatMoneyAmount(br.workAmount.toString(), p.currency)
+                : undefined,
             taxLabel: `Tax (${p.taxPercent.toString()}%)`,
-            taxAmount: formatMoneyAmount(taxAmount.toString(), p.currency),
+            taxAmount: formatMoneyAmount(br.taxAmount.toString(), p.currency),
             discount: formatMoneyAmount(p.discount.toString(), p.currency),
             total: formatMoneyAmount(p.total.toString(), p.currency),
             signedAtIso: p.acceptedAt?.toISOString(),
@@ -1192,8 +1219,9 @@ export function registerProposalRoutes(r, needUser, env) {
         });
         if (!m)
             return c.json({ error: "Forbidden" }, 403);
-        if (m.role !== WorkspaceRole.ADMIN)
+        if (m.role !== WorkspaceRole.ADMIN && m.role !== WorkspaceRole.SUPER_ADMIN) {
             return c.json({ error: "Admin only" }, 403);
+        }
         const t = await prisma.proposalTemplate.findFirst({ where: { id: templateId, workspaceId } });
         if (!t)
             return c.json({ error: "Not found" }, 404);
@@ -1269,10 +1297,7 @@ Rules: Do not invent quantities or prices. No legal guarantees. Keep under 400 w
             (status === ProposalStatus.SENT || status === ProposalStatus.VIEWED)) {
             status = ProposalStatus.EXPIRED;
         }
-        const taxAmount = match.subtotal
-            .mul(match.taxPercent)
-            .div(100)
-            .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+        const pubMoney = proposalBreakdown(match);
         const attachmentsOut = [];
         for (const a of match.attachments) {
             let readUrl = null;
@@ -1300,7 +1325,10 @@ Rules: Do not invent quantities or prices. No legal guarantees. Keep under 400 w
             coverHtml: match.coverNote,
             subtotal: match.subtotal.toString(),
             taxPercent: match.taxPercent.toString(),
-            taxAmount: taxAmount.toString(),
+            workPricePercent: match.workPricePercent.toString(),
+            workAmount: pubMoney.workAmount.toString(),
+            taxableSubtotal: pubMoney.taxableBase.toString(),
+            taxAmount: pubMoney.taxAmount.toString(),
             discount: match.discount.toString(),
             total: match.total.toString(),
             items: match.items.map(proposalLineJson),
@@ -1319,7 +1347,8 @@ Rules: Do not invent quantities or prices. No legal guarantees. Keep under 400 w
         }
         if (p.validUntil < new Date())
             return c.json({ error: "Expired" }, 410);
-        if (p.firstViewedAt == null && (p.status === ProposalStatus.SENT || p.status === ProposalStatus.VIEWED)) {
+        if (p.firstViewedAt == null &&
+            (p.status === ProposalStatus.SENT || p.status === ProposalStatus.VIEWED)) {
             await prisma.proposal.update({
                 where: { id: p.id },
                 data: {
@@ -1382,10 +1411,7 @@ Rules: Do not invent quantities or prices. No legal guarantees. Keep under 400 w
         if (p.status !== ProposalStatus.SENT && p.status !== ProposalStatus.VIEWED) {
             return c.json({ error: "Proposal cannot be accepted" }, 400);
         }
-        const taxAmount = p.subtotal
-            .mul(p.taxPercent)
-            .div(100)
-            .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+        const accBr = proposalBreakdown(p);
         const sigBuf = dataUrlToPngBuffer(body.data.signatureData);
         const rawLogo = await fetchWorkspaceLogoImageBuffer(env, p.workspace);
         const logoBuf = await prepareWorkspaceLogoBufferForPdf(rawLogo);
@@ -1410,8 +1436,14 @@ Rules: Do not invent quantities or prices. No legal guarantees. Keep under 400 w
                 lineTotal: formatMoneyAmount(it.lineTotal.toString(), p.currency),
             })),
             subtotal: formatMoneyAmount(p.subtotal.toString(), p.currency),
+            workFeeLabel: p.workPricePercent.gt(0)
+                ? `Work (${p.workPricePercent.toString()}%)`
+                : undefined,
+            workFeeAmount: p.workPricePercent.gt(0)
+                ? formatMoneyAmount(accBr.workAmount.toString(), p.currency)
+                : undefined,
             taxLabel: `Tax (${p.taxPercent.toString()}%)`,
-            taxAmount: formatMoneyAmount(taxAmount.toString(), p.currency),
+            taxAmount: formatMoneyAmount(accBr.taxAmount.toString(), p.currency),
             discount: formatMoneyAmount(p.discount.toString(), p.currency),
             total: formatMoneyAmount(p.total.toString(), p.currency),
             signedAtIso: new Date().toISOString(),
@@ -1550,9 +1582,7 @@ Rules: Do not invent quantities or prices. No legal guarantees. Keep under 400 w
     });
     r.post("/public/proposals/:token/request-changes", async (c) => {
         const token = c.req.param("token");
-        const body = z
-            .object({ comment: z.string().min(1).max(8000) })
-            .safeParse(await c.req.json());
+        const body = z.object({ comment: z.string().min(1).max(8000) }).safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
         const commentTrimmed = body.data.comment.trim();

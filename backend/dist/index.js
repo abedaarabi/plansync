@@ -9,6 +9,7 @@ config({ path: resolve(__dirname, "../../.env.prod") });
 config({ path: resolve(__dirname, "../.env") });
 config({ path: resolve(__dirname, "../../.env.local"), override: true });
 import { serve } from "@hono/node-server";
+import { createNodeWebSocket } from "@hono/node-ws";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { buildCorsAllowList, loadEnv, resolveGeminiApiKey } from "./lib/env.js";
@@ -22,6 +23,7 @@ if (resolveGeminiApiKey(env)) {
 }
 const auth = createAuth(env);
 const app = new Hono();
+const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
 const corsOrigins = buildCorsAllowList(env);
 app.use("*", cors({
     origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
@@ -32,10 +34,11 @@ app.use("*", cors({
 }));
 app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
 app.route("/api/stripe", stripeRoutes(env));
-app.route("/api/v1", v1Routes(auth, env));
+app.route("/api/v1", v1Routes(auth, env, { upgradeWebSocket }));
 app.get("/", (c) => c.json({ ok: true, service: "plansync-api" }));
-serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     // Inside Docker this is the container port; Traefik/DNS expose PUBLIC_API_URL / api host.
     const publicApi = env.PUBLIC_API_URL?.trim() || "(unset — set PUBLIC_API_URL or NEXT_PUBLIC_API_URL in compose)";
     console.log(`API listening on :${info.port} (public API origin: ${publicApi}; app: ${env.PUBLIC_APP_URL})`);
 });
+injectWebSocket(server);

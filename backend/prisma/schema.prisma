@@ -349,10 +349,14 @@ model Project {
   projectType String?
   /// Site or city (optional).
   location    String?
+  /// Map pin (WGS84). Both set or both null.
+  latitude    Float?
+  longitude   Float?
+
   /// Project or client website (https). Used to resolve a favicon for the project logo.
-  websiteUrl  String?
+  websiteUrl String?
   /// Cached favicon image URL (typically Google favicons service for `websiteUrl` hostname).
-  logoUrl     String?
+  logoUrl    String?
 
   stage           ProjectStage @default(NOT_STARTED)
   /// Overall completion 0–100 (manual; not tied strictly to `stage`).
@@ -797,6 +801,8 @@ model Proposal {
   currency             String                 @default("USD")
   subtotal             Decimal                @db.Decimal(19, 2)
   taxPercent           Decimal                @default(0) @db.Decimal(5, 2)
+  /// Percent of line-item subtotal added as work / labor before tax (e.g. 15 = 15%).
+  workPricePercent     Decimal                @default(0) @db.Decimal(5, 2)
   discount             Decimal                @default(0) @db.Decimal(19, 2)
   total                Decimal                @db.Decimal(19, 2)
   coverNote            String                 @db.Text

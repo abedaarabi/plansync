@@ -29,6 +29,12 @@ const schema = z.object({
     /** OAuth — optional; set both id + secret to enable each provider */
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
+    /** OneDrive import (Graph). Register redirect: `{BETTER_AUTH_URL}/api/v1/cloud/microsoft/callback` */
+    MICROSOFT_CLIENT_ID: z.string().optional(),
+    MICROSOFT_CLIENT_SECRET: z.string().optional(),
+    /** Dropbox import. Register redirect: `{BETTER_AUTH_URL}/api/v1/cloud/dropbox/callback` */
+    DROPBOX_APP_KEY: z.string().optional(),
+    DROPBOX_APP_SECRET: z.string().optional(),
     GITHUB_CLIENT_ID: z.string().optional(),
     GITHUB_CLIENT_SECRET: z.string().optional(),
     SLACK_CLIENT_ID: z.string().optional(),
@@ -41,6 +47,16 @@ const schema = z.object({
      * Use `gemini-2.5-pro` when you need maximum TOC/region accuracy (expect roughly several× higher cost).
      */
     GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+    /**
+     * PDF viewer live collaboration (SSE/WebSocket). Set to `0`, `false`, `off`, or `no` to disable
+     * globally (workspace flags are ignored when off).
+     */
+    COLLABORATION_ENABLED: z.preprocess((v) => {
+        if (v === undefined || v === null || String(v).trim() === "")
+            return true;
+        const t = String(v).trim().toLowerCase();
+        return t !== "0" && t !== "false" && t !== "off" && t !== "no";
+    }, z.boolean()),
 });
 export function buildCorsAllowList(env) {
     const list = [env.CORS_ORIGIN, env.PUBLIC_APP_URL];

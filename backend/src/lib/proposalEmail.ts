@@ -1,6 +1,8 @@
 import { Resend } from "resend";
 import type { Env } from "./env.js";
 import { inviteFromAddress } from "./inviteEmail.js";
+import { buildTransactionalEmailHtml, escapeHtml } from "./transactionalEmailLayout.js";
+import { resolveWorkspaceLogoUrlForEmail } from "./workspaceLogo.js";
 
 /** Throws if API env cannot send mail (call before committing proposal to SENT). */
 export function assertProposalEmailReady(env: Env): void {
@@ -16,12 +18,13 @@ export function assertProposalEmailReady(env: Env): void {
   }
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function workspaceLogoBrandingHtml(
+  env: Env,
+  workspaceLogoUrl: string | null | undefined,
+): string | undefined {
+  const abs = resolveWorkspaceLogoUrlForEmail(env, workspaceLogoUrl);
+  if (!abs) return undefined;
+  return `<div style="margin:0 0 16px"><img src="${escapeHtml(abs)}" alt="" style="max-height:56px;max-width:200px;width:auto;height:auto;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0" /></div>`;
 }
 
 export function proposalPortalUrl(env: Env, token: string): string {
@@ -62,23 +65,17 @@ async function sendMail(opts: {
   }
 
   const resend = new Resend(opts.env.RESEND_API_KEY);
-  const base = opts.env.PUBLIC_APP_URL.replace(/\/$/, "");
-  const linesHtml = opts.lines.map(
-    (l) =>
-      `<p style="margin:0 0 8px;color:#334155;font:15px/1.5 Inter,system-ui,sans-serif">${escapeHtml(l)}</p>`,
-  );
-  const actionBlock =
-    opts.actionUrl && opts.actionLabel
-      ? `<p style="margin:20px 0 0"><a href="${escapeHtml(opts.actionUrl)}" style="display:inline-block;background:#2563eb;color:#fff;font:600 14px Inter,system-ui,sans-serif;padding:12px 20px;border-radius:8px;text-decoration:none">${escapeHtml(opts.actionLabel)}</a></p>`
-      : "";
-  const html = `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#f8fafc">
-  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:28px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
-    ${opts.brandingHtml ?? ""}
-    <h1 style="margin:0 0 16px;font:700 20px Inter,system-ui,sans-serif;color:#0f172a">${escapeHtml(opts.heading)}</h1>
-    ${linesHtml.join("")}
-    ${actionBlock}
-    <p style="margin:24px 0 0;font:12px Inter,system-ui,sans-serif;color:#94a3b8">${escapeHtml(base)}</p>
-  </div></body></html>`;
+  const html = buildTransactionalEmailHtml(opts.env, {
+    eyebrow: "PlanSync",
+    title: opts.heading,
+    preBodyHtml: opts.brandingHtml,
+    bodyLines: opts.lines,
+    primaryAction:
+      opts.actionUrl && opts.actionLabel
+        ? { url: opts.actionUrl, label: opts.actionLabel }
+        : undefined,
+    fallbackUrl: opts.actionUrl,
+  });
 
   const textParts = [opts.heading, "", ...opts.lines];
   if (opts.actionUrl) textParts.push("", opts.actionUrl);
@@ -115,11 +112,7 @@ export async function sendProposalPortalReplyToClient(opts: {
   workspaceLogoUrl?: string | null;
 }): Promise<void> {
   const preview = portalMessageEmailPreview(opts.messagePreview);
-  const brandingHtml =
-    opts.workspaceLogoUrl?.trim() &&
-    (opts.workspaceLogoUrl.startsWith("http://") || opts.workspaceLogoUrl.startsWith("https://"))
-      ? `<div style="margin:0 0 16px"><img src="${escapeHtml(opts.workspaceLogoUrl.trim())}" alt="" style="max-height:56px;max-width:200px;width:auto;height:auto;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0" /></div>`
-      : undefined;
+  const brandingHtml = workspaceLogoBrandingHtml(opts.env, opts.workspaceLogoUrl);
   await sendMail({
     env: opts.env,
     to: [opts.toEmail],
@@ -149,11 +142,7 @@ export async function sendProposalSentToClient(opts: {
   /** Absolute URL — shown in email when set */
   workspaceLogoUrl?: string | null;
 }): Promise<void> {
-  const brandingHtml =
-    opts.workspaceLogoUrl?.trim() &&
-    (opts.workspaceLogoUrl.startsWith("http://") || opts.workspaceLogoUrl.startsWith("https://"))
-      ? `<div style="margin:0 0 16px"><img src="${escapeHtml(opts.workspaceLogoUrl.trim())}" alt="" style="max-height:56px;max-width:200px;width:auto;height:auto;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0" /></div>`
-      : undefined;
+  const brandingHtml = workspaceLogoBrandingHtml(opts.env, opts.workspaceLogoUrl);
   await sendMail({
     env: opts.env,
     to: [opts.toEmail],
@@ -251,11 +240,7 @@ export async function sendProposalAcceptedToClient(opts: {
   if (!opts.pdfAttachment?.length) return;
 
   const sender = opts.senderName?.trim() || "your project team";
-  const brandingHtml =
-    opts.workspaceLogoUrl?.trim() &&
-    (opts.workspaceLogoUrl.startsWith("http://") || opts.workspaceLogoUrl.startsWith("https://"))
-      ? `<div style="margin:0 0 16px"><img src="${escapeHtml(opts.workspaceLogoUrl.trim())}" alt="" style="max-height:56px;max-width:200px;width:auto;height:auto;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0" /></div>`
-      : undefined;
+  const brandingHtml = workspaceLogoBrandingHtml(opts.env, opts.workspaceLogoUrl);
 
   const lines = [
     `Hi ${opts.clientName},`,

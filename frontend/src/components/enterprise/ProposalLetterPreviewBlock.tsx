@@ -11,6 +11,18 @@ const proseLetter =
   "prose-code:before:content-none prose-code:after:content-none " +
   "prose-pre:bg-slate-100 prose-pre:text-slate-800";
 
+/** Align with backend POST …/preview letter split (proposalRoutes.ts). */
+export function splitProposalCoverNote(coverNote: string): {
+  letterMarkdown: string;
+  letterHtml: string | null;
+} {
+  const mergedLetterOnly = coverNote.trim();
+  if (/^\s*</.test(mergedLetterOnly) && /<[a-z]/i.test(mergedLetterOnly)) {
+    return { letterHtml: mergedLetterOnly, letterMarkdown: "" };
+  }
+  return { letterHtml: null, letterMarkdown: mergedLetterOnly };
+}
+
 export function ProposalLetterPreviewBlock({
   letterMarkdown,
   letterHtml,

@@ -138,7 +138,9 @@ export function formatAuditPresentation(type, metadata) {
                 return {
                     actionLabel: "RFI reopened",
                     summary: str(m.title) ?? "RFI reopened",
-                    detail: str(m.title) ? `Reopened RFI “${String(m.title)}”.` : "RFI reopened for further review.",
+                    detail: str(m.title)
+                        ? `Reopened RFI “${String(m.title)}”.`
+                        : "RFI reopened for further review.",
                 };
             }
             if (m.clearedRecordedAnswer === true) {
@@ -185,13 +187,17 @@ export function formatAuditPresentation(type, metadata) {
             return {
                 actionLabel: "RFI attachment",
                 summary: str(m.fileName) ?? "Attachment added",
-                detail: str(m.fileName) ? `Attached “${String(m.fileName)}” to RFI.` : "RFI attachment added.",
+                detail: str(m.fileName)
+                    ? `Attached “${String(m.fileName)}” to RFI.`
+                    : "RFI attachment added.",
             };
         case "RFI_ATTACHMENT_REMOVED":
             return {
                 actionLabel: "RFI attachment",
                 summary: str(m.fileName) ?? "Attachment removed",
-                detail: str(m.fileName) ? `Removed “${String(m.fileName)}” from RFI.` : "RFI attachment removed.",
+                detail: str(m.fileName)
+                    ? `Removed “${String(m.fileName)}” from RFI.`
+                    : "RFI attachment removed.",
             };
         case "RFI_MESSAGE_POSTED":
             return {

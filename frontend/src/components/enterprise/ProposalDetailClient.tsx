@@ -4,11 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { DeleteProposalConfirmDialog } from "@/components/enterprise/DeleteProposalConfirmDialog";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { ProposalLetterPreviewBlock } from "@/components/enterprise/ProposalLetterPreviewBlock";
+import { ProposalLetterPreviewDialog } from "@/components/enterprise/ProposalLetterPreviewDialog";
 import { ProposalPdfLightbox } from "@/components/enterprise/ProposalPdfLightbox";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
@@ -95,8 +95,9 @@ export function ProposalDetailClient({
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
   const [csvLoading, setCsvLoading] = useState(false);
   const [esignLoading, setEsignLoading] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
   const [portalReply, setPortalReply] = useState("");
+  const portalReplyLockRef = useRef(false);
+  const resendLockRef = useRef(false);
 
   const portalPostMut = useMutation({
     mutationFn: (text: string) => postProposalPortalMessageStaff(projectId, proposalId, text),
@@ -106,6 +107,12 @@ export function ProposalDetailClient({
       toast.success("Reply sent — the client will see it on their proposal page.");
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+
+  const resendMut = useMutation({
+    mutationFn: () => resendProposal(projectId, proposalId),
+    onSuccess: () => toast.success("Resent"),
+    onError: (e: Error) => toast.error(e.message ?? "Resend failed."),
   });
 
   const dupMut = useMutation({
@@ -272,16 +279,32 @@ export function ProposalDetailClient({
             {p.status === "SENT" || p.status === "VIEWED" || p.status === "CHANGE_REQUESTED" ? (
               <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
                 <textarea
-                  className="min-h-[72px] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                  placeholder="Reply to the client (visible on their proposal page)…"
+                  className="min-h-[72px] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:cursor-wait disabled:bg-slate-50 disabled:opacity-70"
+                  placeholder={
+                    portalPostMut.isPending
+                      ? "Sending…"
+                      : "Reply to the client (visible on their proposal page)…"
+                  }
                   value={portalReply}
+                  readOnly={portalPostMut.isPending}
+                  aria-busy={portalPostMut.isPending}
                   onChange={(e) => setPortalReply(e.target.value)}
                 />
                 <button
                   type="button"
                   disabled={!portalReply.trim() || portalPostMut.isPending}
-                  onClick={() => portalPostMut.mutate(portalReply.trim())}
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  aria-busy={portalPostMut.isPending}
+                  className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white aria-busy:cursor-wait disabled:pointer-events-none disabled:opacity-50"
+                  onClick={() => {
+                    const text = portalReply.trim();
+                    if (!text || portalPostMut.isPending || portalReplyLockRef.current) return;
+                    portalReplyLockRef.current = true;
+                    portalPostMut.mutate(text, {
+                      onSettled: () => {
+                        portalReplyLockRef.current = false;
+                      },
+                    });
+                  }}
                 >
                   {portalPostMut.isPending ? (
                     <>
@@ -300,7 +323,9 @@ export function ProposalDetailClient({
         <div className="mt-6 flex flex-wrap gap-2 border-t border-slate-100 pt-6">
           <button
             type="button"
-            disabled={reviewLoading || pdfLoading || csvLoading || esignLoading || resendLoading}
+            disabled={
+              reviewLoading || pdfLoading || csvLoading || esignLoading || resendMut.isPending
+            }
             onClick={async () => {
               setReviewLoading(true);
               try {
@@ -330,7 +355,9 @@ export function ProposalDetailClient({
           </button>
           <button
             type="button"
-            disabled={pdfLoading || reviewLoading || csvLoading || esignLoading || resendLoading}
+            disabled={
+              pdfLoading || reviewLoading || csvLoading || esignLoading || resendMut.isPending
+            }
             onClick={async () => {
               setPdfLoading(true);
               try {
@@ -357,7 +384,9 @@ export function ProposalDetailClient({
           {p.status === "ACCEPTED" && (
             <button
               type="button"
-              disabled={csvLoading || reviewLoading || pdfLoading || esignLoading || resendLoading}
+              disabled={
+                csvLoading || reviewLoading || pdfLoading || esignLoading || resendMut.isPending
+              }
               onClick={async () => {
                 setCsvLoading(true);
                 try {
@@ -382,7 +411,9 @@ export function ProposalDetailClient({
           )}
           <button
             type="button"
-            disabled={esignLoading || reviewLoading || pdfLoading || csvLoading || resendLoading}
+            disabled={
+              esignLoading || reviewLoading || pdfLoading || csvLoading || resendMut.isPending
+            }
             onClick={async () => {
               setEsignLoading(true);
               try {
@@ -408,21 +439,22 @@ export function ProposalDetailClient({
           {(p.status === "SENT" || p.status === "VIEWED" || p.status === "CHANGE_REQUESTED") && (
             <button
               type="button"
-              disabled={resendLoading || reviewLoading || pdfLoading || csvLoading || esignLoading}
-              onClick={async () => {
-                setResendLoading(true);
-                try {
-                  await resendProposal(projectId, proposalId);
-                  toast.success("Resent");
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Resend failed.");
-                } finally {
-                  setResendLoading(false);
-                }
+              disabled={
+                resendMut.isPending || reviewLoading || pdfLoading || csvLoading || esignLoading
+              }
+              aria-busy={resendMut.isPending}
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium aria-busy:cursor-wait disabled:pointer-events-none disabled:opacity-60"
+              onClick={() => {
+                if (resendLockRef.current || resendMut.isPending) return;
+                resendLockRef.current = true;
+                resendMut.mutate(undefined, {
+                  onSettled: () => {
+                    resendLockRef.current = false;
+                  },
+                });
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium disabled:opacity-60"
             >
-              {resendLoading ? (
+              {resendMut.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
                   Sending…
@@ -441,7 +473,7 @@ export function ProposalDetailClient({
               pdfLoading ||
               csvLoading ||
               esignLoading ||
-              resendLoading
+              resendMut.isPending
             }
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium disabled:opacity-60"
           >
@@ -497,9 +529,14 @@ export function ProposalDetailClient({
         </div>
         <div className="mt-3 space-y-1 text-right text-sm">
           <div>Subtotal: {fmtMoney(p.subtotal, p.currency)}</div>
+          {Number(p.workPricePercent) > 0 && (
+            <div>
+              Work ({p.workPricePercent}%): {fmtMoney(p.workAmount, p.currency)}
+            </div>
+          )}
+          <div>Taxable: {fmtMoney(p.taxableSubtotal, p.currency)}</div>
           <div>
-            Tax ({p.taxPercent}%):{" "}
-            {fmtMoney(String(Number(p.subtotal) * (Number(p.taxPercent) / 100) || 0), p.currency)}
+            Tax ({p.taxPercent}%): {fmtMoney(p.taxAmount, p.currency)}
           </div>
           <div>Discount: {fmtMoney(p.discount, p.currency)}</div>
           <div className="text-lg font-semibold text-[#2563EB]">
@@ -542,42 +579,20 @@ export function ProposalDetailClient({
         </div>
       )}
 
-      {reviewOpen && reviewPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div
-            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
-            role="dialog"
-            aria-labelledby="proposal-review-title"
-          >
-            <div className="flex justify-between gap-2">
-              <h3 id="proposal-review-title" className="font-semibold text-[#0F172A]">
-                Cover letter (as sent)
-              </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setReviewOpen(false);
-                  setReviewPreview(null);
-                }}
-                className="shrink-0 text-sm font-medium text-slate-500 hover:text-slate-800"
-              >
-                Close
-              </button>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              Letter uses Markdown when it does not start with HTML tags; legacy HTML letters render
-              as before. Takeoff table matches the client email and portal.
-            </p>
-            <div className="mt-4">
-              <ProposalLetterPreviewBlock
-                letterMarkdown={reviewPreview.letterMarkdown}
-                letterHtml={reviewPreview.letterHtml}
-                takeoffTableHtml={reviewPreview.takeoffTableHtml}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {reviewPreview ? (
+        <ProposalLetterPreviewDialog
+          open={reviewOpen}
+          onClose={() => {
+            setReviewOpen(false);
+            setReviewPreview(null);
+          }}
+          title="Cover letter (as sent)"
+          description="Letter uses Markdown when it does not start with HTML tags; legacy HTML letters render as before. Takeoff table matches the client email and portal."
+          letterMarkdown={reviewPreview.letterMarkdown}
+          letterHtml={reviewPreview.letterHtml}
+          takeoffTableHtml={reviewPreview.takeoffTableHtml}
+        />
+      ) : null}
 
       {pdfObjectUrl ? (
         <ProposalPdfLightbox

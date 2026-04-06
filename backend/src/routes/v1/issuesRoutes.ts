@@ -137,7 +137,7 @@ async function sendIssueAssignedEmail(
     from,
     to: input.assigneeEmail,
     subject: `PlanSync: assigned — ${input.issueTitle.slice(0, 60)}${input.issueTitle.length > 60 ? "…" : ""}`,
-    html: buildIssueAssignedEmailHtml(payload),
+    html: buildIssueAssignedEmailHtml(env, payload),
     text: buildIssueAssignedEmailText(payload),
   });
 }

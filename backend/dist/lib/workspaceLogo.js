@@ -7,15 +7,38 @@ export function apiPublicOrigin(env) {
         return u.replace(/\/$/, "");
     return env.PUBLIC_APP_URL.replace(/\/$/, "");
 }
-/** Stable URL for workspace-hosted logo (S3 behind this route). */
+/** Absolute URL (emails, server-side fetch). Prefer `workspaceLogoUrlForClients` for browser JSON. */
 export function workspaceHostedLogoAbsoluteUrl(env, workspaceId) {
     return `${apiPublicOrigin(env)}/api/v1/public/workspaces/${encodeURIComponent(workspaceId)}/logo`;
 }
-export function workspaceLogoUrlForClients(env, ws) {
-    if (ws.logoS3Key)
-        return workspaceHostedLogoAbsoluteUrl(env, ws.id);
+/**
+ * Browser-safe logo URL for API JSON. S3-hosted logos use a same-origin path so `<img src>`
+ * works when `PUBLIC_API_URL` is an internal hostname (Docker) while the app is served elsewhere.
+ */
+export function workspaceLogoUrlForClients(_env, ws) {
+    if (ws.logoS3Key) {
+        return `/api/v1/public/workspaces/${encodeURIComponent(ws.id)}/logo`;
+    }
     const u = ws.logoUrl?.trim();
     return u || null;
+}
+/**
+ * Absolute URL for `<img src>` in outbound email. Resolves same-origin `/api/v1/...` paths
+ * against `PUBLIC_API_URL` when set (split app/API deploy).
+ */
+export function resolveWorkspaceLogoUrlForEmail(env, workspaceLogoUrl) {
+    const t = workspaceLogoUrl?.trim();
+    if (!t)
+        return null;
+    if (t.startsWith("https://") || t.startsWith("http://"))
+        return t;
+    const appBase = env.PUBLIC_APP_URL.replace(/\/$/, "");
+    const apiBase = apiPublicOrigin(env);
+    if (t.startsWith("/api/"))
+        return `${apiBase}${t}`;
+    if (t.startsWith("/"))
+        return `${appBase}${t}`;
+    return `${appBase}/${t}`;
 }
 const MAX_LOGO_FETCH_BYTES = 2_000_000;
 /** PDFKit can embed PNG, JPEG, GIF, WebP — not SVG. */

@@ -25,17 +25,32 @@ export function sumLineTotals(
   return s.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }
 
-export function computeProposalTotals(opts: {
-  subtotal: Prisma.Decimal;
+/**
+ * Line-item subtotal + optional work % → taxable base; tax applies to that base; then subtract discount.
+ */
+export function proposalMoneyBreakdown(opts: {
+  lineSubtotal: Prisma.Decimal;
   taxPercent: Prisma.Decimal;
   discount: Prisma.Decimal;
-}): { taxAmount: Prisma.Decimal; total: Prisma.Decimal } {
-  const sub = opts.subtotal.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-  const taxAmount = sub
+  workPricePercent: Prisma.Decimal;
+}): {
+  workAmount: Prisma.Decimal;
+  taxableBase: Prisma.Decimal;
+  taxAmount: Prisma.Decimal;
+  total: Prisma.Decimal;
+} {
+  const sub = opts.lineSubtotal.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  const wpPct = opts.workPricePercent.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  const workAmount = sub.mul(wpPct).div(100).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  const taxableBase = sub.add(workAmount).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  const taxAmount = taxableBase
     .mul(opts.taxPercent)
     .div(100)
     .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
   const disc = opts.discount.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-  const total = sub.add(taxAmount).sub(disc).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-  return { taxAmount, total };
+  const total = taxableBase
+    .add(taxAmount)
+    .sub(disc)
+    .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  return { workAmount, taxableBase, taxAmount, total };
 }

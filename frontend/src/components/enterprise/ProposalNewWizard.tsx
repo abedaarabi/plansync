@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { ProposalLetterPreviewBlock } from "@/components/enterprise/ProposalLetterPreviewBlock";
+import { ProposalLetterPreviewDialog } from "@/components/enterprise/ProposalLetterPreviewDialog";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   createProposal,
@@ -75,6 +75,7 @@ export function ProposalNewWizard({
 
   const [selectedFvIds, setSelectedFvIds] = useState<string[]>([]);
   const [taxPercent, setTaxPercent] = useState("0");
+  const [workPricePercent, setWorkPricePercent] = useState("0");
   const [discount, setDiscount] = useState("0");
   const [templateId, setTemplateId] = useState<string>("");
   const [coverNote, setCoverNote] = useState("");
@@ -108,6 +109,7 @@ export function ProposalNewWizard({
   });
   const project = projects.find((p) => p.id === projectId);
   const newDraftCurrencySyncedFor = useRef<string | null>(null);
+  const sendProposalLockRef = useRef(false);
 
   /** New drafts default to the project currency once (avoid clobbering edits when the list refetches). */
   useEffect(() => {
@@ -143,6 +145,7 @@ export function ProposalNewWizard({
         setCurrency(d.currency);
         setValidUntil(d.validUntil.slice(0, 10));
         setTaxPercent(d.taxPercent);
+        setWorkPricePercent(d.workPricePercent);
         setDiscount(d.discount);
         setTemplateId(d.templateId ?? "");
         setCoverNote(d.coverNote);
@@ -188,6 +191,11 @@ export function ProposalNewWizard({
     queryFn: () => fetchProposalDetail(projectId, proposalId!),
     enabled: Boolean(wid && isPro && proposalId && step >= 2),
   });
+
+  useEffect(() => {
+    if (!detail) return;
+    setWorkPricePercent(detail.workPricePercent);
+  }, [detail?.id, detail?.workPricePercent]);
 
   const { data: tmplData } = useQuery({
     queryKey: qk.proposalTemplates(wid ?? ""),
@@ -294,6 +302,7 @@ export function ProposalNewWizard({
           sourceTakeoffLineId: it.sourceTakeoffLineId,
         })),
         taxPercent,
+        workPricePercent,
         discount,
         attachmentFileVersionIds: attachments.filter((a) => a.checked).map((a) => a.fileVersionId),
       });
@@ -306,8 +315,13 @@ export function ProposalNewWizard({
 
   const applyTemplateDefaults = (tid: string) => {
     const t = tmplData?.templates.find((x) => x.id === tid);
-    const d = t?.defaultsJson as { taxPercent?: number; validUntilDays?: number } | null;
+    const d = t?.defaultsJson as {
+      taxPercent?: number;
+      workPricePercent?: number;
+      validUntilDays?: number;
+    } | null;
     if (d?.taxPercent != null) setTaxPercent(String(d.taxPercent));
+    if (d?.workPricePercent != null) setWorkPricePercent(String(d.workPricePercent));
     if (d?.validUntilDays != null && proposalId) {
       const end = new Date();
       end.setDate(end.getDate() + d.validUntilDays);
@@ -534,6 +548,25 @@ export function ProposalNewWizard({
 
             <div className="mt-4 flex flex-wrap gap-4">
               <label className="flex flex-col gap-1 text-sm">
+                <span>Work %</span>
+                <input
+                  className="w-24 rounded border border-slate-200 px-2 py-1"
+                  title="Percent of line-item subtotal added as work / labor (before tax)"
+                  value={workPricePercent}
+                  onChange={(e) => setWorkPricePercent(e.target.value)}
+                  onBlur={() => {
+                    if (proposalId)
+                      patchProposal(projectId, proposalId, {
+                        taxPercent,
+                        workPricePercent,
+                        discount,
+                      }).then((p) => {
+                        qc.setQueryData(qk.projectProposal(projectId, p.id), p);
+                      });
+                  }}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
                 <span>Tax %</span>
                 <input
                   className="w-24 rounded border border-slate-200 px-2 py-1"
@@ -541,7 +574,11 @@ export function ProposalNewWizard({
                   onChange={(e) => setTaxPercent(e.target.value)}
                   onBlur={() => {
                     if (proposalId)
-                      patchProposal(projectId, proposalId, { taxPercent, discount }).then((p) => {
+                      patchProposal(projectId, proposalId, {
+                        taxPercent,
+                        workPricePercent,
+                        discount,
+                      }).then((p) => {
                         qc.setQueryData(qk.projectProposal(projectId, p.id), p);
                       });
                   }}
@@ -555,12 +592,28 @@ export function ProposalNewWizard({
                   onChange={(e) => setDiscount(e.target.value)}
                   onBlur={() => {
                     if (proposalId)
-                      patchProposal(projectId, proposalId, { taxPercent, discount }).then((p) => {
+                      patchProposal(projectId, proposalId, {
+                        taxPercent,
+                        workPricePercent,
+                        discount,
+                      }).then((p) => {
                         qc.setQueryData(qk.projectProposal(projectId, p.id), p);
                       });
                   }}
                 />
               </label>
+            </div>
+            <div className="mt-3 space-y-1 text-right text-xs text-slate-600">
+              <div>
+                Line subtotal: {fmtMoney(d.subtotal, d.currency)}
+                {Number(d.workPricePercent) > 0 && (
+                  <>
+                    {" "}
+                    · Work ({d.workPricePercent}%): {fmtMoney(d.workAmount, d.currency)}
+                  </>
+                )}
+              </div>
+              <div>Taxable: {fmtMoney(d.taxableSubtotal, d.currency)}</div>
             </div>
             <div className="mt-2 text-right text-sm font-semibold">
               Total: {fmtMoney(d.total, d.currency)}
@@ -742,8 +795,17 @@ export function ProposalNewWizard({
               <button
                 type="button"
                 disabled={sendMut.isPending || previewLoading || aiLoading}
-                onClick={() => sendMut.mutate()}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                aria-busy={sendMut.isPending}
+                onClick={() => {
+                  if (sendProposalLockRef.current || sendMut.isPending) return;
+                  sendProposalLockRef.current = true;
+                  sendMut.mutate(undefined, {
+                    onSettled: () => {
+                      sendProposalLockRef.current = false;
+                    },
+                  });
+                }}
+                className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-5 py-2.5 text-sm font-semibold text-white aria-busy:cursor-wait disabled:pointer-events-none disabled:opacity-60"
               >
                 {sendMut.isPending ? (
                   <>
@@ -774,35 +836,20 @@ export function ProposalNewWizard({
         </div>
       )}
 
-      {previewOpen && previewPayload && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
-            <div className="flex justify-between gap-2">
-              <h3 className="font-semibold">Preview</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setPreviewOpen(false);
-                  setPreviewPayload(null);
-                }}
-                className="text-slate-500"
-              >
-                Close
-              </button>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              Markdown letter when not HTML; takeoff table below.
-            </p>
-            <div className="mt-4">
-              <ProposalLetterPreviewBlock
-                letterMarkdown={previewPayload.letterMarkdown}
-                letterHtml={previewPayload.letterHtml}
-                takeoffTableHtml={previewPayload.takeoffTableHtml}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {previewPayload ? (
+        <ProposalLetterPreviewDialog
+          open={previewOpen}
+          onClose={() => {
+            setPreviewOpen(false);
+            setPreviewPayload(null);
+          }}
+          title="Preview"
+          description="Markdown letter when not HTML; takeoff table below."
+          letterMarkdown={previewPayload.letterMarkdown}
+          letterHtml={previewPayload.letterHtml}
+          takeoffTableHtml={previewPayload.takeoffTableHtml}
+        />
+      ) : null}
     </div>
   );
 }

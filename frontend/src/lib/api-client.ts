@@ -755,6 +755,11 @@ export async function fetchResolvedFileRevision(
   };
 }
 
+export type TakeoffPricingPublic = {
+  projectDiscountPct: string;
+  itemDiscountPctByKey: Record<string, string>;
+};
+
 export type ProjectMeta = {
   id: string;
   name: string;
@@ -766,12 +771,15 @@ export type ProjectMeta = {
   projectSize?: string | null;
   projectType?: string | null;
   location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   websiteUrl?: string | null;
   logoUrl?: string | null;
   stage?: string;
   progressPercent?: number;
   startDate?: string | null;
   endDate?: string | null;
+  takeoffPricing?: TakeoffPricingPublic;
 };
 
 export type PatchProjectBody = {
@@ -783,11 +791,17 @@ export type PatchProjectBody = {
   projectSize?: string | null;
   projectType?: string | null;
   location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   websiteUrl?: string | null;
   stage?: string;
   progressPercent?: number;
   startDate?: string | null;
   endDate?: string | null;
+  takeoffPricing?: {
+    projectDiscountPct?: string | number;
+    itemDiscountPctByKey?: Record<string, string | number>;
+  };
 };
 
 export async function patchProject(
@@ -2082,6 +2096,11 @@ export type ProposalDetail = {
   currency: string;
   subtotal: string;
   taxPercent: string;
+  /** Percent of line subtotal added as work / labor before tax. */
+  workPricePercent: string;
+  workAmount: string;
+  taxableSubtotal: string;
+  taxAmount: string;
   discount: string;
   total: string;
   coverNote: string;
@@ -2418,6 +2437,9 @@ export type PublicProposalPayload = {
   coverHtml: string;
   subtotal: string;
   taxPercent: string;
+  workPricePercent: string;
+  workAmount: string;
+  taxableSubtotal: string;
   taxAmount: string;
   discount: string;
   total: string;

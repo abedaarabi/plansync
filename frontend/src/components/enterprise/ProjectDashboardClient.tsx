@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -11,17 +12,22 @@ import {
   FileText,
   FolderOpen,
   Gauge,
+  MapPin,
   MessageSquareQuote,
+  Pencil,
   Play,
   Target,
 } from "lucide-react";
 import {
   fetchProjects,
+  fetchProject,
   fetchIssuesForProject,
   fetchProjectRfis,
   fetchProjectPunch,
   fetchProjectDashboard,
 } from "@/lib/api-client";
+import { parseProjectCoords } from "@/lib/projectGeo";
+import { geocodeLocationName } from "@/lib/openMeteoGeocode";
 import { DashboardActivityChart } from "@/components/enterprise/DashboardActivityChart";
 import { ProjectHomeOverviewCharts } from "@/components/enterprise/ProjectHomeOverviewCharts";
 import { qk } from "@/lib/queryKeys";
@@ -31,6 +37,9 @@ import type { CloudFile } from "@/types/projects";
 import { isPdfFile } from "@/lib/isPdfFile";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { ProjectLogo } from "./ProjectLogo";
+import { ProjectLocationMap } from "./ProjectLocationMap";
+import { ProjectWeatherAtLocation } from "./ProjectWeatherAtLocation";
+import { ProjectEditSlideOver } from "./ProjectEditSlideOver";
 import { useTickNowMs } from "@/lib/useTickNowMs";
 
 function sortedFileVersions(f: CloudFile) {
@@ -84,6 +93,7 @@ type Props = {
 
 export function ProjectDashboardClient({ projectId }: Props) {
   const router = useRouter();
+  const [editOpen, setEditOpen] = useState(false);
   const nowMs = useTickNowMs();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
@@ -96,6 +106,31 @@ export function ProjectDashboardClient({ projectId }: Props) {
   });
 
   const project = projects.find((p) => p.id === projectId);
+
+  /** Authoritative row for coords (list payload can lag after edits). */
+  const { data: projectMeta, isPending: projectMetaPending } = useQuery({
+    queryKey: qk.project(projectId),
+    queryFn: () => fetchProject(projectId),
+    enabled: Boolean(projectId && isPro),
+  });
+
+  const savedCoords = useMemo(
+    () => parseProjectCoords(projectMeta) ?? parseProjectCoords(project),
+    [projectMeta, project],
+  );
+
+  const locationText = (projectMeta?.location ?? project?.location)?.trim() ?? "";
+
+  const { data: geocoded, isPending: geocodePending } = useQuery({
+    queryKey: ["geocodeOpenMeteo", locationText],
+    queryFn: () => geocodeLocationName(locationText),
+    enabled:
+      Boolean(projectId && isPro && locationText.length > 0 && !savedCoords) && !projectMetaPending,
+    staleTime: 24 * 60 * 60 * 1000,
+  });
+
+  const mapCoords = savedCoords ?? (geocoded ? { lat: geocoded.lat, lng: geocoded.lng } : null);
+  const isApproximateLocation = !savedCoords && Boolean(geocoded);
 
   function openFile(f: CloudFile) {
     const sv = sortedFileVersions(f);
@@ -275,6 +310,101 @@ export function ProjectDashboardClient({ projectId }: Props) {
           </div>
         </div>
       </div>
+
+      <section className="enterprise-card overflow-hidden p-5 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
+              Site map &amp; weather
+            </h2>
+            <p className="mt-1 text-[12px] leading-snug text-[var(--enterprise-text-muted)]">
+              OpenStreetMap pin and current conditions (Open-Meteo). Set the pin in{" "}
+              <span className="font-medium text-[var(--enterprise-text)]">Edit project</span>.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditOpen(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-[12px] font-semibold text-[var(--enterprise-primary)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
+          >
+            <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            Edit location
+          </button>
+        </div>
+        {mapCoords ? (
+          <div className="mt-4 space-y-3">
+            {isApproximateLocation ? (
+              <p className="rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-[12px] leading-snug text-amber-950/90 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100/90">
+                Approximate position from your location text. Open{" "}
+                <span className="font-medium">Edit location</span> and click the map to save an
+                exact pin.
+              </p>
+            ) : null}
+            <div className="grid gap-4 lg:grid-cols-5">
+              <div className="min-h-[220px] lg:col-span-3">
+                <ProjectLocationMap
+                  height={260}
+                  latitude={mapCoords.lat}
+                  longitude={mapCoords.lng}
+                  zoom={14}
+                />
+              </div>
+              <div className="flex flex-col justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 p-4 lg:col-span-2">
+                <ProjectWeatherAtLocation latitude={mapCoords.lat} longitude={mapCoords.lng} />
+              </div>
+            </div>
+          </div>
+        ) : (locationText && !savedCoords && projectMetaPending) || geocodePending ? (
+          <div className="mt-4 flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
+            <p className="text-sm text-[var(--enterprise-text-muted)]">Loading map and weather…</p>
+          </div>
+        ) : locationText && !savedCoords && !geocodePending ? (
+          <div className="mt-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
+            <MapPin
+              className="h-10 w-10 text-[var(--enterprise-text-muted)]"
+              strokeWidth={1.25}
+              aria-hidden
+            />
+            <p className="max-w-sm text-sm text-[var(--enterprise-text-muted)]">
+              We couldn&apos;t place that address on the map. Set a pin on the map in Edit project,
+              or try a clearer city or address.
+            </p>
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
+            >
+              Edit location
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
+            <MapPin
+              className="h-10 w-10 text-[var(--enterprise-text-muted)]"
+              strokeWidth={1.25}
+              aria-hidden
+            />
+            <p className="max-w-sm text-sm text-[var(--enterprise-text-muted)]">
+              Add a location name or click the map in Edit project to set a site pin — then the map
+              and weather appear here.
+            </p>
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
+            >
+              Set location
+            </button>
+          </div>
+        )}
+      </section>
+
+      <ProjectEditSlideOver
+        open={editOpen}
+        project={project}
+        workspaceId={wid}
+        onClose={() => setEditOpen(false)}
+      />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {stats.map((s) => (

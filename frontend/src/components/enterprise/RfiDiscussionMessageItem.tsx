@@ -54,15 +54,15 @@ export function RfiDiscussionMessageItem({
         aria-labelledby={headingId}
         className={`overflow-hidden rounded-lg border bg-[var(--enterprise-bg)]/50 dark:bg-[var(--enterprise-hover-surface)]/25 ${
           isRecordedAnswer
-            ? "border-emerald-300/90 shadow-sm dark:border-emerald-800/50"
+            ? "border-[var(--enterprise-semantic-success-border)] shadow-sm"
             : isPickerSelected
               ? "border-[var(--enterprise-primary)]/45 ring-2 ring-[var(--enterprise-primary)]/20"
               : "border-[var(--enterprise-border)]"
         }`}
       >
         {isRecordedAnswer ? (
-          <div className="border-b border-emerald-200/80 bg-emerald-50/90 px-3 py-1.5 dark:border-emerald-900/40 dark:bg-emerald-950/35">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-200/95">
+          <div className="border-b border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] px-3 py-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-semantic-success-text)]">
               Official answer
             </span>
           </div>
@@ -90,17 +90,18 @@ export function RfiDiscussionMessageItem({
                 </p>
                 {displayEmail ? (
                   <p
-                    className="mt-1 truncate text-xs text-[var(--enterprise-text-muted)]"
-                    title={displayEmail}
+                    className="enterprise-hint-tip mt-1 truncate text-xs text-[var(--enterprise-text-muted)]"
+                    data-hint={displayEmail}
                   >
                     {displayEmail}
                   </p>
                 ) : null}
               </div>
               <time
-                className="shrink-0 text-right text-[11px] font-medium tabular-nums text-[var(--enterprise-text-muted)]"
+                className="enterprise-hint-tip shrink-0 text-right text-[11px] font-medium tabular-nums text-[var(--enterprise-text-muted)]"
                 dateTime={createdAtIso}
-                title={absoluteTimeTitle}
+                aria-label={absoluteTimeTitle}
+                data-hint={absoluteTimeTitle}
               >
                 {timeLabel}
               </time>
@@ -120,10 +121,20 @@ export function RfiDiscussionMessageItem({
               <button
                 type="button"
                 onClick={onTogglePickAsAnswer}
-                className={`mt-3 text-left text-xs font-semibold ${
+                aria-label={
                   isPickerSelected
-                    ? "text-[var(--enterprise-primary)]"
-                    : "text-[var(--enterprise-primary)] hover:underline"
+                    ? "Clear official answer selection"
+                    : "Use this message as the official answer"
+                }
+                data-hint={
+                  isPickerSelected
+                    ? "Click to clear this selection"
+                    : "Mark this reply as the formal answer, then use Mark as answered above"
+                }
+                className={`enterprise-hint-tip mt-3 rounded-md text-left text-xs font-semibold transition ${
+                  isPickerSelected
+                    ? "bg-[var(--enterprise-primary)]/10 px-2 py-1 text-[var(--enterprise-primary)]"
+                    : "text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-primary-soft)] hover:underline"
                 }`}
               >
                 {isPickerSelected ? "Selected as official answer" : "Use as official answer"}

@@ -26,16 +26,102 @@ import {
 } from "lucide-react";
 import { RfiMentionList, type RfiMentionItem } from "@/components/enterprise/RfiMentionList";
 
-const PRESET_COLORS = [
-  "#0f172a",
-  "#b91c1c",
-  "#c2410c",
-  "#a16207",
-  "#15803d",
-  "#1d4ed8",
-  "#6d28d9",
-  "#be185d",
+/** Matches `--enterprise-text` — used when no inline color is set. */
+const DEFAULT_TEXT_COLOR = "#0f172a";
+
+/**
+ * Curated for the enterprise shell: one slate ramp, one brand accent, semantic text hues.
+ * (Avoids competing blues and neon primaries that clash with the rest of the app.)
+ */
+const PRESET_TEXT_COLORS: { hex: string; label: string }[] = [
+  { hex: DEFAULT_TEXT_COLOR, label: "Default" },
+  { hex: "#475569", label: "Secondary" },
+  { hex: "#64748b", label: "Muted" },
+  { hex: "#2563eb", label: "Accent" },
+  { hex: "#065f46", label: "Success" },
+  { hex: "#92400e", label: "Warning" },
+  { hex: "#991b1b", label: "Danger" },
 ];
+
+/** Normalize editor / preset colors to `#rrggbb` for comparison. */
+function colorToHex(raw: string | undefined | null): string | null {
+  if (raw == null || !String(raw).trim()) return null;
+  const s = String(raw).trim().toLowerCase();
+  if (s.startsWith("#")) {
+    let h = s.slice(1);
+    if (h.length === 3) {
+      h = h
+        .split("")
+        .map((c) => c + c)
+        .join("");
+    }
+    if (h.length === 6 && /^[0-9a-f]+$/.test(h)) return `#${h}`;
+    return s;
+  }
+  const m = s.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (m) {
+    const r = Math.min(255, Number(m[1])).toString(16).padStart(2, "0");
+    const g = Math.min(255, Number(m[2])).toString(16).padStart(2, "0");
+    const b = Math.min(255, Number(m[3])).toString(16).padStart(2, "0");
+    return `#${r}${g}${b}`;
+  }
+  return s;
+}
+
+function isPresetActive(hex: string, editorColor: string | undefined): boolean {
+  const preset = colorToHex(hex);
+  const current = colorToHex(editorColor ?? undefined);
+  if (hex === DEFAULT_TEXT_COLOR) {
+    return current == null || current === preset;
+  }
+  return current != null && preset != null && current === preset;
+}
+
+function TextColorSwatch({
+  editor,
+  disabled,
+  hex,
+  label,
+}: {
+  editor: Editor;
+  disabled: boolean;
+  hex: string;
+  label: string;
+}) {
+  const { active } = useEditorState({
+    editor,
+    selector: (snap) => ({
+      active: isPresetActive(
+        hex,
+        snap.editor.getAttributes("textStyle").color as string | undefined,
+      ),
+    }),
+  });
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      aria-label={`${label} (${hex})`}
+      aria-pressed={active}
+      data-hint={`${label} · ${hex}`}
+      onClick={() => editor.chain().focus().extendMarkRange("textStyle").setColor(hex).run()}
+      className={`enterprise-hint-tip flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-[var(--enterprise-surface)] p-0.5 shadow-[var(--enterprise-shadow-xs)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 disabled:opacity-40 ${
+        active
+          ? "border-[var(--enterprise-primary)] ring-2 ring-[var(--enterprise-primary)]/25"
+          : "border-[var(--enterprise-border)] hover:border-[var(--enterprise-primary)]/35"
+      }`}
+    >
+      <span
+        className="h-5 w-5 rounded-full"
+        style={{
+          backgroundColor: hex,
+          boxShadow: "inset 0 0 0 1px rgba(15, 23, 42, 0.08)",
+        }}
+      />
+    </button>
+  );
+}
 
 function ToolbarButton({
   onClick,
@@ -53,10 +139,11 @@ function ToolbarButton({
   return (
     <button
       type="button"
-      title={title}
+      aria-label={title}
       disabled={disabled}
+      data-hint={title}
       onClick={onClick}
-      className={`rounded-lg p-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30 disabled:opacity-40 ${
+      className={`enterprise-hint-tip rounded-lg p-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30 disabled:opacity-40 ${
         active
           ? "bg-[var(--enterprise-primary)]/15 text-[var(--enterprise-primary)]"
           : "text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
@@ -145,35 +232,35 @@ function EditorToolbar({ editor, disabled }: { editor: Editor; disabled: boolean
         <Link2 className="h-4 w-4" strokeWidth={1.75} />
       </ToolbarButton>
       <span className="mx-1 hidden h-5 w-px bg-[var(--enterprise-border)] sm:block" aria-hidden />
-      <span
-        className="inline-flex max-w-full min-w-0 flex-1 items-center gap-0.5 overflow-x-auto overflow-y-hidden py-0.5 pl-1 sm:flex-initial"
-        title="Text color"
-      >
-        <Baseline
-          className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]"
-          strokeWidth={1.75}
-        />
-        {PRESET_COLORS.map((c) => (
-          <button
-            key={c}
-            type="button"
-            disabled={disabled}
-            title={`Color ${c}`}
-            onClick={() => editor.chain().focus().extendMarkRange("textStyle").setColor(c).run()}
-            className="h-6 w-6 shrink-0 rounded-md border border-[var(--enterprise-border)]/80 shadow-sm transition hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/40 disabled:opacity-40"
-            style={{ backgroundColor: c }}
-          />
-        ))}
+      <div className="inline-flex max-w-full min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overflow-y-hidden rounded-[10px] bg-[var(--enterprise-hover-surface)]/70 px-1.5 py-1 ring-1 ring-[var(--enterprise-border)]/90 sm:flex-initial">
+        <span
+          className="enterprise-hint-tip inline-flex shrink-0 rounded-md p-1 text-[var(--enterprise-text-muted)]"
+          data-hint="Text color"
+        >
+          <Baseline className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+        </span>
+        <div className="flex items-center gap-1">
+          {PRESET_TEXT_COLORS.map(({ hex, label }) => (
+            <TextColorSwatch
+              key={hex}
+              editor={editor}
+              disabled={disabled}
+              hex={hex}
+              label={label}
+            />
+          ))}
+        </div>
         <button
           type="button"
           disabled={disabled}
-          title="Reset color"
+          aria-label="Reset text color"
+          data-hint="Use default body color"
           onClick={() => editor.chain().focus().extendMarkRange("textStyle").unsetColor().run()}
-          className="ml-0.5 shrink-0 rounded-md border border-[var(--enterprise-border)] px-2 py-1 text-[10px] font-medium text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-40"
+          className="enterprise-hint-tip ml-0.5 shrink-0 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-[10px] font-semibold text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/25 hover:bg-[var(--enterprise-bg)] hover:text-[var(--enterprise-text)] disabled:opacity-40"
         >
           Reset
         </button>
-      </span>
+      </div>
     </div>
   );
 }

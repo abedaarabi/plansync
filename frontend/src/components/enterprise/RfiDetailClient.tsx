@@ -67,6 +67,11 @@ import {
   type RfiMessageRow,
   type RfiRow,
 } from "@/lib/api-client";
+import {
+  priorityBadgeClassLight,
+  RFI_STATUS_LABEL,
+  rfiStatusBadgeClass,
+} from "@/lib/issueStatusStyle";
 import { qk } from "@/lib/queryKeys";
 import { userInitials } from "@/lib/user-initials";
 import { useTickNowMs } from "@/lib/useTickNowMs";
@@ -75,19 +80,8 @@ function norm(s: string): string {
   return s.trim().toUpperCase().replace(/\s+/g, "_");
 }
 
-const STATUS_DOT: Record<string, string> = {
-  OPEN: "bg-blue-500",
-  IN_REVIEW: "bg-amber-400",
-  ANSWERED: "bg-emerald-500",
-  CLOSED: "bg-slate-400",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  OPEN: "Open",
-  IN_REVIEW: "In review",
-  ANSWERED: "Answered",
-  CLOSED: "Closed",
-};
+const OVERDUE_CHIP =
+  "border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-semantic-danger-text)]";
 
 function formatFullDate(iso: string | null): string {
   if (!iso) return "—";
@@ -98,11 +92,14 @@ function formatFullDate(iso: string | null): string {
   });
 }
 
-function riskColor(risk: string | null): string {
-  if (risk === "high") return "bg-red-50 text-[#EF4444]";
-  if (risk === "med") return "bg-amber-50 text-amber-600";
-  if (risk === "low") return "bg-[#10B981]/10 text-[#10B981]";
-  return "bg-slate-50 text-[#64748B]";
+function riskChipClass(risk: string | null): string {
+  if (risk === "high")
+    return "border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-semantic-danger-text)]";
+  if (risk === "med")
+    return "border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] text-[var(--enterprise-semantic-warning-text)]";
+  if (risk === "low")
+    return "border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] text-[var(--enterprise-semantic-success-text)]";
+  return "border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]";
 }
 
 function viewerHrefForLinkedIssue(
@@ -146,6 +143,18 @@ function rfiRefFromMeta(m: Record<string, unknown>): string | null {
   return null;
 }
 
+/** Timeline icon wells — enterprise semantic palette only (no rainbow Tailwind). */
+const ACTIVITY_ICON_WRAP = {
+  accent: "bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]",
+  info: "bg-[var(--enterprise-semantic-info-bg)] text-[var(--enterprise-semantic-info-text)]",
+  success:
+    "bg-[var(--enterprise-semantic-success-bg)] text-[var(--enterprise-semantic-success-text)]",
+  warning:
+    "bg-[var(--enterprise-semantic-warning-bg)] text-[var(--enterprise-semantic-warning-text)]",
+  danger: "bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-semantic-danger-text)]",
+  neutral: "bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]",
+} as const;
+
 function formatActivityRelative(iso: string, nowMs: number): string {
   const d = new Date(iso);
   const diff = Math.max(0, nowMs - d.getTime());
@@ -175,8 +184,7 @@ function describeRfiActivity(row: RfiActivityRow): {
     case "RFI_CREATED":
       return {
         Icon: PlusCircle,
-        iconWrapClass:
-          "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200",
+        iconWrapClass: ACTIVITY_ICON_WRAP.success,
         headline: "RFI created",
         subline: ref
           ? `This request was opened: ${ref}.`
@@ -185,7 +193,7 @@ function describeRfiActivity(row: RfiActivityRow): {
     case "RFI_SENT_FOR_REVIEW":
       return {
         Icon: Send,
-        iconWrapClass: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200",
+        iconWrapClass: ACTIVITY_ICON_WRAP.info,
         headline: "Sent for review",
         subline: ref
           ? `${ref} was sent to the assignee so they can post the official response.`
@@ -194,7 +202,7 @@ function describeRfiActivity(row: RfiActivityRow): {
     case "RFI_RESPONSE_SUBMITTED":
       return {
         Icon: BadgeCheck,
-        iconWrapClass: "bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-200",
+        iconWrapClass: ACTIVITY_ICON_WRAP.success,
         headline: "Official response submitted",
         subline: ref
           ? `The written answer was recorded on ${ref}.`
@@ -206,7 +214,7 @@ function describeRfiActivity(row: RfiActivityRow): {
       if (voided) {
         return {
           Icon: Ban,
-          iconWrapClass: "bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100",
+          iconWrapClass: ACTIVITY_ICON_WRAP.warning,
           headline: "Closed without formal answer",
           subline: reason
             ? `Reason noted: “${reason}”.`
@@ -215,7 +223,7 @@ function describeRfiActivity(row: RfiActivityRow): {
       }
       return {
         Icon: CircleCheck,
-        iconWrapClass: "bg-slate-100 text-slate-800 dark:bg-slate-800/80 dark:text-slate-100",
+        iconWrapClass: ACTIVITY_ICON_WRAP.neutral,
         headline: "RFI closed",
         subline: ref
           ? `${ref} was marked complete after the official response.`
@@ -225,7 +233,7 @@ function describeRfiActivity(row: RfiActivityRow): {
     case "RFI_ATTACHMENT_ADDED":
       return {
         Icon: Paperclip,
-        iconWrapClass: "bg-sky-50 text-sky-800 dark:bg-sky-950/35 dark:text-sky-200",
+        iconWrapClass: ACTIVITY_ICON_WRAP.accent,
         headline: "File attached",
         subline: fileName
           ? `“${fileName}” was added to this RFI.`
@@ -234,7 +242,7 @@ function describeRfiActivity(row: RfiActivityRow): {
     case "RFI_ATTACHMENT_REMOVED":
       return {
         Icon: Unlink2,
-        iconWrapClass: "bg-rose-50 text-rose-800 dark:bg-rose-950/35 dark:text-rose-200",
+        iconWrapClass: ACTIVITY_ICON_WRAP.danger,
         headline: "Attachment removed",
         subline: fileName
           ? `“${fileName}” was removed from this RFI.`
@@ -245,7 +253,7 @@ function describeRfiActivity(row: RfiActivityRow): {
       const who = row.actor?.name?.trim() || "Someone";
       return {
         Icon: MessageSquare,
-        iconWrapClass: "bg-indigo-50 text-indigo-800 dark:bg-indigo-950/35 dark:text-indigo-200",
+        iconWrapClass: ACTIVITY_ICON_WRAP.info,
         headline: "Discussion message",
         subline: excerpt ? `${who}: “${excerpt}”` : `${who} posted a message on this RFI.`,
       };
@@ -253,7 +261,7 @@ function describeRfiActivity(row: RfiActivityRow): {
     case "RFI_UPDATED":
       return {
         Icon: PencilLine,
-        iconWrapClass: "bg-violet-50 text-violet-800 dark:bg-violet-950/35 dark:text-violet-200",
+        iconWrapClass: ACTIVITY_ICON_WRAP.neutral,
         headline: "Details updated",
         subline: ref
           ? `Someone edited ${ref} — for example the question, assignee, due date, or linked issues.`
@@ -262,7 +270,7 @@ function describeRfiActivity(row: RfiActivityRow): {
     case "RFI_DELETED":
       return {
         Icon: Trash2,
-        iconWrapClass: "bg-red-50 text-red-800 dark:bg-red-950/35 dark:text-red-200",
+        iconWrapClass: ACTIVITY_ICON_WRAP.danger,
         headline: "RFI deleted",
         subline: ref
           ? `${ref} was permanently removed from the project.`
@@ -271,7 +279,7 @@ function describeRfiActivity(row: RfiActivityRow): {
     default:
       return {
         Icon: CircleDot,
-        iconWrapClass: "bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300",
+        iconWrapClass: ACTIVITY_ICON_WRAP.neutral,
         headline: row.type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
         subline: null,
       };
@@ -379,35 +387,38 @@ function formatAttachmentSize(sizeBytesStr: string): string {
 }
 
 function RfiAttachmentFormatTile({ kind, label }: { kind: AttachmentVisualKind; label: string }) {
-  const common = "h-7 w-7 shrink-0";
+  const common = "h-7 w-7 shrink-0 text-[var(--enterprise-primary)]";
   const icon =
     kind === "pdf" ? (
-      <FileText className={`${common} text-red-500`} aria-hidden />
+      <FileText className={common} aria-hidden />
     ) : kind === "word" ? (
-      <FileText className={`${common} text-blue-500`} aria-hidden />
+      <FileText className={`${common} opacity-90`} aria-hidden />
     ) : kind === "sheet" ? (
-      <FileSpreadsheet className={`${common} text-emerald-600`} aria-hidden />
+      <FileSpreadsheet className={`${common} opacity-90`} aria-hidden />
     ) : kind === "presentation" ? (
-      <Presentation className={`${common} text-amber-600`} aria-hidden />
+      <Presentation className={`${common} opacity-90`} aria-hidden />
     ) : kind === "video" ? (
-      <Film className={`${common} text-violet-500`} aria-hidden />
+      <Film className={`${common} opacity-90`} aria-hidden />
     ) : kind === "audio" ? (
-      <Music className={`${common} text-cyan-600`} aria-hidden />
+      <Music className={`${common} opacity-90`} aria-hidden />
     ) : kind === "archive" ? (
-      <Archive className={`${common} text-amber-800`} aria-hidden />
+      <Archive className={`${common} opacity-90`} aria-hidden />
     ) : kind === "image" ? (
-      <FileImage className={`${common} text-sky-400`} aria-hidden />
+      <FileImage className={`${common} opacity-90`} aria-hidden />
     ) : (
-      <FileIcon className={`${common} text-[var(--enterprise-text-muted)]`} aria-hidden />
+      <FileIcon
+        className={`${common} text-[var(--enterprise-text-muted)] opacity-100`}
+        aria-hidden
+      />
     );
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-b from-[var(--enterprise-surface)] to-slate-950/90 px-1 py-1.5">
+    <div
+      className="enterprise-hint-tip flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-b from-[var(--enterprise-surface)] to-[var(--enterprise-bg)] px-1 py-1.5"
+      data-hint={label}
+    >
       {icon}
-      <span
-        className="max-w-full truncate px-0.5 text-center text-[9px] font-bold uppercase leading-tight tracking-wide text-[var(--enterprise-text-muted)]"
-        title={label}
-      >
+      <span className="max-w-full truncate px-0.5 text-center text-[9px] font-bold uppercase leading-tight tracking-wide text-[var(--enterprise-text-muted)]">
         {label}
       </span>
     </div>
@@ -722,7 +733,7 @@ function RfiAttachmentListItem({
               type="button"
               disabled={deleteMut.isPending}
               onClick={() => setDeleteDialogOpen(true)}
-              className="shrink-0 rounded-md p-1.5 text-[var(--enterprise-text-muted)] hover:bg-red-500/10 hover:text-red-600 disabled:opacity-40"
+              className="shrink-0 rounded-md p-1.5 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)] disabled:opacity-40"
               aria-label={`Remove ${att.fileName}`}
             >
               {deleteMut.isPending ? (
@@ -824,7 +835,7 @@ function RfiActivitySection({
                 </p>
               ) : null}
               <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
-                <span title={abs} className="tabular-nums">
+                <span className="enterprise-hint-tip tabular-nums" data-hint={abs}>
                   {when}
                 </span>
                 {actorName ? (
@@ -1153,7 +1164,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
       <div className="space-y-6 lg:space-y-7">
         <header
           id="rfi-overview"
-          className="space-y-3 border-b border-[var(--enterprise-border)] pb-6"
+          className="space-y-4 rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-card)] sm:p-5 lg:p-6"
         >
           <Link
             href={`/projects/${projectId}/rfi`}
@@ -1162,17 +1173,38 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
             <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
             All RFIs
           </Link>
-          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
-            RFI #{String(rfi.rfiNumber).padStart(3, "0")}
-          </p>
-          <h1 className="text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl lg:text-3xl">
-            {rfi.title}
-          </h1>
-          <div className="flex flex-wrap items-center gap-2 pt-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1 font-mono text-xs font-semibold tabular-nums text-[var(--enterprise-text-muted)]">
+              #{String(rfi.rfiNumber).padStart(3, "0")}
+            </span>
+            <span
+              className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold ${rfiStatusBadgeClass(st)}`}
+            >
+              {RFI_STATUS_LABEL[st] ?? rfi.status}
+            </span>
+            <span
+              className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold ${priorityBadgeClassLight(pri)}`}
+            >
+              {pri === "LOW" ? "Low" : pri === "HIGH" ? "High" : "Medium"} priority
+            </span>
+            {rfi.risk ? (
+              <span
+                className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold capitalize ${riskChipClass(rfi.risk)}`}
+              >
+                Risk: {rfi.risk === "med" ? "Medium" : rfi.risk === "high" ? "High" : "Low"}
+              </span>
+            ) : null}
+            {overdue ? (
+              <span
+                className={`rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${OVERDUE_CHIP}`}
+              >
+                Overdue
+              </span>
+            ) : null}
             <button
               type="button"
               onClick={() => setTimelineOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/25 hover:bg-[var(--enterprise-hover-surface)]"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/30 hover:bg-[var(--enterprise-primary-soft)]"
             >
               <Activity className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" aria-hidden />
               Timeline
@@ -1182,26 +1214,10 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                 </span>
               ) : null}
             </button>
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-medium text-[var(--enterprise-text)]">
-              <span className={`h-2 w-2 rounded-full ${STATUS_DOT[st] ?? "bg-slate-400"}`} />
-              {STATUS_LABEL[st] ?? rfi.status}
-            </span>
-            <span className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-medium text-[var(--enterprise-text)]">
-              Priority: {pri === "LOW" ? "Low" : pri === "HIGH" ? "High" : "Medium"}
-            </span>
-            {rfi.risk ? (
-              <span
-                className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold capitalize ${riskColor(rfi.risk)}`}
-              >
-                Risk: {rfi.risk === "med" ? "Medium" : rfi.risk === "high" ? "High" : "Low"}
-              </span>
-            ) : null}
-            {overdue ? (
-              <span className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-red-700">
-                Overdue
-              </span>
-            ) : null}
           </div>
+          <h1 className="text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl lg:text-3xl">
+            {rfi.title}
+          </h1>
 
           <div className="mt-4 border-t border-[var(--enterprise-border)]/80 pt-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -1282,15 +1298,15 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
               </p>
             ) : null}
             {voidOpen && isCreator && !closed ? (
-              <div className="mt-4 rounded-xl border border-amber-200/60 bg-amber-50/40 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
-                <p className="text-sm font-medium text-[var(--enterprise-text)]">
+              <div className="enterprise-alert-warning mt-4 p-4">
+                <p className="text-sm font-semibold">
                   Close without a recorded answer in the thread?
                 </p>
                 <textarea
                   value={voidReason}
                   onChange={(e) => setVoidReason(e.target.value)}
                   rows={2}
-                  className={`${inputClass} mt-2`}
+                  className={`${inputClass} mt-2 bg-[var(--enterprise-surface)]`}
                   placeholder="Optional reason (superseded, withdrawn, …)"
                 />
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1303,14 +1319,14 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                         voidReason: voidReason.trim() || null,
                       })
                     }
-                    className="rounded-lg bg-[var(--enterprise-text)] px-4 py-2 text-sm font-semibold text-[var(--enterprise-surface)] disabled:opacity-60"
+                    className="rounded-lg bg-[var(--enterprise-semantic-warning-text)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
                   >
                     Confirm close
                   </button>
                   <button
                     type="button"
                     onClick={() => setVoidOpen(false)}
-                    className="rounded-lg border border-[var(--enterprise-border)] px-4 py-2 text-sm text-[var(--enterprise-text)]"
+                    className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)]"
                   >
                     Cancel
                   </button>
@@ -1322,13 +1338,11 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
 
         {st === "OPEN" && rfiResponderUserIds(rfi).length === 0 && canEditAssignee ? (
           <div
-            className="rounded-xl border border-amber-200/90 bg-amber-50/90 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30"
+            className="enterprise-alert-warning px-4 py-3 shadow-[var(--enterprise-shadow-xs)]"
             role="status"
           >
-            <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
-              Choose who will respond
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-amber-900/85 dark:text-amber-200/90">
+            <p className="text-sm font-semibold">Choose who will respond</p>
+            <p className="mt-1 text-xs leading-relaxed opacity-95">
               Select one or more people below. At least one responder is required before you can
               send this RFI for review.
             </p>
@@ -1343,7 +1357,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
             id="rfi-assignee"
             className={`flex min-w-0 gap-3 ${canEditAssignee ? "sm:col-span-2 lg:col-span-4" : ""}`}
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[var(--enterprise-primary)] dark:bg-blue-950/40">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]">
               <User className="h-4 w-4" aria-hidden />
             </div>
             <div className="min-w-0 flex-1">
@@ -1402,8 +1416,8 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40">
-              <Calendar className="h-4 w-4" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]">
+              <Calendar className="h-4 w-4" aria-hidden />
             </div>
             <div>
               <p className="text-[11px] text-[var(--enterprise-text-muted)]">Due</p>
@@ -1413,8 +1427,8 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)]">
-              <Clock className="h-4 w-4" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]">
+              <Clock className="h-4 w-4" aria-hidden />
             </div>
             <div>
               <p className="text-[11px] text-[var(--enterprise-text-muted)]">Created</p>
@@ -1424,7 +1438,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950/40">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]">
               <FileText className="h-4 w-4" strokeWidth={1.75} aria-hidden />
             </div>
             <div>
@@ -1626,7 +1640,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
 
         <div id="rfi-discussion" className={`${cardClass} scroll-mt-36`}>
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-200">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]">
               <MessageSquare className="h-4 w-4" strokeWidth={1.75} aria-hidden />
             </div>
             <div>
@@ -1639,16 +1653,16 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
           </div>
 
           {recordedAnswerPreview ? (
-            <div className="mt-2.5 rounded-lg border border-emerald-200/85 bg-emerald-50/45 px-2 py-2 dark:border-emerald-900/40 dark:bg-emerald-950/18">
+            <div className="mt-2.5 rounded-lg border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] px-2 py-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-200/90">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-semantic-success-text)]">
                   Recorded answer
                 </p>
                 {canRemoveRecordedAnswer ? (
                   <button
                     type="button"
                     onClick={() => setDeleteRecordedAnswerOpen(true)}
-                    className="-my-0.5 -mr-0.5 rounded-md p-1 text-emerald-800/80 transition hover:bg-emerald-900/10 hover:text-red-700 dark:text-emerald-200/80 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                    className="-my-0.5 -mr-0.5 rounded-md p-1 text-[var(--enterprise-semantic-success-text)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
                     aria-label="Remove recorded answer"
                   >
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
@@ -1656,7 +1670,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                 ) : null}
               </div>
               <div className="mt-1.5 flex gap-2">
-                <div className="relative mt-px flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-emerald-200/80 bg-white text-[9px] font-semibold text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-100">
+                <div className="relative mt-px flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-surface)] text-[9px] font-semibold text-[var(--enterprise-semantic-success-text)]">
                   {recordedAnswerPreview.authorImage ? (
                     // eslint-disable-next-line @next/next/no-img-element -- profile URL from auth
                     <img
@@ -1685,7 +1699,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                       </time>
                     ) : null}
                   </div>
-                  <div className="mt-1 rounded-md border border-emerald-200/55 bg-white/85 px-2 py-1.5 dark:border-emerald-900/35 dark:bg-[var(--enterprise-surface)]/55 [&_.rfi-rich-body]:text-xs [&_.rfi-rich-body]:leading-snug">
+                  <div className="mt-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1.5 [&_.rfi-rich-body]:text-xs [&_.rfi-rich-body]:leading-snug">
                     <RfiMessageHtmlBody html={recordedAnswerPreview.body} className="mt-0" />
                   </div>
                 </div>
@@ -1707,7 +1721,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                   <button
                     type="button"
                     onClick={() => setDeleteRecordedAnswerOpen(true)}
-                    className="rounded-md p-1 text-[var(--enterprise-text-muted)] transition hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-300"
+                    className="rounded-md p-1 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
                     aria-label="Remove recorded answer"
                   >
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
@@ -1729,21 +1743,21 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
           {!rfi.answerMessageId &&
           rfi.officialResponse?.trim() &&
           (st === "ANSWERED" || st === "CLOSED") ? (
-            <div className="mt-3 rounded-lg border border-amber-200/70 bg-amber-50/50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/25 dark:text-amber-100">
+            <div className="enterprise-alert-warning mt-3 px-3 py-2 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <p className="font-semibold">Recorded answer (legacy)</p>
                 {canRemoveRecordedAnswer ? (
                   <button
                     type="button"
                     onClick={() => setDeleteRecordedAnswerOpen(true)}
-                    className="rounded-md p-1 text-amber-900/70 transition hover:bg-red-500/15 hover:text-red-800 dark:text-amber-200/80 dark:hover:text-red-300"
+                    className="rounded-md p-1 opacity-80 transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)] hover:opacity-100"
                     aria-label="Remove recorded answer"
                   >
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                   </button>
                 ) : null}
               </div>
-              <p className="mt-1 whitespace-pre-wrap text-[var(--enterprise-text)] dark:text-amber-50/95">
+              <p className="mt-1 whitespace-pre-wrap text-[var(--enterprise-text)]">
                 {rfi.officialResponse}
               </p>
             </div>
@@ -1759,7 +1773,9 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                 Loading thread…
               </p>
             ) : messagesQuery.isError ? (
-              <p className="px-4 py-6 text-sm text-red-600">Could not load this thread.</p>
+              <p className="px-4 py-6 text-sm text-[var(--enterprise-semantic-danger-text)]">
+                Could not load this thread.
+              </p>
             ) : (messagesQuery.data?.length ?? 0) === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-[var(--enterprise-text-muted)]">
                 No replies yet. Add the first comment below.
@@ -1801,7 +1817,9 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
           ) : null}
         </div>
 
-        {actionMsg ? <p className="text-sm text-red-600">{actionMsg}</p> : null}
+        {actionMsg ? (
+          <p className="text-sm text-[var(--enterprise-semantic-danger-text)]">{actionMsg}</p>
+        ) : null}
 
         {closed && viewerHref ? (
           <Link

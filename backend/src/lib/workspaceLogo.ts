@@ -29,6 +29,24 @@ export function workspaceLogoUrlForClients(
   return u || null;
 }
 
+/**
+ * Absolute URL for `<img src>` in outbound email. Resolves same-origin `/api/v1/...` paths
+ * against `PUBLIC_API_URL` when set (split app/API deploy).
+ */
+export function resolveWorkspaceLogoUrlForEmail(
+  env: Env,
+  workspaceLogoUrl: string | null | undefined,
+): string | null {
+  const t = workspaceLogoUrl?.trim();
+  if (!t) return null;
+  if (t.startsWith("https://") || t.startsWith("http://")) return t;
+  const appBase = env.PUBLIC_APP_URL.replace(/\/$/, "");
+  const apiBase = apiPublicOrigin(env);
+  if (t.startsWith("/api/")) return `${apiBase}${t}`;
+  if (t.startsWith("/")) return `${appBase}${t}`;
+  return `${appBase}/${t}`;
+}
+
 const MAX_LOGO_FETCH_BYTES = 2_000_000;
 
 /** PDFKit can embed PNG, JPEG, GIF, WebP — not SVG. */

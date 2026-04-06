@@ -3,6 +3,7 @@ import { ActivityType } from "@prisma/client";
 import type { Env } from "./env.js";
 import { logActivity } from "./activity.js";
 import { prisma } from "./prisma.js";
+import { buildTransactionalEmailHtml } from "./transactionalEmailLayout.js";
 import { STORAGE_WARN_80, STORAGE_WARN_95 } from "../config/product.js";
 
 export async function maybeSendStorageAlerts(
@@ -36,29 +37,39 @@ export async function maybeSendStorageAlerts(
   const gb = (n: bigint) => (Number(n) / 1024 ** 3).toFixed(2);
   const from = env.RESEND_FROM!;
 
-  const send = async (level: 80 | 95, subject: string, body: string) => {
+  const appBase = env.PUBLIC_APP_URL.replace(/\/$/, "");
+
+  const send = async (level: 80 | 95, subject: string, title: string, lines: string[]) => {
     await logActivity(workspaceId, ActivityType.STORAGE_THRESHOLD, {
       metadata: { level, used: newUsed.toString(), quota: quota.toString() },
+    });
+    const text = `${title}\n\n${lines.join("\n")}\n\n${appBase}`;
+    const html = buildTransactionalEmailHtml(env, {
+      eyebrow: "Workspace",
+      title,
+      bodyLines: lines,
+      primaryAction: { url: appBase, label: "Open PlanSync" },
+      fallbackUrl: appBase,
+      footerNote: "You're receiving this because you are an admin of this workspace.",
     });
     await resend.emails.send({
       from,
       to: adminEmails,
       subject,
-      text: body,
+      text,
+      html,
     });
   };
 
   if (newR >= STORAGE_WARN_95 && prevR < STORAGE_WARN_95) {
-    await send(
-      95,
-      "PlanSync: storage almost full (95%)",
-      `Your workspace "${ws.name}" is using ${gb(newUsed)} GB of ${gb(quota)} GB.`,
-    );
+    await send(95, "PlanSync: storage almost full (95%)", "Storage almost full", [
+      `Your workspace “${ws.name}” is using ${gb(newUsed)} GB of ${gb(quota)} GB (about 95%).`,
+      "Consider upgrading your plan or removing old files to avoid uploads being blocked.",
+    ]);
   } else if (newR >= STORAGE_WARN_80 && prevR < STORAGE_WARN_80) {
-    await send(
-      80,
-      "PlanSync: storage warning (80%)",
-      `Your workspace "${ws.name}" is using ${gb(newUsed)} GB of ${gb(quota)} GB.`,
-    );
+    await send(80, "PlanSync: storage warning (80%)", "Storage usage notice", [
+      `Your workspace “${ws.name}” is using ${gb(newUsed)} GB of ${gb(quota)} GB (about 80%).`,
+      "You may want to free up space or review your subscription before you hit the limit.",
+    ]);
   }
 }

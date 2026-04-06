@@ -40,6 +40,7 @@ import {
   ISSUE_STATUS_ORDER,
   issueDateToInputValue,
   issueStatusBadgeClassLight,
+  priorityBadgeClassLight,
 } from "@/lib/issueStatusStyle";
 import { qk } from "@/lib/queryKeys";
 
@@ -54,73 +55,6 @@ const ISSUE_FILTER_DEFS: { key: StatusFilter; label: string; Icon: LucideIcon }[
   { key: "RESOLVED", label: "Resolved", Icon: CheckCircle2 },
   { key: "CLOSED", label: "Closed", Icon: Archive },
 ];
-
-const PRI_BADGE: Record<string, string> = {
-  LOW: "bg-slate-100 text-slate-700 ring-1 ring-slate-200/90",
-  MEDIUM: "bg-amber-50 text-amber-900 ring-1 ring-amber-200/80",
-  HIGH: "bg-red-50 text-red-800 ring-1 ring-red-200/80",
-};
-
-function StatCell({
-  icon: Icon,
-  value,
-  label,
-  selected,
-  onClick,
-  ariaLabel,
-}: {
-  icon: LucideIcon;
-  value: number;
-  label: string;
-  selected?: boolean;
-  onClick?: () => void;
-  ariaLabel?: string;
-}) {
-  const inner = (
-    <>
-      <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]"
-        aria-hidden
-      >
-        <Icon className="h-4 w-4" strokeWidth={1.75} />
-      </div>
-      <div className="min-w-0 text-left">
-        <p className="text-lg font-semibold tabular-nums leading-none text-[var(--enterprise-text)]">
-          {value}
-        </p>
-        <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">{label}</p>
-      </div>
-    </>
-  );
-
-  const shellClass = `flex w-full items-center gap-3 rounded-lg border bg-[var(--enterprise-bg)]/50 px-3 py-2.5 sm:px-4 sm:py-3 ${
-    selected
-      ? "border-[var(--enterprise-primary)]/35 bg-[var(--enterprise-primary-soft)]/40 ring-2 ring-[var(--enterprise-primary)]/20"
-      : "border-[var(--enterprise-border)]"
-  } ${
-    onClick
-      ? "cursor-pointer transition-colors hover:bg-[var(--enterprise-hover-surface)]/60 hover:border-[var(--enterprise-border)]"
-      : ""
-  }`;
-
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        aria-pressed={selected}
-        aria-label={
-          ariaLabel ?? `${label}: ${value} issues. Filter list by ${label.toLowerCase()}.`
-        }
-        className={shellClass}
-      >
-        {inner}
-      </button>
-    );
-  }
-
-  return <div className={shellClass}>{inner}</div>;
-}
 
 function IssueEmptyState({ noRows, projectId }: { noRows: boolean; projectId: string }) {
   return (
@@ -167,7 +101,7 @@ const ProjectIssueTableRow = memo(function ProjectIssueTableRow({
   onStatusChange,
 }: IssueRowProps) {
   const pri = issue.priority ?? "MEDIUM";
-  const priClass = PRI_BADGE[pri] ?? PRI_BADGE.MEDIUM;
+  const priClass = priorityBadgeClassLight(pri);
 
   return (
     <tr className="border-b border-[var(--enterprise-border)]/80 transition-colors last:border-0 hover:bg-[var(--enterprise-hover-surface)]/80">
@@ -436,49 +370,6 @@ export function ProjectIssuesClient({ projectId }: { projectId: string }) {
       </header>
 
       <div className="sticky top-0 z-10 space-y-4 border-b border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/90 py-1 pb-4 backdrop-blur-md supports-[backdrop-filter]:bg-[var(--enterprise-bg)]/80">
-        <div className="enterprise-card p-4 sm:p-5">
-          <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-            Overview — click to filter
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <StatCell
-              icon={LayoutGrid}
-              value={stats.total}
-              label="All"
-              selected={filter === "ALL"}
-              onClick={() => setFilter("ALL")}
-            />
-            <StatCell
-              icon={CircleDot}
-              value={stats.open}
-              label="Open"
-              selected={filter === "OPEN"}
-              onClick={() => setFilter("OPEN")}
-            />
-            <StatCell
-              icon={Activity}
-              value={stats.inProgress}
-              label="In progress"
-              selected={filter === "IN_PROGRESS"}
-              onClick={() => setFilter("IN_PROGRESS")}
-            />
-            <StatCell
-              icon={CheckCircle2}
-              value={stats.resolved}
-              label="Resolved"
-              selected={filter === "RESOLVED"}
-              onClick={() => setFilter("RESOLVED")}
-            />
-            <StatCell
-              icon={Archive}
-              value={stats.closed}
-              label="Closed"
-              selected={filter === "CLOSED"}
-              onClick={() => setFilter("CLOSED")}
-            />
-          </div>
-        </div>
-
         <div className="enterprise-card p-4 sm:p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">

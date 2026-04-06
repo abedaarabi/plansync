@@ -1,3 +1,4 @@
+import { parseTakeoffPricingFromSettingsJson } from "./takeoffPricing.js";
 import { workspaceLogoUrlForClients } from "./workspaceLogo.js";
 /** JSON-safe workspace row; `logoUrl` is a browser-loadable URL (hosted or external). Omits `logoS3Key`. */
 export function workspaceJson(ws, env) {
@@ -45,4 +46,26 @@ export function projectRowJson(row) {
         ...rest,
         localBudget: localBudgetToJson(localBudget),
     };
+}
+/** Single-project API shape (GET/PATCH `/projects/:id`) — exposes takeoff pricing from `settingsJson` only. */
+export function projectDetailApiJson(project) {
+    return projectRowJson({
+        id: project.id,
+        name: project.name,
+        workspaceId: project.workspaceId,
+        projectNumber: project.projectNumber,
+        currency: project.currency,
+        measurementSystem: project.measurementSystem,
+        localBudget: project.localBudget,
+        projectSize: project.projectSize,
+        projectType: project.projectType,
+        location: project.location,
+        websiteUrl: project.websiteUrl,
+        logoUrl: project.logoUrl,
+        stage: project.stage,
+        progressPercent: project.progressPercent,
+        startDate: project.startDate,
+        endDate: project.endDate,
+        takeoffPricing: parseTakeoffPricingFromSettingsJson(project.settingsJson),
+    });
 }

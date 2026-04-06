@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import { prisma } from "../../lib/prisma.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectForMember, assertUserAssignableToProject } from "../../lib/projectAccess.js";
+import { canCreateIssues, issuesWhereForAuth, loadProjectWithAuth } from "../../lib/permissions.js";
 import { logActivity } from "../../lib/activity.js";
 import { inviteFromAddress } from "../../lib/inviteEmail.js";
 import { buildIssueAssignedEmailHtml, buildIssueAssignedEmailText, buildViewerIssuePath, buildViewerIssueUrl, } from "../../lib/issueAssignEmail.js";
@@ -20,8 +21,8 @@ function dateFromYmd(s) {
     return new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12, 0, 0));
 }
 const issueInclude = {
-    assignee: { select: { id: true, name: true, email: true } },
-    creator: { select: { id: true, name: true, email: true } },
+    assignee: { select: { id: true, name: true, email: true, image: true } },
+    creator: { select: { id: true, name: true, email: true, image: true } },
     file: { select: { name: true } },
     fileVersion: { select: { version: true } },
     rfiLinks: {
@@ -59,6 +60,7 @@ function issueRowJson(row) {
                 id: row.assignee.id,
                 name: row.assignee.name,
                 email: row.assignee.email,
+                image: row.assignee.image,
             }
             : null,
         creator: row.creator
@@ -66,6 +68,7 @@ function issueRowJson(row) {
                 id: row.creator.id,
                 name: row.creator.name,
                 email: row.creator.email,
+                image: row.creator.image,
             }
             : null,
         file: { name: row.file.name },
@@ -111,11 +114,12 @@ async function sendIssueAssignedEmail(env, input) {
         from,
         to: input.assigneeEmail,
         subject: `PlanSync: assigned — ${input.issueTitle.slice(0, 60)}${input.issueTitle.length > 60 ? "…" : ""}`,
-        html: buildIssueAssignedEmailHtml(payload),
+        html: buildIssueAssignedEmailHtml(env, payload),
         text: buildIssueAssignedEmailText(payload),
     });
 }
-export function registerIssuesRoutes(r, needUser, env) {
+export function registerIssuesRoutes(r, needUser, env, opts) {
+    const notifyIssues = (fileVersionId) => opts?.onIssuesMutated?.(fileVersionId);
     r.get("/file-versions/:fileVersionId/issues", needUser, async (c) => {
         const fileVersionId = c.req.param("fileVersionId");
         const fv = await prisma.fileVersion.findUnique({
@@ -140,16 +144,23 @@ export function registerIssuesRoutes(r, needUser, env) {
     r.get("/projects/:projectId/issues", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const fileVersionId = c.req.query("fileVersionId")?.trim() || undefined;
-        const access = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in access)
-            return c.json({ error: access.error }, access.status);
-        const gate = requirePro(access.project.workspace);
+        const userId = c.get("user").id;
+        const auth = await loadProjectWithAuth(projectId, userId);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!ctx.settings.modules.issues) {
+            return c.json([]);
+        }
+        const gate = requirePro(ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        const scope = issuesWhereForAuth(ctx, userId);
         const rows = await prisma.issue.findMany({
             where: {
                 projectId,
                 ...(fileVersionId ? { fileVersionId } : {}),
+                ...scope,
             },
             include: issueInclude,
             orderBy: { createdAt: "desc" },
@@ -164,12 +175,23 @@ export function registerIssuesRoutes(r, needUser, env) {
         });
         if (!row)
             return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(row.projectId, c.get("user").id);
-        if ("error" in access)
-            return c.json({ error: access.error }, access.status);
-        const gate = requirePro(access.project.workspace);
+        const userId = c.get("user").id;
+        const auth = await loadProjectWithAuth(row.projectId, userId);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!ctx.settings.modules.issues) {
+            return c.json({ error: "Not found" }, 404);
+        }
+        const gate = requirePro(ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        const scope = issuesWhereForAuth(ctx, userId);
+        const allowed = await prisma.issue.count({
+            where: { id: issueId, projectId: row.projectId, ...scope },
+        });
+        if (allowed === 0)
+            return c.json({ error: "Not found" }, 404);
         return c.json(issueRowJson(row));
     });
     r.post("/issues", needUser, async (c) => {
@@ -202,9 +224,16 @@ export function registerIssuesRoutes(r, needUser, env) {
         });
         if (!file)
             return c.json({ error: "File not found" }, 404);
-        const issueAccess = await loadProjectForMember(file.projectId, c.get("user").id);
-        if ("error" in issueAccess)
-            return c.json({ error: issueAccess.error }, issueAccess.status);
+        const auth = await loadProjectWithAuth(file.projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!ctx.settings.modules.issues) {
+            return c.json({ error: "Issues are disabled for this project" }, 403);
+        }
+        if (!canCreateIssues(ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
         const gate = requirePro(file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
@@ -335,6 +364,7 @@ export function registerIssuesRoutes(r, needUser, env) {
                 actorUserId: c.get("user").id,
             }).catch((e) => console.error("[issue-notification]", e));
         }
+        notifyIssues(issue.fileVersionId);
         return c.json(issueRowJson(issue));
     });
     r.post("/file-versions/:newFileVersionId/issues/carry-forward", needUser, async (c) => {
@@ -378,6 +408,7 @@ export function registerIssuesRoutes(r, needUser, env) {
         }
         const toBlobObj = asObject(toVersion.annotationBlob);
         if (toBlobObj?.[CARRY_FORWARD_META_KEY] === body.data.fromFileVersionId) {
+            notifyIssues(newFileVersionId);
             return c.json({ ok: true, copiedIssueCount: 0, idempotent: true });
         }
         const sourceIssues = await prisma.issue.findMany({
@@ -395,6 +426,7 @@ export function registerIssuesRoutes(r, needUser, env) {
                     },
                 },
             });
+            notifyIssues(newFileVersionId);
             return c.json({ ok: true, copiedIssueCount: 0, idempotent: false });
         }
         const sourceBlobObj = asObject(fromVersion.annotationBlob);
@@ -456,6 +488,8 @@ export function registerIssuesRoutes(r, needUser, env) {
                 copiedIssueCount: result,
             },
         });
+        notifyIssues(newFileVersionId);
+        notifyIssues(body.data.fromFileVersionId);
         return c.json({ ok: true, copiedIssueCount: result, idempotent: false });
     });
     r.patch("/issues/:issueId", needUser, async (c) => {
@@ -603,6 +637,7 @@ export function registerIssuesRoutes(r, needUser, env) {
                 actorUserId: c.get("user").id,
             }).catch((e) => console.error("[issue-notification]", e));
         }
+        notifyIssues(issue.fileVersionId);
         return c.json(issueRowJson(updated));
     });
     r.delete("/issues/:issueId", needUser, async (c) => {
@@ -630,6 +665,7 @@ export function registerIssuesRoutes(r, needUser, env) {
             projectId: issue.projectId,
             metadata: { title },
         });
+        notifyIssues(issue.fileVersionId);
         return c.json({ ok: true });
     });
 }

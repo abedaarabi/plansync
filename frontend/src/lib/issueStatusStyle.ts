@@ -19,6 +19,45 @@ export const ISSUE_PRIORITY_LABEL: Record<string, string> = {
   HIGH: "High",
 };
 
+/**
+ * Priority on light enterprise surfaces (issues table, RFI list/detail).
+ * Low = neutral, Medium = info (on-brand blue, not amber “warning”), High = danger.
+ */
+export const PRIORITY_BADGE_CLASS_LIGHT: Record<string, string> = {
+  LOW: "border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]",
+  MEDIUM:
+    "border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] text-[var(--enterprise-semantic-info-text)]",
+  HIGH: "border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-semantic-danger-text)]",
+};
+
+export function priorityBadgeClassLight(priority: string | undefined | null): string {
+  const k = (priority ?? "MEDIUM").toUpperCase();
+  return PRIORITY_BADGE_CLASS_LIGHT[k] ?? PRIORITY_BADGE_CLASS_LIGHT.MEDIUM;
+}
+
+/** RFI workflow — list + detail chips (aligned with enterprise semantic + primary, not harsh dots). */
+export const RFI_STATUS_LABEL: Record<string, string> = {
+  OPEN: "Open",
+  IN_REVIEW: "In review",
+  ANSWERED: "Answered",
+  CLOSED: "Closed",
+};
+
+export const RFI_STATUS_BADGE_CLASS: Record<string, string> = {
+  OPEN: "border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] text-[var(--enterprise-semantic-info-text)]",
+  IN_REVIEW:
+    "border border-[var(--enterprise-primary)]/30 bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]",
+  ANSWERED:
+    "border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] text-[var(--enterprise-semantic-success-text)]",
+  CLOSED:
+    "border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]",
+};
+
+export function rfiStatusBadgeClass(status: string | undefined | null): string {
+  const k = (status ?? "").trim().toUpperCase().replace(/\s+/g, "_");
+  return RFI_STATUS_BADGE_CLASS[k] ?? RFI_STATUS_BADGE_CLASS.CLOSED;
+}
+
 /** `YYYY-MM-DD` for `<input type="date" />` from API ISO strings (stored as UTC noon). */
 export function issueDateToInputValue(iso: string | null | undefined): string {
   if (!iso) return "";

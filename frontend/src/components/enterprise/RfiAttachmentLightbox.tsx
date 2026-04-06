@@ -116,8 +116,8 @@ export function RfiAttachmentLightbox({
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/40 px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-4">
         <p
           id="rfi-lightbox-title"
-          className="min-w-0 flex-1 truncate text-sm font-medium text-white"
-          title={fileName}
+          className="enterprise-hint-tip min-w-0 flex-1 truncate text-sm font-medium text-white"
+          data-hint={fileName}
         >
           {fileName}
         </p>
@@ -157,7 +157,7 @@ export function RfiAttachmentLightbox({
           </div>
         ) : urlQuery.isError ? (
           <div className="max-w-md px-4 text-center">
-            <p className="text-sm text-red-200/90">
+            <p className="text-sm text-white/90">
               {urlQuery.error instanceof Error ? urlQuery.error.message : "Could not load file."}
             </p>
             <button

@@ -59,7 +59,17 @@ import {
   parseProjectCurrency,
   parseProjectSettingsJson,
 } from "../../lib/projectSettings.js";
-import { fileVersionJson, projectRowJson, projectTreeJson, workspaceJson } from "../../lib/json.js";
+import {
+  fileVersionJson,
+  projectDetailApiJson,
+  projectRowJson,
+  projectTreeJson,
+  workspaceJson,
+} from "../../lib/json.js";
+import {
+  cloneSettingsJson,
+  mergeTakeoffPricingIntoSettingsJson,
+} from "../../lib/takeoffPricing.js";
 import {
   buildUploadObjectKey,
   folderKeyFromFolderId,
@@ -80,7 +90,8 @@ import {
   isGoogleFaviconUrl,
   normalizeWorkspaceWebsite,
 } from "../../lib/workspaceBranding.js";
-import { workspaceLogoUrlForClients } from "../../lib/workspaceLogo.js";
+import { apiPublicOrigin, workspaceLogoUrlForClients } from "../../lib/workspaceLogo.js";
+import { getEmailBrandIconPngBytes } from "../../lib/emailBrandIcon.js";
 import { registerMaterialsRoutes } from "./materialsRoutes.js";
 import { registerIssuesRoutes } from "./issuesRoutes.js";
 import { registerRfiRoutes } from "./rfiRoutes.js";
@@ -256,6 +267,18 @@ export function v1Routes(
     const ext = ws.logoUrl?.trim();
     if (ext?.startsWith("http")) return c.redirect(ext, 302);
     return c.body(null, 404);
+  });
+
+  /** Public: PlanSync mark for transactional email `<img>` (PNG; not Next static files). */
+  r.get("/public/brand/email-icon.png", (c) => {
+    const buf = getEmailBrandIconPngBytes();
+    if (!buf?.length) return c.body(null, 404);
+    return new Response(new Uint8Array(buf), {
+      headers: {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=604800",
+      },
+    });
   });
 
   /** Public: validate invite token for join page (no auth). */
@@ -1056,6 +1079,7 @@ export function v1Routes(
       day: "numeric",
     });
 
+    const apiOrigin = apiPublicOrigin(env);
     const emailInput = {
       to: emailNorm,
       inviterName: inviter.name,
@@ -1065,9 +1089,14 @@ export function v1Routes(
         base,
         invite.workspace.logoUrl,
         invite.workspace.website,
-        { workspaceId: invite.workspace.id, logoS3Key: invite.workspace.logoS3Key },
+        {
+          workspaceId: invite.workspace.id,
+          logoS3Key: invite.workspace.logoS3Key,
+          publicApiUrl: apiOrigin,
+        },
       ),
       publicAppUrl: base,
+      publicApiUrl: apiOrigin,
       projectNames,
       joinUrl,
       expiresLabel,
@@ -1153,6 +1182,7 @@ export function v1Routes(
       day: "numeric",
     });
 
+    const apiOrigin = apiPublicOrigin(env);
     const emailInput = {
       to: invite.email,
       inviterName: invite.invitedBy.name,
@@ -1162,9 +1192,14 @@ export function v1Routes(
         base,
         invite.workspace.logoUrl,
         invite.workspace.website,
-        { workspaceId: invite.workspace.id, logoS3Key: invite.workspace.logoS3Key },
+        {
+          workspaceId: invite.workspace.id,
+          logoS3Key: invite.workspace.logoS3Key,
+          publicApiUrl: apiOrigin,
+        },
       ),
       publicAppUrl: base,
+      publicApiUrl: apiOrigin,
       projectNames,
       joinUrl,
       expiresLabel,
@@ -1739,9 +1774,12 @@ export function v1Routes(
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
     const current = parseProjectSettingsJson(ctx.project.settingsJson);
     const merged = mergeProjectSettingsPatch(current, body.data);
+    const raw = cloneSettingsJson(ctx.project.settingsJson);
+    raw.modules = merged.modules;
+    raw.clientVisibility = merged.clientVisibility;
     const updated = await prisma.project.update({
       where: { id: projectId },
-      data: { settingsJson: merged as object },
+      data: { settingsJson: raw as Prisma.InputJsonValue },
     });
     return c.json({
       projectId: updated.id,
@@ -2997,26 +3035,7 @@ export function v1Routes(
     const res = await loadProjectForMember(projectId, c.get("user").id);
     if ("error" in res) return c.json({ error: res.error }, res.status);
     const { project } = res;
-    return c.json(
-      projectRowJson({
-        id: project.id,
-        name: project.name,
-        workspaceId: project.workspaceId,
-        projectNumber: project.projectNumber,
-        currency: project.currency,
-        measurementSystem: project.measurementSystem,
-        localBudget: project.localBudget,
-        projectSize: project.projectSize,
-        projectType: project.projectType,
-        location: project.location,
-        websiteUrl: project.websiteUrl,
-        logoUrl: project.logoUrl,
-        stage: project.stage,
-        progressPercent: project.progressPercent,
-        startDate: project.startDate,
-        endDate: project.endDate,
-      }),
-    );
+    return c.json(projectDetailApiJson(project));
   });
 
   /** 14-day activity trend scoped to this project (`ActivityLog.projectId`). */
@@ -3151,6 +3170,8 @@ export function v1Routes(
         projectSize: z.string().max(500).nullable().optional(),
         projectType: z.string().max(120).nullable().optional(),
         location: z.string().max(500).nullable().optional(),
+        latitude: z.number().gte(-90).lte(90).nullable().optional(),
+        longitude: z.number().gte(-180).lte(180).nullable().optional(),
         websiteUrl: z.union([z.string().max(2000), z.null()]).optional(),
         stage: z.nativeEnum(ProjectStage).optional(),
         progressPercent: z.number().int().min(0).max(100).optional(),
@@ -3166,6 +3187,12 @@ export function v1Routes(
           .optional(),
         currency: z.string().length(3).optional(),
         measurementSystem: z.nativeEnum(ProjectMeasurementSystem).optional(),
+        takeoffPricing: z
+          .object({
+            projectDiscountPct: z.union([z.string(), z.number()]).optional(),
+            itemDiscountPctByKey: z.record(z.union([z.string(), z.number()])).optional(),
+          })
+          .optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
@@ -3196,6 +3223,21 @@ export function v1Routes(
     }
     if (b.location !== undefined) {
       data.location = b.location?.trim() ? b.location.trim() : null;
+    }
+
+    if (b.latitude !== undefined || b.longitude !== undefined) {
+      if (b.latitude === undefined || b.longitude === undefined) {
+        return c.json({ error: "latitude and longitude must be updated together" }, 400);
+      }
+      if (b.latitude === null && b.longitude === null) {
+        data.latitude = null;
+        data.longitude = null;
+      } else if (b.latitude != null && b.longitude != null) {
+        data.latitude = b.latitude;
+        data.longitude = b.longitude;
+      } else {
+        return c.json({ error: "latitude and longitude must both be set or both cleared" }, 400);
+      }
     }
 
     if (b.localBudget !== undefined) {
@@ -3235,6 +3277,14 @@ export function v1Routes(
     if (b.endDate !== undefined) {
       data.endDate = b.endDate ? dateFromYmd(b.endDate) : null;
     }
+
+    if (b.takeoffPricing !== undefined) {
+      data.settingsJson = mergeTakeoffPricingIntoSettingsJson(
+        project.settingsJson,
+        b.takeoffPricing,
+      );
+    }
+
     const nextStartDate =
       b.startDate === undefined
         ? project.startDate
@@ -3265,7 +3315,7 @@ export function v1Routes(
       projectId,
       metadata: { updatedFields: Object.keys(data) },
     });
-    return c.json(projectRowJson(updated));
+    return c.json(projectDetailApiJson(updated));
   });
 
   registerCloudRoutes(r, needUser, env, auth);
