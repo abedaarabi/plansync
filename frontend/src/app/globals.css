@@ -477,10 +477,8 @@ body {
 
 .enterprise-nav-active {
   color: var(--enterprise-sidebar-active);
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.22) 0%, rgba(59, 130, 246, 0.07) 100%);
-  box-shadow:
-    inset 2px 0 0 0 var(--enterprise-accent-line),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 3px 0 0 0 var(--enterprise-primary);
 }
 
 /* Dark sidebar panel (gradient + edge light) */
@@ -507,11 +505,10 @@ body {
     box-shadow: none;
   }
 
-  /* Icon-only rail: active item without left accent strip */
+  /* Icon-only rail: compact active surface, no side accent */
   [data-sidebar-collapsed="true"] .enterprise-sidebar-nav-link.enterprise-nav-active {
-    background: rgba(59, 130, 246, 0.2);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-    background-image: none;
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
   }
 }
 

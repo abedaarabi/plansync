@@ -28,7 +28,10 @@ const schema = z.object({
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM: z.string().optional(),
   PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
-  /** Optional secret for POST /api/v1/internal/rfi-overdue-reminders (x-plansync-cron-secret). */
+  /**
+   * Optional secret for internal cron POST routes (header `x-plansync-cron-secret`), e.g.
+   * `/api/v1/internal/rfi-overdue-reminders`, `/api/v1/internal/om-maintenance-reminders`.
+   */
   INTERNAL_CRON_SECRET: z.string().optional(),
 
   /** OAuth — optional; set both id + secret to enable each provider */

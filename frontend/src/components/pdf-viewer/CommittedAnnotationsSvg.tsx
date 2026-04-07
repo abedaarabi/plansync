@@ -6,8 +6,8 @@ import { highlightStrokeWidthPx } from "@/lib/highlightStroke";
 import { cloudRectPathD } from "@/lib/cloudPath";
 import { dimensionPixelGeometry } from "@/lib/measureGeometry";
 import { polygonCentroidNorm } from "@/lib/measureCompute";
-import { issueStatusDotRadii, issueStatusDotSolidFill } from "@/lib/issueStatusStyle";
 import type { Annotation } from "@/store/viewerStore";
+import { SheetLinkPin } from "@/components/pdf-viewer/sheetLinkPins";
 import { textBoxLayoutPx, textBoxRectFillAttrs } from "@/lib/annotationResize";
 import { computeRotationCenterPx } from "@/lib/annotationRotation";
 
@@ -140,50 +140,6 @@ type Props = {
   measureUnit: MeasureUnit;
   arrowMarkerId: string;
 };
-
-/** Flat status dot + soft slate ring; light drop shadow only (no 3D gradient). */
-function IssueLinkedStatusDot({
-  cx,
-  cy,
-  status,
-  cssW,
-  cssH,
-  pinShadowFilterUrl,
-}: {
-  cx: number;
-  cy: number;
-  status: string;
-  cssW: number;
-  cssH: number;
-  pinShadowFilterUrl: string;
-}) {
-  const { core, halo } = issueStatusDotRadii(cssW, cssH);
-  const fill = issueStatusDotSolidFill(status);
-  const sw = Math.max(0.55, core * 0.12);
-  const ringW = Math.max(1, halo - core);
-  const ringR = (core + halo) / 2;
-  return (
-    <g>
-      <circle
-        cx={cx}
-        cy={cy}
-        r={ringR}
-        fill="none"
-        stroke="rgba(15,23,42,0.32)"
-        strokeWidth={ringW}
-      />
-      <circle
-        cx={cx}
-        cy={cy}
-        r={core}
-        fill={fill}
-        stroke="rgba(15,23,42,0.32)"
-        strokeWidth={sw}
-        filter={pinShadowFilterUrl}
-      />
-    </g>
-  );
-}
 
 /** Saved markups only (no drafts, selection, or snap overlays). */
 export function CommittedAnnotationsSvg({
@@ -343,7 +299,11 @@ export function CommittedAnnotationsSvg({
           const y = Math.min(p1.y, p2.y);
           const w = Math.abs(p2.x - p1.x);
           const h = Math.abs(p2.y - p1.y);
-          const pin = Boolean(a.linkedIssueId) || Boolean(a.issueDraft);
+          const pin =
+            Boolean(a.linkedIssueId) ||
+            Boolean(a.issueDraft) ||
+            Boolean(a.linkedOmAssetId) ||
+            Boolean(a.omAssetDraft);
           if (pin) {
             const cx = x + w / 2;
             const cy = y + h / 2;
@@ -357,10 +317,10 @@ export function CommittedAnnotationsSvg({
                 pageH={pageH}
                 scale={scale}
               >
-                <IssueLinkedStatusDot
+                <SheetLinkPin
+                  annotation={a}
                   cx={cx}
                   cy={cy}
-                  status={a.issueStatus ?? "OPEN"}
                   cssW={cssW}
                   cssH={cssH}
                   pinShadowFilterUrl={pinShadowFilterUrl}
@@ -398,7 +358,11 @@ export function CommittedAnnotationsSvg({
           const my = Math.max(p1.y, p2.y);
           const d = cloudRectPathD(x, y, mx, my);
           if (!d) return null;
-          const pinC = Boolean(a.linkedIssueId) || Boolean(a.issueDraft);
+          const pinC =
+            Boolean(a.linkedIssueId) ||
+            Boolean(a.issueDraft) ||
+            Boolean(a.linkedOmAssetId) ||
+            Boolean(a.omAssetDraft);
           if (pinC) {
             const cx = (x + mx) / 2;
             const cy = (y + my) / 2;
@@ -412,10 +376,10 @@ export function CommittedAnnotationsSvg({
                 pageH={pageH}
                 scale={scale}
               >
-                <IssueLinkedStatusDot
+                <SheetLinkPin
+                  annotation={a}
                   cx={cx}
                   cy={cy}
-                  status={a.issueStatus ?? "OPEN"}
                   cssW={cssW}
                   cssH={cssH}
                   pinShadowFilterUrl={pinShadowFilterUrl}
@@ -452,7 +416,11 @@ export function CommittedAnnotationsSvg({
           const h = Math.abs(p2.y - p1.y);
           const rx = w / 2;
           const ry = h / 2;
-          const pin = Boolean(a.linkedIssueId) || Boolean(a.issueDraft);
+          const pin =
+            Boolean(a.linkedIssueId) ||
+            Boolean(a.issueDraft) ||
+            Boolean(a.linkedOmAssetId) ||
+            Boolean(a.omAssetDraft);
           if (pin) {
             const cx = x + rx;
             const cy = y + ry;
@@ -466,10 +434,10 @@ export function CommittedAnnotationsSvg({
                 pageH={pageH}
                 scale={scale}
               >
-                <IssueLinkedStatusDot
+                <SheetLinkPin
+                  annotation={a}
                   cx={cx}
                   cy={cy}
-                  status={a.issueStatus ?? "OPEN"}
                   cssW={cssW}
                   cssH={cssH}
                   pinShadowFilterUrl={pinShadowFilterUrl}

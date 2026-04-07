@@ -1,4 +1,4 @@
-import { annotationIsIssuePin } from "@/lib/annotationIssues";
+import { annotationIsAssetPin, annotationIsIssuePin } from "@/lib/annotationIssues";
 import type { Annotation } from "@/store/viewerStore";
 
 export type SheetExportInclude = {
@@ -49,7 +49,7 @@ export function filterAnnotationsForExport(
 ): Annotation[] {
   return annotations.filter((a) => {
     const isMeas = a.type === "measurement";
-    const isPin = annotationIsIssuePin(a);
+    const isPin = annotationIsIssuePin(a) || annotationIsAssetPin(a);
     const isMarkup = !isMeas && !isPin;
     if (isMeas && !inc.measurements) return false;
     if (isPin && !inc.issuePins) return false;

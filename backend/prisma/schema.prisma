@@ -34,12 +34,15 @@ model User {
   rfisAssigned            Rfi[]                    @relation("RfiAssignee")
   rfiAssigneeLinks        RfiAssigneeLink[]
   rfiAttachments          RfiAttachment[]          @relation("RfiAttachmentUploader")
+  assetDocumentsUploaded  AssetDocument[]          @relation("AssetDocumentUploader")
   rfiMessages             RfiMessage[]             @relation("RfiMessageAuthor")
   notifications           UserNotification[]       @relation("NotificationRecipient")
   notificationsAsActor    UserNotification[]       @relation("NotificationActor")
   proposalsCreated        Proposal[]               @relation("ProposalCreator")
   cloudStorageConnections CloudStorageConnection[]
   punchItemsAssigned      PunchItem[]              @relation("PunchAssignee")
+  inspectionRunsSignedOff InspectionRun[]          @relation("InspectionRunSignedOff")
+  inspectionRunsCreated   InspectionRun[]          @relation("InspectionRunCreated")
 
   /// When true, omit this user from PDF viewer presence / collaborator lists (still can edit).
   hideViewerPresence Boolean @default(false)
@@ -161,6 +164,23 @@ model Workspace {
 
   /// PDF viewer live collaboration (SSE/WebSocket rooms). Env COLLABORATION_ENABLED must also allow.
   viewerCollaborationEnabled Boolean @default(true)
+
+  /// Daily O&M maintenance digest emails — idempotency (one row per workspace per UTC day).
+  omMaintenanceReminderDigests OmMaintenanceReminderDigest[]
+}
+
+/// Tracks POST /internal/om-maintenance-reminders digest already sent for a workspace/day (UTC).
+model OmMaintenanceReminderDigest {
+  id          String   @id @default(cuid())
+  workspaceId String
+  /// UTC calendar date YYYY-MM-DD.
+  digestDate  String
+  sentAt      DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, digestDate])
+  @@index([digestDate])
 }
 
 /// Grouping label (e.g. Concrete, Steel, Finishes). Unique per workspace (case-insensitive via nameKey).
@@ -319,6 +339,8 @@ enum ProjectStage {
   PRECONSTRUCTION
   CONSTRUCTION
   CLOSEOUT
+  /// Building / FM handover (warranty, training, asset register, O&M).
+  HANDOVER
   COMPLETED
   ON_HOLD
 }
@@ -369,19 +391,26 @@ model Project {
   /// Module/feature toggles + client visibility (null = all enabled for backwards compatibility).
   settingsJson Json?
 
-  workspace           Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  projectMembers      ProjectMember[]
-  emailInviteProjects EmailInviteProject[]
-  folders             Folder[]
-  files               File[]
-  issues              Issue[]
-  takeoffLines        TakeoffLine[]
-  rfis                Rfi[]
-  punchItems          PunchItem[]
-  fieldReports        FieldReport[]
-  auditLogs           ActivityLog[]
-  userNotifications   UserNotification[]
-  proposals           Proposal[]
+  /// Operations & Maintenance: enables O&M nav, assets, PPM, inspections, occupant portal (when modules allow).
+  operationsMode Boolean @default(false)
+
+  workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectMembers       ProjectMember[]
+  emailInviteProjects  EmailInviteProject[]
+  folders              Folder[]
+  files                File[]
+  issues               Issue[]
+  takeoffLines         TakeoffLine[]
+  rfis                 Rfi[]
+  punchItems           PunchItem[]
+  fieldReports         FieldReport[]
+  auditLogs            ActivityLog[]
+  userNotifications    UserNotification[]
+  proposals            Proposal[]
+  assets               Asset[]
+  inspectionTemplates  InspectionTemplate[]
+  inspectionRuns       InspectionRun[]
+  occupantPortalTokens OccupantPortalToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -434,10 +463,12 @@ model File {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   folder  Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
-  versions     FileVersion[]
-  issues       Issue[]
-  takeoffLines TakeoffLine[]
-  rfisDrawing  Rfi[]         @relation("RfiDrawingFile")
+  versions       FileVersion[]
+  issues         Issue[]
+  takeoffLines   TakeoffLine[]
+  rfisDrawing    Rfi[]           @relation("RfiDrawingFile")
+  assets         Asset[]
+  inspectionRuns InspectionRun[]
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -476,9 +507,16 @@ model FileVersion {
   rfisDrawing            Rfi[]                   @relation("RfiDrawingVersion")
   proposalTakeoffSources ProposalTakeoffSource[]
   proposalAttachments    ProposalAttachment[]
+  assets                 Asset[]
+  inspectionRuns         InspectionRun[]
 
   @@unique([fileId, version])
   @@index([fileId])
+}
+
+enum IssueKind {
+  CONSTRUCTION
+  WORK_ORDER
 }
 
 enum IssueStatus {
@@ -525,6 +563,21 @@ model Issue {
   assigneeId String?
   creatorId  String?
 
+  issueKind IssueKind @default(CONSTRUCTION)
+  assetId   String?
+  asset     Asset?    @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  /// When assignee is not a workspace user (e.g. external vendor).
+  externalAssigneeEmail String?
+  externalAssigneeName  String?
+
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+
+  /// Occupant / portal submitter (when created via tenant portal).
+  reporterName  String?
+  reporterEmail String?
+
   workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   file        File        @relation(fields: [fileId], references: [id], onDelete: Cascade)
@@ -541,6 +594,163 @@ model Issue {
   @@index([projectId])
   @@index([fileId])
   @@index([fileVersionId])
+  @@index([assetId])
+  @@index([issueKind])
+}
+
+enum MaintenanceFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUAL
+  ANNUAL
+  CUSTOM
+}
+
+/// Equipment register for O&M (pinned on drawings when fileVersion is set).
+model Asset {
+  id              String    @id @default(cuid())
+  projectId       String
+  tag             String
+  name            String
+  /// e.g. HVAC, Electrical (free text).
+  category        String?
+  manufacturer    String?
+  model           String?
+  serialNumber    String?
+  locationLabel   String?
+  installDate     DateTime?
+  warrantyExpires DateTime?
+  lastServiceAt   DateTime?
+  notes           String?
+
+  fileId        String?
+  fileVersionId String?
+  pageNumber    Int?
+  annotationId  String?
+  pinJson       Json?
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  file        File?        @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  fileVersion FileVersion? @relation(fields: [fileVersionId], references: [id], onDelete: SetNull)
+
+  issues               Issue[]
+  maintenanceSchedules MaintenanceSchedule[]
+  documents            AssetDocument[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, tag])
+  @@index([projectId])
+}
+
+/// Files attached to an asset (manuals, certificates) — stored in S3, not project drawings.
+model AssetDocument {
+  id           String   @id @default(cuid())
+  assetId      String
+  /// Display name e.g. "Manufacturer manual".
+  label        String   @default("")
+  fileName     String
+  mimeType     String   @default("application/octet-stream")
+  s3Key        String   @unique
+  sizeBytes    BigInt
+  uploadedById String?
+  uploadedBy   User?    @relation("AssetDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  asset        Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+
+  @@index([assetId])
+}
+
+model MaintenanceSchedule {
+  id                  String               @id @default(cuid())
+  assetId             String
+  title               String               @default("")
+  frequency           MaintenanceFrequency
+  /// Used when frequency is CUSTOM (e.g. every N days).
+  intervalDays        Int?
+  nextDueAt           DateTime?
+  lastCompletedAt     DateTime?
+  assignedVendorLabel String?
+  isActive            Boolean              @default(true)
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([assetId])
+  @@index([nextDueAt])
+}
+
+model InspectionTemplate {
+  id            String  @id @default(cuid())
+  projectId     String
+  name          String
+  description   String?
+  /// Display frequency label (e.g. "Monthly", "Weekly", "Annual").
+  frequency     String?
+  checklistJson Json
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runs    InspectionRun[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+enum InspectionRunStatus {
+  DRAFT
+  COMPLETED
+}
+
+model InspectionRun {
+  id              String              @id @default(cuid())
+  projectId       String
+  templateId      String
+  fileId          String?
+  fileVersionId   String?
+  pageNumber      Int?
+  status          InspectionRunStatus @default(DRAFT)
+  resultJson      Json                @default("[]")
+  attachmentsJson Json                @default("[]")
+  completedAt     DateTime?
+  signedOffById   String?
+  createdById     String?
+
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  template    InspectionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  file        File?              @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  fileVersion FileVersion?       @relation(fields: [fileVersionId], references: [id], onDelete: SetNull)
+  signedOffBy User?              @relation("InspectionRunSignedOff", fields: [signedOffById], references: [id], onDelete: SetNull)
+  createdBy   User?              @relation("InspectionRunCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([templateId])
+}
+
+/// Public magic-link access for occupant portal (submit requests without login).
+model OccupantPortalToken {
+  id        String    @id @default(cuid())
+  projectId String
+  token     String    @unique
+  label     String    @default("Default")
+  expiresAt DateTime?
+  revokedAt DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
 }
 
 /// Quantity takeoff line for a specific sheet revision (Pro).

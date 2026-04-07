@@ -90,6 +90,7 @@ export function projectDetailApiJson(project: {
   startDate: Date | null;
   endDate: Date | null;
   settingsJson: unknown;
+  operationsMode?: boolean;
 }) {
   return projectRowJson({
     id: project.id,
@@ -110,6 +111,7 @@ export function projectDetailApiJson(project: {
     progressPercent: project.progressPercent,
     startDate: project.startDate,
     endDate: project.endDate,
+    operationsMode: project.operationsMode ?? false,
     takeoffPricing: parseTakeoffPricingFromSettingsJson(project.settingsJson),
   });
 }

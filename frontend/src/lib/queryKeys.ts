@@ -36,10 +36,35 @@ export const qk = {
   ) => ["materialsPaged", workspaceId, page, pageSize, q, categoryId] as const,
   materialCategories: (workspaceId: string) => ["materialCategories", workspaceId] as const,
   materialTemplate: (workspaceId: string) => ["materialTemplate", workspaceId] as const,
-  issuesForFileVersion: (fileVersionId: string) =>
-    ["issues", "fileVersion", fileVersionId] as const,
-  issuesForProject: (projectId: string, fileVersionId?: string) =>
-    ["issues", "project", projectId, fileVersionId ?? "all"] as const,
+  issuesForFileVersion: (fileVersionId: string, issueKind?: string | null) =>
+    ["issues", "fileVersion", fileVersionId, issueKind ?? "all"] as const,
+  issuesForProject: (
+    projectId: string,
+    fileVersionId?: string,
+    issueKind?: string,
+    assetId?: string,
+  ) =>
+    [
+      "issues",
+      "project",
+      projectId,
+      fileVersionId ?? "all",
+      issueKind ?? "all",
+      assetId ?? "all",
+    ] as const,
+  omHandover: (projectId: string) => ["om", "handover", projectId] as const,
+  omFmDashboard: (projectId: string) => ["om", "fmDashboard", projectId] as const,
+  omAssets: (projectId: string, searchQ?: string) =>
+    ["om", "assets", projectId, searchQ ?? ""] as const,
+  omAssetDocuments: (projectId: string, assetId: string) =>
+    ["om", "assetDocuments", projectId, assetId] as const,
+  /** Short-lived S3 GET URL for asset document preview / open. */
+  omAssetDocumentReadUrl: (projectId: string, assetId: string, documentId: string) =>
+    ["om", "assetDocumentReadUrl", projectId, assetId, documentId] as const,
+  omMaintenance: (projectId: string) => ["om", "maintenance", projectId] as const,
+  omInspectionTemplates: (projectId: string) => ["om", "inspectionTemplates", projectId] as const,
+  omInspectionRuns: (projectId: string) => ["om", "inspectionRuns", projectId] as const,
+  occupantTokens: (projectId: string) => ["om", "occupantTokens", projectId] as const,
   /** Persisted Sheet AI smart sheet + chat (GET cache; invalidate after POST summary/chat). */
   sheetAiSheetCache: (fileVersionId: string, pageIndex0: number) =>
     ["sheetAi", "sheetCache", fileVersionId, pageIndex0] as const,

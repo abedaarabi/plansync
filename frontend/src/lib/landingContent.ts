@@ -32,6 +32,76 @@ export const LANDING_SOLUTIONS = [
     ],
   },
   {
+    slug: "om-handover",
+    title: "O&M + handover",
+    description:
+      "Close projects with confidence by handing over structured O&M records, linked assets, and recurring inspections in one workflow.",
+    bullets: [
+      "Handover packages stay tied to the right assets, documents, and spaces.",
+      "Teams move from construction to operations without rebuilding data in a new tool.",
+    ],
+  },
+  {
+    slug: "om-assets",
+    title: "Asset register",
+    description:
+      "Track maintainable assets with locations, metadata, manuals, and warranty context so FM teams can act faster after handover.",
+    bullets: [
+      "Each asset keeps documents, notes, and history in one place.",
+      "Search and filter by area, category, or system to find equipment quickly.",
+    ],
+  },
+  {
+    slug: "om-maintenance",
+    title: "Maintenance",
+    description:
+      "Plan preventive work, manage recurring tasks, and keep service records current so planned maintenance does not slip.",
+    bullets: [
+      "Recurring schedules help teams stay ahead of reactive failures.",
+      "Maintenance history remains auditable across the full asset lifecycle.",
+    ],
+  },
+  {
+    slug: "om-work-orders",
+    title: "Work orders",
+    description:
+      "Turn maintenance needs into trackable work orders with status, assignees, and due dates your team can actually follow.",
+    bullets: [
+      "Prioritize and route work with clear ownership from open to closed.",
+      "Comments and updates stay attached to the task for full traceability.",
+    ],
+  },
+  {
+    slug: "om-inspections",
+    title: "Inspections",
+    description:
+      "Run repeatable inspection templates, capture findings in the field, and keep compliance evidence organized over time.",
+    bullets: [
+      "Reusable templates standardize checks across sites and teams.",
+      "Inspection runs produce a clear record of findings and actions.",
+    ],
+  },
+  {
+    slug: "om-tenant-portal",
+    title: "Tenant portal",
+    description:
+      "Give occupants a simple channel for reporting issues and viewing updates while your team manages everything in one place.",
+    bullets: [
+      "Requests arrive structured instead of scattered across email and calls.",
+      "Status visibility reduces back-and-forth and improves response clarity.",
+    ],
+  },
+  {
+    slug: "om-fm-dashboard",
+    title: "FM dashboard",
+    description:
+      "Monitor asset health, open work, inspection activity, and operational priorities from a single facilities dashboard.",
+    bullets: [
+      "See operational workload and bottlenecks at a glance.",
+      "Use live metrics to focus teams on the highest-impact actions.",
+    ],
+  },
+  {
     slug: "takeoff",
     title: "Quantity takeoff",
     description:
@@ -92,6 +162,34 @@ export const LANDING_FEATURE_BULLETS = {
   rfis: [
     "Ball-in-court stays visible so nothing stalls waiting on the wrong person.",
     "Formal numbering and history you can hand to owners or inspectors.",
+  ],
+  "om-handover": [
+    "Package asset records, documents, and operational data for smooth turnover.",
+    "Keep O&M information structured so operators can use it from day one.",
+  ],
+  "om-assets": [
+    "Centralized asset cards with manuals, warranty files, and key metadata.",
+    "Location-aware organization makes site-wide asset lookup simple.",
+  ],
+  "om-maintenance": [
+    "Preventive plans and recurring tasks reduce unplanned downtime risk.",
+    "Completed work logs build a reliable maintenance audit trail.",
+  ],
+  "om-work-orders": [
+    "Create, assign, and close work orders with clear accountability.",
+    "Track progress, notes, and outcomes without leaving the platform.",
+  ],
+  "om-inspections": [
+    "Template-based inspections keep standards consistent across buildings.",
+    "Findings and follow-ups are captured in a structured, repeatable format.",
+  ],
+  "om-tenant-portal": [
+    "Occupants submit requests through a clear, guided portal flow.",
+    "Operations teams respond with transparent status updates and history.",
+  ],
+  "om-fm-dashboard": [
+    "Dashboard KPIs highlight workload, overdue items, and active risk areas.",
+    "Operational teams align quickly with a shared live view of priorities.",
   ],
   takeoff: [
     "Color-coded zones make it obvious what was measured where.",

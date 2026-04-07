@@ -127,7 +127,11 @@ export function IssueFormSlider(props: Props) {
     enabled: Boolean(workspaceId) && open,
   });
 
-  const issuesQueryKey = qk.issuesForFileVersion(cloudFileVersionId ?? "");
+  const viewerOperationsMode = useViewerStore((s) => s.viewerOperationsMode);
+  const issuesQueryKey = qk.issuesForFileVersion(
+    cloudFileVersionId ?? "",
+    viewerOperationsMode ? "WORK_ORDER" : null,
+  );
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -151,7 +155,12 @@ export function IssueFormSlider(props: Props) {
   } = useQuery({
     queryKey: qk.projectRfis(resolvedProjectId ?? ""),
     queryFn: () => fetchProjectRfis(resolvedProjectId!),
-    enabled: Boolean(open && resolvedProjectId && (variant === "create" || variant === "edit")),
+    enabled: Boolean(
+      open &&
+      resolvedProjectId &&
+      (variant === "create" || variant === "edit") &&
+      !viewerOperationsMode,
+    ),
   });
 
   const linkableRfis = useMemo(() => {
@@ -225,7 +234,8 @@ export function IssueFormSlider(props: Props) {
         dueDate: dueDate.trim() || undefined,
         ...(location.trim() ? { location: location.trim() } : {}),
         pageNumber: page,
-        ...(rfiLinkIds.length > 0 ? { rfiIds: rfiLinkIds } : {}),
+        ...(rfiLinkIds.length > 0 && !viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
+        ...(viewerOperationsMode ? { issueKind: "WORK_ORDER" as const } : {}),
       });
     },
     onSuccess: (row) => {
@@ -240,11 +250,12 @@ export function IssueFormSlider(props: Props) {
           linkedIssueTitle: row.title,
           issueStatus: row.status,
           color: issueStatusMarkerStrokeHex(row.status),
+          linkedIssueKind: row.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION",
         });
         setIssueCreateDraft(null);
         onClose();
       }
-      toast.success("Issue created");
+      toast.success(viewerOperationsMode ? "Work order created" : "Issue created");
     },
     onError: (e: Error) => toast.error(formatIssueLockHint(e)),
   });
@@ -266,7 +277,7 @@ export function IssueFormSlider(props: Props) {
         dueDate: dueDate.trim() || null,
         location: location.trim() ? location.trim() : null,
         ...(pageNumber !== undefined ? { pageNumber } : {}),
-        rfiIds: rfiLinkIds,
+        ...(!viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
       });
     },
     onSuccess: (row) => {
@@ -283,9 +294,10 @@ export function IssueFormSlider(props: Props) {
           issueStatus: row.status,
           linkedIssueTitle: row.title,
           color: issueStatusMarkerStrokeHex(row.status),
+          linkedIssueKind: row.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION",
         });
       }
-      toast.success("Issue updated");
+      toast.success(viewerOperationsMode ? "Work order updated" : "Issue updated");
       onClose();
     },
     onError: (e: Error) => toast.error(formatIssueLockHint(e)),
@@ -513,75 +525,77 @@ export function IssueFormSlider(props: Props) {
                 </label>
               </section>
 
-              <section
-                className="rounded-xl border border-slate-800/80 bg-slate-900/25 p-3 ring-1 ring-white/[0.02]"
-                aria-labelledby="issue-section-rfis"
-              >
-                <div className="mb-2 flex items-center gap-2">
-                  <Link2 className="h-3 w-3 text-slate-500" strokeWidth={2} aria-hidden />
-                  <h3 id="issue-section-rfis" className={sectionTitleClass}>
-                    Related RFIs{" "}
-                    <span className="font-normal normal-case text-slate-600">(optional)</span>
-                  </h3>
-                </div>
-                {variant === "create" && !resolvedProjectId ? (
-                  resolveProjectPending ? (
-                    <p className="text-[12px] text-slate-500">Finding project…</p>
-                  ) : (
+              {!viewerOperationsMode ? (
+                <section
+                  className="rounded-xl border border-slate-800/80 bg-slate-900/25 p-3 ring-1 ring-white/[0.02]"
+                  aria-labelledby="issue-section-rfis"
+                >
+                  <div className="mb-2 flex items-center gap-2">
+                    <Link2 className="h-3 w-3 text-slate-500" strokeWidth={2} aria-hidden />
+                    <h3 id="issue-section-rfis" className={sectionTitleClass}>
+                      Related RFIs{" "}
+                      <span className="font-normal normal-case text-slate-600">(optional)</span>
+                    </h3>
+                  </div>
+                  {variant === "create" && !resolvedProjectId ? (
+                    resolveProjectPending ? (
+                      <p className="text-[12px] text-slate-500">Finding project…</p>
+                    ) : (
+                      <p className="text-[12px] leading-relaxed text-slate-500">
+                        Open this drawing from the project’s Files tab (or a viewer link with the
+                        project) to list RFIs for this job.
+                      </p>
+                    )
+                  ) : rfisPending ? (
+                    <p className="text-[12px] text-slate-500">Loading RFIs…</p>
+                  ) : rfisError ? (
+                    <p className="text-[12px] leading-relaxed text-amber-200/90">
+                      Could not load RFIs. A Pro subscription and project access are required.
+                    </p>
+                  ) : linkableRfis.length === 0 ? (
                     <p className="text-[12px] leading-relaxed text-slate-500">
-                      Open this drawing from the project’s Files tab (or a viewer link with the
-                      project) to list RFIs for this job.
+                      No open RFIs in this project. Create RFIs from the project RFIs page, then
+                      link them here.
                     </p>
-                  )
-                ) : rfisPending ? (
-                  <p className="text-[12px] text-slate-500">Loading RFIs…</p>
-                ) : rfisError ? (
-                  <p className="text-[12px] leading-relaxed text-amber-200/90">
-                    Could not load RFIs. A Pro subscription and project access are required.
-                  </p>
-                ) : linkableRfis.length === 0 ? (
-                  <p className="text-[12px] leading-relaxed text-slate-500">
-                    No open RFIs in this project. Create RFIs from the project RFIs page, then link
-                    them here.
-                  </p>
-                ) : (
-                  <>
-                    <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-800/60 bg-slate-950/40 p-1 [scrollbar-width:thin]">
-                      {linkableRfis.map((r) => (
-                        <label
-                          key={r.id}
-                          className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-[12px] leading-snug text-slate-200 transition hover:bg-slate-800/50"
-                        >
-                          <input
-                            type="checkbox"
-                            className="viewer-focus-ring mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 accent-[var(--viewer-primary)]"
-                            checked={rfiLinkIds.includes(r.id)}
-                            onChange={() => {
-                              setRfiLinkIds((prev) =>
-                                prev.includes(r.id)
-                                  ? prev.filter((x) => x !== r.id)
-                                  : [...prev, r.id],
-                              );
-                            }}
-                          />
-                          <span className="min-w-0">
-                            <span className="font-medium text-slate-300">
-                              RFI #{String(r.rfiNumber).padStart(3, "0")}
+                  ) : (
+                    <>
+                      <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-800/60 bg-slate-950/40 p-1 [scrollbar-width:thin]">
+                        {linkableRfis.map((r) => (
+                          <label
+                            key={r.id}
+                            className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-[12px] leading-snug text-slate-200 transition hover:bg-slate-800/50"
+                          >
+                            <input
+                              type="checkbox"
+                              className="viewer-focus-ring mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 accent-[var(--viewer-primary)]"
+                              checked={rfiLinkIds.includes(r.id)}
+                              onChange={() => {
+                                setRfiLinkIds((prev) =>
+                                  prev.includes(r.id)
+                                    ? prev.filter((x) => x !== r.id)
+                                    : [...prev, r.id],
+                                );
+                              }}
+                            />
+                            <span className="min-w-0">
+                              <span className="font-medium text-slate-300">
+                                RFI #{String(r.rfiNumber).padStart(3, "0")}
+                              </span>
+                              <span className="text-slate-500"> — </span>
+                              {r.title}
                             </span>
-                            <span className="text-slate-500"> — </span>
-                            {r.title}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                    <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-                      {variant === "create"
-                        ? "Linked RFIs without a sheet use this drawing and page. You can attach several RFIs to one issue."
-                        : "This replaces linked RFIs for the issue. RFIs without a sheet may adopt this drawing when you save."}
-                    </p>
-                  </>
-                )}
-              </section>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+                        {variant === "create"
+                          ? "Linked RFIs without a sheet use this drawing and page. You can attach several RFIs to one issue."
+                          : "This replaces linked RFIs for the issue. RFIs without a sheet may adopt this drawing when you save."}
+                      </p>
+                    </>
+                  )}
+                </section>
+              ) : null}
 
               <section className="space-y-3" aria-labelledby="issue-section-workflow">
                 <h3 id="issue-section-workflow" className={sectionTitleClass}>

@@ -94,6 +94,8 @@ import { apiPublicOrigin, workspaceLogoUrlForClients } from "../../lib/workspace
 import { getEmailBrandIconPngBytes } from "../../lib/emailBrandIcon.js";
 import { registerMaterialsRoutes } from "./materialsRoutes.js";
 import { registerIssuesRoutes } from "./issuesRoutes.js";
+import { registerOmRoutes, registerOccupantPublicRoutes } from "./omRoutes.js";
+import { runOmMaintenanceReminders } from "../../lib/omMaintenanceReminders.js";
 import { registerRfiRoutes } from "./rfiRoutes.js";
 import { registerTakeoffRoutes } from "./takeoffRoutes.js";
 import { registerProposalRoutes } from "./proposalRoutes.js";
@@ -1734,6 +1736,7 @@ export function v1Routes(
       isExternal: ctx.workspaceMember.isExternal,
       projectRole: ctx.projectMember?.projectRole ?? null,
       trade: ctx.projectMember?.trade ?? null,
+      operationsMode: ctx.project.operationsMode,
       settings: ctx.settings,
       uiMode: ctx.uiMode,
     });
@@ -1758,6 +1761,10 @@ export function v1Routes(
             proposals: z.boolean().optional(),
             punch: z.boolean().optional(),
             fieldReports: z.boolean().optional(),
+            omAssets: z.boolean().optional(),
+            omMaintenance: z.boolean().optional(),
+            omInspections: z.boolean().optional(),
+            omTenantPortal: z.boolean().optional(),
           })
           .optional(),
         clientVisibility: z
@@ -1769,6 +1776,25 @@ export function v1Routes(
             allowClientComment: z.boolean().optional(),
           })
           .optional(),
+        omHandover: z
+          .object({
+            notes: z.string().max(20000).optional(),
+            handoverCompletedAt: z.string().datetime().nullable().optional(),
+            buildingLabel: z.string().max(500).nullable().optional(),
+            facilityManagerUserId: z.string().nullable().optional(),
+            handoverDate: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .nullable()
+              .optional(),
+            transferAsBuilt: z.boolean().optional(),
+            transferClosedIssues: z.boolean().optional(),
+            transferPunch: z.boolean().optional(),
+            transferTeamAccess: z.boolean().optional(),
+            handoverWizardCompletedAt: z.string().datetime().nullable().optional(),
+            buildingOwnerEmail: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
+          })
+          .optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
@@ -1777,6 +1803,7 @@ export function v1Routes(
     const raw = cloneSettingsJson(ctx.project.settingsJson);
     raw.modules = merged.modules;
     raw.clientVisibility = merged.clientVisibility;
+    raw.omHandover = merged.omHandover;
     const updated = await prisma.project.update({
       where: { id: projectId },
       data: { settingsJson: raw as Prisma.InputJsonValue },
@@ -2905,6 +2932,34 @@ export function v1Routes(
     return c.json(getCollabMetricsSnapshot());
   });
 
+  /** Daily cron: email workspace admins a digest of PPM items overdue or due within 7 days (UTC). Same auth as RFI overdue reminders. */
+  r.post("/internal/om-maintenance-reminders", async (c) => {
+    const secret = env.INTERNAL_CRON_SECRET?.trim();
+    if (!secret) return c.json({ error: "Not configured" }, 503);
+    const hdr = c.req.header("x-plansync-cron-secret");
+    if (hdr !== secret) return c.json({ error: "Unauthorized" }, 401);
+    try {
+      const result = await runOmMaintenanceReminders(env);
+      if (result.skippedNoResend) {
+        return c.json({
+          ok: true,
+          skipped: true,
+          reason: "RESEND not configured",
+          dayKey: result.dayKey,
+        });
+      }
+      return c.json({
+        ok: true,
+        dayKey: result.dayKey,
+        workspacesEmailed: result.workspacesEmailed,
+        workspacesSkipped: result.workspacesSkipped,
+      });
+    } catch (e) {
+      console.error("[om-maintenance-reminders]", e);
+      return c.json({ error: "Internal error" }, 500);
+    }
+  });
+
   r.get("/workspaces/:workspaceId/dashboard", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
     const m = await prisma.workspaceMember.findFirst({
@@ -3193,12 +3248,24 @@ export function v1Routes(
             itemDiscountPctByKey: z.record(z.union([z.string(), z.number()])).optional(),
           })
           .optional(),
+        /** Super Admin only — enables O&M building experience (sidebar, assets, etc.). */
+        operationsMode: z.boolean().optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
 
     const b = body.data;
     const data: Prisma.ProjectUpdateInput = {};
+
+    if (b.operationsMode !== undefined) {
+      const wm = await prisma.workspaceMember.findFirst({
+        where: { workspaceId: project.workspaceId, userId: c.get("user").id },
+      });
+      if (!wm || wm.role !== WorkspaceRole.SUPER_ADMIN) {
+        return c.json({ error: "Super Admin only" }, 403);
+      }
+      data.operationsMode = b.operationsMode;
+    }
 
     if (b.currency !== undefined) {
       const cur = parseProjectCurrency(b.currency);
@@ -3597,6 +3664,8 @@ export function v1Routes(
     );
   }
 
+  registerOccupantPublicRoutes(r, env);
+  registerOmRoutes(r, needUser, env);
   registerIssuesRoutes(r, needUser, env, {
     onIssuesMutated: (fileVersionId) => {
       if (collaborationGloballyEnabled(env)) {

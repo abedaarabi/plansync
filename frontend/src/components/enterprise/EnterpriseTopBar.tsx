@@ -114,9 +114,16 @@ export function EnterpriseTopBar({
 }: EnterpriseTopBarProps) {
   const pathname = usePathname();
   const qc = useQueryClient();
-  const { primary } = useEnterpriseWorkspace();
-  const wid = primary?.workspace.id;
-  const isPro = primary?.workspace.subscriptionStatus === "active";
+  const { primary, me } = useEnterpriseWorkspace();
+  const pathWid = pathname.match(/^\/workspaces\/([^/]+)/)?.[1];
+  const workspaceFromPath =
+    pathWid && pathWid !== "new"
+      ? me?.workspaces?.find((w) => w.workspace.id === pathWid)?.workspace
+      : undefined;
+  const activeWs = workspaceFromPath ?? primary?.workspace;
+  const wid = activeWs?.id;
+  const workspaceNameForAria = activeWs?.name?.trim() || "PlanSync";
+  const isPro = activeWs?.subscriptionStatus === "active";
 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifWrapRef = useRef<HTMLDivElement>(null);
@@ -203,7 +210,7 @@ export function EnterpriseTopBar({
         <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 md:gap-3">
           <span
             className="hidden shrink-0 select-none items-baseline gap-0 font-bold tracking-tight sm:inline-flex"
-            aria-label="PlanSync"
+            aria-label={workspaceNameForAria}
           >
             <span className="text-[var(--enterprise-text)]">Plan</span>
             <span style={{ color: DEFAULT_ENTERPRISE_PRIMARY_HEX }}>Sync</span>

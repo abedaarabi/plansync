@@ -2,7 +2,16 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import {
   ChevronLeft,
@@ -26,6 +35,7 @@ import {
   FileDown,
   FileText,
   Keyboard,
+  Layers,
   Library,
   PanelLeft,
   X,
@@ -46,6 +56,7 @@ import {
 } from "@/lib/sessionPersistence";
 import { buildSessionBackupJson, parseSessionBackupJson, saveBookmarks } from "@/lib/viewBookmarks";
 import { saveDisplayNameToStorage } from "@/lib/sessionPersistence";
+import { DEFAULT_SHEET_OVERLAY_VISIBILITY } from "@/lib/viewerSheetOverlay";
 import { useViewerStore, VIEWER_SCALE_MAX, VIEWER_SCALE_MIN } from "@/store/viewerStore";
 import type { Tool } from "@/store/viewerStore";
 import { toast } from "sonner";
@@ -117,6 +128,8 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const docInfoRef = useRef<HTMLDivElement>(null);
   const helpRef = useRef<HTMLDivElement>(null);
   const searchBtnRef = useRef<HTMLButtonElement>(null);
+  const layersBtnRef = useRef<HTMLButtonElement>(null);
+  const overlayPopRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const pdfUrl = useViewerStore((s) => s.pdfUrl);
@@ -156,6 +169,9 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const setMeasureUnit = useViewerStore((s) => s.setMeasureUnit);
   const mobileLeftToolsOpen = useViewerStore((s) => s.mobileLeftToolsOpen);
   const toggleMobileLeftTools = useViewerStore((s) => s.toggleMobileLeftTools);
+  const sheetOverlayVisibility = useViewerStore((s) => s.sheetOverlayVisibility);
+  const patchSheetOverlayVisibility = useViewerStore((s) => s.patchSheetOverlayVisibility);
+  const setSheetOverlayVisibilityAll = useViewerStore((s) => s.setSheetOverlayVisibilityAll);
 
   const queryClient = useQueryClient();
   const { data: me, isPending: mePending } = useQuery({
@@ -207,7 +223,61 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const [clearMarkupDialogOpen, setClearMarkupDialogOpen] = useState(false);
   const [sheetExportOpen, setSheetExportOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [overlayMenuOpen, setOverlayMenuOpen] = useState(false);
+  const [overlayPopStyle, setOverlayPopStyle] = useState<CSSProperties | null>(null);
+  const [overlayPortalMounted, setOverlayPortalMounted] = useState(false);
   const [zoomStr, setZoomStr] = useState("100");
+
+  useEffect(() => {
+    setOverlayPortalMounted(true);
+  }, []);
+
+  const updateOverlayMenuPosition = useMemo(
+    () => () => {
+      const el = layersBtnRef.current;
+      if (!el || typeof window === "undefined") {
+        setOverlayPopStyle(null);
+        return;
+      }
+      const r = el.getBoundingClientRect();
+      const pad = 8;
+      const w = Math.min(232, window.innerWidth - pad * 2);
+      setOverlayPopStyle({
+        position: "fixed",
+        top: r.bottom + 4,
+        right: Math.max(pad, window.innerWidth - r.right),
+        width: w,
+        zIndex: 100,
+      });
+    },
+    [],
+  );
+
+  useLayoutEffect(() => {
+    if (!overlayMenuOpen) {
+      setOverlayPopStyle(null);
+      return;
+    }
+    updateOverlayMenuPosition();
+    window.addEventListener("resize", updateOverlayMenuPosition);
+    window.addEventListener("scroll", updateOverlayMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateOverlayMenuPosition);
+      window.removeEventListener("scroll", updateOverlayMenuPosition, true);
+    };
+  }, [overlayMenuOpen, updateOverlayMenuPosition]);
+
+  useEffect(() => {
+    if (!overlayMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (overlayPopRef.current?.contains(t)) return;
+      if (layersBtnRef.current?.contains(t)) return;
+      setOverlayMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [overlayMenuOpen]);
 
   useClickOutside(docInfoRef, docInfoOpen, () => setDocInfoOpen(false));
   useClickOutside(helpRef, helpOpen, () => setHelpOpen(false));
@@ -528,6 +598,125 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               onClose={() => setSearchOpen(false)}
               anchorRef={searchBtnRef}
             />
+          </div>
+
+          <div className="shrink-0">
+            <button
+              ref={layersBtnRef}
+              type="button"
+              disabled={!pdfUrl}
+              onClick={() => {
+                setOverlayMenuOpen((prev) => {
+                  if (!prev) updateOverlayMenuPosition();
+                  return !prev;
+                });
+              }}
+              className={tb(overlayMenuOpen)}
+              title="Show or hide markups, measures, pins, and takeoff on the sheet"
+              aria-expanded={overlayMenuOpen}
+              aria-haspopup="menu"
+              aria-label="Sheet overlays"
+            >
+              <Layers className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+            {overlayPortalMounted &&
+              overlayMenuOpen &&
+              overlayPopStyle &&
+              createPortal(
+                <div
+                  ref={overlayPopRef}
+                  className="rounded-xl border border-[#334155] bg-[#1E293B] py-1 shadow-2xl ring-1 ring-black/25"
+                  style={overlayPopStyle}
+                  role="menu"
+                >
+                  <p className="px-3 pb-1 pt-1.5 text-[9px] font-semibold uppercase tracking-wide text-[#64748B]">
+                    On the drawing
+                  </p>
+                  <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] text-[#F8FAFC] hover:bg-[#334155]">
+                    <input
+                      type="checkbox"
+                      className="rounded border-[#475569] bg-[#0f172a]"
+                      checked={sheetOverlayVisibility.showMarkups}
+                      onChange={(e) =>
+                        patchSheetOverlayVisibility({ showMarkups: e.target.checked })
+                      }
+                    />
+                    Markups and comments
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] text-[#F8FAFC] hover:bg-[#334155]">
+                    <input
+                      type="checkbox"
+                      className="rounded border-[#475569] bg-[#0f172a]"
+                      checked={sheetOverlayVisibility.showMeasurements}
+                      onChange={(e) =>
+                        patchSheetOverlayVisibility({ showMeasurements: e.target.checked })
+                      }
+                    />
+                    Measurements
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] text-[#F8FAFC] hover:bg-[#334155]">
+                    <input
+                      type="checkbox"
+                      className="rounded border-[#475569] bg-[#0f172a]"
+                      checked={sheetOverlayVisibility.showIssuePins}
+                      onChange={(e) =>
+                        patchSheetOverlayVisibility({ showIssuePins: e.target.checked })
+                      }
+                    />
+                    Issues and work orders
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] text-[#F8FAFC] hover:bg-[#334155]">
+                    <input
+                      type="checkbox"
+                      className="rounded border-[#475569] bg-[#0f172a]"
+                      checked={sheetOverlayVisibility.showAssetPins}
+                      onChange={(e) =>
+                        patchSheetOverlayVisibility({ showAssetPins: e.target.checked })
+                      }
+                    />
+                    Asset pins
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[11px] text-[#F8FAFC] hover:bg-[#334155]">
+                    <input
+                      type="checkbox"
+                      className="rounded border-[#475569] bg-[#0f172a]"
+                      checked={sheetOverlayVisibility.showTakeoff}
+                      onChange={(e) =>
+                        patchSheetOverlayVisibility({ showTakeoff: e.target.checked })
+                      }
+                    />
+                    Quantity takeoff
+                  </label>
+                  <div className="my-1 border-t border-[#334155]" />
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
+                    onClick={() => {
+                      setSheetOverlayVisibilityAll({
+                        showMarkups: false,
+                        showMeasurements: false,
+                        showIssuePins: false,
+                        showAssetPins: false,
+                        showTakeoff: false,
+                      });
+                      setOverlayMenuOpen(false);
+                    }}
+                  >
+                    Drawing only (hide all)
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
+                    onClick={() => {
+                      setSheetOverlayVisibilityAll({ ...DEFAULT_SHEET_OVERLAY_VISIBILITY });
+                      setOverlayMenuOpen(false);
+                    }}
+                  >
+                    Show all overlays
+                  </button>
+                </div>,
+                document.body,
+              )}
           </div>
         </div>
       </div>

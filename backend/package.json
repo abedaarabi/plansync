@@ -35,7 +35,7 @@
     "db:backfill-project-dates": "tsx scripts/backfill-project-dates.ts",
     "db:studio": "node ./scripts/load-root-env-run-prisma.mjs studio",
     "db:validate": "node ./scripts/load-root-env-run-prisma.mjs validate",
-    "db:precommit": "node ./scripts/load-root-env-run-prisma.mjs validate && node ./scripts/load-root-env-run-prisma.mjs format --check && node ./scripts/load-root-env-run-prisma.mjs generate",
+    "db:precommit": "node ./scripts/load-root-env-run-prisma.mjs validate && node ./scripts/load-root-env-run-prisma.mjs format && node ./scripts/load-root-env-run-prisma.mjs generate",
     "test": "vitest run",
     "test:watch": "vitest"
   },

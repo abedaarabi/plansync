@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Settings } from "lucide-react";
-import { fetchProjectSession, patchProjectSettings } from "@/lib/api-client";
+import { fetchProjectSession, patchProject, patchProjectSettings } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { isSuperAdmin } from "@/lib/workspaceRole";
@@ -33,6 +33,14 @@ export function ProjectSettingsClient({ projectId }: Props) {
     },
   });
 
+  const opModeMutation = useMutation({
+    mutationFn: (operationsMode: boolean) => patchProject(projectId, { operationsMode }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.projectSession(projectId) });
+      await queryClient.invalidateQueries({ queryKey: qk.project(projectId) });
+    },
+  });
+
   if (meLoading || isPending || !session) {
     return <EnterpriseLoadingState message="Loading settings…" label="Loading" />;
   }
@@ -43,6 +51,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
 
   const m = session.settings.modules;
   const c = session.settings.clientVisibility;
+  const om = session.operationsMode;
 
   function toggleModule(key: keyof typeof m, value: boolean) {
     mutation.mutate({ projectId, patch: { modules: { [key]: value } } });
@@ -100,6 +109,34 @@ export function ProjectSettingsClient({ projectId }: Props) {
         {row("Proposals", m.proposals, (v) => toggleModule("proposals", v))}
         {row("Punch List", m.punch, (v) => toggleModule("punch", v))}
         {row("Field Reports", m.fieldReports, (v) => toggleModule("fieldReports", v))}
+      </section>
+
+      <section className="enterprise-card divide-y divide-[var(--enterprise-border)] p-4 sm:p-6">
+        <h2 className="pb-2 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+          Operations &amp; Maintenance
+        </h2>
+        <p className="pb-4 text-xs text-[var(--enterprise-text-muted)]">
+          Turn on for handover buildings: the{" "}
+          <strong className="font-medium text-[var(--enterprise-text)]">Handover</strong> hub
+          (readiness snapshot), asset register, work orders, preventive maintenance, inspections,
+          and occupant reporting. Set lifecycle stage to <strong>Handover &amp; FM</strong> from the
+          project editor when you enter commissioning.
+        </p>
+        {row("Operations mode", om, (v) => opModeMutation.mutate(v), opModeMutation.isPending)}
+        {om ? (
+          <>
+            {row("O&M: Assets", m.omAssets ?? true, (v) => toggleModule("omAssets", v))}
+            {row("O&M: Maintenance (PPM)", m.omMaintenance ?? true, (v) =>
+              toggleModule("omMaintenance", v),
+            )}
+            {row("O&M: Inspections", m.omInspections ?? true, (v) =>
+              toggleModule("omInspections", v),
+            )}
+            {row("O&M: Tenant portal", m.omTenantPortal ?? true, (v) =>
+              toggleModule("omTenantPortal", v),
+            )}
+          </>
+        ) : null}
       </section>
 
       <section className="enterprise-card divide-y divide-[var(--enterprise-border)] p-4 sm:p-6">

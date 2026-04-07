@@ -7,15 +7,21 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
+  Building2,
   Check,
   ChevronDown,
+  ClipboardCheck,
   ClipboardList,
   Cloud,
+  Hammer,
+  LayoutDashboard,
   MapPin,
   Menu,
   Monitor,
   Play,
   Ruler,
+  Users,
+  Wrench,
   X,
 } from "lucide-react";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
@@ -218,12 +224,31 @@ const SOLUTION_ICONS = {
   viewer: Monitor,
   issues: MapPin,
   rfis: ClipboardList,
+  "om-handover": ClipboardCheck,
+  "om-assets": Building2,
+  "om-maintenance": Wrench,
+  "om-work-orders": Hammer,
+  "om-inspections": ClipboardCheck,
+  "om-tenant-portal": Users,
+  "om-fm-dashboard": LayoutDashboard,
   takeoff: Ruler,
 } as const;
 
 function SolutionsDropdown() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const solutionGroups = [
+    {
+      title: "Core",
+      items: LANDING_SOLUTIONS.filter((s) =>
+        ["viewer", "issues", "rfis", "takeoff"].includes(s.slug),
+      ),
+    },
+    {
+      title: "O&M + FM",
+      items: LANDING_SOLUTIONS.filter((s) => s.slug.startsWith("om-")),
+    },
+  ] as const;
 
   useEffect(() => {
     if (!open) return;
@@ -260,19 +285,49 @@ function SolutionsDropdown() {
       {open ? (
         <div
           role="menu"
-          className="absolute left-0 top-[calc(100%+8px)] z-50 w-[min(calc(100vw-2rem),15rem)] overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1 shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/[0.04]"
+          className="absolute left-0 top-[calc(100%+10px)] z-50 w-[min(calc(100vw-2rem),54rem)] overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-3 shadow-xl shadow-slate-900/10 ring-1 ring-slate-900/[0.05]"
         >
-          {LANDING_SOLUTIONS.map((s) => (
-            <a
-              key={s.slug}
-              href={`#solution-${s.slug}`}
-              role="menuitem"
-              className="block px-3 py-2.5 text-sm font-medium text-slate-800 transition hover:bg-slate-50"
-              onClick={() => setOpen(false)}
-            >
-              {s.title}
-            </a>
-          ))}
+          <div className="grid gap-3 md:grid-cols-2 md:gap-4">
+            {solutionGroups.map((group) => (
+              <div
+                key={group.title}
+                className="rounded-xl border border-slate-200/70 bg-slate-50/35 p-2"
+              >
+                <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  {group.title}
+                </p>
+                <div className="mt-1 space-y-0.5">
+                  {group.items.map((s) => {
+                    const Icon = SOLUTION_ICONS[s.slug];
+                    return (
+                      <a
+                        key={s.slug}
+                        href={`#solution-${s.slug}`}
+                        role="menuitem"
+                        className="group flex items-start gap-3 rounded-xl border border-transparent px-3 py-2.5 transition duration-150 hover:-translate-y-px hover:border-slate-200/80 hover:bg-white"
+                        onClick={() => setOpen(false)}
+                      >
+                        <span
+                          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_22%,transparent)] transition duration-150 group-hover:bg-[color-mix(in_srgb,var(--landing-cta)_16%,white)] group-hover:text-[var(--landing-cta-bright)]"
+                          aria-hidden
+                        >
+                          <Icon className="h-4.5 w-4.5" strokeWidth={1.9} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold tracking-tight text-slate-900 transition group-hover:text-slate-950">
+                            {s.title}
+                          </span>
+                          <span className="mt-0.5 block text-xs leading-5 text-slate-500 transition group-hover:text-slate-600">
+                            {s.description}
+                          </span>
+                        </span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>
@@ -1059,7 +1114,386 @@ export function LandingPage() {
               </div>
             </AnimateIn>
 
-            {/* Feature 4 — Takeoff (text left, image right) */}
+            {/* Feature 4 — O&M + Handover (text left, image right) */}
+            <AnimateIn
+              id="feature-om-handover"
+              className="mt-24 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+            >
+              <div className="order-2 lg:order-1 lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
+                <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                  Handover data your FM team can use
+                </h3>
+                <p className="mt-4 text-base leading-relaxed text-slate-600">
+                  Move from project closeout to operations without losing context. PlanSync keeps
+                  handover packages, asset records, and recurring operational workflows connected in
+                  one system.
+                </p>
+                <ul className="mt-5 flex flex-col gap-2.5">
+                  {LANDING_FEATURE_BULLETS["om-handover"].map((b) => (
+                    <li key={b} className="flex gap-3">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/sign-in"
+                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
+                >
+                  Start Pro Trial <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+              <BrowserMockup className="order-1 lg:order-2">
+                <div className="p-5 sm:p-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <span className="text-sm font-semibold text-slate-900">Handover package</span>
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 ring-1 ring-blue-100">
+                      Ready
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-2.5">
+                    {["Asset register", "O&M manuals", "Inspection templates"].map((item) => (
+                      <div
+                        key={item}
+                        className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm text-slate-700"
+                      >
+                        <span>{item}</span>
+                        <span className="text-xs text-slate-500">Linked</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </BrowserMockup>
+            </AnimateIn>
+
+            {/* Feature 5 — Assets (image left, text right) */}
+            <AnimateIn
+              id="feature-om-assets"
+              className="mt-24 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+            >
+              <BrowserMockup>
+                <div className="p-5 sm:p-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <span className="text-sm font-semibold text-slate-900">Asset register</span>
+                    <span className="text-xs text-slate-500">248 assets</span>
+                  </div>
+                  <div className="mt-4 space-y-2.5">
+                    {["AHU-01", "CHWP-03", "FD-2F-17"].map((asset) => (
+                      <div
+                        key={asset}
+                        className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 p-3"
+                      >
+                        <span className="text-sm text-slate-700">{asset}</span>
+                        <span className="text-xs text-slate-500">Documents 4</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </BrowserMockup>
+              <div className="lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
+                <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                  Asset data that stays organized
+                </h3>
+                <p className="mt-4 text-base leading-relaxed text-slate-600">
+                  Build a maintainable asset register with documents, specifications, and lifecycle
+                  context. Teams find the right equipment record quickly when operations begin.
+                </p>
+                <ul className="mt-5 flex flex-col gap-2.5">
+                  {LANDING_FEATURE_BULLETS["om-assets"].map((b) => (
+                    <li key={b} className="flex gap-3">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/sign-in"
+                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
+                >
+                  Explore O&M assets <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </AnimateIn>
+
+            {/* Feature 6 — Maintenance (text left, image right) */}
+            <AnimateIn
+              id="feature-om-maintenance"
+              className="mt-24 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+            >
+              <div className="order-2 lg:order-1 lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
+                <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                  Preventive maintenance made practical
+                </h3>
+                <p className="mt-4 text-base leading-relaxed text-slate-600">
+                  Schedule recurring maintenance tasks, capture service outcomes, and keep
+                  operational records complete from day one of occupancy.
+                </p>
+                <ul className="mt-5 flex flex-col gap-2.5">
+                  {LANDING_FEATURE_BULLETS["om-maintenance"].map((b) => (
+                    <li key={b} className="flex gap-3">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/sign-in"
+                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
+                >
+                  Start maintenance planning <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+              <BrowserMockup className="order-1 lg:order-2">
+                <div className="p-5 sm:p-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <span className="text-sm font-semibold text-slate-900">
+                      Maintenance calendar
+                    </span>
+                    <span className="text-xs text-slate-500">This week 12</span>
+                  </div>
+                  <div className="mt-4 space-y-2.5">
+                    {["Filter replacement", "Pump inspection", "Emergency lighting test"].map(
+                      (job) => (
+                        <div
+                          key={job}
+                          className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm text-slate-700"
+                        >
+                          {job}
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </div>
+              </BrowserMockup>
+            </AnimateIn>
+
+            {/* Feature 7 — Work Orders (image left, text right) */}
+            <AnimateIn
+              id="feature-om-work-orders"
+              className="mt-24 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+            >
+              <BrowserMockup>
+                <div className="p-5 sm:p-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <span className="text-sm font-semibold text-slate-900">Work orders</span>
+                    <span className="text-xs text-slate-500">Open 9</span>
+                  </div>
+                  <div className="mt-4 space-y-2.5">
+                    {["WO-1024 HVAC fault", "WO-1028 Leak check", "WO-1031 Lighting repair"].map(
+                      (wo) => (
+                        <div
+                          key={wo}
+                          className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm text-slate-700"
+                        >
+                          <span>{wo}</span>
+                          <span className="text-xs text-slate-500">Assigned</span>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </div>
+              </BrowserMockup>
+              <div className="lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
+                <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                  Work orders with clear ownership
+                </h3>
+                <p className="mt-4 text-base leading-relaxed text-slate-600">
+                  Convert maintenance needs into trackable work orders with priorities, assignees,
+                  and auditable completion history your team can trust.
+                </p>
+                <ul className="mt-5 flex flex-col gap-2.5">
+                  {LANDING_FEATURE_BULLETS["om-work-orders"].map((b) => (
+                    <li key={b} className="flex gap-3">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/sign-in"
+                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
+                >
+                  Manage work orders <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </AnimateIn>
+
+            {/* Feature 8 — Inspections (text left, image right) */}
+            <AnimateIn
+              id="feature-om-inspections"
+              className="mt-24 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+            >
+              <div className="order-2 lg:order-1 lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
+                <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                  Repeatable inspections across your portfolio
+                </h3>
+                <p className="mt-4 text-base leading-relaxed text-slate-600">
+                  Use standardized templates, run inspections in the field, and record findings in a
+                  structured format that supports long-term compliance.
+                </p>
+                <ul className="mt-5 flex flex-col gap-2.5">
+                  {LANDING_FEATURE_BULLETS["om-inspections"].map((b) => (
+                    <li key={b} className="flex gap-3">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/sign-in"
+                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
+                >
+                  Run inspections <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+              <BrowserMockup className="order-1 lg:order-2">
+                <div className="p-5 sm:p-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <span className="text-sm font-semibold text-slate-900">Inspection runs</span>
+                    <span className="text-xs text-slate-500">Due 5</span>
+                  </div>
+                  <div className="mt-4 space-y-2.5">
+                    {["Fire safety monthly", "HVAC quarterly", "Lift compliance"].map((run) => (
+                      <div
+                        key={run}
+                        className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm text-slate-700"
+                      >
+                        <span>{run}</span>
+                        <span className="text-xs text-slate-500">Scheduled</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </BrowserMockup>
+            </AnimateIn>
+
+            {/* Feature 9 — Tenant Portal (image left, text right) */}
+            <AnimateIn
+              id="feature-om-tenant-portal"
+              className="mt-24 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+            >
+              <BrowserMockup>
+                <div className="p-5 sm:p-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <span className="text-sm font-semibold text-slate-900">Tenant requests</span>
+                    <span className="text-xs text-slate-500">New 4</span>
+                  </div>
+                  <div className="mt-4 space-y-2.5">
+                    {["AC too warm", "Lobby light out", "Water pressure issue"].map((req) => (
+                      <div
+                        key={req}
+                        className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm text-slate-700"
+                      >
+                        {req}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </BrowserMockup>
+              <div className="lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
+                <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                  Tenant portal for faster issue intake
+                </h3>
+                <p className="mt-4 text-base leading-relaxed text-slate-600">
+                  Give tenants a clean way to report operational issues while your team tracks and
+                  resolves requests with full status visibility.
+                </p>
+                <ul className="mt-5 flex flex-col gap-2.5">
+                  {LANDING_FEATURE_BULLETS["om-tenant-portal"].map((b) => (
+                    <li key={b} className="flex gap-3">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/sign-in"
+                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
+                >
+                  Launch tenant portal <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </AnimateIn>
+
+            {/* Feature 10 — FM Dashboard (text left, image right) */}
+            <AnimateIn
+              id="feature-om-fm-dashboard"
+              className="mt-24 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"
+            >
+              <div className="order-2 lg:order-1 lg:rounded-2xl lg:border lg:border-slate-200/70 lg:bg-white/90 lg:p-8 lg:shadow-[var(--enterprise-shadow-card)] lg:backdrop-blur-sm">
+                <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                  FM dashboard for daily operations clarity
+                </h3>
+                <p className="mt-4 text-base leading-relaxed text-slate-600">
+                  See open work, overdue inspections, and asset workload trends in one dashboard so
+                  teams can prioritize action without context switching.
+                </p>
+                <ul className="mt-5 flex flex-col gap-2.5">
+                  {LANDING_FEATURE_BULLETS["om-fm-dashboard"].map((b) => (
+                    <li key={b} className="flex gap-3">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                        strokeWidth={2.5}
+                        aria-hidden
+                      />
+                      <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/sign-in"
+                  className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[var(--landing-cta)] transition hover:text-[var(--landing-cta-bright)]"
+                >
+                  View FM dashboard <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+              <BrowserMockup className="order-1 lg:order-2">
+                <div className="p-5 sm:p-6">
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      ["Open work", "29"],
+                      ["Overdue", "6"],
+                      ["Inspections due", "12"],
+                      ["High priority", "4"],
+                    ].map(([label, value]) => (
+                      <div
+                        key={label}
+                        className="rounded-xl border border-slate-100 bg-slate-50/50 p-3"
+                      >
+                        <div className="text-xs text-slate-500">{label}</div>
+                        <div className="mt-1 text-lg font-semibold text-slate-900">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </BrowserMockup>
+            </AnimateIn>
+
+            {/* Feature 11 — Takeoff (text left, image right) */}
             <AnimateIn
               id="feature-takeoff"
               className="mt-24 scroll-mt-20 grid items-center gap-10 lg:grid-cols-2 lg:gap-16"

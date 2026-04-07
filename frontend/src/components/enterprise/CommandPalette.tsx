@@ -5,10 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
+  CalendarRange,
   ClipboardList,
   ClipboardCheck,
+  FileCheck2,
   FileStack,
   LayoutDashboard,
+  LayoutGrid,
   MessageSquareQuote,
   Package,
   Search,
@@ -20,6 +23,7 @@ import {
   Ruler,
   ScrollText,
   Settings,
+  Wrench,
 } from "lucide-react";
 import { useProjectNavHref } from "./useProjectNavHref";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
@@ -70,8 +74,13 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     proposals: true,
     punch: true,
     fieldReports: true,
+    omAssets: true,
+    omMaintenance: true,
+    omInspections: true,
+    omTenantPortal: true,
   };
   const mod = projectSession?.settings.modules ?? defaultModules;
+  const operationsMode = projectSession?.operationsMode ?? false;
 
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
@@ -191,7 +200,67 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         icon: FileStack,
       },
     );
-    if (mod.issues) {
+    if (operationsMode) {
+      out.push({
+        id: "om-fm-dashboard",
+        label: "FM dashboard",
+        hint: "KPIs, maintenance & work orders",
+        href: `/projects/${projectId}/om/dashboard`,
+        icon: LayoutGrid,
+      });
+      out.push({
+        id: "om-handover",
+        label: "Handover",
+        hint: "Readiness & FM brief",
+        href: `/projects/${projectId}/om/handover`,
+        icon: FileCheck2,
+      });
+      if (mod.omAssets) {
+        out.push({
+          id: "om-assets",
+          label: "Assets",
+          hint: "O&M equipment",
+          href: `/projects/${projectId}/om/assets`,
+          icon: Package,
+        });
+      }
+      if (mod.issues) {
+        out.push({
+          id: "om-wo",
+          label: "Work orders",
+          hint: "O&M",
+          href: `/projects/${projectId}/om/work-orders`,
+          icon: Wrench,
+        });
+      }
+      if (mod.omMaintenance) {
+        out.push({
+          id: "om-maint",
+          label: "Maintenance (PPM)",
+          hint: "Schedules",
+          href: `/projects/${projectId}/om/maintenance`,
+          icon: CalendarRange,
+        });
+      }
+      if (mod.omInspections) {
+        out.push({
+          id: "om-insp",
+          label: "Inspections",
+          hint: "Templates & runs",
+          href: `/projects/${projectId}/om/inspections`,
+          icon: ClipboardList,
+        });
+      }
+      if (mod.omTenantPortal) {
+        out.push({
+          id: "om-tenant",
+          label: "Tenant portal",
+          hint: "Occupant links",
+          href: `/projects/${projectId}/om/tenant-portal`,
+          icon: Building2,
+        });
+      }
+    } else if (mod.issues) {
       out.push({
         id: "issues",
         label: "Open Issues",
@@ -274,7 +343,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     }
 
     return out;
-  }, [wid, workspaceRole, projectId, projectSession?.uiMode, projectSession?.settings, mod]);
+  }, [
+    wid,
+    workspaceRole,
+    projectId,
+    projectSession?.uiMode,
+    projectSession?.settings,
+    mod,
+    operationsMode,
+  ]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();

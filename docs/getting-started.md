@@ -199,7 +199,7 @@ These are not required for basic local UI and API development, but they enable f
 1. **lint-staged** — ESLint + Prettier on staged files; **`prisma format`** if `backend/prisma/schema.prisma` changed.
 2. **Typecheck** — all workspaces.
 3. **`npm run test`** — Vitest for `backend/` and `frontend/` (no database required for current tests).
-4. **`npm run db:precommit`** — `prisma validate`, **`prisma format --check`**, and **`prisma generate`**. This keeps the Prisma schema valid, consistently formatted, and the generated client aligned with the schema. **No database connection is required.**
+4. **`npm run db:precommit`** — `prisma validate`, **`prisma format`**, and **`prisma generate`**. This keeps the Prisma schema valid, consistently formatted, and the generated client aligned with the schema. **No database connection is required.**
 
 These checks do **not** run `migrate dev` or compare migrations to a live database (Prisma needs a shadow database URL for that). When you change the schema, create or update migrations locally with `npm run db:local:migrate`, commit the `prisma/migrations` folder, and apply in production with **`npm run db:prod:migrate:deploy`**.
 

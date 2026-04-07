@@ -56,6 +56,8 @@ export function getHomepageJsonLd(siteOrigin: string) {
           "Calibrate drawing scale from a known dimension",
           "Line, area, angle, and path measurements on PDFs",
           "Markup tools and export to PDF or PNG",
+          "O&M handover workflows with asset records, inspections, and maintenance planning",
+          "Work orders, tenant request intake, and FM dashboard visibility for operations teams",
           "Free tier: local-only processing on your device; Pro: optional encrypted cloud projects",
         ],
       },

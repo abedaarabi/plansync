@@ -80,3 +80,24 @@ export function s3KeyMatchesRfiAttachment(
   const prefix = `ws/${workspaceId}/p/${projectId}/rfi/${rfiId}/`;
   return s3Key.startsWith(prefix);
 }
+
+export function buildAssetDocumentKey(
+  workspaceId: string,
+  projectId: string,
+  assetId: string,
+  uploadId: string,
+  fileName: string,
+): string {
+  const safe = sanitizeAttachmentFileName(fileName);
+  return `ws/${workspaceId}/p/${projectId}/asset/${assetId}/${uploadId}/${safe}`;
+}
+
+export function s3KeyMatchesAssetDocument(
+  s3Key: string,
+  workspaceId: string,
+  projectId: string,
+  assetId: string,
+): boolean {
+  const prefix = `ws/${workspaceId}/p/${projectId}/asset/${assetId}/`;
+  return s3Key.startsWith(prefix);
+}

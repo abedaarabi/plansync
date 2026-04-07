@@ -202,11 +202,18 @@ export function SidebarIssuesTab() {
   const [deletingIssueId, setDeletingIssueId] = useState<string | null>(null);
   const [deleteConfirmIssue, setDeleteConfirmIssue] = useState<IssueRow | null>(null);
 
-  const issuesQueryKey = qk.issuesForFileVersion(cloudFileVersionId ?? "");
+  const viewerOperationsMode = useViewerStore((s) => s.viewerOperationsMode);
+  const issuesQueryKey = qk.issuesForFileVersion(
+    cloudFileVersionId ?? "",
+    viewerOperationsMode ? "WORK_ORDER" : null,
+  );
 
   const { data: issues = [], isPending: issuesPending } = useQuery({
     queryKey: issuesQueryKey,
-    queryFn: () => fetchIssuesForFileVersion(cloudFileVersionId!),
+    queryFn: () =>
+      fetchIssuesForFileVersion(cloudFileVersionId!, {
+        issueKind: viewerOperationsMode ? "WORK_ORDER" : undefined,
+      }),
     enabled: Boolean(cloudFileVersionId),
   });
 
@@ -235,8 +242,11 @@ export function SidebarIssuesTab() {
       const ann = next[idx];
       if (ann.type === "measurement") continue;
       const hex = issueStatusMarkerStrokeHex(issue.status);
+      const kind: "WORK_ORDER" | "CONSTRUCTION" =
+        issue.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION";
       const needs =
         ann.linkedIssueId !== issue.id ||
+        ann.linkedIssueKind !== kind ||
         ann.issueStatus !== issue.status ||
         (ann.linkedIssueTitle ?? "") !== issue.title ||
         ann.color !== hex;
@@ -246,6 +256,7 @@ export function SidebarIssuesTab() {
       next[idx] = {
         ...ann,
         linkedIssueId: issue.id,
+        linkedIssueKind: kind,
         issueStatus: issue.status,
         linkedIssueTitle: issue.title,
         color: hex,
@@ -275,6 +286,7 @@ export function SidebarIssuesTab() {
           issueStatus: row.status,
           linkedIssueTitle: row.title,
           color: issueStatusMarkerStrokeHex(row.status),
+          linkedIssueKind: row.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION",
         });
       }
     },
@@ -345,6 +357,7 @@ export function SidebarIssuesTab() {
         status: issue.status,
         title: issue.title,
         replaceAnnotationId: livePin?.id ?? issue.annotationId ?? null,
+        issueKind: issue.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION",
       });
     },
     [setIssuePlacement, setNewIssuePlacementActive],
@@ -384,7 +397,7 @@ export function SidebarIssuesTab() {
 
       <div className="flex shrink-0 items-center justify-between gap-1">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-[#94A3B8]">
-          Sheet issues
+          {viewerOperationsMode ? "Work orders (this sheet)" : "Sheet issues"}
         </span>
         <button
           type="button"
@@ -392,7 +405,7 @@ export function SidebarIssuesTab() {
           className="viewer-focus-ring flex items-center gap-1 rounded-md border border-[#334155] bg-[#1E293B] px-2 py-1 text-[10px] font-medium text-[#E2E8F0] hover:bg-[#334155]"
         >
           <Plus className="h-3 w-3" strokeWidth={2} />
-          New issue
+          {viewerOperationsMode ? "New work order" : "New issue"}
         </button>
       </div>
 

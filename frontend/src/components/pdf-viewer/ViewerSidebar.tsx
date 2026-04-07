@@ -33,6 +33,7 @@ import { MARKUP_STROKE_COLOR_PRESETS } from "@/lib/markupUi";
 import { useViewerStore } from "@/store/viewerStore";
 import {
   annotationIsIssuePin,
+  annotationIsProtectedSheetPin,
   filterAnnotationIdsExcludingIssuePins,
 } from "@/lib/annotationIssues";
 import type { MeasureUnit } from "@/lib/coords";
@@ -245,11 +246,26 @@ export function ViewerSidebar() {
   const setPendingProSidebarTab = useViewerStore((s) => s.setPendingProSidebarTab);
   const takeoffMode = useViewerStore((s) => s.takeoffMode);
   const setTakeoffMode = useViewerStore((s) => s.setTakeoffMode);
+  const viewerOperationsMode = useViewerStore((s) => s.viewerOperationsMode);
   const setTakeoffInventoryDrawerFromSidebar = useViewerStore(
     (s) => s.setTakeoffInventoryDrawerFromSidebar,
   );
   const setSheetAiDrawerFromSidebar = useViewerStore((s) => s.setSheetAiDrawerFromSidebar);
   const bumpSheetAiExpand = useViewerStore((s) => s.bumpSheetAiExpand);
+  const setStrokeWidth = useViewerStore((s) => s.setStrokeWidth);
+  const textBoxFillFromFrame = useViewerStore((s) => s.textBoxFillFromFrame);
+  const setTextBoxFillFromFrame = useViewerStore((s) => s.setTextBoxFillFromFrame);
+  const setMarkupShape = useViewerStore((s) => s.setMarkupShape);
+  const measureKind = useViewerStore((s) => s.measureKind);
+  const setMeasureKind = useViewerStore((s) => s.setMeasureKind);
+  const measureUnit = useViewerStore((s) => s.measureUnit);
+  const setMeasureUnit = useViewerStore((s) => s.setMeasureUnit);
+  const measureLabelFontSize = useViewerStore((s) => s.measureLabelFontSize);
+  const measureLabelColor = useViewerStore((s) => s.measureLabelColor);
+  const setMeasureLabelFontSize = useViewerStore((s) => s.setMeasureLabelFontSize);
+  const setMeasureLabelColor = useViewerStore((s) => s.setMeasureLabelColor);
+  const calibrationByPage = useViewerStore((s) => s.calibrationByPage);
+  const clearCalibration = useViewerStore((s) => s.clearCalibration);
   const { enabled: proSheetFeatures } = useViewerProSheetFeatures();
   const showProTabs = Boolean(pdfUrl && proSheetFeatures && viewerProjectId);
   const showCollabTab = showProTabs && Boolean(collabCtx?.collabFeatureEnabled);
@@ -283,7 +299,7 @@ export function ViewerSidebar() {
   const markupAnnotations = useMemo(
     () =>
       sortedAnnotations.filter(
-        (a) => a.type !== "measurement" && !a.linkedIssueId && !a.issueDraft,
+        (a) => a.type !== "measurement" && !annotationIsProtectedSheetPin(a),
       ),
     [sortedAnnotations],
   );
@@ -317,7 +333,7 @@ export function ViewerSidebar() {
     setSidebarTab((t) => {
       if (t === "pages" || t === "outline" || t === "sheetAi" || t === "collab") return t;
       if (annotationIsIssuePin(selectedAnn)) return "issues";
-      if (t === "takeoff") return t;
+      if (t === "takeoff" && !viewerOperationsMode) return t;
       return selectedAnn.type === "measurement" ? "measure" : "draw";
     });
   }, [
@@ -326,6 +342,7 @@ export function ViewerSidebar() {
     selectedAnn?.type,
     selectedAnn?.linkedIssueId,
     selectedAnn?.issueDraft,
+    viewerOperationsMode,
   ]);
 
   /** Ruler / calibrate live under the Measure panel. */
@@ -345,9 +362,11 @@ export function ViewerSidebar() {
 
   useEffect(() => {
     if (!pendingProSidebarTab || !showProTabs) return;
-    setSidebarTab(pendingProSidebarTab);
+    const tab =
+      viewerOperationsMode && pendingProSidebarTab === "takeoff" ? "issues" : pendingProSidebarTab;
+    setSidebarTab(tab);
     setPendingProSidebarTab(null);
-  }, [pendingProSidebarTab, showProTabs, setPendingProSidebarTab]);
+  }, [pendingProSidebarTab, showProTabs, viewerOperationsMode, setPendingProSidebarTab]);
 
   useEffect(() => {
     if (showProTabs) return;
@@ -367,12 +386,35 @@ export function ViewerSidebar() {
   }, [showCollabTab, sidebarTab]);
 
   useEffect(() => {
-    if (takeoffMode) setSidebarTab("takeoff");
-  }, [takeoffMode]);
+    if (takeoffMode && !viewerOperationsMode) setSidebarTab("takeoff");
+  }, [takeoffMode, viewerOperationsMode]);
+
+  /** Match sheet overlay visibility to the active sidebar panel (Draw / Measure / Issues / Takeoff). */
+  useEffect(() => {
+    if (!showProTabs) return;
+    const patch = useViewerStore.getState().patchSheetOverlayVisibility;
+    if (sidebarTab === "draw") {
+      patch({ showMarkups: true });
+    } else if (sidebarTab === "measure") {
+      patch({ showMeasurements: true });
+    } else if (sidebarTab === "issues") {
+      patch({ showIssuePins: true });
+    } else if (sidebarTab === "takeoff") {
+      patch({ showTakeoff: true });
+    }
+  }, [sidebarTab, showProTabs]);
 
   useEffect(() => {
     if (sidebarTab !== "takeoff" && takeoffMode) setTakeoffMode(false);
   }, [sidebarTab, takeoffMode, setTakeoffMode]);
+
+  useEffect(() => {
+    if (!viewerOperationsMode) return;
+    if (sidebarTab !== "takeoff") return;
+    setSidebarTab("issues");
+    setTakeoffMode(false);
+    setTakeoffInventoryDrawerFromSidebar(false);
+  }, [viewerOperationsMode, sidebarTab, setTakeoffMode, setTakeoffInventoryDrawerFromSidebar]);
 
   useEffect(() => {
     if (sidebarTab !== "takeoff") setTakeoffInventoryDrawerFromSidebar(false);
@@ -386,21 +428,6 @@ export function ViewerSidebar() {
       setSheetAiDrawerFromSidebar(false);
     }
   }, [sidebarTab, setSheetAiDrawerFromSidebar, bumpSheetAiExpand]);
-
-  const setStrokeWidth = useViewerStore((s) => s.setStrokeWidth);
-  const textBoxFillFromFrame = useViewerStore((s) => s.textBoxFillFromFrame);
-  const setTextBoxFillFromFrame = useViewerStore((s) => s.setTextBoxFillFromFrame);
-  const setMarkupShape = useViewerStore((s) => s.setMarkupShape);
-  const measureKind = useViewerStore((s) => s.measureKind);
-  const setMeasureKind = useViewerStore((s) => s.setMeasureKind);
-  const measureUnit = useViewerStore((s) => s.measureUnit);
-  const setMeasureUnit = useViewerStore((s) => s.setMeasureUnit);
-  const measureLabelFontSize = useViewerStore((s) => s.measureLabelFontSize);
-  const measureLabelColor = useViewerStore((s) => s.measureLabelColor);
-  const setMeasureLabelFontSize = useViewerStore((s) => s.setMeasureLabelFontSize);
-  const setMeasureLabelColor = useViewerStore((s) => s.setMeasureLabelColor);
-  const calibrationByPage = useViewerStore((s) => s.calibrationByPage);
-  const clearCalibration = useViewerStore((s) => s.clearCalibration);
 
   const pageCal = calibrationByPage[pageIdx0];
 
@@ -474,7 +501,11 @@ export function ViewerSidebar() {
             {pdfUrl ? (
               <div
                 className={`mt-1 grid gap-1 ${
-                  showProTabs ? (showCollabTab ? "grid-cols-2" : "grid-cols-3") : "grid-cols-1"
+                  showProTabs
+                    ? showCollabTab || viewerOperationsMode
+                      ? "grid-cols-2"
+                      : "grid-cols-3"
+                    : "grid-cols-1"
                 }`}
               >
                 {showProTabs ? (
@@ -484,27 +515,33 @@ export function ViewerSidebar() {
                       role="tab"
                       aria-selected={sidebarTab === "issues"}
                       onClick={() => setSidebarTab("issues")}
-                      title="Issues for this sheet"
+                      title={
+                        viewerOperationsMode
+                          ? "Work orders for this sheet"
+                          : "Issues for this sheet"
+                      }
                       className={sidebarPanelTabClass(sidebarTab === "issues")}
                     >
                       <ListChecks className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      Issues
+                      {viewerOperationsMode ? "WO" : "Issues"}
                     </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={sidebarTab === "takeoff"}
-                      onClick={() => {
-                        setSidebarTab("takeoff");
-                        setTakeoffMode(true);
-                        setTakeoffInventoryDrawerFromSidebar(true);
-                      }}
-                      title="Quantity takeoff"
-                      className={sidebarPanelTabClass(sidebarTab === "takeoff")}
-                    >
-                      <Package className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      Takeoff
-                    </button>
+                    {!viewerOperationsMode ? (
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={sidebarTab === "takeoff"}
+                        onClick={() => {
+                          setSidebarTab("takeoff");
+                          setTakeoffMode(true);
+                          setTakeoffInventoryDrawerFromSidebar(true);
+                        }}
+                        title="Quantity takeoff"
+                        className={sidebarPanelTabClass(sidebarTab === "takeoff")}
+                      >
+                        <Package className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        Takeoff
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       role="tab"

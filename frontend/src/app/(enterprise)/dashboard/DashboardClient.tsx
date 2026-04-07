@@ -1,7 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
 import {
   ArrowUpRight,
   Check,
@@ -18,12 +20,23 @@ import {
 import { DashboardActivityChart } from "@/components/enterprise/DashboardActivityChart";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { WorkspaceUsageMeter, formatGiB } from "@/components/enterprise/WorkspaceUsageMeters";
-import { fetchDashboard, fetchMe, fetchProjects, fetchWorkspaceMembers } from "@/lib/api-client";
+import {
+  createWorkspace,
+  fetchDashboard,
+  fetchMe,
+  fetchProjects,
+  fetchWorkspaceMembers,
+} from "@/lib/api-client";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { computeWorkspaceHealthScore } from "@/lib/dashboardHealth";
 import { qk } from "@/lib/queryKeys";
 
 export function DashboardClient() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [createWorkspaceError, setCreateWorkspaceError] = useState<string | null>(null);
   const {
     data: me,
     isPending: meLoading,
@@ -101,6 +114,83 @@ export function DashboardClient() {
     );
   }
 
+  const hasWorkspace = (me.workspaces?.length ?? 0) > 0;
+
+  function makeWorkspaceSlug(raw: string): string {
+    const base = raw
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+    const fallback = `workspace-${Math.random().toString(36).slice(2, 8)}`;
+    return (base || fallback).slice(0, 48);
+  }
+
+  async function onCreateWorkspace(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const name = workspaceName.trim();
+    if (!name || creatingWorkspace) return;
+    setCreatingWorkspace(true);
+    setCreateWorkspaceError(null);
+    try {
+      await createWorkspace(name, makeWorkspaceSlug(name));
+      await queryClient.invalidateQueries({ queryKey: qk.me() });
+      router.push("/projects");
+    } catch (err) {
+      setCreateWorkspaceError(err instanceof Error ? err.message : "Could not create workspace.");
+    } finally {
+      setCreatingWorkspace(false);
+    }
+  }
+
+  if (!hasWorkspace) {
+    return (
+      <div className="enterprise-animate-in space-y-6">
+        <section className="enterprise-card max-w-2xl p-6 sm:p-8">
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--enterprise-text)]">
+            Create your workspace
+          </h1>
+          <p className="mt-2 text-[14px] text-[var(--enterprise-text-muted)]">
+            New accounts need a workspace first. After this step, you can add your first project.
+          </p>
+          <form onSubmit={onCreateWorkspace} className="mt-6 space-y-4">
+            <div>
+              <label
+                htmlFor="workspace-name"
+                className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]"
+              >
+                Workspace name
+              </label>
+              <input
+                id="workspace-name"
+                value={workspaceName}
+                onChange={(e) => setWorkspaceName(e.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+                placeholder="Acme Construction"
+                required
+              />
+            </div>
+            {createWorkspaceError ? (
+              <p className="enterprise-alert-danger px-3 py-2 text-sm">{createWorkspaceError}</p>
+            ) : null}
+            <button
+              type="submit"
+              disabled={creatingWorkspace}
+              className="inline-flex rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--enterprise-primary-deep)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {creatingWorkspace ? "Creating..." : "Create workspace"}
+            </button>
+          </form>
+          <p className="mt-4 text-xs text-[var(--enterprise-text-muted)]">
+            You will be redirected to <strong>Projects</strong> to add your first project.
+          </p>
+        </section>
+      </div>
+    );
+  }
+
   const firstName = me.user.name?.split(/\s+/)[0] ?? me.user.email?.split("@")[0] ?? "there";
   const issueTotal = dash?.issuesByStatus?.reduce((a, x) => a + (x._count ?? 0), 0) ?? 0;
   const openIssues =
@@ -112,7 +202,6 @@ export function DashboardClient() {
       ?.filter((x) => x.status === "CLOSED" || x.status === "RESOLVED")
       .reduce((a, x) => a + x._count, 0) ?? 0;
 
-  const hasWorkspace = (me.workspaces?.length ?? 0) > 0;
   const projectCount = dash?.projectCount ?? 0;
   const fileCount = dash?.fileCount ?? projects.reduce((acc, p) => acc + p.files.length, 0);
   const memberCount = dash?.memberCount ?? 1;

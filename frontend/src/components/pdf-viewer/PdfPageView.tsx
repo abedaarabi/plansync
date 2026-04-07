@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { setupPdfWorker } from "@/lib/pdf";
@@ -49,6 +50,7 @@ import {
   translateAnnotationPoints,
   unionAnnotationSelectionBounds,
 } from "@/lib/annotationHitTest";
+import { annotationPassesOverlayVisibility } from "@/lib/viewerSheetOverlay";
 import {
   boundsNormFromPoints,
   computeResizePatch,
@@ -424,6 +426,7 @@ export function PdfPageView({
   const printRenderTaskRef = useRef<RenderTask | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const pageIdx0 = pageNumber - 1;
+  const searchParams = useSearchParams();
   const screenArrowMarkerId = `markup-arrow-screen-${pageIdx0}`;
   const screenArrowMarkerUrl = `url(#${screenArrowMarkerId})`;
 
@@ -443,6 +446,11 @@ export function PdfPageView({
   const annotations = useMemo(
     () => allAnnotations.filter((a) => a.pageIndex === pageIdx0),
     [allAnnotations, pageIdx0],
+  );
+  const sheetOverlayVisibility = useViewerStore((s) => s.sheetOverlayVisibility);
+  const visibleAnnotations = useMemo(
+    () => annotations.filter((a) => annotationPassesOverlayVisibility(a, sheetOverlayVisibility)),
+    [annotations, sheetOverlayVisibility],
   );
   const calibrationByPage = useViewerStore((s) => s.calibrationByPage);
   const measureUnit = useViewerStore((s) => s.measureUnit);
@@ -470,6 +478,8 @@ export function PdfPageView({
   const issuePlacementActive = useViewerStore(
     (s) => s.issuePlacement != null || s.newIssuePlacementActive,
   );
+  const omAssetPlacementActive = useViewerStore((s) => s.omAssetPlacementActive);
+  const issueOrAssetPlacement = issuePlacementActive || omAssetPlacementActive;
   const setPendingProSidebarTab = useViewerStore((s) => s.setPendingProSidebarTab);
   const setIssuesSidebarFocusIssueId = useViewerStore((s) => s.setIssuesSidebarFocusIssueId);
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
@@ -669,6 +679,11 @@ export function PdfPageView({
     takeoffVertexPreviewPoints,
     takeoffVertexSession,
   ]);
+  const takeoffOverlayVisible = sheetOverlayVisibility.showTakeoff || tool === "takeoff";
+  const takeoffZonesForScreen = useMemo(
+    () => (takeoffOverlayVisible ? takeoffZonesForView : []),
+    [takeoffOverlayVisible, takeoffZonesForView],
+  );
 
   useEffect(() => {
     measureLineDraftEndRef.current = measureEnd;
@@ -948,7 +963,7 @@ export function PdfPageView({
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === "a" && tool === "select" && !inField) {
         e.preventDefault();
-        setSelectedAnnotationIds(annotations.map((a) => a.id));
+        setSelectedAnnotationIds(visibleAnnotations.map((a) => a.id));
         return;
       }
       if (
@@ -1084,6 +1099,18 @@ export function PdfPageView({
         useViewerStore.getState().setNewIssuePlacementActive(false);
         return;
       }
+      if (e.key === "Escape" && useViewerStore.getState().omAssetPlacementActive) {
+        e.preventDefault();
+        useViewerStore.getState().setOmAssetPlacementActive(false);
+        return;
+      }
+      if (e.key === "Escape" && useViewerStore.getState().omAssetCreateDraft) {
+        e.preventDefault();
+        const d = useViewerStore.getState().omAssetCreateDraft;
+        if (d) removeAnnotation(d.annotationId);
+        useViewerStore.getState().setOmAssetCreateDraft(null);
+        return;
+      }
       if (e.key === "Escape" && useViewerStore.getState().issuePlacement) {
         e.preventDefault();
         useViewerStore.getState().setIssuePlacement(null);
@@ -1153,7 +1180,7 @@ export function PdfPageView({
     textCommentOpen,
     sheetContextMenu,
     selectedAnnotationIds,
-    annotations,
+    visibleAnnotations,
     removeAnnotations,
     strokeColor,
     strokeWidth,
@@ -1178,6 +1205,7 @@ export function PdfPageView({
     commitTakeoffDrawOrRedraw,
     setTakeoffAreaPts,
     setTakeoffAreaPreview,
+    removeAnnotation,
   ]);
 
   useEffect(() => {
@@ -1486,6 +1514,7 @@ export function PdfPageView({
           ],
           linkedIssueTitle: "New issue",
           issueStatus: "OPEN",
+          linkedIssueKind: st0.viewerOperationsMode ? "WORK_ORDER" : "CONSTRUCTION",
           issueDraft: true,
           author: displayName,
         });
@@ -1493,6 +1522,58 @@ export function PdfPageView({
         st0.setIssueCreateDraft({ annotationId: newId });
         st0.setPendingProSidebarTab("issues");
         st0.setSelectedAnnotationId(newId);
+        e.preventDefault();
+        return;
+      }
+
+      const stOm = useViewerStore.getState();
+      if (stOm.omAssetPlacementActive && !compareReferenceOnly) {
+        if (pageSize.w === 1 && pageSize.h === 1) return;
+        const omAssetId = searchParams.get("omAssetId")?.trim();
+        if (!omAssetId) {
+          toast.error("Missing asset. Use Link on sheet from the Assets page.");
+          e.preventDefault();
+          return;
+        }
+        const rawTag = searchParams.get("omAssetTag");
+        const tag = rawTag && rawTag.trim() ? decodeURIComponent(rawTag).slice(0, 120) : "Asset";
+        const rawAssetName = searchParams.get("omAssetName");
+        let linkedOmAssetName: string | undefined;
+        if (rawAssetName?.trim()) {
+          try {
+            linkedOmAssetName = decodeURIComponent(rawAssetName).trim().slice(0, 200);
+          } catch {
+            linkedOmAssetName = rawAssetName.trim().slice(0, 200);
+          }
+        }
+        const elOm = e.currentTarget as HTMLDivElement;
+        const rawOm = normFromEvent(e, elOm);
+        const snOm = { x: rawOm.x, y: rawOm.y, snapped: false };
+        const cssWOm = pageSize.w * scale;
+        const cssHOm = pageSize.h * scale;
+        const pinRadOm = 4;
+        const dxNOm = pinRadOm / cssWOm;
+        const dyNOm = pinRadOm / cssHOm;
+        const ASSET_PIN_HEX = "#0d9488";
+        const stA = useViewerStore.getState();
+        const newAid = stA.addAnnotation({
+          pageIndex: pageIdx0,
+          type: "ellipse",
+          color: ASSET_PIN_HEX,
+          strokeWidth: 0,
+          points: [
+            { x: snOm.x - dxNOm, y: snOm.y - dyNOm },
+            { x: snOm.x + dxNOm, y: snOm.y + dyNOm },
+          ],
+          linkedOmAssetId: omAssetId,
+          omAssetDraft: true,
+          linkedOmAssetTag: tag,
+          linkedOmAssetName,
+          author: displayName,
+        });
+        stA.setOmAssetPlacementActive(false);
+        stA.setOmAssetCreateDraft({ annotationId: newAid });
+        stA.setSelectedAnnotationId(newAid);
         e.preventDefault();
         return;
       }
@@ -1527,6 +1608,7 @@ export function PdfPageView({
             { x: snPl.x + dxN, y: snPl.y + dyN },
           ],
           linkedIssueId: issuePl.issueId,
+          linkedIssueKind: issuePl.issueKind,
           issueStatus: issuePl.status,
           linkedIssueTitle: issuePl.title,
           author: displayName,
@@ -1807,7 +1889,7 @@ export function PdfPageView({
       if (tool === "select") {
         const modMulti = e.metaKey || e.ctrlKey || e.shiftKey;
         if (selectedAnnotationIds.length === 1) {
-          const sel = annotations.find((x) => x.id === selectedAnnotationIds[0]);
+          const sel = visibleAnnotations.find((x) => x.id === selectedAnnotationIds[0]);
           if (sel) {
             const handles = getResizeHandles(sel, cssW, cssH, pageSize.w, pageSize.h, scale);
             const rawHit = (() => {
@@ -1840,7 +1922,7 @@ export function PdfPageView({
           }
         }
         const id = pickAnnotationAt(
-          annotations,
+          visibleAnnotations,
           raw.x,
           raw.y,
           cssW,
@@ -1861,11 +1943,11 @@ export function PdfPageView({
             return;
           }
           const selectedOnPage = selectedAnnotationIds.filter((sid) =>
-            annotations.some((a) => a.id === sid),
+            visibleAnnotations.some((a) => a.id === sid),
           );
           if (selectedOnPage.includes(id) && selectedOnPage.length > 1) {
             const unlocked = selectedOnPage.filter((sid) => {
-              const a = annotations.find((x) => x.id === sid);
+              const a = visibleAnnotations.find((x) => x.id === sid);
               return a && !a.locked;
             });
             if (unlocked.length === 0) return;
@@ -1874,9 +1956,12 @@ export function PdfPageView({
             return;
           }
           setSelectedAnnotationIds([id]);
-          const hitAnn = annotations.find((a) => a.id === id);
+          const hitAnn = visibleAnnotations.find((a) => a.id === id);
           if (hitAnn?.issueDraft) {
             useViewerStore.getState().setIssueCreateDraft({ annotationId: hitAnn.id });
+          }
+          if (hitAnn?.omAssetDraft) {
+            useViewerStore.getState().setOmAssetCreateDraft({ annotationId: hitAnn.id });
           }
           if (hitAnn?.locked) return;
           setMoveDrag({ ids: [id], lastN: { x: raw.x, y: raw.y } });
@@ -2215,7 +2300,7 @@ export function PdfPageView({
       pageSize.w,
       pageSize.h,
       scale,
-      annotations,
+      visibleAnnotations,
       addAnnotation,
       displayName,
       setCalibrateDraft,
@@ -2245,6 +2330,7 @@ export function PdfPageView({
       setTakeoffAreaPreview,
       setTakeoffRectAnchor,
       setTakeoffRectPreview,
+      searchParams,
     ],
   );
 
@@ -2635,7 +2721,7 @@ export function PdfPageView({
       } else if (moveDrag || selectMarquee || resizeActive) {
         setMarkupHoverId(null);
       } else {
-        const pageAnn = annotations.filter((a) => a.pageIndex === pageIdx0);
+        const pageAnn = visibleAnnotations.filter((a) => a.pageIndex === pageIdx0);
         const cw = pageSize.w * scale;
         const ch = pageSize.h * scale;
         const hid = pickAnnotationAt(pageAnn, raw.x, raw.y, cw, ch, pageSize.w, pageSize.h, scale);
@@ -2716,7 +2802,7 @@ export function PdfPageView({
       takeoffVertexSession,
       takeoffMoveSession,
       setTakeoffHoverZoneId,
-      annotations,
+      visibleAnnotations,
       pageIdx0,
       resizeActive,
       compareReferenceOnly,
@@ -2795,7 +2881,7 @@ export function PdfPageView({
           const minPy = Math.min(start.y * ch, current.y * ch);
           const maxPy = Math.max(start.y * ch, current.y * ch);
           const picked = pickAnnotationsInMarquee(
-            annotations,
+            visibleAnnotations,
             { minX: minPx, minY: minPy, maxX: maxPx, maxY: maxPy },
             cw,
             ch,
@@ -3028,7 +3114,7 @@ export function PdfPageView({
       setScale,
       scrollContainerRef,
       pageWrapperRefProp,
-      annotations,
+      visibleAnnotations,
       pageSize.w,
       pageSize.h,
       scale,
@@ -3049,7 +3135,7 @@ export function PdfPageView({
 
   const selectionBounds = useMemo(() => {
     if (tool !== "select") return null;
-    const selectedOnPage = annotations.filter((a) => selectedAnnotationIds.includes(a.id));
+    const selectedOnPage = visibleAnnotations.filter((a) => selectedAnnotationIds.includes(a.id));
     if (selectedOnPage.length === 0) return null;
     return unionAnnotationSelectionBounds(
       selectedOnPage,
@@ -3059,7 +3145,7 @@ export function PdfPageView({
       pageSize.h,
       scale,
     );
-  }, [selectedAnnotationIds, tool, annotations, cssW, cssH, pageSize.w, pageSize.h, scale]);
+  }, [selectedAnnotationIds, tool, visibleAnnotations, cssW, cssH, pageSize.w, pageSize.h, scale]);
 
   const remoteCollabSelectionRects = useMemo(() => {
     if (!viewerCollab?.collabActive || viewerCollab.remoteSelections.length === 0) return [];
@@ -3091,7 +3177,7 @@ export function PdfPageView({
     if (tool !== "select" || !markupHoverId || selectedAnnotationIds.includes(markupHoverId)) {
       return null;
     }
-    const a = annotations.find((x) => x.id === markupHoverId);
+    const a = visibleAnnotations.find((x) => x.id === markupHoverId);
     if (!a || a.pageIndex !== pageIdx0) return null;
     const b = annotationSelectionBounds(a, cssW, cssH, pageSize.w, pageSize.h, scale);
     if (!b) return null;
@@ -3115,7 +3201,7 @@ export function PdfPageView({
     tool,
     markupHoverId,
     selectedAnnotationIds,
-    annotations,
+    visibleAnnotations,
     pageIdx0,
     cssW,
     cssH,
@@ -3127,6 +3213,9 @@ export function PdfPageView({
   const selectedLinkedIssueLabel = useMemo(() => {
     if (tool !== "select" || selectedAnnotationIds.length !== 1) return null;
     const a = annotations.find((x) => x.id === selectedAnnotationIds[0]);
+    if (a?.omAssetDraft || a?.linkedOmAssetId) {
+      return a.linkedOmAssetName?.trim() || a.linkedOmAssetTag?.trim() || "Equipment";
+    }
     if (!a?.linkedIssueId && !a?.issueDraft) return null;
     if (a.issueDraft) return a.linkedIssueTitle?.trim() || "New issue (unsaved)";
     return a.linkedIssueTitle?.trim() || "Linked issue";
@@ -3139,7 +3228,7 @@ export function PdfPageView({
 
   const selectionResizeHandles = useMemo(() => {
     if (selectedAnnotationIds.length !== 1 || tool !== "select") return [];
-    const a = annotations.find((x) => x.id === selectedAnnotationIds[0]);
+    const a = visibleAnnotations.find((x) => x.id === selectedAnnotationIds[0]);
     if (!a) return [];
     const handles = getResizeHandles(a, cssW, cssH, pageSize.w, pageSize.h, scale);
     const deg = a.rotationDeg ?? 0;
@@ -3150,7 +3239,7 @@ export function PdfPageView({
       const p = forwardRotateHandlePx(h.cx, h.cy, c, deg);
       return { ...h, cx: p.cx, cy: p.cy };
     });
-  }, [selectedAnnotationIds, tool, annotations, cssW, cssH, pageSize.w, pageSize.h, scale]);
+  }, [selectedAnnotationIds, tool, visibleAnnotations, cssW, cssH, pageSize.w, pageSize.h, scale]);
 
   const handleSheetContextMenu = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -3177,7 +3266,7 @@ export function PdfPageView({
       }
       const raw = normFromEvent(e, el);
       const hitId = pickAnnotationAt(
-        annotations,
+        visibleAnnotations,
         raw.x,
         raw.y,
         cssW,
@@ -3210,7 +3299,7 @@ export function PdfPageView({
       cancelInteraction,
       cssW,
       cssH,
-      annotations,
+      visibleAnnotations,
       pageSize.w,
       pageSize.h,
       scale,
@@ -3238,7 +3327,7 @@ export function PdfPageView({
           className={
             refPaneInactive
               ? "absolute inset-0"
-              : issuePlacementActive
+              : issueOrAssetPlacement
                 ? "absolute inset-0 cursor-crosshair"
                 : tool === "pan"
                   ? "absolute inset-0 cursor-grab active:cursor-grabbing"
@@ -3410,7 +3499,7 @@ export function PdfPageView({
                   </g>
                 )}
                 <CommittedAnnotationsSvg
-                  annotations={annotations}
+                  annotations={visibleAnnotations}
                   cssW={cssW}
                   cssH={cssH}
                   pageW={pageSize.w}
@@ -3420,7 +3509,7 @@ export function PdfPageView({
                   arrowMarkerId={screenArrowMarkerId}
                 />
                 <TakeoffZonesSvg
-                  zones={takeoffZonesForView}
+                  zones={takeoffZonesForScreen}
                   itemsById={takeoffItemsById}
                   cssW={cssW}
                   cssH={cssH}
@@ -3433,7 +3522,7 @@ export function PdfPageView({
                 {tool === "takeoff" &&
                   takeoffVertexEditZoneId &&
                   (() => {
-                    const z = takeoffZonesForView.find((tz) => tz.id === takeoffVertexEditZoneId);
+                    const z = takeoffZonesForScreen.find((tz) => tz.id === takeoffVertexEditZoneId);
                     if (!z || z.measurementType !== "area" || z.points.length < 3) return null;
                     return (
                       <g className="pointer-events-none print:hidden">

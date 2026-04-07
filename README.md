@@ -71,7 +71,7 @@
 | `npm run db:migrate:deploy` | `prisma migrate deploy` (production / CI)                                     |
 | `npm run db:generate`       | Generate Prisma client                                                        |
 | `npm run db:validate`       | `prisma validate`                                                             |
-| `npm run db:precommit`      | validate + `format --check` + `generate` (also runs on commit)                |
+| `npm run db:precommit`      | validate + `format` + `generate` (also runs on commit)                        |
 | `npm run db:seed`           | Dev user + Pro workspace (see seed script)                                    |
 | `npm run db:seed:templates` | Folder structure presets only (`FolderStructureTemplate`) — local DB          |
 
@@ -84,4 +84,4 @@ Optional. Set `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `S
 - **Local Postgres only:** `docker compose up -d` (root `docker-compose.yml`).
 - **Full stack (Next + API + Postgres):** use [`docker-compose.deploy.yml`](docker-compose.deploy.yml) — build context is the **repo root**. See [docs/deploy-dokploy.md](docs/deploy-dokploy.md) for env vars, migrations, and Dokploy.
 
-Pre-commit (Husky): **lint-staged**, then **typecheck**, then **`npm run test`**, then **`db:precommit`** (Prisma validate, **`format --check`**, **`generate`**).
+Pre-commit (Husky): **lint-staged**, then **typecheck**, then **`npm run test`**, then **`db:precommit`** (Prisma validate, **`format`**, **`generate`**).

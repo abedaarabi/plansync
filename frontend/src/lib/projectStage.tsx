@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Building2,
   CheckCircle2,
   ClipboardCheck,
   ClipboardList,
@@ -17,6 +18,7 @@ export type ProjectStageValue =
   | "PRECONSTRUCTION"
   | "CONSTRUCTION"
   | "CLOSEOUT"
+  | "HANDOVER"
   | "COMPLETED"
   | "ON_HOLD";
 
@@ -26,6 +28,7 @@ export const PROJECT_STAGES: { value: ProjectStageValue; label: string; short: s
   { value: "PRECONSTRUCTION", label: "Pre-construction", short: "Pre-con" },
   { value: "CONSTRUCTION", label: "Construction", short: "Build" },
   { value: "CLOSEOUT", label: "Closeout", short: "Closeout" },
+  { value: "HANDOVER", label: "Handover & FM", short: "Handover" },
   { value: "COMPLETED", label: "Completed", short: "Done" },
   { value: "ON_HOLD", label: "On hold", short: "Hold" },
 ];
@@ -54,6 +57,8 @@ export function ProjectStageIconGlyph({ stage }: { stage: string | null | undefi
       return <HardHat {...iconProps} />;
     case "CLOSEOUT":
       return <ClipboardCheck {...iconProps} />;
+    case "HANDOVER":
+      return <Building2 {...iconProps} />;
     case "COMPLETED":
       return <CheckCircle2 {...iconProps} />;
     case "ON_HOLD":
@@ -76,6 +81,8 @@ export function projectStageBadgeClass(stage: string | null | undefined): string
       return "bg-amber-50 text-amber-900 ring-amber-200";
     case "CLOSEOUT":
       return "bg-violet-50 text-violet-800 ring-violet-200";
+    case "HANDOVER":
+      return "bg-teal-50 text-teal-900 ring-teal-200";
     case "COMPLETED":
       return "bg-emerald-50 text-emerald-800 ring-emerald-200";
     case "ON_HOLD":

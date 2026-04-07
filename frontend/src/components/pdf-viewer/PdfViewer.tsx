@@ -10,6 +10,7 @@ import {
   fetchIssue,
   fetchMe,
   fetchProject,
+  fetchProjectSession,
   fetchViewerState,
   putViewerState,
   ViewerStateConflictError,
@@ -30,6 +31,7 @@ import { VIEWER_LOCAL_PDF_INPUT_ID } from "@/lib/viewerLocalPdfInput";
 import { resetViewerCollabRevision, setViewerCollabRevision } from "@/lib/viewerCollabRevision";
 import { parseServerViewerState } from "@/lib/viewerStateCloud";
 import { computeScaleToFitNormRect, scrollViewportToNorm } from "@/lib/viewScroll";
+import { useSyncSheetOverlaysToViewerChrome } from "@/hooks/useSyncSheetOverlaysToViewerChrome";
 import { useViewerStore, VIEWER_SCALE_MAX, VIEWER_SCALE_MIN } from "@/store/viewerStore";
 import { CollaborationSync } from "./CollaborationSync";
 import { ViewerCollabSync } from "./ViewerCollabSync";
@@ -40,6 +42,7 @@ import { PdfPageView } from "./PdfPageView";
 import { ViewerOnboarding } from "./ViewerOnboarding";
 import { ViewerRightPanel } from "./ViewerRightPanel";
 import { ViewerSidebar } from "./ViewerSidebar";
+import { AssetLinkSlider } from "./AssetLinkSlider";
 import { IssueFormSlider } from "./IssueFormSlider";
 import { TakeoffFormSlider } from "./TakeoffFormSlider";
 import { TakeoffInventoryDrawer } from "./TakeoffInventoryDrawer";
@@ -48,6 +51,12 @@ import { TakeoffSummaryModal } from "./TakeoffSummaryModal";
 import { ViewerTopBar } from "./ViewerTopBar";
 
 export function PdfViewer() {
+  useEffect(() => {
+    useViewerStore.getState().hydrateSheetOverlayFromStorage();
+  }, []);
+
+  useSyncSheetOverlaysToViewerChrome();
+
   const pdfUrl = useViewerStore((s) => s.pdfUrl);
   const fileName = useViewerStore((s) => s.fileName);
   const numPages = useViewerStore((s) => s.numPages);
@@ -75,6 +84,7 @@ export function PdfViewer() {
   const clearSearchFocusRequest = useViewerStore((s) => s.clearSearchFocusRequest);
   const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
+  const setViewerOperationsMode = useViewerStore((s) => s.setViewerOperationsMode);
   const takeoffInventoryDrawerFromSidebar = useViewerStore(
     (s) => s.takeoffInventoryDrawerFromSidebar,
   );
@@ -104,6 +114,14 @@ export function PdfViewer() {
     () => setIssueCreateDraft(null),
     [setIssueCreateDraft],
   );
+  const setOmAssetCreateDraft = useViewerStore((s) => s.setOmAssetCreateDraft);
+  const setOmAssetPlacementActive = useViewerStore((s) => s.setOmAssetPlacementActive);
+  const omAssetPlacementActive = useViewerStore((s) => s.omAssetPlacementActive);
+  const omAssetCreateDraft = useViewerStore((s) => s.omAssetCreateDraft);
+  const onOmAssetLinkDialogClose = useCallback(
+    () => setOmAssetCreateDraft(null),
+    [setOmAssetCreateDraft],
+  );
   const searchParams = useSearchParams();
 
   const { data: me, isPending: mePending } = useQuery({
@@ -120,6 +138,26 @@ export function PdfViewer() {
     enabled: Boolean(viewerProjectId) && meHasProWorkspace(me ?? null),
     staleTime: 60_000,
   });
+
+  const { data: viewerProjectSession } = useQuery({
+    queryKey: qk.projectSession(viewerProjectId ?? ""),
+    queryFn: () => fetchProjectSession(viewerProjectId!),
+    enabled: Boolean(viewerProjectId) && meHasProWorkspace(me ?? null),
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    const om = Boolean(viewerProjectSession?.operationsMode && !viewerProjectSession?.isExternal);
+    setViewerOperationsMode(om);
+    if (!om) return;
+    const st = useViewerStore.getState();
+    if (st.tool === "takeoff") st.setTool("select");
+    st.setTakeoffMode(false);
+    st.setTakeoffRedrawZoneId(null);
+    st.setTakeoffMoveZoneId(null);
+    st.setTakeoffVertexEditZoneId(null);
+    st.setTakeoffInventoryDrawerFromSidebar(false);
+  }, [viewerProjectSession, setViewerOperationsMode]);
   const workspaceCollabEnabled = useMemo(() => {
     if (!viewerProjectForCollab?.workspaceId || !me?.workspaces) return true;
     const row = me.workspaces.find((w) => w.workspaceId === viewerProjectForCollab.workspaceId);
@@ -185,6 +223,14 @@ export function PdfViewer() {
   useEffect(() => {
     if (!pdfUrl) setMobileLeftToolsOpen(false);
   }, [pdfUrl, setMobileLeftToolsOpen]);
+
+  /** Deep link from Assets → “Link on sheet”: start placement once the PDF is open. */
+  useEffect(() => {
+    const om = searchParams.get("omAssetLink");
+    const aid = searchParams.get("omAssetId");
+    if (!pdfUrl || om !== "1" || !aid?.trim()) return;
+    setOmAssetPlacementActive(true);
+  }, [pdfUrl, searchParams, setOmAssetPlacementActive]);
 
   useEffect(() => {
     if (!pdfUrl) {
@@ -722,7 +768,21 @@ export function PdfViewer() {
             </div>
           </div>
           <div className="viewer-canvas-area relative col-start-2 row-start-2 row-end-3 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--viewer-canvas)] shadow-[inset_0_0_0_1px_rgba(226,232,240,0.9)] print:overflow-visible md:shadow-[inset_0_0_0_1px_rgba(51,65,85,0.08)]">
-            {newIssuePlacementActive ? (
+            {omAssetPlacementActive ? (
+              <div
+                className="no-print pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="max-w-[min(100%,36rem)] rounded-lg border border-teal-500/45 bg-teal-950/92 px-3 py-2 text-center text-[11px] font-medium leading-snug text-teal-50 shadow-lg ring-1 ring-teal-500/25 backdrop-blur-sm">
+                  <span className="text-teal-200/90">
+                    Click the plan to place the equipment pin —
+                  </span>{" "}
+                  <span className="text-white">then save the link</span>
+                  <span className="text-teal-200/80"> · Esc to cancel</span>
+                </div>
+              </div>
+            ) : newIssuePlacementActive ? (
               <div
                 className="no-print pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-2 pt-2"
                 role="status"
@@ -831,6 +891,7 @@ export function PdfViewer() {
                 </div>
               </div>
             ) : null}
+            {omAssetCreateDraft ? <AssetLinkSlider onClose={onOmAssetLinkDialogClose} /> : null}
             {issueCreateDraft ? (
               <IssueFormSlider
                 variant="create"

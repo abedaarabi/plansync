@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -212,18 +213,44 @@ const ProjectIssueTableRow = memo(function ProjectIssueTableRow({
   );
 });
 
-export function ProjectIssuesClient({ projectId }: { projectId: string }) {
+export function ProjectIssuesClient({
+  projectId,
+  issueKindFilter,
+  listTitle = "Issues",
+}: {
+  projectId: string;
+  /** When set, only loads construction vs work-order issues from the API. */
+  issueKindFilter?: "WORK_ORDER" | "CONSTRUCTION";
+  listTitle?: string;
+}) {
   const qc = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const filterAssetId = searchParams.get("assetId")?.trim() || undefined;
+
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [sort, setSort] = useState<SortKey>("newest");
   const [assigneeFilter, setAssigneeFilter] = useState<AssigneeFilter>("ALL");
   const [msg, setMsg] = useState<string | null>(null);
   const [patchingIssueId, setPatchingIssueId] = useState<string | null>(null);
 
-  const issuesKey = qk.issuesForProject(projectId);
+  const clearAssetFilterHref = useMemo(() => {
+    if (!filterAssetId || !pathname) return null;
+    const p = new URLSearchParams(searchParams.toString());
+    p.delete("assetId");
+    const q = p.toString();
+    return q ? `${pathname}?${q}` : pathname;
+  }, [filterAssetId, pathname, searchParams]);
+
+  const issuesKey = qk.issuesForProject(projectId, undefined, issueKindFilter, filterAssetId);
   const { data: items = [], isPending } = useQuery({
     queryKey: issuesKey,
-    queryFn: () => fetchIssuesForProject(projectId),
+    queryFn: () =>
+      fetchIssuesForProject(projectId, {
+        issueKind: issueKindFilter,
+        assetId: filterAssetId,
+      }),
   });
 
   const { data: project } = useQuery({
@@ -329,13 +356,20 @@ export function ProjectIssuesClient({ projectId }: { projectId: string }) {
     return { open, inProgress, resolved, closed, total: items.length };
   }, [items]);
 
-  const filtersActive = filter !== "ALL" || assigneeFilter !== "ALL" || sort !== "newest";
+  const filtersActive =
+    filter !== "ALL" || assigneeFilter !== "ALL" || sort !== "newest" || Boolean(filterAssetId);
 
   const clearFilters = useCallback(() => {
     setFilter("ALL");
     setAssigneeFilter("ALL");
     setSort("newest");
-  }, []);
+    if (filterAssetId && pathname) {
+      const p = new URLSearchParams(searchParams.toString());
+      p.delete("assetId");
+      const q = p.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname);
+    }
+  }, [filterAssetId, pathname, router, searchParams]);
 
   return (
     <div className="space-y-6">
@@ -349,13 +383,13 @@ export function ProjectIssuesClient({ projectId }: { projectId: string }) {
           </div>
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
-              Issues
+              {listTitle}
             </h1>
             {!isPending ? (
               <p className="mt-1.5 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
                 {stats.total === 0
-                  ? "No issues recorded for this project yet."
-                  : `${stats.total} issue${stats.total === 1 ? "" : "s"} in this project`}
+                  ? `No ${listTitle.toLowerCase()} recorded for this project yet.`
+                  : `${stats.total} ${issueKindFilter === "WORK_ORDER" ? "work orders" : "issues"} in this project`}
               </p>
             ) : null}
           </div>
@@ -368,6 +402,24 @@ export function ProjectIssuesClient({ projectId }: { projectId: string }) {
           Project files
         </Link>
       </header>
+
+      {filterAssetId ? (
+        <div className="enterprise-card flex flex-wrap items-center justify-between gap-3 border border-[var(--enterprise-primary)]/30 bg-[var(--enterprise-primary-soft)] px-4 py-3 text-sm">
+          <p className="text-[var(--enterprise-text)]">
+            Showing {issueKindFilter === "WORK_ORDER" ? "work orders" : "issues"} linked to one
+            asset.
+          </p>
+          {clearAssetFilterHref ? (
+            <Link
+              href={clearAssetFilterHref}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35"
+            >
+              <RotateCcw className="h-3.5 w-3.5 opacity-80" strokeWidth={2} aria-hidden />
+              Show all
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="sticky top-0 z-10 space-y-4 border-b border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/90 py-1 pb-4 backdrop-blur-md supports-[backdrop-filter]:bg-[var(--enterprise-bg)]/80">
         <div className="enterprise-card p-4 sm:p-5">

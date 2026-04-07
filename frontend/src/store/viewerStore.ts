@@ -8,7 +8,7 @@ import {
   offsetAnnotationPoints,
   recomputeMeasurementFields,
 } from "@/lib/annotationClipboard";
-import { annotationIsIssuePin } from "@/lib/annotationIssues";
+import { annotationIsProtectedSheetPin } from "@/lib/annotationIssues";
 import type {
   TakeoffItem,
   TakeoffMeasurementType,
@@ -18,6 +18,13 @@ import type {
 } from "@/lib/takeoffTypes";
 import { DEFAULT_MARKUP_STROKE_COLOR } from "@/lib/markupUi";
 import { DEFAULT_TAKEOFF_COLOR } from "@/lib/takeoffUi";
+import {
+  DEFAULT_SHEET_OVERLAY_VISIBILITY,
+  annotationPassesOverlayVisibility,
+  loadSheetOverlayVisibilityFromStorage,
+  persistSheetOverlayVisibility,
+  type SheetOverlayVisibility,
+} from "@/lib/viewerSheetOverlay";
 
 /** Min / max viewer zoom (multiply viewport scale). */
 export const VIEWER_SCALE_MIN = 0.05;
@@ -106,12 +113,20 @@ export interface Annotation {
   locked?: boolean;
   /** Sheet marker for a Pro issue — ellipse fill/stroke follow `issueStatus`. */
   linkedIssueId?: string;
+  /** Drives on-sheet pin shape (hex vs circle); defaults to construction when unset. */
+  linkedIssueKind?: "WORK_ORDER" | "CONSTRUCTION";
   /** Snapshot of issue status for coloring; update when status changes in Issues tab. */
   issueStatus?: string;
   /** Issue title for on-sheet affordances (tooltip chip when selected). */
   linkedIssueTitle?: string;
   /** Pin placed before the create-issue dialog is saved (no server issue id yet). */
   issueDraft?: boolean;
+  /** O&M asset pin on the sheet (draft before PATCH, or linked after save). */
+  omAssetDraft?: boolean;
+  linkedOmAssetId?: string;
+  linkedOmAssetTag?: string;
+  /** Human-readable asset name (register title), shown next to the sheet pin. */
+  linkedOmAssetName?: string;
   /** TOC zoom box, Sheet AI proposal markup, or AI-placed issue pin — removable in one action. */
   fromSheetAi?: boolean;
 }
@@ -225,14 +240,25 @@ interface ViewerState {
   cloudFileVersionId: string | null;
   /** From `/viewer?projectId=` when opened from Projects (Pro sheet tools). */
   viewerProjectId: string | null;
+  /**
+   * When the open project has Operations mode, the viewer steers sheet tools to work orders
+   * and hides quantity takeoff (FM phase).
+   */
+  viewerOperationsMode: boolean;
   /** Open Issues / Takeoff / Sheet AI tab once (e.g. `issueId` deep link). */
   pendingProSidebarTab: null | "issues" | "takeoff" | "sheetAi" | "collab";
+  /** Show/hide markup layers on the canvas (persisted in localStorage). */
+  sheetOverlayVisibility: SheetOverlayVisibility;
+  patchSheetOverlayVisibility: (patch: Partial<SheetOverlayVisibility>) => void;
+  setSheetOverlayVisibilityAll: (v: SheetOverlayVisibility) => void;
+  hydrateSheetOverlayFromStorage: () => void;
   /** Click on PDF to drop a status-colored marker and link `annotationId` on the issue. */
   issuePlacement: null | {
     issueId: string;
     status: string;
     title: string;
     replaceAnnotationId: string | null;
+    issueKind: "WORK_ORDER" | "CONSTRUCTION";
   };
   /** PlanGrid-style: toolbar “New issue” → click sheet to place pin, then dialog. */
   newIssuePlacementActive: boolean;
@@ -242,6 +268,10 @@ interface ViewerState {
   issuesSidebarFocusIssueId: string | null;
   /** Prevents dropping another sheet pin for the same issue while `patchIssue` is in flight. */
   issuePinLinkInFlightIssueId: string | null;
+  /** From Assets → “Link on sheet”: click plan to drop asset pin (exclusive with issue placement). */
+  omAssetPlacementActive: boolean;
+  /** After pin drop; save/cancel in asset link panel. */
+  omAssetCreateDraft: null | { annotationId: string };
   roomId: string;
   /** Optional-content layer ids discovered from the current page (for snap filter UI) */
   pdfSnapLayers: { id: string; label: string }[];
@@ -289,6 +319,7 @@ interface ViewerState {
     opts?: { cloudFileVersionId?: string | null; viewerProjectId?: string | null },
   ) => void;
   setViewerProjectId: (id: string | null) => void;
+  setViewerOperationsMode: (on: boolean) => void;
   setPendingProSidebarTab: (tab: null | "issues" | "takeoff" | "sheetAi" | "collab") => void;
   setIssuePlacement: (
     p: null | {
@@ -296,10 +327,13 @@ interface ViewerState {
       status: string;
       title: string;
       replaceAnnotationId: string | null;
+      issueKind: "WORK_ORDER" | "CONSTRUCTION";
     },
   ) => void;
   setNewIssuePlacementActive: (v: boolean) => void;
   setIssueCreateDraft: (d: null | { annotationId: string }) => void;
+  setOmAssetPlacementActive: (v: boolean) => void;
+  setOmAssetCreateDraft: (d: null | { annotationId: string }) => void;
   setIssuesSidebarFocusIssueId: (id: string | null) => void;
   setIssuePinLinkInFlightIssueId: (id: string | null) => void;
   setPageSizePt: (pageIndex: number, wPt: number, hPt: number) => void;
@@ -459,12 +493,16 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   displayName: "Engineer",
   cloudFileVersionId: null,
   viewerProjectId: null,
+  viewerOperationsMode: false,
   pendingProSidebarTab: null,
+  sheetOverlayVisibility: { ...DEFAULT_SHEET_OVERLAY_VISIBILITY },
   issuePlacement: null,
   newIssuePlacementActive: false,
   issueCreateDraft: null,
   issuesSidebarFocusIssueId: null,
   issuePinLinkInFlightIssueId: null,
+  omAssetPlacementActive: false,
+  omAssetCreateDraft: null,
   roomId: "default",
   pdfSnapLayers: [],
   toolbarHoveredLayerId: null,
@@ -779,18 +817,79 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   toggleMobileLeftTools: () => set((s) => ({ mobileLeftToolsOpen: !s.mobileLeftToolsOpen })),
 
   setViewerProjectId: (viewerProjectId) => set({ viewerProjectId }),
+  setViewerOperationsMode: (viewerOperationsMode) => set({ viewerOperationsMode }),
   setPendingProSidebarTab: (pendingProSidebarTab) => set({ pendingProSidebarTab }),
+  patchSheetOverlayVisibility: (patch) =>
+    set((s) => {
+      const next = { ...s.sheetOverlayVisibility, ...patch };
+      persistSheetOverlayVisibility(next);
+      const sel = s.selectedAnnotationIds.filter((id) => {
+        const a = s.annotations.find((x) => x.id === id);
+        return a && annotationPassesOverlayVisibility(a, next);
+      });
+      return {
+        sheetOverlayVisibility: next,
+        ...(sel.length !== s.selectedAnnotationIds.length ? { selectedAnnotationIds: sel } : {}),
+      };
+    }),
+  setSheetOverlayVisibilityAll: (sheetOverlayVisibility) => {
+    persistSheetOverlayVisibility(sheetOverlayVisibility);
+    set((s) => {
+      const sel = s.selectedAnnotationIds.filter((id) => {
+        const a = s.annotations.find((x) => x.id === id);
+        return a && annotationPassesOverlayVisibility(a, sheetOverlayVisibility);
+      });
+      return {
+        sheetOverlayVisibility,
+        ...(sel.length !== s.selectedAnnotationIds.length ? { selectedAnnotationIds: sel } : {}),
+      };
+    });
+  },
+  hydrateSheetOverlayFromStorage: () => {
+    const loaded = loadSheetOverlayVisibilityFromStorage();
+    if (!loaded) return;
+    set((s) => {
+      const sel = s.selectedAnnotationIds.filter((id) => {
+        const a = s.annotations.find((x) => x.id === id);
+        return a && annotationPassesOverlayVisibility(a, loaded);
+      });
+      return {
+        sheetOverlayVisibility: loaded,
+        ...(sel.length !== s.selectedAnnotationIds.length ? { selectedAnnotationIds: sel } : {}),
+      };
+    });
+  },
   setIssuePlacement: (issuePlacement) =>
     set({
       issuePlacement,
-      ...(issuePlacement ? { newIssuePlacementActive: false } : {}),
+      ...(issuePlacement
+        ? {
+            newIssuePlacementActive: false,
+            omAssetPlacementActive: false,
+            omAssetCreateDraft: null,
+          }
+        : {}),
     }),
   setNewIssuePlacementActive: (newIssuePlacementActive) =>
     set({
       newIssuePlacementActive,
-      ...(newIssuePlacementActive ? { issuePlacement: null } : {}),
+      ...(newIssuePlacementActive
+        ? { issuePlacement: null, omAssetPlacementActive: false, omAssetCreateDraft: null }
+        : {}),
     }),
   setIssueCreateDraft: (issueCreateDraft) => set({ issueCreateDraft }),
+  setOmAssetPlacementActive: (omAssetPlacementActive) =>
+    set({
+      omAssetPlacementActive,
+      ...(omAssetPlacementActive
+        ? {
+            issuePlacement: null,
+            newIssuePlacementActive: false,
+            issueCreateDraft: null,
+          }
+        : {}),
+    }),
+  setOmAssetCreateDraft: (omAssetCreateDraft) => set({ omAssetCreateDraft }),
   setIssuesSidebarFocusIssueId: (issuesSidebarFocusIssueId) => set({ issuesSidebarFocusIssueId }),
   setIssuePinLinkInFlightIssueId: (issuePinLinkInFlightIssueId) =>
     set({ issuePinLinkInFlightIssueId }),
@@ -802,10 +901,13 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       fileSizeBytes: fileSizeBytes ?? null,
       cloudFileVersionId: opts?.cloudFileVersionId ?? null,
       viewerProjectId: opts?.viewerProjectId ?? null,
+      viewerOperationsMode: false,
       pendingProSidebarTab: null,
       issuePlacement: null,
       newIssuePlacementActive: false,
       issueCreateDraft: null,
+      omAssetPlacementActive: false,
+      omAssetCreateDraft: null,
       issuesSidebarFocusIssueId: null,
       issuePinLinkInFlightIssueId: null,
       takeoffRedrawZoneId: null,
@@ -1161,10 +1263,13 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       fileSizeBytes: null,
       cloudFileVersionId: null,
       viewerProjectId: null,
+      viewerOperationsMode: false,
       pendingProSidebarTab: null,
       issuePlacement: null,
       newIssuePlacementActive: false,
       issueCreateDraft: null,
+      omAssetPlacementActive: false,
+      omAssetCreateDraft: null,
       issuesSidebarFocusIssueId: null,
       issuePinLinkInFlightIssueId: null,
       numPages: 0,
@@ -1259,7 +1364,10 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   deleteAllMarkupsOnPage: (pageIndex0) =>
     set((state) => {
       const next = state.annotations.filter(
-        (a) => a.type === "measurement" || annotationIsIssuePin(a) || a.pageIndex !== pageIndex0,
+        (a) =>
+          a.type === "measurement" ||
+          annotationIsProtectedSheetPin(a) ||
+          a.pageIndex !== pageIndex0,
       );
       if (next.length === state.annotations.length) return state;
       const past = [...state.historyPast.slice(-(MAX_HISTORY - 1)), cloneSnapshot(state)];
@@ -1274,7 +1382,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   deleteAllMarkupsInDocument: () =>
     set((state) => {
       const next = state.annotations.filter(
-        (a) => a.type === "measurement" || annotationIsIssuePin(a),
+        (a) => a.type === "measurement" || annotationIsProtectedSheetPin(a),
       );
       if (next.length === state.annotations.length) return state;
       const past = [...state.historyPast.slice(-(MAX_HISTORY - 1)), cloneSnapshot(state)];

@@ -13,6 +13,37 @@ export async function fetchMe(): Promise<MeResponse | null> {
   return res.json() as Promise<MeResponse>;
 }
 
+export type WorkspaceSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  storageQuotaBytes: string;
+  storageUsedBytes: string;
+  subscriptionStatus?: string | null;
+};
+
+export async function createWorkspace(name: string, slug: string): Promise<WorkspaceSummary> {
+  const res = await fetch(apiUrl("/api/v1/workspaces"), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({ name, slug }),
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: { formErrors?: string[] } | string;
+  } & WorkspaceSummary;
+  if (!res.ok) {
+    const message =
+      typeof j.error === "string"
+        ? j.error
+        : Array.isArray(j.error?.formErrors) && j.error.formErrors[0]
+          ? j.error.formErrors[0]
+          : "Could not create workspace.";
+    throw new Error(message);
+  }
+  return j;
+}
+
 export type ProjectSessionModules = {
   issues: boolean;
   rfis: boolean;
@@ -20,6 +51,10 @@ export type ProjectSessionModules = {
   proposals: boolean;
   punch: boolean;
   fieldReports: boolean;
+  omAssets: boolean;
+  omMaintenance: boolean;
+  omInspections: boolean;
+  omTenantPortal: boolean;
 };
 
 export type ProjectSessionClientVisibility = {
@@ -30,6 +65,21 @@ export type ProjectSessionClientVisibility = {
   allowClientComment: boolean;
 };
 
+export type ProjectSessionOmHandover = {
+  notes: string;
+  handoverCompletedAt: string | null;
+  buildingLabel: string | null;
+  facilityManagerUserId: string | null;
+  handoverDate: string | null;
+  transferAsBuilt: boolean;
+  transferClosedIssues: boolean;
+  transferPunch: boolean;
+  transferTeamAccess: boolean;
+  handoverWizardCompletedAt: string | null;
+  /** Inspection complete → PDF emailed to this address (Resend). */
+  buildingOwnerEmail: string | null;
+};
+
 export type ProjectSessionResponse = {
   projectId: string;
   projectName: string;
@@ -38,9 +88,12 @@ export type ProjectSessionResponse = {
   isExternal: boolean;
   projectRole: string | null;
   trade: string | null;
+  /** When true, project is in Operations & Maintenance mode (sidebar + O&M modules). */
+  operationsMode: boolean;
   settings: {
     modules: ProjectSessionModules;
     clientVisibility: ProjectSessionClientVisibility;
+    omHandover: ProjectSessionOmHandover;
   };
   uiMode: "internal" | "client" | "contractor" | "sub";
 };
@@ -61,6 +114,7 @@ export async function patchProjectSettings(
   body: {
     modules?: Partial<ProjectSessionModules>;
     clientVisibility?: Partial<ProjectSessionClientVisibility>;
+    omHandover?: Partial<ProjectSessionOmHandover>;
   },
 ): Promise<{ projectId: string; settings: ProjectSessionResponse["settings"] }> {
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/settings`), {
@@ -780,6 +834,7 @@ export type ProjectMeta = {
   startDate?: string | null;
   endDate?: string | null;
   takeoffPricing?: TakeoffPricingPublic;
+  operationsMode?: boolean;
 };
 
 export type PatchProjectBody = {
@@ -802,6 +857,8 @@ export type PatchProjectBody = {
     projectDiscountPct?: string | number;
     itemDiscountPctByKey?: Record<string, string | number>;
   };
+  /** Super Admin only — enables O&M experience for this project. */
+  operationsMode?: boolean;
 };
 
 export async function patchProject(
@@ -1561,11 +1618,26 @@ export type IssueRow = {
   fileVersion: { version: number };
   /** RFIs linked to this issue (many-to-many). */
   linkedRfis: { id: string; rfiNumber: number; title: string; status: string }[];
+  issueKind?: string;
+  assetId?: string | null;
+  asset?: { id: string; tag: string; name: string } | null;
+  externalAssigneeEmail?: string | null;
+  externalAssigneeName?: string | null;
+  acknowledgedAt?: string | null;
+  resolvedAt?: string | null;
+  reporterName?: string | null;
+  reporterEmail?: string | null;
 };
 
-export async function fetchIssuesForFileVersion(fileVersionId: string): Promise<IssueRow[]> {
+export async function fetchIssuesForFileVersion(
+  fileVersionId: string,
+  opts?: { issueKind?: "WORK_ORDER" | "CONSTRUCTION" },
+): Promise<IssueRow[]> {
+  const params = new URLSearchParams();
+  if (opts?.issueKind) params.set("issueKind", opts.issueKind);
+  const q = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(
-    apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/issues`),
+    apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/issues${q}`),
     {
       credentials: "include",
     },
@@ -1577,9 +1649,17 @@ export async function fetchIssuesForFileVersion(fileVersionId: string): Promise<
 
 export async function fetchIssuesForProject(
   projectId: string,
-  opts?: { fileVersionId?: string },
+  opts?: {
+    fileVersionId?: string;
+    assetId?: string;
+    issueKind?: "WORK_ORDER" | "CONSTRUCTION";
+  },
 ): Promise<IssueRow[]> {
-  const q = opts?.fileVersionId ? `?fileVersionId=${encodeURIComponent(opts.fileVersionId)}` : "";
+  const params = new URLSearchParams();
+  if (opts?.fileVersionId) params.set("fileVersionId", opts.fileVersionId);
+  if (opts?.assetId) params.set("assetId", opts.assetId);
+  if (opts?.issueKind) params.set("issueKind", opts.issueKind);
+  const q = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/issues${q}`), {
     credentials: "include",
   });
@@ -1613,6 +1693,7 @@ export async function createIssue(body: {
   pageNumber?: number;
   rfiId?: string;
   rfiIds?: string[];
+  issueKind?: "WORK_ORDER" | "CONSTRUCTION";
 }): Promise<IssueRow> {
   const res = await fetch(apiUrl("/api/v1/issues"), {
     method: "POST",
@@ -2715,4 +2796,761 @@ export async function postProposalExternalSignExport(
   };
   if (!res.ok) throw new Error(j.error ?? "Request failed.");
   return { configured: Boolean(j.configured), message: j.message };
+}
+
+// --- Operations & Maintenance (O&M) ---
+
+export type OmAssetRow = {
+  id: string;
+  projectId: string;
+  tag: string;
+  name: string;
+  category?: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  locationLabel: string | null;
+  installDate: string | null;
+  warrantyExpires: string | null;
+  lastServiceAt: string | null;
+  notes: string | null;
+  fileId: string | null;
+  fileVersionId: string | null;
+  pageNumber: number | null;
+  annotationId: string | null;
+  pinJson: unknown;
+  file: { id: string; name: string } | null;
+  fileVersion: { id: string; version: number } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function fetchOmAssets(
+  projectId: string,
+  opts?: { q?: string },
+): Promise<OmAssetRow[]> {
+  const params = new URLSearchParams();
+  if (opts?.q?.trim()) params.set("q", opts.q.trim());
+  const q = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/assets${q}`),
+    {
+      credentials: "include",
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load assets.");
+  return res.json() as Promise<OmAssetRow[]>;
+}
+
+export type OmAssetCreateBody = {
+  tag: string;
+  name: string;
+  category?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  locationLabel?: string | null;
+  installDate?: string | null;
+  warrantyExpires?: string | null;
+  lastServiceAt?: string | null;
+  notes?: string | null;
+  fileId?: string | null;
+  fileVersionId?: string | null;
+  pageNumber?: number | null;
+  annotationId?: string | null;
+  pinJson?: unknown;
+};
+
+export async function createOmAsset(
+  projectId: string,
+  body: OmAssetCreateBody,
+): Promise<OmAssetRow> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/assets`), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not create asset.");
+  }
+  return res.json() as Promise<OmAssetRow>;
+}
+
+export async function deleteOmAsset(projectId: string, assetId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not delete asset.");
+  }
+}
+
+export type OmAssetDocumentRow = {
+  id: string;
+  assetId: string;
+  label: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: string;
+  uploadedBy: { id: string; name: string } | null;
+  createdAt: string;
+};
+
+export async function fetchOmAssetDocuments(
+  projectId: string,
+  assetId: string,
+): Promise<OmAssetDocumentRow[]> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}/documents`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load asset documents.");
+  return res.json() as Promise<OmAssetDocumentRow[]>;
+}
+
+export async function presignOmAssetDocumentUpload(
+  projectId: string,
+  assetId: string,
+  body: { fileName: string; contentType: string; sizeBytes: number },
+): Promise<{ uploadUrl: string; key: string }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}/documents/presign`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    uploadUrl?: string;
+    key?: string;
+  };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not start upload.");
+  }
+  if (!j.uploadUrl || !j.key) throw new Error("Invalid presign response.");
+  return { uploadUrl: j.uploadUrl, key: j.key };
+}
+
+export async function completeOmAssetDocumentUpload(
+  projectId: string,
+  assetId: string,
+  body: {
+    key: string;
+    label?: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+  },
+): Promise<OmAssetDocumentRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}/documents/complete`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not save document.");
+  }
+  return res.json() as Promise<OmAssetDocumentRow>;
+}
+
+export async function fetchOmAssetDocumentReadUrl(
+  projectId: string,
+  assetId: string,
+  documentId: string,
+): Promise<string> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}/documents/${encodeURIComponent(documentId)}/presign-read`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown; url?: string };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not get download link.");
+  }
+  if (!j.url) throw new Error("Invalid response.");
+  return j.url;
+}
+
+export async function deleteOmAssetDocument(
+  projectId: string,
+  assetId: string,
+  documentId: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}/documents/${encodeURIComponent(documentId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not delete document.");
+  }
+}
+
+export async function patchOmAsset(
+  projectId: string,
+  assetId: string,
+  patch: {
+    tag?: string;
+    name?: string;
+    category?: string | null;
+    manufacturer?: string | null;
+    model?: string | null;
+    serialNumber?: string | null;
+    locationLabel?: string | null;
+    installDate?: string | null;
+    warrantyExpires?: string | null;
+    lastServiceAt?: string | null;
+    notes?: string | null;
+    fileId?: string | null;
+    fileVersionId?: string | null;
+    pageNumber?: number | null;
+    annotationId?: string | null;
+    pinJson?: unknown | null;
+  },
+): Promise<OmAssetRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}`,
+    ),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not update asset.");
+  }
+  return res.json() as Promise<OmAssetRow>;
+}
+
+export type OmHandoverSummary = {
+  projectId: string;
+  projectName: string;
+  stage: string;
+  operationsMode: boolean;
+  handoverNotes: string;
+  handoverCompletedAt: string | null;
+  readiness: {
+    assets: { total: number; linkedToDrawing: number };
+    workOrdersOpen: number;
+    maintenance: { schedulesTracked: number; overdue: number; dueSoon: number };
+    inspections: { templates: number; completedRuns: number };
+    occupantPortal: { activeMagicLinks: number };
+    punchOpen: number;
+    constructionIssuesOpen: number;
+  };
+};
+
+export async function fetchOmHandoverSummary(projectId: string): Promise<OmHandoverSummary> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/handover-summary`),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not load handover summary.");
+  }
+  return res.json() as Promise<OmHandoverSummary>;
+}
+
+export async function patchOmHandoverBrief(
+  projectId: string,
+  body: {
+    notes?: string;
+    handoverCompletedAt?: string | null;
+    buildingLabel?: string | null;
+    facilityManagerUserId?: string | null;
+    handoverDate?: string | null;
+    transferAsBuilt?: boolean;
+    transferClosedIssues?: boolean;
+    transferPunch?: boolean;
+    transferTeamAccess?: boolean;
+    handoverWizardCompletedAt?: string | null;
+    buildingOwnerEmail?: string | null;
+  },
+): Promise<{ projectId: string; settings: ProjectSessionResponse["settings"] }> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/handover-brief`),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    projectId?: string;
+    settings?: ProjectSessionResponse["settings"];
+  };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not save handover brief.");
+  }
+  if (!j.settings || !j.projectId) throw new Error("Invalid response.");
+  return { projectId: j.projectId, settings: j.settings };
+}
+
+export type OmFmDashboardResponse = {
+  projectId: string;
+  projectName: string;
+  handoverCompletedAt: string | null;
+  handoverDate: string | null;
+  buildingLabel: string | null;
+  facilityManagerUserId: string | null;
+  handoverWizardCompletedAt: string | null;
+  kpis: {
+    openWorkOrders: number;
+    inProgressWorkOrders: number;
+    maintenanceScheduledThisWeek: number;
+    assetsTracked: number;
+    overdueMaintenanceTasks: number;
+    maintenanceDueSoon: number;
+  };
+  buildingHealthPct: number;
+  upcomingMaintenanceThisWeek: {
+    id: string;
+    title: string;
+    nextDueAt: string;
+    assetTag: string;
+    assetName: string;
+    vendor: string | null;
+    health: "overdue" | "dueSoon" | "onTrack";
+  }[];
+  recentWorkOrders: {
+    id: string;
+    title: string;
+    status: string;
+    priority: string;
+    updatedAt: string;
+  }[];
+};
+
+export async function fetchOmFmDashboard(projectId: string): Promise<OmFmDashboardResponse> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/fm-dashboard`),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not load FM dashboard.");
+  }
+  return res.json() as Promise<OmFmDashboardResponse>;
+}
+
+export function omAssetRegisterCsvUrl(projectId: string): string {
+  return apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/reports/asset-register.csv`);
+}
+
+export async function postOmInspectionRunWorkOrder(
+  projectId: string,
+  runId: string,
+  body: { itemId: string; title: string },
+): Promise<{ id: string; title: string }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-runs/${encodeURIComponent(runId)}/work-order`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    id?: string;
+    title?: string;
+  };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not create work order.");
+  }
+  if (!j.id || !j.title) throw new Error("Invalid response.");
+  return { id: j.id, title: j.title };
+}
+
+export type OmMaintenanceRow = {
+  id: string;
+  assetId: string;
+  title: string;
+  frequency: string;
+  intervalDays: number | null;
+  nextDueAt: string | null;
+  lastCompletedAt: string | null;
+  assignedVendorLabel: string | null;
+  isActive: boolean;
+  health: "overdue" | "dueSoon" | "onTrack";
+  asset: { id: string; tag: string; name: string };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function fetchOmMaintenance(projectId: string): Promise<OmMaintenanceRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/maintenance`),
+    {
+      credentials: "include",
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load maintenance schedules.");
+  return res.json() as Promise<OmMaintenanceRow[]>;
+}
+
+export async function postOmMaintenanceComplete(
+  projectId: string,
+  scheduleId: string,
+): Promise<OmMaintenanceRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/maintenance/${encodeURIComponent(scheduleId)}/complete`,
+    ),
+    { method: "POST", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not mark complete.");
+  return res.json() as Promise<OmMaintenanceRow>;
+}
+
+export async function postOmGenerateWorkOrders(
+  projectId: string,
+): Promise<{ createdIds: string[] }> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/maintenance/generate-work-orders`),
+    { method: "POST", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not generate work orders.");
+  return res.json() as Promise<{ createdIds: string[] }>;
+}
+
+export type OmInspectionTemplateRow = {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string | null;
+  frequency: string | null;
+  checklistJson: unknown;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function fetchOmInspectionTemplates(
+  projectId: string,
+): Promise<OmInspectionTemplateRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-templates`),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load inspection templates.");
+  return res.json() as Promise<OmInspectionTemplateRow[]>;
+}
+
+export type OmInspectionRunRow = {
+  id: string;
+  projectId: string;
+  templateId: string;
+  status: string;
+  resultJson: unknown;
+  completedAt: string | null;
+  template: { id: string; name: string };
+  createdBy: { id: string; name: string } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function fetchOmInspectionRuns(projectId: string): Promise<OmInspectionRunRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-runs`),
+    {
+      credentials: "include",
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load inspection runs.");
+  return res.json() as Promise<OmInspectionRunRow[]>;
+}
+
+export type OmInspectionChecklistItem = {
+  id: string;
+  label: string;
+  type: "checkbox" | "passfail" | "text" | "photo";
+  level?: string;
+};
+
+export async function deleteOmInspectionTemplate(
+  projectId: string,
+  templateId: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-templates/${encodeURIComponent(templateId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not delete template.");
+  }
+}
+
+export async function postOmInspectionTemplate(
+  projectId: string,
+  body: {
+    name: string;
+    description?: string | null;
+    frequency?: string | null;
+    checklistJson: OmInspectionChecklistItem[];
+  },
+): Promise<OmInspectionTemplateRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-templates`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(
+      typeof j.error === "string" ? j.error : "Could not create inspection template.",
+    );
+  }
+  return j as OmInspectionTemplateRow;
+}
+
+export async function postOmInspectionRun(
+  projectId: string,
+  body: { templateId: string; resultJson?: unknown[] },
+): Promise<OmInspectionRunRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-runs`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not start inspection.");
+  }
+  return j as OmInspectionRunRow;
+}
+
+export async function deleteOmInspectionRun(projectId: string, runId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-runs/${encodeURIComponent(runId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not delete inspection.");
+  }
+}
+
+export async function patchOmInspectionRun(
+  projectId: string,
+  runId: string,
+  body: {
+    resultJson?: unknown[];
+    attachmentsJson?: unknown[];
+    status?: string;
+    completedAt?: string | null;
+  },
+): Promise<OmInspectionRunRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-runs/${encodeURIComponent(runId)}`,
+    ),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not save inspection.");
+  }
+  return j as OmInspectionRunRow;
+}
+
+export type OmInspectionRunCompleteResult = {
+  id: string;
+  status: string;
+  workOrderIds: string[];
+  reportPdfPath: string;
+  completedAt: string;
+  buildingOwnerNotify:
+    | { sent: true }
+    | { sent: false; skippedReason: "no_recipient" | "resend_not_configured" | "send_failed" };
+};
+
+export async function postOmInspectionRunComplete(
+  projectId: string,
+  runId: string,
+  body: {
+    resultJson: Array<{
+      itemId: string;
+      outcome: "pass" | "fail" | "na";
+      note?: string;
+      photoDataUrl?: string;
+      photoFileName?: string;
+      followUpIssueId?: string;
+    }>;
+    createWorkOrdersForFailures?: boolean;
+  },
+): Promise<OmInspectionRunCompleteResult> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-runs/${encodeURIComponent(runId)}/complete`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not complete inspection.");
+  }
+  return j as OmInspectionRunCompleteResult;
+}
+
+export function omInspectionRunReportPdfUrl(projectId: string, runId: string): string {
+  return apiUrl(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-runs/${encodeURIComponent(runId)}/report.pdf`,
+  );
+}
+
+export type OccupantTokenRow = {
+  id: string;
+  token: string;
+  label: string;
+  expiresAt: string | null;
+  createdAt: string;
+};
+
+export async function fetchOccupantTokens(projectId: string): Promise<OccupantTokenRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/occupant-tokens`),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load portal links.");
+  return res.json() as Promise<OccupantTokenRow[]>;
+}
+
+export async function postOccupantToken(
+  projectId: string,
+  body?: { label?: string },
+): Promise<OccupantTokenRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/occupant-tokens`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body ?? {}),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not create link.");
+  return res.json() as Promise<OccupantTokenRow>;
+}
+
+export async function fetchOccupantMeta(
+  token: string,
+): Promise<{ projectId: string; projectName: string }> {
+  const res = await fetch(apiUrl(`/api/v1/occupant/${encodeURIComponent(token)}/meta`));
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(typeof j.error === "string" ? j.error : "Invalid link.");
+  }
+  return res.json() as Promise<{ projectId: string; projectName: string }>;
+}
+
+export async function postOccupantSubmit(
+  token: string,
+  body: {
+    description: string;
+    floor?: string;
+    room?: string;
+    reporterName: string;
+    reporterEmail: string;
+  },
+): Promise<{ ok: true; issueId: string }> {
+  const res = await fetch(apiUrl(`/api/v1/occupant/${encodeURIComponent(token)}/submit`), {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    ok?: boolean;
+    issueId?: string;
+  };
+  if (!res.ok) {
+    const err = j.error;
+    const msg =
+      typeof err === "string" ? err : Array.isArray(err) ? "Invalid request" : "Could not submit.";
+    throw new Error(msg);
+  }
+  if (!j.issueId) throw new Error("Invalid response.");
+  return { ok: true as const, issueId: j.issueId };
 }
