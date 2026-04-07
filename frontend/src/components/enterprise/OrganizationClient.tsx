@@ -22,6 +22,7 @@ import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadin
 import { WorkspaceTeamClient } from "@/components/enterprise/WorkspaceTeamClient";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { isSuperAdmin, isWorkspaceManager } from "@/lib/workspaceRole";
+import { trialDaysLeft } from "@/lib/workspaceSubscription";
 
 type OrgTab = "organization" | "people" | "invite-member";
 
@@ -177,6 +178,8 @@ export function OrganizationClient() {
 
   const roleLabel =
     primary.role === "SUPER_ADMIN" ? "Super Admin" : primary.role === "ADMIN" ? "Admin" : "Member";
+  const trialDays =
+    ws.subscriptionStatus === "trialing" ? trialDaysLeft(ws.currentPeriodEnd) : null;
 
   const tabBtn = (id: OrgTab, label: string) => (
     <button
@@ -209,6 +212,20 @@ export function OrganizationClient() {
               <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
                 Name, logo, and details shown in the sidebar and on invite pages. Your role:{" "}
                 <span className="font-medium text-[var(--enterprise-text)]">{roleLabel}</span>
+              </p>
+              <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
+                Plan:{" "}
+                <span className="font-medium text-[var(--enterprise-text)]">
+                  {ws.subscriptionStatus === "active"
+                    ? "Pro active"
+                    : ws.subscriptionStatus === "trialing"
+                      ? trialDays === 0
+                        ? "Trial ended"
+                        : trialDays != null
+                          ? `Pro trial (${trialDays} day${trialDays === 1 ? "" : "s"} left)`
+                          : "Pro trial"
+                      : "Free"}
+                </span>
               </p>
             </div>
             {ws.logoUrl ? (

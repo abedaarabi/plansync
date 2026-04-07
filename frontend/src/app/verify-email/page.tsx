@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Loader2, Mail } from "lucide-react";
+import { authClient } from "@/lib/auth-client";
 
 function VerifyEmailContent() {
   const router = useRouter();
@@ -12,11 +13,43 @@ function VerifyEmailContent() {
   const next = sp.get("next") ?? "/onboarding";
   const [resent, setResent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   function onResend() {
     setBusy(true);
     setResent(true);
     window.setTimeout(() => setBusy(false), 1200);
+  }
+
+  async function onContinue() {
+    setChecking(true);
+    setStatusMsg(null);
+    try {
+      const res = await fetch("/api/v1/me", { credentials: "include", cache: "no-store" });
+      if (res.status === 401) {
+        setStatusMsg("Please sign in again after verifying your email.");
+        return;
+      }
+      if (res.status === 403) {
+        setStatusMsg("Your email is not verified yet. Open the link in your inbox first.");
+        return;
+      }
+      if (!res.ok) {
+        setStatusMsg("Could not confirm verification right now. Please try again.");
+        return;
+      }
+      const me = (await res.json().catch(() => ({}))) as { user?: { emailVerified?: boolean } };
+      if (me.user?.emailVerified !== true) {
+        setStatusMsg("Your email is not verified yet. Open the link in your inbox first.");
+        return;
+      }
+      router.push(next.startsWith("/") ? next : "/onboarding");
+    } catch {
+      setStatusMsg("Could not confirm verification right now. Please try again.");
+    } finally {
+      setChecking(false);
+    }
   }
 
   return (
@@ -86,11 +119,29 @@ function VerifyEmailContent() {
 
             <button
               type="button"
-              onClick={() => router.push(next.startsWith("/") ? next : "/onboarding")}
-              className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] py-3 text-sm font-semibold text-white shadow-md transition hover:bg-[#1d4ed8]"
+              onClick={() => void onContinue()}
+              disabled={checking}
+              className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] py-3 text-sm font-semibold text-white shadow-md transition hover:bg-[#1d4ed8] disabled:opacity-60"
             >
-              <Mail className="h-4 w-4" />
-              Continue to setup
+              {checking ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Mail className="h-4 w-4" />
+              )}
+              I verified my email
+            </button>
+            {statusMsg ? (
+              <p className="mt-3 text-center text-sm text-red-600">{statusMsg}</p>
+            ) : null}
+            <button
+              type="button"
+              onClick={async () => {
+                await authClient.signOut();
+                router.push("/sign-in");
+              }}
+              className="mt-4 w-full text-center text-sm text-[#64748B] transition hover:text-[#0F172A]"
+            >
+              Sign out
             </button>
           </div>
 

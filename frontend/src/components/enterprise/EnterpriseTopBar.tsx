@@ -32,7 +32,7 @@ import {
 import { DEFAULT_ENTERPRISE_PRIMARY_HEX } from "@/lib/enterpriseTheme";
 import { qk } from "@/lib/queryKeys";
 import { userInitials } from "@/lib/user-initials";
-import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { isWorkspaceProClient, trialDaysLeft } from "@/lib/workspaceSubscription";
 import Link from "next/link";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -125,6 +125,8 @@ export function EnterpriseTopBar({
   const wid = activeWs?.id;
   const workspaceNameForAria = activeWs?.name?.trim() || "PlanSync";
   const isPro = isWorkspaceProClient(activeWs?.subscriptionStatus);
+  const trialDays =
+    activeWs?.subscriptionStatus === "trialing" ? trialDaysLeft(activeWs.currentPeriodEnd) : null;
 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifWrapRef = useRef<HTMLDivElement>(null);
@@ -275,6 +277,19 @@ export function EnterpriseTopBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1 sm:gap-2 md:gap-2.5">
+        {activeWs?.subscriptionStatus === "trialing" ? (
+          <Link
+            href="/organization?tab=organization"
+            className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 sm:inline-flex"
+          >
+            {trialDays === 0
+              ? "Trial ended - upgrade"
+              : trialDays != null
+                ? `${trialDays} day${trialDays === 1 ? "" : "s"} left in trial`
+                : "Free trial"}
+          </Link>
+        ) : null}
+
         {/* Search / Command Palette */}
         <button
           type="button"

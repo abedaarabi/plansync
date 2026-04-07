@@ -619,20 +619,46 @@ export function v1Routes(
       .object({ name: z.string().min(1), slug: z.string().min(2) })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
-    const slug = body.data.slug.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-    const ws = await prisma.workspace.create({
-      data: {
-        name: body.data.name,
-        slug,
-        storageQuotaBytes: DEFAULT_STORAGE_QUOTA_BYTES,
-        // Every new workspace starts with a 14-day full Pro trial.
-        subscriptionStatus: "trialing",
-        currentPeriodEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-        members: {
-          create: { userId: c.get("user").id, role: WorkspaceRole.SUPER_ADMIN },
-        },
-      },
-    });
+    const baseSlug = body.data.slug
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48);
+    const fallbackSlug = `workspace-${randomBytes(3).toString("hex")}`;
+    let candidate = baseSlug || fallbackSlug;
+    let ws: Awaited<ReturnType<typeof prisma.workspace.create>> | null = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const slug =
+        attempt === 0 ? candidate : `${candidate}-${randomBytes(2).toString("hex")}`.slice(0, 60);
+      try {
+        ws = await prisma.workspace.create({
+          data: {
+            name: body.data.name,
+            slug,
+            storageQuotaBytes: DEFAULT_STORAGE_QUOTA_BYTES,
+            // Every new workspace starts with a 14-day full Pro trial.
+            subscriptionStatus: "trialing",
+            currentPeriodEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            members: {
+              create: { userId: c.get("user").id, role: WorkspaceRole.SUPER_ADMIN },
+            },
+          },
+        });
+        break;
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === "P2002" &&
+          Array.isArray(err.meta?.target) &&
+          err.meta.target.includes("slug")
+        ) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    if (!ws) return c.json({ error: "Could not create workspace slug. Try again." }, 409);
     await logActivity(ws.id, ActivityType.WORKSPACE_CREATED, {
       actorUserId: c.get("user").id,
       entityId: ws.id,

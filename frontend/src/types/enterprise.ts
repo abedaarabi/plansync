@@ -19,6 +19,7 @@ export type MeWorkspace = {
     storageQuotaBytes: string;
     storageUsedBytes: string;
     subscriptionStatus?: string | null;
+    currentPeriodEnd?: string | null;
   };
   /** Workspace projects in use (Pro plan cap). */
   projectCount?: number;
@@ -30,6 +31,7 @@ export type MeResponse = {
     id: string;
     name: string;
     email: string;
+    emailVerified?: boolean;
     image?: string | null;
     hideViewerPresence?: boolean;
   };

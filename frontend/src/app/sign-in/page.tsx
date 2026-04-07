@@ -24,9 +24,13 @@ export default function SignInPage() {
   const [name, setName] = useState("");
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [error, setError] = useState<string | null>(null);
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function waitForSessionReady(): Promise<boolean> {
+  async function waitForSessionReady(): Promise<{
+    ready: boolean;
+    emailVerified: boolean | null;
+  }> {
     const waitsMs = [0, 120, 250, 500, 900];
     for (const w of waitsMs) {
       if (w > 0) await new Promise((resolve) => window.setTimeout(resolve, w));
@@ -35,17 +39,26 @@ export default function SignInPage() {
           credentials: "include",
           cache: "no-store",
         });
-        if (res.ok) return true;
+        if (res.status === 403) {
+          return { ready: true, emailVerified: false };
+        }
+        if (res.ok) {
+          const me = (await res.json().catch(() => ({}))) as {
+            user?: { emailVerified?: boolean };
+          };
+          return { ready: true, emailVerified: me.user?.emailVerified ?? null };
+        }
       } catch {
         // retry
       }
     }
-    return false;
+    return { ready: false, emailVerified: null };
   }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setUnverifiedEmail(null);
     setLoading(true);
     try {
       if (mode === "sign-up") {
@@ -65,11 +78,17 @@ export default function SignInPage() {
         const { error: err } = await authClient.signIn.email({ email, password });
         if (err) setError(err.message ?? "Sign in failed");
         else {
-          const sessionReady = await waitForSessionReady();
-          if (!sessionReady) {
+          const session = await waitForSessionReady();
+          if (!session.ready) {
             setError(
               "Signed in, but session was not persisted yet. Please try again. If this continues in production, check proxy Set-Cookie forwarding and cookie domain settings.",
             );
+            return;
+          }
+          if (session.emailVerified === false) {
+            await authClient.signOut();
+            setUnverifiedEmail(email);
+            setError("Please verify your email before signing in.");
             return;
           }
           // Full navigation after session is confirmed.
@@ -269,6 +288,20 @@ export default function SignInPage() {
                     <span>{error}</span>
                   </div>
                 )}
+                {unverifiedEmail ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                    <p>
+                      Your account is not verified yet. Check your inbox for{" "}
+                      <span className="font-medium">{unverifiedEmail}</span>.
+                    </p>
+                    <Link
+                      href={`/verify-email?email=${encodeURIComponent(unverifiedEmail)}&next=${encodeURIComponent(`/onboarding?next=${encodeURIComponent(next)}`)}`}
+                      className="mt-2 inline-flex font-semibold text-amber-900 underline underline-offset-2"
+                    >
+                      Open verification page
+                    </Link>
+                  </div>
+                ) : null}
 
                 <button
                   type="submit"
