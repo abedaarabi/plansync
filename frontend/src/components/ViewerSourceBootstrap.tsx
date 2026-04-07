@@ -64,6 +64,24 @@ export function ViewerSourceBootstrap() {
         } catch {
           /* Not Pro, offline, or missing access — still open the PDF without a version row id. */
         }
+      } else if (projectIdParam == null || projectIdParam.trim() === "") {
+        /**
+         * Deep links often pass `fileVersionId` without `projectId`. Sidebar Pro tabs (takeoff,
+         * issues, …) require `viewerProjectId` — resolve it from the same revision endpoint while
+         * keeping the URL's `cloudFv` as the source of truth.
+         */
+        try {
+          const verN =
+            versionParam != null && versionParam !== "" ? Number(versionParam) : undefined;
+          const resolved = await fetchResolvedFileRevision(
+            fileId,
+            verN != null && !Number.isNaN(verN) ? verN : undefined,
+          );
+          if (cancelled) return;
+          resolvedProjectId = resolved.projectId;
+        } catch {
+          /* Same as unresolved revision — PDF may still load from content URL. */
+        }
       }
 
       if (cancelled) return;

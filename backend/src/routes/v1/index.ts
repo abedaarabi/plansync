@@ -101,6 +101,7 @@ import { registerTakeoffRoutes } from "./takeoffRoutes.js";
 import { registerProposalRoutes } from "./proposalRoutes.js";
 import { registerSheetAiRoutes } from "./sheetAiRoutes.js";
 import { registerCloudRoutes } from "./cloudRoutes.js";
+import { registerPunchRoutes } from "./punchRoutes.js";
 import {
   auditLogsToRows,
   buildAuditPdfBuffer,
@@ -3418,117 +3419,6 @@ export function v1Routes(
   registerRfiRoutes(r, needUser, env);
   registerProposalRoutes(r, needUser, env);
 
-  r.get("/projects/:projectId/punch", needUser, async (c) => {
-    const projectId = c.req.param("projectId")!;
-    const res = await loadProjectForMember(projectId, c.get("user").id);
-    if ("error" in res) return c.json({ error: res.error }, res.status);
-    const list = await prisma.punchItem.findMany({
-      where: { projectId },
-      orderBy: { updatedAt: "desc" },
-    });
-    return c.json(
-      list.map((row) => ({
-        ...row,
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-      })),
-    );
-  });
-
-  r.post("/projects/:projectId/punch", needUser, async (c) => {
-    const projectId = c.req.param("projectId")!;
-    const res = await loadProjectForMember(projectId, c.get("user").id);
-    if ("error" in res) return c.json({ error: res.error }, res.status);
-    const gate = requirePro(res.project.workspace);
-    if (gate) return c.json({ error: gate.error }, gate.status);
-    const body = z
-      .object({
-        location: z.string().min(1).max(500),
-        trade: z.string().min(1).max(120),
-        priority: z.nativeEnum(PunchPriority).optional(),
-        status: z.nativeEnum(PunchStatus).optional(),
-        notes: z.string().max(5000).optional(),
-      })
-      .safeParse(await c.req.json());
-    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
-    const row = await prisma.punchItem.create({
-      data: {
-        projectId,
-        location: body.data.location,
-        trade: body.data.trade,
-        priority: body.data.priority ?? PunchPriority.P2,
-        status: body.data.status ?? PunchStatus.OPEN,
-        notes: body.data.notes,
-      },
-    });
-    await logActivity(res.project.workspaceId, ActivityType.PUNCH_CREATED, {
-      actorUserId: c.get("user").id,
-      entityId: row.id,
-      projectId,
-      metadata: { location: row.location, trade: row.trade },
-    });
-    return c.json({
-      ...row,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    });
-  });
-
-  r.patch("/projects/:projectId/punch/:punchId", needUser, async (c) => {
-    const projectId = c.req.param("projectId")!;
-    const punchId = c.req.param("punchId")!;
-    const res = await loadProjectForMember(projectId, c.get("user").id);
-    if ("error" in res) return c.json({ error: res.error }, res.status);
-    const gate = requirePro(res.project.workspace);
-    if (gate) return c.json({ error: gate.error }, gate.status);
-    const existing = await prisma.punchItem.findFirst({ where: { id: punchId, projectId } });
-    if (!existing) return c.json({ error: "Not found" }, 404);
-    const body = z
-      .object({
-        location: z.string().min(1).max(500).optional(),
-        trade: z.string().min(1).max(120).optional(),
-        priority: z.nativeEnum(PunchPriority).optional(),
-        status: z.nativeEnum(PunchStatus).optional(),
-        notes: z.string().max(5000).nullable().optional(),
-      })
-      .safeParse(await c.req.json());
-    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
-    const row = await prisma.punchItem.update({
-      where: { id: punchId },
-      data: body.data,
-    });
-    await logActivity(res.project.workspaceId, ActivityType.PUNCH_UPDATED, {
-      actorUserId: c.get("user").id,
-      entityId: row.id,
-      projectId,
-      metadata: { location: row.location, trade: row.trade },
-    });
-    return c.json({
-      ...row,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    });
-  });
-
-  r.delete("/projects/:projectId/punch/:punchId", needUser, async (c) => {
-    const projectId = c.req.param("projectId")!;
-    const punchId = c.req.param("punchId")!;
-    const res = await loadProjectForMember(projectId, c.get("user").id);
-    if ("error" in res) return c.json({ error: res.error }, res.status);
-    const gate = requirePro(res.project.workspace);
-    if (gate) return c.json({ error: gate.error }, gate.status);
-    const existing = await prisma.punchItem.findFirst({ where: { id: punchId, projectId } });
-    if (!existing) return c.json({ error: "Not found" }, 404);
-    await logActivitySafe(res.project.workspaceId, ActivityType.PUNCH_DELETED, {
-      actorUserId: c.get("user").id,
-      entityId: existing.id,
-      projectId,
-      metadata: { location: existing.location, trade: existing.trade },
-    });
-    await prisma.punchItem.delete({ where: { id: punchId } });
-    return c.json({ ok: true });
-  });
-
   r.get("/projects/:projectId/field-reports", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const res = await loadProjectForMember(projectId, c.get("user").id);
@@ -3695,6 +3585,7 @@ export function v1Routes(
 
   registerOccupantPublicRoutes(r, env);
   registerOmRoutes(r, needUser, env);
+  registerPunchRoutes(r, needUser);
   registerIssuesRoutes(r, needUser, env, {
     onIssuesMutated: (fileVersionId) => {
       if (collaborationGloballyEnabled(env)) {

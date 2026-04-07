@@ -1260,11 +1260,30 @@ export async function presignReadRfiAttachment(
 export type PunchRow = {
   id: string;
   projectId: string;
+  title: string;
   location: string;
   trade: string;
   priority: string;
   status: string;
+  assigneeId: string | null;
+  dueDate: string | null;
+  completedAt: string | null;
+  templateId: string | null;
+  assignee: { id: string; name: string; email: string; image: string | null } | null;
   notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PunchTemplateRow = {
+  id: string;
+  workspaceId: string;
+  projectId: string | null;
+  name: string;
+  description: string | null;
+  itemsJson: unknown;
+  isArchived: boolean;
+  createdById: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -1279,7 +1298,17 @@ export async function fetchProjectPunch(projectId: string): Promise<PunchRow[]> 
 
 export async function createPunchItem(
   projectId: string,
-  body: { location: string; trade: string; notes?: string },
+  body: {
+    title?: string;
+    location: string;
+    trade: string;
+    notes?: string;
+    priority?: string;
+    status?: string;
+    assigneeId?: string | null;
+    dueDateYmd?: string | null;
+    templateId?: string | null;
+  },
 ): Promise<PunchRow> {
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/punch`), {
     method: "POST",
@@ -1291,6 +1320,109 @@ export async function createPunchItem(
   const j = (await res.json().catch(() => ({}))) as { error?: unknown };
   if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not create item.");
   return j as PunchRow;
+}
+
+export async function patchPunchItem(
+  projectId: string,
+  punchId: string,
+  body: {
+    title?: string;
+    location?: string;
+    trade?: string;
+    notes?: string | null;
+    priority?: string;
+    status?: string;
+    assigneeId?: string | null;
+    dueDateYmd?: string | null;
+  },
+): Promise<PunchRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/punch/${encodeURIComponent(punchId)}`,
+    ),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not update item.");
+  return j as PunchRow;
+}
+
+export async function bulkPatchPunchItems(
+  projectId: string,
+  body: { ids: string[]; assigneeId?: string | null; status?: string },
+): Promise<void> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/punch/bulk`), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok)
+    throw new Error(typeof j.error === "string" ? j.error : "Could not apply bulk action.");
+}
+
+export function punchExportCsvUrl(projectId: string): string {
+  return apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/punch/export.csv`);
+}
+
+export async function fetchPunchTemplates(projectId: string): Promise<PunchTemplateRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/punch/templates`),
+    { credentials: "include" },
+  );
+  if (!res.ok) throw new Error("Could not load punch templates.");
+  return res.json() as Promise<PunchTemplateRow[]>;
+}
+
+export async function createPunchTemplate(
+  projectId: string,
+  body: {
+    name: string;
+    description?: string;
+    scope?: "WORKSPACE" | "PROJECT";
+    items: Array<{
+      title: string;
+      location: string;
+      trade: string;
+      priority?: "P1" | "P2" | "P3";
+      notes?: string;
+    }>;
+  },
+): Promise<PunchTemplateRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/punch/templates`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok)
+    throw new Error(typeof j.error === "string" ? j.error : "Could not create template.");
+  return j as PunchTemplateRow;
+}
+
+export async function applyPunchTemplate(projectId: string, templateId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/punch/templates/${encodeURIComponent(templateId)}/apply`,
+    ),
+    { method: "POST", credentials: "include", headers: jsonHeaders },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not apply template.");
 }
 
 export type FieldReportRow = {
@@ -1772,6 +1904,19 @@ export function viewerHrefForCloudRevision(input: {
   return `/viewer?${q.toString()}`;
 }
 
+/** Open viewer on this revision; when the line came from sheet takeoff, zoom to the zone. */
+export function viewerHrefForTakeoffLine(row: TakeoffLineRow): string {
+  const q = new URLSearchParams();
+  q.set("fileId", row.fileId);
+  q.set("name", row.fileName);
+  q.set("projectId", row.projectId);
+  q.set("fileVersionId", row.fileVersionId);
+  q.set("version", String(row.fileVersion));
+  const zid = row.sourceZoneId?.trim();
+  if (zid) q.set("takeoffZoneId", zid);
+  return `/viewer?${q.toString()}`;
+}
+
 /** Relative URL to open the viewer on this issue (same sheet revision). */
 export function viewerHrefForIssue(row: IssueRow): string {
   const q = new URLSearchParams();
@@ -1985,6 +2130,42 @@ export async function fetchTakeoffLinesForProject(projectId: string): Promise<Ta
   if (res.status === 402) throw new ProRequiredError();
   if (!res.ok) throw new Error("Could not load takeoff.");
   return res.json() as Promise<TakeoffLineRow[]>;
+}
+
+/** Adds a catalog-backed line to project takeoff (anchor file = latest revision in project). */
+export async function createProjectTakeoffLineFromMaterial(
+  projectId: string,
+  body: {
+    materialId: string;
+    quantity?: number | string;
+    label?: string;
+    unit?: string;
+    notes?: string;
+    tags?: string[];
+  },
+): Promise<TakeoffLineRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/takeoff-lines`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as TakeoffLineRow & { error?: unknown };
+  if (!res.ok) {
+    const e = j.error;
+    const msg =
+      typeof e === "string"
+        ? e
+        : e != null && typeof e === "object"
+          ? JSON.stringify(e)
+          : "Could not add line to takeoff.";
+    throw new Error(msg);
+  }
+  return j as TakeoffLineRow;
 }
 
 export async function createTakeoffLine(

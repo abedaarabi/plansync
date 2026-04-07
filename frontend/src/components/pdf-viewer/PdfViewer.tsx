@@ -16,6 +16,7 @@ import {
   ViewerStateConflictError,
 } from "@/lib/api-client";
 import { findAnnotationById, normRectFromAnnotationPoints } from "@/lib/issueFocus";
+import { takeoffFocusRectForZone, TAKEOFF_FOCUS_FIT_MARGIN } from "@/lib/takeoffFocus";
 import { meHasProWorkspace } from "@/lib/proWorkspace";
 import { setupPdfWorker } from "@/lib/pdf";
 import {
@@ -191,7 +192,9 @@ export function PdfViewer() {
     fh: 1,
   });
   const issueFocusConsumedRef = useRef<string | null>(null);
+  const takeoffFocusConsumedRef = useRef<string | null>(null);
   const issueIdParam = searchParams.get("issueId");
+  const takeoffZoneIdParam = searchParams.get("takeoffZoneId");
   /** One-time fit width per PDF load; skip when deep-linking to an issue (issue focus zooms). */
   const initialFitWidthAppliedRef = useRef(false);
 
@@ -373,7 +376,7 @@ export function PdfViewer() {
 
   useEffect(() => {
     if (!pdfDoc || numPages < 1) return;
-    if (issueIdParam?.trim()) return;
+    if (issueIdParam?.trim() || takeoffZoneIdParam?.trim()) return;
     const cfv = useViewerStore.getState().cloudFileVersionId;
     if (cfv && !cloudHydrated) return;
     if (initialFitWidthAppliedRef.current) return;
@@ -384,11 +387,70 @@ export function PdfViewer() {
 
     initialFitWidthAppliedRef.current = true;
     requestFit("width");
-  }, [pdfDoc, numPages, currentPage, pageSizePtByPage, cloudHydrated, issueIdParam, requestFit]);
+  }, [
+    pdfDoc,
+    numPages,
+    currentPage,
+    pageSizePtByPage,
+    cloudHydrated,
+    issueIdParam,
+    takeoffZoneIdParam,
+    requestFit,
+  ]);
 
   useEffect(() => {
     issueFocusConsumedRef.current = null;
   }, [issueIdParam]);
+
+  useEffect(() => {
+    takeoffFocusConsumedRef.current = null;
+  }, [takeoffZoneIdParam]);
+
+  /** Deep link: `/viewer?...&takeoffZoneId=` zooms to takeoff shape after cloud state hydrates. */
+  useEffect(() => {
+    const zid = takeoffZoneIdParam?.trim();
+    if (!zid || !cloudHydrated || !pdfDoc || !cloudFileVersionId) return;
+    if (takeoffFocusConsumedRef.current === zid) return;
+
+    let cancelled = false;
+    const deadline = Date.now() + 4000;
+
+    void (async () => {
+      const tryFocus = (): boolean => {
+        const st = useViewerStore.getState();
+        const z = st.takeoffZones.find((tz) => tz.id === zid);
+        if (!z) return false;
+        const { pageIndex0, rectNorm } = takeoffFocusRectForZone(z);
+        st.requestSearchFocus({
+          pageNumber: pageIndex0 + 1,
+          rectNorm,
+          fitMargin: TAKEOFF_FOCUS_FIT_MARGIN,
+        });
+        st.setTakeoffSelectedItemId(z.itemId);
+        st.setTakeoffSelectedZoneIds([z.id]);
+        st.setTakeoffMode(true);
+        st.setTakeoffInventoryDrawerFromSidebar(true);
+        setPendingProSidebarTab("takeoff");
+        takeoffFocusConsumedRef.current = zid;
+        return true;
+      };
+
+      while (Date.now() < deadline && !cancelled) {
+        if (tryFocus()) return;
+        await new Promise<void>((r) => window.setTimeout(r, 40));
+      }
+      if (cancelled) return;
+      if (takeoffFocusConsumedRef.current !== zid) {
+        toast.error("That takeoff shape is not on this sheet version (or it was removed).");
+        setPendingProSidebarTab("takeoff");
+        takeoffFocusConsumedRef.current = zid;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [takeoffZoneIdParam, cloudHydrated, pdfDoc, cloudFileVersionId, setPendingProSidebarTab]);
 
   /** Deep link: `/viewer?...&issueId=` zooms to linked markup after cloud state hydrates. */
   useEffect(() => {

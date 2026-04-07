@@ -3,8 +3,9 @@
  * Production-safe: insert missing `FolderStructureTemplate` rows from JSON.
  * Does not overwrite existing rows (preserves DB edits). Run after `prisma migrate deploy`.
  *
- * Loads env the same way as `scripts/load-root-env-run-prisma.mjs` so DATABASE_URL works
- * when this runs after local migrate (separate Node process).
+ * Loads env like `scripts/load-root-env-run-prisma.mjs`:
+ * - production from `.env.prod`
+ * - local override from `.env.local` (unless PRISMA_SKIP_LOCAL=1)
  */
 import { config } from "dotenv";
 import { readFileSync } from "node:fs";
@@ -17,9 +18,7 @@ const backendRoot = resolve(__dirname, "..");
 const repoRoot = resolve(backendRoot, "..");
 const skipLocal = process.env.PRISMA_SKIP_LOCAL === "1" || process.env.PRISMA_SKIP_LOCAL === "true";
 
-config({ path: resolve(repoRoot, ".env") });
-config({ path: resolve(repoRoot, ".env.prod") });
-config({ path: resolve(backendRoot, ".env") });
+config({ path: resolve(repoRoot, ".env.prod"), override: true });
 if (!skipLocal) {
   config({ path: resolve(repoRoot, ".env.local"), override: true });
 }

@@ -20,7 +20,10 @@ export function combineCountRedrawPoints(
 
 export function patchZoneQuantitiesFromPoints(
   zone: Pick<TakeoffZone, "measurementType">,
-  item: Pick<TakeoffItem, "measurementType" | "unit" | "linearFactor" | "wastePercent">,
+  item: Pick<
+    TakeoffItem,
+    "measurementType" | "unit" | "linearFactor" | "wastePercent" | "heightMm"
+  >,
   points: { x: number; y: number }[],
   pageW: number,
   pageH: number,
@@ -89,10 +92,55 @@ export function rawToDisplayUnit(
 }
 
 export function applyItemToRawQuantity(
-  item: Pick<TakeoffItem, "measurementType" | "unit" | "linearFactor" | "wastePercent">,
+  item: Pick<
+    TakeoffItem,
+    "measurementType" | "unit" | "linearFactor" | "wastePercent" | "heightMm"
+  >,
   rawGeometry: number,
 ): number {
   let base: number;
+
+  /** Plan length × vertical height → wall / strip area (e.g. finish priced per m²). */
+  if (
+    item.measurementType === "linear" &&
+    item.heightMm != null &&
+    item.heightMm > 0 &&
+    (item.unit === "m²" || item.unit === "mm²" || item.unit === "ft²")
+  ) {
+    const lengthMm = rawGeometry;
+    if (item.unit === "m²") {
+      base = (lengthMm / 1000) * (item.heightMm / 1000);
+    } else if (item.unit === "mm²") {
+      base = lengthMm * item.heightMm;
+    } else {
+      base = (lengthMm / 304.8) * (item.heightMm / 304.8);
+    }
+    const waste = item.wastePercent ?? 0;
+    if (waste > 0) base *= 1 + waste / 100;
+    return base;
+  }
+
+  if (
+    item.measurementType === "area" &&
+    item.heightMm != null &&
+    item.heightMm > 0 &&
+    (item.unit === "m³" || item.unit === "mm³" || item.unit === "ft³")
+  ) {
+    const rawMm2 = rawGeometry;
+    if (item.unit === "m³") {
+      const areaM2 = rawMm2 / 1_000_000;
+      base = areaM2 * (item.heightMm / 1000);
+    } else if (item.unit === "mm³") {
+      base = rawMm2 * item.heightMm;
+    } else {
+      const mm2PerFt2 = 304.8 * 304.8;
+      const areaFt2 = rawMm2 / mm2PerFt2;
+      base = areaFt2 * (item.heightMm / 304.8);
+    }
+    const waste = item.wastePercent ?? 0;
+    if (waste > 0) base *= 1 + waste / 100;
+    return base;
+  }
 
   if (item.measurementType === "linear" && item.unit === "kg" && item.linearFactor != null) {
     const lengthMm = rawGeometry;

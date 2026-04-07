@@ -109,6 +109,7 @@ export function TakeoffZonesSvg({
   return (
     <g className="pointer-events-none print:hidden">
       {zones.map((z) => {
+        if (z.noSheetGeometry) return null;
         const item = itemsById.get(z.itemId);
         const stroke = item?.color ?? "#64748b";
         /** ~44% alpha fill (was ~30%) — reads darker on white sheet */

@@ -333,7 +333,7 @@ export function ViewerSidebar() {
     setSidebarTab((t) => {
       if (t === "pages" || t === "outline" || t === "sheetAi" || t === "collab") return t;
       if (annotationIsIssuePin(selectedAnn)) return "issues";
-      if (t === "takeoff" && !viewerOperationsMode) return t;
+      if (t === "takeoff") return t;
       return selectedAnn.type === "measurement" ? "measure" : "draw";
     });
   }, [
@@ -342,7 +342,6 @@ export function ViewerSidebar() {
     selectedAnn?.type,
     selectedAnn?.linkedIssueId,
     selectedAnn?.issueDraft,
-    viewerOperationsMode,
   ]);
 
   /** Ruler / calibrate live under the Measure panel. */
@@ -362,8 +361,7 @@ export function ViewerSidebar() {
 
   useEffect(() => {
     if (!pendingProSidebarTab || !showProTabs) return;
-    const tab =
-      viewerOperationsMode && pendingProSidebarTab === "takeoff" ? "issues" : pendingProSidebarTab;
+    const tab = pendingProSidebarTab;
     setSidebarTab(tab);
     setPendingProSidebarTab(null);
   }, [pendingProSidebarTab, showProTabs, viewerOperationsMode, setPendingProSidebarTab]);
@@ -386,8 +384,8 @@ export function ViewerSidebar() {
   }, [showCollabTab, sidebarTab]);
 
   useEffect(() => {
-    if (takeoffMode && !viewerOperationsMode) setSidebarTab("takeoff");
-  }, [takeoffMode, viewerOperationsMode]);
+    if (takeoffMode) setSidebarTab("takeoff");
+  }, [takeoffMode]);
 
   /** Match sheet overlay visibility to the active sidebar panel (Draw / Measure / Issues / Takeoff). */
   useEffect(() => {
@@ -407,14 +405,6 @@ export function ViewerSidebar() {
   useEffect(() => {
     if (sidebarTab !== "takeoff" && takeoffMode) setTakeoffMode(false);
   }, [sidebarTab, takeoffMode, setTakeoffMode]);
-
-  useEffect(() => {
-    if (!viewerOperationsMode) return;
-    if (sidebarTab !== "takeoff") return;
-    setSidebarTab("issues");
-    setTakeoffMode(false);
-    setTakeoffInventoryDrawerFromSidebar(false);
-  }, [viewerOperationsMode, sidebarTab, setTakeoffMode, setTakeoffInventoryDrawerFromSidebar]);
 
   useEffect(() => {
     if (sidebarTab !== "takeoff") setTakeoffInventoryDrawerFromSidebar(false);
@@ -501,11 +491,7 @@ export function ViewerSidebar() {
             {pdfUrl ? (
               <div
                 className={`mt-1 grid gap-1 ${
-                  showProTabs
-                    ? showCollabTab || viewerOperationsMode
-                      ? "grid-cols-2"
-                      : "grid-cols-3"
-                    : "grid-cols-1"
+                  showProTabs ? (showCollabTab ? "grid-cols-2" : "grid-cols-3") : "grid-cols-1"
                 }`}
               >
                 {showProTabs ? (
@@ -525,23 +511,21 @@ export function ViewerSidebar() {
                       <ListChecks className="h-3.5 w-3.5" strokeWidth={1.75} />
                       {viewerOperationsMode ? "WO" : "Issues"}
                     </button>
-                    {!viewerOperationsMode ? (
-                      <button
-                        type="button"
-                        role="tab"
-                        aria-selected={sidebarTab === "takeoff"}
-                        onClick={() => {
-                          setSidebarTab("takeoff");
-                          setTakeoffMode(true);
-                          setTakeoffInventoryDrawerFromSidebar(true);
-                        }}
-                        title="Quantity takeoff"
-                        className={sidebarPanelTabClass(sidebarTab === "takeoff")}
-                      >
-                        <Package className="h-3.5 w-3.5" strokeWidth={1.75} />
-                        Takeoff
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={sidebarTab === "takeoff"}
+                      onClick={() => {
+                        setSidebarTab("takeoff");
+                        setTakeoffMode(true);
+                        setTakeoffInventoryDrawerFromSidebar(true);
+                      }}
+                      title="Quantity takeoff"
+                      className={sidebarPanelTabClass(sidebarTab === "takeoff")}
+                    >
+                      <Package className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      Takeoff
+                    </button>
                     <button
                       type="button"
                       role="tab"

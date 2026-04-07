@@ -17,6 +17,7 @@ export const qk = {
   rfiAttachmentReadUrl: (projectId: string, rfiId: string, attachmentId: string) =>
     ["rfiAttachmentReadUrl", projectId, rfiId, attachmentId] as const,
   projectPunch: (projectId: string) => ["projectPunch", projectId] as const,
+  projectPunchTemplates: (projectId: string) => ["projectPunchTemplates", projectId] as const,
   projectFieldReports: (projectId: string) => ["projectFieldReports", projectId] as const,
   /** Project audit log (opens, uploads, deletes, …) */
   projectAudit: (projectId: string) => ["project-audit", projectId] as const,

@@ -5,7 +5,18 @@
 export type TakeoffMeasurementType = "area" | "linear" | "count";
 
 /** Display / export unit label (user-facing). */
-export type TakeoffUnit = "m²" | "m" | "m³" | "mm²" | "mm" | "ft²" | "ft" | "ea" | "kg";
+export type TakeoffUnit =
+  | "m²"
+  | "m"
+  | "m³"
+  | "mm²"
+  | "mm"
+  | "mm³"
+  | "ft²"
+  | "ft"
+  | "ft³"
+  | "ea"
+  | "kg";
 
 export type TakeoffPackageStatus = "draft" | "checked" | "approved";
 
@@ -17,6 +28,8 @@ export type TakeoffItem = {
   measurementType: TakeoffMeasurementType;
   /** Linked workspace material catalog row (drives pricing when set). */
   materialId?: string | null;
+  /** Area: extrusion for volume (m³…). Linear: wall height — length × height → m²/mm²/ft² when those units are selected. */
+  heightMm?: number;
   /** Linear × factor → kg, etc. (optional) */
   linearFactor?: number;
   wastePercent?: number;
@@ -44,6 +57,8 @@ export type TakeoffZone = {
   notes?: string;
   tags?: string[];
   locked?: boolean;
+  /** Quantity entered manually (not from sheet geometry); nothing is drawn on the PDF. */
+  noSheetGeometry?: boolean;
   /** Zone tagged from Sheet AI (cleared with clearSheetAiFromDrawing). */
   fromSheetAi?: boolean;
   createdBy: string;

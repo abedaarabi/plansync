@@ -18,6 +18,7 @@
     "db:local:push": "node ./scripts/load-root-env-run-prisma.mjs db push && node ./scripts/seed-folder-templates.mjs",
     "db:local:studio": "node ./scripts/load-root-env-run-prisma.mjs studio",
     "db:local:migrate": "node ./scripts/load-root-env-run-prisma.mjs migrate dev && node ./scripts/seed-folder-templates.mjs",
+    "db:local:migrate:deploy": "node ./scripts/load-root-env-run-prisma.mjs migrate deploy && node ./scripts/seed-folder-templates.mjs",
     "db:repair-migration-drift": "node ./scripts/repair-migration-drift.mjs",
     "db:prod:generate": "cross-env PRISMA_SKIP_LOCAL=1 node ./scripts/load-root-env-run-prisma.mjs generate",
     "db:prod:push": "cross-env PRISMA_SKIP_LOCAL=1 node ./scripts/load-root-env-run-prisma.mjs db push && cross-env PRISMA_SKIP_LOCAL=1 node ./scripts/seed-folder-templates.mjs",

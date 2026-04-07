@@ -430,6 +430,8 @@ interface ViewerState {
   bumpSheetAiExpand: () => void;
   takeoffPendingGeometry: TakeoffPendingGeometry | null;
   takeoffSliderOpen: boolean;
+  /** True when adding a catalog-only line (no sheet geometry). */
+  takeoffSliderManualOnly: boolean;
   takeoffEditingZoneId: string | null;
   takeoffPackageStatus: TakeoffPackageStatus;
   setTakeoffPackageStatus: (s: TakeoffPackageStatus) => void;
@@ -463,6 +465,7 @@ interface ViewerState {
   openTakeoffSlider: (opts: {
     editZoneId?: string | null;
     pending?: TakeoffPendingGeometry | null;
+    manualLine?: boolean;
   }) => void;
   closeTakeoffSlider: () => void;
 }
@@ -537,6 +540,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   sheetAiExpandNonce: 0,
   takeoffPendingGeometry: null,
   takeoffSliderOpen: false,
+  takeoffSliderManualOnly: false,
   takeoffEditingZoneId: null,
   takeoffPackageStatus: "draft",
   takeoffSummaryOpen: false,
@@ -567,9 +571,10 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   bumpSheetAiExpand: () => set((s) => ({ sheetAiExpandNonce: s.sheetAiExpandNonce + 1 })),
   setTakeoffPendingGeometry: (takeoffPendingGeometry) => set({ takeoffPendingGeometry }),
 
-  openTakeoffSlider: ({ editZoneId, pending }) =>
+  openTakeoffSlider: ({ editZoneId, pending, manualLine }) =>
     set({
       takeoffSliderOpen: true,
+      takeoffSliderManualOnly: Boolean(manualLine),
       takeoffEditingZoneId: editZoneId ?? null,
       takeoffPendingGeometry: pending ?? null,
     }),
@@ -577,6 +582,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   closeTakeoffSlider: () =>
     set({
       takeoffSliderOpen: false,
+      takeoffSliderManualOnly: false,
       takeoffEditingZoneId: null,
       takeoffPendingGeometry: null,
     }),
@@ -654,6 +660,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
         ...(editingThisItem
           ? {
               takeoffSliderOpen: false,
+              takeoffSliderManualOnly: false,
               takeoffEditingZoneId: null,
               takeoffPendingGeometry: null,
             }
@@ -729,6 +736,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
         ...(state.takeoffEditingZoneId === id
           ? {
               takeoffSliderOpen: false,
+              takeoffSliderManualOnly: false,
               takeoffEditingZoneId: null,
               takeoffPendingGeometry: null,
             }
@@ -778,6 +786,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       ...(editingRemoved
         ? {
             takeoffSliderOpen: false,
+            takeoffSliderManualOnly: false,
             takeoffEditingZoneId: null,
             takeoffPendingGeometry: null,
           }
@@ -951,6 +960,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       sheetAiExpandNonce: 0,
       takeoffPendingGeometry: null,
       takeoffSliderOpen: false,
+      takeoffSliderManualOnly: false,
       takeoffEditingZoneId: null,
       takeoffPackageStatus: "draft",
       takeoffSummaryOpen: false,
@@ -1303,6 +1313,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       sheetAiExpandNonce: 0,
       takeoffPendingGeometry: null,
       takeoffSliderOpen: false,
+      takeoffSliderManualOnly: false,
       takeoffEditingZoneId: null,
       takeoffPackageStatus: "draft",
       takeoffSummaryOpen: false,
@@ -1353,6 +1364,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       sheetAiExpandNonce: 0,
       takeoffPendingGeometry: null,
       takeoffSliderOpen: false,
+      takeoffSliderManualOnly: false,
       takeoffEditingZoneId: null,
       takeoffPackageStatus: "draft",
       takeoffSummaryOpen: false,

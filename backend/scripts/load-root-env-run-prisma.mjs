@@ -1,7 +1,9 @@
 /**
  * Load monorepo env then run Prisma.
- * Order: repo `.env` → `.env.prod` → `backend/.env` → optional `.env.local` (unless PRISMA_SKIP_LOCAL=1).
- * `db:prod:*` scripts set PRISMA_SKIP_LOCAL so DATABASE_URL comes from `.env` / `.env.prod` only (e.g. CI / remote DB).
+ * Source of truth:
+ * - local: `.env.local`
+ * - production: `.env.prod`
+ * `db:prod:*` scripts set PRISMA_SKIP_LOCAL so `.env.local` is ignored.
  */
 import { config } from "dotenv";
 import { dirname, resolve } from "node:path";
@@ -14,9 +16,8 @@ const repoRoot = resolve(backendRoot, "..");
 
 const skipLocal = process.env.PRISMA_SKIP_LOCAL === "1" || process.env.PRISMA_SKIP_LOCAL === "true";
 
-config({ path: resolve(repoRoot, ".env") });
-config({ path: resolve(repoRoot, ".env.prod") });
-config({ path: resolve(backendRoot, ".env") });
+// Always override shell-exported values so script-controlled precedence is deterministic.
+config({ path: resolve(repoRoot, ".env.prod"), override: true });
 if (!skipLocal) {
   config({ path: resolve(repoRoot, ".env.local"), override: true });
 }

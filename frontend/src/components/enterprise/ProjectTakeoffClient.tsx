@@ -13,13 +13,12 @@ import {
   Plus,
   Ruler,
   Search,
-  Tag,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import {
-  createMaterial,
+  createProjectTakeoffLineFromMaterial,
   deleteTakeoffLine,
   fetchMaterials,
   fetchProject,
@@ -29,7 +28,7 @@ import {
   type ProjectMeta,
   type TakeoffLineRow,
   ProRequiredError,
-  viewerHrefForCloudRevision,
+  viewerHrefForTakeoffLine,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { PROJECT_TAKEOFF_INVALIDATE_CHANNEL } from "@/lib/takeoffPublishCloud";
@@ -81,12 +80,7 @@ export function ProjectTakeoffClient({
   const takeoffKey = qk.takeoffForProject(projectId);
   const [projectDiscountPct, setProjectDiscountPct] = useState("0");
   const [itemDiscountPctByKey, setItemDiscountPctByKey] = useState<Record<string, string>>({});
-  const [materialType, setMaterialType] = useState("");
-  const [materialName, setMaterialName] = useState("");
-  const [materialUnit, setMaterialUnit] = useState("ea");
-  const [materialPrice, setMaterialPrice] = useState("");
-  const [materialCurrency, setMaterialCurrency] = useState("USD");
-  const materialCurrencySyncedFor = useRef<string | null>(null);
+  const [materialHubSearch, setMaterialHubSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [lineSearch, setLineSearch] = useState("");
   const takeoffDiscountsBaselineRef = useRef<string | null>(null);
@@ -164,15 +158,6 @@ export function ProjectTakeoffClient({
     return () => window.clearTimeout(t);
   }, [discountsSerialized, project?.id, projectId, projectDiscountPct, itemDiscountPctByKey, qc]);
 
-  useEffect(() => {
-    if (!project?.id) return;
-    if (materialCurrencySyncedFor.current === project.id) return;
-    const c = project.currency;
-    if (typeof c === "string" && c.trim().length === 3) {
-      setMaterialCurrency(c.trim().toUpperCase());
-    }
-    materialCurrencySyncedFor.current = project.id;
-  }, [project?.currency, project?.id]);
   const projectFilesHref = `/projects/${projectId}/files`;
 
   useEffect(() => {
@@ -180,11 +165,24 @@ export function ProjectTakeoffClient({
       router.replace(`/workspaces/${workspaceId}/projects/${projectId}/takeoff`);
     }
   }, [pathname, projectId, router, workspaceId, workspaceIdProp]);
-  useQuery({
+  const {
+    data: hubMaterials = [],
+    isPending: hubMaterialsLoading,
+    isError: hubMaterialsError,
+  } = useQuery({
     queryKey: qk.materials(workspaceId ?? ""),
     queryFn: () => fetchMaterials(workspaceId!),
     enabled: Boolean(workspaceId),
   });
+
+  const filteredHubMaterials = useMemo(() => {
+    const q = materialHubSearch.trim().toLowerCase();
+    if (!q) return hubMaterials;
+    return hubMaterials.filter((m) => {
+      const hay = `${m.category.name} ${m.name} ${m.sku ?? ""} ${m.unit}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [hubMaterials, materialHubSearch]);
 
   const patchMut = useMutation({
     mutationFn: (vars: { id: string; quantity: string }) =>
@@ -203,35 +201,24 @@ export function ProjectTakeoffClient({
       toast.error(e instanceof ProRequiredError ? "Pro subscription required." : e.message),
   });
 
-  const addMaterialMut = useMutation({
-    mutationFn: async () => {
-      if (!workspaceId) throw new Error("Workspace not loaded.");
-      if (!materialType.trim() || !materialName.trim()) {
-        throw new Error("Material type and name are required.");
-      }
-      return createMaterial(workspaceId, {
-        materialType: materialType.trim(),
-        name: materialName.trim(),
-        unit: materialUnit.trim() || "ea",
-        unitPrice: materialPrice.trim() || null,
-        currency: materialCurrency.trim() || "USD",
-      });
-    },
+  const addCatalogToCostingMut = useMutation({
+    mutationFn: (materialId: string) =>
+      createProjectTakeoffLineFromMaterial(projectId, { materialId, quantity: 1 }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: qk.materials(workspaceId ?? "") });
-      setMaterialType("");
-      setMaterialName("");
-      setMaterialUnit("ea");
-      setMaterialPrice("");
-      const pm = qc.getQueryData<ProjectMeta>(qk.project(projectId));
-      const cur =
-        pm?.currency && String(pm.currency).trim().length === 3
-          ? String(pm.currency).trim().toUpperCase()
-          : "USD";
-      setMaterialCurrency(cur);
-      toast.success("Material added to workspace catalog.");
+      void qc.invalidateQueries({ queryKey: takeoffKey });
+      if (typeof BroadcastChannel !== "undefined") {
+        try {
+          const bc = new BroadcastChannel(PROJECT_TAKEOFF_INVALIDATE_CHANNEL);
+          bc.postMessage({ projectId });
+          bc.close();
+        } catch {
+          /* ignore */
+        }
+      }
+      toast.success("Material added to takeoff and costing");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) =>
+      toast.error(e instanceof ProRequiredError ? "Pro subscription required." : e.message),
   });
 
   const allTags = useMemo(() => {
@@ -253,7 +240,12 @@ export function ProjectTakeoffClient({
     const q = lineSearch.trim().toLowerCase();
     if (!q) return visibleLines;
     return visibleLines.filter((r) => {
-      const item = r.material ? `${r.material.categoryName} ${r.material.name}` : r.label || "";
+      const item = [
+        r.label?.trim(),
+        r.material ? `${r.material.categoryName} ${r.material.name}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
       const blob = [
         r.fileName,
         String(r.fileVersion),
@@ -315,9 +307,9 @@ export function ProjectTakeoffClient({
       } else {
         map.set(key, {
           key,
-          label: row.material
-            ? `${row.material.categoryName} — ${row.material.name}`
-            : row.label || "Item",
+          label:
+            row.label?.trim() ||
+            (row.material ? `${row.material.categoryName} — ${row.material.name}` : "Item"),
           unit: row.unit,
           qty,
           rate,
@@ -373,7 +365,13 @@ export function ProjectTakeoffClient({
       [
         r.fileName,
         String(r.fileVersion),
-        r.material ? `${r.material.categoryName} — ${r.material.name}` : r.label,
+        r.label?.trim()
+          ? r.material
+            ? `${r.label.trim()} (${r.material.categoryName} — ${r.material.name})`
+            : r.label.trim()
+          : r.material
+            ? `${r.material.categoryName} — ${r.material.name}`
+            : r.label || "",
         r.quantity,
         r.unit,
         r.material?.unitPrice ?? "",
@@ -421,14 +419,6 @@ export function ProjectTakeoffClient({
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:shrink-0">
-            <Link
-              href={workspaceId ? `/workspaces/${workspaceId}/materials` : "#"}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2.5 text-sm font-semibold text-[#0F172A] shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition hover:border-[#CBD5E1] hover:bg-white"
-            >
-              <Package className="h-4 w-4 text-[#2563EB]" strokeWidth={1.75} />
-              Materials library
-              <ExternalLink className="h-3.5 w-3.5 text-[#94A3B8]" aria-hidden />
-            </Link>
             <button
               type="button"
               onClick={exportCsv}
@@ -443,63 +433,113 @@ export function ProjectTakeoffClient({
       </header>
 
       <div className="rounded-xl border border-[#E2E8F0] bg-white p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Tag className="h-4 w-4 text-[#2563EB]" />
-          <h2 className="text-sm font-semibold text-[#0F172A]">Quick add material</h2>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-5">
-          <input
-            value={materialType}
-            onChange={(e) => setMaterialType(e.target.value)}
-            placeholder="Type"
-            className="rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
-            spellCheck={false}
-            suppressHydrationWarning
-          />
-          <input
-            value={materialName}
-            onChange={(e) => setMaterialName(e.target.value)}
-            placeholder="Material name"
-            className="rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
-            spellCheck={false}
-            suppressHydrationWarning
-          />
-          <input
-            value={materialUnit}
-            onChange={(e) => setMaterialUnit(e.target.value)}
-            placeholder="Unit"
-            className="rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
-            spellCheck={false}
-            suppressHydrationWarning
-          />
-          <input
-            value={materialPrice}
-            onChange={(e) => setMaterialPrice(e.target.value)}
-            placeholder="Unit price"
-            className="rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
-            spellCheck={false}
-            suppressHydrationWarning
-          />
-          <div className="flex gap-2">
-            <input
-              value={materialCurrency}
-              onChange={(e) => setMaterialCurrency(e.target.value.toUpperCase())}
-              placeholder="USD"
-              className="w-20 rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
-              spellCheck={false}
-              suppressHydrationWarning
-            />
-            <button
-              type="button"
-              onClick={() => addMaterialMut.mutate()}
-              disabled={addMaterialMut.isPending}
-              className="inline-flex flex-1 items-center justify-center gap-1 rounded-md bg-[#2563EB] px-3 py-2 text-sm font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-40"
-            >
-              <Plus className="h-4 w-4" />
-              Add
-            </button>
+        <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-2">
+            <Package className="mt-0.5 h-4 w-4 shrink-0 text-[#2563EB]" strokeWidth={1.75} />
+            <div>
+              <h2 className="text-sm font-semibold text-[#0F172A]">Browse workspace materials</h2>
+              <p className="mt-0.5 text-xs leading-relaxed text-[#64748B]">
+                Search your workspace catalog. Use{" "}
+                <strong className="font-medium text-[#334155]">Add to costing</strong> to put a
+                material on the takeoff list and into{" "}
+                <strong className="font-medium text-[#334155]">Costing and discounts</strong>{" "}
+                (default quantity 1 — edit qty in the table below). The project needs at least one
+                uploaded file so lines can be stored.
+              </p>
+            </div>
           </div>
         </div>
+        {!workspaceId ? (
+          <p className="text-sm text-[#64748B]">Loading workspace…</p>
+        ) : hubMaterialsLoading ? (
+          <div className="flex items-center gap-2 py-6 text-sm text-[#64748B]">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Loading materials from library…
+          </div>
+        ) : hubMaterialsError ? (
+          <p className="text-sm text-red-700">
+            Could not load materials. Refresh the page or check your connection.
+          </p>
+        ) : (
+          <>
+            <div className="relative mb-2">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94A3B8]"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <input
+                type="search"
+                value={materialHubSearch}
+                onChange={(e) => setMaterialHubSearch(e.target.value)}
+                placeholder="Search name, type, SKU, unit…"
+                className="w-full rounded-md border border-[#E2E8F0] py-2 pl-9 pr-3 text-sm"
+                spellCheck={false}
+                autoComplete="off"
+                aria-label="Search materials library"
+              />
+            </div>
+            {hubMaterials.length === 0 ? (
+              <p className="rounded-md border border-dashed border-[#E2E8F0] bg-[#F8FAFC] px-3 py-4 text-sm text-[#64748B]">
+                No materials in this workspace yet. Ask a workspace admin to add items to the
+                catalog.
+              </p>
+            ) : (
+              <>
+                <ul
+                  className="max-h-56 divide-y divide-[#F1F5F9] overflow-y-auto rounded-md border border-[#E2E8F0] [scrollbar-width:thin]"
+                  aria-label="Workspace materials"
+                >
+                  {filteredHubMaterials.slice(0, 100).map((m) => (
+                    <li
+                      key={m.id}
+                      className="flex flex-col gap-2 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-[#0F172A]">{m.name}</p>
+                        <p className="truncate text-xs text-[#64748B]">
+                          {m.category.name}
+                          {m.sku ? ` · ${m.sku}` : ""}
+                        </p>
+                        <p className="mt-0.5 text-xs tabular-nums text-[#334155]">
+                          <span className="text-[#64748B]">{m.unit}</span>
+                          {m.unitPrice != null && m.unitPrice !== "" ? (
+                            <>
+                              {" "}
+                              · {m.currency} {m.unitPrice}
+                            </>
+                          ) : null}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={addCatalogToCostingMut.isPending}
+                        onClick={() => addCatalogToCostingMut.mutate(m.id)}
+                        className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#2563EB] bg-[#EFF6FF] px-3 py-2 text-xs font-semibold text-[#1D4ED8] transition hover:bg-[#DBEAFE] disabled:opacity-50"
+                      >
+                        {addCatalogToCostingMut.isPending &&
+                        addCatalogToCostingMut.variables === m.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                        ) : (
+                          <Plus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                        )}
+                        Add to costing
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {filteredHubMaterials.length > 100 ? (
+                  <p className="mt-2 text-xs text-[#64748B]">
+                    Showing 100 of {filteredHubMaterials.length}. Refine your search to find more.
+                  </p>
+                ) : null}
+                {filteredHubMaterials.length === 0 && hubMaterials.length > 0 ? (
+                  <p className="mt-2 text-sm text-[#64748B]">No matches — try another search.</p>
+                ) : null}
+              </>
+            )}
+          </>
+        )}
       </div>
 
       <div className="rounded-xl border border-[#E2E8F0] bg-white p-4">
@@ -800,19 +840,22 @@ export function ProjectTakeoffClient({
                         <span className="line-clamp-2">{row.notes || "—"}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <Link
-                          href={viewerHrefForCloudRevision({
-                            fileId: row.fileId,
-                            fileName: row.fileName,
-                            projectId: row.projectId,
-                            fileVersionId: row.fileVersionId,
-                            version: row.fileVersion,
-                          })}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:underline"
-                        >
-                          Open
-                          <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-                        </Link>
+                        {row.sourceZoneId?.trim() ? (
+                          <Link
+                            href={viewerHrefForTakeoffLine(row)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:underline"
+                          >
+                            Open
+                            <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
+                          </Link>
+                        ) : (
+                          <span
+                            className="inline-block rounded-md border border-[#E2E8F0] bg-[#F8FAFC] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#64748B]"
+                            title="Added from the takeoff page catalog — not linked to a shape on a sheet"
+                          >
+                            Added manually
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <button

@@ -56,8 +56,10 @@ function displayUnit(u: TakeoffUnit): string {
     "m³": "M3",
     "mm²": "MM2",
     mm: "MM",
+    "mm³": "MM3",
     "ft²": "FT2",
     ft: "FT",
+    "ft³": "FT3",
     ea: "EA",
     kg: "KG",
   };
@@ -155,6 +157,9 @@ export function TakeoffInventoryPanel() {
   const takeoffUndoLastZoneDeletion = useViewerStore((s) => s.takeoffUndoLastZoneDeletion);
   const requestSearchFocus = useViewerStore((s) => s.requestSearchFocus);
   const openTakeoffSlider = useViewerStore((s) => s.openTakeoffSlider);
+  const bumpTakeoffInventoryExpand = useViewerStore((s) => s.bumpTakeoffInventoryExpand);
+  const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
+  const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
   const setTool = useViewerStore((s) => s.setTool);
   const setTakeoffMode = useViewerStore((s) => s.setTakeoffMode);
 
@@ -470,6 +475,9 @@ export function TakeoffInventoryPanel() {
                   {displayUnit(item.unit)}
                 </span>
                 <span className="ml-1 text-[#64748b]">p.{z.pageIndex + 1}</span>
+                {z.noSheetGeometry ? (
+                  <span className="ml-1 text-[9px] font-medium text-violet-300">Manual</span>
+                ) : null}
                 {z.locked ? (
                   <span className="ml-1 text-[9px] font-medium text-amber-400">Locked</span>
                 ) : null}
@@ -770,6 +778,25 @@ export function TakeoffInventoryPanel() {
               Select all lines
             </button>
           )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={!cloudFileVersionId || !viewerProjectId}
+            title={
+              !cloudFileVersionId || !viewerProjectId
+                ? "Open a project sheet to add catalog lines"
+                : "Add quantity from the material library without drawing on the PDF"
+            }
+            onClick={() => {
+              openTakeoffSlider({ manualLine: true });
+              bumpTakeoffInventoryExpand();
+            }}
+            className="viewer-focus-ring inline-flex items-center gap-1 rounded-md border border-emerald-500/45 bg-emerald-950/35 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-100 hover:bg-emerald-950/55 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+            Add from material
+          </button>
         </div>
         {zoneBulkCount > 0 ? (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-sky-500/30 bg-sky-950/25 px-2 py-1.5">

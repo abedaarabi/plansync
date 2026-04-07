@@ -114,6 +114,88 @@ export function registerTakeoffRoutes(r: Hono, needUser: MiddlewareHandler) {
     return c.json(rows.map(takeoffRowJson));
   });
 
+  /** Catalog line: attach a workspace material to project takeoff (uses latest file revision in project as anchor). */
+  r.post("/projects/:projectId/takeoff-lines", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const access = await loadProjectForMember(projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const gate = requirePro(access.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const body = z
+      .object({
+        materialId: z.string(),
+        quantity: z.union([z.number(), z.string()]).optional(),
+        label: z.string().optional(),
+        unit: z.string().optional(),
+        notes: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      })
+      .safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    const wsId = access.project.workspaceId;
+    const mat = await prisma.material.findFirst({
+      where: { id: body.data.materialId, workspaceId: wsId },
+      include: { category: { select: { name: true } } },
+    });
+    if (!mat) return c.json({ error: "Material not found" }, 400);
+
+    const fv = await prisma.fileVersion.findFirst({
+      where: { file: { projectId } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, fileId: true },
+    });
+    if (!fv) {
+      return c.json(
+        {
+          error:
+            "Add at least one drawing or file to this project before adding catalog lines to takeoff.",
+        },
+        400,
+      );
+    }
+
+    if (await fileVersionWriteBlocked(fv.id, c.get("user").id)) {
+      return c.json(
+        {
+          error:
+            "The latest sheet revision is locked by another user. Try again in a moment or upload a new revision.",
+        },
+        409,
+      );
+    }
+
+    const qtyRaw =
+      body.data.quantity !== undefined
+        ? typeof body.data.quantity === "number"
+          ? body.data.quantity
+          : Number(body.data.quantity)
+        : 1;
+    if (!Number.isFinite(qtyRaw)) return c.json({ error: "Invalid quantity" }, 400);
+
+    const tags = body.data.tags?.map((t) => t.trim()).filter(Boolean) ?? [];
+
+    const defaultCatalogLabel = `Catalog · ${mat.category.name} — ${mat.name}`;
+    const row = await prisma.takeoffLine.create({
+      data: {
+        workspaceId: wsId,
+        projectId,
+        fileId: fv.fileId,
+        fileVersionId: fv.id,
+        materialId: mat.id,
+        label: body.data.label?.trim() || defaultCatalogLabel,
+        quantity: new Prisma.Decimal(qtyRaw),
+        unit: body.data.unit?.trim() || mat.unit || "ea",
+        notes: body.data.notes?.trim() || null,
+        sourceZoneId: null,
+        tags,
+      },
+      include: takeoffInclude,
+    });
+    return c.json(takeoffRowJson(row));
+  });
+
   r.post("/file-versions/:fileVersionId/takeoff-lines", needUser, async (c) => {
     const fileVersionId = c.req.param("fileVersionId")!;
     const body = z
