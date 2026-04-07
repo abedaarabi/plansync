@@ -32,6 +32,7 @@ import {
 import { DEFAULT_ENTERPRISE_PRIMARY_HEX } from "@/lib/enterpriseTheme";
 import { qk } from "@/lib/queryKeys";
 import { userInitials } from "@/lib/user-initials";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import Link from "next/link";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -123,7 +124,7 @@ export function EnterpriseTopBar({
   const activeWs = workspaceFromPath ?? primary?.workspace;
   const wid = activeWs?.id;
   const workspaceNameForAria = activeWs?.name?.trim() || "PlanSync";
-  const isPro = activeWs?.subscriptionStatus === "active";
+  const isPro = isWorkspaceProClient(activeWs?.subscriptionStatus);
 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifWrapRef = useRef<HTMLDivElement>(null);

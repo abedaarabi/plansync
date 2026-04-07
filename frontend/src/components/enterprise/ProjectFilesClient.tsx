@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { fetchProjects } from "@/lib/api-client";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import {
   addFolderToProjectCache,
   moveFileInProjectCache,
@@ -64,7 +65,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = primary?.workspace.subscriptionStatus === "active";
+  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
 
   const { data: projects = [], isPending } = useQuery({
     queryKey: qk.projects(wid ?? ""),

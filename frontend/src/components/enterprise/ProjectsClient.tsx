@@ -42,6 +42,7 @@ import type { ProjectStageValue } from "@/lib/projectStage";
 import type { ProjectCurrencyCode } from "@/lib/projectCurrency";
 import type { ProjectMeasurementSystem } from "@/lib/projectMeasurement";
 import type { CloudFile, FileVersion, Folder as ProjectFolder, Project } from "@/types/projects";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
 import {
@@ -103,7 +104,7 @@ export function ProjectsClient() {
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
   const isAdmin = primary?.role === "ADMIN" || primary?.role === "SUPER_ADMIN";
-  const isPro = primary?.workspace.subscriptionStatus === "active";
+  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
 
   const {
     data: projects = [],

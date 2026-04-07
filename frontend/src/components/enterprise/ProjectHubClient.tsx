@@ -39,6 +39,7 @@ import { ProjectProgressBar } from "./ProjectProgressBar";
 import { ProjectStageBadge } from "./ProjectStageBadge";
 import { ProjectTypeChip } from "./ProjectTypeChip";
 import type { Project } from "@/types/projects";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -71,7 +72,7 @@ export function ProjectHubClient() {
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
   const isAdmin = primary?.role === "ADMIN" || primary?.role === "SUPER_ADMIN";
-  const isPro = primary?.workspace.subscriptionStatus === "active";
+  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
   const sub = primary?.workspace.subscriptionStatus;
 
   const { data: projects = [], isPending: projectsPending } = useQuery({

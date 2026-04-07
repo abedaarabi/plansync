@@ -9,6 +9,7 @@ import {
   LAST_PROJECT_STORAGE_KEY,
 } from "@/lib/lastProject";
 import { qk } from "@/lib/queryKeys";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 
 export type ProjectToolSegment = "rfi" | "punch" | "reports";
@@ -16,7 +17,7 @@ export type ProjectToolSegment = "rfi" | "punch" | "reports";
 export function useProjectNavHref() {
   const { primary } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = primary?.workspace.subscriptionStatus === "active";
+  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
   const { data: projects = [] } = useQuery({
     queryKey: qk.projects(wid ?? ""),
     queryFn: () => fetchProjects(wid!),

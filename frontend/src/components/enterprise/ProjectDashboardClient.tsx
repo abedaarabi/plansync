@@ -41,6 +41,7 @@ import { ProjectLocationMap } from "./ProjectLocationMap";
 import { ProjectWeatherAtLocation } from "./ProjectWeatherAtLocation";
 import { ProjectEditSlideOver } from "./ProjectEditSlideOver";
 import { useTickNowMs } from "@/lib/useTickNowMs";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 
 function sortedFileVersions(f: CloudFile) {
   return [...f.versions].sort((a, b) => b.version - a.version);
@@ -97,7 +98,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
   const nowMs = useTickNowMs();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = primary?.workspace.subscriptionStatus === "active";
+  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
 
   const { data: projects = [], isPending: projPending } = useQuery({
     queryKey: qk.projects(wid ?? ""),

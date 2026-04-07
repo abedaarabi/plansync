@@ -48,6 +48,7 @@ import {
 } from "@/lib/issueStatusStyle";
 import { qk } from "@/lib/queryKeys";
 import { useTickNowMs } from "@/lib/useTickNowMs";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import type { CloudFile, Folder, Project } from "@/types/projects";
 
 type StatusFilter = "ALL" | "OPEN" | "IN_REVIEW" | "ANSWERED" | "CLOSED" | "OVERDUE";
@@ -189,7 +190,7 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = primary?.workspace.subscriptionStatus === "active";
+  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
 
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [sort, setSort] = useState<SortKey>("newest");

@@ -62,7 +62,9 @@ export function DashboardClient() {
   const { data: projects = [] } = useQuery({
     queryKey: qk.projects(wid ?? ""),
     queryFn: () => fetchProjects(wid!),
-    enabled: Boolean(wid && me?.workspaces?.[0]?.workspace.subscriptionStatus === "active"),
+    enabled: Boolean(
+      wid && isWorkspaceProClient(me?.workspaces?.[0]?.workspace.subscriptionStatus),
+    ),
   });
 
   const { data: membersData } = useQuery({

@@ -625,6 +625,9 @@ export function v1Routes(
         name: body.data.name,
         slug,
         storageQuotaBytes: DEFAULT_STORAGE_QUOTA_BYTES,
+        // Every new workspace starts with a 14-day full Pro trial.
+        subscriptionStatus: "trialing",
+        currentPeriodEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
         members: {
           create: { userId: c.get("user").id, role: WorkspaceRole.SUPER_ADMIN },
         },
