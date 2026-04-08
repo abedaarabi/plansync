@@ -406,7 +406,9 @@ export function LandingPage() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2.5" aria-label="PlanSync home">
             <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 shrink-0" />
-            <span className="text-base font-bold tracking-tight text-slate-900">PlanSync</span>
+            <span className="text-base font-bold tracking-tight text-slate-900">
+              Plan<span className="text-blue-600">Sync</span>
+            </span>
           </Link>
 
           {/* Desktop links */}

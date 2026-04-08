@@ -768,22 +768,22 @@ model OccupantPortalToken {
 
 /// Quantity takeoff line for a specific sheet revision (Pro).
 model TakeoffLine {
-  id            String   @id @default(cuid())
-  workspaceId   String
-  projectId     String
-  fileId        String
-  fileVersionId String
-  materialId    String?
-  label         String   @default("")
-  quantity      Decimal  @db.Decimal(19, 4)
-  unit          String   @default("ea")
-  notes         String?
-  sourceType    String   @default("zone")
+  id                        String   @id @default(cuid())
+  workspaceId               String
+  projectId                 String
+  fileId                    String
+  fileVersionId             String
+  materialId                String?
+  label                     String   @default("")
+  quantity                  Decimal  @db.Decimal(19, 4)
+  unit                      String   @default("ea")
+  notes                     String?
+  sourceType                String   @default("zone")
   /// Source file version at time of creation, used for mismatch warnings when revisions move.
   sourceFileVersionAtCreate Int?
   /// Viewer zone id for upsert when publishing quantities from the sheet.
-  sourceZoneId  String?
-  tags          String[] @default([])
+  sourceZoneId              String?
+  tags                      String[] @default([])
 
   workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -803,7 +803,7 @@ model TakeoffLine {
 
 /// Saved per-user view state for takeoff table (filters, columns, sort, search).
 model TakeoffViewPreset {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   workspaceId String
   projectId   String
   userId      String
@@ -818,25 +818,25 @@ model TakeoffViewPreset {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([projectId, userId, name])
   @@index([workspaceId])
   @@index([projectId, userId])
-  @@unique([projectId, userId, name])
 }
 
 /// Audit trail for drawing -> takeoff sync runs.
 model TakeoffSyncRun {
-  id          String @id @default(cuid())
-  workspaceId String
-  projectId   String
-  userId      String
-  mode        String
-  startedAt   DateTime @default(now())
-  finishedAt  DateTime?
-  addedCount  Int      @default(0)
-  updatedCount Int     @default(0)
-  removedCount Int     @default(0)
-  sourceFileVersionIds String[] @default([])
-  summaryJson Json?
+  id                   String    @id @default(cuid())
+  workspaceId          String
+  projectId            String
+  userId               String
+  mode                 String
+  startedAt            DateTime  @default(now())
+  finishedAt           DateTime?
+  addedCount           Int       @default(0)
+  updatedCount         Int       @default(0)
+  removedCount         Int       @default(0)
+  sourceFileVersionIds String[]  @default([])
+  summaryJson          Json?
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
