@@ -45,6 +45,9 @@ model User {
   punchHistoryActions     PunchItemHistory[]
   inspectionRunsSignedOff InspectionRun[]          @relation("InspectionRunSignedOff")
   inspectionRunsCreated   InspectionRun[]          @relation("InspectionRunCreated")
+  takeoffViewPresets      TakeoffViewPreset[]
+  takeoffSyncRuns         TakeoffSyncRun[]
+  takeoffSnapshots        TakeoffSnapshot[]
 
   /// When true, omit this user from PDF viewer presence / collaborator lists (still can edit).
   hideViewerPresence Boolean @default(false)
@@ -150,17 +153,20 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members      WorkspaceMember[]
-  invites      WorkspaceInvite[]
-  emailInvites EmailInvite[]
-  projects     Project[]
-  activity     ActivityLog[]
-  issues       Issue[]
+  members        WorkspaceMember[]
+  invites        WorkspaceInvite[]
+  emailInvites   EmailInvite[]
+  projects       Project[]
+  activity       ActivityLog[]
+  issues         Issue[]
   punchTemplates PunchTemplate[]
 
   materialCategories MaterialCategory[]
   materials          Material[]
   takeoffLines       TakeoffLine[]
+  takeoffViewPresets TakeoffViewPreset[]
+  takeoffSyncRuns    TakeoffSyncRun[]
+  takeoffSnapshots   TakeoffSnapshot[]
   userNotifications  UserNotification[]
   proposalTemplates  ProposalTemplate[]
   proposals          Proposal[]
@@ -404,6 +410,9 @@ model Project {
   files                File[]
   issues               Issue[]
   takeoffLines         TakeoffLine[]
+  takeoffViewPresets   TakeoffViewPreset[]
+  takeoffSyncRuns      TakeoffSyncRun[]
+  takeoffSnapshots     TakeoffSnapshot[]
   rfis                 Rfi[]
   punchItems           PunchItem[]
   punchTemplates       PunchTemplate[]
@@ -769,6 +778,9 @@ model TakeoffLine {
   quantity      Decimal  @db.Decimal(19, 4)
   unit          String   @default("ea")
   notes         String?
+  sourceType    String   @default("zone")
+  /// Source file version at time of creation, used for mismatch warnings when revisions move.
+  sourceFileVersionAtCreate Int?
   /// Viewer zone id for upsert when publishing quantities from the sheet.
   sourceZoneId  String?
   tags          String[] @default([])
@@ -787,6 +799,73 @@ model TakeoffLine {
   @@index([projectId])
   @@index([fileId])
   @@index([fileVersionId])
+}
+
+/// Saved per-user view state for takeoff table (filters, columns, sort, search).
+model TakeoffViewPreset {
+  id          String @id @default(cuid())
+  workspaceId String
+  projectId   String
+  userId      String
+  name        String
+  isDefault   Boolean @default(false)
+  configJson  Json
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([projectId, userId])
+  @@unique([projectId, userId, name])
+}
+
+/// Audit trail for drawing -> takeoff sync runs.
+model TakeoffSyncRun {
+  id          String @id @default(cuid())
+  workspaceId String
+  projectId   String
+  userId      String
+  mode        String
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  addedCount  Int      @default(0)
+  updatedCount Int     @default(0)
+  removedCount Int     @default(0)
+  sourceFileVersionIds String[] @default([])
+  summaryJson Json?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([projectId, createdAt])
+}
+
+/// Undo checkpoints for destructive takeoff operations (replace sync, bulk delete).
+model TakeoffSnapshot {
+  id          String @id @default(cuid())
+  workspaceId String
+  projectId   String
+  userId      String
+  reason      String
+  payloadJson Json
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([projectId, createdAt])
 }
 
 enum RfiStatus {
@@ -918,24 +997,24 @@ enum PunchStatus {
 }
 
 model PunchItem {
-  id         String        @id @default(cuid())
-  projectId  String
-  project    Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title      String        @default("Punch item")
-  location   String
-  trade      String
-  priority   PunchPriority @default(P2)
-  status     PunchStatus   @default(OPEN)
-  notes      String?
-  dueDate    DateTime?
+  id          String             @id @default(cuid())
+  projectId   String
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String             @default("Punch item")
+  location    String
+  trade       String
+  priority    PunchPriority      @default(P2)
+  status      PunchStatus        @default(OPEN)
+  notes       String?
+  dueDate     DateTime?
   completedAt DateTime?
-  assigneeId String?
-  assignee   User?         @relation("PunchAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  templateId String?
-  template   PunchTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  history    PunchItemHistory[]
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  assigneeId  String?
+  assignee    User?              @relation("PunchAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  templateId  String?
+  template    PunchTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  history     PunchItemHistory[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   @@index([projectId])
   @@index([assigneeId])
@@ -945,34 +1024,34 @@ model PunchItem {
 }
 
 model PunchTemplate {
-  id          String    @id @default(cuid())
+  id          String      @id @default(cuid())
   workspaceId String
   projectId   String?
   name        String
   description String?
-  itemsJson   Json      @default("[]")
-  isArchived  Boolean   @default(false)
+  itemsJson   Json        @default("[]")
+  isArchived  Boolean     @default(false)
   createdById String?
-  createdBy   User?     @relation("PunchTemplateCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User?       @relation("PunchTemplateCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   punchItems  PunchItem[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   @@index([workspaceId])
   @@index([projectId])
 }
 
 model PunchItemHistory {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   punchItemId String
   action      String
   metadata    Json?
   actorUserId String?
-  actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actor       User?     @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
   punchItem   PunchItem @relation(fields: [punchItemId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([punchItemId, createdAt])
 }

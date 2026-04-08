@@ -2094,6 +2094,10 @@ export type TakeoffLineRow = {
   quantity: string;
   unit: string;
   notes: string | null;
+  sourceType?: string;
+  sourceFileVersionAtCreate?: number | null;
+  revisionMismatch?: boolean;
+  latestFileVersion?: number;
   sourceZoneId: string | null;
   tags: string[];
   createdAt: string;
@@ -2106,6 +2110,53 @@ export type TakeoffLineRow = {
     currency: string;
     categoryName: string;
   } | null;
+};
+
+export type TakeoffSyncPreview = {
+  mode: "merge" | "replace";
+  sourceFileVersionIds: string[];
+  counts: { added: number; updated: number; removed: number };
+  sample?: {
+    added?: Array<Record<string, unknown>>;
+    updated?: Array<Record<string, unknown>>;
+  };
+};
+
+export type TakeoffSyncApplyResult = {
+  ok: boolean;
+  syncRunId: string;
+  snapshotId?: string;
+  counts: { added: number; updated: number; removed: number };
+};
+
+export type TakeoffSyncHistoryRow = {
+  id: string;
+  mode: string;
+  addedCount: number;
+  updatedCount: number;
+  removedCount: number;
+  startedAt: string;
+  finishedAt: string | null;
+  createdAt: string;
+  actor: { id: string; name: string; email: string };
+};
+
+export type TakeoffSnapshotRow = {
+  id: string;
+  reason: string;
+  createdAt: string;
+};
+
+export type TakeoffViewPresetRow = {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  userId: string;
+  name: string;
+  isDefault: boolean;
+  configJson: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export async function fetchTakeoffLinesForFileVersion(
@@ -2130,6 +2181,166 @@ export async function fetchTakeoffLinesForProject(projectId: string): Promise<Ta
   if (res.status === 402) throw new ProRequiredError();
   if (!res.ok) throw new Error("Could not load takeoff.");
   return res.json() as Promise<TakeoffLineRow[]>;
+}
+
+export async function previewTakeoffSync(projectId: string): Promise<TakeoffSyncPreview> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/takeoff/sync/preview`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: "{}",
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not preview sync.");
+  return j as TakeoffSyncPreview;
+}
+
+export async function applyTakeoffSync(
+  projectId: string,
+  body: { mode: "merge" | "replace"; protectManualEdits?: boolean },
+): Promise<TakeoffSyncApplyResult> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/takeoff/sync/apply`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not apply sync.");
+  return j as TakeoffSyncApplyResult;
+}
+
+export async function fetchTakeoffSyncHistory(projectId: string): Promise<TakeoffSyncHistoryRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/takeoff/sync-history`),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load takeoff sync history.");
+  return res.json() as Promise<TakeoffSyncHistoryRow[]>;
+}
+
+export async function restoreTakeoffSnapshot(projectId: string, snapshotId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/takeoff/snapshots/${encodeURIComponent(snapshotId)}/restore`,
+    ),
+    { method: "POST", credentials: "include", headers: jsonHeaders, body: "{}" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok)
+    throw new Error(typeof j.error === "string" ? j.error : "Could not restore snapshot.");
+}
+
+export async function fetchTakeoffSnapshots(projectId: string): Promise<TakeoffSnapshotRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/takeoff/snapshots`),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load takeoff snapshots.");
+  return res.json() as Promise<TakeoffSnapshotRow[]>;
+}
+
+export async function fetchTakeoffViews(projectId: string): Promise<TakeoffViewPresetRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/takeoff/views`),
+    {
+      credentials: "include",
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load takeoff views.");
+  return res.json() as Promise<TakeoffViewPresetRow[]>;
+}
+
+export async function createTakeoffView(
+  projectId: string,
+  body: { name: string; isDefault?: boolean; configJson: Record<string, unknown> },
+): Promise<TakeoffViewPresetRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/takeoff/views`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok)
+    throw new Error(typeof j.error === "string" ? j.error : "Could not save takeoff view.");
+  return j as TakeoffViewPresetRow;
+}
+
+export async function patchTakeoffView(
+  projectId: string,
+  viewId: string,
+  body: { name?: string; isDefault?: boolean; configJson?: Record<string, unknown> },
+): Promise<TakeoffViewPresetRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/takeoff/views/${encodeURIComponent(viewId)}`,
+    ),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok)
+    throw new Error(typeof j.error === "string" ? j.error : "Could not update takeoff view.");
+  return j as TakeoffViewPresetRow;
+}
+
+export async function deleteTakeoffView(projectId: string, viewId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/takeoff/views/${encodeURIComponent(viewId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok)
+    throw new Error(typeof j.error === "string" ? j.error : "Could not delete takeoff view.");
+}
+
+export async function bulkTakeoffAction(
+  projectId: string,
+  body: { ids: string[]; action: "delete" | "set_tags" | "set_rate_placeholder"; tags?: string[] },
+): Promise<{ ok: boolean; affected: number }> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/takeoff/bulk`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    ok?: boolean;
+    affected?: number;
+  };
+  if (!res.ok)
+    throw new Error(typeof j.error === "string" ? j.error : "Could not apply bulk action.");
+  return { ok: Boolean(j.ok), affected: Number(j.affected ?? 0) };
 }
 
 /** Adds a catalog-backed line to project takeoff (anchor file = latest revision in project). */
