@@ -424,11 +424,53 @@ model Project {
   inspectionTemplates  InspectionTemplate[]
   inspectionRuns       InspectionRun[]
   occupantPortalTokens OccupantPortalToken[]
+  scheduleTasks        ScheduleTask[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([workspaceId])
+}
+
+/// Construction schedule row (WBS-style hierarchy + Gantt dates).
+model ScheduleTask {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title    String
+  parentId String?
+  parent   ScheduleTask?  @relation("ScheduleTaskTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children ScheduleTask[] @relation("ScheduleTaskTree")
+
+  sortOrder Int @default(0)
+
+  /// Date-only semantics; stored UTC noon to avoid TZ drift (see issues routes).
+  startDate DateTime
+  endDate   DateTime
+
+  isMilestone     Boolean @default(false)
+  progressPercent Int     @default(0)
+
+  takeoffLinks ScheduleTaskTakeoffLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([parentId])
+}
+
+/// Many-to-many: schedule task ↔ quantity takeoff lines (materials / measured lines).
+model ScheduleTaskTakeoffLine {
+  scheduleTaskId String
+  takeoffLineId  String
+
+  scheduleTask ScheduleTask @relation(fields: [scheduleTaskId], references: [id], onDelete: Cascade)
+  takeoffLine  TakeoffLine  @relation(fields: [takeoffLineId], references: [id], onDelete: Cascade)
+
+  @@id([scheduleTaskId, takeoffLineId])
+  @@index([takeoffLineId])
 }
 
 model Folder {
@@ -790,6 +832,8 @@ model TakeoffLine {
   file        File        @relation(fields: [fileId], references: [id], onDelete: Cascade)
   fileVersion FileVersion @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
   material    Material?   @relation(fields: [materialId], references: [id], onDelete: SetNull)
+
+  scheduleTaskLinks ScheduleTaskTakeoffLine[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

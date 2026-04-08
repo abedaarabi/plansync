@@ -56,6 +56,8 @@ export type ProjectModules = {
   omInspections: boolean;
   /** O&M: occupant portal (magic link) */
   omTenantPortal: boolean;
+  /** Construction schedule (Gantt / timeline). */
+  schedule: boolean;
 };
 
 /** Handover pack + FM wizard fields (stored in `settingsJson.omHandover`). */
@@ -108,6 +110,7 @@ const DEFAULT_MODULES: ProjectModules = {
   omMaintenance: true,
   omInspections: true,
   omTenantPortal: true,
+  schedule: true,
 };
 
 const DEFAULT_CLIENT_VISIBILITY: ClientVisibility = {
@@ -203,6 +206,7 @@ export function parseProjectSettingsJson(raw: unknown): ProjectSettingsResolved 
         typeof m.omInspections === "boolean" ? m.omInspections : DEFAULT_MODULES.omInspections,
       omTenantPortal:
         typeof m.omTenantPortal === "boolean" ? m.omTenantPortal : DEFAULT_MODULES.omTenantPortal,
+      schedule: typeof m.schedule === "boolean" ? m.schedule : DEFAULT_MODULES.schedule,
     },
     clientVisibility: {
       showIssues:

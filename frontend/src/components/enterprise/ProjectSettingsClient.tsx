@@ -109,6 +109,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
         {row("Proposals", m.proposals, (v) => toggleModule("proposals", v))}
         {row("Punch List", m.punch, (v) => toggleModule("punch", v))}
         {row("Field Reports", m.fieldReports, (v) => toggleModule("fieldReports", v))}
+        {row("Construction schedule", m.schedule, (v) => toggleModule("schedule", v))}
       </section>
 
       <section className="enterprise-card divide-y divide-[var(--enterprise-border)] p-4 sm:p-6">

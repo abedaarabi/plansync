@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   Building2,
   CalendarRange,
+  ChartGantt,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -160,6 +161,7 @@ export function EnterpriseSidebar({
     omMaintenance: true,
     omInspections: true,
     omTenantPortal: true,
+    schedule: true,
   };
   const mod = projectSession?.settings.modules ?? defaultModules;
   const operationsMode = projectSession?.operationsMode ?? false;
@@ -216,6 +218,12 @@ export function EnterpriseSidebar({
       { href: `/projects/${projectId}/home`, label: "Home", icon: House },
       { href: `/projects/${projectId}/files`, label: "Files & Drawings", icon: FileStack },
     ];
+    if (mod.schedule)
+      projectItems.push({
+        href: `/projects/${projectId}/schedule`,
+        label: "Schedule",
+        icon: ChartGantt,
+      });
     if (!operationsMode && mod.issues) {
       projectItems.push({ href: `/projects/${projectId}/issues`, label: "Issues", icon: MapPin });
     }

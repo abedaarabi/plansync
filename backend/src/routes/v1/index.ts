@@ -102,6 +102,7 @@ import { registerProposalRoutes } from "./proposalRoutes.js";
 import { registerSheetAiRoutes } from "./sheetAiRoutes.js";
 import { registerCloudRoutes } from "./cloudRoutes.js";
 import { registerPunchRoutes } from "./punchRoutes.js";
+import { registerScheduleRoutes } from "./scheduleRoutes.js";
 import {
   auditLogsToRows,
   buildAuditPdfBuffer,
@@ -1795,6 +1796,7 @@ export function v1Routes(
             omMaintenance: z.boolean().optional(),
             omInspections: z.boolean().optional(),
             omTenantPortal: z.boolean().optional(),
+            schedule: z.boolean().optional(),
           })
           .optional(),
         clientVisibility: z
@@ -3596,6 +3598,7 @@ export function v1Routes(
   registerTakeoffRoutes(r, needUser);
   registerSheetAiRoutes(r, needUser, env);
   registerMaterialsRoutes(r, needUser);
+  registerScheduleRoutes(r, needUser);
 
   return r;
 }

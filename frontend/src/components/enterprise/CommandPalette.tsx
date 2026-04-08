@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
   CalendarRange,
+  ChartGantt,
   ClipboardList,
   ClipboardCheck,
   FileCheck2,
@@ -78,6 +79,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     omMaintenance: true,
     omInspections: true,
     omTenantPortal: true,
+    schedule: true,
   };
   const mod = projectSession?.settings.modules ?? defaultModules;
   const operationsMode = projectSession?.operationsMode ?? false;
@@ -200,6 +202,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         icon: FileStack,
       },
     );
+    if (mod.schedule) {
+      out.push({
+        id: "schedule",
+        label: "Construction schedule",
+        hint: "Timeline & phases",
+        href: `/projects/${projectId}/schedule`,
+        icon: ChartGantt,
+      });
+    }
     if (operationsMode) {
       out.push({
         id: "om-fm-dashboard",

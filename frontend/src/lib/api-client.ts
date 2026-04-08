@@ -55,6 +55,7 @@ export type ProjectSessionModules = {
   omMaintenance: boolean;
   omInspections: boolean;
   omTenantPortal: boolean;
+  schedule: boolean;
 };
 
 export type ProjectSessionClientVisibility = {
@@ -133,6 +134,50 @@ export async function patchProjectSettings(
   }
   if (!j.settings || !j.projectId) throw new Error("Invalid response.");
   return { projectId: j.projectId, settings: j.settings };
+}
+
+export type ScheduleTaskRow = {
+  id: string;
+  title: string;
+  parentId: string | null;
+  sortOrder: number;
+  startDate: string;
+  endDate: string;
+  isMilestone: boolean;
+  progressPercent: number;
+  /** Linked quantity takeoff line ids (same project). */
+  takeoffLineIds: string[];
+  updatedAt: string;
+};
+
+export type ScheduleTaskInput = Omit<ScheduleTaskRow, "updatedAt">;
+
+export async function fetchProjectSchedule(projectId: string): Promise<ScheduleTaskRow[]> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/schedule`), {
+    credentials: "include",
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  if (res.status === 403) throw new Error("You don’t have access to the schedule.");
+  if (!res.ok) throw new Error("Could not load schedule.");
+  return res.json() as Promise<ScheduleTaskRow[]>;
+}
+
+export async function putProjectSchedule(
+  projectId: string,
+  body: { tasks: ScheduleTaskInput[] },
+): Promise<ScheduleTaskRow[]> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/schedule`), {
+    method: "PUT",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not save schedule.");
+  }
+  return res.json() as Promise<ScheduleTaskRow[]>;
 }
 
 export type MeNotificationRow = {
