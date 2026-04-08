@@ -365,6 +365,7 @@ function BrowserMockup({
 
 export function LandingPage() {
   const router = useRouter();
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const { data: me } = useQuery({
     queryKey: qk.me(),
@@ -556,15 +557,29 @@ export function LandingPage() {
           className="relative isolate min-h-dvh scroll-mt-20 overflow-hidden pt-28 pb-14 sm:pt-36 sm:pb-20 lg:flex lg:items-center lg:py-24 xl:py-28"
         >
           <div className="pointer-events-none absolute inset-0" aria-hidden>
-            <Image
-              src="/images/cta/CTA-constraction-hero.webp"
-              alt=""
-              fill
-              sizes="100vw"
-              className="object-cover object-[center_36%]"
-              priority
-              quality={75}
-            />
+            {prefersReducedMotion ? (
+              <Image
+                src="/images/cta/CTA-constraction-hero.webp"
+                alt=""
+                fill
+                sizes="100vw"
+                className="object-cover object-[center_36%]"
+                priority
+                quality={75}
+              />
+            ) : (
+              <video
+                className="h-full w-full object-cover object-[center_36%]"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                poster="/images/cta/CTA-constraction-hero.webp"
+              >
+                <source src="/hero.mp4" type="video/mp4" />
+              </video>
+            )}
           </div>
 
           <div
