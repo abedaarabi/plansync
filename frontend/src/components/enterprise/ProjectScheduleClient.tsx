@@ -2,7 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChartGantt, ChevronDown, ChevronRight, Link2, Plus, Save, Trash2, X } from "lucide-react";
+import {
+  ChartGantt,
+  ChevronDown,
+  ChevronRight,
+  Link2,
+  Plus,
+  Printer,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
 import {
@@ -11,6 +21,7 @@ import {
   fetchTakeoffLinesForProject,
   ProRequiredError,
   putProjectSchedule,
+  type ScheduleTaskStatus,
   type ScheduleTaskInput,
   type ScheduleTaskRow,
   type TakeoffLineRow,
@@ -18,15 +29,96 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { AccessRestricted } from "@/components/enterprise/AccessRestricted";
+import { useTaskCreation } from "@/components/enterprise/useTaskCreation";
 
 type Props = { projectId: string };
 
 const AUTOSAVE_MS = 900;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TIMELINE_PX_PER_DAY = 8;
-const TIMELINE_MIN_WIDTH_PX = 1200;
+const TIMELINE_MIN_WIDTH_PX = 720;
 const TIMELINE_MAX_WIDTH_PX = 28000;
-const SCHEDULE_ROW_HEIGHT_PX = 40;
+
+const STATUS_OPTIONS: { value: ScheduleTaskStatus; label: string }[] = [
+  { value: "not_started", label: "Not started" },
+  { value: "in_progress", label: "In progress" },
+  { value: "delayed", label: "Delayed" },
+  { value: "completed", label: "Completed" },
+];
+
+const SCHEDULE_BTN_SECONDARY =
+  "inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm font-medium text-[var(--enterprise-text)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--enterprise-surface)] disabled:cursor-not-allowed disabled:opacity-60";
+
+const SCHEDULE_BTN_PRIMARY =
+  "inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-3 py-2 text-sm font-medium text-white transition-all duration-150 hover:bg-[var(--enterprise-primary-deep)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--enterprise-surface)] disabled:cursor-not-allowed disabled:opacity-60";
+
+const SCHEDULE_ICON_BTN =
+  "cursor-pointer rounded p-1 text-[var(--enterprise-text-muted)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] hover:text-[var(--enterprise-text)] active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]";
+
+function normalizeStatus(status: string | null | undefined): ScheduleTaskStatus {
+  if (status === "in_progress") return "in_progress";
+  if (status === "delayed") return "delayed";
+  if (status === "completed") return "completed";
+  return "not_started";
+}
+
+function statusPalette(status: ScheduleTaskStatus): {
+  barBg: string;
+  progressBg: string;
+  pillBg: string;
+  pillText: string;
+} {
+  switch (status) {
+    case "completed":
+      return {
+        barBg: "bg-emerald-500/85",
+        progressBg: "bg-emerald-300/95",
+        pillBg: "bg-emerald-100",
+        pillText: "text-emerald-700",
+      };
+    case "delayed":
+      return {
+        barBg: "bg-rose-500/85",
+        progressBg: "bg-rose-300/95",
+        pillBg: "bg-rose-100",
+        pillText: "text-rose-700",
+      };
+    case "in_progress":
+      return {
+        barBg: "bg-blue-500/85",
+        progressBg: "bg-blue-300/95",
+        pillBg: "bg-blue-100",
+        pillText: "text-blue-700",
+      };
+    case "not_started":
+    default:
+      return {
+        barBg: "bg-slate-400/85",
+        progressBg: "bg-slate-200/95",
+        pillBg: "bg-slate-200",
+        pillText: "text-slate-700",
+      };
+  }
+}
+
+function ProgressBar({ value }: { value: number }) {
+  const clamped = Math.max(0, Math.min(100, Math.round(value)));
+  return (
+    <div
+      className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--enterprise-border)]/80"
+      aria-label={`Progress ${clamped}%`}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={clamped}
+    >
+      <div
+        className="h-full rounded-full bg-[var(--enterprise-primary)] transition-[width] duration-150"
+        style={{ width: `${clamped}%` }}
+      />
+    </div>
+  );
+}
 
 function toYmd(d: Date): string {
   const y = d.getFullYear();
@@ -58,6 +150,7 @@ function makeRow(partial?: Partial<ScheduleTaskInput>): ScheduleTaskInput {
     endDate: partial?.endDate ?? toYmd(end),
     isMilestone: partial?.isMilestone ?? false,
     progressPercent: partial?.progressPercent ?? 0,
+    status: partial?.status ?? "not_started",
     takeoffLineIds: partial?.takeoffLineIds ?? [],
   };
 }
@@ -76,44 +169,38 @@ function normalizeTasksForSave(tasks: ScheduleTaskInput[]): ScheduleTaskInput[] 
 
 function sortForDisplay(tasks: ScheduleTaskInput[]): ScheduleTaskInput[] {
   const byId = new Map(tasks.map((t) => [t.id, t]));
-  const ids = new Set(tasks.map((t) => t.id));
-  const visited = new Set<string>();
+  const childrenByParent = new Map<string | null, ScheduleTaskInput[]>();
+  for (const task of tasks) {
+    const parentKey = task.parentId && byId.has(task.parentId) ? task.parentId : null;
+    const arr = childrenByParent.get(parentKey) ?? [];
+    arr.push(task);
+    childrenByParent.set(parentKey, arr);
+  }
+  for (const arr of childrenByParent.values()) {
+    arr.sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
+  }
+
   const out: ScheduleTaskInput[] = [];
-  const sorted = [...tasks].sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
+  const visited = new Set<string>();
 
-  function visit(id: string) {
-    if (visited.has(id)) return;
-    const t = byId.get(id);
-    if (!t) return;
-    if (t.parentId && ids.has(t.parentId)) visit(t.parentId);
-    visited.add(id);
-    out.push(t);
+  function walk(parentId: string | null) {
+    const kids = childrenByParent.get(parentId) ?? [];
+    for (const kid of kids) {
+      if (visited.has(kid.id)) continue;
+      visited.add(kid.id);
+      out.push(kid);
+      walk(kid.id);
+    }
   }
-  for (const t of sorted) visit(t.id);
+
+  walk(null);
   return out;
-}
-
-function depthOf(id: string, byId: Map<string, ScheduleTaskInput>): number {
-  let d = 0;
-  let cur: string | null = id;
-  const seen = new Set<string>();
-  while (cur) {
-    if (seen.has(cur)) break;
-    seen.add(cur);
-    const t = byId.get(cur);
-    if (!t?.parentId) break;
-    d += 1;
-    cur = t.parentId;
-  }
-  return d;
 }
 
 function timelineRange(tasks: ScheduleTaskInput[]): { min: Date; max: Date } {
   const today = new Date();
-  const todayMin = addDays(today, -14).getTime();
-  const todayMax = addDays(today, 14).getTime();
   if (tasks.length === 0) {
-    return { min: addDays(today, -7), max: addDays(today, 56) };
+    return { min: addDays(today, -7), max: addDays(today, 28) };
   }
   let minT = parseYmd(tasks[0].startDate).getTime();
   let maxT = parseYmd(tasks[0].endDate).getTime();
@@ -121,10 +208,7 @@ function timelineRange(tasks: ScheduleTaskInput[]): { min: Date; max: Date } {
     minT = Math.min(minT, parseYmd(x.startDate).getTime());
     maxT = Math.max(maxT, parseYmd(x.endDate).getTime());
   }
-  // Keep "today" visible even when schedule dates are far away.
-  minT = Math.min(minT, todayMin);
-  maxT = Math.max(maxT, todayMax);
-  return { min: addDays(new Date(minT), -7), max: addDays(new Date(maxT), 14) };
+  return { min: addDays(new Date(minT), -4), max: addDays(new Date(maxT), 4) };
 }
 
 function barLayout(
@@ -156,15 +240,6 @@ function clientXToDate(clientX: number, rect: DOMRect, min: Date, max: Date): Da
 }
 
 type GanttDragState =
-  | {
-      kind: "create";
-      rowTaskId: string;
-      parentId: string | null;
-      pointerId: number;
-      originX: number;
-      currentX: number;
-      rowEl: HTMLElement;
-    }
   | {
       kind: "resize-left" | "resize-right";
       taskId: string;
@@ -244,31 +319,6 @@ function todayLinePct(min: Date, max: Date): number | null {
   return ((t - min.getTime()) / span) * 100;
 }
 
-function SubtaskTreeGutter({ depth }: { depth: number }) {
-  if (depth <= 0) return null;
-  const lane = 14;
-  const elbowLeft = (depth - 1) * lane + 6;
-  return (
-    <div
-      className="pointer-events-none absolute inset-y-0 left-0 z-[3]"
-      style={{ width: depth * lane + 16 }}
-      aria-hidden
-    >
-      {Array.from({ length: depth }).map((_, i) => (
-        <div
-          key={i}
-          className="absolute inset-y-0 border-l border-[var(--enterprise-text-muted)]/75"
-          style={{ left: i * lane + 6 }}
-        />
-      ))}
-      <div
-        className="absolute top-1/2 h-px w-3 -translate-y-1/2 border-t border-[var(--enterprise-text-muted)]/75"
-        style={{ left: elbowLeft }}
-      />
-    </div>
-  );
-}
-
 function SubtaskTreeConnector({ depth }: { depth: number }) {
   if (depth <= 0) return null;
   const lane = 14;
@@ -302,6 +352,7 @@ function rowToInput(r: ScheduleTaskRow): ScheduleTaskInput {
     endDate: r.endDate,
     isMilestone: r.isMilestone,
     progressPercent: r.progressPercent,
+    status: normalizeStatus(r.status),
     takeoffLineIds: r.takeoffLineIds ?? [],
   };
 }
@@ -352,14 +403,14 @@ function TakeoffLinksPicker({ open, onClose, lines, selected, onApply }: Takeoff
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className="no-print fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
       role="dialog"
       aria-modal
       aria-labelledby="takeoff-picker-title"
     >
       <button
         type="button"
-        className="absolute inset-0 cursor-default"
+        className="absolute inset-0 cursor-pointer"
         aria-label="Close"
         onClick={onClose}
       />
@@ -371,12 +422,7 @@ function TakeoffLinksPicker({ open, onClose, lines, selected, onApply }: Takeoff
           >
             Link quantity takeoff lines
           </h2>
-          <button
-            type="button"
-            className="rounded p-1 text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-bg)]"
-            onClick={onClose}
-            aria-label="Close"
-          >
+          <button type="button" className={SCHEDULE_ICON_BTN} onClick={onClose} aria-label="Close">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -425,16 +471,12 @@ function TakeoffLinksPicker({ open, onClose, lines, selected, onApply }: Takeoff
           )}
         </ul>
         <div className="flex justify-end gap-2 border-t border-[var(--enterprise-border)] px-4 py-3">
-          <button
-            type="button"
-            className="rounded-lg border border-[var(--enterprise-border)] px-3 py-2 text-sm text-[var(--enterprise-text)]"
-            onClick={onClose}
-          >
+          <button type="button" className={SCHEDULE_BTN_SECONDARY} onClick={onClose}>
             Cancel
           </button>
           <button
             type="button"
-            className="rounded-lg bg-[var(--enterprise-primary)] px-3 py-2 text-sm font-medium text-white"
+            className={SCHEDULE_BTN_PRIMARY}
             onClick={() => {
               onApply(local);
               onClose();
@@ -445,6 +487,106 @@ function TakeoffLinksPicker({ open, onClose, lines, selected, onApply }: Takeoff
         </div>
       </div>
     </div>
+  );
+}
+
+type TaskDetailPanelProps = {
+  task: ScheduleTaskInput | null;
+  onClose: () => void;
+  onChange: (id: string, patch: Partial<ScheduleTaskInput>) => void;
+  onAddSubtask: (parentId: string) => void;
+};
+
+function TaskDetailPanel({ task, onClose, onChange, onAddSubtask }: TaskDetailPanelProps) {
+  if (!task) return null;
+  return (
+    <aside
+      className="no-print fixed inset-y-0 right-0 z-40 w-full max-w-md border-l border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-2xl"
+      aria-hidden={false}
+      aria-label="Task details"
+    >
+      <div className="flex h-full flex-col">
+        <div className="flex items-center justify-between border-b border-[var(--enterprise-border)] px-4 py-3">
+          <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Task details</h2>
+          <button
+            type="button"
+            className={SCHEDULE_ICON_BTN}
+            onClick={onClose}
+            aria-label="Close details panel"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="space-y-4 overflow-y-auto p-4">
+          <label className="block text-xs font-medium text-[var(--enterprise-text-muted)]">
+            Name
+            <input
+              className="mt-1 h-9 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]"
+              value={task.title}
+              onChange={(e) => onChange(task.id, { title: e.target.value })}
+              onBlur={(e) => onChange(task.id, { title: normalizeTaskTitle(e.target.value) })}
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
+              Start
+              <input
+                type="date"
+                className="mt-1 h-9 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]"
+                value={task.startDate}
+                onChange={(e) => onChange(task.id, { startDate: e.target.value })}
+              />
+            </label>
+            <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
+              End
+              <input
+                type="date"
+                className="mt-1 h-9 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 text-sm text-[var(--enterprise-text)]"
+                value={task.endDate}
+                onChange={(e) => onChange(task.id, { endDate: e.target.value })}
+              />
+            </label>
+          </div>
+          <label className="block text-xs font-medium text-[var(--enterprise-text-muted)]">
+            Status
+            <select
+              className="mt-1 h-9 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 text-sm text-[var(--enterprise-text)]"
+              value={normalizeStatus(task.status)}
+              onChange={(e) => onChange(task.id, { status: normalizeStatus(e.target.value) })}
+            >
+              {STATUS_OPTIONS.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs font-medium text-[var(--enterprise-text-muted)]">
+            Progress ({Math.max(0, Math.min(100, Math.round(task.progressPercent)))}%)
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              className="mt-2 w-full accent-[var(--enterprise-primary)]"
+              value={task.progressPercent}
+              onChange={(e) => onChange(task.id, { progressPercent: Number(e.target.value) })}
+            />
+            <div className="mt-2">
+              <ProgressBar value={task.progressPercent} />
+            </div>
+          </label>
+          <button
+            type="button"
+            className={`${SCHEDULE_BTN_SECONDARY} bg-[var(--enterprise-bg)]`}
+            onClick={() => onAddSubtask(task.id)}
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            Add subtask
+          </button>
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -486,10 +628,10 @@ export function ProjectScheduleClient({ projectId }: Props) {
 
   const [saveUi, setSaveUi] = useState<"saved" | "saving" | "pending" | "error">("saved");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
-  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(new Set());
   const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
   const [pickerTaskId, setPickerTaskId] = useState<string | null>(null);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     if (scheduleQuery.data && !dirty) {
@@ -506,6 +648,24 @@ export function ProjectScheduleClient({ projectId }: Props) {
       m.set(t.parentId, (m.get(t.parentId) ?? 0) + 1);
     }
     return m;
+  }, [allRows, byId]);
+  const depthById = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const task of allRows) {
+      let depth = 0;
+      let cur = task.parentId;
+      const seen = new Set<string>();
+      while (cur) {
+        if (seen.has(cur)) break;
+        seen.add(cur);
+        const p = byId.get(cur);
+        if (!p) break;
+        depth += 1;
+        cur = p.parentId;
+      }
+      out.set(task.id, depth);
+    }
+    return out;
   }, [allRows, byId]);
   const taskNumberById = useMemo(() => {
     const childrenByParent = new Map<string | null, ScheduleTaskInput[]>();
@@ -544,7 +704,6 @@ export function ProjectScheduleClient({ projectId }: Props) {
     }
     return allRows.filter((t) => !isHiddenByCollapsed(t));
   }, [allRows, collapsedTaskIds, byId]);
-  const selectedSet = useMemo(() => new Set(selectedTaskIds), [selectedTaskIds]);
   const range = useMemo(() => timelineRange(rows), [rows]);
   const timelineWidthPx = useMemo(() => {
     const days = Math.max(30, Math.ceil((range.max.getTime() - range.min.getTime()) / DAY_MS));
@@ -557,24 +716,25 @@ export function ProjectScheduleClient({ projectId }: Props) {
   rangeRef.current = range;
 
   const dragStateRef = useRef<GanttDragState | null>(null);
-  const [createPreview, setCreatePreview] = useState<{
-    rowTaskId: string;
-    leftPct: number;
-    widthPct: number;
-  } | null>(null);
 
   const saveMutation = useMutation({
     mutationFn: (tasks: ScheduleTaskInput[]) =>
       putProjectSchedule(projectId, { tasks: normalizeTasksForSave(tasks) }),
     onMutate: () => {
-      setSaveUi("saving");
+      setSaveUi((prev) => (prev === "saving" ? prev : "saving"));
     },
-    onSuccess: async (saved) => {
+    onSuccess: async (saved, variables) => {
+      // Guard against race conditions: if user edited again while this request was in flight,
+      // ignore stale response data so we don't clobber newer local changes.
+      if (draftRef.current !== variables) {
+        setSaveUi((prev) => (prev === "saving" ? "pending" : prev));
+        return;
+      }
       setDirty(false);
       setDraft(saved.map(rowToInput));
       setSaveUi("saved");
       setLastSavedAt(new Date());
-      await queryClient.invalidateQueries({ queryKey: qk.projectSchedule(projectId) });
+      queryClient.setQueryData(qk.projectSchedule(projectId), saved);
     },
     onError: (e: unknown) => {
       setSaveUi("error");
@@ -593,18 +753,16 @@ export function ProjectScheduleClient({ projectId }: Props) {
       if (!payload) return;
       saveMutation.mutate(payload);
     }, AUTOSAVE_MS);
-    setSaveUi("pending");
+    setSaveUi((prev) => (prev === "saving" || prev === "pending" ? prev : "pending"));
     return () => window.clearTimeout(t);
   }, [draft, dirty, saveMutation]);
 
   useEffect(() => {
     if (allRows.length === 0) {
-      setSelectedTaskIds([]);
       setCollapsedTaskIds(new Set());
       return;
     }
     const rowIds = new Set(allRows.map((t) => t.id));
-    setSelectedTaskIds((prev) => prev.filter((id) => rowIds.has(id)));
     setCollapsedTaskIds((prev) => {
       const next = new Set<string>();
       for (const id of prev) {
@@ -646,22 +804,24 @@ export function ProjectScheduleClient({ projectId }: Props) {
 
   const removeRows = useCallback((ids: string[]) => {
     if (ids.length === 0) return;
+    const base = draftRef.current ?? [];
+    const drop = new Set<string>();
+    const stack = [...ids];
+    while (stack.length) {
+      const x = stack.pop()!;
+      drop.add(x);
+      for (const t of base) {
+        if (t.parentId === x) stack.push(t.id);
+      }
+    }
     setDirty(true);
     setDraft((prev) => {
       if (!prev) return prev;
-      const drop = new Set<string>();
-      const stack = [...ids];
-      while (stack.length) {
-        const x = stack.pop()!;
-        drop.add(x);
-        for (const t of prev) {
-          if (t.parentId === x) stack.push(t.id);
-        }
-      }
       return prev
         .filter((t) => !drop.has(t.id))
         .map((t) => (t.parentId && drop.has(t.parentId) ? { ...t, parentId: null } : t));
     });
+    setDetailTaskId((prev) => (prev && drop.has(prev) ? null : prev));
   }, []);
 
   const removeRow = useCallback(
@@ -671,44 +831,44 @@ export function ProjectScheduleClient({ projectId }: Props) {
     [removeRows],
   );
 
+  const createTask = useCallback(
+    (opts: { parentId: string | null; seed?: Partial<ScheduleTaskInput> }) => {
+      const created = makeRow({ parentId: opts.parentId, ...opts.seed });
+      setDirty(true);
+      setDraft((prev) => {
+        const next = prev ?? [];
+        const siblings = next.filter((t) => t.parentId === opts.parentId);
+        const maxOrder = siblings.reduce((m, t) => Math.max(m, t.sortOrder), -1);
+        return [...next, { ...created, sortOrder: maxOrder + 1 }];
+      });
+      setDetailTaskId(created.id);
+      return created.id;
+    },
+    [],
+  );
+
   const addRow = useCallback(() => {
-    setDirty(true);
-    setDraft((prev) => {
-      const next = prev ?? [];
-      const maxOrder = next.reduce((m, t) => Math.max(m, t.sortOrder), -1);
-      return [...next, makeRow({ sortOrder: maxOrder + 1 })];
-    });
-  }, []);
+    createTask({ parentId: null });
+  }, [createTask]);
 
-  const addChild = useCallback((parentId: string) => {
-    setDirty(true);
-    setDraft((prev) => {
-      const next = prev ?? [];
-      const siblings = next.filter((t) => t.parentId === parentId);
-      const maxOrder = siblings.reduce((m, t) => Math.max(m, t.sortOrder), -1);
-      return [...next, makeRow({ parentId, sortOrder: maxOrder + 1 })];
-    });
-  }, []);
+  const addChild = useCallback(
+    (parentId: string) => {
+      createTask({ parentId });
+    },
+    [createTask],
+  );
 
-  const addSibling = useCallback((taskId: string) => {
-    setDirty(true);
-    setDraft((prev) => {
-      const next = prev ?? [];
-      const base = next.find((t) => t.id === taskId);
-      if (!base) return next;
-      const siblings = next.filter((t) => t.parentId === base.parentId);
-      const maxOrder = siblings.reduce((m, t) => Math.max(m, t.sortOrder), -1);
-      return [
-        ...next,
-        makeRow({
-          parentId: base.parentId,
-          sortOrder: maxOrder + 1,
-          startDate: base.startDate,
-          endDate: base.endDate,
-        }),
-      ];
-    });
-  }, []);
+  const addSibling = useCallback(
+    (taskId: string) => {
+      const base = draftRef.current?.find((t) => t.id === taskId);
+      if (!base) return;
+      createTask({
+        parentId: base.parentId,
+        seed: { startDate: base.startDate, endDate: base.endDate },
+      });
+    },
+    [createTask],
+  );
 
   const indentRows = useCallback((ids: string[]) => {
     if (ids.length === 0) return;
@@ -777,90 +937,36 @@ export function ProjectScheduleClient({ projectId }: Props) {
     });
   }, []);
 
-  const toggleTaskSelection = useCallback((taskId: string, checked: boolean) => {
-    setSelectedTaskIds((prev) => {
-      if (checked) {
-        if (prev.includes(taskId)) return prev;
-        return [...prev, taskId];
-      }
-      return prev.filter((id) => id !== taskId);
-    });
-  }, []);
-
-  const addTaskFromCanvas = useCallback((parentId: string | null, start: Date, end: Date) => {
-    setDirty(true);
-    setDraft((prev) => {
-      const next = prev ?? [];
-      const siblings = next.filter((t) => t.parentId === parentId);
-      const maxOrder = siblings.reduce((m, t) => Math.max(m, t.sortOrder), -1);
-      return [
-        ...next,
-        makeRow({
-          parentId,
-          sortOrder: maxOrder + 1,
+  const addTaskFromCanvas = useCallback(
+    (parentId: string | null, start: Date, end: Date) => {
+      createTask({
+        parentId,
+        seed: {
           startDate: toYmd(start),
           endDate: toYmd(end),
           title: "New task",
-        }),
-      ];
-    });
-  }, []);
-
-  const onTrackPointerDown = useCallback((e: React.PointerEvent, rowTask: ScheduleTaskInput) => {
-    if (e.button !== 0) return;
-    const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
-    dragStateRef.current = {
-      kind: "create",
-      rowTaskId: rowTask.id,
-      parentId: rowTask.parentId,
-      pointerId: e.pointerId,
-      originX: e.clientX,
-      currentX: e.clientX,
-      rowEl: el,
-    };
-    setCreatePreview({ rowTaskId: rowTask.id, leftPct: 0, widthPct: 0 });
-  }, []);
-
-  const onTrackPointerMove = useCallback((e: React.PointerEvent) => {
-    const d = dragStateRef.current;
-    if (!d || d.kind !== "create" || e.pointerId !== d.pointerId) return;
-    d.currentX = e.clientX;
-    const rect = d.rowEl.getBoundingClientRect();
-    const x0 = Math.min(d.originX, d.currentX);
-    const x1 = Math.max(d.originX, d.currentX);
-    const leftPct = ((x0 - rect.left) / rect.width) * 100;
-    const widthPct = Math.max(0.2, ((x1 - x0) / rect.width) * 100);
-    setCreatePreview({ rowTaskId: d.rowTaskId, leftPct, widthPct });
-  }, []);
-
-  const onTrackPointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      const d = dragStateRef.current;
-      if (!d || d.kind !== "create" || e.pointerId !== d.pointerId) return;
-      const el = e.currentTarget as HTMLElement;
-      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
-      const rect = d.rowEl.getBoundingClientRect();
-      const r = rangeRef.current;
-      const dx = Math.abs(d.currentX - d.originX);
-      let start = snapToLocalDay(
-        clientXToDate(Math.min(d.originX, d.currentX), rect, r.min, r.max),
-      );
-      let end = snapToLocalDay(clientXToDate(Math.max(d.originX, d.currentX), rect, r.min, r.max));
-      if (end.getTime() < start.getTime()) [start, end] = [end, start];
-      if (dx < 8) {
-        const click = snapToLocalDay(clientXToDate(d.originX, rect, r.min, r.max));
-        addTaskFromCanvas(d.parentId, click, click);
-      } else if (start.getTime() === end.getTime()) {
-        addTaskFromCanvas(d.parentId, start, start);
-      } else {
-        addTaskFromCanvas(d.parentId, start, end);
-      }
-      setCreatePreview(null);
-      dragStateRef.current = null;
+        },
+      });
     },
-    [addTaskFromCanvas],
+    [createTask],
   );
+
+  const openPrintDialog = useCallback(() => {
+    // Keep print output focused on schedule content.
+    setDetailTaskId(null);
+    window.setTimeout(() => window.print(), 80);
+  }, []);
+
+  const {
+    createPreview,
+    onTrackPointerDown,
+    onTrackPointerMove,
+    onTrackPointerUp,
+    onTrackPointerCancel,
+  } = useTaskCreation({
+    rangeRef,
+    onCreateTask: addTaskFromCanvas,
+  });
 
   const onResizeLeftDown = useCallback((e: React.PointerEvent, taskId: string) => {
     e.stopPropagation();
@@ -964,57 +1070,23 @@ export function ProjectScheduleClient({ projectId }: Props) {
   }, []);
 
   const pickerTask = pickerTaskId ? byId.get(pickerTaskId) : undefined;
+  const detailTask = detailTaskId ? (byId.get(detailTaskId) ?? null) : null;
+  const lastDetailTaskRef = useRef<ScheduleTaskInput | null>(null);
+  useEffect(() => {
+    if (detailTask) {
+      lastDetailTaskRef.current = detailTask;
+      return;
+    }
+    if (!detailTaskId) lastDetailTaskRef.current = null;
+  }, [detailTask, detailTaskId]);
+  const panelTask = detailTask ?? (detailTaskId ? lastDetailTaskRef.current : null);
   const tableRowHeightClass = "h-10";
   const ganttRowHeightClass = "h-10";
   const inputHeightClass = "h-7";
-  const allSelected = rows.length > 0 && rows.every((t) => selectedSet.has(t.id));
+  const singleSelectedTaskId = detailTaskId && byId.has(detailTaskId) ? detailTaskId : null;
   const saveTimeLabel = lastSavedAt
     ? lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;
-  const ganttDependencyLines = useMemo(() => {
-    const rowHeight = SCHEDULE_ROW_HEIGHT_PX;
-    const rowGap = 0;
-    const topPad = 0;
-    const rowStep = rowHeight + rowGap;
-    const rowIndexById = new Map(rows.map((t, i) => [t.id, i]));
-    return rows.flatMap((child) => {
-      if (!child.parentId) return [];
-      const parent = byId.get(child.parentId);
-      if (!parent) return [];
-      const parentIndex = rowIndexById.get(parent.id);
-      const childIndex = rowIndexById.get(child.id);
-      if (parentIndex == null || childIndex == null) return [];
-      const p = barLayout(
-        parseYmd(parent.startDate),
-        parseYmd(parent.endDate),
-        range.min,
-        range.max,
-      );
-      const c = barLayout(parseYmd(child.startDate), parseYmd(child.endDate), range.min, range.max);
-      const parentEndPct = p.leftPct + p.widthPct;
-      const childStartPct = c.leftPct;
-      const parentY = topPad + parentIndex * rowStep + rowHeight / 2;
-      const childY = topPad + childIndex * rowStep + rowHeight / 2;
-      const delta = childStartPct - parentEndPct;
-      const elbowPct =
-        delta >= 0
-          ? parentEndPct + Math.min(1.8, Math.max(0.8, delta * 0.45))
-          : childStartPct - 0.8;
-      const isActive = selectedSet.has(parent.id) || selectedSet.has(child.id);
-      return [
-        {
-          key: `${parent.id}->${child.id}`,
-          parentEndPct,
-          childStartPct,
-          elbowPct,
-          parentY,
-          childY,
-          isActive,
-        },
-      ];
-    });
-  }, [rows, byId, range.min, range.max, selectedSet]);
-
   if (sessionPending || !session) {
     return <EnterpriseLoadingState message="Loading…" label="Loading" />;
   }
@@ -1063,7 +1135,21 @@ export function ProjectScheduleClient({ projectId }: Props) {
   const ganttToday = todayLinePct(range.min, range.max);
 
   return (
-    <div className="enterprise-animate-in space-y-4">
+    <div className="schedule-print-root enterprise-animate-in space-y-4">
+      {panelTask ? (
+        <button
+          type="button"
+          className="no-print fixed inset-0 z-30 bg-black/20"
+          onClick={() => setDetailTaskId(null)}
+          aria-label="Close task details"
+        />
+      ) : null}
+      <TaskDetailPanel
+        task={panelTask}
+        onClose={() => setDetailTaskId(null)}
+        onChange={updateRow}
+        onAddSubtask={addChild}
+      />
       <TakeoffLinksPicker
         open={Boolean(pickerTaskId && pickerTask)}
         onClose={() => setPickerTaskId(null)}
@@ -1074,7 +1160,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
         }}
       />
 
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <header className="no-print flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <div
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]"
@@ -1089,28 +1175,6 @@ export function ProjectScheduleClient({ projectId }: Props) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {selectedTaskIds.length > 0 ? (
-            <>
-              <span className="rounded-md bg-[var(--enterprise-bg)] px-2 py-1 text-xs text-[var(--enterprise-text-muted)]">
-                {selectedTaskIds.length} selected
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `Delete ${selectedTaskIds.length} selected task(s) and their subtasks?`,
-                    )
-                  ) {
-                    removeRows(selectedTaskIds);
-                  }
-                }}
-                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700"
-              >
-                Delete selected
-              </button>
-            </>
-          ) : null}
           <span
             className="text-xs text-[var(--enterprise-text-muted)]"
             aria-live="polite"
@@ -1127,18 +1191,33 @@ export function ProjectScheduleClient({ projectId }: Props) {
               saveMutation.mutate(payload);
             }}
             disabled={!dirty || saveMutation.isPending || !draft}
-            className="inline-flex items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm font-medium text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+            className={SCHEDULE_BTN_SECONDARY}
           >
             <Save className="h-4 w-4" aria-hidden />
             Save now
           </button>
+          <button type="button" onClick={addRow} className={SCHEDULE_BTN_SECONDARY}>
+            <Plus className="h-4 w-4" aria-hidden />
+            Add top-level task
+          </button>
           <button
             type="button"
-            onClick={addRow}
-            className="inline-flex items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm font-medium text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-surface-hover)]"
+            onClick={() => {
+              if (!singleSelectedTaskId) return;
+              addChild(singleSelectedTaskId);
+            }}
+            disabled={!singleSelectedTaskId}
+            className={SCHEDULE_BTN_SECONDARY}
+            title={
+              singleSelectedTaskId ? "Create subtask under selected task" : "Select one task first"
+            }
           >
             <Plus className="h-4 w-4" aria-hidden />
-            Add task
+            Add subtask
+          </button>
+          <button type="button" onClick={openPrintDialog} className={SCHEDULE_BTN_SECONDARY}>
+            <Printer className="h-4 w-4" aria-hidden />
+            Print
           </button>
         </div>
       </header>
@@ -1152,7 +1231,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
               setDirty(true);
               setDraft([makeRow({ title: "Project start", sortOrder: 0 })]);
             }}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-medium text-white"
+            className={`${SCHEDULE_BTN_PRIMARY} mt-4 px-4`}
           >
             <Plus className="h-4 w-4" aria-hidden />
             Start a schedule
@@ -1161,7 +1240,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
       ) : (
         <>
           <section
-            className="hidden min-h-[420px] overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] lg:grid lg:min-h-[620px] lg:h-[calc(100vh-13.5rem)] lg:grid-cols-[440px_minmax(0,1fr)]"
+            className="schedule-print-grid hidden min-h-[420px] overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] lg:grid lg:min-h-[620px] lg:h-[calc(100vh-13.5rem)] lg:grid-cols-[440px_minmax(0,1fr)]"
             aria-label="Schedule grid and timeline"
           >
             <div className="flex min-h-0 flex-col border-r border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
@@ -1170,53 +1249,33 @@ export function ProjectScheduleClient({ projectId }: Props) {
                 className="enterprise-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-auto overscroll-contain"
                 aria-label="Task list scroll area"
               >
-                <table className="min-w-[540px] text-left text-sm">
+                <table className="min-w-[660px] text-left text-sm">
                   <thead className="sticky top-0 z-20 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-xs uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                     <tr>
-                      <th className="w-8 px-2 py-2">
-                        <input
-                          type="checkbox"
-                          aria-label="Select all tasks"
-                          checked={allSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedTaskIds(rows.map((x) => x.id));
-                            else setSelectedTaskIds([]);
-                          }}
-                          className="h-3.5 w-3.5 accent-[var(--enterprise-primary)]"
-                        />
-                      </th>
                       <th className="px-3 py-2 font-medium">Task</th>
                       {takeoffEnabled ? <th className="px-1 py-2 font-medium">Takeoff</th> : null}
                       <th className="px-2 py-2 font-medium">Start</th>
                       <th className="px-2 py-2 font-medium">End</th>
+                      <th className="w-32 px-2 py-2 font-medium">Progress</th>
                       <th className="w-10 px-1 py-2" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--enterprise-border)]">
                     {rows.map((t) => {
-                      const depth = depthOf(t.id, byId);
-                      const isSelected = selectedSet.has(t.id);
+                      const depth = depthById.get(t.id) ?? 0;
                       return (
                         <tr
                           key={t.id}
-                          className={`${tableRowHeightClass} ${isSelected ? "bg-[var(--enterprise-bg)]/40" : "bg-[var(--enterprise-surface)]"}`}
+                          className={`${tableRowHeightClass} bg-[var(--enterprise-surface)] hover:bg-[var(--enterprise-bg)]/20`}
+                          onClick={() => setDetailTaskId(t.id)}
                         >
-                          <td className="px-2 py-1.5 align-middle">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => toggleTaskSelection(t.id, e.target.checked)}
-                              aria-label={`Select task ${t.title}`}
-                              className="h-3.5 w-3.5 accent-[var(--enterprise-primary)]"
-                            />
-                          </td>
                           <td className="px-3 py-1.5 align-middle">
                             <div className="flex items-center gap-2">
                               <SubtaskTreeConnector depth={depth} />
                               {(childCountByParent.get(t.id) ?? 0) > 0 ? (
                                 <button
                                   type="button"
-                                  className="rounded p-0.5 text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-surface-hover)] hover:text-[var(--enterprise-text)]"
+                                  className="cursor-pointer rounded p-0.5 text-[var(--enterprise-text-muted)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] hover:text-[var(--enterprise-text)] active:scale-[0.96]"
                                   aria-label={
                                     collapsedTaskIds.has(t.id)
                                       ? "Expand subtasks"
@@ -1247,6 +1306,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                                 onBlur={(e) =>
                                   updateRow(t.id, { title: normalizeTaskTitle(e.target.value) })
                                 }
+                                onFocus={() => setDetailTaskId(t.id)}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") {
                                     e.preventDefault();
@@ -1255,10 +1315,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                                   }
                                   if (e.key === "Tab") {
                                     e.preventDefault();
-                                    const targets =
-                                      selectedSet.has(t.id) && selectedTaskIds.length > 1
-                                        ? selectedTaskIds
-                                        : [t.id];
+                                    const targets = [t.id];
                                     if (e.shiftKey) outdentRows(targets);
                                     else indentRows(targets);
                                   }
@@ -1275,7 +1332,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                               <button
                                 type="button"
                                 disabled={takeoffQuery.isPending}
-                                className={`flex ${inputHeightClass} w-full items-center gap-1 truncate rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 text-left text-[11px] text-[var(--enterprise-text)] hover:bg-[var(--enterprise-surface-hover)] disabled:opacity-50`}
+                                className={`flex ${inputHeightClass} w-full cursor-pointer items-center gap-1 truncate rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 text-left text-[11px] text-[var(--enterprise-text)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50`}
                                 onClick={() => setPickerTaskId(t.id)}
                                 title={takeoffSummaryLabel(t.takeoffLineIds, takeoffById)}
                               >
@@ -1294,6 +1351,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                               className={`${inputHeightClass} w-38 rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1 text-[var(--enterprise-text)]`}
                               value={t.startDate}
                               onChange={(e) => updateRow(t.id, { startDate: e.target.value })}
+                              onFocus={() => setDetailTaskId(t.id)}
                             />
                           </td>
                           <td className="px-2 py-1.5 align-middle">
@@ -1302,13 +1360,39 @@ export function ProjectScheduleClient({ projectId }: Props) {
                               className={`${inputHeightClass} w-38 rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1 text-[var(--enterprise-text)]`}
                               value={t.endDate}
                               onChange={(e) => updateRow(t.id, { endDate: e.target.value })}
+                              onFocus={() => setDetailTaskId(t.id)}
                             />
+                          </td>
+                          <td className="px-2 py-1.5 align-middle">
+                            <button
+                              type="button"
+                              className="w-full cursor-pointer rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1 text-left transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99]"
+                              onClick={() => setDetailTaskId(t.id)}
+                              title="Open details to edit progress/status"
+                            >
+                              <div className="flex items-center justify-between gap-2 text-[11px]">
+                                <span
+                                  className={`rounded px-1.5 py-0.5 font-medium ${
+                                    statusPalette(normalizeStatus(t.status)).pillBg
+                                  } ${statusPalette(normalizeStatus(t.status)).pillText}`}
+                                >
+                                  {STATUS_OPTIONS.find((x) => x.value === normalizeStatus(t.status))
+                                    ?.label ?? "Not started"}
+                                </span>
+                                <span className="font-semibold text-[var(--enterprise-text)]">
+                                  {Math.max(0, Math.min(100, Math.round(t.progressPercent)))}%
+                                </span>
+                              </div>
+                              <div className="mt-1">
+                                <ProgressBar value={t.progressPercent} />
+                              </div>
+                            </button>
                           </td>
                           <td className="relative px-1 py-1.5 align-middle">
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 type="button"
-                                className="rounded p-1 text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-surface-hover)] hover:text-[var(--enterprise-text)]"
+                                className={SCHEDULE_ICON_BTN}
                                 aria-label="Add subtask"
                                 onClick={() => addChild(t.id)}
                               >
@@ -1316,7 +1400,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                               </button>
                               <button
                                 type="button"
-                                className="rounded p-1 text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600"
+                                className="cursor-pointer rounded p-1 text-[var(--enterprise-text-muted)] transition-all duration-150 hover:bg-red-50 hover:text-red-600 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
                                 aria-label="Delete task"
                                 onClick={() =>
                                   setConfirmDeleteTaskId((prev) => (prev === t.id ? null : t.id))
@@ -1333,14 +1417,14 @@ export function ProjectScheduleClient({ projectId }: Props) {
                                 <div className="mt-2 flex justify-end gap-2">
                                   <button
                                     type="button"
-                                    className="rounded-md border border-[var(--enterprise-border)] px-2 py-1 text-xs text-[var(--enterprise-text)]"
+                                    className="cursor-pointer rounded-md border border-[var(--enterprise-border)] px-2 py-1 text-xs text-[var(--enterprise-text)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.97]"
                                     onClick={() => setConfirmDeleteTaskId(null)}
                                   >
                                     Cancel
                                   </button>
                                   <button
                                     type="button"
-                                    className="rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white"
+                                    className="cursor-pointer rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white transition-all duration-150 hover:bg-red-700 active:scale-[0.97]"
                                     onClick={() => {
                                       removeRow(t.id);
                                       setConfirmDeleteTaskId(null);
@@ -1407,66 +1491,13 @@ export function ProjectScheduleClient({ projectId }: Props) {
                         </div>
                       </>
                     ) : null}
-                    {ganttDependencyLines.map((line) => {
-                      const verticalTop = Math.min(line.parentY, line.childY);
-                      const verticalHeight = Math.max(1, Math.abs(line.childY - line.parentY));
-                      const strokeClass = line.isActive
-                        ? "bg-[var(--enterprise-primary)]/90"
-                        : "bg-[var(--enterprise-text-muted)]/75";
-                      const arrowLeftPct = line.childStartPct - 0.45;
-                      return (
-                        <div
-                          key={line.key}
-                          className="pointer-events-none absolute inset-0 z-[3]"
-                          aria-hidden
-                        >
-                          <div
-                            className={`absolute h-px ${strokeClass}`}
-                            style={{
-                              left: `${line.parentEndPct}%`,
-                              width: `${Math.max(0.3, line.elbowPct - line.parentEndPct)}%`,
-                              top: line.parentY,
-                            }}
-                          />
-                          <div
-                            className={`absolute w-px ${strokeClass}`}
-                            style={{
-                              left: `${line.elbowPct}%`,
-                              top: verticalTop,
-                              height: verticalHeight,
-                            }}
-                          />
-                          <div
-                            className={`absolute h-px ${strokeClass}`}
-                            style={{
-                              left: `${Math.min(line.elbowPct, line.childStartPct)}%`,
-                              width: `${Math.max(0.3, Math.abs(line.childStartPct - line.elbowPct))}%`,
-                              top: line.childY,
-                            }}
-                          />
-                          <div
-                            className={`absolute h-[5px] w-[5px] rounded-full ${strokeClass}`}
-                            style={{ left: `${line.parentEndPct - 0.16}%`, top: line.parentY - 2 }}
-                          />
-                          <div
-                            className="absolute h-0 w-0 border-y-[4px] border-y-transparent border-l-[6px]"
-                            style={{
-                              left: `${arrowLeftPct}%`,
-                              top: line.childY - 4,
-                              borderLeftColor: line.isActive
-                                ? "var(--enterprise-primary)"
-                                : "var(--enterprise-text-muted)",
-                              opacity: line.isActive ? 0.9 : 0.75,
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
                     {rows.map((t) => {
-                      const depth = depthOf(t.id, byId);
+                      const depth = depthById.get(t.id) ?? 0;
                       const start = parseYmd(t.startDate);
                       const end = parseYmd(t.endDate);
                       const { leftPct, widthPct } = barLayout(start, end, range.min, range.max);
+                      const status = normalizeStatus(t.status);
+                      const palette = statusPalette(status);
                       const isChild = depth > 0;
                       const showPreview =
                         createPreview?.rowTaskId === t.id && createPreview.widthPct > 0;
@@ -1474,14 +1505,11 @@ export function ProjectScheduleClient({ projectId }: Props) {
                         <div
                           key={t.id}
                           data-gantt-track
-                          className={`relative ${ganttRowHeightClass} select-none rounded-sm border border-[var(--enterprise-border)]/40 bg-[var(--enterprise-bg)] ${
+                          className={`group relative ${ganttRowHeightClass} select-none rounded-sm border border-[var(--enterprise-border)]/40 bg-[var(--enterprise-bg)] ${
                             isChild ? "ring-1 ring-[var(--enterprise-border)]/30" : ""
-                          } ${
-                            selectedSet.has(t.id)
-                              ? "ring-2 ring-[var(--enterprise-primary)]/35"
-                              : ""
                           }`}
                           style={{ minWidth: timelineWidthPx }}
+                          onClick={() => setDetailTaskId(t.id)}
                         >
                           {ganttWeeks.map((w, i) => (
                             <div
@@ -1493,12 +1521,12 @@ export function ProjectScheduleClient({ projectId }: Props) {
                           <button
                             type="button"
                             tabIndex={-1}
-                            aria-label={`Add task on timeline (${t.title})`}
+                            aria-label={`Drag on timeline to create task (${t.title})`}
                             className="absolute inset-0 z-[1] cursor-crosshair border-0 bg-transparent p-0"
-                            onPointerDown={(e) => onTrackPointerDown(e, t)}
+                            onPointerDown={(e) => onTrackPointerDown(e, t.id, t.parentId)}
                             onPointerMove={onTrackPointerMove}
                             onPointerUp={onTrackPointerUp}
-                            onPointerCancel={onTrackPointerUp}
+                            onPointerCancel={onTrackPointerCancel}
                           />
                           {showPreview ? (
                             <div
@@ -1511,10 +1539,8 @@ export function ProjectScheduleClient({ projectId }: Props) {
                             />
                           ) : null}
                           <div
-                            className={`absolute top-1/2 z-[4] flex h-3 -translate-y-1/2 items-stretch touch-none rounded-sm shadow-sm ${
-                              isChild
-                                ? "bg-[var(--enterprise-primary)]/65"
-                                : "bg-[var(--enterprise-primary)]/85"
+                            className={`absolute top-1/2 z-[4] flex h-6 -translate-y-1/2 items-stretch touch-none rounded-xl shadow-sm ${palette.barBg} ${
+                              isChild ? "opacity-85" : ""
                             }`}
                             style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                             title={`${t.title}`}
@@ -1530,11 +1556,24 @@ export function ProjectScheduleClient({ projectId }: Props) {
                             />
                             <div
                               className="min-w-0 flex-1 cursor-grab touch-none active:cursor-grabbing"
+                              onClick={() => setDetailTaskId(t.id)}
                               onPointerDown={(e) => onMoveBarDown(e, t.id)}
                               onPointerMove={onMoveBarMove}
                               onPointerUp={onMoveBarUp}
                               onPointerCancel={onMoveBarUp}
                             />
+                            <div
+                              className={`pointer-events-none absolute inset-y-0 left-0 rounded-sm ${palette.progressBg}`}
+                              style={{
+                                width: `${Math.max(0, Math.min(100, t.progressPercent))}%`,
+                              }}
+                              aria-hidden
+                            />
+                            {widthPct > 5 ? (
+                              <span className="pointer-events-none absolute inset-0 flex items-center px-2 text-[10px] font-medium text-white/90">
+                                <span className="truncate">{t.title}</span>
+                              </span>
+                            ) : null}
                             <div
                               role="separator"
                               aria-label="Resize end date"
@@ -1554,13 +1593,13 @@ export function ProjectScheduleClient({ projectId }: Props) {
             </div>
           </section>
 
-          <div className="space-y-3 lg:hidden">
+          <div className="no-print space-y-3 lg:hidden">
             <p className="text-xs text-[var(--enterprise-text-muted)]">
               Timeline view uses horizontal space — use a larger screen for the chart, or edit dates
               below.
             </p>
             {rows.map((t) => {
-              const depth = depthOf(t.id, byId);
+              const depth = depthById.get(t.id) ?? 0;
               return (
                 <div
                   key={t.id}
@@ -1574,6 +1613,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                       value={t.title}
                       onChange={(e) => updateRow(t.id, { title: e.target.value })}
                       onBlur={(e) => updateRow(t.id, { title: normalizeTaskTitle(e.target.value) })}
+                      onFocus={() => setDetailTaskId(t.id)}
                     />
                   </label>
                   {takeoffEnabled ? (
@@ -1584,7 +1624,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                       <button
                         type="button"
                         disabled={takeoffQuery.isPending}
-                        className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2 text-sm text-[var(--enterprise-text)]"
+                        className="mt-1 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2 text-sm text-[var(--enterprise-text)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={() => setPickerTaskId(t.id)}
                       >
                         <Link2 className="h-4 w-4 shrink-0" aria-hidden />
@@ -1602,6 +1642,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                         className="mt-1 w-full rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1 text-sm"
                         value={t.startDate}
                         onChange={(e) => updateRow(t.id, { startDate: e.target.value })}
+                        onFocus={() => setDetailTaskId(t.id)}
                       />
                     </label>
                     <label className="text-xs text-[var(--enterprise-text-muted)]">
@@ -1611,20 +1652,43 @@ export function ProjectScheduleClient({ projectId }: Props) {
                         className="mt-1 w-full rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1 text-sm"
                         value={t.endDate}
                         onChange={(e) => updateRow(t.id, { endDate: e.target.value })}
+                        onFocus={() => setDetailTaskId(t.id)}
                       />
                     </label>
                   </div>
+                  <button
+                    type="button"
+                    className="mt-2 w-full cursor-pointer rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-2 text-left transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99]"
+                    onClick={() => setDetailTaskId(t.id)}
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <span
+                        className={`rounded px-1.5 py-0.5 font-medium ${
+                          statusPalette(normalizeStatus(t.status)).pillBg
+                        } ${statusPalette(normalizeStatus(t.status)).pillText}`}
+                      >
+                        {STATUS_OPTIONS.find((x) => x.value === normalizeStatus(t.status))?.label ??
+                          "Not started"}
+                      </span>
+                      <span className="font-semibold text-[var(--enterprise-text)]">
+                        {Math.max(0, Math.min(100, Math.round(t.progressPercent)))}%
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <ProgressBar value={t.progressPercent} />
+                    </div>
+                  </button>
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"
-                      className="rounded border border-[var(--enterprise-border)] px-2 py-1 text-xs"
+                      className="cursor-pointer rounded border border-[var(--enterprise-border)] px-2 py-1 text-xs transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.98]"
                       onClick={() => addChild(t.id)}
                     >
                       Add subtask
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-red-200 px-2 py-1 text-xs text-red-700"
+                      className="cursor-pointer rounded border border-red-200 px-2 py-1 text-xs text-red-700 transition-all duration-150 hover:bg-red-50 active:scale-[0.98]"
                       onClick={() => {
                         if (window.confirm("Delete this task and all subtasks?")) removeRow(t.id);
                       }}

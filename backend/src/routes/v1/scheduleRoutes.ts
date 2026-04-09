@@ -35,10 +35,20 @@ const taskInSchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   isMilestone: z.boolean().optional(),
   progressPercent: z.number().int().min(0).max(100).optional(),
+  status: z.enum(["not_started", "in_progress", "delayed", "completed"]).optional(),
   takeoffLineIds: z.array(z.string().min(1).max(80)).max(200).optional(),
 });
 
 type TaskIn = z.infer<typeof taskInSchema>;
+
+function normalizeStatus(
+  status: string | null | undefined,
+): "not_started" | "in_progress" | "delayed" | "completed" {
+  if (status === "in_progress") return "in_progress";
+  if (status === "delayed") return "delayed";
+  if (status === "completed") return "completed";
+  return "not_started";
+}
 
 function validateForest(tasks: TaskIn[]): { ok: true } | { error: string } {
   const ids = new Set(tasks.map((t) => t.id));
@@ -98,6 +108,7 @@ function rowJson(row: {
   endDate: Date;
   isMilestone: boolean;
   progressPercent: number;
+  status: string;
   updatedAt: Date;
   takeoffLinks?: { takeoffLineId: string }[];
 }) {
@@ -110,6 +121,7 @@ function rowJson(row: {
     endDate: ymdFromDate(row.endDate),
     isMilestone: row.isMilestone,
     progressPercent: row.progressPercent,
+    status: normalizeStatus(row.status),
     takeoffLineIds: (row.takeoffLinks ?? []).map((l) => l.takeoffLineId),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -210,6 +222,7 @@ export function registerScheduleRoutes(r: Hono, needUser: MiddlewareHandler) {
             endDate,
             isMilestone: t.isMilestone ?? false,
             progressPercent: t.progressPercent ?? 0,
+            status: t.status ?? "not_started",
           },
           update: {
             title: t.title,
@@ -219,6 +232,7 @@ export function registerScheduleRoutes(r: Hono, needUser: MiddlewareHandler) {
             endDate,
             isMilestone: t.isMilestone ?? false,
             progressPercent: t.progressPercent ?? 0,
+            status: t.status ?? "not_started",
           },
         });
         const linkIds = [...new Set(t.takeoffLineIds ?? [])];

@@ -136,6 +136,8 @@ export async function patchProjectSettings(
   return { projectId: j.projectId, settings: j.settings };
 }
 
+export type ScheduleTaskStatus = "not_started" | "in_progress" | "delayed" | "completed";
+
 export type ScheduleTaskRow = {
   id: string;
   title: string;
@@ -145,6 +147,7 @@ export type ScheduleTaskRow = {
   endDate: string;
   isMilestone: boolean;
   progressPercent: number;
+  status: ScheduleTaskStatus;
   /** Linked quantity takeoff line ids (same project). */
   takeoffLineIds: string[];
   updatedAt: string;

@@ -7,6 +7,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
   Bell,
+  ChevronLeft,
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
@@ -76,6 +77,8 @@ type EnterpriseTopBarProps = {
   onToggleMobileNav: () => void;
   /** Mobile drawer open — drives menu button `aria-expanded`. Desktop nav is a separate column. */
   mobileNavOpen: boolean;
+  desktopSidebarCollapsed: boolean;
+  onToggleDesktopSidebar: () => void;
 };
 
 function extractProjectId(pathname: string): string | null {
@@ -112,6 +115,8 @@ export function EnterpriseTopBar({
   onOpenCommandPalette,
   onToggleMobileNav,
   mobileNavOpen,
+  desktopSidebarCollapsed,
+  onToggleDesktopSidebar,
 }: EnterpriseTopBarProps) {
   const pathname = usePathname();
   const qc = useQueryClient();
@@ -211,6 +216,19 @@ export function EnterpriseTopBar({
 
         {/* Breadcrumb */}
         <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 md:gap-3">
+          <button
+            type="button"
+            onClick={onToggleDesktopSidebar}
+            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 lg:flex"
+            aria-label={desktopSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={`${desktopSidebarCollapsed ? "Expand" : "Collapse"} sidebar`}
+          >
+            {desktopSidebarCollapsed ? (
+              <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+            ) : (
+              <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
+            )}
+          </button>
           <span
             className="hidden shrink-0 select-none items-baseline gap-0 font-bold tracking-tight sm:inline-flex"
             aria-label={workspaceNameForAria}

@@ -451,6 +451,7 @@ model ScheduleTask {
 
   isMilestone     Boolean @default(false)
   progressPercent Int     @default(0)
+  status          String  @default("not_started")
 
   takeoffLinks ScheduleTaskTakeoffLine[]
 

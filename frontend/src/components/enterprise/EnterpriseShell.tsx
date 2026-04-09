@@ -115,13 +115,14 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
             mobileOpen={mobileNavOpen}
             onCloseMobile={closeMobileNav}
             desktopCollapsed={desktopSidebarCollapsed}
-            onToggleDesktopCollapse={toggleDesktopSidebar}
           />
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:border-l lg:border-[var(--enterprise-border-subtle)]/80 lg:shadow-[var(--enterprise-shadow-inner)]">
             <EnterpriseTopBar
               onOpenCommandPalette={openPalette}
               onToggleMobileNav={toggleMobileNav}
               mobileNavOpen={mobileNavOpen}
+              desktopSidebarCollapsed={desktopSidebarCollapsed}
+              onToggleDesktopSidebar={toggleDesktopSidebar}
             />
             <main className="enterprise-scrollbar enterprise-main-canvas min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
               <div className="enterprise-main-inner min-h-full">{children}</div>

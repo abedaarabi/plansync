@@ -79,6 +79,7 @@ html {
   --enterprise-sidebar-hover: rgba(255, 255, 255, 0.04);
   --enterprise-sidebar-edge: rgba(255, 255, 255, 0.06);
   --enterprise-hover-surface: #f1f5f9;
+  --enterprise-surface-hover: #f8fafc;
 
   /* Hairlines & elevation */
   --enterprise-border-subtle: rgba(12, 18, 34, 0.06);
@@ -162,6 +163,31 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   max-width: 100%;
+}
+
+button,
+[role="button"] {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 120ms ease;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+button:active:not(:disabled),
+[role="button"]:active:not([aria-disabled="true"]) {
+  transform: scale(0.98);
 }
 
 .viewer-shell-bg {
@@ -543,6 +569,36 @@ body {
   background-clip: padding-box;
 }
 
+.enterprise-sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.enterprise-sidebar-scrollbar:hover {
+  scrollbar-color: color-mix(in srgb, var(--enterprise-text-muted) 45%, transparent) transparent;
+}
+
+.enterprise-sidebar-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.enterprise-sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.enterprise-sidebar-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.enterprise-sidebar-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--enterprise-text-muted) 42%, transparent);
+}
+
+.enterprise-sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--enterprise-text-muted) 58%, transparent);
+}
+
 @keyframes enterprise-fade-in {
   from {
     opacity: 0;
@@ -697,6 +753,13 @@ body {
 }
 
 @media print {
+  /* Keep gantt colors in print output (bars, status chips, highlights). */
+  .schedule-print-root,
+  .schedule-print-root * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   .no-print {
     display: none !important;
   }
@@ -706,5 +769,26 @@ body {
   .pdf-print-only {
     display: block !important;
     break-inside: avoid;
+  }
+
+  /* Schedule print: render only the desktop gantt/list layout */
+  .schedule-print-root > * {
+    display: none !important;
+  }
+  .schedule-print-root .schedule-print-grid {
+    display: grid !important;
+    min-height: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .schedule-print-root .schedule-print-grid [aria-label="Task list scroll area"],
+  .schedule-print-root .schedule-print-grid [aria-label="Timeline scroll area"] {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  .schedule-print-root .schedule-print-grid .sticky {
+    position: static !important;
   }
 }
