@@ -44,13 +44,19 @@ export function SocialAuthButtons({ callbackURL, onError }: Props) {
 
   if (ids.length === 0) return null;
 
+  function absoluteCallbackURL(pathOrUrl: string): string {
+    if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+    const path = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+    return new URL(path, window.location.origin).href;
+  }
+
   async function handle(id: SocialProviderId) {
     setPending(id);
     onError(null);
     try {
       const { error } = await authClient.signIn.social({
         provider: id,
-        callbackURL,
+        callbackURL: absoluteCallbackURL(callbackURL),
       });
       if (error) onError(error.message ?? "Could not start sign-in");
     } catch (e) {
