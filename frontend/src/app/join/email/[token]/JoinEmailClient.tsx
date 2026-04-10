@@ -1,7 +1,7 @@
 "use client";
 
 import { apiUrl } from "@/lib/api-url";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImageIcon, Loader2, Lock, Mail, User } from "lucide-react";
@@ -40,6 +40,7 @@ export function JoinEmailClient({ token }: { token: string }) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const autoInviteAcceptRef = useRef(false);
 
   useEffect(() => {
     void (async () => {
@@ -80,6 +81,23 @@ export function JoinEmailClient({ token }: { token: string }) {
     return true;
   }, [router, token]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("afterVerify") !== "1") return;
+    if (autoInviteAcceptRef.current) return;
+    if (!preview?.valid || sessionPending || !session?.user) return;
+    autoInviteAcceptRef.current = true;
+    void acceptAndGo().then((ok) => {
+      if (!ok) {
+        autoInviteAcceptRef.current = false;
+        const u = new URL(window.location.href);
+        u.searchParams.delete("afterVerify");
+        router.replace(u.pathname + (u.search ? u.search : ""));
+      }
+    });
+  }, [acceptAndGo, preview?.valid, router, session?.user, sessionPending]);
+
   const onJoin = useCallback(async () => {
     setError(null);
     setJoining(true);
@@ -116,13 +134,36 @@ export function JoinEmailClient({ token }: { token: string }) {
             setError("Passwords do not match.");
             return;
           }
+          const joinAfterVerifyPath = `/join/email/${encodeURIComponent(token)}?afterVerify=1`;
+          const verifyCallbackUrl =
+            typeof window !== "undefined"
+              ? new URL(joinAfterVerifyPath, window.location.origin).href
+              : undefined;
           const { error: err } = await authClient.signUp.email({
             email: email.trim(),
             password,
             name: displayName,
+            ...(verifyCallbackUrl ? { callbackURL: verifyCallbackUrl } : {}),
           });
           if (err) {
             setError(err.message ?? "Could not create account.");
+            return;
+          }
+          let hasSession = false;
+          try {
+            const sessRes = await fetch("/api/auth/get-session", {
+              credentials: "include",
+              cache: "no-store",
+            });
+            const sess = (await sessRes.json().catch(() => null)) as { user?: unknown } | null;
+            hasSession = Boolean(sess?.user);
+          } catch {
+            hasSession = false;
+          }
+          if (!hasSession) {
+            router.replace(
+              `/verify-email?email=${encodeURIComponent(email.trim())}&next=${encodeURIComponent(joinAfterVerifyPath)}`,
+            );
             return;
           }
           if (avatarUrl.trim()) {
@@ -147,7 +188,7 @@ export function JoinEmailClient({ token }: { token: string }) {
         setAuthLoading(false);
       }
     },
-    [acceptAndGo, avatarUrl, confirmPassword, email, mode, name, password, preview],
+    [acceptAndGo, avatarUrl, confirmPassword, email, mode, name, password, preview, router, token],
   );
 
   useEffect(() => {

@@ -62,14 +62,21 @@ export default function SignInPage() {
     setLoading(true);
     try {
       if (mode === "sign-up") {
+        const nextPath = next.startsWith("/") ? next : `/${next}`;
+        const verifyCallbackUrl =
+          typeof window !== "undefined"
+            ? new URL(`/onboarding?next=${encodeURIComponent(nextPath)}`, window.location.origin)
+                .href
+            : undefined;
         const { error: err } = await authClient.signUp.email({
           email,
           password,
           name: name.trim() || email.split("@")[0] || "User",
+          ...(verifyCallbackUrl ? { callbackURL: verifyCallbackUrl } : {}),
         });
         if (err) setError(err.message ?? "Sign up failed");
         else {
-          const afterOnboarding = encodeURIComponent(next);
+          const afterOnboarding = encodeURIComponent(nextPath);
           router.replace(
             `/verify-email?email=${encodeURIComponent(email)}&next=${encodeURIComponent(`/onboarding?next=${afterOnboarding}`)}`,
           );

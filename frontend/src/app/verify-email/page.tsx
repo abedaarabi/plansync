@@ -16,10 +16,29 @@ function VerifyEmailContent() {
   const [checking, setChecking] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
-  function onResend() {
+  async function onResend() {
     setBusy(true);
-    setResent(true);
-    window.setTimeout(() => setBusy(false), 1200);
+    setStatusMsg(null);
+    try {
+      const path = next.startsWith("/") ? next : `/${next}`;
+      const callbackURL =
+        typeof window !== "undefined" ? new URL(path, window.location.origin).href : undefined;
+      const { error } = await authClient.sendVerificationEmail({
+        email,
+        ...(callbackURL ? { callbackURL } : {}),
+      });
+      if (error) {
+        setResent(false);
+        setStatusMsg(error.message ?? "Could not resend the email. Try again in a moment.");
+      } else {
+        setResent(true);
+      }
+    } catch {
+      setResent(false);
+      setStatusMsg("Could not resend the email. Try again in a moment.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onContinue() {
@@ -113,9 +132,13 @@ function VerifyEmailContent() {
               ) : resent ? (
                 "Check your inbox again — we sent another link."
               ) : (
-                "Didn’t receive it? Resend email"
+                "Didn’t receive it? Resend verification email"
               )}
             </button>
+
+            {statusMsg ? (
+              <p className="mt-3 text-center text-sm text-red-600">{statusMsg}</p>
+            ) : null}
 
             <button
               type="button"
@@ -130,9 +153,6 @@ function VerifyEmailContent() {
               )}
               I verified my email
             </button>
-            {statusMsg ? (
-              <p className="mt-3 text-center text-sm text-red-600">{statusMsg}</p>
-            ) : null}
             <button
               type="button"
               onClick={async () => {
