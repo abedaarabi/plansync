@@ -22,7 +22,20 @@ const schema = z.object({
   S3_BUCKET: z.string().optional(),
   /** Max bytes for POST /files/upload (browser → API → S3; avoids S3 CORS). Default 100 MiB. */
   MAX_DIRECT_UPLOAD_BYTES: z.coerce.bigint().default(104857600n),
-  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_SECRET_KEY: z.preprocess(
+    (v) => {
+      if (v === undefined || v === null) return undefined;
+      const s = String(v).trim();
+      return s === "" ? undefined : s;
+    },
+    z
+      .string()
+      .optional()
+      .refine((s) => s == null || !s.toLowerCase().startsWith("pk_"), {
+        message:
+          "STRIPE_SECRET_KEY must be a secret key (sk_test_… or sk_live_… from Stripe Dashboard → Developers → API keys), not a publishable key (pk_…).",
+      }),
+  ),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PRICE_PRO_MONTHLY: z.string().optional(),
   STRIPE_PRICE_ENTERPRISE_MONTHLY: z.string().optional(),
