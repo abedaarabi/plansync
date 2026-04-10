@@ -60,12 +60,15 @@ export function projectDetailApiJson(project) {
         projectSize: project.projectSize,
         projectType: project.projectType,
         location: project.location,
+        latitude: project.latitude,
+        longitude: project.longitude,
         websiteUrl: project.websiteUrl,
         logoUrl: project.logoUrl,
         stage: project.stage,
         progressPercent: project.progressPercent,
         startDate: project.startDate,
         endDate: project.endDate,
+        operationsMode: project.operationsMode ?? false,
         takeoffPricing: parseTakeoffPricingFromSettingsJson(project.settingsJson),
     });
 }

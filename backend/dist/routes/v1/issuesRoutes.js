@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ActivityType, IssuePriority, IssueStatus, RfiStatus } from "@prisma/client";
+import { ActivityType, IssueKind, IssuePriority, IssueStatus, RfiStatus, } from "@prisma/client";
 import { Resend } from "resend";
 import { prisma } from "../../lib/prisma.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
@@ -23,6 +23,7 @@ function dateFromYmd(s) {
 const issueInclude = {
     assignee: { select: { id: true, name: true, email: true, image: true } },
     creator: { select: { id: true, name: true, email: true, image: true } },
+    asset: { select: { id: true, tag: true, name: true } },
     file: { select: { name: true } },
     fileVersion: { select: { version: true } },
     rfiLinks: {
@@ -79,6 +80,15 @@ function issueRowJson(row) {
             title: l.rfi.title,
             status: l.rfi.status,
         })),
+        issueKind: row.issueKind,
+        assetId: row.assetId,
+        asset: row.asset ? { id: row.asset.id, tag: row.asset.tag, name: row.asset.name } : null,
+        externalAssigneeEmail: row.externalAssigneeEmail,
+        externalAssigneeName: row.externalAssigneeName,
+        acknowledgedAt: row.acknowledgedAt ? row.acknowledgedAt.toISOString() : null,
+        resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
+        reporterName: row.reporterName,
+        reporterEmail: row.reporterEmail,
     };
 }
 function asObject(v) {
@@ -134,8 +144,12 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
         const gate = requirePro(access.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        const issueKindRaw = c.req.query("issueKind")?.trim();
+        const issueKind = issueKindRaw === "WORK_ORDER" || issueKindRaw === "CONSTRUCTION"
+            ? issueKindRaw
+            : undefined;
         const rows = await prisma.issue.findMany({
-            where: { fileVersionId },
+            where: { fileVersionId, ...(issueKind ? { issueKind } : {}) },
             include: issueInclude,
             orderBy: { createdAt: "desc" },
         });
@@ -144,6 +158,11 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
     r.get("/projects/:projectId/issues", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const fileVersionId = c.req.query("fileVersionId")?.trim() || undefined;
+        const assetIdFilter = c.req.query("assetId")?.trim() || undefined;
+        const issueKindRaw = c.req.query("issueKind")?.trim();
+        const issueKind = issueKindRaw === "WORK_ORDER" || issueKindRaw === "CONSTRUCTION"
+            ? issueKindRaw
+            : undefined;
         const userId = c.get("user").id;
         const auth = await loadProjectWithAuth(projectId, userId);
         if ("error" in auth)
@@ -160,6 +179,8 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             where: {
                 projectId,
                 ...(fileVersionId ? { fileVersionId } : {}),
+                ...(assetIdFilter ? { assetId: assetIdFilter } : {}),
+                ...(issueKind ? { issueKind } : {}),
                 ...scope,
             },
             include: issueInclude,
@@ -214,6 +235,12 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             /** Link new issue to one or more project RFIs (merged with `rfiId` if both sent). */
             rfiId: z.string().optional(),
             rfiIds: z.array(z.string()).max(50).optional(),
+            issueKind: z.nativeEnum(IssueKind).optional(),
+            assetId: z.string().optional(),
+            externalAssigneeEmail: z.string().email().optional().or(z.literal("")),
+            externalAssigneeName: z.string().max(200).optional(),
+            reporterName: z.string().max(200).optional(),
+            reporterEmail: z.string().email().optional(),
         })
             .safeParse(await c.req.json());
         if (!body.success)
@@ -264,6 +291,15 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             if ("error" in a)
                 return c.json({ error: a.error }, a.status);
         }
+        if (body.data.assetId) {
+            const ast = await prisma.asset.findFirst({
+                where: { id: body.data.assetId, projectId: file.projectId },
+            });
+            if (!ast)
+                return c.json({ error: "Asset not found on this project" }, 400);
+        }
+        const extEmail = body.data.externalAssigneeEmail?.trim();
+        const extName = body.data.externalAssigneeName?.trim();
         const startDate = body.data.startDate === undefined
             ? undefined
             : body.data.startDate === null
@@ -294,6 +330,18 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
                     sheetName: file.name,
                     sheetVersion: fv.version,
                     ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
+                    ...(body.data.issueKind !== undefined ? { issueKind: body.data.issueKind } : {}),
+                    ...(body.data.assetId !== undefined ? { assetId: body.data.assetId } : {}),
+                    ...(extEmail
+                        ? {
+                            externalAssigneeEmail: extEmail,
+                            externalAssigneeName: extName || null,
+                        }
+                        : {}),
+                    ...(body.data.reporterName !== undefined ? { reporterName: body.data.reporterName } : {}),
+                    ...(body.data.reporterEmail !== undefined
+                        ? { reporterEmail: body.data.reporterEmail }
+                        : {}),
                 },
             });
             if (rfiIdsToLink.length > 0) {
@@ -363,6 +411,24 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
                 href: buildViewerIssuePath(viewerParams),
                 actorUserId: c.get("user").id,
             }).catch((e) => console.error("[issue-notification]", e));
+        }
+        if (extEmail) {
+            const viewerParams = {
+                issueId: issue.id,
+                fileId: issue.fileId,
+                fileVersionId: issue.fileVersionId,
+                projectId: issue.projectId,
+                fileName: issue.file.name,
+                version: issue.fileVersion.version,
+            };
+            const viewerUrl = buildViewerIssueUrl(env, viewerParams);
+            void sendIssueAssignedEmail(env, {
+                assigneeEmail: extEmail,
+                assignerName,
+                issueTitle: issue.title,
+                fileName: issue.file.name,
+                viewerUrl,
+            }).catch((e) => console.error("[issue-email-external]", e));
         }
         notifyIssues(issue.fileVersionId);
         return c.json(issueRowJson(issue));
@@ -453,6 +519,12 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
                     creatorId: c.get("user").id,
                     sheetName: toVersion.file.name,
                     sheetVersion: toVersion.version,
+                    issueKind: issue.issueKind,
+                    assetId: issue.assetId,
+                    externalAssigneeEmail: issue.externalAssigneeEmail,
+                    externalAssigneeName: issue.externalAssigneeName,
+                    reporterName: issue.reporterName,
+                    reporterEmail: issue.reporterEmail,
                 },
                 select: { id: true },
             })));
@@ -531,6 +603,12 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             pageNumber: z.number().int().min(1).nullable().optional(),
             /** Replace RFIs linked to this issue (same project). */
             rfiIds: z.array(z.string()).max(50).optional(),
+            issueKind: z.nativeEnum(IssueKind).optional(),
+            assetId: z.string().nullable().optional(),
+            externalAssigneeEmail: z.string().email().nullable().optional().or(z.literal("")),
+            externalAssigneeName: z.string().max(200).nullable().optional(),
+            acknowledgedAt: z.string().datetime().nullable().optional(),
+            resolvedAt: z.string().datetime().nullable().optional(),
         })
             .safeParse(await c.req.json());
         if (!body.success)
@@ -542,6 +620,13 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             const a = await assertUserAssignableToProject(nextAssigneeId, issue.projectId, issue.workspaceId);
             if ("error" in a)
                 return c.json({ error: a.error }, a.status);
+        }
+        if (body.data.assetId) {
+            const ast = await prisma.asset.findFirst({
+                where: { id: body.data.assetId, projectId: issue.projectId },
+            });
+            if (!ast)
+                return c.json({ error: "Asset not found on this project" }, 400);
         }
         const patchStart = body.data.startDate === undefined
             ? undefined
@@ -569,6 +654,8 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
                 return c.json({ error: "One or more RFIs not found in this project" }, 400);
             }
         }
+        const nextStatus = body.data.status;
+        const shouldStampResolved = nextStatus === IssueStatus.RESOLVED || nextStatus === IssueStatus.CLOSED;
         const updated = await prisma.$transaction(async (tx) => {
             const u = await tx.issue.update({
                 where: { id: issue.id },
@@ -585,6 +672,31 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
                     ...(patchDue !== undefined ? { dueDate: patchDue } : {}),
                     ...(body.data.location !== undefined ? { location: body.data.location } : {}),
                     ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
+                    ...(body.data.issueKind !== undefined ? { issueKind: body.data.issueKind } : {}),
+                    ...(body.data.assetId !== undefined ? { assetId: body.data.assetId } : {}),
+                    ...(body.data.externalAssigneeEmail !== undefined
+                        ? {
+                            externalAssigneeEmail: body.data.externalAssigneeEmail?.trim()
+                                ? body.data.externalAssigneeEmail.trim()
+                                : null,
+                            externalAssigneeName: body.data.externalAssigneeName?.trim()
+                                ? body.data.externalAssigneeName.trim()
+                                : null,
+                        }
+                        : {}),
+                    ...(body.data.acknowledgedAt !== undefined
+                        ? {
+                            acknowledgedAt: body.data.acknowledgedAt
+                                ? new Date(body.data.acknowledgedAt)
+                                : null,
+                        }
+                        : {}),
+                    ...(body.data.resolvedAt !== undefined
+                        ? { resolvedAt: body.data.resolvedAt ? new Date(body.data.resolvedAt) : null }
+                        : {}),
+                    ...(shouldStampResolved && body.data.resolvedAt === undefined
+                        ? { resolvedAt: new Date() }
+                        : {}),
                 },
             });
             if (patchRfiIds !== undefined) {
@@ -636,6 +748,31 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
                 href: buildViewerIssuePath(viewerParams),
                 actorUserId: c.get("user").id,
             }).catch((e) => console.error("[issue-notification]", e));
+        }
+        const prevExt = issue.externalAssigneeEmail?.trim() ?? "";
+        const nextExt = updated.externalAssigneeEmail?.trim() ?? "";
+        if (nextExt && nextExt !== prevExt) {
+            const actor = await prisma.user.findUnique({
+                where: { id: c.get("user").id },
+                select: { name: true },
+            });
+            const assignerName = actor?.name?.trim() || "Someone";
+            const viewerParams = {
+                issueId: updated.id,
+                fileId: updated.fileId,
+                fileVersionId: updated.fileVersionId,
+                projectId: updated.projectId,
+                fileName: updated.file.name,
+                version: updated.fileVersion.version,
+            };
+            const viewerUrl = buildViewerIssueUrl(env, viewerParams);
+            void sendIssueAssignedEmail(env, {
+                assigneeEmail: nextExt,
+                assignerName,
+                issueTitle: updated.title,
+                fileName: updated.file.name,
+                viewerUrl,
+            }).catch((e) => console.error("[issue-email-external]", e));
         }
         notifyIssues(issue.fileVersionId);
         return c.json(issueRowJson(updated));

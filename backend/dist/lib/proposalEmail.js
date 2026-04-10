@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import { inviteFromAddress } from "./inviteEmail.js";
-import { buildTransactionalEmailHtml, escapeHtml, } from "./transactionalEmailLayout.js";
+import { buildTransactionalEmailHtml, escapeHtml } from "./transactionalEmailLayout.js";
 import { resolveWorkspaceLogoUrlForEmail } from "./workspaceLogo.js";
 /** Throws if API env cannot send mail (call before committing proposal to SENT). */
 export function assertProposalEmailReady(env) {

@@ -7,6 +7,9 @@ export function sessionMiddleware(auth) {
         if (!session?.user) {
             return c.json({ error: "Unauthorized" }, 401);
         }
+        if (session.user.emailVerified === false) {
+            return c.json({ error: "Email verification required" }, 403);
+        }
         c.set("user", session.user);
         c.set("session", session.session);
         await next();

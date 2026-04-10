@@ -28,6 +28,9 @@ export function proposalMoneyBreakdown(opts) {
         .div(100)
         .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     const disc = opts.discount.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-    const total = taxableBase.add(taxAmount).sub(disc).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+    const total = taxableBase
+        .add(taxAmount)
+        .sub(disc)
+        .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     return { workAmount, taxableBase, taxAmount, total };
 }

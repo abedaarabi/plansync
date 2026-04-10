@@ -421,7 +421,9 @@ export function buildProposalPdfBuffer(input) {
             .text(input.subtotal, rightX + labelW, y, { width: valW, align: "right" });
         y += 16;
         if (hasWorkFee) {
-            doc.fillColor(C.slate600).text(input.workFeeLabel, rightX, y, { width: labelW, align: "right" });
+            doc
+                .fillColor(C.slate600)
+                .text(input.workFeeLabel, rightX, y, { width: labelW, align: "right" });
             doc
                 .fillColor(C.slate900)
                 .text(input.workFeeAmount, rightX + labelW, y, { width: valW, align: "right" });

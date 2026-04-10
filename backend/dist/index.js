@@ -12,6 +12,7 @@ import { serve } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { buildApiHomePageHtml } from "./lib/apiHomePage.js";
 import { buildCorsAllowList, loadEnv, resolveGeminiApiKey } from "./lib/env.js";
 import { createAuth } from "./auth.js";
 import { v1Routes } from "./routes/v1/index.js";
@@ -33,9 +34,18 @@ app.use("*", cors({
     maxAge: 600,
 }));
 app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
-app.route("/api/stripe", stripeRoutes(env));
+app.route("/api/stripe", stripeRoutes(env, auth));
 app.route("/api/v1", v1Routes(auth, env, { upgradeWebSocket }));
-app.get("/", (c) => c.json({ ok: true, service: "plansync-api" }));
+app.get("/", (c) => {
+    const accept = c.req.header("Accept") ?? "";
+    const wantsJson = /application\/json/i.test(accept) && !/text\/html/i.test(accept);
+    if (wantsJson) {
+        return c.json({ ok: true, service: "plansync-api" });
+    }
+    const host = new URL(c.req.url).host;
+    const html = buildApiHomePageHtml({ env, host });
+    return c.html(html);
+});
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
     // Inside Docker this is the container port; Traefik/DNS expose PUBLIC_API_URL / api host.
     const publicApi = env.PUBLIC_API_URL?.trim() || "(unset — set PUBLIC_API_URL or NEXT_PUBLIC_API_URL in compose)";

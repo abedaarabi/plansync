@@ -10,7 +10,7 @@ import { DEFAULT_STORAGE_QUOTA_BYTES, MAX_WORKSPACE_MEMBERS, MAX_WORKSPACE_PROJE
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { deleteObject, getObjectStream, presignPut, presignGet, putObjectBuffer, } from "../../lib/s3.js";
 import { Resend } from "resend";
-import { ActivityType, EmailInviteKind, Prisma, ProjectMeasurementSystem, ProjectMemberRole, ProjectStage, PunchPriority, PunchStatus, WorkspaceRole, } from "@prisma/client";
+import { ActivityType, EmailInviteKind, Prisma, ProjectMeasurementSystem, ProjectMemberRole, ProjectStage, WorkspaceRole, } from "@prisma/client";
 import { loadProjectWithAuth } from "../../lib/permissions.js";
 /** Workspace roles that can manage members, invites, and project-level admin actions. */
 const WORKSPACE_MANAGER_ROLES = [WorkspaceRole.SUPER_ADMIN, WorkspaceRole.ADMIN];
@@ -31,7 +31,7 @@ function projectRoleFromInviteKind(kind) {
 }
 import { mergeProjectSettingsPatch, parseProjectCurrency, parseProjectSettingsJson, } from "../../lib/projectSettings.js";
 import { fileVersionJson, projectDetailApiJson, projectRowJson, projectTreeJson, workspaceJson, } from "../../lib/json.js";
-import { cloneSettingsJson, mergeTakeoffPricingIntoSettingsJson } from "../../lib/takeoffPricing.js";
+import { cloneSettingsJson, mergeTakeoffPricingIntoSettingsJson, } from "../../lib/takeoffPricing.js";
 import { buildUploadObjectKey, folderKeyFromFolderId, newUploadId, s3KeyMatchesFileUpload, upsertFileForUpload, } from "../../lib/fileUpload.js";
 import { resolvedMimeType } from "../../lib/mime.js";
 import { findBestUploadMatch } from "../../lib/uploadMatch.js";
@@ -43,11 +43,15 @@ import { apiPublicOrigin, workspaceLogoUrlForClients } from "../../lib/workspace
 import { getEmailBrandIconPngBytes } from "../../lib/emailBrandIcon.js";
 import { registerMaterialsRoutes } from "./materialsRoutes.js";
 import { registerIssuesRoutes } from "./issuesRoutes.js";
+import { registerOmRoutes, registerOccupantPublicRoutes } from "./omRoutes.js";
+import { runOmMaintenanceReminders } from "../../lib/omMaintenanceReminders.js";
 import { registerRfiRoutes } from "./rfiRoutes.js";
 import { registerTakeoffRoutes } from "./takeoffRoutes.js";
 import { registerProposalRoutes } from "./proposalRoutes.js";
 import { registerSheetAiRoutes } from "./sheetAiRoutes.js";
 import { registerCloudRoutes } from "./cloudRoutes.js";
+import { registerPunchRoutes } from "./punchRoutes.js";
+import { registerScheduleRoutes } from "./scheduleRoutes.js";
 import { auditLogsToRows, buildAuditPdfBuffer, buildAuditXlsxBuffer, } from "../../lib/projectAuditExport.js";
 import { formatAuditPresentation } from "../../lib/auditFormat.js";
 import { fetchProjectAuditLogs } from "../../lib/projectAuditQuery.js";
@@ -494,17 +498,45 @@ export function v1Routes(auth, env, deps) {
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
-        const slug = body.data.slug.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-        const ws = await prisma.workspace.create({
-            data: {
-                name: body.data.name,
-                slug,
-                storageQuotaBytes: DEFAULT_STORAGE_QUOTA_BYTES,
-                members: {
-                    create: { userId: c.get("user").id, role: WorkspaceRole.SUPER_ADMIN },
-                },
-            },
-        });
+        const baseSlug = body.data.slug
+            .toLowerCase()
+            .replace(/[^a-z0-9-]/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/^-|-$/g, "")
+            .slice(0, 48);
+        const fallbackSlug = `workspace-${randomBytes(3).toString("hex")}`;
+        let candidate = baseSlug || fallbackSlug;
+        let ws = null;
+        for (let attempt = 0; attempt < 6; attempt++) {
+            const slug = attempt === 0 ? candidate : `${candidate}-${randomBytes(2).toString("hex")}`.slice(0, 60);
+            try {
+                ws = await prisma.workspace.create({
+                    data: {
+                        name: body.data.name,
+                        slug,
+                        storageQuotaBytes: DEFAULT_STORAGE_QUOTA_BYTES,
+                        // Every new workspace starts with a 14-day full Pro trial.
+                        subscriptionStatus: "trialing",
+                        currentPeriodEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+                        members: {
+                            create: { userId: c.get("user").id, role: WorkspaceRole.SUPER_ADMIN },
+                        },
+                    },
+                });
+                break;
+            }
+            catch (err) {
+                if (err instanceof Prisma.PrismaClientKnownRequestError &&
+                    err.code === "P2002" &&
+                    Array.isArray(err.meta?.target) &&
+                    err.meta.target.includes("slug")) {
+                    continue;
+                }
+                throw err;
+            }
+        }
+        if (!ws)
+            return c.json({ error: "Could not create workspace slug. Try again." }, 409);
         await logActivity(ws.id, ActivityType.WORKSPACE_CREATED, {
             actorUserId: c.get("user").id,
             entityId: ws.id,
@@ -1537,6 +1569,7 @@ export function v1Routes(auth, env, deps) {
             isExternal: ctx.workspaceMember.isExternal,
             projectRole: ctx.projectMember?.projectRole ?? null,
             trade: ctx.projectMember?.trade ?? null,
+            operationsMode: ctx.project.operationsMode,
             settings: ctx.settings,
             uiMode: ctx.uiMode,
         });
@@ -1561,6 +1594,11 @@ export function v1Routes(auth, env, deps) {
                 proposals: z.boolean().optional(),
                 punch: z.boolean().optional(),
                 fieldReports: z.boolean().optional(),
+                omAssets: z.boolean().optional(),
+                omMaintenance: z.boolean().optional(),
+                omInspections: z.boolean().optional(),
+                omTenantPortal: z.boolean().optional(),
+                schedule: z.boolean().optional(),
             })
                 .optional(),
             clientVisibility: z
@@ -1572,6 +1610,25 @@ export function v1Routes(auth, env, deps) {
                 allowClientComment: z.boolean().optional(),
             })
                 .optional(),
+            omHandover: z
+                .object({
+                notes: z.string().max(20000).optional(),
+                handoverCompletedAt: z.string().datetime().nullable().optional(),
+                buildingLabel: z.string().max(500).nullable().optional(),
+                facilityManagerUserId: z.string().nullable().optional(),
+                handoverDate: z
+                    .string()
+                    .regex(/^\d{4}-\d{2}-\d{2}$/)
+                    .nullable()
+                    .optional(),
+                transferAsBuilt: z.boolean().optional(),
+                transferClosedIssues: z.boolean().optional(),
+                transferPunch: z.boolean().optional(),
+                transferTeamAccess: z.boolean().optional(),
+                handoverWizardCompletedAt: z.string().datetime().nullable().optional(),
+                buildingOwnerEmail: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
+            })
+                .optional(),
         })
             .safeParse(await c.req.json());
         if (!body.success)
@@ -1581,6 +1638,7 @@ export function v1Routes(auth, env, deps) {
         const raw = cloneSettingsJson(ctx.project.settingsJson);
         raw.modules = merged.modules;
         raw.clientVisibility = merged.clientVisibility;
+        raw.omHandover = merged.omHandover;
         const updated = await prisma.project.update({
             where: { id: projectId },
             data: { settingsJson: raw },
@@ -2656,6 +2714,36 @@ export function v1Routes(auth, env, deps) {
             return c.json({ error: "Forbidden" }, 403);
         return c.json(getCollabMetricsSnapshot());
     });
+    /** Daily cron: email workspace admins a digest of PPM items overdue or due within 7 days (UTC). Same auth as RFI overdue reminders. */
+    r.post("/internal/om-maintenance-reminders", async (c) => {
+        const secret = env.INTERNAL_CRON_SECRET?.trim();
+        if (!secret)
+            return c.json({ error: "Not configured" }, 503);
+        const hdr = c.req.header("x-plansync-cron-secret");
+        if (hdr !== secret)
+            return c.json({ error: "Unauthorized" }, 401);
+        try {
+            const result = await runOmMaintenanceReminders(env);
+            if (result.skippedNoResend) {
+                return c.json({
+                    ok: true,
+                    skipped: true,
+                    reason: "RESEND not configured",
+                    dayKey: result.dayKey,
+                });
+            }
+            return c.json({
+                ok: true,
+                dayKey: result.dayKey,
+                workspacesEmailed: result.workspacesEmailed,
+                workspacesSkipped: result.workspacesSkipped,
+            });
+        }
+        catch (e) {
+            console.error("[om-maintenance-reminders]", e);
+            return c.json({ error: "Internal error" }, 500);
+        }
+    });
     r.get("/workspaces/:workspaceId/dashboard", needUser, async (c) => {
         const workspaceId = c.req.param("workspaceId");
         const m = await prisma.workspaceMember.findFirst({
@@ -2906,6 +2994,8 @@ export function v1Routes(auth, env, deps) {
             projectSize: z.string().max(500).nullable().optional(),
             projectType: z.string().max(120).nullable().optional(),
             location: z.string().max(500).nullable().optional(),
+            latitude: z.number().gte(-90).lte(90).nullable().optional(),
+            longitude: z.number().gte(-180).lte(180).nullable().optional(),
             websiteUrl: z.union([z.string().max(2000), z.null()]).optional(),
             stage: z.nativeEnum(ProjectStage).optional(),
             progressPercent: z.number().int().min(0).max(100).optional(),
@@ -2927,12 +3017,23 @@ export function v1Routes(auth, env, deps) {
                 itemDiscountPctByKey: z.record(z.union([z.string(), z.number()])).optional(),
             })
                 .optional(),
+            /** Super Admin only — enables O&M building experience (sidebar, assets, etc.). */
+            operationsMode: z.boolean().optional(),
         })
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
         const b = body.data;
         const data = {};
+        if (b.operationsMode !== undefined) {
+            const wm = await prisma.workspaceMember.findFirst({
+                where: { workspaceId: project.workspaceId, userId: c.get("user").id },
+            });
+            if (!wm || wm.role !== WorkspaceRole.SUPER_ADMIN) {
+                return c.json({ error: "Super Admin only" }, 403);
+            }
+            data.operationsMode = b.operationsMode;
+        }
         if (b.currency !== undefined) {
             const cur = parseProjectCurrency(b.currency);
             if (!cur) {
@@ -2955,6 +3056,22 @@ export function v1Routes(auth, env, deps) {
         }
         if (b.location !== undefined) {
             data.location = b.location?.trim() ? b.location.trim() : null;
+        }
+        if (b.latitude !== undefined || b.longitude !== undefined) {
+            if (b.latitude === undefined || b.longitude === undefined) {
+                return c.json({ error: "latitude and longitude must be updated together" }, 400);
+            }
+            if (b.latitude === null && b.longitude === null) {
+                data.latitude = null;
+                data.longitude = null;
+            }
+            else if (b.latitude != null && b.longitude != null) {
+                data.latitude = b.latitude;
+                data.longitude = b.longitude;
+            }
+            else {
+                return c.json({ error: "latitude and longitude must both be set or both cleared" }, 400);
+            }
         }
         if (b.localBudget !== undefined) {
             if (b.localBudget === null || b.localBudget === "") {
@@ -3028,122 +3145,6 @@ export function v1Routes(auth, env, deps) {
     registerCloudRoutes(r, needUser, env, auth);
     registerRfiRoutes(r, needUser, env);
     registerProposalRoutes(r, needUser, env);
-    r.get("/projects/:projectId/punch", needUser, async (c) => {
-        const projectId = c.req.param("projectId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const list = await prisma.punchItem.findMany({
-            where: { projectId },
-            orderBy: { updatedAt: "desc" },
-        });
-        return c.json(list.map((row) => ({
-            ...row,
-            createdAt: row.createdAt.toISOString(),
-            updatedAt: row.updatedAt.toISOString(),
-        })));
-    });
-    r.post("/projects/:projectId/punch", needUser, async (c) => {
-        const projectId = c.req.param("projectId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
-        if (gate)
-            return c.json({ error: gate.error }, gate.status);
-        const body = z
-            .object({
-            location: z.string().min(1).max(500),
-            trade: z.string().min(1).max(120),
-            priority: z.nativeEnum(PunchPriority).optional(),
-            status: z.nativeEnum(PunchStatus).optional(),
-            notes: z.string().max(5000).optional(),
-        })
-            .safeParse(await c.req.json());
-        if (!body.success)
-            return c.json({ error: body.error.flatten() }, 400);
-        const row = await prisma.punchItem.create({
-            data: {
-                projectId,
-                location: body.data.location,
-                trade: body.data.trade,
-                priority: body.data.priority ?? PunchPriority.P2,
-                status: body.data.status ?? PunchStatus.OPEN,
-                notes: body.data.notes,
-            },
-        });
-        await logActivity(res.project.workspaceId, ActivityType.PUNCH_CREATED, {
-            actorUserId: c.get("user").id,
-            entityId: row.id,
-            projectId,
-            metadata: { location: row.location, trade: row.trade },
-        });
-        return c.json({
-            ...row,
-            createdAt: row.createdAt.toISOString(),
-            updatedAt: row.updatedAt.toISOString(),
-        });
-    });
-    r.patch("/projects/:projectId/punch/:punchId", needUser, async (c) => {
-        const projectId = c.req.param("projectId");
-        const punchId = c.req.param("punchId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
-        if (gate)
-            return c.json({ error: gate.error }, gate.status);
-        const existing = await prisma.punchItem.findFirst({ where: { id: punchId, projectId } });
-        if (!existing)
-            return c.json({ error: "Not found" }, 404);
-        const body = z
-            .object({
-            location: z.string().min(1).max(500).optional(),
-            trade: z.string().min(1).max(120).optional(),
-            priority: z.nativeEnum(PunchPriority).optional(),
-            status: z.nativeEnum(PunchStatus).optional(),
-            notes: z.string().max(5000).nullable().optional(),
-        })
-            .safeParse(await c.req.json());
-        if (!body.success)
-            return c.json({ error: body.error.flatten() }, 400);
-        const row = await prisma.punchItem.update({
-            where: { id: punchId },
-            data: body.data,
-        });
-        await logActivity(res.project.workspaceId, ActivityType.PUNCH_UPDATED, {
-            actorUserId: c.get("user").id,
-            entityId: row.id,
-            projectId,
-            metadata: { location: row.location, trade: row.trade },
-        });
-        return c.json({
-            ...row,
-            createdAt: row.createdAt.toISOString(),
-            updatedAt: row.updatedAt.toISOString(),
-        });
-    });
-    r.delete("/projects/:projectId/punch/:punchId", needUser, async (c) => {
-        const projectId = c.req.param("projectId");
-        const punchId = c.req.param("punchId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
-        if (gate)
-            return c.json({ error: gate.error }, gate.status);
-        const existing = await prisma.punchItem.findFirst({ where: { id: punchId, projectId } });
-        if (!existing)
-            return c.json({ error: "Not found" }, 404);
-        await logActivitySafe(res.project.workspaceId, ActivityType.PUNCH_DELETED, {
-            actorUserId: c.get("user").id,
-            entityId: existing.id,
-            projectId,
-            metadata: { location: existing.location, trade: existing.trade },
-        });
-        await prisma.punchItem.delete({ where: { id: punchId } });
-        return c.json({ ok: true });
-    });
     r.get("/projects/:projectId/field-reports", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const res = await loadProjectForMember(projectId, c.get("user").id);
@@ -3310,6 +3311,9 @@ export function v1Routes(auth, env, deps) {
             });
         }));
     }
+    registerOccupantPublicRoutes(r, env);
+    registerOmRoutes(r, needUser, env);
+    registerPunchRoutes(r, needUser);
     registerIssuesRoutes(r, needUser, env, {
         onIssuesMutated: (fileVersionId) => {
             if (collaborationGloballyEnabled(env)) {
@@ -3320,5 +3324,6 @@ export function v1Routes(auth, env, deps) {
     registerTakeoffRoutes(r, needUser);
     registerSheetAiRoutes(r, needUser, env);
     registerMaterialsRoutes(r, needUser);
+    registerScheduleRoutes(r, needUser);
     return r;
 }

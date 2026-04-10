@@ -46,3 +46,11 @@ export function s3KeyMatchesRfiAttachment(s3Key, workspaceId, projectId, rfiId) 
     const prefix = `ws/${workspaceId}/p/${projectId}/rfi/${rfiId}/`;
     return s3Key.startsWith(prefix);
 }
+export function buildAssetDocumentKey(workspaceId, projectId, assetId, uploadId, fileName) {
+    const safe = sanitizeAttachmentFileName(fileName);
+    return `ws/${workspaceId}/p/${projectId}/asset/${assetId}/${uploadId}/${safe}`;
+}
+export function s3KeyMatchesAssetDocument(s3Key, workspaceId, projectId, assetId) {
+    const prefix = `ws/${workspaceId}/p/${projectId}/asset/${assetId}/`;
+    return s3Key.startsWith(prefix);
+}
