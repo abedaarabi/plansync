@@ -53,7 +53,7 @@ export function ProposalDetailClient({
   const qc = useQueryClient();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
+  const isPro = isWorkspaceProClient(primary?.workspace);
 
   const base = wsFromPath
     ? `/workspaces/${wsFromPath}/projects/${projectId}/proposals`

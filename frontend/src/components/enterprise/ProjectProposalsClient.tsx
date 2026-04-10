@@ -95,7 +95,7 @@ export function ProjectProposalsClient({
 }) {
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
+  const isPro = isWorkspaceProClient(primary?.workspace);
 
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [search, setSearch] = useState("");

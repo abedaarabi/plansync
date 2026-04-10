@@ -36,7 +36,7 @@ import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadin
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
 import { MaterialTemplateEditor } from "./MaterialTemplateEditor";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
-import { isProSubscriptionStatus } from "@/lib/proWorkspace";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 
 const materialInputClass =
   "mt-1 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition placeholder:text-[var(--enterprise-text-muted)]/50 focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/15";
@@ -142,7 +142,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
   const selectedMembership =
     memberships.find((m) => m.workspace.id === workspaceId) ?? primary ?? null;
   const wid = forcedWorkspaceId ?? selectedMembership?.workspace.id;
-  const isPro = isProSubscriptionStatus(selectedMembership?.workspace.subscriptionStatus);
+  const isPro = isWorkspaceProClient(selectedMembership?.workspace);
   const isSuperAdmin = selectedMembership?.role === "SUPER_ADMIN";
 
   useEffect(() => {

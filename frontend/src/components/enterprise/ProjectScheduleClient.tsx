@@ -101,11 +101,11 @@ function statusPalette(status: ScheduleTaskStatus): {
   }
 }
 
-function ProgressBar({ value }: { value: number }) {
+function ProgressBar({ value, className }: { value: number; className?: string }) {
   const clamped = Math.max(0, Math.min(100, Math.round(value)));
   return (
     <div
-      className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--enterprise-border)]/80"
+      className={`h-1 w-full overflow-hidden rounded-full bg-[var(--enterprise-border)]/80 ${className ?? ""}`}
       aria-label={`Progress ${clamped}%`}
       role="progressbar"
       aria-valuemin={0}
@@ -324,7 +324,7 @@ function SubtaskTreeConnector({ depth }: { depth: number }) {
   const lane = 14;
   const elbowLeft = (depth - 1) * lane + 6;
   return (
-    <div className="pointer-events-none relative h-7 shrink-0" style={{ width: depth * lane + 16 }}>
+    <div className="pointer-events-none relative h-6 shrink-0" style={{ width: depth * lane + 16 }}>
       {Array.from({ length: depth }).map((_, i) => (
         <div
           key={i}
@@ -622,16 +622,14 @@ export function ProjectScheduleClient({ projectId }: Props) {
   const [dirty, setDirty] = useState(false);
   const draftRef = useRef<ScheduleTaskInput[] | null>(null);
   draftRef.current = draft;
-  const leftScrollRef = useRef<HTMLDivElement | null>(null);
-  const rightScrollRef = useRef<HTMLDivElement | null>(null);
-  const scrollSyncSourceRef = useRef<"left" | "right" | null>(null);
-
   const [saveUi, setSaveUi] = useState<"saved" | "saving" | "pending" | "error">("saved");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(new Set());
   const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
   const [pickerTaskId, setPickerTaskId] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
+  const selectAllCheckboxRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (scheduleQuery.data && !dirty) {
@@ -773,28 +771,37 @@ export function ProjectScheduleClient({ projectId }: Props) {
   }, [allRows]);
 
   useEffect(() => {
-    const leftEl = leftScrollRef.current;
-    const rightEl = rightScrollRef.current;
-    if (!leftEl || !rightEl) return;
+    const valid = new Set(allRows.map((t) => t.id));
+    setSelectedTaskIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (valid.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [allRows]);
 
-    const sync = (source: HTMLElement, target: HTMLElement, from: "left" | "right") => {
-      if (scrollSyncSourceRef.current && scrollSyncSourceRef.current !== from) return;
-      scrollSyncSourceRef.current = from;
-      target.scrollTop = source.scrollTop;
-      window.requestAnimationFrame(() => {
-        if (scrollSyncSourceRef.current === from) scrollSyncSourceRef.current = null;
-      });
-    };
+  const selectedCount = selectedTaskIds.size;
+  const selectedVisibleCount = useMemo(
+    () => rows.filter((t) => selectedTaskIds.has(t.id)).length,
+    [rows, selectedTaskIds],
+  );
 
-    const onLeftScroll = () => sync(leftEl, rightEl, "left");
-    const onRightScroll = () => sync(rightEl, leftEl, "right");
+  useEffect(() => {
+    const el = selectAllCheckboxRef.current;
+    if (!el || rows.length === 0) return;
+    el.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < rows.length;
+  }, [rows.length, selectedVisibleCount]);
 
-    leftEl.addEventListener("scroll", onLeftScroll, { passive: true });
-    rightEl.addEventListener("scroll", onRightScroll, { passive: true });
-    return () => {
-      leftEl.removeEventListener("scroll", onLeftScroll);
-      rightEl.removeEventListener("scroll", onRightScroll);
-    };
+  const toggleTaskSelected = useCallback((id: string) => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }, []);
 
   const updateRow = useCallback((id: string, patch: Partial<ScheduleTaskInput>) => {
@@ -822,6 +829,12 @@ export function ProjectScheduleClient({ projectId }: Props) {
         .map((t) => (t.parentId && drop.has(t.parentId) ? { ...t, parentId: null } : t));
     });
     setDetailTaskId((prev) => (prev && drop.has(prev) ? null : prev));
+    setSelectedTaskIds((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set(prev);
+      for (const id of drop) next.delete(id);
+      return next.size === prev.size ? prev : next;
+    });
   }, []);
 
   const removeRow = useCallback(
@@ -830,6 +843,20 @@ export function ProjectScheduleClient({ projectId }: Props) {
     },
     [removeRows],
   );
+
+  const deleteSelectedTasks = useCallback(() => {
+    const ids = [...selectedTaskIds];
+    if (ids.length === 0) return;
+    if (
+      !window.confirm(
+        `Delete ${ids.length} selected task(s) and their subtasks? This cannot be undone.`,
+      )
+    )
+      return;
+    removeRows(ids);
+    setSelectedTaskIds(new Set());
+    setConfirmDeleteTaskId(null);
+  }, [selectedTaskIds, removeRows]);
 
   const createTask = useCallback(
     (opts: { parentId: string | null; seed?: Partial<ScheduleTaskInput> }) => {
@@ -1080,9 +1107,9 @@ export function ProjectScheduleClient({ projectId }: Props) {
     if (!detailTaskId) lastDetailTaskRef.current = null;
   }, [detailTask, detailTaskId]);
   const panelTask = detailTask ?? (detailTaskId ? lastDetailTaskRef.current : null);
-  const tableRowHeightClass = "h-10";
-  const ganttRowHeightClass = "h-10";
-  const inputHeightClass = "h-7";
+  const tableRowHeightClass = "h-8";
+  const ganttRowHeightClass = "h-8";
+  const inputHeightClass = "h-6";
   const singleSelectedTaskId = detailTaskId && byId.has(detailTaskId) ? detailTaskId : null;
   const saveTimeLabel = lastSavedAt
     ? lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -1219,6 +1246,16 @@ export function ProjectScheduleClient({ projectId }: Props) {
             <Printer className="h-4 w-4" aria-hidden />
             Print
           </button>
+          {selectedCount > 0 ? (
+            <button
+              type="button"
+              onClick={deleteSelectedTasks}
+              className={`${SCHEDULE_BTN_SECONDARY} border-red-200 text-red-700 hover:bg-red-50`}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+              Delete selected ({selectedCount})
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -1240,36 +1277,67 @@ export function ProjectScheduleClient({ projectId }: Props) {
       ) : (
         <>
           <section
-            className="schedule-print-grid hidden min-h-[420px] overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] lg:grid lg:min-h-[620px] lg:h-[calc(100vh-13.5rem)] lg:grid-cols-[440px_minmax(0,1fr)]"
+            className="schedule-print-grid hidden min-h-[420px] overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] lg:flex lg:min-h-[620px] lg:h-[calc(100vh-13.5rem)] lg:flex-col"
             aria-label="Schedule grid and timeline"
           >
-            <div className="flex min-h-0 flex-col border-r border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
-              <div
-                ref={leftScrollRef}
-                className="enterprise-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-auto overscroll-contain"
-                aria-label="Task list scroll area"
-              >
-                <table className="min-w-[660px] text-left text-sm">
+            <div
+              className="enterprise-scrollbar flex min-h-0 flex-1 flex-row items-start overflow-x-hidden overflow-y-auto overscroll-contain"
+              aria-label="Schedule scroll area"
+            >
+              <div className="flex w-[440px] shrink-0 flex-col overflow-x-auto border-r border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
+                <table className="min-w-[680px] text-left text-sm">
                   <thead className="sticky top-0 z-20 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-xs uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                     <tr>
-                      <th className="px-3 py-2 font-medium">Task</th>
-                      {takeoffEnabled ? <th className="px-1 py-2 font-medium">Takeoff</th> : null}
-                      <th className="px-2 py-2 font-medium">Start</th>
-                      <th className="px-2 py-2 font-medium">End</th>
-                      <th className="w-32 px-2 py-2 font-medium">Progress</th>
-                      <th className="w-10 px-1 py-2" />
+                      <th className="no-print w-8 px-1 py-1.5 align-middle font-medium" scope="col">
+                        <input
+                          ref={selectAllCheckboxRef}
+                          type="checkbox"
+                          checked={rows.length > 0 && selectedVisibleCount === rows.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedTaskIds(new Set(rows.map((r) => r.id)));
+                            } else {
+                              setSelectedTaskIds(new Set());
+                            }
+                          }}
+                          className="accent-[var(--enterprise-primary)]"
+                          title="Select all visible tasks"
+                          aria-label="Select all visible tasks"
+                        />
+                      </th>
+                      <th className="px-2 py-1.5 font-medium">Task</th>
+                      {takeoffEnabled ? <th className="px-1 py-1.5 font-medium">Takeoff</th> : null}
+                      <th className="px-2 py-1.5 font-medium">Start</th>
+                      <th className="px-2 py-1.5 font-medium">End</th>
+                      <th className="w-36 px-1 py-1.5 font-medium">Progress</th>
+                      <th className="w-10 px-1 py-1.5" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--enterprise-border)]">
                     {rows.map((t) => {
                       const depth = depthById.get(t.id) ?? 0;
+                      const isRowSelected = selectedTaskIds.has(t.id);
                       return (
                         <tr
                           key={t.id}
-                          className={`${tableRowHeightClass} bg-[var(--enterprise-surface)] hover:bg-[var(--enterprise-bg)]/20`}
+                          className={`${tableRowHeightClass} bg-[var(--enterprise-surface)] hover:bg-[var(--enterprise-bg)]/20 ${
+                            isRowSelected ? "bg-[var(--enterprise-primary)]/10" : ""
+                          }`}
                           onClick={() => setDetailTaskId(t.id)}
                         >
-                          <td className="px-3 py-1.5 align-middle">
+                          <td
+                            className="no-print w-8 px-1 py-0 align-middle"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isRowSelected}
+                              onChange={() => toggleTaskSelected(t.id)}
+                              className="accent-[var(--enterprise-primary)]"
+                              aria-label={`Select ${t.title}`}
+                            />
+                          </td>
+                          <td className="px-2 py-0.5 align-middle">
                             <div className="flex items-center gap-2">
                               <SubtaskTreeConnector depth={depth} />
                               {(childCountByParent.get(t.id) ?? 0) > 0 ? (
@@ -1297,7 +1365,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                                   )}
                                 </button>
                               ) : (
-                                <span className="h-4 w-4" aria-hidden />
+                                <span className="h-3 w-3" aria-hidden />
                               )}
                               <input
                                 className={`${inputHeightClass} min-w-0 flex-1 rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 text-[var(--enterprise-text)]`}
@@ -1328,11 +1396,11 @@ export function ProjectScheduleClient({ projectId }: Props) {
                             </div>
                           </td>
                           {takeoffEnabled ? (
-                            <td className="max-w-[140px] px-1 py-1.5 align-middle">
+                            <td className="max-w-[140px] px-1 py-0.5 align-middle">
                               <button
                                 type="button"
                                 disabled={takeoffQuery.isPending}
-                                className={`flex ${inputHeightClass} w-full cursor-pointer items-center gap-1 truncate rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 text-left text-[11px] text-[var(--enterprise-text)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50`}
+                                className={`flex ${inputHeightClass} w-full cursor-pointer items-center gap-1 truncate rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1.5 text-left text-[10px] text-[var(--enterprise-text)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50`}
                                 onClick={() => setPickerTaskId(t.id)}
                                 title={takeoffSummaryLabel(t.takeoffLineIds, takeoffById)}
                               >
@@ -1345,7 +1413,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                               </button>
                             </td>
                           ) : null}
-                          <td className="px-2 py-1.5 align-middle">
+                          <td className="px-2 py-0.5 align-middle">
                             <input
                               type="date"
                               className={`${inputHeightClass} w-38 rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1 text-[var(--enterprise-text)]`}
@@ -1354,7 +1422,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                               onFocus={() => setDetailTaskId(t.id)}
                             />
                           </td>
-                          <td className="px-2 py-1.5 align-middle">
+                          <td className="px-2 py-0.5 align-middle">
                             <input
                               type="date"
                               className={`${inputHeightClass} w-38 rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1 text-[var(--enterprise-text)]`}
@@ -1363,40 +1431,39 @@ export function ProjectScheduleClient({ projectId }: Props) {
                               onFocus={() => setDetailTaskId(t.id)}
                             />
                           </td>
-                          <td className="px-2 py-1.5 align-middle">
+                          <td className="px-1 py-0.5 align-middle">
                             <button
                               type="button"
-                              className="w-full cursor-pointer rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1 text-left transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99]"
-                              onClick={() => setDetailTaskId(t.id)}
+                              className="flex w-full cursor-pointer items-center gap-1.5 rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1.5 py-0.5 text-left transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99]"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDetailTaskId(t.id);
+                              }}
                               title="Open details to edit progress/status"
                             >
-                              <div className="flex items-center justify-between gap-2 text-[11px]">
-                                <span
-                                  className={`rounded px-1.5 py-0.5 font-medium ${
-                                    statusPalette(normalizeStatus(t.status)).pillBg
-                                  } ${statusPalette(normalizeStatus(t.status)).pillText}`}
-                                >
-                                  {STATUS_OPTIONS.find((x) => x.value === normalizeStatus(t.status))
-                                    ?.label ?? "Not started"}
-                                </span>
-                                <span className="font-semibold text-[var(--enterprise-text)]">
-                                  {Math.max(0, Math.min(100, Math.round(t.progressPercent)))}%
-                                </span>
-                              </div>
-                              <div className="mt-1">
-                                <ProgressBar value={t.progressPercent} />
-                              </div>
+                              <span
+                                className={`shrink-0 rounded px-1 py-px text-[10px] font-medium leading-tight ${
+                                  statusPalette(normalizeStatus(t.status)).pillBg
+                                } ${statusPalette(normalizeStatus(t.status)).pillText}`}
+                              >
+                                {STATUS_OPTIONS.find((x) => x.value === normalizeStatus(t.status))
+                                  ?.label ?? "Not started"}
+                              </span>
+                              <ProgressBar value={t.progressPercent} className="min-w-0 flex-1" />
+                              <span className="shrink-0 text-[10px] font-semibold tabular-nums text-[var(--enterprise-text)]">
+                                {Math.max(0, Math.min(100, Math.round(t.progressPercent)))}%
+                              </span>
                             </button>
                           </td>
-                          <td className="relative px-1 py-1.5 align-middle">
-                            <div className="flex items-center justify-end gap-1">
+                          <td className="relative px-1 py-0.5 align-middle">
+                            <div className="flex items-center justify-end gap-0.5">
                               <button
                                 type="button"
                                 className={SCHEDULE_ICON_BTN}
                                 aria-label="Add subtask"
                                 onClick={() => addChild(t.id)}
                               >
-                                <Plus className="h-4 w-4" />
+                                <Plus className="h-3.5 w-3.5" />
                               </button>
                               <button
                                 type="button"
@@ -1406,7 +1473,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                                   setConfirmDeleteTaskId((prev) => (prev === t.id ? null : t.id))
                                 }
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
                             {confirmDeleteTaskId === t.id ? (
@@ -1442,13 +1509,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                   </tbody>
                 </table>
               </div>
-            </div>
-            <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--enterprise-bg)]/15">
-              <div
-                ref={rightScrollRef}
-                className="enterprise-scrollbar min-h-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain"
-                aria-label="Timeline scroll area"
-              >
+              <div className="flex min-w-0 flex-1 flex-col overflow-x-auto bg-[var(--enterprise-bg)]/15">
                 <div className="relative px-2 pb-2" style={{ minWidth: timelineWidthPx }}>
                   <div className="sticky top-0 z-[2] border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
                     <div className="relative h-8 border-b border-[var(--enterprise-border)]/70">
@@ -1499,6 +1560,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                       const status = normalizeStatus(t.status);
                       const palette = statusPalette(status);
                       const isChild = depth > 0;
+                      const ganttSelected = selectedTaskIds.has(t.id);
                       const showPreview =
                         createPreview?.rowTaskId === t.id && createPreview.widthPct > 0;
                       return (
@@ -1506,7 +1568,11 @@ export function ProjectScheduleClient({ projectId }: Props) {
                           key={t.id}
                           data-gantt-track
                           className={`group relative ${ganttRowHeightClass} select-none rounded-sm border border-[var(--enterprise-border)]/40 bg-[var(--enterprise-bg)] ${
-                            isChild ? "ring-1 ring-[var(--enterprise-border)]/30" : ""
+                            ganttSelected
+                              ? "ring-1 ring-[var(--enterprise-primary)]/45"
+                              : isChild
+                                ? "ring-1 ring-[var(--enterprise-border)]/30"
+                                : ""
                           }`}
                           style={{ minWidth: timelineWidthPx }}
                           onClick={() => setDetailTaskId(t.id)}
@@ -1530,7 +1596,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                           />
                           {showPreview ? (
                             <div
-                              className="pointer-events-none absolute top-1/2 z-[2] h-3 -translate-y-1/2 rounded-sm border border-dashed border-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/25"
+                              className="pointer-events-none absolute top-1/2 z-[2] h-2 -translate-y-1/2 rounded-sm border border-dashed border-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/25"
                               style={{
                                 left: `${createPreview.leftPct}%`,
                                 width: `${createPreview.widthPct}%`,
@@ -1539,7 +1605,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                             />
                           ) : null}
                           <div
-                            className={`absolute top-1/2 z-[4] flex h-6 -translate-y-1/2 items-stretch touch-none rounded-xl shadow-sm ${palette.barBg} ${
+                            className={`absolute top-1/2 z-[4] flex h-5 -translate-y-1/2 items-stretch touch-none rounded-lg shadow-sm ${palette.barBg} ${
                               isChild ? "opacity-85" : ""
                             }`}
                             style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
@@ -1600,12 +1666,24 @@ export function ProjectScheduleClient({ projectId }: Props) {
             </p>
             {rows.map((t) => {
               const depth = depthById.get(t.id) ?? 0;
+              const mobileSelected = selectedTaskIds.has(t.id);
               return (
                 <div
                   key={t.id}
-                  className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3"
+                  className={`rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 ${
+                    mobileSelected ? "ring-1 ring-[var(--enterprise-primary)]/40" : ""
+                  }`}
                   style={{ marginLeft: depth * 8 }}
                 >
+                  <div className="mb-2 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={mobileSelected}
+                      onChange={() => toggleTaskSelected(t.id)}
+                      className="accent-[var(--enterprise-primary)]"
+                      aria-label={`Select ${t.title}`}
+                    />
+                  </div>
                   <label className="block text-xs font-medium text-[var(--enterprise-text-muted)]">
                     Task
                     <input

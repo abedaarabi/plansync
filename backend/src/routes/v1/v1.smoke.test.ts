@@ -15,6 +15,7 @@ function testEnv(): Env {
     MAX_DIRECT_UPLOAD_BYTES: 104857600n,
     GEMINI_MODEL: "gemini-2.5-pro",
     COLLABORATION_ENABLED: true,
+    STRIPE_CHECKOUT_ALLOW_PROMOTION_CODES: true,
   };
 }
 

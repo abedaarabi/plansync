@@ -56,7 +56,7 @@ export function ProposalNewWizard({
   const qc = useQueryClient();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
+  const isPro = isWorkspaceProClient(primary?.workspace);
 
   const [step, setStep] = useState(1);
   const [proposalId, setProposalId] = useState<string | null>(null);

@@ -72,7 +72,7 @@ export function ProjectHubClient() {
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
   const isAdmin = primary?.role === "ADMIN" || primary?.role === "SUPER_ADMIN";
-  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
+  const isPro = isWorkspaceProClient(primary?.workspace);
   const sub = primary?.workspace.subscriptionStatus;
 
   const { data: projects = [], isPending: projectsPending } = useQuery({

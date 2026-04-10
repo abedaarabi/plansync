@@ -783,8 +783,7 @@ button:active:not(:disabled),
     border-radius: 0 !important;
     box-shadow: none !important;
   }
-  .schedule-print-root .schedule-print-grid [aria-label="Task list scroll area"],
-  .schedule-print-root .schedule-print-grid [aria-label="Timeline scroll area"] {
+  .schedule-print-root .schedule-print-grid [aria-label="Schedule scroll area"] {
     overflow: visible !important;
     max-height: none !important;
   }

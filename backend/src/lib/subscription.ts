@@ -1,5 +1,24 @@
-/** Pro cloud APIs require active subscription (or trialing) */
-export function isWorkspacePro(ws: { subscriptionStatus: string | null }): boolean {
+/** Fields needed to decide Pro access (matches typical `Workspace` / API workspace JSON). */
+export type WorkspaceSubscriptionFields = {
+  subscriptionStatus: string | null;
+  currentPeriodEnd?: Date | string | null;
+  stripeSubscriptionId?: string | null;
+};
+
+/**
+ * Pro cloud APIs: paid (`active`), Stripe-managed trial (`trialing` + subscription id), or
+ * app-only trial (`trialing` without Stripe) until `currentPeriodEnd`.
+ */
+export function isWorkspacePro(ws: WorkspaceSubscriptionFields): boolean {
   const s = ws.subscriptionStatus;
-  return s === "active" || s === "trialing";
+  if (s === "active") return true;
+  if (s === "trialing") {
+    if (ws.stripeSubscriptionId) return true;
+    const end = ws.currentPeriodEnd;
+    if (end == null) return false;
+    const endMs = end instanceof Date ? end.getTime() : new Date(end).getTime();
+    if (!Number.isFinite(endMs)) return false;
+    return endMs > Date.now();
+  }
+  return false;
 }

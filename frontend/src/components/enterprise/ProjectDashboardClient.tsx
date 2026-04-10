@@ -98,7 +98,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
   const nowMs = useTickNowMs();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
+  const isPro = isWorkspaceProClient(primary?.workspace);
 
   const { data: projects = [], isPending: projPending } = useQuery({
     queryKey: qk.projects(wid ?? ""),

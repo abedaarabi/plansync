@@ -6,10 +6,27 @@ import { getViewerCollabRevision, setViewerCollabRevision } from "@/lib/viewerCo
 
 const jsonHeaders = { "Content-Type": "application/json" };
 
+function readJsonErrorBody(j: Record<string, unknown>, res: Response, fallback: string): string {
+  const err = j.error;
+  if (typeof err === "string" && err.trim()) return err;
+  const msg = j.message;
+  if (typeof msg === "string" && msg.trim()) return msg;
+  return `${fallback} (HTTP ${res.status})`;
+}
+
 export async function fetchMe(): Promise<MeResponse | null> {
   const res = await fetch(apiUrl("/api/v1/me"), { credentials: "include" });
   if (res.status === 401) return null;
-  if (!res.ok) throw new Error("Could not load session.");
+  if (!res.ok) {
+    let msg = `Could not load session (HTTP ${res.status}).`;
+    try {
+      const j = (await res.json()) as { error?: string };
+      if (typeof j.error === "string" && j.error.trim()) msg = j.error;
+    } catch {
+      /* empty or non-JSON body */
+    }
+    throw new Error(msg);
+  }
   return res.json() as Promise<MeResponse>;
 }
 
@@ -416,6 +433,91 @@ export async function patchWorkspace(
       text = "Check fields and try again.";
     throw new Error(text);
   }
+}
+
+/** Super Admin — Stripe Checkout for PlanSync Pro (subscription). Returns to `/dashboard` after pay. */
+export async function createStripeCheckoutSession(workspaceId: string): Promise<{ url: string }> {
+  const res = await fetch(apiUrl("/api/stripe/checkout"), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({ workspaceId }),
+  });
+  const j = (await res.json().catch(() => ({}))) as Record<string, unknown> & { url?: string };
+  if (res.status === 503) {
+    throw new Error("Billing is not configured. Add Stripe keys to the API environment.");
+  }
+  if (res.status === 401) {
+    throw new Error(readJsonErrorBody(j, res, "Sign in again to continue"));
+  }
+  if (res.status === 403) {
+    const msg = typeof j.error === "string" ? j.error : "";
+    if (msg === "Email verification required") {
+      throw new Error("Verify your email address before subscribing.");
+    }
+    throw new Error("Only the workspace owner (Super Admin) can manage billing.");
+  }
+  if (!res.ok) {
+    throw new Error(readJsonErrorBody(j, res, "Could not start checkout"));
+  }
+  if (!j.url || typeof j.url !== "string") throw new Error("No checkout URL returned.");
+  return { url: j.url };
+}
+
+/** After Checkout success, links the workspace to Stripe when webhooks are not available (e.g. local dev). */
+export async function syncStripeCheckoutSession(sessionId: string): Promise<void> {
+  const res = await fetch(apiUrl("/api/stripe/sync-checkout-session"), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({ sessionId }),
+  });
+  const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (res.status === 503) {
+    throw new Error("Billing is not configured.");
+  }
+  if (res.status === 401) {
+    throw new Error(readJsonErrorBody(j, res, "Sign in again to continue"));
+  }
+  if (res.status === 403) {
+    const msg = typeof j.error === "string" ? j.error : "";
+    if (msg === "Email verification required") {
+      throw new Error("Verify your email address first.");
+    }
+    throw new Error("Only the workspace owner can confirm checkout.");
+  }
+  if (!res.ok) {
+    throw new Error(readJsonErrorBody(j, res, "Could not confirm checkout"));
+  }
+}
+
+/** Super Admin — Stripe Customer Portal (payment method, invoices, cancel). */
+export async function createStripePortalSession(workspaceId: string): Promise<{ url: string }> {
+  const res = await fetch(apiUrl("/api/stripe/portal"), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({ workspaceId }),
+  });
+  const j = (await res.json().catch(() => ({}))) as Record<string, unknown> & { url?: string };
+  if (res.status === 503) {
+    throw new Error("Billing is not configured. Add Stripe keys to the API environment.");
+  }
+  if (res.status === 401) {
+    throw new Error(readJsonErrorBody(j, res, "Sign in again to continue"));
+  }
+  if (res.status === 403) {
+    const msg = typeof j.error === "string" ? j.error : "";
+    if (msg === "Email verification required") {
+      throw new Error("Verify your email address before opening billing.");
+    }
+    throw new Error("Only the workspace owner (Super Admin) can manage billing.");
+  }
+  if (!res.ok) {
+    throw new Error(readJsonErrorBody(j, res, "Could not open billing portal"));
+  }
+  if (!j.url || typeof j.url !== "string") throw new Error("No portal URL returned.");
+  return { url: j.url };
 }
 
 /** Workspace row as returned by `workspaceJson` (e.g. after logo upload). */

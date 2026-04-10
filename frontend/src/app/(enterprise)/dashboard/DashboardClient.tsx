@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import {
+  WorkspaceBillingCard,
+  useStripeCheckoutReturnToast,
+} from "@/components/enterprise/WorkspaceBillingCard";
+import {
   ArrowUpRight,
   Check,
   Circle,
@@ -30,10 +34,12 @@ import {
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { computeWorkspaceHealthScore } from "@/lib/dashboardHealth";
 import { qk } from "@/lib/queryKeys";
+import { isSuperAdmin } from "@/lib/workspaceRole";
 
 export function DashboardClient() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  useStripeCheckoutReturnToast("/dashboard");
   const [workspaceName, setWorkspaceName] = useState("");
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [createWorkspaceError, setCreateWorkspaceError] = useState<string | null>(null);
@@ -62,9 +68,7 @@ export function DashboardClient() {
   const { data: projects = [] } = useQuery({
     queryKey: qk.projects(wid ?? ""),
     queryFn: () => fetchProjects(wid!),
-    enabled: Boolean(
-      wid && isWorkspaceProClient(me?.workspaces?.[0]?.workspace.subscriptionStatus),
-    ),
+    enabled: Boolean(wid && isWorkspaceProClient(me?.workspaces?.[0]?.workspace)),
   });
 
   const { data: membersData } = useQuery({
@@ -223,9 +227,9 @@ export function DashboardClient() {
         ? 100
         : 0;
 
-  const sub = dash?.workspace?.subscriptionStatus ?? ws?.subscriptionStatus ?? null;
   const maxProjects = membership?.maxProjects ?? 5;
-  const isPro = isWorkspaceProClient(sub);
+  const isPro = isWorkspaceProClient(ws);
+  const sub = dash?.workspace?.subscriptionStatus ?? ws?.subscriptionStatus ?? null;
   const projectCountForUsage =
     membership?.projectCount !== undefined ? membership.projectCount : isPro ? projects.length : 0;
   const projectUsagePct =
@@ -280,9 +284,13 @@ export function DashboardClient() {
                 <span className="enterprise-badge-success px-3 py-1 text-[12px] font-semibold">
                   Pro active
                 </span>
-              ) : sub === "trialing" ? (
+              ) : sub === "trialing" && isPro ? (
                 <span className="enterprise-badge-warning px-3 py-1 text-[12px] font-semibold">
                   Trial
+                </span>
+              ) : sub === "trialing" && !isPro ? (
+                <span className="enterprise-badge-neutral px-3 py-1 text-[12px] font-semibold">
+                  Trial ended
                 </span>
               ) : (
                 <span className="enterprise-badge-neutral px-3 py-1 text-[12px] font-semibold">
@@ -290,7 +298,7 @@ export function DashboardClient() {
                 </span>
               )}
               <Link
-                href="/organization"
+                href="/dashboard#billing"
                 className="inline-flex items-center rounded-full border border-[var(--enterprise-border)] bg-white/80 px-3 py-1 text-[12px] font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35"
               >
                 Billing & plan
@@ -331,6 +339,10 @@ export function DashboardClient() {
           </div>
         </div>
       </section>
+
+      {hasWorkspace && wid && ws && isSuperAdmin(membership?.role) ? (
+        <WorkspaceBillingCard workspaceId={wid} workspace={ws} isSuperAdmin />
+      ) : null}
 
       {/* KPI strip */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

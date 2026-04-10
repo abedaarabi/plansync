@@ -57,7 +57,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const ws = primary?.workspace;
   const wid = ws?.id;
   const workspaceRole = primary?.role;
-  const isPro = isWorkspaceProClient(ws?.subscriptionStatus);
+  const isPro = isWorkspaceProClient(ws);
   const { projectId: lastProjectId } = useProjectNavHref();
   const projectId = extractProjectId(pathname) ?? lastProjectId;
 

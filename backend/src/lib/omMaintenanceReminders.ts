@@ -77,7 +77,13 @@ export async function runOmMaintenanceReminders(env: Env): Promise<{
               settingsJson: true,
               workspaceId: true,
               workspace: {
-                select: { id: true, name: true, subscriptionStatus: true },
+                select: {
+                  id: true,
+                  name: true,
+                  subscriptionStatus: true,
+                  currentPeriodEnd: true,
+                  stripeSubscriptionId: true,
+                },
               },
             },
           },

@@ -190,7 +190,7 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = isWorkspaceProClient(primary?.workspace.subscriptionStatus);
+  const isPro = isWorkspaceProClient(primary?.workspace);
 
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [sort, setSort] = useState<SortKey>("newest");

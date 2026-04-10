@@ -25,6 +25,15 @@ const schema = z.object({
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PRICE_PRO_MONTHLY: z.string().optional(),
+  /**
+   * Stripe Checkout shows “Add promotion code” when true (default). Create Coupons + Promotion codes in the Dashboard.
+   * Set to 0 / false / off / no to disable.
+   */
+  STRIPE_CHECKOUT_ALLOW_PROMOTION_CODES: z.preprocess((v) => {
+    if (v === undefined || v === null || String(v).trim() === "") return true;
+    const t = String(v).trim().toLowerCase();
+    return t !== "0" && t !== "false" && t !== "off" && t !== "no";
+  }, z.boolean()),
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM: z.string().optional(),
   PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),

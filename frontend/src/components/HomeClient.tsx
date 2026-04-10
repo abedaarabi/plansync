@@ -1,6 +1,6 @@
 "use client";
 
-import { LandingPage } from "@/components/LandingPage";
+import { LandingPage } from "@/components/landing";
 import { QueryProvider } from "@/providers/QueryProvider";
 
 export function HomeClient() {

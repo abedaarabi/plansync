@@ -158,7 +158,7 @@ export function EnterpriseSidebar({
   const activeMembership = resolveActiveMembership(pathname, me?.workspaces, primary);
   const ws = activeMembership?.workspace;
   const wid = ws?.id;
-  const isPro = isWorkspaceProClient(ws?.subscriptionStatus);
+  const isPro = isWorkspaceProClient(ws);
   const projectId = extractProjectId(pathname);
   const isProjectContext = Boolean(projectId);
 

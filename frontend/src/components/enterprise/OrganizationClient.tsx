@@ -19,6 +19,7 @@ import {
   normalizeWorkspaceWebsite,
 } from "@/lib/workspaceBranding";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { WorkspaceBillingCard } from "@/components/enterprise/WorkspaceBillingCard";
 import { WorkspaceTeamClient } from "@/components/enterprise/WorkspaceTeamClient";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { isSuperAdmin, isWorkspaceManager } from "@/lib/workspaceRole";
@@ -237,6 +238,17 @@ export function OrganizationClient() {
               />
             ) : null}
           </div>
+
+          {superAdmin && wid ? (
+            <div className="mt-6">
+              <WorkspaceBillingCard
+                workspaceId={wid}
+                workspace={ws}
+                isSuperAdmin={superAdmin}
+                compact
+              />
+            </div>
+          ) : null}
 
           {superAdmin ? (
             <form

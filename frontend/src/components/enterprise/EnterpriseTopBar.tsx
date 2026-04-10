@@ -129,7 +129,7 @@ export function EnterpriseTopBar({
   const activeWs = workspaceFromPath ?? primary?.workspace;
   const wid = activeWs?.id;
   const workspaceNameForAria = activeWs?.name?.trim() || "PlanSync";
-  const isPro = isWorkspaceProClient(activeWs?.subscriptionStatus);
+  const isPro = isWorkspaceProClient(activeWs);
   const trialDays =
     activeWs?.subscriptionStatus === "trialing" ? trialDaysLeft(activeWs.currentPeriodEnd) : null;
 
@@ -297,14 +297,20 @@ export function EnterpriseTopBar({
       <div className="flex shrink-0 items-center gap-1 sm:gap-2 md:gap-2.5">
         {activeWs?.subscriptionStatus === "trialing" ? (
           <Link
-            href="/organization?tab=organization"
+            href="/dashboard#billing"
             className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 sm:inline-flex"
           >
-            {trialDays === 0
-              ? "Trial ended - upgrade"
-              : trialDays != null
-                ? `${trialDays} day${trialDays === 1 ? "" : "s"} left in trial`
-                : "Free trial"}
+            {activeWs.stripeSubscriptionId
+              ? trialDays === 0
+                ? "Manage billing"
+                : trialDays != null
+                  ? `${trialDays}d left · Stripe trial`
+                  : "Stripe trial"
+              : trialDays === 0
+                ? "Trial ended - upgrade"
+                : trialDays != null
+                  ? `${trialDays} day${trialDays === 1 ? "" : "s"} left in trial`
+                  : "Free trial"}
           </Link>
         ) : null}
 

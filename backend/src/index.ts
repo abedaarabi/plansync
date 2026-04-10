@@ -44,7 +44,7 @@ app.use(
 
 app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
 
-app.route("/api/stripe", stripeRoutes(env));
+app.route("/api/stripe", stripeRoutes(env, auth));
 app.route("/api/v1", v1Routes(auth, env, { upgradeWebSocket }));
 
 app.get("/", (c) => c.json({ ok: true, service: "plansync-api" }));

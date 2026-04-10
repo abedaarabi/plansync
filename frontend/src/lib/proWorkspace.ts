@@ -1,14 +1,15 @@
 import type { MeResponse } from "@/types/enterprise";
+import { isWorkspaceProClient, type WorkspaceProFields } from "@/lib/workspaceSubscription";
 
-/** Matches backend `isWorkspacePro` — active Stripe subscription or trial. */
-export function isProSubscriptionStatus(status: string | null | undefined): boolean {
-  return status === "active" || status === "trialing";
+/** Matches backend `isWorkspacePro` for a workspace row from `/me`. */
+export function isProSubscriptionStatus(workspace: WorkspaceProFields | null | undefined): boolean {
+  return isWorkspaceProClient(workspace);
 }
 
 /** Signed-in user with at least one workspace on Pro — local PDF open in the viewer is disallowed. */
 export function meHasProWorkspace(me: MeResponse | null | undefined): boolean {
   if (!me?.workspaces?.length) return false;
-  return me.workspaces.some((m) => isProSubscriptionStatus(m.workspace.subscriptionStatus));
+  return me.workspaces.some((m) => isWorkspaceProClient(m.workspace));
 }
 
 /**

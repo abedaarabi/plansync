@@ -20,6 +20,8 @@ export type MeWorkspace = {
     storageUsedBytes: string;
     subscriptionStatus?: string | null;
     currentPeriodEnd?: string | null;
+    stripeCustomerId?: string | null;
+    stripeSubscriptionId?: string | null;
   };
   /** Workspace projects in use (Pro plan cap). */
   projectCount?: number;
