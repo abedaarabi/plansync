@@ -5,6 +5,11 @@ export type WorkspaceSubscriptionFields = {
   stripeSubscriptionId?: string | null;
 };
 
+/** Adds `billingPlan` for Enterprise vs Pro (O&M). */
+export type WorkspaceBillingPlanFields = WorkspaceSubscriptionFields & {
+  billingPlan?: string | null;
+};
+
 /**
  * Pro cloud APIs: paid (`active`), Stripe-managed trial (`trialing` + subscription id), or
  * app-only trial (`trialing` without Stripe) until `currentPeriodEnd`.
@@ -20,5 +25,17 @@ export function isWorkspacePro(ws: WorkspaceSubscriptionFields): boolean {
     if (!Number.isFinite(endMs)) return false;
     return endMs > Date.now();
   }
+  return false;
+}
+
+/**
+ * Operations & Maintenance (O&M) billing: Enterprise subscribers, or legacy workspaces
+ * (`billingPlan` null) that already have Pro — keeps existing customers on Pro grandfathered.
+ * Explicit `pro` tier does not include O&M.
+ */
+export function isWorkspaceOmBilling(ws: WorkspaceBillingPlanFields): boolean {
+  if (!isWorkspacePro(ws)) return false;
+  if (ws.billingPlan === "enterprise") return true;
+  if (ws.billingPlan == null) return true;
   return false;
 }

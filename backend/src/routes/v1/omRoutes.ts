@@ -14,7 +14,7 @@ import {
   PunchStatus,
 } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
-import { isWorkspacePro } from "../../lib/subscription.js";
+import { isWorkspaceOmBilling, isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectWithAuth } from "../../lib/permissions.js";
 import { mergeProjectSettingsPatch, parseProjectSettingsJson } from "../../lib/projectSettings.js";
 import { cloneSettingsJson } from "../../lib/takeoffPricing.js";
@@ -51,9 +51,19 @@ function csvEscapeCell(v: string): string {
   return v;
 }
 
-function requirePro(workspace: { subscriptionStatus: string | null }) {
-  if (!isWorkspacePro(workspace)) {
-    return { error: "Pro subscription required", status: 402 as const };
+function requireOmBilling(workspace: {
+  subscriptionStatus: string | null;
+  billingPlan?: string | null;
+}) {
+  if (!isWorkspaceOmBilling(workspace)) {
+    if (!isWorkspacePro(workspace)) {
+      return { error: "Pro subscription required", status: 402 as const };
+    }
+    return {
+      error:
+        "PlanSync Enterprise is required for Operations & Maintenance. Upgrade under Dashboard → Billing (Enterprise includes O&M).",
+      status: 402 as const,
+    };
   }
   return null;
 }
@@ -495,7 +505,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
       return c.json({ error: "Operations assets are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const qRaw = c.req.query("q")?.trim();
@@ -545,7 +555,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
       return c.json({ error: "Operations assets are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const body = z
@@ -633,7 +643,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
       return c.json({ error: "Operations assets are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const existing = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
@@ -730,7 +740,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
       return c.json({ error: "Operations assets are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const asset = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
@@ -765,7 +775,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
       return c.json({ error: "Operations assets are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const asset = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
@@ -824,7 +834,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
       return c.json({ error: "Operations assets are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const asset = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
@@ -911,7 +921,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
         return c.json({ error: "Not found" }, 404);
       }
-      const gate = requirePro(ctx.project.workspace);
+      const gate = requireOmBilling(ctx.project.workspace);
       if (gate) return c.json({ error: gate.error }, gate.status);
 
       const doc = await prisma.assetDocument.findFirst({
@@ -942,7 +952,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
       return c.json({ error: "Operations assets are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const doc = await prisma.assetDocument.findFirst({
@@ -976,7 +986,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
       return c.json({ error: "Operations assets are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const existing = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
@@ -1017,7 +1027,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omMaintenance) {
       return c.json({ error: "Maintenance module is not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const rows = await prisma.maintenanceSchedule.findMany({
@@ -1047,7 +1057,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omMaintenance) {
       return c.json({ error: "Maintenance module is not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const body = z
@@ -1106,7 +1116,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omMaintenance) {
       return c.json({ error: "Maintenance module is not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const existing = await prisma.maintenanceSchedule.findFirst({
@@ -1171,7 +1181,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.settings.modules.issues) {
       return c.json({ error: "Issues/work orders module is disabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const defaultFv = await getDefaultFileVersion(projectId);
@@ -1233,7 +1243,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omMaintenance) {
       return c.json({ error: "Maintenance module is not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const existing = await prisma.maintenanceSchedule.findFirst({
@@ -1273,7 +1283,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
       return c.json({ error: "Inspections are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const rows = await prisma.inspectionTemplate.findMany({
@@ -1298,7 +1308,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
       return c.json({ error: "Inspections are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const body = z
@@ -1344,7 +1354,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
       return c.json({ error: "Inspections are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const tpl = await prisma.inspectionTemplate.findFirst({
@@ -1366,7 +1376,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
       return c.json({ error: "Inspections are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const rows = await prisma.inspectionRun.findMany({
@@ -1396,7 +1406,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
       return c.json({ error: "Inspections are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const body = z
@@ -1454,7 +1464,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
       return c.json({ error: "Inspections are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const existing = await prisma.inspectionRun.findFirst({ where: { id: runId, projectId } });
@@ -1516,7 +1526,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
       return c.json({ error: "Inspections are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const existing = await prisma.inspectionRun.findFirst({ where: { id: runId, projectId } });
@@ -1539,7 +1549,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
       return c.json({ error: "Inspections are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const body = z
@@ -1700,7 +1710,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
       return c.json({ error: "Inspections are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const run = await prisma.inspectionRun.findFirst({
@@ -1734,7 +1744,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omTenantPortal) {
       return c.json({ error: "Occupant portal is not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const rows = await prisma.occupantPortalToken.findMany({
@@ -1763,7 +1773,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omTenantPortal) {
       return c.json({ error: "Occupant portal is not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const body = z
@@ -1803,7 +1813,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode) {
       return c.json({ error: "Operations mode is not enabled for this project" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const settings = parseProjectSettingsJson(ctx.project.settingsJson);
@@ -1909,7 +1919,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode) {
       return c.json({ error: "Operations mode is not enabled for this project" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const body = z
@@ -1989,7 +1999,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode) {
       return c.json({ error: "Operations mode is not enabled for this project" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const settings = parseProjectSettingsJson(ctx.project.settingsJson);
@@ -2101,7 +2111,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
       return c.json({ error: "Operations assets are not enabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const rows = await prisma.asset.findMany({
@@ -2152,7 +2162,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!ctx.settings.modules.issues) {
       return c.json({ error: "Issues module is disabled" }, 403);
     }
-    const gate = requirePro(ctx.project.workspace);
+    const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const body = z
@@ -2254,7 +2264,7 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
       return c.json({ error: "Reporting is disabled for this building" }, 403);
     }
 
-    const gate = requirePro(link.project.workspace);
+    const gate = requireOmBilling(link.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const defaultFv = await getDefaultFileVersion(link.projectId);

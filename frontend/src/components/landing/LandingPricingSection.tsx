@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { ArrowRight, Check, Cloud, Monitor } from "lucide-react";
 import { AnimateIn } from "./AnimateIn";
-import { PRO_MONTHLY_PRICE_USD } from "@/lib/productPricing";
-import { FREE_FEATURES, PRO_FEATURES } from "./constants";
+import { ENTERPRISE_MONTHLY_PRICE_USD, PRO_MONTHLY_PRICE_USD } from "@/lib/productPricing";
+import { ENTERPRISE_FEATURES, FREE_FEATURES, PRO_FEATURES } from "./constants";
 
 type LandingPricingSectionProps = {
   onGoToFreeViewer: () => void;
@@ -16,21 +16,21 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
       className="landing-band-pricing relative scroll-mt-20 border-t border-slate-200/60 py-24 sm:py-32"
       id="compare"
     >
-      <div className="relative mx-auto max-w-5xl px-6">
+      <div className="relative mx-auto max-w-6xl px-6">
         <AnimateIn className="text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
             Pricing
           </p>
           <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            Free to start. Pro when you&apos;re ready.
+            Free to start. Pro or Enterprise when you&apos;re ready.
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
-            Everything you need to view construction PDFs — upgrade when your team needs
-            collaboration.
+            View and mark up PDFs for free — add Pro for team collaboration, or Enterprise for
+            Operations &amp; Maintenance on top.
           </p>
         </AnimateIn>
 
-        <div className="mt-16 grid gap-8 lg:grid-cols-2 lg:gap-10">
+        <div className="mt-16 grid gap-8 lg:grid-cols-3 lg:gap-8">
           <AnimateIn delay={100}>
             <div className="flex h-full flex-col rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[var(--enterprise-shadow-card)] sm:p-9">
               <div className="flex items-start gap-4">
@@ -96,7 +96,9 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                     ${PRO_MONTHLY_PRICE_USD}
                     <span className="text-lg font-normal text-slate-500">/month</span>
                   </div>
-                  <p className="mt-2 text-sm font-medium text-slate-700">8 uses</p>
+                  <p className="mt-2 text-sm font-medium text-slate-700">
+                    Unlimited users &amp; projects
+                  </p>
                   <p className="mt-0.5 text-sm text-slate-500">Everything in Free +</p>
                 </div>
               </div>
@@ -119,6 +121,54 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
               <Link
                 href="/sign-in"
                 className="btn-shine relative mt-8 flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[var(--landing-cta)] py-3.5 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
+              >
+                Start 14-day Trial <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </AnimateIn>
+
+          <AnimateIn delay={300}>
+            <div className="flex h-full flex-col rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[var(--enterprise-shadow-card)] sm:p-9">
+              <div className="flex items-start gap-4">
+                <div
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 ring-1 ring-slate-200/80"
+                  aria-hidden
+                >
+                  <Cloud className="h-6 w-6" strokeWidth={1.75} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold uppercase tracking-widest text-slate-600">
+                    Enterprise
+                  </div>
+                  <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
+                    ${ENTERPRISE_MONTHLY_PRICE_USD}
+                    <span className="text-lg font-normal text-slate-500">/month</span>
+                  </div>
+                  <p className="mt-2 text-sm font-medium text-slate-700">
+                    Unlimited users &amp; projects
+                  </p>
+                  <p className="mt-0.5 text-sm text-slate-500">Pro + O&amp;M</p>
+                </div>
+              </div>
+
+              <ul className="mt-8 flex flex-1 flex-col gap-2.5">
+                {ENTERPRISE_FEATURES.map((f) => (
+                  <li
+                    key={f}
+                    className="flex items-start gap-3 rounded-xl px-1 py-1.5 text-sm text-slate-700"
+                  >
+                    <Check
+                      className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                      strokeWidth={2.5}
+                    />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+
+              <Link
+                href="/sign-in"
+                className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
               >
                 Start 14-day Trial <ArrowRight className="h-4 w-4" />
               </Link>

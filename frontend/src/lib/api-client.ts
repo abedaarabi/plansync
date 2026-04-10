@@ -435,13 +435,16 @@ export async function patchWorkspace(
   }
 }
 
-/** Super Admin — Stripe Checkout for PlanSync Pro (subscription). Returns to `/dashboard` after pay. */
-export async function createStripeCheckoutSession(workspaceId: string): Promise<{ url: string }> {
+/** Super Admin — Stripe Checkout for PlanSync Pro or Enterprise (subscription). Returns to `/dashboard` after pay. */
+export async function createStripeCheckoutSession(
+  workspaceId: string,
+  plan: "pro" | "enterprise" = "pro",
+): Promise<{ url: string }> {
   const res = await fetch(apiUrl("/api/stripe/checkout"), {
     method: "POST",
     credentials: "include",
     headers: jsonHeaders,
-    body: JSON.stringify({ workspaceId }),
+    body: JSON.stringify({ workspaceId, plan }),
   });
   const j = (await res.json().catch(() => ({}))) as Record<string, unknown> & { url?: string };
   if (res.status === 503) {

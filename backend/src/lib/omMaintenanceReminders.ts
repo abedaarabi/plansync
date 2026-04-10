@@ -3,7 +3,7 @@ import { WorkspaceRole } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import type { Env } from "./env.js";
 import { inviteFromAddress } from "./inviteEmail.js";
-import { isWorkspacePro } from "./subscription.js";
+import { isWorkspaceOmBilling } from "./subscription.js";
 import { parseProjectSettingsJson } from "./projectSettings.js";
 
 function addDays(d: Date, n: number): Date {
@@ -83,6 +83,7 @@ export async function runOmMaintenanceReminders(env: Env): Promise<{
                   subscriptionStatus: true,
                   currentPeriodEnd: true,
                   stripeSubscriptionId: true,
+                  billingPlan: true,
                 },
               },
             },
@@ -95,7 +96,7 @@ export async function runOmMaintenanceReminders(env: Env): Promise<{
   const byWorkspace = new Map<string, OmMaintenanceReminderRow[]>();
   for (const s of schedules) {
     const ws = s.asset.project.workspace;
-    if (!isWorkspacePro(ws)) continue;
+    if (!isWorkspaceOmBilling(ws)) continue;
     const settings = parseProjectSettingsJson(s.asset.project.settingsJson);
     if (!settings.modules.omMaintenance) continue;
 

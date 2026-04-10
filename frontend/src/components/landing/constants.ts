@@ -13,7 +13,7 @@ export const FREE_FEATURES = [
 
 export const PRO_FEATURES = [
   "Cloud storage 20GB",
-  "Unlimited projects",
+  "Unlimited users & projects",
   "Team collaboration",
   "Issues on drawings",
   "RFIs workflow",
@@ -21,4 +21,12 @@ export const PRO_FEATURES = [
   "Version history",
   "AI drawing summary",
   "Priority support",
+];
+
+export const ENTERPRISE_FEATURES = [
+  "Everything in Pro — unlimited users & projects",
+  "Operations & Maintenance mode",
+  "Handover, assets & work orders",
+  "Maintenance schedules & inspections",
+  "Tenant portal",
 ];

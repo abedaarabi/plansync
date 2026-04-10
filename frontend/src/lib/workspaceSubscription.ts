@@ -3,6 +3,7 @@ export type WorkspaceProFields = {
   subscriptionStatus?: string | null;
   currentPeriodEnd?: string | Date | null;
   stripeSubscriptionId?: string | null;
+  billingPlan?: string | null;
 };
 
 /**
@@ -21,6 +22,14 @@ export function isWorkspaceProClient(ws: WorkspaceProFields | null | undefined):
     if (!Number.isFinite(endMs)) return false;
     return endMs > Date.now();
   }
+  return false;
+}
+
+/** O&M billing — matches backend `isWorkspaceOmBilling`. */
+export function isWorkspaceOmBillingClient(ws: WorkspaceProFields | null | undefined): boolean {
+  if (!ws || !isWorkspaceProClient(ws)) return false;
+  if (ws.billingPlan === "enterprise") return true;
+  if (ws.billingPlan == null) return true;
   return false;
 }
 

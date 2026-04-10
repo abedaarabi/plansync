@@ -10,12 +10,13 @@ import {
   createStripePortalSession,
   syncStripeCheckoutSession,
 } from "@/lib/api-client";
-import { PRO_MONTHLY_PRICE_USD } from "@/lib/productPricing";
+import { ENTERPRISE_MONTHLY_PRICE_USD, PRO_MONTHLY_PRICE_USD } from "@/lib/productPricing";
 import { qk } from "@/lib/queryKeys";
 type BillingWorkspace = {
   subscriptionStatus?: string | null;
   currentPeriodEnd?: string | null;
   stripeCustomerId?: string | null;
+  billingPlan?: string | null;
 };
 
 /** Call on dashboard (or any page) so `?checkout=success|cancel` from Stripe shows a toast and clears the query. */
@@ -65,7 +66,7 @@ type Props = {
 };
 
 export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin, compact }: Props) {
-  const [busy, setBusy] = useState<"checkout" | "portal" | null>(null);
+  const [busy, setBusy] = useState<"checkout-pro" | "checkout-enterprise" | "portal" | null>(null);
 
   if (!isSuperAdmin || !workspaceId || !workspace) return null;
 
@@ -79,6 +80,14 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin, com
   /** Offer Checkout whenever Stripe is not linked — includes trial/seed Pro so you can pay with a test card. */
   const showSubscribe = !hasStripe;
   const showManage = hasStripe;
+  const planLabel =
+    workspace.billingPlan === "enterprise"
+      ? "Enterprise"
+      : workspace.billingPlan === "pro"
+        ? "Pro"
+        : hasStripe
+          ? "Active"
+          : null;
 
   return (
     <section
@@ -100,10 +109,12 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin, com
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
             {hasStripe
-              ? "Manage payment method, invoices, and your PlanSync Pro subscription in Stripe."
+              ? `Manage payment method, invoices, and your PlanSync subscription in Stripe.${
+                  planLabel ? ` Current plan: ${planLabel}.` : ""
+                } Enterprise ($${ENTERPRISE_MONTHLY_PRICE_USD}/mo) includes Operations & Maintenance; Pro ($${PRO_MONTHLY_PRICE_USD}/mo) is collaboration without O&M.`
               : isAppPro
-                ? `This workspace already has Pro access (trial or seed). Use Checkout below to link Stripe billing — in test mode use card 4242 4242 4242 4242, any future expiry, any CVC. ${PRO_MONTHLY_PRICE_USD}/month.`
-                : `Subscribe to PlanSync Pro for $${PRO_MONTHLY_PRICE_USD}/month — cloud projects, collaboration, and team features.`}
+                ? `This workspace already has access (trial or seed). Choose Pro or Enterprise below to link Stripe — test card 4242 4242 4242 4242. Pro $${PRO_MONTHLY_PRICE_USD}/mo; Enterprise $${ENTERPRISE_MONTHLY_PRICE_USD}/mo includes O&M.`
+                : `Subscribe to PlanSync Pro ($${PRO_MONTHLY_PRICE_USD}/mo) for cloud projects and collaboration, or Enterprise ($${ENTERPRISE_MONTHLY_PRICE_USD}/mo) to include Operations & Maintenance.`}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {showManage ? (
@@ -126,25 +137,44 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin, com
               </button>
             ) : null}
             {showSubscribe ? (
-              <button
-                type="button"
-                disabled={busy !== null}
-                onClick={async () => {
-                  setBusy("checkout");
-                  try {
-                    const { url } = await createStripeCheckoutSession(workspaceId);
-                    window.location.href = url;
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "Could not start checkout.");
-                    setBusy(null);
-                  }
-                }}
-                className="rounded-lg bg-[var(--enterprise-primary)] px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
-              >
-                {busy === "checkout"
-                  ? "Redirecting…"
-                  : `Subscribe — $${PRO_MONTHLY_PRICE_USD}/month`}
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={async () => {
+                    setBusy("checkout-pro");
+                    try {
+                      const { url } = await createStripeCheckoutSession(workspaceId, "pro");
+                      window.location.href = url;
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Could not start checkout.");
+                      setBusy(null);
+                    }
+                  }}
+                  className="rounded-lg border border-[var(--enterprise-border)] bg-white px-3 py-2 text-sm font-medium text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-60"
+                >
+                  {busy === "checkout-pro" ? "Redirecting…" : `Pro — $${PRO_MONTHLY_PRICE_USD}/mo`}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={async () => {
+                    setBusy("checkout-enterprise");
+                    try {
+                      const { url } = await createStripeCheckoutSession(workspaceId, "enterprise");
+                      window.location.href = url;
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Could not start checkout.");
+                      setBusy(null);
+                    }
+                  }}
+                  className="rounded-lg bg-[var(--enterprise-primary)] px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
+                >
+                  {busy === "checkout-enterprise"
+                    ? "Redirecting…"
+                    : `Enterprise — $${ENTERPRISE_MONTHLY_PRICE_USD}/mo`}
+                </button>
+              </>
             ) : null}
           </div>
         </div>

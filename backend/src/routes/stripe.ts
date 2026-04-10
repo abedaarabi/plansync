@@ -4,6 +4,8 @@ import { ActivityType, WorkspaceRole } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import type { Env } from "../lib/env.js";
 import { logActivity } from "../lib/activity.js";
+import { inferBillingPlanFromSubscription } from "../lib/stripeBillingPlan.js";
+import { resolveEnterpriseMonthlyPriceId } from "../lib/stripeEnterprisePrice.js";
 import { resolveProMonthlyPriceId } from "../lib/stripeProPrice.js";
 import { sessionMiddleware } from "../middleware/session.js";
 
@@ -53,12 +55,21 @@ function checkoutCustomerAndSubscriptionIds(session: Stripe.Checkout.Session): {
 
 async function persistCheckoutSubscriptionToWorkspace(
   stripe: Stripe,
+  env: Env,
   wsId: string,
   customerId: string,
   subId: string,
   source: string,
+  checkoutPlanTier: "pro" | "enterprise" | null,
 ): Promise<void> {
-  const sub = await stripe.subscriptions.retrieve(subId);
+  const sub = await stripe.subscriptions.retrieve(subId, {
+    expand: ["items.data.price"],
+  });
+  let billingPlan: "pro" | "enterprise" | null =
+    checkoutPlanTier === "pro" || checkoutPlanTier === "enterprise" ? checkoutPlanTier : null;
+  if (!billingPlan) {
+    billingPlan = await inferBillingPlanFromSubscription(stripe, env, sub);
+  }
   await prisma.workspace.update({
     where: { id: wsId },
     data: {
@@ -66,10 +77,11 @@ async function persistCheckoutSubscriptionToWorkspace(
       stripeSubscriptionId: subId,
       subscriptionStatus: sub.status,
       currentPeriodEnd: subscriptionPeriodEnd(sub),
+      ...(billingPlan != null ? { billingPlan } : {}),
     },
   });
   await logActivity(wsId, ActivityType.SUBSCRIPTION_UPDATED, {
-    metadata: { status: sub.status, source },
+    metadata: { status: sub.status, source, billingPlan: billingPlan ?? undefined },
   });
 }
 
@@ -82,16 +94,22 @@ export function stripeRoutes(env: Env, auth: AuthLike) {
       return c.json({ error: "Stripe not configured" }, 503);
     }
     const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+    const body = await c.req.json().catch(() => ({}));
+    const planRaw = typeof body.plan === "string" ? body.plan.trim().toLowerCase() : "";
+    const planTier: "pro" | "enterprise" = planRaw === "enterprise" ? "enterprise" : "pro";
+
     let priceId: string;
     try {
-      priceId = await resolveProMonthlyPriceId(stripe, env.STRIPE_PRICE_PRO_MONTHLY);
+      priceId =
+        planTier === "enterprise"
+          ? await resolveEnterpriseMonthlyPriceId(stripe, env.STRIPE_PRICE_ENTERPRISE_MONTHLY)
+          : await resolveProMonthlyPriceId(stripe, env.STRIPE_PRICE_PRO_MONTHLY);
     } catch (e) {
-      console.error("[stripe] resolve Pro monthly price failed", e);
+      console.error("[stripe] resolve subscription price failed", e);
       const msg = e instanceof Error ? e.message : "Could not resolve subscription price";
       return c.json({ error: msg }, 400);
     }
 
-    const body = await c.req.json().catch(() => ({}));
     const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
     if (!workspaceId) {
       return c.json({ error: "workspaceId is required" }, 400);
@@ -120,9 +138,9 @@ export function stripeRoutes(env: Env, auth: AuthLike) {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { workspaceId },
+      metadata: { workspaceId, planTier },
       subscription_data: {
-        metadata: { workspaceId },
+        metadata: { workspaceId, planTier },
       },
       client_reference_id: workspaceId,
     };
@@ -233,13 +251,17 @@ export function stripeRoutes(env: Env, auth: AuthLike) {
       return c.json({ error: "Session missing subscription or customer" }, 400);
     }
 
+    const pt = session.metadata?.planTier;
+    const checkoutTier = pt === "pro" || pt === "enterprise" ? pt : null;
     try {
       await persistCheckoutSubscriptionToWorkspace(
         stripe,
+        env,
         wsId,
         ids.customerId,
         ids.subId,
         "sync-checkout-session",
+        checkoutTier,
       );
     } catch (e) {
       console.error("[stripe] persistCheckoutSubscriptionToWorkspace (sync)", e);
@@ -281,12 +303,16 @@ export function stripeRoutes(env: Env, auth: AuthLike) {
           const customerId = typeof sess.customer === "string" ? sess.customer : sess.customer?.id;
           const wsId = sess.metadata?.workspaceId;
           if (wsId && subId && customerId) {
+            const pt = sess.metadata?.planTier;
+            const checkoutTier = pt === "pro" || pt === "enterprise" ? pt : null;
             await persistCheckoutSubscriptionToWorkspace(
               stripe,
+              env,
               wsId,
               customerId,
               subId,
               "checkout.session.completed",
+              checkoutTier,
             );
           }
           break;
@@ -298,15 +324,28 @@ export function stripeRoutes(env: Env, auth: AuthLike) {
             where: { stripeSubscriptionId: sub.id },
           });
           if (found) {
+            let billingPlan: "pro" | "enterprise" | undefined;
+            if (event.type === "customer.subscription.updated") {
+              try {
+                const full = await stripe.subscriptions.retrieve(sub.id, {
+                  expand: ["items.data.price"],
+                });
+                const inferred = await inferBillingPlanFromSubscription(stripe, env, full);
+                if (inferred) billingPlan = inferred;
+              } catch (e) {
+                console.error("[stripe] subscription.updated infer billingPlan", e);
+              }
+            }
             await prisma.workspace.update({
               where: { id: found.id },
               data: {
                 subscriptionStatus: sub.status,
                 currentPeriodEnd: subscriptionPeriodEnd(sub),
+                ...(billingPlan != null ? { billingPlan } : {}),
               },
             });
             await logActivity(found.id, ActivityType.SUBSCRIPTION_UPDATED, {
-              metadata: { status: sub.status, event: event.type },
+              metadata: { status: sub.status, event: event.type, billingPlan },
             });
           }
           break;

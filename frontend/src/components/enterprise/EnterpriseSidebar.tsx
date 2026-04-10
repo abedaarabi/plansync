@@ -36,7 +36,7 @@ import { projectScopedBaseFromPathname } from "@/lib/projectScopedPath";
 import { faviconUrlFromHostname, normalizeWorkspaceWebsite } from "@/lib/workspaceBranding";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { qk } from "@/lib/queryKeys";
-import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { isWorkspaceOmBillingClient, isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { isSuperAdmin } from "@/lib/workspaceRole";
 import type { MeWorkspace } from "@/types/enterprise";
 
@@ -159,6 +159,7 @@ export function EnterpriseSidebar({
   const ws = activeMembership?.workspace;
   const wid = ws?.id;
   const isPro = isWorkspaceProClient(ws);
+  const omBilling = isWorkspaceOmBillingClient(ws);
   const projectId = extractProjectId(pathname);
   const isProjectContext = Boolean(projectId);
 
@@ -259,7 +260,7 @@ export function EnterpriseSidebar({
       },
     ];
 
-    if (operationsMode) {
+    if (operationsMode && omBilling) {
       const omItems: NavItem[] = [
         {
           href: `${omBase}/om/dashboard`,
@@ -398,7 +399,16 @@ export function EnterpriseSidebar({
     });
 
     return sections;
-  }, [pathname, projectId, wid, mod, workspaceRole, projectSession?.uiMode, operationsMode]);
+  }, [
+    pathname,
+    projectId,
+    wid,
+    mod,
+    workspaceRole,
+    projectSession?.uiMode,
+    operationsMode,
+    omBilling,
+  ]);
 
   const globalMainSection = useMemo(
     (): NavSection => ({

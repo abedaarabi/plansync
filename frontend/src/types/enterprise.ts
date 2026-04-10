@@ -22,6 +22,8 @@ export type MeWorkspace = {
     currentPeriodEnd?: string | null;
     stripeCustomerId?: string | null;
     stripeSubscriptionId?: string | null;
+    /** `pro` | `enterprise` from Stripe; null = legacy / unknown. */
+    billingPlan?: string | null;
   };
   /** Workspace projects in use (Pro plan cap). */
   projectCount?: number;

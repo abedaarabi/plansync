@@ -149,6 +149,8 @@ model Workspace {
   stripeSubscriptionId String?   @unique
   subscriptionStatus   String? // active | canceled | past_due | trialing | incomplete | null = free/manual
   currentPeriodEnd     DateTime?
+  /// Paid tier from Stripe Checkout metadata / subscription items: `pro` | `enterprise`. Null = legacy (pre–plan split) or unknown.
+  billingPlan          String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -12,7 +12,7 @@ import {
   MAX_WORKSPACE_MEMBERS,
   MAX_WORKSPACE_PROJECTS,
 } from "../../config/product.js";
-import { isWorkspacePro } from "../../lib/subscription.js";
+import { isWorkspaceOmBilling, isWorkspacePro } from "../../lib/subscription.js";
 import {
   deleteObject,
   getObjectStream,
@@ -3295,6 +3295,15 @@ export function v1Routes(
       });
       if (!wm || wm.role !== WorkspaceRole.SUPER_ADMIN) {
         return c.json({ error: "Super Admin only" }, 403);
+      }
+      if (b.operationsMode === true && !isWorkspaceOmBilling(project.workspace)) {
+        return c.json(
+          {
+            error:
+              "Operations & Maintenance mode requires PlanSync Enterprise. Upgrade under Dashboard → Billing.",
+          },
+          402,
+        );
       }
       data.operationsMode = b.operationsMode;
     }
