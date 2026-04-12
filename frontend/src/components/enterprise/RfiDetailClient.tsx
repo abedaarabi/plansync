@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -38,6 +39,7 @@ import {
   X,
 } from "lucide-react";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
+import { DeleteRfiConfirmDialog } from "@/components/enterprise/DeleteRfiConfirmDialog";
 import { DeleteRfiAttachmentConfirmDialog } from "@/components/enterprise/DeleteRfiAttachmentConfirmDialog";
 import { DeleteRecordedAnswerConfirmDialog } from "@/components/enterprise/DeleteRecordedAnswerConfirmDialog";
 import { RfiTimelineDialog } from "@/components/enterprise/RfiTimelineDialog";
@@ -46,8 +48,10 @@ import { RfiDiscussionRichEditor } from "@/components/enterprise/RfiDiscussionRi
 import { RfiDiscussionMessageItem } from "@/components/enterprise/RfiDiscussionMessageItem";
 import { RfiMessageHtmlBody } from "@/components/enterprise/RfiMessageHtmlBody";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   completeRfiAttachmentUpload,
+  deleteProjectRfi,
   deleteRfiAttachment,
   fetchIssuesForProject,
   fetchMe,
@@ -60,6 +64,7 @@ import {
   postRfiMessage,
   presignReadRfiAttachment,
   presignRfiAttachmentUpload,
+  ProRequiredError,
   viewerHrefForRfi,
   type RfiActivityRow,
   type RfiAttachmentRow,
@@ -74,6 +79,7 @@ import {
 } from "@/lib/issueStatusStyle";
 import { qk } from "@/lib/queryKeys";
 import { userInitials } from "@/lib/user-initials";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { useTickNowMs } from "@/lib/useTickNowMs";
 
 function norm(s: string): string {
@@ -902,6 +908,9 @@ function sameSortedIds(a: string[], b: string[]): boolean {
 
 export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId: string }) {
   const qc = useQueryClient();
+  const router = useRouter();
+  const { primary } = useEnterpriseWorkspace();
+  const isPro = isWorkspaceProClient(primary?.workspace);
   const nowMs = useTickNowMs();
   const [questionDraft, setQuestionDraft] = useState("");
   const [editingQuestion, setEditingQuestion] = useState(false);
@@ -916,6 +925,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
   const [discussionEditorKey, setDiscussionEditorKey] = useState(0);
   const [selectedAnswerMessageId, setSelectedAnswerMessageId] = useState<string | null>(null);
   const [deleteRecordedAnswerOpen, setDeleteRecordedAnswerOpen] = useState(false);
+  const [deleteRfiOpen, setDeleteRfiOpen] = useState(false);
   const discussionThreadRef = useRef<HTMLDivElement>(null);
 
   const { data: me } = useQuery({
@@ -934,6 +944,9 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
     if (!meId || !team) return false;
     return team.members.some((m) => m.userId === meId && m.workspaceRole === "ADMIN");
   }, [meId, team]);
+
+  const onProjectTeam = Boolean(meId && team?.members.some((m) => m.userId === meId));
+  const canDeleteRfi = isPro && onProjectTeam;
 
   const rfiQuery = useQuery({
     queryKey: qk.projectRfi(projectId, rfiId),
@@ -1059,6 +1072,23 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
     },
   });
 
+  const deleteRfiMut = useMutation({
+    mutationFn: () => deleteProjectRfi(projectId, rfiId),
+    onSuccess: () => {
+      qc.removeQueries({ queryKey: qk.projectRfi(projectId, rfiId) });
+      qc.removeQueries({ queryKey: qk.rfiActivity(projectId, rfiId) });
+      qc.removeQueries({ queryKey: qk.rfiMessages(projectId, rfiId) });
+      void qc.invalidateQueries({ queryKey: qk.projectRfis(projectId) });
+      void qc.invalidateQueries({ queryKey: qk.meNotifications() });
+      toast.success("RFI deleted");
+      setDeleteRfiOpen(false);
+      router.push(`/projects/${projectId}/rfi`);
+    },
+    onError: (e: Error) => {
+      toast.error(e instanceof ProRequiredError ? e.message : e.message);
+    },
+  });
+
   useEffect(() => {
     setSelectedAnswerMessageId(null);
   }, [rfiId, rfiQuery.data?.status]);
@@ -1161,6 +1191,14 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
 
   return (
     <div className="space-y-6">
+      <DeleteRfiConfirmDialog
+        open={deleteRfiOpen}
+        reference={`RFI #${String(rfi.rfiNumber).padStart(3, "0")}`}
+        title={rfi.title}
+        isDeleting={deleteRfiMut.isPending}
+        onCancel={() => setDeleteRfiOpen(false)}
+        onConfirm={() => deleteRfiMut.mutate()}
+      />
       <div className="space-y-6 lg:space-y-7">
         <header
           id="rfi-overview"
@@ -1282,6 +1320,17 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                 >
                   <X className="h-4 w-4" aria-hidden />
                   Void / close
+                </button>
+              ) : null}
+              {canDeleteRfi ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteRfiOpen(true)}
+                  disabled={deleteRfiMut.isPending}
+                  className="inline-flex items-center gap-2 rounded-lg border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] shadow-sm transition hover:opacity-90 disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
+                  Delete RFI
                 </button>
               ) : null}
             </div>

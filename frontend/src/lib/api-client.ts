@@ -523,6 +523,99 @@ export async function createStripePortalSession(workspaceId: string): Promise<{ 
   return { url: j.url };
 }
 
+/** Super Admin — switch existing Stripe subscription between Pro and Enterprise (same subscription, prorated). */
+export async function changeWorkspaceSubscriptionPlan(
+  workspaceId: string,
+  plan: "pro" | "enterprise",
+): Promise<{ alreadyOnPlan: boolean; plan: "pro" | "enterprise" }> {
+  const res = await fetch(apiUrl("/api/stripe/change-subscription-plan"), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({ workspaceId, plan }),
+  });
+  const j = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
+    alreadyOnPlan?: boolean;
+    plan?: "pro" | "enterprise";
+  };
+  if (res.status === 503) {
+    throw new Error("Billing is not configured. Add Stripe keys to the API environment.");
+  }
+  if (res.status === 401) {
+    throw new Error(readJsonErrorBody(j, res, "Sign in again to continue"));
+  }
+  if (res.status === 403) {
+    throw new Error("Only the workspace Super Admin can change the plan.");
+  }
+  if (!res.ok) {
+    throw new Error(readJsonErrorBody(j, res, "Could not change plan"));
+  }
+  const outPlan = j.plan === "pro" || j.plan === "enterprise" ? j.plan : plan;
+  return { alreadyOnPlan: j.alreadyOnPlan === true, plan: outPlan };
+}
+
+/** Super Admin — cancel Stripe subscription in-app (default: at period end). */
+export async function cancelWorkspaceStripeSubscription(
+  workspaceId: string,
+  options?: { immediate?: boolean },
+): Promise<{
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: string | null;
+  status: string;
+}> {
+  const res = await fetch(apiUrl("/api/stripe/cancel-subscription"), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({ workspaceId, immediate: options?.immediate === true }),
+  });
+  const j = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
+    cancelAtPeriodEnd?: boolean;
+    currentPeriodEnd?: string | null;
+    status?: string;
+  };
+  if (res.status === 503) {
+    throw new Error("Billing is not configured. Add Stripe keys to the API environment.");
+  }
+  if (res.status === 401) {
+    throw new Error(readJsonErrorBody(j, res, "Sign in again to continue"));
+  }
+  if (res.status === 403) {
+    throw new Error("Only the workspace Super Admin can cancel the subscription.");
+  }
+  if (!res.ok) {
+    throw new Error(readJsonErrorBody(j, res, "Could not cancel subscription"));
+  }
+  return {
+    cancelAtPeriodEnd: Boolean(j.cancelAtPeriodEnd),
+    currentPeriodEnd: typeof j.currentPeriodEnd === "string" ? j.currentPeriodEnd : null,
+    status: typeof j.status === "string" ? j.status : "",
+  };
+}
+
+/** Super Admin — permanently delete the workspace and all related data (DB + S3). Cancels Stripe first if needed. */
+export async function deleteWorkspacePermanently(
+  workspaceId: string,
+  confirmWorkspaceName: string,
+): Promise<void> {
+  const res = await fetch(apiUrl(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}`), {
+    method: "DELETE",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({ confirmWorkspaceName }),
+  });
+  const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (res.status === 401) {
+    throw new Error(readJsonErrorBody(j, res, "Sign in again to continue"));
+  }
+  if (res.status === 403) {
+    throw new Error("Only the workspace Super Admin can delete this organization.");
+  }
+  if (!res.ok) {
+    throw new Error(readJsonErrorBody(j, res, "Could not delete workspace"));
+  }
+}
+
 /** Workspace row as returned by `workspaceJson` (e.g. after logo upload). */
 export type WorkspaceBrandingJson = Record<string, unknown> & {
   id: string;

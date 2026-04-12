@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Settings } from "lucide-react";
 import { fetchProjectSession, patchProject, patchProjectSettings } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { isSuperAdmin } from "@/lib/workspaceRole";
+import { isWorkspaceOmBillingClient } from "@/lib/workspaceSubscription";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { AccessRestricted } from "./AccessRestricted";
 
@@ -52,6 +54,9 @@ export function ProjectSettingsClient({ projectId }: Props) {
   const m = session.settings.modules;
   const c = session.settings.clientVisibility;
   const om = session.operationsMode;
+  const ws = primary?.workspace;
+  const omBilling = isWorkspaceOmBillingClient(ws);
+  const billingHref = isSuperAdmin(primary?.role) ? "/organization?tab=billing" : "/organization";
 
   function toggleModule(key: keyof typeof m, value: boolean) {
     mutation.mutate({ projectId, patch: { modules: { [key]: value } } });
@@ -123,6 +128,32 @@ export function ProjectSettingsClient({ projectId }: Props) {
           and occupant reporting. Set lifecycle stage to <strong>Handover &amp; FM</strong> from the
           project editor when you enter commissioning.
         </p>
+        {!omBilling ? (
+          <div className="mb-4 rounded-xl border border-amber-200/90 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 shadow-sm">
+            <p className="font-medium text-amber-950">Enterprise plan required</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-amber-900/90">
+              O&amp;M navigation and hubs are included with the{" "}
+              <strong className="font-semibold">Enterprise</strong> workspace plan. Upgrade under{" "}
+              <strong className="font-semibold">Organization → Plan &amp; billing</strong> so this
+              project can use handover, assets, maintenance, inspections, and the tenant portal
+              after you turn on Operations mode.
+            </p>
+            <div className="mt-3">
+              {isSuperAdmin(primary?.role) ? (
+                <Link
+                  href={billingHref}
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:opacity-95"
+                >
+                  Open Plan &amp; billing
+                </Link>
+              ) : (
+                <p className="text-xs font-medium text-amber-900/90">
+                  Ask a workspace Super Admin to upgrade the plan in Plan &amp; billing.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : null}
         {row("Operations mode", om, (v) => opModeMutation.mutate(v), opModeMutation.isPending)}
         {om ? (
           <>

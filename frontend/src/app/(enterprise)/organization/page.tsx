@@ -23,7 +23,7 @@ export default function OrganizationPage() {
                 Organization
               </h1>
               <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
-                Branding, people, roles, and email invites for your workspace.
+                Branding, plan &amp; billing, people, roles, and email invites for your workspace.
               </p>
             </div>
           </div>

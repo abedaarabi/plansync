@@ -19,3 +19,17 @@ export function isWorkspacePro(ws) {
     }
     return false;
 }
+/**
+ * Operations & Maintenance (O&M) billing: Enterprise subscribers, or legacy workspaces
+ * (`billingPlan` null) that already have Pro — keeps existing customers on Pro grandfathered.
+ * Explicit `pro` tier does not include O&M.
+ */
+export function isWorkspaceOmBilling(ws) {
+    if (!isWorkspacePro(ws))
+        return false;
+    if (ws.billingPlan === "enterprise")
+        return true;
+    if (ws.billingPlan == null)
+        return true;
+    return false;
+}

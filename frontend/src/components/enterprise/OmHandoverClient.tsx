@@ -35,6 +35,7 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { isSuperAdmin } from "@/lib/workspaceRole";
+import { isWorkspaceOmBillingClient } from "@/lib/workspaceSubscription";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { HandoverWizardModal } from "./HandoverWizardModal";
 
@@ -308,6 +309,36 @@ export function OmHandoverClient({ projectId }: Props) {
           <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
         </Link>
         <p className="mt-4 text-xs text-[var(--enterprise-text-muted)]">Super Admin only.</p>
+      </GateState>
+    );
+  }
+
+  const omBilling = isWorkspaceOmBillingClient(primary?.workspace);
+  if (!omBilling) {
+    return (
+      <GateState icon={AlertTriangle} title="Enterprise plan required">
+        <p className="mb-4">
+          Operations & Maintenance (including this handover hub) needs the{" "}
+          <strong className="font-medium text-[var(--enterprise-text)]">Enterprise</strong>{" "}
+          workspace plan. Upgrade under{" "}
+          <strong className="font-medium text-[var(--enterprise-text)]">
+            Organization → Plan & billing
+          </strong>
+          .
+        </p>
+        {superAdmin ? (
+          <Link
+            href="/organization?tab=billing"
+            className="inline-flex w-full min-h-12 max-w-sm items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2 sm:w-auto"
+          >
+            Open Plan & billing
+            <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+          </Link>
+        ) : (
+          <p className="text-xs text-[var(--enterprise-text-muted)]">
+            Ask a workspace Super Admin to upgrade the plan.
+          </p>
+        )}
       </GateState>
     );
   }

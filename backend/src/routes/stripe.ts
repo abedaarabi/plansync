@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import Stripe from "stripe";
 import { ActivityType, WorkspaceRole } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
@@ -14,7 +14,14 @@ function subscriptionPeriodEnd(sub: Stripe.Subscription): Date | null {
   return typeof t === "number" ? new Date(t * 1000) : null;
 }
 
-type AuthLike = { api: { getSession: (o: { headers: Headers }) => Promise<unknown> } };
+type AuthLike = {
+  api: {
+    getSession: (o: {
+      headers: Headers;
+      query?: { disableCookieCache?: boolean };
+    }) => Promise<unknown>;
+  };
+};
 
 function stripeThrownMessage(e: unknown): string {
   if (
@@ -85,6 +92,154 @@ async function persistCheckoutSubscriptionToWorkspace(
   });
 }
 
+async function runChangeSubscriptionPlan(
+  c: Context,
+  env: Env,
+  workspaceId: string,
+  targetPlan: "pro" | "enterprise",
+): Promise<Response> {
+  if (!env.STRIPE_SECRET_KEY) {
+    return c.json({ error: "Stripe not configured" }, 503);
+  }
+  const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+
+  const user = c.get("user");
+  const membership = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId, userId: user.id } },
+  });
+  if (!membership || membership.role !== WorkspaceRole.SUPER_ADMIN) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const ws = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+  if (!ws) {
+    return c.json({ error: "Workspace not found" }, 404);
+  }
+  if (!ws.stripeSubscriptionId) {
+    return c.json(
+      { error: "No subscription on file. Use checkout to connect billing first." },
+      400,
+    );
+  }
+
+  let proPriceId: string;
+  let enterprisePriceId: string;
+  try {
+    proPriceId = await resolveProMonthlyPriceId(stripe, env.STRIPE_PRICE_PRO_MONTHLY);
+    enterprisePriceId = await resolveEnterpriseMonthlyPriceId(
+      stripe,
+      env.STRIPE_PRICE_ENTERPRISE_MONTHLY,
+    );
+  } catch (e) {
+    console.error("[stripe] change-subscription-plan resolve prices", e);
+    const msg = e instanceof Error ? e.message : "Could not resolve plan prices";
+    return c.json({ error: msg }, 400);
+  }
+
+  let sub: Stripe.Subscription;
+  try {
+    sub = await stripe.subscriptions.retrieve(ws.stripeSubscriptionId, {
+      expand: ["items.data.price"],
+    });
+  } catch (e) {
+    console.error("[stripe] change-subscription-plan retrieve", e);
+    return c.json({ error: stripeThrownMessage(e) }, 502);
+  }
+
+  const inferred = await inferBillingPlanFromSubscription(stripe, env, sub);
+  if (inferred === null) {
+    return c.json(
+      {
+        error:
+          "This subscription does not use the configured Pro or Enterprise prices. Use Manage billing in Stripe or contact support.",
+      },
+      400,
+    );
+  }
+
+  if (inferred === targetPlan) {
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        billingPlan: targetPlan,
+        subscriptionStatus: sub.status,
+        currentPeriodEnd: subscriptionPeriodEnd(sub),
+      },
+    });
+    return c.json({
+      ok: true as const,
+      alreadyOnPlan: true as const,
+      plan: targetPlan,
+    });
+  }
+
+  const currentPriceId = inferred === "pro" ? proPriceId : enterprisePriceId;
+  const targetPriceId = targetPlan === "pro" ? proPriceId : enterprisePriceId;
+
+  const lineItem = sub.items.data.find((item) => {
+    const pid = typeof item.price === "string" ? item.price : item.price?.id;
+    return pid === currentPriceId;
+  });
+  if (!lineItem) {
+    return c.json(
+      {
+        error: `Could not find the ${inferred} subscription line item. Contact support.`,
+      },
+      400,
+    );
+  }
+
+  const meta: Record<string, string> = {};
+  if (sub.metadata) {
+    for (const [k, v] of Object.entries(sub.metadata)) {
+      if (v != null && v !== "") meta[k] = String(v);
+    }
+  }
+  meta.workspaceId = workspaceId;
+  meta.planTier = targetPlan;
+
+  let updated: Stripe.Subscription;
+  try {
+    updated = await stripe.subscriptions.update(sub.id, {
+      items: [{ id: lineItem.id, price: targetPriceId }],
+      proration_behavior: "create_prorations",
+      metadata: meta,
+    });
+  } catch (e) {
+    console.error("[stripe] change-subscription-plan subscriptions.update", e);
+    return c.json({ error: stripeThrownMessage(e) }, 502);
+  }
+
+  const full = await stripe.subscriptions.retrieve(updated.id, {
+    expand: ["items.data.price"],
+  });
+  const billingPlan = await inferBillingPlanFromSubscription(stripe, env, full);
+  await prisma.workspace.update({
+    where: { id: workspaceId },
+    data: {
+      stripeSubscriptionId: full.id,
+      subscriptionStatus: full.status,
+      currentPeriodEnd: subscriptionPeriodEnd(full),
+      billingPlan: billingPlan ?? targetPlan,
+    },
+  });
+  await logActivity(ws.id, ActivityType.SUBSCRIPTION_UPDATED, {
+    metadata: {
+      status: full.status,
+      source: "change-subscription-plan",
+      from: inferred,
+      to: targetPlan,
+      billingPlan: billingPlan ?? targetPlan,
+    },
+  });
+
+  return c.json({
+    ok: true as const,
+    alreadyOnPlan: false as const,
+    plan: (billingPlan ?? targetPlan) as "pro" | "enterprise",
+  });
+}
+
 export function stripeRoutes(env: Env, auth: AuthLike) {
   const r = new Hono();
   const needUser = sessionMiddleware(auth);
@@ -129,8 +284,8 @@ export function stripeRoutes(env: Env, auth: AuthLike) {
     }
 
     /** `{CHECKOUT_SESSION_ID}` is replaced by Stripe — used to sync DB when webhooks do not reach localhost. */
-    const successUrl = `${env.PUBLIC_APP_URL}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${env.PUBLIC_APP_URL}/dashboard?checkout=cancel`;
+    const successUrl = `${env.PUBLIC_APP_URL}/organization?tab=billing&checkout=success&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${env.PUBLIC_APP_URL}/organization?tab=billing&checkout=cancel`;
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "subscription",
@@ -192,13 +347,130 @@ export function stripeRoutes(env: Env, auth: AuthLike) {
     try {
       portal = await stripe.billingPortal.sessions.create({
         customer: ws.stripeCustomerId,
-        return_url: `${env.PUBLIC_APP_URL}/dashboard`,
+        return_url: `${env.PUBLIC_APP_URL}/organization?tab=billing`,
       });
     } catch (e) {
       console.error("[stripe] billingPortal.sessions.create", e);
       return c.json({ error: stripeThrownMessage(e) }, 502);
     }
     return c.json({ url: portal.url });
+  });
+
+  /**
+   * Super Admin — switch the workspace subscription between PlanSync Pro and Enterprise monthly prices.
+   * Stripe prorates on the same subscription; the default payment method is invoiced (not Checkout).
+   */
+  r.post("/change-subscription-plan", needUser, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
+    const planRaw = typeof body.plan === "string" ? body.plan.trim().toLowerCase() : "";
+    const targetPlan: "pro" | "enterprise" | null =
+      planRaw === "enterprise" ? "enterprise" : planRaw === "pro" ? "pro" : null;
+
+    if (!workspaceId) {
+      return c.json({ error: "workspaceId is required" }, 400);
+    }
+    if (!targetPlan) {
+      return c.json({ error: 'plan must be "pro" or "enterprise"' }, 400);
+    }
+
+    return runChangeSubscriptionPlan(c, env, workspaceId, targetPlan);
+  });
+
+  /**
+   * @deprecated Prefer POST /change-subscription-plan with `{ "plan": "enterprise" }`.
+   * Legacy alias: same behavior, response includes `alreadyEnterprise` (= `alreadyOnPlan`) for old clients.
+   */
+  r.post("/upgrade-to-enterprise", needUser, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
+    if (!workspaceId) {
+      return c.json({ error: "workspaceId is required" }, 400);
+    }
+
+    const inner = await runChangeSubscriptionPlan(c, env, workspaceId, "enterprise");
+    if (inner.status !== 200) {
+      return inner;
+    }
+    const data = (await inner.json()) as {
+      ok?: boolean;
+      alreadyOnPlan?: boolean;
+      plan?: string;
+    };
+    return c.json({
+      ...data,
+      alreadyEnterprise: data.alreadyOnPlan === true,
+    });
+  });
+
+  /**
+   * Super Admin — end paid billing for the workspace without deleting data.
+   * Default: cancel at the end of the current period. Pass `immediate: true` to end access now.
+   */
+  r.post("/cancel-subscription", needUser, async (c) => {
+    if (!env.STRIPE_SECRET_KEY) {
+      return c.json({ error: "Stripe not configured" }, 503);
+    }
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+    const body = await c.req.json().catch(() => ({}));
+    const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
+    const immediate = body.immediate === true;
+    if (!workspaceId) {
+      return c.json({ error: "workspaceId is required" }, 400);
+    }
+
+    const user = c.get("user");
+    const membership = await prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId: user.id } },
+    });
+    if (!membership || membership.role !== WorkspaceRole.SUPER_ADMIN) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+
+    const ws = await prisma.workspace.findUnique({ where: { id: workspaceId } });
+    if (!ws) {
+      return c.json({ error: "Workspace not found" }, 404);
+    }
+    if (!ws.stripeSubscriptionId) {
+      return c.json({ error: "This workspace has no Stripe subscription to cancel." }, 400);
+    }
+
+    let sub: Stripe.Subscription;
+    try {
+      if (immediate) {
+        sub = await stripe.subscriptions.cancel(ws.stripeSubscriptionId);
+      } else {
+        sub = await stripe.subscriptions.update(ws.stripeSubscriptionId, {
+          cancel_at_period_end: true,
+        });
+      }
+    } catch (e) {
+      console.error("[stripe] cancel-subscription", e);
+      return c.json({ error: stripeThrownMessage(e) }, 502);
+    }
+
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        subscriptionStatus: sub.status,
+        currentPeriodEnd: subscriptionPeriodEnd(sub),
+      },
+    });
+    await logActivity(ws.id, ActivityType.SUBSCRIPTION_UPDATED, {
+      metadata: {
+        status: sub.status,
+        source: "cancel-subscription",
+        immediate,
+        cancelAtPeriodEnd: sub.cancel_at_period_end,
+      },
+    });
+
+    return c.json({
+      ok: true as const,
+      status: sub.status,
+      cancelAtPeriodEnd: sub.cancel_at_period_end,
+      currentPeriodEnd: subscriptionPeriodEnd(sub)?.toISOString() ?? null,
+    });
   });
 
   /**

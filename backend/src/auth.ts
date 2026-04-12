@@ -38,7 +38,8 @@ export function createAuth(env: Env) {
     database: prismaAdapter(prisma, { provider: "postgresql" }),
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: true,
+      /** Verification is enforced on API routes via `sessionMiddleware`; set false so invite sign-up gets a session. */
+      requireEmailVerification: false,
       sendResetPassword: async ({ user, url }) => {
         queuePasswordResetEmail(env, {
           to: user.email,

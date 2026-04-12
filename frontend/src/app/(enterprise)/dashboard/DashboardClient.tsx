@@ -5,10 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import {
-  WorkspaceBillingCard,
-  useStripeCheckoutReturnToast,
-} from "@/components/enterprise/WorkspaceBillingCard";
-import {
   ArrowUpRight,
   Check,
   Circle,
@@ -32,14 +28,12 @@ import {
   fetchWorkspaceMembers,
 } from "@/lib/api-client";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { isSuperAdmin } from "@/lib/workspaceRole";
 import { computeWorkspaceHealthScore } from "@/lib/dashboardHealth";
 import { qk } from "@/lib/queryKeys";
-import { isSuperAdmin } from "@/lib/workspaceRole";
-
 export function DashboardClient() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  useStripeCheckoutReturnToast("/dashboard");
   const [workspaceName, setWorkspaceName] = useState("");
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [createWorkspaceError, setCreateWorkspaceError] = useState<string | null>(null);
@@ -298,7 +292,9 @@ export function DashboardClient() {
                 </span>
               )}
               <Link
-                href="/dashboard#billing"
+                href={
+                  isSuperAdmin(membership?.role) ? "/organization?tab=billing" : "/organization"
+                }
                 className="inline-flex items-center rounded-full border border-[var(--enterprise-border)] bg-white/80 px-3 py-1 text-[12px] font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35"
               >
                 Billing & plan
@@ -339,10 +335,6 @@ export function DashboardClient() {
           </div>
         </div>
       </section>
-
-      {hasWorkspace && wid && ws && isSuperAdmin(membership?.role) ? (
-        <WorkspaceBillingCard workspaceId={wid} workspace={ws} isSuperAdmin />
-      ) : null}
 
       {/* KPI strip */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

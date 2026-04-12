@@ -3,6 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./lib/prisma.js";
 import { buildCorsAllowList } from "./lib/env.js";
 import { queuePasswordResetEmail } from "./lib/send-password-reset-email.js";
+import { queueVerificationEmail } from "./lib/send-verification-email.js";
 function buildSocialProviders(env) {
     const out = {};
     if (env.GOOGLE_CLIENT_ID?.trim() && env.GOOGLE_CLIENT_SECRET?.trim()) {
@@ -35,6 +36,8 @@ export function createAuth(env) {
         database: prismaAdapter(prisma, { provider: "postgresql" }),
         emailAndPassword: {
             enabled: true,
+            /** Verification is enforced on API routes via `sessionMiddleware`; set false so invite sign-up gets a session. */
+            requireEmailVerification: false,
             sendResetPassword: async ({ user, url }) => {
                 queuePasswordResetEmail(env, {
                     to: user.email,
@@ -43,6 +46,18 @@ export function createAuth(env) {
                 });
             },
             revokeSessionsOnPasswordReset: true,
+        },
+        emailVerification: {
+            sendOnSignUp: true,
+            sendOnSignIn: true,
+            autoSignInAfterVerification: true,
+            sendVerificationEmail: async ({ user, url }) => {
+                queueVerificationEmail(env, {
+                    to: user.email,
+                    displayName: user.name,
+                    verifyUrl: url,
+                });
+            },
         },
         ...(socialProviders ? { socialProviders } : {}),
         advanced: {

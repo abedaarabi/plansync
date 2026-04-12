@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import Stripe from "stripe";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
@@ -7,7 +8,7 @@ import { sessionMiddleware } from "../../middleware/session.js";
 import { logActivity, logActivitySafe } from "../../lib/activity.js";
 import { maybeSendStorageAlerts } from "../../lib/storageAlerts.js";
 import { DEFAULT_STORAGE_QUOTA_BYTES, MAX_WORKSPACE_MEMBERS, MAX_WORKSPACE_PROJECTS, } from "../../config/product.js";
-import { isWorkspacePro } from "../../lib/subscription.js";
+import { isWorkspaceOmBilling, isWorkspacePro } from "../../lib/subscription.js";
 import { deleteObject, getObjectStream, presignPut, presignGet, putObjectBuffer, } from "../../lib/s3.js";
 import { Resend } from "resend";
 import { ActivityType, EmailInviteKind, Prisma, ProjectMeasurementSystem, ProjectMemberRole, ProjectStage, WorkspaceRole, } from "@prisma/client";
@@ -36,6 +37,7 @@ import { buildUploadObjectKey, folderKeyFromFolderId, newUploadId, s3KeyMatchesF
 import { resolvedMimeType } from "../../lib/mime.js";
 import { findBestUploadMatch } from "../../lib/uploadMatch.js";
 import { deleteFileFromS3AndDb, deleteFolderTreeFromDbAndS3, } from "../../lib/deleteProjectAssets.js";
+import { deleteAllWorkspaceS3Objects } from "../../lib/deleteWorkspaceS3.js";
 import { logoUrlFromWebsiteUrl, normalizeWebsiteUrl } from "../../lib/websiteUrl.js";
 import { fileVersionPublicSelect, viewerStatePutSchema } from "../../lib/viewerState.js";
 import { faviconUrlFromHostname, isGoogleFaviconUrl, normalizeWorkspaceWebsite, } from "../../lib/workspaceBranding.js";
@@ -127,6 +129,8 @@ async function countSeatPressure(workspaceId) {
 export function v1Routes(auth, env, deps) {
     const r = new Hono();
     const needUser = sessionMiddleware(auth);
+    /** Invite accept must run before `emailVerified` is flipped; all other routes use `needUser`. */
+    const needUserForInviteAccept = sessionMiddleware(auth, { requireEmailVerified: false });
     r.get("/health", (c) => c.json({ ok: true }));
     /** Public: workspace logo (S3 upload or redirect to external `logoUrl`). Cached briefly for proposals / emails. */
     r.get("/public/workspaces/:workspaceId/logo", async (c) => {
@@ -249,7 +253,7 @@ export function v1Routes(auth, env, deps) {
             projects: inv.projects.map((p) => p.project),
         });
     });
-    r.post("/invites/:token/accept", needUser, async (c) => {
+    r.post("/invites/:token/accept", needUserForInviteAccept, async (c) => {
         const token = c.req.param("token");
         const userId = c.get("user").id;
         const inv = await prisma.workspaceInvite.findUnique({
@@ -260,6 +264,10 @@ export function v1Routes(auth, env, deps) {
             return c.json({ error: "Invalid invite" }, 400);
         if (inv.expiresAt < /* @__PURE__ */ new Date())
             return c.json({ error: "Invite expired" }, 400);
+        await prisma.user.update({
+            where: { id: userId },
+            data: { emailVerified: true },
+        });
         const gate = requirePro(inv.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
@@ -292,7 +300,7 @@ export function v1Routes(auth, env, deps) {
         const ws = await prisma.workspace.findUniqueOrThrow({ where: { id: inv.workspaceId } });
         return c.json({ ok: true, workspace: workspaceJson(ws, env) });
     });
-    r.post("/email-invites/:token/accept", needUser, async (c) => {
+    r.post("/email-invites/:token/accept", needUserForInviteAccept, async (c) => {
         const token = c.req.param("token");
         const userId = c.get("user").id;
         const user = c.get("user");
@@ -315,6 +323,10 @@ export function v1Routes(auth, env, deps) {
         if (user.email.toLowerCase().trim() !== inv.email.toLowerCase().trim()) {
             return c.json({ error: `Sign in as ${inv.email} to accept this invite.` }, 400);
         }
+        await prisma.user.update({
+            where: { id: userId },
+            data: { emailVerified: true },
+        });
         const existing = await prisma.workspaceMember.findUnique({
             where: { workspaceId_userId: { workspaceId: inv.workspaceId, userId } },
         });
@@ -658,6 +670,61 @@ export function v1Routes(auth, env, deps) {
             data,
         });
         return c.json(workspaceJson(ws, env));
+    });
+    r.delete("/workspaces/:workspaceId", needUser, async (c) => {
+        const workspaceId = c.req.param("workspaceId");
+        const admin = await prisma.workspaceMember.findFirst({
+            where: { workspaceId, userId: c.get("user").id, role: WorkspaceRole.SUPER_ADMIN },
+            include: { workspace: true },
+        });
+        if (!admin)
+            return c.json({ error: "Forbidden" }, 403);
+        const body = z
+            .object({ confirmWorkspaceName: z.string().min(1).max(200) })
+            .safeParse(await c.req.json().catch(() => ({})));
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        if (body.data.confirmWorkspaceName.trim() !== admin.workspace.name.trim()) {
+            return c.json({ error: "Confirmation name must match the workspace name exactly." }, 400);
+        }
+        if (env.STRIPE_SECRET_KEY && admin.workspace.stripeSubscriptionId) {
+            const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+            try {
+                await stripe.subscriptions.cancel(admin.workspace.stripeSubscriptionId);
+            }
+            catch (e) {
+                const code = e && typeof e === "object" && "code" in e && typeof e.code === "string"
+                    ? e.code
+                    : "";
+                const msg = e &&
+                    typeof e === "object" &&
+                    "message" in e &&
+                    typeof e.message === "string"
+                    ? e.message
+                    : "";
+                if (code !== "resource_missing" && !/canceled|cancelled/i.test(msg)) {
+                    console.error("[workspaces] Stripe subscription cancel before delete", e);
+                    return c.json({
+                        error: "Could not cancel the Stripe subscription. Cancel billing in Stripe first, then try again.",
+                    }, 502);
+                }
+            }
+        }
+        try {
+            await deleteAllWorkspaceS3Objects(env, workspaceId);
+        }
+        catch (e) {
+            console.error("[workspaces] S3 cleanup before delete", e);
+            return c.json({ error: "Could not remove stored files for this workspace." }, 500);
+        }
+        try {
+            await prisma.workspace.delete({ where: { id: workspaceId } });
+        }
+        catch (e) {
+            console.error("[workspaces] delete", e);
+            return c.json({ error: "Could not delete workspace." }, 500);
+        }
+        return c.json({ ok: true });
     });
     r.post("/workspaces/:workspaceId/logo", needUser, bodyLimit({
         maxSize: 3 * 1024 * 1024,
@@ -1375,6 +1442,10 @@ export function v1Routes(auth, env, deps) {
             where: { id: targetUserId },
             select: { email: true },
         });
+        const otherWorkspaceMemberships = await prisma.workspaceMember.count({
+            where: { userId: targetUserId, workspaceId: { not: workspaceId } },
+        });
+        const deleteAccountAfterRemoval = otherWorkspaceMemberships === 0;
         await prisma.$transaction(async (tx) => {
             await tx.projectMember.deleteMany({
                 where: { userId: targetUserId, project: { workspaceId } },
@@ -1383,12 +1454,16 @@ export function v1Routes(auth, env, deps) {
             if (removedUser?.email) {
                 await revokePendingEmailInvitesForWorkspaceEmail(tx, workspaceId, removedUser.email);
             }
+            if (deleteAccountAfterRemoval) {
+                await tx.user.delete({ where: { id: targetUserId } });
+            }
         });
         await logActivity(workspaceId, ActivityType.MEMBER_REMOVED, {
             actorUserId: actorId,
             entityId: targetUserId,
+            metadata: deleteAccountAfterRemoval ? { accountDeleted: true } : undefined,
         });
-        return c.json({ ok: true });
+        return c.json({ ok: true, accountDeleted: deleteAccountAfterRemoval });
     });
     r.post("/workspaces/:workspaceId/members", needUser, async (c) => {
         const workspaceId = c.req.param("workspaceId");
@@ -3031,6 +3106,11 @@ export function v1Routes(auth, env, deps) {
             });
             if (!wm || wm.role !== WorkspaceRole.SUPER_ADMIN) {
                 return c.json({ error: "Super Admin only" }, 403);
+            }
+            if (b.operationsMode === true && !isWorkspaceOmBilling(project.workspace)) {
+                return c.json({
+                    error: "Operations & Maintenance mode requires PlanSync Enterprise. Upgrade under Dashboard → Billing.",
+                }, 402);
             }
             data.operationsMode = b.operationsMode;
         }

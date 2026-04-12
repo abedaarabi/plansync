@@ -34,6 +34,7 @@ import { DEFAULT_ENTERPRISE_PRIMARY_HEX } from "@/lib/enterpriseTheme";
 import { qk } from "@/lib/queryKeys";
 import { userInitials } from "@/lib/user-initials";
 import { isWorkspaceProClient, trialDaysLeft } from "@/lib/workspaceSubscription";
+import { isSuperAdmin } from "@/lib/workspaceRole";
 import Link from "next/link";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -297,7 +298,7 @@ export function EnterpriseTopBar({
       <div className="flex shrink-0 items-center gap-1 sm:gap-2 md:gap-2.5">
         {activeWs?.subscriptionStatus === "trialing" ? (
           <Link
-            href="/dashboard#billing"
+            href={isSuperAdmin(primary?.role) ? "/organization?tab=billing" : "/organization"}
             className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 sm:inline-flex"
           >
             {activeWs.stripeSubscriptionId

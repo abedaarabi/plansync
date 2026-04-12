@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { LANDING_SOLUTIONS } from "@/lib/landingContent";
 
 type LandingFooterProps = {
   onGoToFreeViewer: () => void;
@@ -37,27 +38,36 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
             </h4>
             <ul className="mt-4 flex flex-col gap-3">
               <li>
-                <a
-                  href="#how-it-works"
+                <Link
+                  href="/#how-it-works"
                   className="text-sm text-slate-300 transition hover:text-white"
                 >
                   How it works
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#solutions" className="text-sm text-slate-300 transition hover:text-white">
-                  Solutions
-                </a>
+                <Link
+                  href="/solutions"
+                  className="text-sm text-slate-300 transition hover:text-white"
+                >
+                  All solutions
+                </Link>
               </li>
               <li>
-                <a href="#features" className="text-sm text-slate-300 transition hover:text-white">
+                <Link
+                  href="/#features"
+                  className="text-sm text-slate-300 transition hover:text-white"
+                >
                   Features
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#compare" className="text-sm text-slate-300 transition hover:text-white">
+                <Link
+                  href="/#compare"
+                  className="text-sm text-slate-300 transition hover:text-white"
+                >
                   Pricing
-                </a>
+                </Link>
               </li>
               <li>
                 <button
@@ -71,6 +81,21 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               <li>
                 <span className="text-sm text-slate-500">Changelog</span>
               </li>
+            </ul>
+            <p className="mt-6 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Solutions
+            </p>
+            <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {LANDING_SOLUTIONS.map((s) => (
+                <li key={s.slug}>
+                  <Link
+                    href={`/solutions/${s.slug}`}
+                    className="text-sm text-slate-300 transition hover:text-[var(--landing-cta)]"
+                  >
+                    {s.title}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 

@@ -108,14 +108,14 @@ export function LandingNav({
             </p>
             <div className="flex flex-col gap-2 border-b border-slate-100 pb-4">
               {LANDING_SOLUTIONS.map((s) => (
-                <a
+                <Link
                   key={s.slug}
-                  href={`#solution-${s.slug}`}
+                  href={`/solutions/${s.slug}`}
                   className="text-sm font-medium text-slate-700"
                   onClick={() => setMobileOpen(false)}
                 >
                   {s.title}
-                </a>
+                </Link>
               ))}
             </div>
             <a

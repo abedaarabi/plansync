@@ -113,6 +113,20 @@ export const LANDING_SOLUTIONS = [
   },
 ] as const;
 
+export type SolutionSlug = (typeof LANDING_SOLUTIONS)[number]["slug"];
+
+export type LandingSolution = (typeof LANDING_SOLUTIONS)[number];
+
+export const LANDING_SOLUTION_SLUGS = LANDING_SOLUTIONS.map((s) => s.slug) as SolutionSlug[];
+
+export function getSolution(slug: string): LandingSolution | undefined {
+  return LANDING_SOLUTIONS.find((s) => s.slug === slug);
+}
+
+export function isSolutionSlug(slug: string): slug is SolutionSlug {
+  return LANDING_SOLUTIONS.some((s) => s.slug === slug);
+}
+
 /** Section heading copy for the solutions grid on the homepage. */
 export const LANDING_SOLUTIONS_SECTION = {
   eyebrow: "Solutions",

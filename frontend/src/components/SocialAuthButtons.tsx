@@ -67,14 +67,14 @@ export function SocialAuthButtons({ callbackURL, onError }: Props) {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-2.5">
+    <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         {ids.includes("google") && (
           <button
             type="button"
             disabled={pending !== null}
             onClick={() => void handle("google")}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-800 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {pending === "google" ? (
               <Loader2 className="h-5 w-5 shrink-0 animate-spin text-slate-500" aria-hidden />
@@ -86,7 +86,7 @@ export function SocialAuthButtons({ callbackURL, onError }: Props) {
         )}
       </div>
 
-      <div className="relative py-1">
+      <div className="relative py-0.5">
         <div className="absolute inset-0 flex items-center" aria-hidden>
           <span className="w-full border-t border-slate-200" />
         </div>

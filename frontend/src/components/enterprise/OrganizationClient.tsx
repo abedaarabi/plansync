@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { patchWorkspace, uploadWorkspaceLogo } from "@/lib/api-client";
+import { toast } from "sonner";
+import { deleteWorkspacePermanently, patchWorkspace, uploadWorkspaceLogo } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import type { MeResponse, MeWorkspace } from "@/types/enterprise";
 import {
@@ -19,19 +20,23 @@ import {
   normalizeWorkspaceWebsite,
 } from "@/lib/workspaceBranding";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { WorkspaceBillingCard } from "@/components/enterprise/WorkspaceBillingCard";
+import {
+  WorkspaceBillingCard,
+  useStripeCheckoutReturnToast,
+} from "@/components/enterprise/WorkspaceBillingCard";
 import { WorkspaceTeamClient } from "@/components/enterprise/WorkspaceTeamClient";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { isSuperAdmin, isWorkspaceManager } from "@/lib/workspaceRole";
 import { trialDaysLeft } from "@/lib/workspaceSubscription";
 
-type OrgTab = "organization" | "people" | "invite-member";
+type OrgTab = "organization" | "billing" | "people" | "invite-member";
 
 export function OrganizationClient() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
+  useStripeCheckoutReturnToast("/organization?tab=billing");
   const wid = primary?.workspace.id;
   const isManager = isWorkspaceManager(primary?.role);
   const superAdmin = isSuperAdmin(primary?.role);
@@ -48,14 +53,24 @@ export function OrganizationClient() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [primaryColor, setPrimaryColor] = useState("#2563EB");
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
   const [tab, setTabState] = useState<OrgTab>("organization");
 
   useEffect(() => {
     const t = searchParams.get("tab");
-    if (t === "invite-member" && isManager) setTabState("invite-member");
+    if (t === "billing") {
+      if (superAdmin) setTabState("billing");
+      else {
+        setTabState("organization");
+        router.replace("/organization?tab=organization", { scroll: false });
+      }
+    } else if (t === "invite-member" && isManager) setTabState("invite-member");
     else if (t === "people") setTabState("people");
     else if (t === "organization") setTabState("organization");
-  }, [searchParams, isManager]);
+  }, [searchParams, isManager, superAdmin, router]);
 
   useEffect(() => {
     if (!isManager && tab === "invite-member") {
@@ -201,6 +216,7 @@ export function OrganizationClient() {
     <div className="space-y-8">
       <div className="flex flex-wrap gap-1 border-b border-[var(--enterprise-border)]">
         {tabBtn("organization", "Branding")}
+        {superAdmin ? tabBtn("billing", "Plan & billing") : null}
         {tabBtn("people", "People")}
         {isManager ? tabBtn("invite-member", "Invite member") : null}
       </div>
@@ -238,17 +254,6 @@ export function OrganizationClient() {
               />
             ) : null}
           </div>
-
-          {superAdmin && wid ? (
-            <div className="mt-6">
-              <WorkspaceBillingCard
-                workspaceId={wid}
-                workspace={ws}
-                isSuperAdmin={superAdmin}
-                compact
-              />
-            </div>
-          ) : null}
 
           {superAdmin ? (
             <form
@@ -506,6 +511,27 @@ export function OrganizationClient() {
               </p>
             </dl>
           )}
+          {superAdmin && wid ? (
+            <div className="mt-8 border-t border-red-200/90 pt-6">
+              <h3 className="text-sm font-semibold text-red-900">Delete workspace</h3>
+              <p className="mt-1 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
+                Permanently deletes this organization and all related data: projects, drawings,
+                issues, RFIs, team memberships, and stored files. If there is an active Stripe
+                subscription, it is canceled first. This cannot be undone.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirmName("");
+                  setDeleteOpen(true);
+                }}
+                className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-800 shadow-sm transition hover:bg-red-50"
+              >
+                Delete workspace…
+              </button>
+            </div>
+          ) : null}
+
           {superAdmin ? (
             <div className="mt-8 border-t border-[var(--enterprise-border)] pt-6">
               <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">
@@ -528,10 +554,83 @@ export function OrganizationClient() {
         </section>
       ) : null}
 
+      {tab === "billing" && superAdmin && wid ? (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]/80 px-4 py-3 sm:px-5">
+            <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
+              Plan &amp; billing
+            </h2>
+            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+              Choose a plan, open the Stripe customer portal, or cancel subscription—all in one
+              place.
+            </p>
+          </div>
+          <WorkspaceBillingCard workspaceId={wid} workspace={ws} isSuperAdmin={superAdmin} />
+        </div>
+      ) : null}
+
       {tab === "people" ? <WorkspaceTeamClient embedded variant="full" /> : null}
 
       {tab === "invite-member" && isManager ? (
         <WorkspaceTeamClient embedded variant="inviteOnly" />
+      ) : null}
+
+      {deleteOpen && wid ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-ws-title"
+        >
+          <div className="max-w-md rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 shadow-lg">
+            <h3 id="delete-ws-title" className="text-sm font-semibold text-red-900">
+              Delete workspace permanently
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
+              Type the workspace name{" "}
+              <span className="font-medium text-[var(--enterprise-text)]">{ws.name}</span> to
+              confirm. All data for this organization will be removed.
+            </p>
+            <input
+              value={deleteConfirmName}
+              onChange={(e) => setDeleteConfirmName(e.target.value)}
+              autoComplete="off"
+              placeholder="Workspace name"
+              className="mt-4 w-full rounded-lg border border-[var(--enterprise-border)] px-3 py-2 text-sm text-[var(--enterprise-text)] outline-none ring-[var(--enterprise-primary)]/25 focus:ring-2"
+            />
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleteBusy}
+                onClick={() => setDeleteOpen(false)}
+                className="rounded-lg border border-[var(--enterprise-border)] bg-white px-3 py-2 text-sm font-medium text-[var(--enterprise-text)] hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteBusy || deleteConfirmName.trim() !== ws.name.trim()}
+                onClick={async () => {
+                  setDeleteBusy(true);
+                  try {
+                    await deleteWorkspacePermanently(wid, deleteConfirmName);
+                    await queryClient.invalidateQueries({ queryKey: qk.me() });
+                    setDeleteOpen(false);
+                    toast.success("Workspace deleted.");
+                    router.push("/dashboard");
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Could not delete workspace.");
+                  } finally {
+                    setDeleteBusy(false);
+                  }
+                }}
+                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleteBusy ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

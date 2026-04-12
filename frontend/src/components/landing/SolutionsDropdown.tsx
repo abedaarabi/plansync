@@ -1,41 +1,96 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
-import { LANDING_SOLUTIONS } from "@/lib/landingContent";
-import { SOLUTION_ICONS } from "./solutionIcons";
+import { createPortal } from "react-dom";
+import { X } from "lucide-react";
+import { CtaHeroAtmosphere } from "@/components/BrandStoryPanel";
+import { LANDING_SOLUTIONS_SECTION } from "@/lib/landingContent";
+import { SolutionsMenuPanelContent } from "./SolutionsMenuPanelContent";
 
 export function SolutionsDropdown() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const solutionGroups = [
-    {
-      title: "Core",
-      items: LANDING_SOLUTIONS.filter((s) =>
-        ["viewer", "issues", "rfis", "takeoff"].includes(s.slug),
-      ),
-    },
-    {
-      title: "O&M + FM",
-      items: LANDING_SOLUTIONS.filter((s) => s.slug.startsWith("om-")),
-    },
-  ] as const;
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
     };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open]);
+
+  const overlay =
+    open && typeof document !== "undefined"
+      ? createPortal(
+          <>
+            <button
+              type="button"
+              aria-label="Close solutions menu"
+              className="fixed inset-x-0 top-16 bottom-0 z-40 bg-slate-950/55 backdrop-blur-[2px]"
+              onClick={() => setOpen(false)}
+            />
+            <div
+              ref={panelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="solutions-panel-title"
+              className="fixed inset-x-0 top-16 bottom-0 z-[45] flex flex-col overflow-hidden bg-[#0F172A] shadow-[0_-12px_48px_-14px_rgba(0,0,0,0.45)]"
+            >
+              <CtaHeroAtmosphere />
+              <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+                <div className="flex shrink-0 items-center justify-between border-b border-white/10 bg-slate-950/45 px-4 py-3 backdrop-blur-md sm:px-6">
+                  <div className="min-w-0 pr-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-300/90">
+                      {LANDING_SOLUTIONS_SECTION.eyebrow}
+                    </p>
+                    <h2
+                      id="solutions-panel-title"
+                      className="text-lg font-bold tracking-tight text-white drop-shadow-[0_1px_10px_rgba(0,0,0,0.35)] sm:text-xl"
+                    >
+                      {LANDING_SOLUTIONS_SECTION.title}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white backdrop-blur-sm transition hover:border-white/25 hover:bg-white/15"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" strokeWidth={2} />
+                  </button>
+                </div>
+                <SolutionsMenuPanelContent
+                  titleId="solutions-panel-title"
+                  showEyebrowHeader={false}
+                  showCloseButton={false}
+                  onNavigate={() => setOpen(false)}
+                  descriptionAlign="center"
+                  introTone="onDark"
+                  bodyClassName="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-6 sm:py-8"
+                />
+              </div>
+            </div>
+          </>,
+          document.body,
+        )
+      : null;
 
   return (
     <div className="relative" ref={rootRef}>
@@ -43,64 +98,12 @@ export function SolutionsDropdown() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         className="flex items-center gap-0.5 text-sm font-medium text-slate-600 transition hover:text-slate-900"
       >
         Solutions
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`}
-          strokeWidth={2}
-          aria-hidden
-        />
       </button>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute left-0 top-[calc(100%+10px)] z-50 w-[min(calc(100vw-2rem),54rem)] overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-3 shadow-xl shadow-slate-900/10 ring-1 ring-slate-900/[0.05]"
-        >
-          <div className="grid gap-3 md:grid-cols-2 md:gap-4">
-            {solutionGroups.map((group) => (
-              <div
-                key={group.title}
-                className="rounded-xl border border-slate-200/70 bg-slate-50/35 p-2"
-              >
-                <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                  {group.title}
-                </p>
-                <div className="mt-1 space-y-0.5">
-                  {group.items.map((s) => {
-                    const Icon = SOLUTION_ICONS[s.slug];
-                    return (
-                      <a
-                        key={s.slug}
-                        href={`#solution-${s.slug}`}
-                        role="menuitem"
-                        className="group flex items-start gap-3 rounded-xl border border-transparent px-3 py-2.5 transition duration-150 hover:-translate-y-px hover:border-slate-200/80 hover:bg-white"
-                        onClick={() => setOpen(false)}
-                      >
-                        <span
-                          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_22%,transparent)] transition duration-150 group-hover:bg-[color-mix(in_srgb,var(--landing-cta)_16%,white)] group-hover:text-[var(--landing-cta-bright)]"
-                          aria-hidden
-                        >
-                          <Icon className="h-4.5 w-4.5" strokeWidth={1.9} />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold tracking-tight text-slate-900 transition group-hover:text-slate-950">
-                            {s.title}
-                          </span>
-                          <span className="mt-0.5 block text-xs leading-5 text-slate-500 transition group-hover:text-slate-600">
-                            {s.description}
-                          </span>
-                        </span>
-                      </a>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {overlay}
     </div>
   );
 }
