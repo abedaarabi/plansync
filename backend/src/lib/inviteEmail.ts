@@ -1,4 +1,5 @@
 import type { Env } from "./env.js";
+import { planSyncEmailIconPublicUrl } from "./transactionalEmailLayout.js";
 import { faviconUrlFromHostname, normalizeWorkspaceWebsite } from "./workspaceBranding.js";
 
 export type InviteEmailKind = "INTERNAL" | "CLIENT" | "CONTRACTOR" | "SUBCONTRACTOR";
@@ -106,8 +107,7 @@ const FF = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',
 export function buildProjectInviteEmailHtml(input: InviteEmailInput): string {
   const appBase = input.publicAppUrl.replace(/\/$/, "");
   const apiBase = input.publicApiUrl?.replace(/\/$/, "") || appBase;
-  /** Served by the API so images work when `PUBLIC_APP_URL` is only the Next app or only the API. */
-  const planSyncIconUrl = `${apiBase}/api/v1/public/brand/email-icon.png`;
+  const planSyncIconUrl = planSyncEmailIconPublicUrl(input.publicAppUrl);
   const workspaceResolved = resolveEmailImageUrl(appBase, apiBase, input.workspaceLogoUrl);
 
   const kind = input.inviteKind ?? "INTERNAL";

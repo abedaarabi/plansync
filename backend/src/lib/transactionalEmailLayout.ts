@@ -16,8 +16,13 @@ export function publicApiBaseFromEnv(env: Env): string {
   return env.PUBLIC_API_URL?.replace(/\/$/, "") || app;
 }
 
+/** Same icon as `frontend/public/icons/icon-180.png` — must be an absolute app URL for email clients. */
+export function planSyncEmailIconPublicUrl(publicAppUrl: string): string {
+  return `${publicAppUrl.replace(/\/$/, "")}/icons/icon-180.png`;
+}
+
 export function planSyncEmailIconUrl(env: Env): string {
-  return `${publicApiBaseFromEnv(env)}/api/v1/public/brand/email-icon.png`;
+  return planSyncEmailIconPublicUrl(env.PUBLIC_APP_URL);
 }
 
 export type TransactionalEmailContent = {

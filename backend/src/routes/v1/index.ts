@@ -284,7 +284,7 @@ export function v1Routes(
     return c.body(null, 404);
   });
 
-  /** Public: PlanSync mark for transactional email `<img>` (PNG; not Next static files). */
+  /** Public: PlanSync mark (PNG). Prefer `PUBLIC_APP_URL/icons/icon-180.png` in new email HTML. */
   r.get("/public/brand/email-icon.png", (c) => {
     const buf = getEmailBrandIconPngBytes();
     if (!buf?.length) return c.body(null, 404);
