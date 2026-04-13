@@ -58,15 +58,35 @@ export function rfiStatusBadgeClass(status: string | undefined | null): string {
   return RFI_STATUS_BADGE_CLASS[k] ?? RFI_STATUS_BADGE_CLASS.CLOSED;
 }
 
-/** `YYYY-MM-DD` for `<input type="date" />` from API ISO strings (stored as UTC noon). */
+/** `YYYY-MM-DD` for `<input type="date" />` and sidebar labels from API values. */
 export function issueDateToInputValue(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  if (iso == null) return "";
+  const s = String(iso).trim();
+  if (!s) return "";
+  /** Prefer the calendar portion of ISO strings so we never depend on `Date` parsing quirks for plain dates. */
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s]|$)/.exec(s);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (y >= 1970 && y <= 2100 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      const cal = new Date(Date.UTC(y, mo - 1, d));
+      if (
+        !Number.isNaN(cal.getTime()) &&
+        cal.getUTCFullYear() === y &&
+        cal.getUTCMonth() === mo - 1 &&
+        cal.getUTCDate() === d
+      ) {
+        return `${m[1]}-${m[2]}-${m[3]}`;
+      }
+    }
+  }
+  const parsed = new Date(s);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const y = parsed.getUTCFullYear();
+  const month = String(parsed.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getUTCDate()).padStart(2, "0");
+  return `${y}-${month}-${day}`;
 }
 
 /** Compact labels for segmented controls and narrow sidebars. */
@@ -131,4 +151,52 @@ export function issueStatusDotRadii(cssW: number, cssH: number): { core: number;
 /** Persisted stroke / tint on `Annotation.color` (matches on-sheet dot fill). */
 export function issueStatusMarkerStrokeHex(status: string): string {
   return issueStatusDotSolidFill(status);
+}
+
+/** Pin card border / stem accent from priority (Fieldwire-style). */
+export function issuePriorityPinAccent(priority: string | undefined | null): string {
+  const k = (priority ?? "MEDIUM").toUpperCase();
+  if (k === "HIGH") return "#dc2626";
+  if (k === "LOW") return "#ca8a04";
+  return "#ea580c";
+}
+
+/**
+ * Short assignee line for issue pins: given name + first two characters of the last name
+ * (e.g. `Jane Doe` → `Jane Do`). Falls back to email local-part. Capped for narrow pin cards.
+ */
+export function issueAssigneeShortLabel(
+  name: string | null | undefined,
+  email?: string | null,
+  maxLen = 16,
+): string {
+  const clamp = (raw: string) => {
+    const t = raw.trim();
+    if (t.length <= maxLen) return t;
+    return `${t.slice(0, Math.max(1, maxLen - 1)).trimEnd()}…`;
+  };
+
+  const n = (name ?? "").trim();
+  if (n) {
+    const parts = n.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      const first = parts[0]!;
+      const last = parts[parts.length - 1]!;
+      const bit = last.length <= 2 ? last : last.slice(0, 2);
+      return clamp(`${first} ${bit}`);
+    }
+    return clamp(n.length > 0 ? n : "?");
+  }
+  const e = (email ?? "").trim();
+  if (e.includes("@")) {
+    const local = (e.split("@")[0] ?? "").replace(/[._-]+/g, " ").trim();
+    const lp = local.split(/\s+/).filter(Boolean);
+    if (lp.length >= 2) {
+      const bit = lp[1]!.length <= 2 ? lp[1]! : lp[1]!.slice(0, 2);
+      return clamp(`${lp[0]} ${bit}`);
+    }
+    const t = lp[0] ?? local;
+    return clamp(t || "?");
+  }
+  return "?";
 }

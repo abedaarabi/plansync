@@ -113,6 +113,8 @@ export interface Annotation {
   locked?: boolean;
   /** Sheet marker for a Pro issue — ellipse fill/stroke follow `issueStatus`. */
   linkedIssueId?: string;
+  /** When set with {@link linkedIssueId}, this markup is linked for context but is not the issue location pin. */
+  linkedIssueAttachment?: boolean;
   /** Drives on-sheet pin shape (hex vs circle); defaults to construction when unset. */
   linkedIssueKind?: "WORK_ORDER" | "CONSTRUCTION";
   /** Snapshot of issue status for coloring; update when status changes in Issues tab. */
@@ -121,6 +123,13 @@ export interface Annotation {
   linkedIssueTitle?: string;
   /** Pin placed before the create-issue dialog is saved (no server issue id yet). */
   issueDraft?: boolean;
+  /** Synced from Issues API for on-sheet pin chrome (optional). */
+  linkedIssuePriority?: string;
+  linkedIssueAssigneeInitials?: string;
+  /** Display index for pin chip (e.g. 12 in “#12”), from sheet issue list order. */
+  linkedIssueDisplayNum?: number;
+  /** True when the linked issue has reference photos, linked markups, or RFIs (synced from Issues API). */
+  linkedIssueHasAttachments?: boolean;
   /** O&M asset pin on the sheet (draft before PATCH, or linked after save). */
   omAssetDraft?: boolean;
   linkedOmAssetId?: string;
@@ -285,10 +294,26 @@ interface ViewerState {
   historyFuture: SessionSnapshot[];
   showMinimap: boolean;
   minimapOnlyWhenZoomed: boolean;
-  /** Right strip (map & snap); user can collapse to reclaim canvas width */
-  rightSidebarOpen: boolean;
-  setRightSidebarOpen: (open: boolean) => void;
-  toggleRightSidebar: () => void;
+  /**
+   * Right flyout — sheet settings (overlays) plus map & snap in one navy panel.
+   */
+  rightFlyout: null | "settings";
+  setRightFlyout: (id: null | "settings") => void;
+  /** Opens or closes the settings flyout (includes map, snap, saved views, overlays). */
+  toggleRightFlyout: () => void;
+  /** Mirrors the left sidebar tab for canvas hints (e.g. issues). Updated from ViewerSidebar. */
+  leftSidebarTab:
+    | "draw"
+    | "measure"
+    | "pages"
+    | "outline"
+    | "issues"
+    | "takeoff"
+    | "sheetAi"
+    | "collab";
+  setLeftSidebarTab: (
+    t: "draw" | "measure" | "pages" | "outline" | "issues" | "takeoff" | "sheetAi" | "collab",
+  ) => void;
   /**
    * Left tools rail (Draw / Measure / Pages / …). Used below `lg` only — wide layouts always show the panel;
    * this flag is ignored for layout at lg+.
@@ -301,6 +326,15 @@ interface ViewerState {
   comparePage: number;
   setCompareMode: (on: boolean) => void;
   setComparePage: (page: number) => void;
+  /** Compare viewer layout when {@link compareMode} is on. */
+  compareLayout: "sideBySide" | "overlay" | "swipe";
+  setCompareLayout: (layout: "sideBySide" | "overlay" | "swipe") => void;
+  /** Overlay mode: false = clean PDF (before), true = markups (after). */
+  compareOverlayAfter: boolean;
+  setCompareOverlayAfter: (v: boolean) => void;
+  /** Swipe mode: 0 = all “before”, 1 = all “after”. */
+  compareSwipeRatio: number;
+  setCompareSwipeRatio: (n: number) => void;
   fitRequest: null | { mode: "width" | "page"; token: number };
   /** After text search: zoom and scroll to a normalized rect on a page */
   searchFocusRequest: null | {
@@ -516,10 +550,14 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   historyFuture: [],
   showMinimap: true,
   minimapOnlyWhenZoomed: false,
-  rightSidebarOpen: true,
+  rightFlyout: null,
+  leftSidebarTab: "draw",
   mobileLeftToolsOpen: false,
   compareMode: false,
   comparePage: 1,
+  compareLayout: "sideBySide",
+  compareOverlayAfter: true,
+  compareSwipeRatio: 0.5,
   fitRequest: null,
   searchFocusRequest: null,
 
@@ -815,13 +853,29 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       };
     }),
 
-  setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
-  setCompareMode: (compareMode) => set({ compareMode }),
+  setRightFlyout: (rightFlyout) => set({ rightFlyout }),
+  toggleRightFlyout: () =>
+    set((s) => ({ rightFlyout: s.rightFlyout === "settings" ? null : "settings" })),
+  setLeftSidebarTab: (leftSidebarTab) => set({ leftSidebarTab }),
+  setCompareMode: (compareMode) =>
+    set({
+      compareMode,
+      ...(compareMode
+        ? {}
+        : {
+            compareLayout: "sideBySide",
+            compareOverlayAfter: true,
+            compareSwipeRatio: 0.5,
+          }),
+    }),
   setComparePage: (comparePage) =>
     set((s) => ({
       comparePage: Math.min(Math.max(1, comparePage), s.numPages || 1),
     })),
-  toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
+  setCompareLayout: (compareLayout) => set({ compareLayout }),
+  setCompareOverlayAfter: (compareOverlayAfter) => set({ compareOverlayAfter }),
+  setCompareSwipeRatio: (n) =>
+    set({ compareSwipeRatio: Math.min(1, Math.max(0, Number.isFinite(n) ? n : 0.5)) }),
   setMobileLeftToolsOpen: (open) => set({ mobileLeftToolsOpen: open }),
   toggleMobileLeftTools: () => set((s) => ({ mobileLeftToolsOpen: !s.mobileLeftToolsOpen })),
 
@@ -942,6 +996,11 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       snapRadiusPx: 14,
       compareMode: false,
       comparePage: 1,
+      compareLayout: "sideBySide",
+      compareOverlayAfter: true,
+      compareSwipeRatio: 0.5,
+      rightFlyout: null,
+      leftSidebarTab: "draw",
       tool: "pan",
       takeoffMode: false,
       takeoffDrawKind: "area",
@@ -1322,6 +1381,13 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       takeoffMoveZoneId: null,
       takeoffVertexEditZoneId: null,
       mobileLeftToolsOpen: false,
+      compareMode: false,
+      comparePage: 1,
+      compareLayout: "sideBySide",
+      compareOverlayAfter: true,
+      compareSwipeRatio: 0.5,
+      rightFlyout: null,
+      leftSidebarTab: "draw",
     }),
 
   clearPersistedMarkupForCurrentDocument: () => {
@@ -1410,7 +1476,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     const state = get();
     const sheetAiAnn = state.annotations.filter((a) => a.fromSheetAi === true);
     for (const a of sheetAiAnn) {
-      if (a.linkedIssueId) {
+      if (a.linkedIssueId && !a.linkedIssueAttachment) {
         try {
           await patchIssue(a.linkedIssueId, { annotationId: null });
         } catch {

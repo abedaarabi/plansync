@@ -1969,6 +1969,28 @@ export type IssueUserRef = {
   image?: string | null;
 };
 
+/** On-image markups for an issue reference photo (normalized 0–1 coordinates). */
+export type IssuePhotoSketchV1 = {
+  v: 1;
+  strokes: Array<{
+    id: string;
+    tool: "pen" | "line" | "rect";
+    color: string;
+    sw: number;
+    pts: { x: number; y: number }[];
+  }>;
+};
+
+export type IssueReferencePhotoRow = {
+  id: string;
+  s3Key: string;
+  fileName: string;
+  contentType?: string;
+  createdAt: string;
+  sizeBytes: number;
+  sketch?: IssuePhotoSketchV1 | null;
+};
+
 export type IssueRow = {
   id: string;
   workspaceId: string;
@@ -1986,6 +2008,10 @@ export type IssueRow = {
   sheetVersion?: number | null;
   pageNumber?: number | null;
   annotationId: string | null;
+  /** Extra viewer annotation ids linked to this issue (same sheet revision), not the pin. */
+  attachedMarkupAnnotationIds?: string[];
+  /** Reference images (with optional sketch JSON) attached to the issue. */
+  referencePhotos?: IssueReferencePhotoRow[];
   assigneeId: string | null;
   creatorId: string | null;
   createdAt: string;
@@ -2055,6 +2081,104 @@ export async function fetchIssue(issueId: string): Promise<IssueRow> {
   return res.json() as Promise<IssueRow>;
 }
 
+export async function presignIssueReferencePhotoUpload(
+  issueId: string,
+  body: { fileName: string; contentType?: string; sizeBytes: string | number | bigint },
+): Promise<{ uploadUrl: string; key: string }> {
+  const res = await fetch(
+    apiUrl(`/api/v1/issues/${encodeURIComponent(issueId)}/reference-photos/presign`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        fileName: body.fileName,
+        contentType: body.contentType ?? "application/octet-stream",
+        sizeBytes: String(body.sizeBytes),
+      }),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    uploadUrl?: string;
+    key?: string;
+  };
+  if (!res.ok) {
+    const err = j.error;
+    const msg =
+      typeof err === "string"
+        ? err
+        : res.status === 503
+          ? "File uploads are not configured (S3). Set AWS_* and S3_BUCKET on the server."
+          : "Could not presign reference photo upload.";
+    throw new Error(msg);
+  }
+  return { uploadUrl: j.uploadUrl!, key: j.key! };
+}
+
+export async function completeIssueReferencePhotoUpload(
+  issueId: string,
+  body: {
+    key: string;
+    fileName: string;
+    contentType?: string;
+    sizeBytes: string | number | bigint;
+  },
+): Promise<IssueRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/issues/${encodeURIComponent(issueId)}/reference-photos/complete`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        key: body.key,
+        fileName: body.fileName,
+        contentType: body.contentType ?? "image/jpeg",
+        sizeBytes: String(body.sizeBytes),
+      }),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown } & Partial<IssueRow>;
+  if (!res.ok) {
+    const msg =
+      typeof j.error === "string"
+        ? j.error
+        : res.status === 503
+          ? "File storage is not configured on the server."
+          : "Could not save reference photo after upload.";
+    throw new HttpError(res.status, msg);
+  }
+  return j as IssueRow;
+}
+
+export async function presignReadIssueReferencePhoto(
+  issueId: string,
+  photoId: string,
+): Promise<string> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/issues/${encodeURIComponent(issueId)}/reference-photos/${encodeURIComponent(photoId)}/presign-read`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown; url?: string };
+  if (!res.ok) {
+    const msg =
+      typeof j.error === "string"
+        ? j.error
+        : res.status === 503
+          ? "File storage is not configured."
+          : "Could not open reference photo.";
+    throw new Error(msg);
+  }
+  if (!j.url) throw new Error("Could not open reference photo.");
+  return j.url;
+}
+
 export async function createIssue(body: {
   workspaceId: string;
   fileId: string;
@@ -2062,6 +2186,7 @@ export async function createIssue(body: {
   title: string;
   description?: string;
   annotationId?: string;
+  attachedMarkupAnnotationIds?: string[];
   assigneeId?: string;
   status?: string;
   priority?: string;
@@ -2096,6 +2221,9 @@ export async function patchIssue(
     description?: string | null;
     assigneeId?: string | null;
     annotationId?: string | null;
+    attachedMarkupAnnotationIds?: string[] | null;
+    /** Replace reference photos; send `null` to remove all. Omit to leave unchanged. */
+    referencePhotos?: IssueReferencePhotoRow[] | null;
     priority?: string;
     startDate?: string | null;
     dueDate?: string | null;

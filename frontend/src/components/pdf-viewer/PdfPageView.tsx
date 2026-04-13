@@ -71,8 +71,9 @@ import { cloudRectPathD } from "@/lib/cloudPath";
 import { fetchProjectTeam, formatIssueLockHint, patchIssue } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { normRectFromAnnotationPoints } from "@/lib/issueFocus";
+import { formatPageSizeTitle } from "@/lib/pagePaperInfo";
 import { issueStatusMarkerStrokeHex } from "@/lib/issueStatusStyle";
-import { MousePointer2 } from "lucide-react";
+import { Check, MousePointer2 } from "lucide-react";
 import { toast } from "sonner";
 import { loadLastCalibrationKnownMm, saveLastCalibrationKnownMm } from "@/lib/sessionPersistence";
 import { CalibrateDialog } from "./CalibrateDialog";
@@ -475,6 +476,7 @@ export function PdfPageView({
   const copyAnnotationsToClipboard = useViewerStore((s) => s.copyAnnotationsToClipboard);
   const pasteClipboardToPage = useViewerStore((s) => s.pasteClipboardToPage);
   const duplicateAnnotationsOnPage = useViewerStore((s) => s.duplicateAnnotationsOnPage);
+  const newIssuePlacementActive = useViewerStore((s) => s.newIssuePlacementActive);
   const issuePlacementActive = useViewerStore(
     (s) => s.issuePlacement != null || s.newIssuePlacementActive,
   );
@@ -1361,19 +1363,19 @@ export function PdfPageView({
     }
   }, [tool]);
 
-  /** Sync Issues sidebar: focus + tab when a single issue pin is selected on this page. */
+  /** Sync Issues sidebar: focus + tab when a single issue pin or issue-linked markup is selected. */
   useEffect(() => {
     if (tool !== "select" || selectedAnnotationIds.length !== 1) {
       setIssuesSidebarFocusIssueId(null);
       return;
     }
     const ann = annotations.find((a) => a.id === selectedAnnotationIds[0]);
-    if (!ann || !annotationIsIssuePin(ann)) {
+    if (!ann?.linkedIssueId || ann.issueDraft) {
       setIssuesSidebarFocusIssueId(null);
       return;
     }
     setPendingProSidebarTab("issues");
-    setIssuesSidebarFocusIssueId(ann.linkedIssueId ?? null);
+    setIssuesSidebarFocusIssueId(ann.linkedIssueId);
   }, [
     tool,
     selectedAnnotationIds,
@@ -3218,6 +3220,7 @@ export function PdfPageView({
     }
     if (!a?.linkedIssueId && !a?.issueDraft) return null;
     if (a.issueDraft) return a.linkedIssueTitle?.trim() || "New issue (unsaved)";
+    if (a.linkedIssueAttachment) return a.linkedIssueTitle?.trim() || "Linked issue markup";
     return a.linkedIssueTitle?.trim() || "Linked issue";
   }, [tool, selectedAnnotationIds, annotations]);
 
@@ -3225,6 +3228,13 @@ export function PdfPageView({
     void calibrateKey;
     return loadLastCalibrationKnownMm(fileName, numPages, pageIdx0);
   }, [fileName, numPages, pageIdx0, calibrateKey]);
+
+  const pageFooterSheetLine = useMemo(() => {
+    if (pageSize.w <= 1 || pageSize.h <= 1) return null;
+    const t = formatPageSizeTitle(pageSize.w, pageSize.h);
+    const first = t?.split("\n")[0]?.trim();
+    return first && first.length > 0 ? first : null;
+  }, [pageSize.w, pageSize.h]);
 
   const selectionResizeHandles = useMemo(() => {
     if (selectedAnnotationIds.length !== 1 || tool !== "select") return [];
@@ -3324,6 +3334,13 @@ export function PdfPageView({
         />
         <div
           ref={overlayRef}
+          title={
+            newIssuePlacementActive && tool === "pan"
+              ? "Click to drop issue pin"
+              : issueOrAssetPlacement
+                ? "Click the sheet to place the pin"
+                : undefined
+          }
           className={
             refPaneInactive
               ? "absolute inset-0"
@@ -3410,8 +3427,9 @@ export function PdfPageView({
             </div>
           )}
           {calibrationByPage[pageIdx0] && (
-            <div className="pointer-events-none absolute right-2 top-2 z-[5]">
-              <span className="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-950/90 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-emerald-200/95">
+            <div className="pointer-events-none absolute right-3 top-3 z-[5] print:hidden">
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/45 bg-emerald-600/95 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm ring-1 ring-emerald-400/30">
+                <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden />
                 Calibrated
               </span>
             </div>
@@ -3507,6 +3525,7 @@ export function PdfPageView({
                   scale={scale}
                   measureUnit={measureUnit}
                   arrowMarkerId={screenArrowMarkerId}
+                  selectedAnnotationIds={selectedAnnotationIds}
                 />
                 <TakeoffZonesSvg
                   zones={takeoffZonesForScreen}
@@ -4289,6 +4308,14 @@ export function PdfPageView({
                   })}
               </div>
             )}
+          {!compareReferenceOnly && numPages > 0 ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-2 z-[6] flex justify-center px-2 print:hidden">
+              <div className="max-w-[min(100%,42rem)] rounded-full border border-slate-200/90 bg-white/95 px-3 py-1 text-center text-[10px] font-medium text-slate-600 shadow-sm backdrop-blur-sm">
+                Page {pageNumber} of {numPages}
+                {pageFooterSheetLine ? ` — ${pageFooterSheetLine}` : ""}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 

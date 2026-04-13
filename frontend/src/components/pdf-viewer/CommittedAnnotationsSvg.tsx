@@ -7,6 +7,7 @@ import { cloudRectPathD } from "@/lib/cloudPath";
 import { dimensionPixelGeometry } from "@/lib/measureGeometry";
 import { polygonCentroidNorm } from "@/lib/measureCompute";
 import type { Annotation } from "@/store/viewerStore";
+import { annotationShowsSheetLinkPinCard } from "@/lib/annotationIssues";
 import { SheetLinkPin } from "@/components/pdf-viewer/sheetLinkPins";
 import { textBoxLayoutPx, textBoxRectFillAttrs } from "@/lib/annotationResize";
 import { computeRotationCenterPx } from "@/lib/annotationRotation";
@@ -139,6 +140,8 @@ type Props = {
   scale: number;
   measureUnit: MeasureUnit;
   arrowMarkerId: string;
+  /** Issue / sheet pins pulse when selected on the canvas. */
+  selectedAnnotationIds?: string[];
 };
 
 /** Saved markups only (no drafts, selection, or snap overlays). */
@@ -151,10 +154,12 @@ export function CommittedAnnotationsSvg({
   scale,
   measureUnit,
   arrowMarkerId,
+  selectedAnnotationIds = [],
 }: Props) {
   const markerUrl = `url(#${arrowMarkerId})`;
   const pinShadowId = `${arrowMarkerId}-issue-pin`;
   const pinShadowFilterUrl = `url(#${pinShadowId})`;
+  const selSet = new Set(selectedAnnotationIds);
 
   return (
     <>
@@ -218,6 +223,7 @@ export function CommittedAnnotationsSvg({
                 strokeWidth={sw}
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                shapeRendering="geometricPrecision"
                 vectorEffect={a.fromSheetAi ? "non-scaling-stroke" : undefined}
               />
             </RotatedMarkupG>
@@ -246,6 +252,7 @@ export function CommittedAnnotationsSvg({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeOpacity={a.fromSheetAi ? 0.35 : 0.4}
+                shapeRendering="geometricPrecision"
                 vectorEffect={a.fromSheetAi ? "non-scaling-stroke" : undefined}
               />
             </RotatedMarkupG>
@@ -300,8 +307,7 @@ export function CommittedAnnotationsSvg({
           const w = Math.abs(p2.x - p1.x);
           const h = Math.abs(p2.y - p1.y);
           const pin =
-            Boolean(a.linkedIssueId) ||
-            Boolean(a.issueDraft) ||
+            annotationShowsSheetLinkPinCard(a) ||
             Boolean(a.linkedOmAssetId) ||
             Boolean(a.omAssetDraft);
           if (pin) {
@@ -324,6 +330,7 @@ export function CommittedAnnotationsSvg({
                   cssW={cssW}
                   cssH={cssH}
                   pinShadowFilterUrl={pinShadowFilterUrl}
+                  selected={selSet.has(a.id)}
                 />
               </RotatedMarkupG>
             );
@@ -359,8 +366,7 @@ export function CommittedAnnotationsSvg({
           const d = cloudRectPathD(x, y, mx, my);
           if (!d) return null;
           const pinC =
-            Boolean(a.linkedIssueId) ||
-            Boolean(a.issueDraft) ||
+            annotationShowsSheetLinkPinCard(a) ||
             Boolean(a.linkedOmAssetId) ||
             Boolean(a.omAssetDraft);
           if (pinC) {
@@ -383,6 +389,7 @@ export function CommittedAnnotationsSvg({
                   cssW={cssW}
                   cssH={cssH}
                   pinShadowFilterUrl={pinShadowFilterUrl}
+                  selected={selSet.has(a.id)}
                 />
               </RotatedMarkupG>
             );
@@ -417,8 +424,7 @@ export function CommittedAnnotationsSvg({
           const rx = w / 2;
           const ry = h / 2;
           const pin =
-            Boolean(a.linkedIssueId) ||
-            Boolean(a.issueDraft) ||
+            annotationShowsSheetLinkPinCard(a) ||
             Boolean(a.linkedOmAssetId) ||
             Boolean(a.omAssetDraft);
           if (pin) {
@@ -441,6 +447,7 @@ export function CommittedAnnotationsSvg({
                   cssW={cssW}
                   cssH={cssH}
                   pinShadowFilterUrl={pinShadowFilterUrl}
+                  selected={selSet.has(a.id)}
                 />
               </RotatedMarkupG>
             );

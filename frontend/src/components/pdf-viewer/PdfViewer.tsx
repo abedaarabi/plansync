@@ -41,7 +41,7 @@ import { ViewerCanvasContext } from "./ViewerCanvasContext";
 import { PdfPageMinimap, type MinimapFocusRect } from "./PdfPageMinimap";
 import { PdfPageView } from "./PdfPageView";
 import { ViewerOnboarding } from "./ViewerOnboarding";
-import { ViewerRightPanel } from "./ViewerRightPanel";
+import { ViewerFlyoutStack } from "./ViewerFlyoutStack";
 import { ViewerSidebar } from "./ViewerSidebar";
 import { AssetLinkSlider } from "./AssetLinkSlider";
 import { IssueFormSlider } from "./IssueFormSlider";
@@ -81,6 +81,13 @@ export function PdfViewer() {
   const setDisplayName = useViewerStore((s) => s.setDisplayName);
   const setRoomId = useViewerStore((s) => s.setRoomId);
   const compareMode = useViewerStore((s) => s.compareMode);
+  const compareLayout = useViewerStore((s) => s.compareLayout);
+  const setCompareLayout = useViewerStore((s) => s.setCompareLayout);
+  const compareOverlayAfter = useViewerStore((s) => s.compareOverlayAfter);
+  const setCompareOverlayAfter = useViewerStore((s) => s.setCompareOverlayAfter);
+  const compareSwipeRatio = useViewerStore((s) => s.compareSwipeRatio);
+  const setCompareSwipeRatio = useViewerStore((s) => s.setCompareSwipeRatio);
+  const setCompareMode = useViewerStore((s) => s.setCompareMode);
   const searchFocusRequest = useViewerStore((s) => s.searchFocusRequest);
   const clearSearchFocusRequest = useViewerStore((s) => s.clearSearchFocusRequest);
   const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
@@ -191,6 +198,8 @@ export function PdfViewer() {
     fw: 1,
     fh: 1,
   });
+  const compareSwipeAreaRef = useRef<HTMLDivElement>(null);
+  const swipeDragRef = useRef<{ pointerId: number } | null>(null);
   const issueFocusConsumedRef = useRef<string | null>(null);
   const takeoffFocusConsumedRef = useRef<string | null>(null);
   const issueIdParam = searchParams.get("issueId");
@@ -655,7 +664,7 @@ export function PdfViewer() {
 
   /** Keep compare panes scrolled together (same PDF region). */
   useEffect(() => {
-    if (!compareMode) return;
+    if (!compareMode || compareLayout !== "sideBySide") return;
     const left = compareScrollOriginalRef.current;
     const right = compareScrollMarkupRef.current;
     if (!left || !right) return;
@@ -679,7 +688,28 @@ export function PdfViewer() {
       left.removeEventListener("scroll", onLeft);
       right.removeEventListener("scroll", onRight);
     };
-  }, [compareMode, pdfDoc, currentPage]);
+  }, [compareMode, compareLayout, pdfDoc, currentPage]);
+
+  useEffect(() => {
+    if (!compareMode || compareLayout !== "swipe") return;
+    const onMove = (e: PointerEvent) => {
+      if (!swipeDragRef.current || swipeDragRef.current.pointerId !== e.pointerId) return;
+      const box = compareSwipeAreaRef.current?.getBoundingClientRect();
+      if (!box || box.width < 1) return;
+      setCompareSwipeRatio((e.clientX - box.left) / box.width);
+    };
+    const onUp = (e: PointerEvent) => {
+      if (swipeDragRef.current?.pointerId === e.pointerId) swipeDragRef.current = null;
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [compareMode, compareLayout, setCompareSwipeRatio]);
 
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
@@ -723,7 +753,7 @@ export function PdfViewer() {
         if (compareMode) {
           const o1 = compareScrollOriginalRef.current;
           const o2 = compareScrollMarkupRef.current;
-          if (o1) syncPair(o1);
+          if (compareLayout === "sideBySide" && o1) syncPair(o1);
           if (o2) syncPair(o2);
         } else {
           const sc = pdfScrollRef.current;
@@ -736,19 +766,23 @@ export function PdfViewer() {
     if (compareMode) {
       const o1 = compareScrollOriginalRef.current;
       const o2 = compareScrollMarkupRef.current;
-      o1?.addEventListener("wheel", onWheel, { passive: false });
+      if (compareLayout === "sideBySide") {
+        o1?.addEventListener("wheel", onWheel, { passive: false });
+        o2?.addEventListener("wheel", onWheel, { passive: false });
+        return () => {
+          o1?.removeEventListener("wheel", onWheel);
+          o2?.removeEventListener("wheel", onWheel);
+        };
+      }
       o2?.addEventListener("wheel", onWheel, { passive: false });
-      return () => {
-        o1?.removeEventListener("wheel", onWheel);
-        o2?.removeEventListener("wheel", onWheel);
-      };
+      return () => o2?.removeEventListener("wheel", onWheel);
     }
 
     const el = pdfScrollRef.current;
     if (!el) return;
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [pdfDoc, compareMode]);
+  }, [pdfDoc, compareMode, compareLayout]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -807,7 +841,7 @@ export function PdfViewer() {
       currentUserId={me?.user.id}
     >
       <ViewerCanvasContext.Provider value={{ pageCanvasRef }}>
-        <div className="viewer-shell-bg relative grid min-h-0 min-w-0 flex-1 grid-cols-[0_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)] gap-x-px gap-y-0 overflow-hidden bg-[var(--viewer-border)] lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+        <div className="viewer-shell-bg relative grid min-h-0 min-w-0 flex-1 grid-cols-[0_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-x-0 gap-y-0 overflow-hidden bg-[var(--viewer-border)] lg:grid-cols-[auto_minmax(0,1fr)]">
           <CollaborationSync roomId={roomId} />
           {pdfUrl && mobileLeftToolsOpen ? (
             <button
@@ -817,7 +851,7 @@ export function PdfViewer() {
               onClick={() => setMobileLeftToolsOpen(false)}
             />
           ) : null}
-          <div className="col-span-3 row-start-1 min-h-0 min-w-0 self-start overflow-visible bg-[var(--viewer-chrome-top)]">
+          <div className="col-span-2 row-start-1 min-h-0 min-w-0 self-start overflow-visible bg-[var(--viewer-chrome-top)]">
             <ViewerTopBar pdfDoc={pdfDoc} exportCanvasRef={pageCanvasRef} />
           </div>
           <div className="relative z-[36] col-start-1 row-start-2 row-end-3 min-h-0 max-lg:min-w-0 max-lg:overflow-visible lg:min-w-min lg:overflow-hidden lg:self-stretch lg:bg-[var(--viewer-chrome-bottom)]">
@@ -971,6 +1005,12 @@ export function PdfViewer() {
                 aria-live="polite"
                 aria-busy="true"
               >
+                <div
+                  className="pointer-events-none absolute inset-x-0 top-0 z-[41] h-1 overflow-hidden bg-slate-800/40"
+                  aria-hidden
+                >
+                  <div className="viewer-pdf-load-indeterminate h-full w-[38%] bg-[#2563eb]" />
+                </div>
                 <div className="relative w-full max-w-[min(100%,22rem)] overflow-hidden rounded-2xl border border-[var(--viewer-border-strong)] bg-[var(--viewer-panel)]/98 p-6 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.5)] ring-1 ring-[var(--viewer-primary)]/25 backdrop-blur-md">
                   <div
                     className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[var(--viewer-primary)]/70 to-transparent"
@@ -1003,7 +1043,8 @@ export function PdfViewer() {
                         </p>
                       ) : null}
                       <p className="pt-1 text-[10px] leading-relaxed text-[var(--viewer-text-muted)]">
-                        Parsing pages and preparing the canvas…
+                        Loading page {currentPage}
+                        {numPages > 0 ? ` of ${numPages}` : ""}…
                       </p>
                     </div>
                     <div className="w-full overflow-hidden rounded-full bg-slate-800/80 py-px">
@@ -1067,75 +1108,233 @@ export function PdfViewer() {
             {pdfDoc && pdfUrl && (
               <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col">
                 <ViewerOnboarding />
+                <ViewerFlyoutStack />
                 {compareMode ? (
                   <>
-                    <div className="flex min-h-0 min-w-0 flex-1 flex-col divide-y divide-slate-600/45 md:flex-row md:divide-x md:divide-y-0 print:hidden">
-                      <div
-                        ref={compareScrollOriginalRef}
-                        className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain"
-                      >
-                        <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
-                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                            Original (reference)
-                          </p>
-                          <PdfPageView
-                            pdfDoc={pdfDoc}
-                            pageNumber={currentPage}
-                            compareReferenceOnly
-                            scrollContainerRef={compareScrollOriginalRef}
-                            pageCanvasRef={pageCanvasCompareRef}
-                            pageWrapperRef={pageWrapperCompareRef}
-                          />
-                        </div>
+                    <div className="no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/95 px-2 py-1.5 text-[11px] text-slate-700 backdrop-blur-sm print:hidden">
+                      <div className="flex flex-wrap items-center gap-1">
+                        {(
+                          [
+                            ["sideBySide", "Side by side"],
+                            ["overlay", "Overlay"],
+                            ["swipe", "Swipe"],
+                          ] as const
+                        ).map(([id, label]) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setCompareLayout(id)}
+                            className={`rounded-md px-2 py-1 font-medium transition ${
+                              compareLayout === id
+                                ? "bg-[#2563eb] text-white shadow-sm"
+                                : "bg-white/80 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
                       </div>
+                      {compareLayout === "overlay" ? (
+                        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-0.5 shadow-sm">
+                          <span
+                            className={
+                              !compareOverlayAfter
+                                ? "font-semibold text-slate-900"
+                                : "text-slate-500"
+                            }
+                          >
+                            Before
+                          </span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={compareOverlayAfter}
+                            title="Toggle clean PDF vs markups"
+                            onClick={() => setCompareOverlayAfter(!compareOverlayAfter)}
+                            className="relative h-6 w-11 rounded-full border border-slate-300 bg-slate-100 transition"
+                          >
+                            <span
+                              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${
+                                compareOverlayAfter ? "left-5" : "left-0.5"
+                              }`}
+                            />
+                          </button>
+                          <span
+                            className={
+                              compareOverlayAfter
+                                ? "font-semibold text-slate-900"
+                                : "text-slate-500"
+                            }
+                          >
+                            After
+                          </span>
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setCompareMode(false)}
+                        className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                      >
+                        Exit compare
+                      </button>
+                    </div>
+                    {compareLayout === "sideBySide" ? (
+                      <>
+                        <div className="flex min-h-0 min-w-0 flex-1 flex-col divide-y divide-slate-600/45 md:flex-row md:divide-x md:divide-y-0 print:hidden">
+                          <div
+                            ref={compareScrollOriginalRef}
+                            className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain"
+                          >
+                            <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
+                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                Before — original
+                              </p>
+                              <PdfPageView
+                                pdfDoc={pdfDoc}
+                                pageNumber={currentPage}
+                                compareReferenceOnly
+                                scrollContainerRef={compareScrollOriginalRef}
+                                pageCanvasRef={pageCanvasCompareRef}
+                                pageWrapperRef={pageWrapperCompareRef}
+                              />
+                            </div>
+                          </div>
+                          <div
+                            ref={compareScrollMarkupRef}
+                            className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain"
+                          >
+                            <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
+                              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                After — with markups
+                              </p>
+                              <PdfPageView
+                                pdfDoc={pdfDoc}
+                                pageNumber={currentPage}
+                                scrollContainerRef={compareScrollMarkupRef}
+                                pageCanvasRef={pageCanvasRef}
+                                pageWrapperRef={pageWrapperRef}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="pointer-events-none absolute bottom-4 right-4 z-20 flex max-w-[calc(100%-1rem)] flex-col items-end gap-2 sm:max-w-none sm:flex-row sm:items-end sm:gap-3 print:hidden">
+                          <div className="pointer-events-auto">
+                            <PdfPageMinimap
+                              scrollRef={compareScrollMarkupRef}
+                              viewportScrollRef={compareScrollOriginalRef}
+                              sourceCanvasRef={pageCanvasRef}
+                              pageWrapperRef={pageWrapperRef}
+                              compareCanvasRef={pageCanvasCompareRef}
+                              comparePageWrapperRef={pageWrapperCompareRef}
+                              scale={scale}
+                              pageNumber={currentPage}
+                              comparePane="original"
+                              sharedFocusRef={compareMinimapFocusRef}
+                            />
+                          </div>
+                          <div className="pointer-events-auto">
+                            <PdfPageMinimap
+                              scrollRef={compareScrollMarkupRef}
+                              sourceCanvasRef={pageCanvasRef}
+                              pageWrapperRef={pageWrapperRef}
+                              compareCanvasRef={pageCanvasCompareRef}
+                              comparePageWrapperRef={pageWrapperCompareRef}
+                              scale={scale}
+                              pageNumber={currentPage}
+                              comparePane="markup"
+                              sharedFocusRef={compareMinimapFocusRef}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
                       <div
                         ref={compareScrollMarkupRef}
-                        className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain"
+                        className="relative min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain print:hidden"
                       >
-                        <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
-                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                            With markups
-                          </p>
-                          <PdfPageView
-                            pdfDoc={pdfDoc}
-                            pageNumber={currentPage}
-                            scrollContainerRef={compareScrollMarkupRef}
-                            pageCanvasRef={pageCanvasRef}
-                            pageWrapperRef={pageWrapperRef}
-                          />
+                        <div className="mx-auto max-w-[min(100%,1920px)] px-4 py-5 sm:px-6 sm:py-6">
+                          {compareLayout === "overlay" ? (
+                            <div className="relative inline-block">
+                              <PdfPageView
+                                pdfDoc={pdfDoc}
+                                pageNumber={currentPage}
+                                compareReferenceOnly
+                                scrollContainerRef={compareScrollMarkupRef}
+                                pageCanvasRef={pageCanvasCompareRef}
+                                pageWrapperRef={pageWrapperCompareRef}
+                              />
+                              <div
+                                className="absolute left-0 top-0 transition-opacity duration-300"
+                                style={{
+                                  opacity: compareOverlayAfter ? 1 : 0,
+                                  pointerEvents: compareOverlayAfter ? "auto" : "none",
+                                }}
+                              >
+                                <PdfPageView
+                                  pdfDoc={pdfDoc}
+                                  pageNumber={currentPage}
+                                  scrollContainerRef={compareScrollMarkupRef}
+                                  pageCanvasRef={pageCanvasRef}
+                                  pageWrapperRef={pageWrapperRef}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              ref={compareSwipeAreaRef}
+                              className="relative inline-block select-none"
+                            >
+                              <PdfPageView
+                                pdfDoc={pdfDoc}
+                                pageNumber={currentPage}
+                                scrollContainerRef={compareScrollMarkupRef}
+                                pageCanvasRef={pageCanvasRef}
+                                pageWrapperRef={pageWrapperRef}
+                              />
+                              <div
+                                className="absolute inset-0 z-10 overflow-hidden"
+                                style={{
+                                  clipPath: `inset(0 ${(1 - compareSwipeRatio) * 100}% 0 0)`,
+                                }}
+                              >
+                                <PdfPageView
+                                  pdfDoc={pdfDoc}
+                                  pageNumber={currentPage}
+                                  compareReferenceOnly
+                                  scrollContainerRef={compareScrollMarkupRef}
+                                  pageCanvasRef={pageCanvasCompareRef}
+                                  pageWrapperRef={pageWrapperCompareRef}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                aria-label="Drag to compare before and after"
+                                className="absolute bottom-2 top-2 z-20 w-1 -translate-x-1/2 cursor-ew-resize rounded-full bg-white shadow-md ring-2 ring-slate-400/80"
+                                style={{ left: `${compareSwipeRatio * 100}%` }}
+                                onPointerDown={(e) => {
+                                  e.preventDefault();
+                                  swipeDragRef.current = { pointerId: e.pointerId };
+                                  (e.target as HTMLButtonElement).setPointerCapture(e.pointerId);
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div className="pointer-events-none absolute bottom-4 right-4 z-20 print:hidden">
+                          <div className="pointer-events-auto">
+                            <PdfPageMinimap
+                              scrollRef={compareScrollMarkupRef}
+                              sourceCanvasRef={pageCanvasRef}
+                              pageWrapperRef={pageWrapperRef}
+                              compareCanvasRef={pageCanvasCompareRef}
+                              comparePageWrapperRef={pageWrapperCompareRef}
+                              scale={scale}
+                              pageNumber={currentPage}
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    {/* Same floating position as single-view minimap (bottom-right of canvas, by the right drawer). */}
-                    <div className="pointer-events-none absolute bottom-4 right-4 z-20 flex max-w-[calc(100%-1rem)] flex-col items-end gap-2 sm:max-w-none sm:flex-row sm:items-end sm:gap-3 print:hidden">
-                      <div className="pointer-events-auto">
-                        <PdfPageMinimap
-                          scrollRef={compareScrollMarkupRef}
-                          viewportScrollRef={compareScrollOriginalRef}
-                          sourceCanvasRef={pageCanvasRef}
-                          pageWrapperRef={pageWrapperRef}
-                          compareCanvasRef={pageCanvasCompareRef}
-                          comparePageWrapperRef={pageWrapperCompareRef}
-                          scale={scale}
-                          pageNumber={currentPage}
-                          comparePane="original"
-                          sharedFocusRef={compareMinimapFocusRef}
-                        />
-                      </div>
-                      <div className="pointer-events-auto">
-                        <PdfPageMinimap
-                          scrollRef={compareScrollMarkupRef}
-                          sourceCanvasRef={pageCanvasRef}
-                          pageWrapperRef={pageWrapperRef}
-                          compareCanvasRef={pageCanvasCompareRef}
-                          comparePageWrapperRef={pageWrapperCompareRef}
-                          scale={scale}
-                          pageNumber={currentPage}
-                          comparePane="markup"
-                          sharedFocusRef={compareMinimapFocusRef}
-                        />
-                      </div>
-                    </div>
+                    )}
                   </>
                 ) : (
                   <>
@@ -1177,9 +1376,6 @@ export function PdfViewer() {
                 ) : null}
               </div>
             ) : null}
-          </div>
-          <div className="col-start-3 row-start-2 row-end-3 min-h-0 min-w-0 self-stretch overflow-hidden bg-[var(--viewer-chrome-bottom)] print:hidden">
-            <ViewerRightPanel />
           </div>
         </div>
         <ViewerRevisionConflictDialog

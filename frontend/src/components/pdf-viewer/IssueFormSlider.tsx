@@ -4,19 +4,36 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { ChevronDown, FileStack, Hash, Link2, Search, Trash2, X } from "lucide-react";
+import {
+  Camera,
+  ChevronDown,
+  FileStack,
+  Hash,
+  ImagePlus,
+  Link2,
+  Pencil,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
+  completeIssueReferencePhotoUpload,
   createIssue,
   deleteIssue,
   fetchProject,
   fetchProjectRfis,
   fetchResolvedFileRevision,
+  fetchViewerState,
   fetchWorkspaceMembers,
   formatIssueLockHint,
   patchIssue,
+  presignIssueReferencePhotoUpload,
+  presignReadIssueReferencePhoto,
+  type IssueReferencePhotoRow,
   type IssueRow,
 } from "@/lib/api-client";
+import { setViewerCollabRevision } from "@/lib/viewerCollabRevision";
 import {
   ISSUE_PRIORITY_LABEL,
   ISSUE_PRIORITY_ORDER,
@@ -28,6 +45,8 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { useViewerStore } from "@/store/viewerStore";
 import { DeleteIssueConfirmDialog } from "./DeleteIssueConfirmDialog";
+import { IssuePhotoSketchModal } from "./IssuePhotoSketchModal";
+import { IssueReferenceLiveCapture } from "./IssueReferenceLiveCapture";
 import { ViewerUserThumb } from "./ViewerUserThumb";
 
 type CreateProps = {
@@ -45,6 +64,58 @@ type EditProps = {
 };
 
 type Props = CreateProps | EditProps;
+
+function referencePhotoHasSketch(sk: unknown): boolean {
+  if (!sk || typeof sk !== "object") return false;
+  const o = sk as { strokes?: unknown };
+  return Array.isArray(o.strokes) && o.strokes.length > 0;
+}
+
+/** MIME for S3 PUT + API validation (mobile cameras often omit type or use HEIC). */
+function referencePhotoContentType(file: File): string {
+  const raw = file.type?.trim().toLowerCase() || "";
+  const allowed = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/heic",
+    "image/heif",
+  ]);
+  if (allowed.has(raw)) return raw;
+  const n = file.name.toLowerCase();
+  if (n.endsWith(".heic")) return "image/heic";
+  if (n.endsWith(".heif")) return "image/heif";
+  if (n.endsWith(".png")) return "image/png";
+  if (n.endsWith(".webp")) return "image/webp";
+  if (n.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+}
+
+function markupAttachLabel(type: string): string {
+  switch (type) {
+    case "rect":
+      return "Rectangle";
+    case "ellipse":
+      return "Ellipse";
+    case "line":
+      return "Line";
+    case "arrow":
+      return "Arrow";
+    case "polyline":
+      return "Polyline";
+    case "polygon":
+      return "Polygon";
+    case "text":
+      return "Text";
+    case "cloud":
+      return "Cloud";
+    case "highlighter":
+      return "Highlighter";
+    default:
+      return type;
+  }
+}
 
 export function IssueFormSlider(props: Props) {
   const { open, onClose } = props;
@@ -143,6 +214,16 @@ export function IssueFormSlider(props: Props) {
   const [location, setLocation] = useState("");
   /** Optional: attach this issue to one or more project RFIs (create + edit). */
   const [rfiLinkIds, setRfiLinkIds] = useState<string[]>([]);
+  /** Markup annotation ids on this sheet page to link to the issue (not the location pin). */
+  const [linkedMarkupIds, setLinkedMarkupIds] = useState<string[]>([]);
+  const [referencePhotos, setReferencePhotos] = useState<IssueReferencePhotoRow[]>([]);
+  const [sketchModal, setSketchModal] = useState<{
+    photo: IssueReferencePhotoRow;
+    imageUrl: string;
+    startInViewMode?: boolean;
+  } | null>(null);
+  const [photoThumbUrls, setPhotoThumbUrls] = useState<Record<string, string>>({});
+  const [liveCaptureOpen, setLiveCaptureOpen] = useState(false);
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
   const [assigneeSearchQuery, setAssigneeSearchQuery] = useState("");
   const assigneePickerRef = useRef<HTMLDivElement>(null);
@@ -168,6 +249,90 @@ export function IssueFormSlider(props: Props) {
     return projectRfis.filter((r) => norm(r.status) !== "CLOSED");
   }, [projectRfis]);
 
+  const attachableMarkups = useMemo(() => {
+    if (!open) return [];
+    const pageNum = sheetContext.pageNumber;
+    if (pageNum == null) return [];
+    const pageIdx = pageNum - 1;
+    if (variant === "create") {
+      const pinId = props.annotationId;
+      return annotations.filter((a) => {
+        if (a.pageIndex !== pageIdx) return false;
+        if (a.id === pinId) return false;
+        if (a.type === "measurement") return false;
+        if (a.fromSheetAi) return false;
+        if (a.linkedOmAssetId || a.omAssetDraft) return false;
+        if (a.issueDraft) return false;
+        return !a.linkedIssueId;
+      });
+    }
+    const issueRow = props.issue;
+    const issueId = issueRow.id;
+    const pinId =
+      issueRow.annotationId ??
+      annotations.find((a) => a.linkedIssueId === issueId && !a.linkedIssueAttachment)?.id ??
+      "";
+    return annotations.filter((a) => {
+      if (a.pageIndex !== pageIdx) return false;
+      if (pinId && a.id === pinId) return false;
+      if (a.type === "measurement") return false;
+      if (a.fromSheetAi) return false;
+      if (a.linkedOmAssetId || a.omAssetDraft) return false;
+      if (a.issueDraft) return false;
+      if (a.linkedIssueId) {
+        return Boolean(a.linkedIssueId === issueId && a.linkedIssueAttachment);
+      }
+      return true;
+    });
+  }, [annotations, open, sheetContext.pageNumber, variant, props]);
+
+  const editIssueId = variant === "edit" ? props.issue.id : "";
+
+  const referencePhotoThumbDeps = useMemo(
+    () => referencePhotos.map((p) => `${p.id}:${p.s3Key}`).join("|"),
+    [referencePhotos],
+  );
+
+  const canLiveCapture = useMemo(
+    () =>
+      typeof navigator !== "undefined" &&
+      typeof window !== "undefined" &&
+      Boolean(navigator.mediaDevices?.getUserMedia) &&
+      (window.isSecureContext === true ||
+        window.location.protocol === "https:" ||
+        window.location.hostname === "localhost"),
+    [],
+  );
+
+  useEffect(() => {
+    if (variant !== "edit" || !open || !editIssueId || referencePhotos.length === 0) {
+      setPhotoThumbUrls({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        referencePhotos.map(async (p) => {
+          try {
+            const url = await presignReadIssueReferencePhoto(editIssueId, p.id);
+            return [p.id, url] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (cancelled) return;
+      const next: Record<string, string> = {};
+      for (const e of entries) {
+        if (e) next[e[0]] = e[1];
+      }
+      setPhotoThumbUrls(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [variant, open, editIssueId, referencePhotoThumbDeps]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -189,6 +354,8 @@ export function IssueFormSlider(props: Props) {
       setDueDate(issueDateToInputValue(i.dueDate));
       setLocation(i.location ?? "");
       setRfiLinkIds(i.linkedRfis.map((r) => r.id));
+      setLinkedMarkupIds(i.attachedMarkupAnnotationIds ?? []);
+      setReferencePhotos(i.referencePhotos ?? []);
     } else {
       setTitle("");
       setDescription("");
@@ -199,6 +366,8 @@ export function IssueFormSlider(props: Props) {
       setDueDate("");
       setLocation("");
       setRfiLinkIds([]);
+      setLinkedMarkupIds([]);
+      setReferencePhotos([]);
     }
   }, [
     open,
@@ -234,6 +403,7 @@ export function IssueFormSlider(props: Props) {
         dueDate: dueDate.trim() || undefined,
         ...(location.trim() ? { location: location.trim() } : {}),
         pageNumber: page,
+        ...(linkedMarkupIds.length > 0 ? { attachedMarkupAnnotationIds: linkedMarkupIds } : {}),
         ...(rfiLinkIds.length > 0 && !viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
         ...(viewerOperationsMode ? { issueKind: "WORK_ORDER" as const } : {}),
       });
@@ -252,6 +422,18 @@ export function IssueFormSlider(props: Props) {
           color: issueStatusMarkerStrokeHex(row.status),
           linkedIssueKind: row.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION",
         });
+        const pri = row.priority ?? "MEDIUM";
+        const k = row.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION";
+        for (const aid of linkedMarkupIds) {
+          updateAnnotation(aid, {
+            linkedIssueId: row.id,
+            linkedIssueAttachment: true,
+            linkedIssueTitle: row.title,
+            issueStatus: row.status,
+            linkedIssueKind: k,
+            linkedIssuePriority: pri,
+          });
+        }
         setIssueCreateDraft(null);
         onClose();
       }
@@ -277,6 +459,8 @@ export function IssueFormSlider(props: Props) {
         dueDate: dueDate.trim() || null,
         location: location.trim() ? location.trim() : null,
         ...(pageNumber !== undefined ? { pageNumber } : {}),
+        attachedMarkupAnnotationIds: linkedMarkupIds,
+        referencePhotos,
         ...(!viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
       });
     },
@@ -303,14 +487,87 @@ export function IssueFormSlider(props: Props) {
     onError: (e: Error) => toast.error(formatIssueLockHint(e)),
   });
 
+  const uploadRefPhotoMut = useMutation({
+    mutationFn: async (file: File) => {
+      if (props.variant !== "edit") throw new Error("Save the issue first, then add photos.");
+      const issueId = props.issue.id;
+      const ct = referencePhotoContentType(file);
+      const { uploadUrl, key } = await presignIssueReferencePhotoUpload(issueId, {
+        fileName: file.name,
+        contentType: ct,
+        sizeBytes: file.size,
+      });
+      const put = await fetch(uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": ct },
+      });
+      if (!put.ok) throw new Error("Could not upload image to storage.");
+      return completeIssueReferencePhotoUpload(issueId, {
+        key,
+        fileName: file.name,
+        contentType: ct,
+        sizeBytes: file.size,
+      });
+    },
+    onSuccess: (row) => {
+      setReferencePhotos(row.referencePhotos ?? []);
+      qc.setQueryData(issuesQueryKey, (old: IssueRow[] | undefined) => {
+        if (!old) return old;
+        return old.map((i) => (i.id === row.id ? row : i));
+      });
+      void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
+      toast.success("Reference photo added");
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not attach photo."),
+  });
+
+  const removeRefPhotoMut = useMutation({
+    mutationFn: async (nextPhotos: IssueReferencePhotoRow[]) => {
+      if (props.variant !== "edit") throw new Error("Invalid state");
+      return patchIssue(props.issue.id, { referencePhotos: nextPhotos });
+    },
+    onSuccess: (row) => {
+      setReferencePhotos(row.referencePhotos ?? []);
+      qc.setQueryData(issuesQueryKey, (old: IssueRow[] | undefined) => {
+        if (!old) return old;
+        return old.map((i) => (i.id === row.id ? row : i));
+      });
+      void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
+      toast.success("Photo removed");
+    },
+    onError: (e: Error) => toast.error(formatIssueLockHint(e)),
+  });
+
+  const openSketchEditor = useCallback(
+    async (photo: IssueReferencePhotoRow) => {
+      if (props.variant !== "edit") return;
+      try {
+        const imageUrl = await presignReadIssueReferencePhoto(props.issue.id, photo.id);
+        setSketchModal({ photo, imageUrl, startInViewMode: true });
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Could not load photo.");
+      }
+    },
+    [props],
+  );
+
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteIssue(id),
     onSuccess: (_, id) => {
+      const issueFv = props.variant === "edit" ? props.issue.fileVersionId : undefined;
       void qc.invalidateQueries({ queryKey: issuesQueryKey });
       void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
       const st = useViewerStore.getState();
-      const ann = st.annotations.find((a) => a.linkedIssueId === id);
-      if (ann) removeAnnotation(ann.id);
+      const linked = st.annotations.filter((a) => a.linkedIssueId === id);
+      for (const ann of linked) {
+        removeAnnotation(ann.id);
+      }
+      if (issueFv && cloudFileVersionId === issueFv) {
+        void fetchViewerState(issueFv)
+          .then(({ revision }) => setViewerCollabRevision(revision))
+          .catch(() => {});
+      }
       toast.success("Issue deleted");
       onClose();
     },
@@ -368,7 +625,11 @@ export function IssueFormSlider(props: Props) {
   }, [assigneePickerOpen]);
 
   useEffect(() => {
-    if (!open) setAssigneePickerOpen(false);
+    if (!open) {
+      setAssigneePickerOpen(false);
+      setSketchModal(null);
+      setLiveCaptureOpen(false);
+    }
   }, [open]);
 
   useEffect(() => {
@@ -378,7 +639,18 @@ export function IssueFormSlider(props: Props) {
   /** Only Cancel / successful Save / Delete — backdrop and Escape use the same handler. */
   const onCancel = useCallback(() => {
     if (deleteDialogOpen) return;
-    if (createMut.isPending || saveEditMut.isPending || deleteMut.isPending) return;
+    if (liveCaptureOpen) {
+      setLiveCaptureOpen(false);
+      return;
+    }
+    if (
+      createMut.isPending ||
+      saveEditMut.isPending ||
+      deleteMut.isPending ||
+      uploadRefPhotoMut.isPending ||
+      removeRefPhotoMut.isPending
+    )
+      return;
     if (variant === "create") {
       removeAnnotation(annotationId);
       setIssueCreateDraft(null);
@@ -388,12 +660,15 @@ export function IssueFormSlider(props: Props) {
     annotationId,
     createMut.isPending,
     deleteMut.isPending,
+    removeRefPhotoMut.isPending,
+    uploadRefPhotoMut.isPending,
     onClose,
     removeAnnotation,
     saveEditMut.isPending,
     setIssueCreateDraft,
     variant,
     deleteDialogOpen,
+    liveCaptureOpen,
   ]);
 
   const onCancelRef = useRef(onCancel);
@@ -404,6 +679,16 @@ export function IssueFormSlider(props: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (deleteDialogOpen) return;
+      if (sketchModal) {
+        e.preventDefault();
+        setSketchModal(null);
+        return;
+      }
+      if (liveCaptureOpen) {
+        e.preventDefault();
+        setLiveCaptureOpen(false);
+        return;
+      }
       if (assigneePickerOpen) {
         e.preventDefault();
         setAssigneePickerOpen(false);
@@ -414,7 +699,7 @@ export function IssueFormSlider(props: Props) {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, assigneePickerOpen, deleteDialogOpen]);
+  }, [open, assigneePickerOpen, deleteDialogOpen, sketchModal, liveCaptureOpen]);
 
   if (!open || !mounted || typeof document === "undefined") return null;
 
@@ -426,9 +711,13 @@ export function IssueFormSlider(props: Props) {
     "w-full rounded-lg border border-slate-600/70 bg-slate-900/60 px-2.5 py-2 text-[12px] leading-snug text-slate-100 shadow-sm placeholder:text-slate-500 outline-none transition focus:border-[var(--viewer-primary)]/55 focus:ring-2 focus:ring-[var(--viewer-primary)]/20";
   /** Native date picker icon: align with dark chrome (WebKit + `color-scheme`). */
   /** Calendar glyph → solid white (WebKit); `color-scheme: dark` helps Firefox/native chrome. */
-  const dateFieldClass = `${fieldClass} tabular-nums [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:[filter:brightness(0)_invert(1)]`;
+  const dateFieldClass = `${fieldClass} tabular-nums text-slate-100 [color-scheme:dark] [&::-webkit-datetime-edit]:text-slate-100 [&::-webkit-datetime-edit-fields-wrapper]:text-slate-100 [&::-webkit-datetime-edit-month-field]:text-slate-100 [&::-webkit-datetime-edit-day-field]:text-slate-100 [&::-webkit-datetime-edit-year-field]:text-slate-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:[filter:brightness(0)_invert(1)]`;
   const labelClass = "mb-1 block text-[10px] font-medium text-slate-400";
   const sectionTitleClass = "text-[10px] font-semibold uppercase tracking-wider text-slate-500";
+
+  const refPhotoPickDisabled = uploadRefPhotoMut.isPending || saveEditMut.isPending;
+  const refPhotoLabelClass =
+    "viewer-focus-ring relative inline-flex min-h-[2.5rem] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/60 px-2.5 py-2 text-[12px] text-slate-200 transition hover:bg-slate-800/80";
 
   return createPortal(
     <>
@@ -464,7 +753,13 @@ export function IssueFormSlider(props: Props) {
             <button
               type="button"
               onClick={onCancel}
-              disabled={createMut.isPending || saveEditMut.isPending || deleteMut.isPending}
+              disabled={
+                createMut.isPending ||
+                saveEditMut.isPending ||
+                deleteMut.isPending ||
+                uploadRefPhotoMut.isPending ||
+                removeRefPhotoMut.isPending
+              }
               className="viewer-focus-ring shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40"
               aria-label="Close"
             >
@@ -593,6 +888,207 @@ export function IssueFormSlider(props: Props) {
                           : "This replaces linked RFIs for the issue. RFIs without a sheet may adopt this drawing when you save."}
                       </p>
                     </>
+                  )}
+                </section>
+              ) : null}
+
+              <section className="space-y-2" aria-labelledby="issue-section-linked-markups">
+                <h3 id="issue-section-linked-markups" className={sectionTitleClass}>
+                  Linked markups
+                </h3>
+                <p className="text-[11px] leading-relaxed text-slate-500">
+                  Add shapes or text on this page to the issue. They stay as markups (not a second
+                  pin) and update when the issue changes.
+                </p>
+                {attachableMarkups.length === 0 ? (
+                  <p className="text-[11px] text-slate-500">
+                    No other markups on this page yet. Draw on the sheet, then reopen this form.
+                  </p>
+                ) : (
+                  <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border border-slate-800/60 bg-slate-950/40 p-1 [scrollbar-width:thin]">
+                    {attachableMarkups.map((a) => (
+                      <label
+                        key={a.id}
+                        className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-[12px] leading-snug text-slate-200 transition hover:bg-slate-800/50"
+                      >
+                        <input
+                          type="checkbox"
+                          className="viewer-focus-ring mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 accent-[var(--viewer-primary)]"
+                          checked={linkedMarkupIds.includes(a.id)}
+                          onChange={() => {
+                            setLinkedMarkupIds((prev) =>
+                              prev.includes(a.id)
+                                ? prev.filter((x) => x !== a.id)
+                                : [...prev, a.id],
+                            );
+                          }}
+                        />
+                        <span className="min-w-0 font-mono text-[11px] text-slate-300">
+                          {markupAttachLabel(a.type)} ·{" "}
+                          <span className="text-slate-500">{a.id.slice(0, 8)}…</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {variant === "edit" ? (
+                <section className="space-y-2" aria-labelledby="issue-section-ref-photos">
+                  <h3 id="issue-section-ref-photos" className={sectionTitleClass}>
+                    Reference photos
+                  </h3>
+                  <p className="text-[11px] leading-relaxed text-slate-500">
+                    Tap <span className="font-medium text-slate-400">Take photo</span> so the
+                    browser opens the camera (required on many phones). If nothing happens, try{" "}
+                    <span className="font-medium text-slate-400">Web camera</span> (HTTPS) or{" "}
+                    <span className="font-medium text-slate-400">From library</span>. Markups stay
+                    on the image only.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {refPhotoPickDisabled ? (
+                      <span
+                        className={`${refPhotoLabelClass} pointer-events-none cursor-not-allowed opacity-40`}
+                      >
+                        <Camera
+                          className="h-3.5 w-3.5 text-slate-400"
+                          strokeWidth={2}
+                          aria-hidden
+                        />
+                        Take photo
+                      </span>
+                    ) : (
+                      <label className={refPhotoLabelClass}>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture
+                          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) uploadRefPhotoMut.mutate(f);
+                          }}
+                        />
+                        <span className="pointer-events-none flex items-center gap-2">
+                          <Camera
+                            className="h-3.5 w-3.5 text-slate-400"
+                            strokeWidth={2}
+                            aria-hidden
+                          />
+                          Take photo
+                        </span>
+                      </label>
+                    )}
+                    {canLiveCapture ? (
+                      <button
+                        type="button"
+                        disabled={refPhotoPickDisabled}
+                        onClick={() => setLiveCaptureOpen(true)}
+                        className="viewer-focus-ring inline-flex items-center gap-2 rounded-lg border border-slate-700/50 bg-slate-900/40 px-2.5 py-2 text-[12px] text-slate-300 transition hover:bg-slate-800/80 disabled:opacity-40"
+                        title="Opens the camera inside the browser (needs permission)"
+                      >
+                        Web camera…
+                      </button>
+                    ) : null}
+                    {refPhotoPickDisabled ? (
+                      <span
+                        className={`${refPhotoLabelClass} pointer-events-none cursor-not-allowed opacity-40`}
+                      >
+                        <ImagePlus
+                          className="h-3.5 w-3.5 text-slate-400"
+                          strokeWidth={2}
+                          aria-hidden
+                        />
+                        From library…
+                      </span>
+                    ) : (
+                      <label className={refPhotoLabelClass}>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
+                          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) uploadRefPhotoMut.mutate(f);
+                          }}
+                        />
+                        <span className="pointer-events-none flex items-center gap-2">
+                          <ImagePlus
+                            className="h-3.5 w-3.5 text-slate-400"
+                            strokeWidth={2}
+                            aria-hidden
+                          />
+                          From library…
+                        </span>
+                      </label>
+                    )}
+                  </div>
+                  {referencePhotos.length === 0 ? (
+                    <p className="text-[11px] text-slate-500">No reference photos yet.</p>
+                  ) : (
+                    <ul className="space-y-1 rounded-lg border border-slate-800/60 bg-slate-950/40 p-1.5">
+                      {referencePhotos.map((p) => (
+                        <li
+                          key={p.id}
+                          className="flex flex-wrap items-center gap-2.5 rounded-md px-1.5 py-1.5 text-[11px] text-slate-200"
+                        >
+                          <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md border border-slate-700/80 bg-slate-900">
+                            {photoThumbUrls[p.id] ? (
+                              // eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL
+                              <img
+                                src={photoThumbUrls[p.id]}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.visibility = "hidden";
+                                }}
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-[9px] tabular-nums text-slate-600">
+                                …
+                              </div>
+                            )}
+                          </div>
+                          <span
+                            className="min-w-0 flex-1 truncate font-medium text-slate-300"
+                            title={p.fileName}
+                          >
+                            {p.fileName}
+                          </span>
+                          {referencePhotoHasSketch(p.sketch) ? (
+                            <span className="shrink-0 rounded bg-amber-950/60 px-1 py-0.5 text-[9px] font-medium text-amber-200/90">
+                              Markup
+                            </span>
+                          ) : null}
+                          <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1">
+                            <button
+                              type="button"
+                              title="Open the photo here with any markups; tap Draw in the viewer to edit."
+                              className="viewer-focus-ring inline-flex items-center gap-0.5 rounded-md border border-slate-700/80 px-2 py-0.5 text-[10px] text-slate-300 hover:bg-slate-800/80"
+                              onClick={() => void openSketchEditor(p)}
+                            >
+                              <Pencil className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
+                              Open / draw
+                            </button>
+                            <button
+                              type="button"
+                              disabled={removeRefPhotoMut.isPending || saveEditMut.isPending}
+                              className="viewer-focus-ring rounded-md border border-red-500/30 px-2 py-0.5 text-[10px] text-red-200/90 hover:bg-red-950/40 disabled:opacity-40"
+                              onClick={() =>
+                                removeRefPhotoMut.mutate(
+                                  referencePhotos.filter((q) => q.id !== p.id),
+                                )
+                              }
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </section>
               ) : null}
@@ -821,14 +1317,25 @@ export function IssueFormSlider(props: Props) {
               <button
                 type="button"
                 onClick={onCancel}
-                disabled={createMut.isPending || saveEditMut.isPending}
+                disabled={
+                  createMut.isPending ||
+                  saveEditMut.isPending ||
+                  uploadRefPhotoMut.isPending ||
+                  removeRefPhotoMut.isPending
+                }
                 className="viewer-focus-ring rounded-lg border border-slate-600/80 bg-transparent px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-slate-800/80 disabled:opacity-40"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={!canSubmit || createMut.isPending || saveEditMut.isPending}
+                disabled={
+                  !canSubmit ||
+                  createMut.isPending ||
+                  saveEditMut.isPending ||
+                  uploadRefPhotoMut.isPending ||
+                  removeRefPhotoMut.isPending
+                }
                 onClick={() => {
                   if (variant === "create") createMut.mutate();
                   else if (variant === "edit") saveEditMut.mutate(props.issue.id);
@@ -845,6 +1352,42 @@ export function IssueFormSlider(props: Props) {
           </footer>
         </aside>
       </div>
+      {variant === "edit" ? (
+        <IssueReferenceLiveCapture
+          open={liveCaptureOpen}
+          onClose={() => setLiveCaptureOpen(false)}
+          onCapture={(file) => uploadRefPhotoMut.mutate(file)}
+        />
+      ) : null}
+      {sketchModal && variant === "edit" ? (
+        <IssuePhotoSketchModal
+          open
+          startInViewMode={sketchModal.startInViewMode ?? true}
+          imageUrl={sketchModal.imageUrl}
+          fileName={sketchModal.photo.fileName}
+          initialSketch={sketchModal.photo.sketch}
+          onClose={() => setSketchModal(null)}
+          onSave={async (sketch) => {
+            const pid = sketchModal.photo.id;
+            const next = referencePhotos.map((x) =>
+              x.id === pid ? { ...x, sketch: sketch ?? null } : x,
+            );
+            try {
+              const row = await patchIssue(props.issue.id, { referencePhotos: next });
+              setReferencePhotos(row.referencePhotos ?? []);
+              qc.setQueryData(issuesQueryKey, (old: IssueRow[] | undefined) => {
+                if (!old) return old;
+                return old.map((i) => (i.id === row.id ? row : i));
+              });
+              void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
+              setSketchModal(null);
+              toast.success("Markups saved");
+            } catch (e) {
+              toast.error(formatIssueLockHint(e as Error));
+            }
+          }}
+        />
+      ) : null}
       {variant === "edit" ? (
         <DeleteIssueConfirmDialog
           open={deleteDialogOpen}

@@ -615,6 +615,12 @@ model Issue {
   /// viewer annotation id(s) — store primary
   annotationId String?
 
+  /// Additional sheet markup annotation ids linked to this issue (same file version blob); not the location pin.
+  attachedMarkupAnnotationIds Json?
+
+  /// Reference images (S3) attached to the issue; optional per-item `sketch` JSON for on-image markups.
+  referencePhotos Json?
+
   /// Optional BIM / 3D anchor payload for sheet ↔ model linking.
   bimAnchor Json?
 

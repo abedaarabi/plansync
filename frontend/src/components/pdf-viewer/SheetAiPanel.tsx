@@ -301,20 +301,10 @@ export function SheetAiPanel() {
                     <Sparkles className="h-2.5 w-2.5 text-violet-400" aria-hidden />
                     Smart sheet
                   </h3>
-                  {hasSmartSheet ? (
-                    <button
-                      type="button"
-                      disabled={summaryLoading}
-                      onClick={() => void runSummary()}
-                      className="shrink-0 text-[8px] font-medium text-sky-400 hover:text-sky-300 disabled:opacity-40"
-                    >
-                      {summaryLoading ? "…" : "Regenerate"}
-                    </button>
-                  ) : null}
                 </div>
                 {sheetCacheReady && sheetCache?.cached === true && hasSmartSheet ? (
                   <p className="text-[7px] leading-tight text-[#64748b]">
-                    Saved on server — Regenerate runs the model again.
+                    Saved on server for this page.
                   </p>
                 ) : null}
                 {!hasSmartSheet ? (

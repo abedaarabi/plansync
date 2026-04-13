@@ -32,6 +32,7 @@ import { useViewerProSheetFeatures } from "@/hooks/useViewerProSheetFeatures";
 import { MARKUP_STROKE_COLOR_PRESETS } from "@/lib/markupUi";
 import { useViewerStore } from "@/store/viewerStore";
 import {
+  annotationIsIssueLinkedMarkup,
   annotationIsIssuePin,
   annotationIsProtectedSheetPin,
   filterAnnotationIdsExcludingIssuePins,
@@ -74,7 +75,11 @@ const markupShapes: {
 ];
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return <h3 className="viewer-section-title">{children}</h3>;
+  return (
+    <h3 className="mb-2.5 px-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#64748b]">
+      {children}
+    </h3>
+  );
 }
 
 /** Same filled blue active state as viewer-toolbar-btn-active (top bar icons). */
@@ -250,6 +255,7 @@ export function ViewerSidebar() {
   const setTakeoffInventoryDrawerFromSidebar = useViewerStore(
     (s) => s.setTakeoffInventoryDrawerFromSidebar,
   );
+  const setLeftSidebarTab = useViewerStore((s) => s.setLeftSidebarTab);
   const setSheetAiDrawerFromSidebar = useViewerStore((s) => s.setSheetAiDrawerFromSidebar);
   const bumpSheetAiExpand = useViewerStore((s) => s.bumpSheetAiExpand);
   const setStrokeWidth = useViewerStore((s) => s.setStrokeWidth);
@@ -323,7 +329,12 @@ export function ViewerSidebar() {
   useEffect(() => {
     if (tool !== "select") return;
     if (!selectedAnn) return;
-    if (selectedAnn.type === "measurement" || annotationIsIssuePin(selectedAnn)) return;
+    if (
+      selectedAnn.type === "measurement" ||
+      annotationIsIssuePin(selectedAnn) ||
+      annotationIsIssueLinkedMarkup(selectedAnn)
+    )
+      return;
     setStrokeColor(selectedAnn.color);
   }, [tool, selectedAnn, selectedAnn?.id, selectedAnn?.color, setStrokeColor]);
 
@@ -332,7 +343,8 @@ export function ViewerSidebar() {
     if (!selectedAnn) return;
     setSidebarTab((t) => {
       if (t === "pages" || t === "outline" || t === "sheetAi" || t === "collab") return t;
-      if (annotationIsIssuePin(selectedAnn)) return "issues";
+      if (annotationIsIssuePin(selectedAnn) || annotationIsIssueLinkedMarkup(selectedAnn))
+        return "issues";
       if (t === "takeoff") return t;
       return selectedAnn.type === "measurement" ? "measure" : "draw";
     });
@@ -342,6 +354,7 @@ export function ViewerSidebar() {
     selectedAnn?.type,
     selectedAnn?.linkedIssueId,
     selectedAnn?.issueDraft,
+    selectedAnn?.linkedIssueAttachment,
   ]);
 
   /** Ruler / calibrate live under the Measure panel. */
@@ -365,6 +378,10 @@ export function ViewerSidebar() {
     setSidebarTab(tab);
     setPendingProSidebarTab(null);
   }, [pendingProSidebarTab, showProTabs, viewerOperationsMode, setPendingProSidebarTab]);
+
+  useEffect(() => {
+    setLeftSidebarTab(sidebarTab);
+  }, [sidebarTab, setLeftSidebarTab]);
 
   useEffect(() => {
     if (showProTabs) return;
@@ -597,16 +614,16 @@ export function ViewerSidebar() {
                 Used for new markups while drawing. Selecting an existing shape updates this to
                 match its color.
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2.5">
                 {MARKUP_STROKE_COLOR_PRESETS.map((c) => (
                   <button
                     key={c}
                     type="button"
                     title={c}
-                    className={`h-7 w-7 rounded-full border-2 ${
+                    className={`h-7 w-7 rounded-full border-2 transition ${
                       strokeColor === c
-                        ? "border-white ring-2 ring-sky-500/50"
-                        : "border-transparent"
+                        ? "border-[#2563eb] ring-2 ring-[#2563eb]/45"
+                        : "border-transparent hover:ring-1 hover:ring-slate-500/40"
                     }`}
                     style={{ backgroundColor: c }}
                     onClick={() => setStrokeColor(c)}
@@ -675,8 +692,21 @@ export function ViewerSidebar() {
             {tool === "select" &&
               selectedOnPageIds.length === 1 &&
               selectedAnn &&
+              annotationIsIssueLinkedMarkup(selectedAnn) && (
+                <div className="mb-2 rounded-lg border border-sky-900/40 bg-slate-900/55 p-2 ring-1 ring-slate-800/40">
+                  <p className="text-[9px] leading-snug text-slate-400">
+                    This markup is <strong className="font-medium text-slate-300">linked</strong> to
+                    an issue. Add or remove linked shapes from the issue in the{" "}
+                    <strong className="text-slate-300">Issues</strong> tab.
+                  </p>
+                </div>
+              )}
+            {tool === "select" &&
+              selectedOnPageIds.length === 1 &&
+              selectedAnn &&
               selectedAnn.type !== "measurement" &&
-              !annotationIsIssuePin(selectedAnn) && (
+              !annotationIsIssuePin(selectedAnn) &&
+              !annotationIsIssueLinkedMarkup(selectedAnn) && (
                 <>
                   <SectionTitle>Selection</SectionTitle>
                   <div className="mb-2 space-y-2 rounded-lg border border-blue-900/45 bg-[var(--viewer-surface-elevated)] p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] ring-1 ring-blue-800/45">
@@ -821,7 +851,7 @@ export function ViewerSidebar() {
             {sidebarTab === "draw" && (
               <>
                 <SectionTitle>Markup type</SectionTitle>
-                <div className="mb-2 grid grid-cols-3 gap-1">
+                <div className="mb-3 grid grid-cols-3 gap-2">
                   {markupShapes.map((m) => {
                     const Icon = m.icon;
                     const active = tool === "annotate" && markupShape === m.id;
@@ -834,11 +864,13 @@ export function ViewerSidebar() {
                           setTool("annotate");
                           setMarkupShape(m.id);
                         }}
-                        className={`viewer-focus-ring viewer-markup-tool-btn ${
-                          active ? "viewer-markup-tool-btn-active" : ""
+                        className={`viewer-focus-ring flex min-h-[48px] min-w-0 flex-col items-center justify-center gap-1 rounded-lg border px-0.5 py-1.5 text-[8px] font-semibold uppercase tracking-[0.06em] transition ${
+                          active
+                            ? "border-[#2563eb] bg-[#2563eb] text-white shadow-md"
+                            : "border-[#334155] bg-[#1E293B] text-[#94A3B8] hover:bg-[#334155] hover:text-[#F8FAFC]"
                         }`}
                       >
-                        <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        <Icon className="h-5 w-5" strokeWidth={1.75} />
                         {m.label}
                       </button>
                     );
@@ -886,7 +918,7 @@ export function ViewerSidebar() {
                   {markupAnnotations.map((a) => {
                     const MuIcon = markupAnnotationIcon(a);
                     return (
-                      <li key={a.id}>
+                      <li key={a.id} className="group relative">
                         <button
                           type="button"
                           onClick={() => {
@@ -899,13 +931,12 @@ export function ViewerSidebar() {
                             e.preventDefault();
                             setListMenu({ clientX: e.clientX, clientY: e.clientY, id: a.id });
                           }}
-                          className="flex w-full items-start gap-1 rounded-md bg-[#1E293B] px-1.5 py-1.5 text-left text-[9px] leading-tight text-[#F8FAFC] hover:bg-[#334155]"
+                          className="flex w-full items-start gap-2 rounded-md border border-transparent bg-[#1E293B] px-2 py-2 text-left text-[9px] leading-tight text-[#F8FAFC] transition hover:border-sky-500/25 hover:bg-sky-950/25"
                         >
-                          <MuIcon
-                            className="mt-0.5 h-3 w-3 shrink-0 text-[#94A3B8]"
-                            strokeWidth={1.75}
-                          />
-                          <span className="min-w-0 flex-1">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#334155] bg-[#0F172A] text-[#94A3B8]">
+                            <MuIcon className="h-4 w-4" strokeWidth={1.75} />
+                          </span>
+                          <span className="min-w-0 flex-1 pr-7">
                             <span className="font-semibold text-[#94A3B8]">
                               p.{a.pageIndex + 1}
                             </span>{" "}
@@ -915,6 +946,17 @@ export function ViewerSidebar() {
                             </span>
                           </span>
                         </button>
+                        <button
+                          type="button"
+                          title="Delete markup"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeAnnotation(a.id);
+                          }}
+                          className="viewer-focus-ring absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md border border-red-900/40 bg-red-950/50 text-red-100 opacity-0 transition hover:bg-red-950/75 group-hover:opacity-100"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                        </button>
                       </li>
                     );
                   })}
@@ -923,7 +965,8 @@ export function ViewerSidebar() {
             </div>
 
             <p className="rounded-md border border-slate-800/80 bg-slate-900/60 px-1.5 py-1.5 text-[9px] leading-snug text-slate-500">
-              Map &amp; snap: right panel. Pan: top bar. Use the{" "}
+              Map &amp; snap: top bar <strong className="text-slate-400">settings</strong> icon
+              (right panel). Pan: top bar. Use the{" "}
               <strong className="text-slate-400">Measure</strong> tab for calibration and
               dimensions.
             </p>
@@ -982,6 +1025,18 @@ export function ViewerSidebar() {
                     To remove it, open the <strong className="text-slate-300">Issues</strong> tab
                     and use <strong className="text-slate-300">Delete</strong> on the issue — not
                     markup delete.
+                  </p>
+                </div>
+              )}
+            {tool === "select" &&
+              selectedOnPageIds.length === 1 &&
+              selectedAnn &&
+              annotationIsIssueLinkedMarkup(selectedAnn) && (
+                <div className="mb-2 rounded-lg border border-sky-900/40 bg-slate-900/55 p-2 ring-1 ring-slate-800/40">
+                  <p className="text-[9px] leading-snug text-slate-400">
+                    This markup is <strong className="font-medium text-slate-300">linked</strong> to
+                    an issue. Add or remove linked shapes from the issue in the{" "}
+                    <strong className="text-slate-300">Issues</strong> tab.
                   </p>
                 </div>
               )}
@@ -1248,7 +1303,7 @@ export function ViewerSidebar() {
             </div>
 
             <p className="rounded-md border border-[#334155] bg-[#1E293B]/80 px-2 py-2 text-[9px] italic leading-snug text-[#94A3B8]">
-              Map &amp; snap live in the right panel. Pan and zoom from the top toolbar.
+              Map &amp; snap are under Sheet settings (top bar). Pan and zoom from the top toolbar.
             </p>
           </div>
         )}
