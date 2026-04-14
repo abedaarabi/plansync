@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
 const ENTERPRISE_SIDEBAR_COLLAPSED_KEY = "plansync-enterprise-sidebar-collapsed";
 import { CommandPalette } from "./CommandPalette";
@@ -27,7 +27,7 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
     setDesktopSidebarCollapsed((c) => !c);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     try {
       const raw = localStorage.getItem(ENTERPRISE_SIDEBAR_COLLAPSED_KEY);
       setDesktopSidebarCollapsed(raw === "1");

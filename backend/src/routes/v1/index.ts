@@ -3691,7 +3691,7 @@ export function v1Routes(
 
   registerOccupantPublicRoutes(r, env);
   registerOmRoutes(r, needUser, env);
-  registerPunchRoutes(r, needUser);
+  registerPunchRoutes(r, needUser, env);
   registerIssuesRoutes(r, needUser, env, {
     onIssuesMutated: (fileVersionId) => {
       if (collaborationGloballyEnabled(env)) {

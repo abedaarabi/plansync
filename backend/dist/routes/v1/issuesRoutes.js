@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { ActivityType, IssueKind, IssuePriority, IssueStatus, RfiStatus, } from "@prisma/client";
 import { Resend } from "resend";
@@ -6,14 +7,81 @@ import { isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectForMember, assertUserAssignableToProject } from "../../lib/projectAccess.js";
 import { canCreateIssues, issuesWhereForAuth, loadProjectWithAuth } from "../../lib/permissions.js";
 import { logActivity } from "../../lib/activity.js";
+import { buildIssueReferencePhotoKey, newUploadId, s3KeyMatchesIssueReferencePhoto, } from "../../lib/fileUpload.js";
 import { inviteFromAddress } from "../../lib/inviteEmail.js";
+import { deleteObject, presignGet, presignPut } from "../../lib/s3.js";
 import { buildIssueAssignedEmailHtml, buildIssueAssignedEmailText, buildViewerIssuePath, buildViewerIssueUrl, } from "../../lib/issueAssignEmail.js";
 import { createUserNotifications } from "../../lib/userNotifications.js";
+import { broadcastViewerState } from "../../lib/viewerCollabHub.js";
+import { collaborationGloballyEnabled } from "../../lib/viewerCollabPolicy.js";
 function requirePro(workspace) {
     if (!isWorkspacePro(workspace)) {
         return { error: "Pro subscription required", status: 402 };
     }
     return null;
+}
+const MAX_ISSUE_REFERENCE_PHOTOS = 12;
+const MAX_ISSUE_PHOTO_BYTES = 15n * 1024n * 1024n;
+const MAX_ISSUE_PHOTO_SKETCH_BYTES = 48_000;
+const ALLOWED_ISSUE_PHOTO_CONTENT_TYPES = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    /** Common default from iPhone / iPad camera. */
+    "image/heic",
+    "image/heif",
+]);
+function sketchJsonByteSize(sk) {
+    try {
+        return new TextEncoder().encode(JSON.stringify(sk)).length;
+    }
+    catch {
+        return MAX_ISSUE_PHOTO_SKETCH_BYTES + 1;
+    }
+}
+function parseReferencePhotos(v) {
+    if (!Array.isArray(v))
+        return [];
+    const out = [];
+    for (const x of v) {
+        if (!x || typeof x !== "object")
+            continue;
+        const o = x;
+        const id = typeof o.id === "string" && o.id.trim() ? o.id.trim().slice(0, 80) : "";
+        const s3Key = typeof o.s3Key === "string" && o.s3Key.trim() ? o.s3Key.trim().slice(0, 500) : "";
+        const fileName = typeof o.fileName === "string" && o.fileName.trim() ? o.fileName.trim().slice(0, 200) : "";
+        if (!id || !s3Key || !fileName)
+            continue;
+        const contentType = typeof o.contentType === "string" ? o.contentType.trim().slice(0, 120) : undefined;
+        const createdAt = typeof o.createdAt === "string" && o.createdAt.trim()
+            ? o.createdAt.trim().slice(0, 80)
+            : new Date().toISOString();
+        let sizeBytes = 0;
+        if (typeof o.sizeBytes === "number" && Number.isFinite(o.sizeBytes) && o.sizeBytes >= 0) {
+            sizeBytes = Math.min(Math.floor(o.sizeBytes), 80 * 1024 * 1024);
+        }
+        const sketchRaw = "sketch" in o ? o.sketch : undefined;
+        const sketch = sketchRaw !== undefined && sketchJsonByteSize(sketchRaw) <= MAX_ISSUE_PHOTO_SKETCH_BYTES
+            ? sketchRaw
+            : undefined;
+        out.push({
+            id,
+            s3Key,
+            fileName,
+            contentType,
+            createdAt,
+            sizeBytes,
+            ...(sketch !== undefined ? { sketch } : {}),
+        });
+    }
+    return out.slice(0, MAX_ISSUE_REFERENCE_PHOTOS);
+}
+function referencePhotosToJsonValue(photos) {
+    return JSON.parse(JSON.stringify(photos));
+}
+function issuePhotosStorageBytes(photos) {
+    return photos.reduce((n, p) => n + BigInt(p.sizeBytes || 0), 0n);
 }
 /** Parse `YYYY-MM-DD` from client date inputs; noon UTC avoids TZ edge shifts. */
 function dateFromYmd(s) {
@@ -49,6 +117,8 @@ function issueRowJson(row) {
         dueDate: row.dueDate ? row.dueDate.toISOString() : null,
         location: row.location,
         annotationId: row.annotationId,
+        attachedMarkupAnnotationIds: parseAttachedMarkupAnnotationIds(row.attachedMarkupAnnotationIds),
+        referencePhotos: parseReferencePhotos(row.referencePhotos),
         sheetName: row.sheetName ?? row.file.name,
         sheetVersion: row.sheetVersion ?? row.fileVersion.version,
         pageNumber: row.pageNumber,
@@ -95,6 +165,54 @@ function asObject(v) {
     if (!v || typeof v !== "object" || Array.isArray(v))
         return null;
     return v;
+}
+/** Normalized list of viewer annotation ids for markups linked to an issue (not the pin). */
+function parseAttachedMarkupAnnotationIds(v) {
+    if (!Array.isArray(v))
+        return [];
+    const out = [];
+    for (const x of v) {
+        if (typeof x === "string" && x.trim())
+            out.push(x.trim());
+    }
+    return [...new Set(out)].slice(0, 30);
+}
+/** Annotation ids to drop from `FileVersion.annotationBlob` when an issue is deleted (pin + linked markups). */
+function annotationIdsToRemoveForDeletedIssue(issueId, issueAnnotationId, attachedMarkupAnnotationIdsJson, blobAnnotations) {
+    const ids = new Set();
+    const pin = typeof issueAnnotationId === "string" ? issueAnnotationId.trim() : "";
+    if (pin)
+        ids.add(pin);
+    for (const id of parseAttachedMarkupAnnotationIds(attachedMarkupAnnotationIdsJson)) {
+        ids.add(id);
+    }
+    for (const ann of blobAnnotations) {
+        if (!ann || typeof ann !== "object")
+            continue;
+        const o = ann;
+        const id = typeof o.id === "string" ? o.id : "";
+        const linked = typeof o.linkedIssueId === "string" ? o.linkedIssueId : null;
+        if (linked === issueId && id)
+            ids.add(id);
+    }
+    return ids;
+}
+function stripIssueLinkedAnnotationsFromViewerBlob(blobUnknown, issueId, issueAnnotationId, attachedMarkupAnnotationIdsJson) {
+    const blobObj = asObject(blobUnknown) ?? {};
+    const annotations = Array.isArray(blobObj.annotations) ? blobObj.annotations : [];
+    const idsToRemove = annotationIdsToRemoveForDeletedIssue(issueId, issueAnnotationId, attachedMarkupAnnotationIdsJson, annotations);
+    const nextAnnotations = annotations.filter((ann) => {
+        if (!ann || typeof ann !== "object")
+            return true;
+        const o = ann;
+        const id = typeof o.id === "string" ? o.id : "";
+        if (!id)
+            return true;
+        return !idsToRemove.has(id);
+    });
+    if (nextAnnotations.length === annotations.length)
+        return null;
+    return { ...blobObj, annotations: nextAnnotations };
 }
 async function fileVersionWriteBlocked(fileVersionId, userId) {
     const fv = await prisma.fileVersion.findUnique({
@@ -215,6 +333,211 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             return c.json({ error: "Not found" }, 404);
         return c.json(issueRowJson(row));
     });
+    r.post("/issues/:issueId/reference-photos/presign", needUser, async (c) => {
+        const issueId = c.req.param("issueId");
+        const issue = await prisma.issue.findUnique({
+            where: { id: issueId },
+            select: {
+                id: true,
+                projectId: true,
+                workspaceId: true,
+                fileVersionId: true,
+                referencePhotos: true,
+            },
+        });
+        if (!issue)
+            return c.json({ error: "Not found" }, 404);
+        const auth = await loadProjectWithAuth(issue.projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!ctx.settings.modules.issues) {
+            return c.json({ error: "Not found" }, 404);
+        }
+        if (!canCreateIssues(ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const gate = requirePro(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        if (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id)) {
+            return c.json({ error: "File is locked by another user" }, 409);
+        }
+        const existing = parseReferencePhotos(issue.referencePhotos);
+        if (existing.length >= MAX_ISSUE_REFERENCE_PHOTOS) {
+            return c.json({ error: `At most ${MAX_ISSUE_REFERENCE_PHOTOS} reference photos per issue` }, 400);
+        }
+        const body = z
+            .object({
+            fileName: z.string().min(1),
+            contentType: z.string().default("application/octet-stream"),
+            sizeBytes: z.coerce.bigint(),
+        })
+            .safeParse(await c.req.json());
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const ct = body.data.contentType.trim().toLowerCase();
+        if (!ALLOWED_ISSUE_PHOTO_CONTENT_TYPES.has(ct)) {
+            return c.json({
+                error: "Only JPEG, PNG, WebP, GIF, or HEIC/HEIF images are allowed for reference photos",
+            }, 400);
+        }
+        if (body.data.sizeBytes <= 0n) {
+            return c.json({ error: "File is empty" }, 400);
+        }
+        if (body.data.sizeBytes > MAX_ISSUE_PHOTO_BYTES) {
+            return c.json({ error: "File too large (max 15 MB per reference photo)" }, 400);
+        }
+        const ws = ctx.project.workspace;
+        const newUsed = ws.storageUsedBytes + body.data.sizeBytes;
+        if (newUsed > ws.storageQuotaBytes) {
+            return c.json({ error: "Storage quota exceeded" }, 400);
+        }
+        const uploadId = newUploadId();
+        const key = buildIssueReferencePhotoKey(ctx.project.workspaceId, issue.projectId, uploadId, body.data.fileName);
+        let url;
+        try {
+            url = await presignPut(env, key, ct);
+        }
+        catch (e) {
+            console.error("[issue reference photo presign]", e);
+            return c.json({ error: "Could not create upload URL. Check S3 credentials and bucket configuration." }, 503);
+        }
+        if (!url) {
+            return c.json({ error: "S3 not configured — set AWS_* and S3_BUCKET", devKey: key }, 503);
+        }
+        return c.json({ uploadUrl: url, key });
+    });
+    r.post("/issues/:issueId/reference-photos/complete", needUser, async (c) => {
+        const issueId = c.req.param("issueId");
+        const issue = await prisma.issue.findUnique({
+            where: { id: issueId },
+            select: {
+                id: true,
+                projectId: true,
+                workspaceId: true,
+                fileVersionId: true,
+                referencePhotos: true,
+            },
+        });
+        if (!issue)
+            return c.json({ error: "Not found" }, 404);
+        const auth = await loadProjectWithAuth(issue.projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!ctx.settings.modules.issues) {
+            return c.json({ error: "Not found" }, 404);
+        }
+        if (!canCreateIssues(ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const gate = requirePro(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        if (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id)) {
+            return c.json({ error: "File is locked by another user" }, 409);
+        }
+        const body = z
+            .object({
+            key: z.string().min(1),
+            fileName: z.string().min(1),
+            contentType: z.string().default("image/jpeg"),
+            sizeBytes: z.coerce.bigint(),
+        })
+            .safeParse(await c.req.json());
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        if (body.data.sizeBytes <= 0n) {
+            return c.json({ error: "File is empty" }, 400);
+        }
+        if (body.data.sizeBytes > MAX_ISSUE_PHOTO_BYTES) {
+            return c.json({ error: "File too large (max 15 MB per reference photo)" }, 400);
+        }
+        if (!s3KeyMatchesIssueReferencePhoto(body.data.key, ctx.project.workspaceId, issue.projectId)) {
+            return c.json({ error: "Invalid upload key" }, 400);
+        }
+        const ct = body.data.contentType.trim().toLowerCase();
+        if (!ALLOWED_ISSUE_PHOTO_CONTENT_TYPES.has(ct)) {
+            return c.json({ error: "Invalid content type for reference photo" }, 400);
+        }
+        const existing = parseReferencePhotos(issue.referencePhotos);
+        if (existing.length >= MAX_ISSUE_REFERENCE_PHOTOS) {
+            return c.json({ error: `At most ${MAX_ISSUE_REFERENCE_PHOTOS} reference photos per issue` }, 400);
+        }
+        const ws = ctx.project.workspace;
+        const newUsed = ws.storageUsedBytes + body.data.sizeBytes;
+        if (newUsed > ws.storageQuotaBytes) {
+            return c.json({ error: "Storage quota exceeded" }, 400);
+        }
+        const photoId = randomUUID();
+        const entry = {
+            id: photoId,
+            s3Key: body.data.key,
+            fileName: body.data.fileName,
+            contentType: ct,
+            createdAt: new Date().toISOString(),
+            sizeBytes: Number(body.data.sizeBytes > BigInt(Number.MAX_SAFE_INTEGER)
+                ? BigInt(Number.MAX_SAFE_INTEGER)
+                : body.data.sizeBytes),
+        };
+        const next = [...existing, entry];
+        const updated = await prisma.$transaction(async (tx) => {
+            await tx.workspace.update({
+                where: { id: ctx.project.workspaceId },
+                data: { storageUsedBytes: { increment: body.data.sizeBytes } },
+            });
+            return tx.issue.update({
+                where: { id: issue.id },
+                data: { referencePhotos: referencePhotosToJsonValue(next) },
+                include: issueInclude,
+            });
+        });
+        notifyIssues(updated.fileVersionId);
+        return c.json(issueRowJson(updated));
+    });
+    r.get("/issues/:issueId/reference-photos/:photoId/presign-read", needUser, async (c) => {
+        const issueId = c.req.param("issueId");
+        const photoId = c.req.param("photoId");
+        const row = await prisma.issue.findUnique({
+            where: { id: issueId },
+            include: issueInclude,
+        });
+        if (!row)
+            return c.json({ error: "Not found" }, 404);
+        const userId = c.get("user").id;
+        const auth = await loadProjectWithAuth(row.projectId, userId);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!ctx.settings.modules.issues) {
+            return c.json({ error: "Not found" }, 404);
+        }
+        const gate = requirePro(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const scope = issuesWhereForAuth(ctx, userId);
+        const allowed = await prisma.issue.count({
+            where: { id: issueId, projectId: row.projectId, ...scope },
+        });
+        if (allowed === 0)
+            return c.json({ error: "Not found" }, 404);
+        const photos = parseReferencePhotos(row.referencePhotos);
+        const hit = photos.find((p) => p.id === photoId);
+        if (!hit)
+            return c.json({ error: "Not found" }, 404);
+        let url;
+        try {
+            url = await presignGet(env, hit.s3Key);
+        }
+        catch (e) {
+            console.error("[issue reference photo presign-read]", e);
+            return c.json({ error: "Could not create download link (S3)." }, 503);
+        }
+        if (!url)
+            return c.json({ error: "S3 not configured" }, 503);
+        return c.json({ url });
+    });
     r.post("/issues", needUser, async (c) => {
         const optionalYmd = z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.null()]).optional();
         const body = z
@@ -225,6 +548,8 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             title: z.string().min(1),
             description: z.string().optional(),
             annotationId: z.string().optional(),
+            /** Extra sheet markups (annotation ids) to associate with this issue (same revision). */
+            attachedMarkupAnnotationIds: z.array(z.string().min(1)).max(30).optional(),
             assigneeId: z.string().optional(),
             status: z.nativeEnum(IssueStatus).optional(),
             priority: z.nativeEnum(IssuePriority).optional(),
@@ -310,6 +635,8 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             : body.data.dueDate === null
                 ? null
                 : dateFromYmd(body.data.dueDate);
+        const primaryAnnId = body.data.annotationId?.trim();
+        const attachedCreate = parseAttachedMarkupAnnotationIds(body.data.attachedMarkupAnnotationIds ?? []).filter((id) => !primaryAnnId || id !== primaryAnnId);
         const issue = await prisma.$transaction(async (tx) => {
             const iss = await tx.issue.create({
                 data: {
@@ -319,7 +646,10 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
                     fileVersionId: body.data.fileVersionId,
                     title: body.data.title,
                     description: body.data.description,
-                    annotationId: body.data.annotationId,
+                    annotationId: primaryAnnId,
+                    ...(attachedCreate.length > 0
+                        ? { attachedMarkupAnnotationIds: attachedCreate }
+                        : {}),
                     assigneeId: body.data.assigneeId,
                     creatorId: c.get("user").id,
                     status: body.data.status ?? IssueStatus.OPEN,
@@ -514,6 +844,16 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
                     dueDate: issue.dueDate,
                     location: issue.location,
                     annotationId: issue.annotationId,
+                    ...(parseAttachedMarkupAnnotationIds(issue.attachedMarkupAnnotationIds).length > 0
+                        ? {
+                            attachedMarkupAnnotationIds: parseAttachedMarkupAnnotationIds(issue.attachedMarkupAnnotationIds),
+                        }
+                        : {}),
+                    ...(parseReferencePhotos(issue.referencePhotos).length > 0
+                        ? {
+                            referencePhotos: referencePhotosToJsonValue(parseReferencePhotos(issue.referencePhotos)),
+                        }
+                        : {}),
                     pageNumber: issue.pageNumber,
                     assigneeId: issue.assigneeId,
                     creatorId: c.get("user").id,
@@ -596,6 +936,8 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             description: z.string().nullable().optional(),
             assigneeId: z.string().nullable().optional(),
             annotationId: z.string().nullable().optional(),
+            /** Replace linked markup ids; send `null` to clear. Omit to leave unchanged. */
+            attachedMarkupAnnotationIds: z.array(z.string().min(1)).max(30).nullable().optional(),
             priority: z.nativeEnum(IssuePriority).optional(),
             startDate: optionalYmdPatch,
             dueDate: optionalYmdPatch,
@@ -609,13 +951,84 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             externalAssigneeName: z.string().max(200).nullable().optional(),
             acknowledgedAt: z.string().datetime().nullable().optional(),
             resolvedAt: z.string().datetime().nullable().optional(),
+            /** Replace reference photos (S3 keys under this project). Send `null` to clear all. */
+            referencePhotos: z
+                .array(z.object({
+                id: z.string().min(1).max(80),
+                s3Key: z.string().min(1).max(500),
+                fileName: z.string().min(1).max(220),
+                contentType: z.string().max(120).optional(),
+                createdAt: z.string().max(80).optional(),
+                sizeBytes: z
+                    .number()
+                    .int()
+                    .min(0)
+                    .max(80 * 1024 * 1024)
+                    .optional(),
+                sketch: z.union([z.unknown(), z.null()]).optional(),
+            }))
+                .max(MAX_ISSUE_REFERENCE_PHOTOS)
+                .nullable()
+                .optional(),
         })
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
+        const prevPhotosForRef = parseReferencePhotos(issue.referencePhotos);
+        let nextReferencePhotos;
+        let photosToDeleteFromS3 = [];
+        let bytesRemovedFromPhotos = 0n;
+        const refRaw = body.data.referencePhotos;
+        if (refRaw !== undefined) {
+            const incoming = refRaw === null ? [] : refRaw;
+            const seenIds = new Set();
+            const seenKeys = new Set();
+            for (const row of incoming) {
+                if (seenIds.has(row.id)) {
+                    return c.json({ error: "Duplicate reference photo id" }, 400);
+                }
+                seenIds.add(row.id);
+                if (seenKeys.has(row.s3Key)) {
+                    return c.json({ error: "Duplicate reference photo storage key" }, 400);
+                }
+                seenKeys.add(row.s3Key);
+                if (!s3KeyMatchesIssueReferencePhoto(row.s3Key, issue.workspaceId, issue.projectId)) {
+                    return c.json({ error: "Invalid reference photo storage key" }, 400);
+                }
+                const sk = row.sketch === null ? undefined : row.sketch;
+                if (sk !== undefined && sketchJsonByteSize(sk) > MAX_ISSUE_PHOTO_SKETCH_BYTES) {
+                    return c.json({ error: "Reference photo sketch payload is too large" }, 400);
+                }
+            }
+            nextReferencePhotos = incoming.map((r) => {
+                const match = prevPhotosForRef.find((p) => p.id === r.id && p.s3Key === r.s3Key);
+                const sizeBytes = typeof r.sizeBytes === "number" && r.sizeBytes > 0
+                    ? r.sizeBytes
+                    : (match?.sizeBytes ?? 0);
+                const sketch = r.sketch === null ? undefined : r.sketch !== undefined ? r.sketch : match?.sketch;
+                return {
+                    id: r.id,
+                    s3Key: r.s3Key,
+                    fileName: r.fileName,
+                    contentType: r.contentType,
+                    createdAt: (r.createdAt && r.createdAt.trim()) || match?.createdAt || new Date().toISOString(),
+                    sizeBytes,
+                    ...(sketch !== undefined ? { sketch } : {}),
+                };
+            });
+            const nextKeys = new Set(nextReferencePhotos.map((p) => p.s3Key));
+            photosToDeleteFromS3 = prevPhotosForRef.filter((p) => !nextKeys.has(p.s3Key));
+            bytesRemovedFromPhotos = issuePhotosStorageBytes(photosToDeleteFromS3);
+        }
         const prevAssigneeId = issue.assigneeId;
         const nextAssigneeId = body.data.assigneeId === undefined ? undefined : body.data.assigneeId;
         const nextAnnotationId = body.data.annotationId === undefined ? undefined : body.data.annotationId;
+        const nextAttachedRaw = body.data.attachedMarkupAnnotationIds;
+        const nextAttachedIds = nextAttachedRaw === undefined
+            ? undefined
+            : nextAttachedRaw === null
+                ? null
+                : parseAttachedMarkupAnnotationIds(nextAttachedRaw).filter((id) => !issue.annotationId || id !== issue.annotationId);
         if (nextAssigneeId) {
             const a = await assertUserAssignableToProject(nextAssigneeId, issue.projectId, issue.workspaceId);
             if ("error" in a)
@@ -657,6 +1070,12 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
         const nextStatus = body.data.status;
         const shouldStampResolved = nextStatus === IssueStatus.RESOLVED || nextStatus === IssueStatus.CLOSED;
         const updated = await prisma.$transaction(async (tx) => {
+            if (bytesRemovedFromPhotos > 0n) {
+                await tx.workspace.update({
+                    where: { id: issue.workspaceId },
+                    data: { storageUsedBytes: { decrement: bytesRemovedFromPhotos } },
+                });
+            }
             const u = await tx.issue.update({
                 where: { id: issue.id },
                 data: {
@@ -667,6 +1086,20 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
                     ...(body.data.description !== undefined ? { description: body.data.description } : {}),
                     ...(nextAssigneeId !== undefined ? { assigneeId: nextAssigneeId } : {}),
                     ...(nextAnnotationId !== undefined ? { annotationId: nextAnnotationId } : {}),
+                    ...(nextAttachedIds !== undefined
+                        ? {
+                            attachedMarkupAnnotationIds: nextAttachedIds === null || nextAttachedIds.length === 0
+                                ? null
+                                : nextAttachedIds,
+                        }
+                        : {}),
+                    ...(nextReferencePhotos !== undefined
+                        ? {
+                            referencePhotos: nextReferencePhotos.length === 0
+                                ? null
+                                : referencePhotosToJsonValue(nextReferencePhotos),
+                        }
+                        : {}),
                     ...(body.data.priority !== undefined ? { priority: body.data.priority } : {}),
                     ...(patchStart !== undefined ? { startDate: patchStart } : {}),
                     ...(patchDue !== undefined ? { dueDate: patchDue } : {}),
@@ -774,6 +1207,9 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
                 viewerUrl,
             }).catch((e) => console.error("[issue-email-external]", e));
         }
+        for (const p of photosToDeleteFromS3) {
+            void deleteObject(env, p.s3Key).catch((e) => console.error("[issue reference photo delete after patch]", p.s3Key, e));
+        }
         notifyIssues(issue.fileVersionId);
         return c.json(issueRowJson(updated));
     });
@@ -795,7 +1231,41 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             return c.json({ error: "File is locked by another user" }, 409);
         }
         const title = issue.title;
-        await prisma.issue.delete({ where: { id: issueId } });
+        const photos = parseReferencePhotos(issue.referencePhotos);
+        const photoBytes = issuePhotosStorageBytes(photos);
+        const viewerRevision = await prisma.$transaction(async (tx) => {
+            const fv = await tx.fileVersion.findUnique({
+                where: { id: issue.fileVersionId },
+                select: { annotationBlob: true },
+            });
+            const nextBlob = stripIssueLinkedAnnotationsFromViewerBlob(fv?.annotationBlob, issueId, issue.annotationId, issue.attachedMarkupAnnotationIds);
+            let rev;
+            if (nextBlob !== null) {
+                const fvUp = await tx.fileVersion.update({
+                    where: { id: issue.fileVersionId },
+                    data: {
+                        annotationBlob: nextBlob,
+                        annotationBlobRevision: { increment: 1 },
+                    },
+                    select: { annotationBlobRevision: true },
+                });
+                rev = fvUp.annotationBlobRevision;
+            }
+            await tx.issue.delete({ where: { id: issueId } });
+            if (photoBytes > 0n) {
+                await tx.workspace.update({
+                    where: { id: issue.workspaceId },
+                    data: { storageUsedBytes: { decrement: photoBytes } },
+                });
+            }
+            return rev;
+        });
+        if (viewerRevision !== undefined && collaborationGloballyEnabled(env)) {
+            broadcastViewerState(issue.fileVersionId, viewerRevision, c.get("user").id);
+        }
+        for (const p of photos) {
+            void deleteObject(env, p.s3Key).catch((e) => console.error("[issue reference photo delete on issue delete]", p.s3Key, e));
+        }
         await logActivity(issue.workspaceId, ActivityType.ISSUE_DELETED, {
             actorUserId: c.get("user").id,
             entityId: issueId,

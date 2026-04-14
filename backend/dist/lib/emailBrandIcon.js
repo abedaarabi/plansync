@@ -2,9 +2,12 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 const _dir = dirname(fileURLToPath(import.meta.url));
-/** Relative to compiled `dist/lib` or source `src/lib` → `backend/assets/`. */
+/** Repo `frontend/public/icons/icon-180.png`, then legacy `backend/assets` PNG. */
 function emailIconCandidatePaths() {
     return [
+        join(_dir, "../../../frontend/public/icons/icon-180.png"),
+        join(process.cwd(), "frontend/public/icons/icon-180.png"),
+        join(process.cwd(), "../frontend/public/icons/icon-180.png"),
         join(_dir, "../../assets/plansync-email-icon-192.png"),
         join(process.cwd(), "backend/assets/plansync-email-icon-192.png"),
         join(process.cwd(), "assets/plansync-email-icon-192.png"),

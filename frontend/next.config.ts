@@ -32,6 +32,17 @@ const withPWA = withPWAInit({
           expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 },
         },
       },
+      /** Enterprise project shell (punch list, RFIs, etc.) — faster repeat visits / flaky site Wi‑Fi. */
+      {
+        urlPattern: ({ url }) =>
+          url.pathname.startsWith("/projects/") && !url.pathname.includes("/files/"),
+        handler: "NetworkFirst",
+        options: {
+          cacheName: "plansync-project-pages",
+          networkTimeoutSeconds: 8,
+          expiration: { maxEntries: 24, maxAgeSeconds: 60 * 60 * 12 },
+        },
+      },
     ],
   },
 });

@@ -167,7 +167,7 @@ export function v1Routes(auth, env, deps) {
             return c.redirect(ext, 302);
         return c.body(null, 404);
     });
-    /** Public: PlanSync mark for transactional email `<img>` (PNG; not Next static files). */
+    /** Public: PlanSync mark (PNG). Prefer `PUBLIC_APP_URL/icons/icon-180.png` in new email HTML. */
     r.get("/public/brand/email-icon.png", (c) => {
         const buf = getEmailBrandIconPngBytes();
         if (!buf?.length)
@@ -693,7 +693,10 @@ export function v1Routes(auth, env, deps) {
                 await stripe.subscriptions.cancel(admin.workspace.stripeSubscriptionId);
             }
             catch (e) {
-                const code = e && typeof e === "object" && "code" in e && typeof e.code === "string"
+                const code = e &&
+                    typeof e === "object" &&
+                    "code" in e &&
+                    typeof e.code === "string"
                     ? e.code
                     : "";
                 const msg = e &&
@@ -3393,7 +3396,7 @@ export function v1Routes(auth, env, deps) {
     }
     registerOccupantPublicRoutes(r, env);
     registerOmRoutes(r, needUser, env);
-    registerPunchRoutes(r, needUser);
+    registerPunchRoutes(r, needUser, env);
     registerIssuesRoutes(r, needUser, env, {
         onIssuesMutated: (fileVersionId) => {
             if (collaborationGloballyEnabled(env)) {

@@ -1050,25 +1050,30 @@ enum PunchStatus {
 }
 
 model PunchItem {
-  id          String             @id @default(cuid())
-  projectId   String
-  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title       String             @default("Punch item")
-  location    String
-  trade       String
-  priority    PunchPriority      @default(P2)
-  status      PunchStatus        @default(OPEN)
-  notes       String?
-  dueDate     DateTime?
-  completedAt DateTime?
-  assigneeId  String?
-  assignee    User?              @relation("PunchAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  templateId  String?
-  template    PunchTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  history     PunchItemHistory[]
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id              String             @id @default(cuid())
+  projectId       String
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// Monotonic per project (display #); assigned at create.
+  punchNumber     Int
+  title           String             @default("Punch item")
+  location        String
+  trade           String
+  priority        PunchPriority      @default(P2)
+  status          PunchStatus        @default(OPEN)
+  notes           String?
+  dueDate         DateTime?
+  completedAt     DateTime?
+  assigneeId      String?
+  assignee        User?              @relation("PunchAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  templateId      String?
+  template        PunchTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  /// Reference images (S3 keys); same shape as issue reference photos minus sketch.
+  referencePhotos Json?
+  history         PunchItemHistory[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
+  @@unique([projectId, punchNumber])
   @@index([projectId])
   @@index([assigneeId])
   @@index([status])

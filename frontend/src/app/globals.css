@@ -392,6 +392,8 @@ button:active:not(:disabled),
 
 /* Main workspace canvas — soft atmosphere (reads “premium” without noise) */
 .enterprise-main-canvas {
+  /* Avoid horizontal jump when overflow-y switches (e.g. loading → full Materials page). */
+  scrollbar-gutter: stable;
   position: relative;
   isolation: isolate;
   background:

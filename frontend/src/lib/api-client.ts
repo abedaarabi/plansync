@@ -1503,9 +1503,19 @@ export async function presignReadRfiAttachment(
   return j.url;
 }
 
+export type PunchReferencePhotoRow = {
+  id: string;
+  s3Key: string;
+  fileName: string;
+  contentType?: string;
+  createdAt: string;
+  sizeBytes: number;
+};
+
 export type PunchRow = {
   id: string;
   projectId: string;
+  punchNumber: number;
   title: string;
   location: string;
   trade: string;
@@ -1517,6 +1527,7 @@ export type PunchRow = {
   templateId: string | null;
   assignee: { id: string; name: string; email: string; image: string | null } | null;
   notes: string | null;
+  referencePhotos?: PunchReferencePhotoRow[];
   createdAt: string;
   updatedAt: string;
 };
@@ -1580,6 +1591,7 @@ export async function patchPunchItem(
     status?: string;
     assigneeId?: string | null;
     dueDateYmd?: string | null;
+    referencePhotos?: PunchReferencePhotoRow[] | null;
   },
 ): Promise<PunchRow> {
   const res = await fetch(
@@ -1597,6 +1609,18 @@ export async function patchPunchItem(
   const j = (await res.json().catch(() => ({}))) as { error?: unknown };
   if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not update item.");
   return j as PunchRow;
+}
+
+export async function deletePunchItem(projectId: string, punchId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/punch/${encodeURIComponent(punchId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not delete item.");
 }
 
 export async function bulkPatchPunchItems(
@@ -1617,6 +1641,111 @@ export async function bulkPatchPunchItems(
 
 export function punchExportCsvUrl(projectId: string): string {
   return apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/punch/export.csv`);
+}
+
+export async function presignPunchPhotoUpload(
+  projectId: string,
+  punchId: string,
+  body: { fileName: string; contentType?: string; sizeBytes: string | number | bigint },
+): Promise<{ uploadUrl: string; key: string }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/punch/${encodeURIComponent(punchId)}/photos/presign`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        fileName: body.fileName,
+        contentType: body.contentType ?? "application/octet-stream",
+        sizeBytes: String(body.sizeBytes),
+      }),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    uploadUrl?: string;
+    key?: string;
+  };
+  if (!res.ok) {
+    const err = j.error;
+    const msg =
+      typeof err === "string"
+        ? err
+        : res.status === 503
+          ? "File uploads are not configured (S3). Set AWS_* and S3_BUCKET on the server."
+          : "Could not presign punch photo upload.";
+    throw new Error(msg);
+  }
+  return { uploadUrl: j.uploadUrl!, key: j.key! };
+}
+
+export async function completePunchPhotoUpload(
+  projectId: string,
+  punchId: string,
+  body: {
+    key: string;
+    fileName: string;
+    contentType?: string;
+    sizeBytes: string | number | bigint;
+  },
+): Promise<PunchRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/punch/${encodeURIComponent(punchId)}/photos/complete`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        key: body.key,
+        fileName: body.fileName,
+        contentType: body.contentType ?? "image/jpeg",
+        sizeBytes: String(body.sizeBytes),
+      }),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown } & Partial<PunchRow>;
+  if (!res.ok) {
+    const msg =
+      typeof j.error === "string"
+        ? j.error
+        : res.status === 503
+          ? "File storage is not configured on the server."
+          : "Could not save punch photo after upload.";
+    throw new HttpError(res.status, msg);
+  }
+  return j as PunchRow;
+}
+
+export async function presignReadPunchPhoto(
+  projectId: string,
+  punchId: string,
+  photoId: string,
+): Promise<string> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/punch/${encodeURIComponent(punchId)}/photos/${encodeURIComponent(photoId)}/presign-read`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown; url?: string };
+  if (!res.ok) {
+    const msg =
+      typeof j.error === "string"
+        ? j.error
+        : res.status === 503
+          ? "File storage is not configured."
+          : "Could not open punch photo.";
+    throw new Error(msg);
+  }
+  if (!j.url) throw new Error("Could not open punch photo.");
+  return j.url;
 }
 
 export async function fetchPunchTemplates(projectId: string): Promise<PunchTemplateRow[]> {
@@ -1659,16 +1788,20 @@ export async function createPunchTemplate(
   return j as PunchTemplateRow;
 }
 
-export async function applyPunchTemplate(projectId: string, templateId: string): Promise<void> {
+export async function applyPunchTemplate(
+  projectId: string,
+  templateId: string,
+): Promise<{ created: number }> {
   const res = await fetch(
     apiUrl(
       `/api/v1/projects/${encodeURIComponent(projectId)}/punch/templates/${encodeURIComponent(templateId)}/apply`,
     ),
-    { method: "POST", credentials: "include", headers: jsonHeaders },
+    { method: "POST", credentials: "include", headers: jsonHeaders, body: "{}" },
   );
   if (res.status === 402) throw new ProRequiredError();
-  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown; created?: number };
   if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not apply template.");
+  return { created: typeof j.created === "number" ? j.created : 0 };
 }
 
 export type FieldReportRow = {

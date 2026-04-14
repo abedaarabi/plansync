@@ -5,6 +5,7 @@ import { downloadProjectFileVersion } from "@/lib/downloadProjectFile";
 import { isImageThumbnailFile, isPdfFile } from "@/lib/isPdfFile";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { fetchProjects } from "@/lib/api-client";
@@ -92,6 +93,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
       else params.delete("folder");
       const q = params.toString();
       router.push(q ? `${pathname}?${q}` : pathname, { scroll: false });
+      setMobileFolderTreeOpen(false);
     },
     [pathname, router, searchParams],
   );
@@ -127,6 +129,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     version: number;
   } | null>(null);
   const [cloudImportOpen, setCloudImportOpen] = useState(false);
+  const [mobileFolderTreeOpen, setMobileFolderTreeOpen] = useState(false);
 
   const toggleTreeExpand = useCallback((id: string) => {
     setTreeExpanded((prev) => {
@@ -609,10 +612,11 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           uploading={false}
           uploadInputId={UPLOAD_INPUT_ID}
           onImportFromCloud={() => setCloudImportOpen(true)}
+          onOpenFolderTree={() => setMobileFolderTreeOpen(true)}
         />
 
-        <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] md:grid-cols-[290px_minmax(0,1fr)]">
-          <aside className="flex min-h-0 shrink-0 flex-col border-r border-slate-200/70 bg-slate-50">
+        <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[290px_minmax(0,1fr)]">
+          <aside className="hidden min-h-0 shrink-0 flex-col border-r border-slate-200/70 bg-slate-50 lg:flex">
             <FileExplorerTree
               className="h-full"
               folders={project.folders}
@@ -663,6 +667,50 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           />
         </div>
       </div>
+
+      {mobileFolderTreeOpen ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close folder list"
+            className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-[1px] lg:hidden"
+            onClick={() => setMobileFolderTreeOpen(false)}
+          />
+          <div
+            className="fixed inset-y-0 left-0 z-[70] flex w-[min(100%,20rem)] flex-col border-r border-slate-200/80 bg-slate-50 shadow-xl lg:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Folders"
+          >
+            <div className="flex items-center justify-between border-b border-slate-200/80 bg-white px-4 py-3">
+              <p className="text-sm font-semibold text-[var(--enterprise-text)]">Folders</p>
+              <button
+                type="button"
+                onClick={() => setMobileFolderTreeOpen(false)}
+                className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" strokeWidth={2} aria-hidden />
+              </button>
+            </div>
+            <FileExplorerTree
+              className="min-h-0 flex-1"
+              showSectionLabel={false}
+              folders={project.folders}
+              rootLabel={project.name}
+              selectedFolderId={folderId}
+              expanded={treeExpanded}
+              onToggleExpand={toggleTreeExpand}
+              onSelectFolder={navigateFolder}
+              dropTargetKey={dropTargetKey}
+              onDragOverFolder={handleDragOverFolder}
+              onDragLeaveFolder={handleDragLeaveFolder}
+              onDropOnFolder={handleDropOnFolder}
+              onDragStartMove={(e, fid) => bindDragStartMove(e, { kind: "folder", id: fid })}
+            />
+          </div>
+        </>
+      ) : null}
 
       <FileExplorerDeleteConfirmDialog
         open={Boolean(pendingDeletion)}

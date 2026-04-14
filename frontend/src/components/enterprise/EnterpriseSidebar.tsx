@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   Building2,
   CalendarRange,
@@ -143,9 +143,10 @@ export function EnterpriseSidebar({
   desktopCollapsed,
 }: EnterpriseSidebarProps) {
   const pathname = usePathname();
-  const [isDesktopLg, setIsDesktopLg] = useState<boolean | null>(null);
+  /** false until layout sync — avoids treating desktop as mobile before matchMedia runs. */
+  const [isDesktopLg, setIsDesktopLg] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
     const sync = () => setIsDesktopLg(mq.matches);
     sync();
@@ -582,7 +583,7 @@ export function EnterpriseSidebar({
 
   const workspaceTitle = loading ? "…" : ws?.name?.trim() || "Workspace";
   /** lg icon-only rail: hide workspace title visually, keep sr-only for a11y */
-  const desktopIconRail = Boolean(railCollapsed && isDesktopLg === true);
+  const desktopIconRail = Boolean(railCollapsed && isDesktopLg);
 
   const navLinkClass = (active: boolean, disabled?: boolean, iconOnly?: boolean) => {
     const io = iconOnly === undefined ? railCollapsed : iconOnly;
@@ -611,7 +612,7 @@ export function EnterpriseSidebar({
     <aside
       id="enterprise-sidebar-panel"
       data-sidebar-collapsed={railCollapsed ? "true" : "false"}
-      className={`enterprise-sidebar-panel fixed bottom-0 left-0 top-[3.25rem] z-40 flex min-h-0 w-[min(280px,88vw)] shrink-0 flex-col overflow-hidden transition-[transform,width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:static lg:top-auto lg:z-auto lg:h-auto lg:min-h-0 lg:max-h-none lg:translate-x-0 lg:self-stretch lg:border-b-0 lg:shadow-none ${
+      className={`enterprise-sidebar-panel fixed bottom-0 left-0 top-[3.25rem] z-40 flex min-h-0 w-[min(280px,88vw)] shrink-0 flex-col overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:static lg:top-auto lg:z-auto lg:h-auto lg:min-h-0 lg:max-h-none lg:translate-x-0 lg:self-stretch lg:border-b-0 lg:shadow-none lg:transition-none ${
         railCollapsed ? "lg:w-[72px]" : useTwoLevelNav ? "lg:w-[248px]" : "lg:w-[236px]"
       } ${
         mobileOpen ? "translate-x-0" : "-translate-x-full"

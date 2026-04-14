@@ -121,3 +121,23 @@ export function s3KeyMatchesIssueReferencePhoto(
   const prefix = `ws/${workspaceId}/p/${projectId}/issue-photos/`;
   return s3Key.startsWith(prefix);
 }
+
+/** Project-scoped punch walk photos (same isolation pattern as issue-photos). */
+export function buildPunchReferencePhotoKey(
+  workspaceId: string,
+  projectId: string,
+  uploadId: string,
+  fileName: string,
+): string {
+  const safe = sanitizeAttachmentFileName(fileName);
+  return `ws/${workspaceId}/p/${projectId}/punch-photos/${uploadId}/${safe}`;
+}
+
+export function s3KeyMatchesPunchReferencePhoto(
+  s3Key: string,
+  workspaceId: string,
+  projectId: string,
+): boolean {
+  const prefix = `ws/${workspaceId}/p/${projectId}/punch-photos/`;
+  return s3Key.startsWith(prefix);
+}

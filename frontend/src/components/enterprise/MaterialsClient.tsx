@@ -541,7 +541,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="sticky top-0 z-[1]">
               <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] shadow-sm">
