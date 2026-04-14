@@ -58,6 +58,9 @@ html {
 
   /* PlanSync Pro — enterprise shell (refined SaaS: depth, restraint, crisp type) */
   --enterprise-bg: #f8fafc;
+  /** Top chrome + notch / status inset — use for `top:` / `h-[calc(100dvh-…)]` outside flex layouts */
+  --enterprise-topbar-h: 3.25rem;
+  --enterprise-topbar-offset: calc(var(--enterprise-topbar-h) + env(safe-area-inset-top, 0px));
   --enterprise-surface: #ffffff;
   --enterprise-border: #e2e8f0;
   --enterprise-primary: #2563eb;

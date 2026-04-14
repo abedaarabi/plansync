@@ -201,7 +201,7 @@ export function ProjectHomeOverviewCharts({ projectId, issues, punchItems, rfis 
   ];
 
   return (
-    <section className="enterprise-card flex h-full min-h-0 flex-col p-5 sm:p-6">
+    <section className="enterprise-card flex h-full min-h-0 min-w-0 flex-col p-4 sm:p-6">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
           Project overview

@@ -124,8 +124,8 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
               desktopSidebarCollapsed={desktopSidebarCollapsed}
               onToggleDesktopSidebar={toggleDesktopSidebar}
             />
-            <main className="enterprise-scrollbar enterprise-main-canvas min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-              <div className="enterprise-main-inner min-h-full">{children}</div>
+            <main className="enterprise-scrollbar enterprise-main-canvas min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+              <div className="enterprise-main-inner min-h-full min-w-0 max-w-full">{children}</div>
             </main>
           </div>
           <CommandPalette open={commandOpen} onClose={closePalette} />

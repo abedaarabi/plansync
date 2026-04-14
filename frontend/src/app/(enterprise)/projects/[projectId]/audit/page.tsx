@@ -13,7 +13,7 @@ const AUDIT_SUBHEAD =
 export default async function ProjectAuditPage({ params }: Props) {
   const { projectId } = await params;
   return (
-    <div className="enterprise-animate-in box-border flex h-[calc(100dvh-3.25rem)] min-h-0 flex-col overflow-hidden px-3 py-2 sm:px-4 sm:py-3 lg:px-5">
+    <div className="enterprise-animate-in box-border flex h-[calc(100dvh_-_var(--enterprise-topbar-offset))] min-h-0 flex-col overflow-hidden px-3 py-2 sm:px-4 sm:py-3 lg:px-5">
       <div className="flex min-h-0 flex-1 flex-col">
         <Suspense fallback={<FileExplorerPageSkeleton />}>
           <ProjectAuditClient projectId={projectId} subhead={AUDIT_SUBHEAD} />

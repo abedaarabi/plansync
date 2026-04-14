@@ -783,7 +783,7 @@ export function ProjectsClient() {
   }
 
   return (
-    <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col gap-6">
+    <div className="flex min-h-[calc(100dvh_-_var(--enterprise-topbar-offset))] flex-col gap-6">
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         <aside className="enterprise-card w-full shrink-0 p-4 lg:w-72">
           <div className="flex items-center justify-between gap-2">

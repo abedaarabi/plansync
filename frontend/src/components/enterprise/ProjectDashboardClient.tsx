@@ -261,8 +261,8 @@ export function ProjectDashboardClient({ projectId }: Props) {
     .slice(0, 5);
 
   return (
-    <div className="enterprise-animate-in space-y-8">
-      <div className="enterprise-card relative overflow-hidden bg-gradient-to-br from-[var(--enterprise-surface)] via-[var(--enterprise-surface)] to-[var(--enterprise-bg)]/80 p-5 sm:p-6">
+    <div className="enterprise-animate-in min-w-0 max-w-full space-y-6 sm:space-y-8">
+      <div className="enterprise-card relative min-w-0 overflow-hidden bg-gradient-to-br from-[var(--enterprise-surface)] via-[var(--enterprise-surface)] to-[var(--enterprise-bg)]/80 p-4 sm:p-6">
         <div
           className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[var(--enterprise-primary)]/[0.06]"
           aria-hidden
@@ -278,7 +278,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
             </div>
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--enterprise-text)]">
+            <h1 className="break-words text-xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
               {project.name}
             </h1>
             {(project.projectNumber?.trim() || project.location?.trim()) && (
@@ -303,7 +303,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
           </div>
         </div>
 
-        <div className="relative mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="relative mt-4 grid min-w-0 gap-2.5 sm:mt-5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
           <div className="flex gap-3 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-3.5 ring-1 ring-inset ring-white/40 dark:ring-white/[0.04]">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/12 text-violet-600 ring-1 ring-violet-500/15 dark:text-violet-400">
               <Layers className="h-5 w-5" strokeWidth={1.75} aria-hidden />
@@ -360,13 +360,13 @@ export function ProjectDashboardClient({ projectId }: Props) {
 
         <nav
           aria-label="Project summary"
-          className="relative mt-5 flex flex-wrap gap-2 border-t border-[var(--enterprise-border)]/80 pt-5"
+          className="relative mt-4 grid min-w-0 grid-cols-2 gap-2 border-t border-[var(--enterprise-border)]/80 pt-4 sm:mt-5 sm:flex sm:flex-wrap sm:gap-2 sm:pt-5"
         >
           {quickStats.map((s) => (
             <Link
               key={s.label}
               href={s.href}
-              className="group inline-flex min-w-[7.5rem] flex-1 items-center gap-2.5 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/90 px-3 py-2.5 shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--enterprise-primary)]/28 hover:shadow-[var(--enterprise-shadow-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 sm:min-w-0 sm:flex-none"
+              className="group inline-flex min-w-0 items-center gap-2 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/90 px-2.5 py-2.5 shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--enterprise-primary)]/28 hover:shadow-[var(--enterprise-shadow-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 sm:min-w-[7.5rem] sm:flex-1 sm:gap-2.5 sm:px-3 md:min-w-0 md:flex-none lg:min-w-[7rem] lg:flex-1"
             >
               <span
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${s.iconWrap}`}
@@ -374,10 +374,10 @@ export function ProjectDashboardClient({ projectId }: Props) {
                 <s.icon className={`h-4 w-4 ${s.iconColor}`} strokeWidth={2} aria-hidden />
               </span>
               <span className="min-w-0 text-left">
-                <span className="block text-lg font-bold tabular-nums leading-none text-[var(--enterprise-text)] group-hover:text-[var(--enterprise-primary)]">
+                <span className="block text-base font-bold tabular-nums leading-none text-[var(--enterprise-text)] group-hover:text-[var(--enterprise-primary)] sm:text-lg">
                   {s.value}
                 </span>
-                <span className="mt-1 block text-[11px] font-medium leading-tight text-[var(--enterprise-text-muted)]">
+                <span className="mt-0.5 block text-[10px] font-medium leading-snug text-[var(--enterprise-text-muted)] sm:mt-1 sm:text-[11px] sm:leading-tight">
                   {s.label}
                 </span>
               </span>
@@ -386,8 +386,8 @@ export function ProjectDashboardClient({ projectId }: Props) {
         </nav>
       </div>
 
-      <section className="enterprise-card overflow-hidden p-5 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <section className="enterprise-card min-w-0 overflow-hidden p-4 sm:p-6">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
               Site map &amp; weather
@@ -415,10 +415,10 @@ export function ProjectDashboardClient({ projectId }: Props) {
                 exact pin.
               </p>
             ) : null}
-            <div className="grid gap-4 lg:grid-cols-5">
-              <div className="min-h-[220px] lg:col-span-3">
+            <div className="grid min-w-0 gap-4 lg:grid-cols-5">
+              <div className="min-h-[200px] min-w-0 lg:col-span-3">
                 <ProjectLocationMap
-                  height={260}
+                  height={240}
                   latitude={mapCoords.lat}
                   longitude={mapCoords.lng}
                   zoom={14}
@@ -481,7 +481,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
         onClose={() => setEditOpen(false)}
       />
 
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch lg:gap-6">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2 lg:items-stretch lg:gap-6">
         <ProjectHomeOverviewCharts
           projectId={projectId}
           issues={issues}
@@ -489,7 +489,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
           rfis={rfis}
         />
 
-        <section className="enterprise-card flex h-full min-h-0 flex-col p-5 sm:p-6">
+        <section className="enterprise-card flex min-h-[15rem] min-w-0 flex-col p-4 sm:min-h-[17rem] sm:p-6 lg:h-full lg:min-h-0">
           <div className="shrink-0 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
               Project activity
@@ -517,10 +517,10 @@ export function ProjectDashboardClient({ projectId }: Props) {
         </section>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="enterprise-card p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
+      <div className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-2">
+        <section className="enterprise-card min-w-0 p-4 sm:p-6">
+          <div className="flex min-w-0 items-start justify-between gap-2 sm:gap-3">
+            <div className="min-w-0 pr-1">
               <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
                 Recently opened
               </h2>
@@ -539,20 +539,22 @@ export function ProjectDashboardClient({ projectId }: Props) {
             <button
               type="button"
               onClick={() => openFile(continueFile)}
-              className="mt-4 flex w-full items-center gap-3 rounded-xl border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-4 py-3 text-left transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-primary-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35"
+              className="mt-4 flex w-full min-w-0 flex-col items-stretch gap-2 rounded-xl border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-3 py-3 text-left transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-primary-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 sm:flex-row sm:items-center sm:gap-3 sm:px-4"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-sm">
-                <Play className="h-5 w-5" fill="currentColor" aria-hidden />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-semantic-info-text)]">
-                  Continue viewing
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-sm">
+                  <Play className="h-5 w-5" fill="currentColor" aria-hidden />
                 </span>
-                <span className="mt-0.5 block truncate text-sm font-semibold text-[var(--enterprise-text)]">
-                  {continueFile.name}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-semantic-info-text)]">
+                    Continue viewing
+                  </span>
+                  <span className="mt-0.5 block break-words text-sm font-semibold text-[var(--enterprise-text)] sm:truncate">
+                    {continueFile.name}
+                  </span>
                 </span>
-              </span>
-              <span className="shrink-0 text-xs text-[var(--enterprise-text-muted)]">
+              </div>
+              <span className="w-full shrink-0 text-right text-xs text-[var(--enterprise-text-muted)] sm:w-auto sm:text-left">
                 {continueFile.lastOpenedAt ? relativeTime(continueFile.lastOpenedAt, nowMs) : ""}
               </span>
             </button>
@@ -567,20 +569,20 @@ export function ProjectDashboardClient({ projectId }: Props) {
                     type="button"
                     onClick={() => openFile(f)}
                     aria-label={`Open ${f.name} in viewer`}
-                    className="flex w-full cursor-pointer items-center gap-3 py-3 text-left transition first:pt-0 last:pb-0 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25"
+                    className="flex w-full min-w-0 cursor-pointer items-start gap-2 py-3 text-left transition first:pt-0 last:pb-0 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:items-center sm:gap-3"
                   >
                     {isPdfFile(f) ? (
-                      <PdfFileIcon className="h-4 w-4 shrink-0" />
+                      <PdfFileIcon className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
                     ) : (
                       <FileText
-                        className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]"
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)] sm:mt-0"
                         aria-hidden
                       />
                     )}
-                    <span className="flex-1 truncate text-sm font-medium text-[var(--enterprise-text)]">
+                    <span className="min-w-0 flex-1 break-words text-sm font-medium text-[var(--enterprise-text)] sm:truncate">
                       {f.name}
                     </span>
-                    <span className="shrink-0 text-xs text-[var(--enterprise-sidebar-muted)]">
+                    <span className="shrink-0 self-end text-xs text-[var(--enterprise-sidebar-muted)] sm:self-auto">
                       {fileActivityLabel(f, nowMs) ?? "—"}
                     </span>
                   </button>
@@ -607,9 +609,9 @@ export function ProjectDashboardClient({ projectId }: Props) {
           )}
         </section>
 
-        <section className="enterprise-card p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
+        <section className="enterprise-card min-w-0 p-4 sm:p-6">
+          <div className="flex min-w-0 items-start justify-between gap-2 sm:gap-3">
+            <div className="min-w-0 pr-1">
               <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
                 Recent punch items
               </h2>
@@ -640,17 +642,27 @@ export function ProjectDashboardClient({ projectId }: Props) {
                       ? "In Progress"
                       : "Resolved";
                 return (
-                  <li key={issue.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusColor}`} />
-                    <span className="flex-1 truncate text-sm text-[var(--enterprise-text)]">
-                      {issue.location}
-                    </span>
-                    <span className="truncate text-xs text-[var(--enterprise-sidebar-muted)]">
-                      {issue.trade}
-                    </span>
-                    <span className="shrink-0 rounded-md bg-[var(--enterprise-bg)] px-2 py-0.5 text-xs font-medium text-[var(--enterprise-text-muted)]">
-                      {statusLabel}
-                    </span>
+                  <li
+                    key={issue.id}
+                    className="flex min-w-0 flex-col gap-1.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-3"
+                  >
+                    <div className="flex min-w-0 items-center gap-2 sm:flex-1 sm:gap-3">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusColor}`} />
+                      <span className="min-w-0 flex-1 text-sm text-[var(--enterprise-text)] sm:truncate">
+                        {issue.location}
+                      </span>
+                      <span className="shrink-0 rounded-md bg-[var(--enterprise-bg)] px-2 py-0.5 text-xs font-medium text-[var(--enterprise-text-muted)] sm:hidden">
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <div className="flex min-w-0 items-center justify-between gap-2 pl-4 sm:flex-1 sm:justify-end sm:pl-0">
+                      <span className="min-w-0 truncate text-xs text-[var(--enterprise-sidebar-muted)] sm:max-w-[40%]">
+                        {issue.trade}
+                      </span>
+                      <span className="hidden shrink-0 rounded-md bg-[var(--enterprise-bg)] px-2 py-0.5 text-xs font-medium text-[var(--enterprise-text-muted)] sm:inline-block">
+                        {statusLabel}
+                      </span>
+                    </div>
                   </li>
                 );
               })}
@@ -675,8 +687,8 @@ export function ProjectDashboardClient({ projectId }: Props) {
         </section>
       </div>
 
-      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
-        <section className="enterprise-card p-5">
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 lg:gap-6">
+        <section className="enterprise-card min-w-0 p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <Gauge className="h-4 w-4 text-[var(--enterprise-primary)]" />
             <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">Progress</h3>
@@ -691,7 +703,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
             />
           </div>
         </section>
-        <section className="enterprise-card p-5">
+        <section className="enterprise-card min-w-0 p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <Target className="h-4 w-4 text-[var(--enterprise-error)]" />
             <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">Issue risk</h3>
@@ -703,7 +715,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
             High-priority issues need attention.
           </p>
         </section>
-        <section className="enterprise-card p-5">
+        <section className="enterprise-card min-w-0 p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <FolderOpen className="h-4 w-4 text-violet-500" />
             <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">Project assets</h3>

@@ -182,7 +182,7 @@ export function DashboardActivityChart({
     <div className={`${outerLayout} ${className}`.trim()}>
       {stats ? (
         <div
-          className={`flex flex-wrap gap-x-6 gap-y-2 text-[var(--enterprise-text-muted)] ${fillHeight ? "shrink-0" : ""} ${compact ? "gap-x-4 text-[12px] leading-snug" : "text-[13px]"}`}
+          className={`flex flex-wrap gap-x-4 gap-y-2 text-[var(--enterprise-text-muted)] sm:gap-x-6 ${fillHeight ? "shrink-0" : ""} ${compact ? "text-[11px] leading-snug sm:gap-x-4 sm:text-[12px]" : "text-[12px] sm:text-[13px]"}`}
         >
           <span>
             <span className="font-semibold tabular-nums text-[var(--enterprise-text)]">

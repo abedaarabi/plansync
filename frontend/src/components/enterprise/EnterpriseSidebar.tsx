@@ -612,7 +612,7 @@ export function EnterpriseSidebar({
     <aside
       id="enterprise-sidebar-panel"
       data-sidebar-collapsed={railCollapsed ? "true" : "false"}
-      className={`enterprise-sidebar-panel fixed bottom-0 left-0 top-[3.25rem] z-40 flex min-h-0 w-[min(280px,88vw)] shrink-0 flex-col overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:static lg:top-auto lg:z-auto lg:h-auto lg:min-h-0 lg:max-h-none lg:translate-x-0 lg:self-stretch lg:border-b-0 lg:shadow-none lg:transition-none ${
+      className={`enterprise-sidebar-panel fixed bottom-0 left-0 top-[var(--enterprise-topbar-offset)] z-40 flex min-h-0 w-[min(280px,88vw)] shrink-0 flex-col overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:static lg:top-auto lg:z-auto lg:h-auto lg:min-h-0 lg:max-h-none lg:translate-x-0 lg:self-stretch lg:border-b-0 lg:shadow-none lg:transition-none ${
         railCollapsed ? "lg:w-[72px]" : useTwoLevelNav ? "lg:w-[248px]" : "lg:w-[236px]"
       } ${
         mobileOpen ? "translate-x-0" : "-translate-x-full"
