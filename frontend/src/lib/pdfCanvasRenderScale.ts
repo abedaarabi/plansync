@@ -42,12 +42,13 @@ export function getPdfCanvasMaxBitmapEdge(): number {
  */
 export function getPdfCanvasMaxBitmapPixelBudget(): number {
   const mem = readDeviceMemoryGb();
-  if (mem !== undefined && mem >= 8) return 260_000_000;
-  if (mem !== undefined && mem >= 4) return 220_000_000;
+  if (mem !== undefined && mem >= 16) return 420_000_000;
+  if (mem !== undefined && mem >= 8) return 340_000_000;
+  if (mem !== undefined && mem >= 4) return 240_000_000;
   if (isCoarsePointer() && (mem === undefined || mem <= 4)) {
     return 160_000_000;
   }
-  return 190_000_000;
+  return 210_000_000;
 }
 
 /**
@@ -60,7 +61,9 @@ export function getMaxCanvasDpr(): number {
   const coarse = isCoarsePointer();
   if (coarse && (mem === undefined || mem < 4)) return 3;
   if (mem !== undefined && mem <= 2) return 2;
-  return 4;
+  if (mem !== undefined && mem >= 16) return 6;
+  if (mem !== undefined && mem >= 8) return 5.5;
+  return 4.5;
 }
 
 /**
@@ -77,7 +80,18 @@ export function computePdfPageRenderScale(
   devicePixelRatio: number,
 ): number {
   if (baseWidth < 1e-6 || baseHeight < 1e-6) return Math.max(scale, 1e-6);
-  const ideal = scale * devicePixelRatio;
+  /**
+   * Extra oversampling for high zoom:
+   * - gentle boost at normal zoom
+   * - stronger boost when users punch in very far
+   */
+  const detailBoost =
+    scale <= 1
+      ? 1
+      : scale <= 2.5
+        ? Math.min(1.35, 1 + Math.log2(scale) * 0.14)
+        : Math.min(1.8, 1.25 + Math.log2(scale / 2.5) * 0.24);
+  const ideal = scale * devicePixelRatio * detailBoost;
   const maxEdge = getPdfCanvasMaxBitmapEdge();
   const maxByEdge = Math.min(maxEdge / baseWidth, maxEdge / baseHeight);
   let renderScale = Math.min(ideal, maxByEdge);

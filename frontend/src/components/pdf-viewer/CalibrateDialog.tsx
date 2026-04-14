@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { displayLengthToMm, mmToDisplayLength, type MeasureUnit } from "@/lib/coords";
 
 type Props = {
   open: boolean;
   onConfirm: (knownLengthMm: number) => void;
   onCancel: () => void;
+  measureUnit: MeasureUnit;
   /** Page overlay (same box as calibration clicks) — used with midNorm for screen position */
   anchorRef: React.RefObject<HTMLElement | null>;
   /** Midpoint of the two calibration points in normalized page coords (0–1) */
@@ -80,6 +82,7 @@ export function CalibrateDialog({
   open,
   onConfirm,
   onCancel,
+  measureUnit,
   anchorRef,
   midNorm,
   initialKnownMm,
@@ -97,11 +100,11 @@ export function CalibrateDialog({
   useEffect(() => {
     if (!open) return;
     if (initialKnownMm != null && initialKnownMm > 0) {
-      setValue(String(initialKnownMm));
+      setValue(String(mmToDisplayLength(initialKnownMm, measureUnit)));
     } else {
       setValue("");
     }
-  }, [open, initialKnownMm]);
+  }, [open, initialKnownMm, measureUnit]);
 
   useEffect(() => {
     if (!open) return;
@@ -139,13 +142,13 @@ export function CalibrateDialog({
           Known distance
         </h2>
         <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
-          Between the two snapped points (mm on the sheet). While you drag to the second point, the
-          live label uses your selected measure unit; before Apply it reflects PDF coordinate space
-          (72 pt = 1 in), not site scale until you enter the known length. If you calibrated this
-          page before, the last known distance is prefilled.
+          Between the two snapped points ({measureUnit} on the sheet). While you drag to the second
+          point, the live label uses your selected measure unit; before Apply it reflects PDF
+          coordinate space (72 pt = 1 in), not site scale until you enter the known length. If you
+          calibrated this page before, the last known distance is prefilled.
         </p>
         <label className="mt-2 block text-[11px] font-medium text-[#94A3B8]">
-          Millimeters
+          {measureUnit}
           <input
             type="number"
             min={0.001}
@@ -153,7 +156,7 @@ export function CalibrateDialog({
             className="mt-1 w-full rounded-md border border-[#334155] bg-[#0F172A] px-2 py-1.5 text-[12px] text-[#F8FAFC] outline-none transition placeholder:text-[#64748B] focus:border-[#2563EB]/60 focus:ring-1 focus:ring-[#2563EB]/35"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            title="Real-world distance between calibration points (mm)"
+            title={`Real-world distance between calibration points (${measureUnit})`}
             autoFocus
           />
         </label>
@@ -173,7 +176,7 @@ export function CalibrateDialog({
             onClick={() => {
               const n = parseFloat(value);
               if (!Number.isFinite(n) || n <= 0) return;
-              onConfirm(n);
+              onConfirm(displayLengthToMm(n, measureUnit));
             }}
           >
             Apply

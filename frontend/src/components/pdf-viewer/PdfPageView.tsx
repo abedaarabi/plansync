@@ -95,6 +95,12 @@ const PRINT_PDF_SCALE = 1;
 type Props = {
   pdfDoc: PDFDocumentProxy;
   pageNumber: number;
+  /** Called after on-screen page bitmap render completes. */
+  onScreenRenderComplete?: (info: {
+    pageNumber: number;
+    renderMs: number;
+    renderScale: number;
+  }) => void;
   /** Scrollable region for Pan (hand) tool click-drag */
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
   /** Exposed for corner minimap (same nodes as internal refs) */
@@ -416,6 +422,7 @@ function MeasurementDimensionSvg({
 export function PdfPageView({
   pdfDoc,
   pageNumber,
+  onScreenRenderComplete,
   scrollContainerRef,
   pageCanvasRef: pageCanvasRefProp,
   pageWrapperRef: pageWrapperRefProp,
@@ -1251,6 +1258,7 @@ export function PdfPageView({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const renderStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
       const pdfjs = await import("pdfjs-dist");
       setupPdfWorker(pdfjs);
       const page = await pdfDoc.getPage(pageNumber);
@@ -1290,6 +1298,12 @@ export function PdfPageView({
         /* cancelled or aborted */
       }
       if (cancelled) return;
+      onScreenRenderComplete?.({
+        pageNumber,
+        renderMs:
+          (typeof performance !== "undefined" ? performance.now() : Date.now()) - renderStartedAt,
+        renderScale,
+      });
       if (screenRenderTaskRef.current === task) {
         screenRenderTaskRef.current = null;
       }
@@ -1299,7 +1313,7 @@ export function PdfPageView({
       screenRenderTaskRef.current?.cancel();
       screenRenderTaskRef.current = null;
     };
-  }, [pdfDoc, pageNumber, scale, pageIdx0, setPageSizePt]);
+  }, [pdfDoc, pageNumber, scale, pageIdx0, setPageSizePt, onScreenRenderComplete]);
 
   const renderPrintPageToCanvas = useCallback(async () => {
     if (compareReferenceOnly) return;
@@ -4473,6 +4487,7 @@ export function PdfPageView({
       <CalibrateDialog
         key={calibrateKey}
         open={calibrateOpen}
+        measureUnit={measureUnit}
         initialKnownMm={calibrateDialogInitialMm}
         anchorRef={overlayRef}
         midNorm={

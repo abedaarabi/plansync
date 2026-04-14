@@ -80,6 +80,7 @@ export function CalibrateTargetRow() {
 
 export function CalibrationGuide() {
   const tool = useViewerStore((s) => s.tool);
+  const measureUnit = useViewerStore((s) => s.measureUnit);
   const calibrateDraft = useViewerStore((s) => s.calibrateDraft);
   const fileName = useViewerStore((s) => s.fileName);
   const numPages = useViewerStore((s) => s.numPages);
@@ -136,8 +137,7 @@ export function CalibrationGuide() {
     },
     {
       title: "Enter the real distance",
-      detail:
-        "When prompted, type the length in millimeters and choose Apply. The last value you used on this page is prefilled when you calibrate again.",
+      detail: `When prompted, type the length in ${measureUnit} and choose Apply. The last value you used on this page is prefilled when you calibrate again.`,
       done: false,
     },
   ];

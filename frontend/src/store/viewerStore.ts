@@ -210,6 +210,8 @@ interface ViewerState {
   numPages: number;
   currentPage: number;
   scale: number;
+  /** Baseline scale used for zoom % display (fit action sets this to current scale = 100%). */
+  zoomDisplayBaseScale: number;
   tool: Tool;
   markupShape: MarkupShape;
   /** Line / area / angle / path length — used when tool is measure */
@@ -379,6 +381,7 @@ interface ViewerState {
   setNumPages: (n: number) => void;
   setCurrentPage: (n: number) => void;
   setScale: (s: number) => void;
+  setZoomDisplayBaseScale: (s: number) => void;
   setTool: (t: Tool) => void;
   setStrokeColor: (c: string) => void;
   setStrokeWidth: (w: number) => void;
@@ -511,6 +514,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   numPages: 0,
   currentPage: 1,
   scale: 1,
+  zoomDisplayBaseScale: 1,
   tool: "pan",
   markupShape: "freehand",
   measureKind: "line",
@@ -978,6 +982,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       takeoffVertexEditZoneId: null,
       currentPage: 1,
       numPages: 0,
+      zoomDisplayBaseScale: 1,
       annotations: [],
       calibrationByPage: {},
       calibrateDraft: [],
@@ -1060,6 +1065,10 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   setScale: (s) =>
     set({
       scale: Math.min(VIEWER_SCALE_MAX, Math.max(VIEWER_SCALE_MIN, s)),
+    }),
+  setZoomDisplayBaseScale: (s) =>
+    set({
+      zoomDisplayBaseScale: Math.min(VIEWER_SCALE_MAX, Math.max(VIEWER_SCALE_MIN, s)),
     }),
 
   setTool: (tool) =>
@@ -1344,6 +1353,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       numPages: 0,
       currentPage: 1,
       tool: "pan",
+      zoomDisplayBaseScale: 1,
       annotations: [],
       calibrationByPage: {},
       calibrateDraft: [],

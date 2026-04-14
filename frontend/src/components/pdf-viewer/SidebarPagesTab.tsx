@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { setupPdfWorker } from "@/lib/pdf";
+import { buildPdfOpenOptions, setupPdfWorker } from "@/lib/pdf";
 import { pdfUnitsToMm } from "@/lib/pagePaperInfo";
 import { useViewerStore } from "@/store/viewerStore";
 
@@ -155,20 +155,26 @@ export function SidebarPagesTab() {
       return;
     }
     let cancelled = false;
+    let loadingTask: { destroy?: () => void; promise: Promise<PDFDocumentProxy> } | null = null;
+    let openedDoc: { destroy?: () => void } | null = null;
     setLoadError(null);
     setDoc(null);
     (async () => {
       try {
         const pdfjs = await import("pdfjs-dist");
         setupPdfWorker(pdfjs);
-        const d = await pdfjs.getDocument({ url: pdfUrl }).promise;
+        loadingTask = pdfjs.getDocument(buildPdfOpenOptions(pdfUrl));
+        const d = await loadingTask.promise;
         if (!cancelled) setDoc(d);
+        openedDoc = d;
       } catch {
         if (!cancelled) setLoadError("Could not load page previews.");
       }
     })();
     return () => {
       cancelled = true;
+      loadingTask?.destroy?.();
+      openedDoc?.destroy?.();
     };
   }, [pdfUrl]);
 

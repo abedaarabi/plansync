@@ -18,7 +18,7 @@ import {
 import { findAnnotationById, normRectFromAnnotationPoints } from "@/lib/issueFocus";
 import { takeoffFocusRectForZone, TAKEOFF_FOCUS_FIT_MARGIN } from "@/lib/takeoffFocus";
 import { meHasProWorkspace } from "@/lib/proWorkspace";
-import { setupPdfWorker } from "@/lib/pdf";
+import { buildPdfOpenOptions, setupPdfWorker } from "@/lib/pdf";
 import {
   calibrationFromPersisted,
   fileFingerprint,
@@ -65,6 +65,7 @@ export function PdfViewer() {
   const setNumPages = useViewerStore((s) => s.setNumPages);
   const currentPage = useViewerStore((s) => s.currentPage);
   const scale = useViewerStore((s) => s.scale);
+  const setZoomDisplayBaseScale = useViewerStore((s) => s.setZoomDisplayBaseScale);
   const annotations = useViewerStore((s) => s.annotations);
   const takeoffItems = useViewerStore((s) => s.takeoffItems);
   const takeoffZones = useViewerStore((s) => s.takeoffZones);
@@ -200,6 +201,11 @@ export function PdfViewer() {
   });
   const compareSwipeAreaRef = useRef<HTMLDivElement>(null);
   const swipeDragRef = useRef<{ pointerId: number } | null>(null);
+  const perfRef = useRef<{
+    loadStartMs: number;
+    docReadyLogged: boolean;
+    firstRenderLogged: boolean;
+  } | null>(null);
   const issueFocusConsumedRef = useRef<string | null>(null);
   const takeoffFocusConsumedRef = useRef<string | null>(null);
   const issueIdParam = searchParams.get("issueId");
@@ -248,23 +254,43 @@ export function PdfViewer() {
     if (!pdfUrl) {
       setPdfDoc(null);
       setLoadError(null);
+      perfRef.current = null;
       return;
     }
 
     setLoadError(null);
     setPdfDoc(null);
+    perfRef.current = {
+      loadStartMs: typeof performance !== "undefined" ? performance.now() : Date.now(),
+      docReadyLogged: false,
+      firstRenderLogged: false,
+    };
+    console.info("[PDF PERF] load start", { file: fileName ?? "(unnamed)" });
 
     let cancelled = false;
+    let loadingTask: { destroy?: () => void; promise: Promise<PDFDocumentProxy> } | null = null;
+    let openedDoc: { destroy?: () => void } | null = null;
 
     (async () => {
       try {
         const pdfjs = await import("pdfjs-dist");
         setupPdfWorker(pdfjs);
-        const task = pdfjs.getDocument({ url: pdfUrl });
-        const doc = await task.promise;
+        loadingTask = pdfjs.getDocument(buildPdfOpenOptions(pdfUrl));
+        const doc = await loadingTask.promise;
         if (cancelled) return;
+        openedDoc = doc;
         setPdfDoc(doc);
         setNumPages(doc.numPages);
+        const perf = perfRef.current;
+        if (perf && !perf.docReadyLogged) {
+          perf.docReadyLogged = true;
+          const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+          console.info("[PDF PERF] document ready", {
+            file: fileName ?? "(unnamed)",
+            pages: doc.numPages,
+            elapsedMs: Math.round(now - perf.loadStartMs),
+          });
+        }
       } catch (err) {
         if (!cancelled) {
           const msg = err instanceof Error ? err.message : "Failed to load PDF";
@@ -281,14 +307,17 @@ export function PdfViewer() {
 
     return () => {
       cancelled = true;
+      loadingTask?.destroy?.();
+      openedDoc?.destroy?.();
     };
-  }, [pdfUrl, setNumPages]);
+  }, [pdfUrl, fileName, setNumPages]);
 
   const pdfLoading = Boolean(pdfUrl && !pdfDoc && !loadError);
 
   /** Warm pdf.js cache for adjacent page (smoother page turns on large files). */
   useEffect(() => {
     if (!pdfDoc || numPages < 2) return;
+    if (numPages > 400) return;
     const next = currentPage >= numPages ? 1 : currentPage + 1;
     void pdfDoc.getPage(next).catch(() => {});
   }, [pdfDoc, currentPage, numPages]);
@@ -583,8 +612,17 @@ export function PdfViewer() {
     const sh = ch / sz.hPt;
     const nextScale = fitRequest.mode === "width" ? sw : Math.min(sw, sh);
     setScale(nextScale);
+    setZoomDisplayBaseScale(nextScale);
     clearFitRequest();
-  }, [fitRequest, compareMode, currentPage, pageSizePtByPage, setScale, clearFitRequest]);
+  }, [
+    fitRequest,
+    compareMode,
+    currentPage,
+    pageSizePtByPage,
+    setScale,
+    setZoomDisplayBaseScale,
+    clearFitRequest,
+  ]);
 
   /** After search result: zoom to fit match region and scroll it into view. */
   useEffect(() => {
@@ -710,6 +748,31 @@ export function PdfViewer() {
       window.removeEventListener("pointercancel", onUp);
     };
   }, [compareMode, compareLayout, setCompareSwipeRatio]);
+
+  const handleScreenRenderComplete = useCallback(
+    ({
+      pageNumber,
+      renderMs,
+      renderScale,
+    }: {
+      pageNumber: number;
+      renderMs: number;
+      renderScale: number;
+    }) => {
+      const perf = perfRef.current;
+      if (!perf || perf.firstRenderLogged || pageNumber !== currentPage) return;
+      perf.firstRenderLogged = true;
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      console.info("[PDF PERF] first page render", {
+        file: fileName ?? "(unnamed)",
+        pageNumber,
+        renderMs: Math.round(renderMs),
+        renderScale: Number(renderScale.toFixed(3)),
+        elapsedMs: Math.round(now - perf.loadStartMs),
+      });
+    },
+    [currentPage, fileName],
+  );
 
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
@@ -1192,6 +1255,7 @@ export function PdfViewer() {
                               <PdfPageView
                                 pdfDoc={pdfDoc}
                                 pageNumber={currentPage}
+                                onScreenRenderComplete={handleScreenRenderComplete}
                                 compareReferenceOnly
                                 scrollContainerRef={compareScrollOriginalRef}
                                 pageCanvasRef={pageCanvasCompareRef}
@@ -1210,6 +1274,7 @@ export function PdfViewer() {
                               <PdfPageView
                                 pdfDoc={pdfDoc}
                                 pageNumber={currentPage}
+                                onScreenRenderComplete={handleScreenRenderComplete}
                                 scrollContainerRef={compareScrollMarkupRef}
                                 pageCanvasRef={pageCanvasRef}
                                 pageWrapperRef={pageWrapperRef}
@@ -1258,6 +1323,7 @@ export function PdfViewer() {
                               <PdfPageView
                                 pdfDoc={pdfDoc}
                                 pageNumber={currentPage}
+                                onScreenRenderComplete={handleScreenRenderComplete}
                                 compareReferenceOnly
                                 scrollContainerRef={compareScrollMarkupRef}
                                 pageCanvasRef={pageCanvasCompareRef}
@@ -1273,6 +1339,7 @@ export function PdfViewer() {
                                 <PdfPageView
                                   pdfDoc={pdfDoc}
                                   pageNumber={currentPage}
+                                  onScreenRenderComplete={handleScreenRenderComplete}
                                   scrollContainerRef={compareScrollMarkupRef}
                                   pageCanvasRef={pageCanvasRef}
                                   pageWrapperRef={pageWrapperRef}
@@ -1287,6 +1354,7 @@ export function PdfViewer() {
                               <PdfPageView
                                 pdfDoc={pdfDoc}
                                 pageNumber={currentPage}
+                                onScreenRenderComplete={handleScreenRenderComplete}
                                 scrollContainerRef={compareScrollMarkupRef}
                                 pageCanvasRef={pageCanvasRef}
                                 pageWrapperRef={pageWrapperRef}
@@ -1300,6 +1368,7 @@ export function PdfViewer() {
                                 <PdfPageView
                                   pdfDoc={pdfDoc}
                                   pageNumber={currentPage}
+                                  onScreenRenderComplete={handleScreenRenderComplete}
                                   compareReferenceOnly
                                   scrollContainerRef={compareScrollMarkupRef}
                                   pageCanvasRef={pageCanvasCompareRef}
@@ -1346,6 +1415,7 @@ export function PdfViewer() {
                         <PdfPageView
                           pdfDoc={pdfDoc}
                           pageNumber={currentPage}
+                          onScreenRenderComplete={handleScreenRenderComplete}
                           scrollContainerRef={pdfScrollRef}
                           pageCanvasRef={pageCanvasRef}
                           pageWrapperRef={pageWrapperRef}

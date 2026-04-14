@@ -1,6 +1,7 @@
 "use client";
 
 import { apiUrl } from "@/lib/api-url";
+import { buildPdfCacheKey, fetchAndCachePdfBlob, readCachedPdfBlob } from "@/lib/pdfContentCache";
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -35,6 +36,7 @@ export function ViewerSourceBootstrap() {
     if (!fileId) return;
 
     let cancelled = false;
+    let activeObjectUrl: string | null = null;
 
     void (async () => {
       const displayName = nameParam ? decodeURIComponent(nameParam) : "document.pdf";
@@ -90,15 +92,37 @@ export function ViewerSourceBootstrap() {
         projectIdParam != null && projectIdParam.trim() !== ""
           ? projectIdParam.trim()
           : resolvedProjectId;
+      const setPdfWithUrl = (url: string) =>
+        setPdf(url, displayName, null, {
+          cloudFileVersionId: cloudFv,
+          viewerProjectId,
+        });
 
-      setPdf(contentUrl, displayName, null, {
-        cloudFileVersionId: cloudFv,
-        viewerProjectId,
-      });
+      const cacheKey = buildPdfCacheKey(fileId, versionParam);
+      const cachedBlob = await readCachedPdfBlob(cacheKey);
+      if (cancelled) return;
+      if (cachedBlob) {
+        activeObjectUrl = URL.createObjectURL(cachedBlob);
+        setPdfWithUrl(activeObjectUrl);
+      }
+      try {
+        const freshBlob = await fetchAndCachePdfBlob(contentUrl, cacheKey);
+        if (cancelled) return;
+        if (!cachedBlob) {
+          activeObjectUrl = URL.createObjectURL(freshBlob);
+          setPdfWithUrl(activeObjectUrl);
+        }
+      } catch {
+        if (cancelled) return;
+        if (!cachedBlob) {
+          setPdfWithUrl(contentUrl);
+        }
+      }
     })();
 
     return () => {
       cancelled = true;
+      if (activeObjectUrl) URL.revokeObjectURL(activeObjectUrl);
     };
   }, [fileId, nameParam, versionParam, fileVersionIdParam, projectIdParam, setPdf]);
 

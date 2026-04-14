@@ -6,8 +6,8 @@ import type { Annotation } from "@/store/viewerStore";
 import { buildAnnotationsSvgDocument } from "@/lib/annotationsSvgExport";
 import { buildTakeoffExportSvgDocument } from "@/lib/takeoffOverlaySvg";
 
-/** Raster multiplier vs PDF points — balances file size and legibility. */
-const EXPORT_RENDER_SCALE = 2.5;
+/** Raster multiplier vs PDF points — favors legibility on exported markups/text. */
+const EXPORT_RENDER_SCALE = 4;
 
 function canvasToPngBytes(canvas: HTMLCanvasElement): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {

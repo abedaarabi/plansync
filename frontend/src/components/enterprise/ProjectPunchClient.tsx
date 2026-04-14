@@ -569,32 +569,32 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
 
   return (
     <div
-      className="min-h-0 flex-1 bg-[#f8fafc] pb-[env(safe-area-inset-bottom,0px)]"
+      className="enterprise-animate-in min-h-0 flex-1 bg-[var(--enterprise-bg)] p-4 pb-[env(safe-area-inset-bottom,0px)] sm:p-6 lg:p-8"
       style={{ fontFamily: "var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif" }}
     >
-      <div className="mx-auto max-w-[1400px] px-3 py-4 sm:px-5 sm:py-6">
+      <div className="mx-auto max-w-6xl space-y-5 sm:space-y-6">
         {/* SECTION 1 — Header */}
-        <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#3b82f6] to-[#1d4ed8] text-white shadow-lg shadow-blue-600/25 ring-1 ring-white/30 sm:h-14 sm:w-14"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
               aria-hidden
             >
               <ClipboardList className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight text-[#0f172a] sm:text-2xl">
+              <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
                 Punch list
               </h1>
-              <p className="mt-0.5 text-sm text-[#64748b]">
+              <p className="mt-1 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
                 Track open items, photos, and closeouts.
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <a
               href={punchExportCsvUrl(projectId)}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e2e8f0] bg-white px-3 text-xs font-semibold text-[#334155] shadow-sm"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/25 hover:bg-[var(--enterprise-hover-surface)] sm:min-h-10 sm:rounded-lg sm:px-3 sm:text-xs"
             >
               <Download className="h-4 w-4" />
               Export
@@ -602,7 +602,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             <button
               type="button"
               onClick={() => setChecklistModalOpen(true)}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-3 text-xs font-semibold text-[#1d4ed8] shadow-sm hover:bg-[#dbeafe]"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-4 text-sm font-semibold text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-primary)]/15 sm:min-h-10 sm:rounded-lg sm:px-3 sm:text-xs"
             >
               <FileText className="h-4 w-4" />
               From checklist
@@ -610,7 +610,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             <button
               type="button"
               onClick={() => setNewModalOpen(true)}
-              className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#2563eb] px-4 text-xs font-semibold text-white shadow-sm hover:bg-[#1d4ed8]"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] sm:min-h-10 sm:rounded-lg sm:px-3 sm:text-xs"
             >
               <Plus className="h-4 w-4" />
               New Item
@@ -619,7 +619,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         </header>
 
         {/* SECTION 2 — Stats */}
-        <section className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {(
             [
               ["Total", stats.total],
@@ -631,16 +631,16 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
           ).map(([label, n]) => (
             <div
               key={label}
-              className="rounded-lg border border-[#e2e8f0] bg-white px-4 py-3 shadow-sm"
+              className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 shadow-[var(--enterprise-shadow-xs)]"
             >
-              <p className="text-2xl font-bold tabular-nums text-[#0f172a]">{n}</p>
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[#94a3b8]">
+              <p className="text-2xl font-bold tabular-nums text-[var(--enterprise-text)]">{n}</p>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                 {label}
               </p>
             </div>
           ))}
         </section>
-        <div className="mb-5 flex h-2 overflow-hidden rounded-full bg-[#e2e8f0]">
+        <div className="flex h-2 overflow-hidden rounded-full bg-[var(--enterprise-border)]">
           {progressSegments.map((s) => (
             <div
               key={s.key}
@@ -654,10 +654,10 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         {/* Bulk bar OR filters */}
         {selectedIds.length > 0 ? (
           <div
-            className="sticky top-0 z-20 mb-4 flex flex-col gap-3 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+            className="sticky top-0 z-20 flex flex-col gap-3 rounded-xl border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-4 py-3 shadow-[var(--enterprise-shadow-xs)] sm:flex-row sm:items-center sm:justify-between"
             style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
           >
-            <p className="text-sm font-semibold text-[#1e3a8a]">
+            <p className="text-sm font-semibold text-[var(--enterprise-primary)]">
               {selectedIds.length} item{selectedIds.length === 1 ? "" : "s"} selected
             </p>
             <div className="flex flex-wrap items-center gap-2">
@@ -670,7 +670,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
               />
               <button
                 type="button"
-                className="inline-flex h-9 items-center rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-50"
+                className="inline-flex h-9 items-center rounded-lg border border-red-200 bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50"
                 onClick={() => {
                   if (
                     !window.confirm(
@@ -698,7 +698,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
               </button>
               <button
                 type="button"
-                className="text-xs font-semibold text-[#2563eb] underline"
+                className="text-xs font-semibold text-[var(--enterprise-primary)] underline"
                 onClick={() => setSelectedIds([])}
               >
                 Clear selection
@@ -706,18 +706,18 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             </div>
           </div>
         ) : (
-          <section className="mb-4 flex flex-col gap-2 rounded-lg border border-[#e2e8f0] bg-white p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center">
+          <section className="enterprise-card flex flex-col gap-2 p-3 sm:flex-row sm:flex-wrap sm:items-center sm:p-4">
             <input
               type="search"
               placeholder="Search items…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="min-h-10 w-full min-w-[8rem] flex-1 rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-3 text-sm text-[#0f172a] placeholder:text-[#94a3b8] sm:max-w-xs"
+              className="min-h-10 w-full min-w-[8rem] flex-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20 sm:max-w-xs"
             />
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="min-h-10 min-w-[7rem] rounded-md border border-[#e2e8f0] bg-white px-2 text-sm"
+              className="min-h-10 min-w-[7rem] rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 text-sm text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
             >
               <option value="ALL">Status</option>
               {STATUSES.map((s) => (
@@ -729,7 +729,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             <select
               value={filterAssignee}
               onChange={(e) => setFilterAssignee(e.target.value)}
-              className="min-h-10 min-w-[8rem] flex-1 rounded-md border border-[#e2e8f0] bg-white px-2 text-sm sm:flex-none"
+              className="min-h-10 min-w-[8rem] flex-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 text-sm text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20 sm:flex-none"
             >
               <option value="ALL">Assignee</option>
               <option value="UNASSIGNED">Unassigned</option>
@@ -742,7 +742,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             <select
               value={filterLocation}
               onChange={(e) => setFilterLocation(e.target.value)}
-              className="min-h-10 min-w-[8rem] flex-1 rounded-md border border-[#e2e8f0] bg-white px-2 text-sm sm:flex-none"
+              className="min-h-10 min-w-[8rem] flex-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 text-sm text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20 sm:flex-none"
             >
               <option value="ALL">Location</option>
               {locationOptions.map((loc) => (
@@ -754,7 +754,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             <select
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
-              className="min-h-10 min-w-[7rem] rounded-md border border-[#e2e8f0] bg-white px-2 text-sm"
+              className="min-h-10 min-w-[7rem] rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 text-sm text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
             >
               <option value="ALL">Priority</option>
               {PRIORITIES.map((pr) => (
@@ -767,7 +767,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
               <button
                 type="button"
                 onClick={() => setChecklistModalOpen(true)}
-                className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[#bfdbfe] bg-[#eff6ff] px-3 text-sm font-semibold text-[#1d4ed8] sm:flex-none"
+                className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-3 text-sm font-semibold text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary)]/15 sm:flex-none"
               >
                 <FileText className="h-4 w-4 shrink-0" />
                 Add from checklist
@@ -775,7 +775,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
               <button
                 type="button"
                 onClick={() => setManageTemplatesOpen(true)}
-                className="min-h-10 rounded-md border border-[#e2e8f0] bg-white px-3 text-sm font-medium text-[#64748b] sm:shrink-0"
+                className="min-h-10 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] sm:shrink-0"
               >
                 Edit checklists
               </button>
@@ -794,17 +794,17 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
           </div>
         ) : (
           <div
-            className="-mx-3 overflow-x-auto sm:mx-0"
+            className="-mx-4 overflow-x-auto sm:mx-0"
             style={{ WebkitOverflowScrolling: "touch" }}
           >
             <div className="inline-block min-w-full align-middle">
-              <table className="min-w-[920px] w-full border-collapse rounded-lg border border-[#e2e8f0] bg-white shadow-sm">
+              <table className="w-full min-w-[760px] border-collapse rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] md:min-w-[920px]">
                 <thead>
-                  <tr className="border-b border-[#e2e8f0] bg-[#f1f5f9]">
+                  <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
                     <th className="w-10 px-2 py-2 text-left">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-[#cbd5e1]"
+                        className="h-4 w-4 rounded border-[var(--enterprise-border)]"
                         checked={allSelected}
                         onChange={toggleAll}
                         aria-label="Select all"
@@ -871,7 +871,10 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                 <tbody>
                   {filteredSorted.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center text-sm text-[#94a3b8]">
+                      <td
+                        colSpan={8}
+                        className="px-4 py-12 text-center text-sm text-[var(--enterprise-text-muted)]"
+                      >
                         No items match your filters.
                       </td>
                     </tr>
@@ -886,16 +889,16 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                           key={p.id}
                           id={`punch-row-${p.id}`}
                           onClick={() => openRow(p.id)}
-                          className={`h-11 cursor-pointer border-b border-[#e2e8f0] text-sm transition-colors last:border-b-0 ${
+                          className={`h-11 cursor-pointer border-b border-[var(--enterprise-border)] text-sm transition-colors last:border-b-0 ${
                             rowHi
-                              ? "border-l-4 border-l-[#2563eb] bg-[#eff6ff]"
-                              : "hover:bg-[#f8fafc]"
+                              ? "border-l-4 border-l-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/10"
+                              : "hover:bg-[var(--enterprise-hover-surface)]"
                           }`}
                         >
                           <td className="px-2 py-0" onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
-                              className="h-4 w-4 rounded border-[#cbd5e1]"
+                              className="h-4 w-4 rounded border-[var(--enterprise-border)]"
                               checked={sel}
                               onChange={(e) => {
                                 e.stopPropagation();
@@ -906,22 +909,24 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                               aria-label={`Select #${p.punchNumber}`}
                             />
                           </td>
-                          <td className="px-3 font-mono text-xs font-semibold text-[#2563eb]">
+                          <td className="px-3 font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
                             {p.punchNumber}
                           </td>
-                          <td className="max-w-[220px] truncate px-3 font-medium text-[#0f172a]">
+                          <td className="max-w-[220px] truncate px-3 font-medium text-[var(--enterprise-text)]">
                             {p.title}
                           </td>
-                          <td className="max-w-[160px] truncate px-3 text-[#475569]">
+                          <td className="max-w-[160px] truncate px-3 text-[var(--enterprise-text-muted)]">
                             {p.location}
                           </td>
                           <td className="px-3">
                             <div className="flex min-w-0 items-center gap-2">
                               <AssigneeAvatar member={p.assignee} />
-                              <span className="truncate text-[#334155]">{assigneeLabel(p)}</span>
+                              <span className="truncate text-[var(--enterprise-text)]/85">
+                                {assigneeLabel(p)}
+                              </span>
                             </div>
                           </td>
-                          <td className="whitespace-nowrap px-3 text-[#475569]">
+                          <td className="whitespace-nowrap px-3 text-[var(--enterprise-text-muted)]">
                             {formatTableDate(p.dueDate)}
                           </td>
                           <td className="px-3">
@@ -931,7 +936,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                               {STATUS_LABEL[st] ?? p.status}
                             </span>
                           </td>
-                          <td className="px-3 text-[#475569]">
+                          <td className="px-3 text-[var(--enterprise-text-muted)]">
                             {PRIORITY_LABEL[p.priority] ?? p.priority}
                           </td>
                         </tr>
@@ -953,7 +958,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         <button
           type="button"
           onClick={() => setChecklistModalOpen(true)}
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8] shadow-lg"
+          className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)] shadow-lg"
           aria-label="Add from checklist"
         >
           <FileText className="h-6 w-6" />
@@ -961,7 +966,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         <button
           type="button"
           onClick={() => setNewModalOpen(true)}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-[#2563eb] text-white shadow-lg"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--enterprise-primary)] text-white shadow-lg"
           aria-label="New punch item"
         >
           <Plus className="h-7 w-7" />

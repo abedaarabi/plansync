@@ -126,6 +126,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const numPages = useViewerStore((s) => s.numPages);
   const currentPage = useViewerStore((s) => s.currentPage);
   const scale = useViewerStore((s) => s.scale);
+  const zoomDisplayBaseScale = useViewerStore((s) => s.zoomDisplayBaseScale);
   const tool = useViewerStore((s) => s.tool);
   const displayName = useViewerStore((s) => s.displayName);
   const roomId = useViewerStore((s) => s.roomId);
@@ -211,14 +212,18 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const [sheetExportOpen, setSheetExportOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [zoomStr, setZoomStr] = useState("100");
+  const zoomPct = Math.max(
+    1,
+    Math.round((scale / Math.max(VIEWER_SCALE_MIN, zoomDisplayBaseScale || 1)) * 100),
+  );
 
   useClickOutside(docInfoRef, docInfoOpen, () => setDocInfoOpen(false));
   useClickOutside(helpRef, helpOpen, () => setHelpOpen(false));
   useClickOutside(moreMenuRef, moreMenuOpen, () => setMoreMenuOpen(false));
 
   useEffect(() => {
-    setZoomStr(String(Math.round(scale * 100)));
-  }, [scale]);
+    setZoomStr(String(zoomPct));
+  }, [zoomPct]);
 
   const pagePaperTitle = useMemo(() => {
     if (!pdfUrl || numPages < 1) return null;
@@ -245,13 +250,13 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const commitZoomFromInput = () => {
     const n = parseInt(zoomStr, 10);
     if (!Number.isFinite(n) || n < 1) {
-      setZoomStr(String(Math.round(scale * 100)));
+      setZoomStr(String(zoomPct));
       return;
     }
-    const pctMin = Math.round(VIEWER_SCALE_MIN * 100);
-    const pctMax = Math.round(VIEWER_SCALE_MAX * 100);
+    const pctMin = Math.max(1, Math.round((VIEWER_SCALE_MIN / zoomDisplayBaseScale) * 100));
+    const pctMax = Math.max(1, Math.round((VIEWER_SCALE_MAX / zoomDisplayBaseScale) * 100));
     const pct = Math.min(pctMax, Math.max(pctMin, n));
-    setScale(pct / 100);
+    setScale((pct / 100) * zoomDisplayBaseScale);
     setZoomStr(String(pct));
   };
 
@@ -471,16 +476,6 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               aria-label="Fit width"
             >
               <Maximize2 className="h-3.5 w-3.5 rotate-90" />
-            </button>
-            <button
-              type="button"
-              disabled={!pdfUrl}
-              title="Fit page"
-              onClick={() => requestFit("page")}
-              className="rounded p-1 text-[#94A3B8] transition hover:bg-[#334155] hover:text-[#F8FAFC] disabled:opacity-30"
-              aria-label="Fit page"
-            >
-              <Maximize2 className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -725,7 +720,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               )}
               <div className="flex justify-between gap-2 border-b border-slate-600/45 pb-1.5">
                 <dt className="text-slate-500">Zoom</dt>
-                <dd className="tabular-nums text-blue-400">{Math.round(scale * 100)}%</dd>
+                <dd className="tabular-nums text-blue-400">{zoomPct}%</dd>
               </div>
               <div className="flex justify-between gap-2 border-b border-slate-600/45 pb-1.5">
                 <dt className="text-slate-500">Markups</dt>
