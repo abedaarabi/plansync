@@ -26,6 +26,7 @@ import { Resend } from "resend";
 import {
   ActivityType,
   EmailInviteKind,
+  FieldReport,
   Prisma,
   ProjectMeasurementSystem,
   ProjectMemberRole,
@@ -146,6 +147,13 @@ import {
   resolveWorkspaceEmailLogoUrl,
   type InviteEmailKind,
 } from "../../lib/inviteEmail.js";
+import {
+  buildFieldReportEmailHtml,
+  buildFieldReportEmailSubject,
+  buildFieldReportEmailText,
+  buildFieldReportsPageUrl,
+  workWeekFridayKey,
+} from "../../lib/fieldReportClientEmail.js";
 
 function newInviteToken(): string {
   return randomBytes(24).toString("base64url");
@@ -3552,6 +3560,10 @@ export function v1Routes(
     const body = z
       .object({
         reportDate: z.string().datetime(),
+        reportKind: z.enum(["DAILY", "WEEKLY"]).optional(),
+        status: z.enum(["DRAFT", "SUBMITTED"]).optional(),
+        totalWorkers: z.number().int().min(0).optional(),
+        details: z.unknown().optional(),
         weather: z.string().max(500).optional(),
         authorLabel: z.string().max(200).optional(),
         photoCount: z.number().int().min(0).optional(),
@@ -3564,6 +3576,13 @@ export function v1Routes(
       data: {
         projectId,
         reportDate: new Date(body.data.reportDate),
+        reportKind: body.data.reportKind ?? "DAILY",
+        status: body.data.status ?? "DRAFT",
+        totalWorkers: body.data.totalWorkers ?? 0,
+        details:
+          body.data.details === undefined
+            ? undefined
+            : (body.data.details as Prisma.InputJsonValue),
         weather: body.data.weather,
         authorLabel: body.data.authorLabel,
         photoCount: body.data.photoCount ?? 0,
@@ -3597,6 +3616,10 @@ export function v1Routes(
     const body = z
       .object({
         reportDate: z.string().datetime().optional(),
+        reportKind: z.enum(["DAILY", "WEEKLY"]).optional(),
+        status: z.enum(["DRAFT", "SUBMITTED"]).optional(),
+        totalWorkers: z.number().int().min(0).optional(),
+        details: z.unknown().nullable().optional(),
         weather: z.string().max(500).nullable().optional(),
         authorLabel: z.string().max(200).nullable().optional(),
         photoCount: z.number().int().min(0).optional(),
@@ -3605,12 +3628,17 @@ export function v1Routes(
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
-    const { reportDate, ...frRest } = body.data;
+    const { reportDate, details, ...frRest } = body.data;
     const row = await prisma.fieldReport.update({
       where: { id: reportId },
       data: {
         ...frRest,
         reportDate: reportDate === undefined ? undefined : new Date(reportDate),
+        ...(details === undefined
+          ? {}
+          : {
+              details: details === null ? Prisma.JsonNull : (details as Prisma.InputJsonValue),
+            }),
       },
     });
     await logActivity(res.project.workspaceId, ActivityType.FIELD_REPORT_UPDATED, {
@@ -3644,6 +3672,188 @@ export function v1Routes(
     });
     await prisma.fieldReport.delete({ where: { id: reportId } });
     return c.json({ ok: true });
+  });
+
+  r.post("/projects/:projectId/field-reports/send-email", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const res = await loadProjectForMember(projectId, c.get("user").id);
+    if ("error" in res) return c.json({ error: res.error }, res.status);
+    const gate = requirePro(res.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const body = z
+      .object({
+        mode: z.enum(["daily", "weekly"]),
+        reportId: z.string().min(1).optional(),
+        weekEndingFriday: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        recipients: z.array(z.string().email()).min(1).max(25),
+        message: z.string().max(5000).optional(),
+        include: z.object({
+          weather: z.boolean(),
+          workers: z.boolean(),
+          completed: z.boolean(),
+          delays: z.boolean(),
+          photos: z.boolean(),
+          materials: z.boolean(),
+        }),
+      })
+      .superRefine((data, ctx) => {
+        if (data.mode === "daily" && !data.reportId) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "reportId is required for daily sends",
+            path: ["reportId"],
+          });
+        }
+        if (data.mode === "weekly" && !data.weekEndingFriday) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "weekEndingFriday is required for weekly sends",
+            path: ["weekEndingFriday"],
+          });
+        }
+      })
+      .safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    const key = env.RESEND_API_KEY?.trim();
+    const from = inviteFromAddress(env);
+    if (!key || !from) {
+      return c.json({ error: "email_not_configured" }, 503);
+    }
+
+    const seen = new Set<string>();
+    const recipients = body.data.recipients.filter((e) => {
+      const k = e.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    if (recipients.length === 0) {
+      return c.json({ error: "No valid recipients after deduplication" }, 400);
+    }
+
+    const projectName = res.project.name?.trim() || "Project";
+    const user = c.get("user");
+    let reports: FieldReport[];
+    let headline: string;
+    let subject: string;
+    let reportQuery: string;
+    let entityId: string;
+    let activityMeta: {
+      mode: string;
+      recipientCount: number;
+      reportDate?: string;
+      weekEndingFriday?: string;
+    };
+
+    if (body.data.mode === "daily") {
+      const row = await prisma.fieldReport.findFirst({
+        where: { id: body.data.reportId!, projectId, reportKind: "DAILY" },
+      });
+      if (!row) return c.json({ error: "Report not found" }, 404);
+      if (row.lastEmailedAt) {
+        return c.json({ error: "already_emailed" }, 409);
+      }
+      reports = [row];
+      const ymd = row.reportDate.toISOString().slice(0, 10);
+      headline = `Field report — ${ymd}`;
+      subject = buildFieldReportEmailSubject({
+        projectName,
+        mode: "daily",
+        reportDateYmd: ymd,
+      });
+      reportQuery = row.id;
+      entityId = row.id;
+      activityMeta = {
+        mode: "daily",
+        recipientCount: recipients.length,
+        reportDate: row.reportDate.toISOString(),
+      };
+    } else {
+      const all = await prisma.fieldReport.findMany({
+        where: { projectId, reportKind: "DAILY" },
+        orderBy: { reportDate: "asc" },
+      });
+      const weekEnding = body.data.weekEndingFriday!;
+      const weekRows = all.filter(
+        (r) => workWeekFridayKey(r.reportDate.toISOString()) === weekEnding,
+      );
+      if (weekRows.length === 0) {
+        return c.json({ error: "No daily reports for that week" }, 404);
+      }
+      if (weekRows.some((r) => !!r.lastEmailedAt)) {
+        return c.json({ error: "already_emailed" }, 409);
+      }
+      reports = weekRows;
+      headline = `Weekly field reports — week ending ${weekEnding}`;
+      subject = buildFieldReportEmailSubject({
+        projectName,
+        mode: "weekly",
+        weekEndingYmd: weekEnding,
+      });
+      reportQuery = `virtual-week-${weekEnding}`;
+      entityId = weekRows[0]!.id;
+      activityMeta = {
+        mode: "weekly",
+        recipientCount: recipients.length,
+        weekEndingFriday: weekEnding,
+      };
+    }
+
+    const reportsUrl = buildFieldReportsPageUrl(env, projectId, reportQuery);
+    const htmlPayload = {
+      senderName: user.name?.trim() || "A team member",
+      projectName,
+      mode: body.data.mode,
+      headline,
+      message: body.data.message,
+      reportsUrl,
+      reports,
+      include: body.data.include,
+    };
+    const html = buildFieldReportEmailHtml(env, htmlPayload);
+    const text = buildFieldReportEmailText(htmlPayload);
+
+    const resend = new Resend(key);
+    for (const to of recipients) {
+      const sendResult = await resend.emails.send({
+        from,
+        to,
+        replyTo: user.email,
+        subject,
+        html,
+        text,
+      });
+      if (sendResult.error) {
+        console.error("[field-report-email] resend failed", {
+          to,
+          resendError: sendResult.error.message,
+        });
+        return c.json({ error: "email_send_failed", detail: sendResult.error.message }, 502);
+      }
+    }
+
+    const emailedAt = new Date();
+    await prisma.fieldReport.updateMany({
+      where: { id: { in: reports.map((r) => r.id) } },
+      data: {
+        lastEmailedAt: emailedAt,
+        emailSentCount: { increment: 1 },
+      },
+    });
+
+    await logActivity(res.project.workspaceId, ActivityType.FIELD_REPORT_EMAILED, {
+      actorUserId: user.id,
+      projectId,
+      entityId,
+      metadata: activityMeta,
+    });
+
+    return c.json({ ok: true as const, sent: recipients.length });
   });
 
   if (deps?.upgradeWebSocket) {

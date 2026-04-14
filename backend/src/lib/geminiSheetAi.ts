@@ -3,11 +3,17 @@ import type { Env } from "./env.js";
 import { resolveGeminiApiKey } from "./env.js";
 import {
   assertImageSizeOk,
+  parseTakeoffAssistResultLoose,
   sanitizeSheetSummaryResult,
+  sanitizeTakeoffAssistResult,
   sheetSummaryResultSchema,
+  takeoffAssistResultSchema,
   type SheetAiContextBundle,
   type SheetSummaryReadingRow,
   type SheetSummaryTocEntry,
+  type SheetTakeoffDetectBody,
+  type TakeoffAssistCacheEntry,
+  uniqueTakeoffCategoriesInOrder,
 } from "./sheetAiSchemas.js";
 
 function stripDataUrlPrefix(b64: string): string {
@@ -25,6 +31,103 @@ function extractJsonObject(text: string): unknown {
     throw new Error("No JSON object in model response");
   }
   return JSON.parse(body.slice(start, end + 1)) as unknown;
+}
+
+/**
+ * Prefer the last ```json … ``` block (models often emit thinking, then a final JSON fence).
+ */
+function stripToJsonBody(modelText: string): string {
+  const t = modelText.trim();
+  let lastBlock: string | null = null;
+  const re = /```(?:json)?\s*([\s\S]*?)```/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(t)) !== null) {
+    lastBlock = m[1]!.trim();
+  }
+  if (lastBlock && (lastBlock.startsWith("{") || lastBlock.startsWith("["))) return lastBlock;
+  const one = /^```(?:json)?\s*([\s\S]*?)```/m.exec(t);
+  if (one && (one[1]!.trim().startsWith("{") || one[1]!.trim().startsWith("[")))
+    return one[1]!.trim();
+  return t;
+}
+
+/** From body[start]==="{", slice one balanced `{ ... }` (string-aware). */
+function extractBalancedObject(body: string, start: number): string | null {
+  if (body[start] !== "{") return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  let quote: '"' | "'" | null = null;
+  for (let i = start; i < body.length; i++) {
+    const c = body[i]!;
+    if (inStr) {
+      if (esc) {
+        esc = false;
+        continue;
+      }
+      if (c === "\\") {
+        esc = true;
+        continue;
+      }
+      if (quote && c === quote) {
+        inStr = false;
+        quote = null;
+        continue;
+      }
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      inStr = true;
+      quote = c as '"' | "'";
+      continue;
+    }
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) return body.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * Recover JSON when the model prefixes thinking / prose (first `{` is not the payload).
+ * Looks for an object that contains a top-level array keyed as items / detections / etc.
+ */
+function extractTakeoffStructuredJson(modelText: string): unknown {
+  const body = stripToJsonBody(modelText);
+  const trimmed = body.trim();
+  if (trimmed.startsWith("[")) {
+    try {
+      const arr = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(arr)) return { items: arr };
+    } catch {
+      /* fall through — model may have put prose before a real object */
+    }
+  }
+
+  const arrayKeyPattern = /"(?:items|detections|boxes|regions|results|elements|annotations)"\s*:/g;
+  let match: RegExpExecArray | null;
+  while ((match = arrayKeyPattern.exec(body)) !== null) {
+    let open = match.index;
+    while (open >= 0 && body[open] !== "{") open--;
+    if (open < 0 || body[open] !== "{") continue;
+    const chunk = extractBalancedObject(body, open);
+    if (!chunk) continue;
+    try {
+      const o = JSON.parse(chunk) as unknown;
+      if (o && typeof o === "object" && !Array.isArray(o)) return o;
+    } catch {
+      /* try next key occurrence */
+    }
+  }
+
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    return JSON.parse(body.slice(start, end + 1)) as unknown;
+  }
+  throw new Error("No JSON object in model response");
 }
 
 function contextText(bundle: SheetAiContextBundle): string {
@@ -147,6 +250,81 @@ Rules for tableOfContents (user will click an entry to zoom and highlight that r
     return sanitizeSheetSummaryResult(parsed.data, bundle.pageIndex);
   } catch {
     return { summaryMarkdown: text.trim(), readingsTable: [], tableOfContents: [] };
+  }
+}
+
+export async function geminiTakeoffAssistDetect(
+  env: Env,
+  bundle: SheetTakeoffDetectBody,
+): Promise<TakeoffAssistCacheEntry> {
+  const raw = stripDataUrlPrefix(bundle.imageBase64);
+  const size = assertImageSizeOk(raw);
+  if (!size.ok) throw new Error(size.error);
+
+  const categories = uniqueTakeoffCategoriesInOrder(bundle.categories);
+
+  const catList = categories.join(", ");
+  const prompt = `You are assisting with construction drawing takeoff (quantity estimates from one raster image only).
+
+${contextText(bundle)}
+
+The user selected these categories to detect on THIS sheet image: ${catList}.
+
+Definitions:
+- windows: window opening symbols, glazing tags, or window callouts visible on this view.
+- doors: door swings, door tags, or door symbols.
+- walls: visible wall graphic segments or wall runs you can separate (not linear feet — count distinct visible wall segments/symbols you can box).
+- rooms: labeled or clearly bounded room/spaces on plans (one box per room when possible).
+
+Return ONLY valid JSON (no markdown fences, no commentary). Use lowercase category strings exactly: "windows", "doors", "walls", or "rooms".
+
+Example shape (replace with your real reads; coordinates must be decimals 0–1):
+{
+  "items": [
+    {
+      "category": "doors",
+      "pageIndex": ${bundle.pageIndex},
+      "minX": 0.12,
+      "minY": 0.34,
+      "maxX": 0.16,
+      "maxY": 0.38,
+      "label": "D-101"
+    }
+  ]
+}
+
+You may also include optional "counts": { "windows": 3, "doors": 2 } — counts must match the number of items you list per category when possible.
+
+Rules:
+- Only detect categories the user asked for: ${catList}.
+- Use pageIndex exactly ${bundle.pageIndex} for every item.
+- minX/minY/maxX/maxY are normalized to the FULL sheet image: (0,0) top-left, (1,1) bottom-right. Use decimal numbers (not strings).
+- Prefer one box per instance you can see, up to 80 items total. If nothing is visible for a category, omit items for that category.
+- Make your best estimate on real construction plans; return empty items only if the sheet truly has no detectable instances for the selected categories.`;
+
+  const text = await runGemini(
+    env,
+    [{ text: prompt }, { inlineData: { mimeType: bundle.mimeType, data: raw } }],
+    { maxOutputTokens: 8192 },
+  );
+
+  try {
+    const json = extractTakeoffStructuredJson(text);
+    const parsed = takeoffAssistResultSchema.safeParse(json);
+    const loose = parseTakeoffAssistResultLoose(json);
+
+    if (parsed.success && parsed.data.items.length > 0) {
+      return sanitizeTakeoffAssistResult(parsed.data, bundle.pageIndex, categories);
+    }
+    if (loose && loose.items.length > 0) {
+      return sanitizeTakeoffAssistResult(loose, bundle.pageIndex, categories);
+    }
+    if (parsed.success) {
+      return sanitizeTakeoffAssistResult(parsed.data, bundle.pageIndex, categories);
+    }
+    return sanitizeTakeoffAssistResult({ items: [] }, bundle.pageIndex, categories);
+  } catch {
+    return sanitizeTakeoffAssistResult({ items: [] }, bundle.pageIndex, categories);
   }
 }
 

@@ -38,6 +38,7 @@ import {
   issueAssigneeShortLabel,
 } from "@/lib/issueStatusStyle";
 import { qk } from "@/lib/queryKeys";
+import { annotationIsIssuePin } from "@/lib/annotationIssues";
 import { useViewerStore } from "@/store/viewerStore";
 import type { Annotation } from "@/store/viewerStore";
 
@@ -419,6 +420,13 @@ export function SidebarIssuesTab() {
         const ann = next[i];
         if (ann.linkedIssueId !== issue.id || ann.issueDraft) continue;
         if (linkedSet.has(ann.id)) continue;
+        /** Cached `issue.annotationId` can lag after “Place pin” / reposition; do not strip the new pin. */
+        const serverPrimaryId = issue.annotationId;
+        const serverPrimaryMissing =
+          typeof serverPrimaryId === "string" &&
+          serverPrimaryId.length > 0 &&
+          !next.some((a) => a.id === serverPrimaryId);
+        if (serverPrimaryMissing && annotationIsIssuePin(ann)) continue;
         changed = true;
         next = [...next];
         next[i] = stripIssueFields(ann);

@@ -1,0 +1,1 @@
+ALTER TABLE "FieldReport" ADD COLUMN "lastEmailedAt" TIMESTAMP(3), ADD COLUMN "emailSentCount" INTEGER NOT NULL DEFAULT 0;

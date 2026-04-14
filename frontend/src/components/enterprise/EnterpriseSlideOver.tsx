@@ -29,6 +29,8 @@ export type EnterpriseSlideOverProps = {
   ariaLabelledBy?: string;
   /** Tailwind max-width classes for the panel (default: `max-w-[520px]`). */
   panelMaxWidthClass?: string;
+  /** Replace default panel border / background / shadow (Tailwind classes). */
+  panelChromeClassName?: string;
   /** Extra classes for the scrollable body (padding, max-width wrapper). */
   bodyClassName?: string;
   /** Extra classes for the footer bar (padding, alignment). */
@@ -58,6 +60,7 @@ export function EnterpriseSlideOver({
   overlayZClass = "z-[100]",
   ariaLabelledBy,
   panelMaxWidthClass = ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W,
+  panelChromeClassName = "border-l border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]",
   bodyClassName,
   footerClassName,
   headerClassName,
@@ -125,13 +128,15 @@ export function EnterpriseSlideOver({
 
   if (!shouldRender || typeof document === "undefined") return null;
 
+  // Keep pointer-events on while mounted so clicks cannot fall through to the page during
+  // open/close transitions (otherwise a backdrop "close" can immediately trigger UI underneath).
   const backdropClass =
-    "absolute inset-0 bg-[var(--enterprise-text)]/40 backdrop-blur-[2px] transition-opacity duration-300 ease-out " +
-    (panelActive ? "opacity-100" : "pointer-events-none opacity-0");
+    "pointer-events-auto absolute inset-0 bg-[var(--enterprise-text)]/40 backdrop-blur-[2px] transition-opacity duration-300 ease-out " +
+    (panelActive ? "opacity-100" : "opacity-0");
 
   const panelMotion =
     `w-full ${panelMaxWidthClass} ${SLIDE_OVER_PANEL_TRANSITION} ` +
-    "fixed inset-y-0 right-0 z-[101] flex h-dvh max-h-dvh flex-col border-l border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)] " +
+    `fixed inset-y-0 right-0 z-[101] flex h-dvh max-h-dvh flex-col ${panelChromeClassName} ` +
     (panelActive ? "translate-x-0" : "translate-x-full");
 
   const shell = (

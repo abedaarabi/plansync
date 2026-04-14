@@ -42,8 +42,8 @@ export function SheetAiDrawer() {
   const titleMain = (
     <span className="flex min-w-0 items-center gap-1.5 text-[10px] text-[#e2e8f0]">
       <Sparkles className="h-3 w-3 shrink-0 text-violet-400" aria-hidden />
-      <span className="font-medium text-[#94a3b8]">Sheet AI</span>
-      <span className="text-[#cbd5e1]">Summary &amp; chat</span>
+      <span className="font-medium text-[#94a3b8]">Assist</span>
+      <span className="text-[#cbd5e1]">Takeoff detect</span>
     </span>
   );
 
@@ -58,7 +58,7 @@ export function SheetAiDrawer() {
         titleWhenCollapsed={
           <span className="flex items-center gap-1 text-[10px] text-[#cbd5e1]">
             <Sparkles className="h-3 w-3 text-violet-400" aria-hidden />
-            Sheet AI
+            Assist
           </span>
         }
       >

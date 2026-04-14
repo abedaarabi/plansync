@@ -552,11 +552,11 @@ export function ViewerSidebar() {
                         setTakeoffMode(false);
                         setTakeoffInventoryDrawerFromSidebar(false);
                       }}
-                      title="Sheet AI — summary &amp; chat"
+                      title="Takeoff assist — detect quantities on the sheet"
                       className={sidebarPanelTabClass(sidebarTab === "sheetAi")}
                     >
                       <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      AI
+                      Assist
                     </button>
                     {showCollabTab ? (
                       <button

@@ -62,7 +62,7 @@ export async function fetchProjectAuditLogs(opts: {
             AND a."entityId" IN (SELECT id FROM "PunchItem" WHERE "projectId" = ${projectId})
           )
           OR (
-            a.type::text IN ('FIELD_REPORT_CREATED', 'FIELD_REPORT_UPDATED')
+            a.type::text IN ('FIELD_REPORT_CREATED', 'FIELD_REPORT_UPDATED', 'FIELD_REPORT_EMAILED')
             AND a."entityId" IN (SELECT id FROM "FieldReport" WHERE "projectId" = ${projectId})
           )
           OR (a.type::text = 'PROJECT_UPDATED' AND a."entityId" = ${projectId})

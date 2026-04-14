@@ -3,18 +3,25 @@ import type { MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { prisma } from "../../lib/prisma.js";
 import type { Env } from "../../lib/env.js";
-import { geminiConfigured, geminiSheetChat, geminiSheetSummary } from "../../lib/geminiSheetAi.js";
+import {
+  geminiConfigured,
+  geminiSheetChat,
+  geminiSheetSummary,
+  geminiTakeoffAssistDetect,
+} from "../../lib/geminiSheetAi.js";
 import { loadProjectForMember } from "../../lib/projectAccess.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import {
   getSheetAiPageFromDb,
   saveSheetAiChatToDb,
   saveSheetAiSummaryToDb,
+  saveTakeoffAssistToDb,
 } from "../../lib/sheetAiCacheDb.js";
 import {
   assertImageSizeOk,
   sheetChatBodySchema,
   sheetSummaryBodySchema,
+  sheetTakeoffDetectBodySchema,
 } from "../../lib/sheetAiSchemas.js";
 
 function requirePro(workspace: { subscriptionStatus: string | null }) {
@@ -62,7 +69,9 @@ export function registerSheetAiRoutes(r: Hono, needUser: MiddlewareHandler, env:
     const hasSummary = entry.summaryMarkdown.trim().length > 0;
     const hasTables = entry.readingsTable.length > 0 || entry.tableOfContents.length > 0;
     const hasChat = (entry.chatMessages?.length ?? 0) > 0;
-    if (!hasSummary && !hasTables && !hasChat) {
+    const hasTakeoffAssist =
+      entry.takeoffAssist != null && entry.takeoffAssist.categories.length > 0;
+    if (!hasSummary && !hasTables && !hasChat && !hasTakeoffAssist) {
       return c.json({ cached: false as const });
     }
     return c.json({
@@ -71,6 +80,7 @@ export function registerSheetAiRoutes(r: Hono, needUser: MiddlewareHandler, env:
       readingsTable: entry.readingsTable,
       tableOfContents: entry.tableOfContents,
       chatMessages: entry.chatMessages ?? [],
+      ...(entry.takeoffAssist ? { takeoffAssist: entry.takeoffAssist } : {}),
       updatedAt: entry.updatedAt,
     });
   });
@@ -130,6 +140,31 @@ export function registerSheetAiRoutes(r: Hono, needUser: MiddlewareHandler, env:
       return c.json({ reply });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Chat failed";
+      return c.json({ error: msg }, 502);
+    }
+  });
+
+  r.post("/file-versions/:fileVersionId/ai/takeoff-detect", needUser, aiBodyLimit, async (c) => {
+    if (!geminiConfigured(env)) return c.json({ error: "Sheet AI is not configured" }, 503);
+
+    const fileVersionId = c.req.param("fileVersionId")!;
+    const authz = await authorizeSheetAi(fileVersionId, c.get("user").id);
+    if ("error" in authz && authz.status === 404) return c.json({ error: authz.error }, 404);
+    if ("error" in authz) return c.json({ error: authz.error }, authz.status);
+
+    const raw = await c.req.json().catch(() => null);
+    const parsed = sheetTakeoffDetectBodySchema.safeParse(raw);
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+
+    const img = assertImageSizeOk(parsed.data.imageBase64.replace(/^data:[^;]+;base64,/, ""));
+    if (!img.ok) return c.json({ error: img.error }, 400);
+
+    try {
+      const takeoffAssist = await geminiTakeoffAssistDetect(env, parsed.data);
+      await saveTakeoffAssistToDb(fileVersionId, parsed.data.pageIndex, takeoffAssist);
+      return c.json({ takeoffAssist });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Takeoff detect failed";
       return c.json({ error: msg }, 502);
     }
   });

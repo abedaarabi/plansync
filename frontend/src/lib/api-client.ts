@@ -1808,10 +1808,16 @@ export type FieldReportRow = {
   id: string;
   projectId: string;
   reportDate: string;
+  reportKind: "DAILY" | "WEEKLY";
+  status: "DRAFT" | "SUBMITTED";
+  totalWorkers: number;
+  details: unknown | null;
   weather: string | null;
   authorLabel: string | null;
   photoCount: number;
   issueCount: number;
+  lastEmailedAt: string | null;
+  emailSentCount: number;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -1832,6 +1838,10 @@ export async function createFieldReport(
   projectId: string,
   body: {
     reportDate: string;
+    reportKind?: "DAILY" | "WEEKLY";
+    status?: "DRAFT" | "SUBMITTED";
+    totalWorkers?: number;
+    details?: unknown;
     weather?: string;
     authorLabel?: string;
     photoCount?: number;
@@ -1852,6 +1862,102 @@ export async function createFieldReport(
   const j = (await res.json().catch(() => ({}))) as { error?: unknown };
   if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not create report.");
   return j as FieldReportRow;
+}
+
+export async function patchFieldReport(
+  projectId: string,
+  reportId: string,
+  body: Partial<{
+    reportDate: string;
+    reportKind: "DAILY" | "WEEKLY";
+    status: "DRAFT" | "SUBMITTED";
+    totalWorkers: number;
+    details: unknown | null;
+    weather: string | null;
+    authorLabel: string | null;
+    photoCount: number;
+    issueCount: number;
+    notes: string | null;
+  }>,
+): Promise<FieldReportRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/field-reports/${encodeURIComponent(reportId)}`,
+    ),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not update report.");
+  return j as FieldReportRow;
+}
+
+export async function deleteFieldReport(projectId: string, reportId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/field-reports/${encodeURIComponent(reportId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "Could not delete report.");
+}
+
+export type FieldReportSendInclude = {
+  weather: boolean;
+  workers: boolean;
+  completed: boolean;
+  delays: boolean;
+  photos: boolean;
+  materials: boolean;
+};
+
+export async function sendFieldReportEmail(
+  projectId: string,
+  body: {
+    mode: "daily" | "weekly";
+    reportId?: string;
+    weekEndingFriday?: string;
+    recipients: string[];
+    message?: string;
+    include: FieldReportSendInclude;
+  },
+): Promise<{ ok: true; sent: number }> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/field-reports/send-email`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    detail?: unknown;
+    sent?: number;
+  };
+  if (!res.ok) {
+    if (res.status === 503 && j.error === "email_not_configured") {
+      throw new Error(
+        "Outbound email is not configured. Add RESEND_API_KEY and RESEND_FROM on the server.",
+      );
+    }
+    if (res.status === 409 && j.error === "already_emailed") {
+      throw new Error("This report has already been emailed.");
+    }
+    const err = typeof j.error === "string" ? j.error : "Could not send email.";
+    const detail = typeof j.detail === "string" ? j.detail : "";
+    throw new Error(detail ? `${err}: ${detail}` : err);
+  }
+  return { ok: true as const, sent: typeof j.sent === "number" ? j.sent : body.recipients.length };
 }
 
 export type MaterialCustomFieldType = "text" | "number" | "currency";
@@ -2501,9 +2607,28 @@ export type SheetAiReadingRow = {
   kind?: SheetAiTocKind;
 };
 
+/** Takeoff Assist — vision-detected categories on the current sheet page. */
+export type TakeoffAssistCategory = "windows" | "doors" | "walls" | "rooms";
+
+export type TakeoffAssistItem = {
+  category: TakeoffAssistCategory;
+  pageIndex: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  label?: string;
+};
+
+export type TakeoffAssistCachePayload = {
+  categories: TakeoffAssistCategory[];
+  counts: Partial<Record<TakeoffAssistCategory, number>>;
+  items: TakeoffAssistItem[];
+};
+
 async function sheetAiJson<T>(
   fileVersionId: string,
-  aiPath: "ai/sheet-summary" | "ai/chat",
+  aiPath: "ai/sheet-summary" | "ai/chat" | "ai/takeoff-detect",
   body: unknown,
 ): Promise<T> {
   const res = await fetch(
@@ -2536,6 +2661,7 @@ export type SheetAiSheetCacheResponse =
       readingsTable: SheetAiReadingRow[];
       tableOfContents: SheetAiTocEntry[];
       chatMessages: SheetAiChatMessage[];
+      takeoffAssist?: TakeoffAssistCachePayload;
       updatedAt: string;
     };
 
@@ -2584,6 +2710,17 @@ export async function fetchSheetAiChat(
   body: SheetAiContextPayload & { messages: SheetAiChatMessage[] },
 ): Promise<{ reply: string }> {
   return sheetAiJson<{ reply: string }>(fileVersionId, "ai/chat", body);
+}
+
+export async function fetchTakeoffAssistDetect(
+  fileVersionId: string,
+  body: SheetAiContextPayload & { categories: TakeoffAssistCategory[] },
+): Promise<{ takeoffAssist: TakeoffAssistCachePayload }> {
+  return sheetAiJson<{ takeoffAssist: TakeoffAssistCachePayload }>(
+    fileVersionId,
+    "ai/takeoff-detect",
+    body,
+  );
 }
 
 // --- Takeoff lines (Pro) ---

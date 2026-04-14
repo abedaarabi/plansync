@@ -292,6 +292,20 @@ export function formatAuditPresentation(
           ? `Removed field report (${String(m.reportDate)}).`
           : "Field report removed.",
       };
+    case "FIELD_REPORT_EMAILED":
+      return {
+        actionLabel: "Field report emailed",
+        summary:
+          typeof m.recipientCount === "number"
+            ? `Sent to ${String(m.recipientCount)} recipient(s)`
+            : "Field report emailed",
+        detail:
+          str(m.mode) === "weekly" && str(m.weekEndingFriday)
+            ? `Weekly summary (week ending ${String(m.weekEndingFriday)}).`
+            : str(m.reportDate)
+              ? `Daily report (${String(m.reportDate)}).`
+              : "Field report sent by email.",
+      };
     default:
       return {
         actionLabel: String(type).replace(/_/g, " "),

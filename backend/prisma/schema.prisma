@@ -1115,17 +1115,25 @@ model PunchItemHistory {
 }
 
 model FieldReport {
-  id          String   @id @default(cuid())
-  projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  reportDate  DateTime
-  weather     String?
-  authorLabel String?
-  photoCount  Int      @default(0)
-  issueCount  Int      @default(0)
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reportDate   DateTime
+  /// DAILY | WEEKLY (weekly rows may also be stored for exports; UI injects virtual weeklies from dailies)
+  reportKind   String   @default("DAILY")
+  /// DRAFT | SUBMITTED
+  status       String   @default("DRAFT")
+  totalWorkers Int      @default(0)
+  details      Json?
+  weather      String?
+  authorLabel  String?
+  photoCount   Int      @default(0)
+  issueCount    Int       @default(0)
+  lastEmailedAt DateTime?
+  emailSentCount Int      @default(0)
+  notes         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([projectId])
 }
@@ -1303,6 +1311,7 @@ enum ActivityType {
   FIELD_REPORT_CREATED
   FIELD_REPORT_UPDATED
   FIELD_REPORT_DELETED
+  FIELD_REPORT_EMAILED
   RFI_DELETED
   RFI_SENT_FOR_REVIEW
   RFI_RESPONSE_SUBMITTED

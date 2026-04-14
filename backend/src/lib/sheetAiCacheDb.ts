@@ -67,6 +67,11 @@ export async function mergeSheetAiPageInDb(
     tableOfContents: patch.tableOfContents ?? prev.tableOfContents,
     updatedAt: new Date().toISOString(),
   };
+  if (patch.takeoffAssist !== undefined) {
+    next.takeoffAssist = patch.takeoffAssist;
+  } else if (prev.takeoffAssist) {
+    next.takeoffAssist = prev.takeoffAssist;
+  }
   if (patch.chatMessages !== undefined) {
     next.chatMessages = patch.chatMessages;
   } else if (prev.chatMessages && prev.chatMessages.length > 0) {
@@ -89,6 +94,14 @@ export async function saveSheetAiSummaryToDb(
     readingsTable: payload.readingsTable,
     tableOfContents: payload.tableOfContents,
   });
+}
+
+export async function saveTakeoffAssistToDb(
+  fileVersionId: string,
+  pageIndex0: number,
+  takeoffAssist: NonNullable<SheetAiPageCacheEntry["takeoffAssist"]>,
+): Promise<void> {
+  await mergeSheetAiPageInDb(fileVersionId, pageIndex0, { takeoffAssist });
 }
 
 const MAX_CACHED_CHAT_MESSAGES = 48;
