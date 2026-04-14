@@ -16,11 +16,19 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { buildApiHomePageHtml } from "./lib/apiHomePage.js";
 import { buildCorsAllowList, loadEnv, resolveGeminiApiKey } from "./lib/env.js";
+import { isWebPushConfigured } from "./lib/webPush.js";
 import { createAuth } from "./auth.js";
 import { v1Routes } from "./routes/v1/index.js";
 import { stripeRoutes } from "./routes/stripe.js";
 
 const env = loadEnv();
+if (isWebPushConfigured(env)) {
+  console.log("[web-push] VAPID env present — device push API enabled");
+} else {
+  console.log(
+    "[web-push] VAPID not configured on this process — set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT on the API host",
+  );
+}
 if (resolveGeminiApiKey(env)) {
   const m = env.GEMINI_MODEL.trim() || "gemini-2.5-pro";
   console.log(`[sheet-ai] Gemini model: ${m}`);

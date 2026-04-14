@@ -30,6 +30,16 @@ In Dokploy, create a Compose application pointing at this repo and set the compo
 
 Optional (same names as `.env.example`): `AWS_*`, `S3_BUCKET`, `STRIPE_*`, `RESEND_*`, `GEMINI_API_KEY` (or `GOOGLE_GENERATIVE_AI_API_KEY`) and optional `GEMINI_MODEL` for Sheet AI, `NEXT_PUBLIC_UMAMI_*`. For S3, configure bucket **CORS** for your public app origin — see [s3-setup.md](./s3-setup.md).
 
+**Web Push (device alerts):** set all three on the Dokploy project env so the **`backend`** service receives them (they are passed through in [`docker-compose.deploy.yml`](../docker-compose.deploy.yml) under `services.backend.environment`):
+
+| Variable            | Purpose                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| `VAPID_PUBLIC_KEY`  | From `npx web-push generate-vapid-keys` (public line).                                    |
+| `VAPID_PRIVATE_KEY` | Same command (private line). Treat as a secret.                                           |
+| `VAPID_SUBJECT`     | Contact for push providers, e.g. `mailto:you@yourdomain.com` or `https://yourdomain.com`. |
+
+Redeploy after adding. Backend logs should show `[web-push] VAPID env present — device push API enabled` when all three are non-empty inside the API container.
+
 The compose file does **not** publish Next on a host port; Traefik routes using the Docker network and labels. To hit Next directly on the host for debugging, add a `ports:` override (e.g. `3001:3000`) in a local override file.
 
 ## Database migrations (production)

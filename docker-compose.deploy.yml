@@ -7,7 +7,8 @@
 #   export BETTER_AUTH_SECRET=...
 #   docker compose -f docker-compose.deploy.yml up -d --build
 #
-# Dokploy: set env in the UI. Traefik needs external network `dokploy-network`.
+# Dokploy: set env in the UI (project or compose env). Traefik needs external network `dokploy-network`.
+# Web Push: add VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT here so the `backend` service receives them (not only on `frontend`).
 
 networks:
   internal:
@@ -60,6 +61,10 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-}
+      # Web Push (VAPID) — optional; all three required for device alerts. Generate: `cd backend && npx web-push generate-vapid-keys`
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dokploy-network"
