@@ -443,6 +443,15 @@ export function EnterpriseTopBar({
                   </ul>
                 )}
               </div>
+              <div className="border-t border-[var(--enterprise-border)] px-3 py-2">
+                <Link
+                  href="/account"
+                  onClick={() => setNotifOpen(false)}
+                  className="text-xs font-medium text-[var(--enterprise-primary)] hover:underline"
+                >
+                  Device alerts: manage in Account
+                </Link>
+              </div>
             </div>
           ) : null}
         </div>

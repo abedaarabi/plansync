@@ -6,6 +6,7 @@ import { authClient } from "@/lib/auth-client";
 import { resizeImageToDataUrl } from "@/lib/resize-avatar";
 import { userInitials } from "@/lib/user-initials";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
+import { AccountDeviceAlerts } from "./AccountDeviceAlerts";
 
 export function AccountClient() {
   const router = useRouter();
@@ -226,6 +227,7 @@ export function AccountClient() {
       </form>
 
       <aside className="space-y-4">
+        <AccountDeviceAlerts />
         <div className="enterprise-card p-5">
           <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">Session</h3>
           <p className="mt-2 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">

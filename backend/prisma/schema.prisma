@@ -48,6 +48,7 @@ model User {
   takeoffViewPresets      TakeoffViewPreset[]
   takeoffSyncRuns         TakeoffSyncRun[]
   takeoffSnapshots        TakeoffSnapshot[]
+  pushSubscriptions       PushSubscription[]
 
   /// When true, omit this user from PDF viewer presence / collaborator lists (still can edit).
   hideViewerPresence Boolean @default(false)
@@ -1378,6 +1379,20 @@ model UserNotification {
 
   @@index([userId, readAt])
   @@index([userId, createdAt])
+}
+
+/// Web Push subscription (VAPID); one row per browser/device endpoint.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 /// Idempotent Stripe webhook processing

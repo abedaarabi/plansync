@@ -11,6 +11,10 @@ type Props = {
   ariaLabel?: string;
   /** Shown in legend; omit to use default caption. */
   caption?: string;
+  /** Shorter chart and tighter chrome (e.g. project dashboard beside overview). */
+  compact?: boolean;
+  /** Grow to fill a flex parent (chart area stretches vertically). */
+  fillHeight?: boolean;
 };
 
 function formatDay(isoDate: string): string {
@@ -55,6 +59,8 @@ export function DashboardActivityChart({
   className = "",
   ariaLabel = "14-day workspace activity chart",
   caption,
+  compact = false,
+  fillHeight = false,
 }: Props) {
   const gradId = useId().replace(/:/g, "");
   const [hovered, setHovered] = useState<number | null>(null);
@@ -79,8 +85,8 @@ export function DashboardActivityChart({
   const { lineD, avgD, areaD, points, avg, axisMax, yTicks, w, h, pad, innerW, innerH, labelIdx } =
     useMemo(() => {
       const w = 560;
-      const h = 196;
-      const pad = { l: 40, r: 12, t: 16, b: 40 };
+      const h = compact ? 128 : 196;
+      const pad = compact ? { l: 32, r: 8, t: 6, b: 26 } : { l: 40, r: 12, t: 16, b: 40 };
       const innerW = w - pad.l - pad.r;
       const innerH = h - pad.t - pad.b;
       const n = Math.max(1, data.length - 1);
@@ -144,14 +150,14 @@ export function DashboardActivityChart({
         innerH,
         labelIdx,
       };
-    }, [data]);
+    }, [data, compact]);
 
   const clearHover = useCallback(() => setHovered(null), []);
 
   if (!data.length) {
     return (
       <div
-        className={`flex min-h-[11rem] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 px-4 py-8 text-center ${className}`}
+        className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 px-4 text-center ${fillHeight ? "min-h-0 flex-1 py-6" : compact ? "min-h-36 py-8" : "min-h-44 py-8"} ${className}`}
       >
         <p className="text-sm font-medium text-[var(--enterprise-text)]">No activity yet</p>
         <p className="max-w-sm text-[13px] leading-relaxed text-[var(--enterprise-text-muted)]">
@@ -166,10 +172,18 @@ export function DashboardActivityChart({
   const hiPoint = hi != null ? points[hi] : null;
   const hiAvg = hi != null ? avg[hi] : null;
 
+  const outerLayout = fillHeight
+    ? `flex h-full min-h-0 flex-1 flex-col ${compact ? "gap-2" : "gap-3"}`
+    : compact
+      ? "space-y-2"
+      : "space-y-3";
+
   return (
-    <div className={`space-y-3 ${className}`}>
+    <div className={`${outerLayout} ${className}`.trim()}>
       {stats ? (
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-[var(--enterprise-text-muted)]">
+        <div
+          className={`flex flex-wrap gap-x-6 gap-y-2 text-[var(--enterprise-text-muted)] ${fillHeight ? "shrink-0" : ""} ${compact ? "gap-x-4 text-[12px] leading-snug" : "text-[13px]"}`}
+        >
           <span>
             <span className="font-semibold tabular-nums text-[var(--enterprise-text)]">
               {stats.total}
@@ -204,7 +218,7 @@ export function DashboardActivityChart({
       ) : null}
 
       <div
-        className="relative w-full"
+        className={`relative w-full ${fillHeight ? "min-h-0 flex-1" : ""}`}
         onPointerLeave={clearHover}
         onBlur={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node)) clearHover();
@@ -212,7 +226,12 @@ export function DashboardActivityChart({
       >
         <svg
           viewBox={`0 0 ${w} ${h}`}
-          className="h-auto w-full max-h-[220px] touch-manipulation"
+          preserveAspectRatio="xMidYMid meet"
+          className={
+            fillHeight
+              ? "h-full min-h-[7rem] w-full touch-manipulation"
+              : `h-auto w-full touch-manipulation ${compact ? "max-h-[148px]" : "max-h-[220px]"}`
+          }
           role="img"
           aria-label={ariaLabel}
         >
@@ -244,7 +263,10 @@ export function DashboardActivityChart({
                 y={y + 4}
                 textAnchor="end"
                 fill="var(--enterprise-text-muted)"
-                style={{ fontSize: "10px", fontVariantNumeric: "tabular-nums" }}
+                style={{
+                  fontSize: compact ? "9px" : "10px",
+                  fontVariantNumeric: "tabular-nums",
+                }}
                 pointerEvents="none"
               >
                 {value}
@@ -258,7 +280,7 @@ export function DashboardActivityChart({
             d={lineD}
             fill="none"
             stroke={`url(#${gradId}-dash-line)`}
-            strokeWidth="2.5"
+            strokeWidth={compact ? "2" : "2.5"}
             strokeLinecap="round"
             strokeLinejoin="round"
             pointerEvents="none"
@@ -268,7 +290,7 @@ export function DashboardActivityChart({
             d={avgD}
             fill="none"
             stroke="var(--enterprise-success)"
-            strokeWidth="2"
+            strokeWidth={compact ? "1.5" : "2"}
             strokeDasharray="6 5"
             strokeLinecap="round"
             opacity={0.92}
@@ -294,10 +316,10 @@ export function DashboardActivityChart({
               key={p.date}
               cx={p.x}
               cy={p.y}
-              r={hi === i ? 5.5 : 3.5}
+              r={compact ? (hi === i ? 4.25 : 2.75) : hi === i ? 5.5 : 3.5}
               fill="var(--enterprise-surface)"
               stroke="var(--enterprise-primary)"
-              strokeWidth={hi === i ? 2.5 : 2}
+              strokeWidth={compact ? (hi === i ? 2 : 1.5) : hi === i ? 2.5 : 2}
               pointerEvents="none"
               className="transition-[r,stroke-width] duration-150 ease-out"
             />
@@ -309,10 +331,10 @@ export function DashboardActivityChart({
               <text
                 key={data[i].date}
                 x={x}
-                y={h - 10}
+                y={compact ? h - 7 : h - 10}
                 textAnchor={i === 0 ? "start" : i === data.length - 1 ? "end" : "middle"}
                 fill="var(--enterprise-text-muted)"
-                style={{ fontSize: "10px" }}
+                style={{ fontSize: compact ? "9px" : "10px" }}
                 pointerEvents="none"
               >
                 {formatDay(data[i].date)}
@@ -370,7 +392,9 @@ export function DashboardActivityChart({
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[var(--enterprise-border)]/70 pt-3 text-[11px] text-[var(--enterprise-text-muted)]">
+      <div
+        className={`flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[var(--enterprise-border)]/70 text-[11px] text-[var(--enterprise-text-muted)] ${fillHeight ? "shrink-0" : ""} ${compact ? "gap-x-4 pt-2" : "pt-3"}`}
+      >
         <span className="inline-flex items-center gap-2">
           <span
             className="h-2 w-5 shrink-0 rounded-full bg-[var(--enterprise-primary)]"

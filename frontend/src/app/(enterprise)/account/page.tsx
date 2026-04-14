@@ -12,7 +12,8 @@ export default function AccountPage() {
             Account
           </h1>
           <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
-            Profile, photo, and sign out — same as you would expect in a cloud workspace.
+            Profile, optional device alerts, and sign out — same as you would expect in a cloud
+            workspace.
           </p>
         </header>
         <AccountClient />

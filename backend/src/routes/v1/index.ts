@@ -22,6 +22,7 @@ import {
   putObjectBuffer,
 } from "../../lib/s3.js";
 import type { Env } from "../../lib/env.js";
+import { isWebPushConfigured } from "../../lib/webPush.js";
 import { Resend } from "resend";
 import {
   ActivityType,
@@ -630,6 +631,56 @@ export function v1Routes(
       data: { readAt: new Date() },
     });
     return c.json({ ok: true });
+  });
+
+  const pushSubscriptionBody = z.object({
+    endpoint: z.string().url(),
+    keys: z.object({
+      p256dh: z.string().min(1),
+      auth: z.string().min(1),
+    }),
+  });
+
+  r.get("/me/push/vapid-public-key", needUser, (c) => {
+    if (!isWebPushConfigured(env)) {
+      return c.body(null, 404);
+    }
+    return c.json({ publicKey: env.VAPID_PUBLIC_KEY!.trim() });
+  });
+
+  r.post("/me/push/subscribe", needUser, async (c) => {
+    if (!isWebPushConfigured(env)) {
+      return c.json({ error: "Web Push is not configured." }, 503);
+    }
+    const body = pushSubscriptionBody.safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+    const userId = c.get("user").id;
+    const { endpoint, keys } = body.data;
+    await prisma.pushSubscription.upsert({
+      where: { endpoint },
+      create: {
+        userId,
+        endpoint,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+      },
+      update: {
+        userId,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+      },
+    });
+    return c.json({ ok: true as const });
+  });
+
+  r.post("/me/push/unsubscribe", needUser, async (c) => {
+    const body = z.object({ endpoint: z.string().min(1) }).safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+    const userId = c.get("user").id;
+    const result = await prisma.pushSubscription.deleteMany({
+      where: { userId, endpoint: body.data.endpoint },
+    });
+    return c.json({ ok: true as const, removed: result.count });
   });
 
   r.patch("/me/viewer-presence", needUser, async (c) => {

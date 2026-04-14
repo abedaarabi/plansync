@@ -132,7 +132,7 @@ function StackedBar({ segments }: { segments: BarSegment[] }) {
   if (total === 0) {
     return (
       <div
-        className="flex h-10 w-full items-center justify-center rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 text-[11px] text-[var(--enterprise-text-muted)]"
+        className="flex h-7 w-full items-center justify-center rounded-lg border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 text-[10px] text-[var(--enterprise-text-muted)]"
         aria-hidden
       >
         No data
@@ -141,15 +141,15 @@ function StackedBar({ segments }: { segments: BarSegment[] }) {
   }
   return (
     <div
-      className="w-full rounded-xl bg-[var(--enterprise-bg)] p-1 ring-1 ring-[var(--enterprise-border)]/80"
+      className="w-full rounded-lg bg-[var(--enterprise-bg)] p-px ring-1 ring-[var(--enterprise-border)]/80"
       role="img"
       aria-label={`Status distribution, ${total} total`}
     >
-      <div className="flex h-4 w-full gap-1 overflow-hidden rounded-lg sm:h-5">
+      <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-md sm:h-3">
         {segments.map((s) => (
           <div
             key={s.key}
-            className="min-h-full min-w-[4px] rounded-md shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-[flex-grow] duration-200 first:rounded-l-md last:rounded-md sm:first:rounded-lg sm:last:rounded-lg"
+            className="min-h-full min-w-1 rounded-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition-[flex-grow] duration-200 first:rounded-l-sm last:rounded-sm sm:first:rounded-md sm:last:rounded-md"
             style={{
               flexGrow: Math.max(s.count, 0.001),
               backgroundColor: s.fill,
@@ -201,7 +201,7 @@ export function ProjectHomeOverviewCharts({ projectId, issues, punchItems, rfis 
   ];
 
   return (
-    <section className="enterprise-card p-5 sm:p-6">
+    <section className="enterprise-card flex h-full min-h-0 flex-col p-5 sm:p-6">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
           Project overview
@@ -210,11 +210,14 @@ export function ProjectHomeOverviewCharts({ projectId, issues, punchItems, rfis 
           Live counts from issues, punch list, and RFIs
         </p>
       </div>
-      <div className="mt-5 grid gap-8 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
+      <div className="mt-5 flex flex-1 flex-col">
         {cards.map((c) => {
           const total = c.segments.reduce((a, s) => a + s.count, 0);
           return (
-            <div key={c.title} className="min-w-0">
+            <div
+              key={c.title}
+              className="min-w-0 border-b border-[var(--enterprise-border)] pb-4 last:border-b-0 last:pb-0"
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">{c.title}</h3>
@@ -232,17 +235,17 @@ export function ProjectHomeOverviewCharts({ projectId, issues, punchItems, rfis 
                   Open
                 </Link>
               </div>
-              <div className="mt-3">
+              <div className="mt-2">
                 {c.segments.length > 0 ? (
                   <StackedBar segments={c.segments} />
                 ) : (
-                  <p className="text-[13px] leading-relaxed text-[var(--enterprise-text-muted)]">
+                  <p className="text-[12px] leading-relaxed text-[var(--enterprise-text-muted)]">
                     {c.emptyHint}
                   </p>
                 )}
               </div>
               {c.segments.length > 0 && (
-                <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-[var(--enterprise-text-muted)]">
+                <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] text-[var(--enterprise-text-muted)] sm:text-[11px]">
                   {c.segments.map((s) => (
                     <li key={s.key} className="flex min-w-0 max-w-full items-center gap-1.5">
                       <span

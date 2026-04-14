@@ -249,6 +249,41 @@ export async function markAllNotificationsRead(): Promise<void> {
   if (!res.ok) throw new Error("Could not mark all notifications read.");
 }
 
+/** Returns `null` when Web Push is not configured on the server (HTTP 404). */
+export async function fetchVapidPublicKey(): Promise<string | null> {
+  const res = await fetch(apiUrl("/api/v1/me/push/vapid-public-key"), { credentials: "include" });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("Could not load push configuration.");
+  const j = (await res.json()) as { publicKey?: string };
+  return typeof j.publicKey === "string" && j.publicKey.trim() ? j.publicKey.trim() : null;
+}
+
+export async function postWebPushSubscribe(subscription: {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}): Promise<void> {
+  const res = await fetch(apiUrl("/api/v1/me/push/subscribe"), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify(subscription),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not save push subscription.");
+  }
+}
+
+export async function postWebPushUnsubscribe(endpoint: string): Promise<void> {
+  const res = await fetch(apiUrl("/api/v1/me/push/unsubscribe"), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({ endpoint }),
+  });
+  if (!res.ok) throw new Error("Could not remove push subscription.");
+}
+
 export class ProRequiredError extends Error {
   readonly code = "PRO" as const;
   constructor() {
