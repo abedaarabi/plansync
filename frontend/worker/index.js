@@ -1,5 +1,10 @@
 /* global self */
 
+/** @param {Record<string, unknown>} data */
+function safeString(v, fallback = "") {
+  return typeof v === "string" && v.trim() ? v.trim() : fallback;
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -7,27 +12,42 @@ self.addEventListener("push", (event) => {
   } catch {
     /* ignore */
   }
-  const title =
-    typeof data.title === "string" && data.title.trim() ? data.title.trim() : "PlanSync";
-  const body = typeof data.body === "string" ? data.body : undefined;
+
+  const title = safeString(data.title, "PlanSync");
+  const body = safeString(data.body, "");
+  const rawUrl = data.url;
   const url =
-    typeof data.url === "string" && (data.url.startsWith("http") || data.url.startsWith("/"))
-      ? data.url
+    typeof rawUrl === "string" && (rawUrl.startsWith("http") || rawUrl.startsWith("/"))
+      ? rawUrl
       : `${self.location.origin}/`;
 
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      data: { url },
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-    }),
-  );
+  const tag = typeof data.tag === "string" && data.tag.length > 0 ? data.tag : undefined;
+  const ts =
+    typeof data.timestamp === "number" && Number.isFinite(data.timestamp)
+      ? data.timestamp
+      : Date.now();
+
+  const options = {
+    body: body || "Open in PlanSync",
+    tag,
+    timestamp: ts,
+    data: { url, kind: typeof data.kind === "string" ? data.kind : "" },
+    icon: `${self.location.origin}/icons/icon-512.png`,
+    badge: `${self.location.origin}/icons/icon-192.png`,
+    vibrate: [180, 80, 180],
+    requireInteraction: false,
+    silent: false,
+    renotify: true,
+    dir: "auto",
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const raw = event.notification.data && event.notification.data.url;
+  const d = event.notification.data || {};
+  const raw = d.url;
   let targetUrl = `${self.location.origin}/`;
   if (typeof raw === "string" && raw.trim()) {
     const t = raw.trim();

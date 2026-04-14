@@ -62,6 +62,7 @@ export async function createUserNotifications(opts: {
         title: opts.title,
         body: opts.body,
         href: opts.href,
+        kind: opts.kind,
       }).catch((e) => console.error("[web-push-notify]", e));
     }
   } catch (e) {

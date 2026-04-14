@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { clearAppBadgeSafe } from "@/lib/appBadge";
 import { resizeImageToDataUrl } from "@/lib/resize-avatar";
 import { userInitials } from "@/lib/user-initials";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
@@ -78,6 +79,7 @@ export function AccountClient() {
   }
 
   async function onSignOut() {
+    clearAppBadgeSafe();
     await authClient.signOut();
     router.push("/sign-in");
     router.refresh();

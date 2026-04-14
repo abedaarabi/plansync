@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, LogOut, UserRound } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { clearAppBadgeSafe } from "@/lib/appBadge";
 import { userInitials } from "@/lib/user-initials";
 
 export function UserMenu() {
@@ -37,6 +38,7 @@ export function UserMenu() {
 
   async function onSignOut() {
     setOpen(false);
+    clearAppBadgeSafe();
     await authClient.signOut();
     router.push("/sign-in");
     router.refresh();

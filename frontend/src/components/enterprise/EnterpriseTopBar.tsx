@@ -35,6 +35,7 @@ import { qk } from "@/lib/queryKeys";
 import { userInitials } from "@/lib/user-initials";
 import { isWorkspaceProClient, trialDaysLeft } from "@/lib/workspaceSubscription";
 import { isSuperAdmin } from "@/lib/workspaceRole";
+import { clearAppBadgeSafe, syncAppBadgeFromUnreadCount } from "@/lib/appBadge";
 import Link from "next/link";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -181,6 +182,14 @@ export function EnterpriseTopBar({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [notifOpen]);
+
+  useEffect(() => {
+    if (!me) {
+      clearAppBadgeSafe();
+      return;
+    }
+    syncAppBadgeFromUnreadCount(unreadCount);
+  }, [me, unreadCount]);
 
   function onNotificationNavigate(n: MeNotificationRow) {
     if (!n.readAt) markReadMut.mutate([n.id]);

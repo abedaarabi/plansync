@@ -29,6 +29,10 @@ const siteDescription =
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteOrigin()),
+  /** iOS uses this for `apple-touch-startup-image` splashes; Next only adds `mobile-web-app-capable`. */
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
   title: {
     default: siteTitle,
     template: "%s · PlanSync",

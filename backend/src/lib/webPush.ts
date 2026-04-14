@@ -1,6 +1,42 @@
+import { createHash } from "node:crypto";
 import webpush from "web-push";
 import type { Env } from "./env.js";
 import { prisma } from "./prisma.js";
+
+/** Short line for push body (shown under the title in the service worker). */
+export function pushKindCategoryLabel(kind: string): string {
+  const labels: Record<string, string> = {
+    RFI_MESSAGE: "RFI",
+    RFI_ASSIGNED: "RFI",
+    RFI_REOPENED: "RFI",
+    RFI_REVIEW: "RFI",
+    RFI_RESPONSE: "RFI",
+    RFI_CLOSED: "RFI",
+    RFI_OVERDUE: "RFI",
+    PUNCH_ASSIGNED: "Punch list",
+    ISSUE_ASSIGNED: "Site issue",
+    HANDOVER_FM: "O&M handover",
+    ISSUE_CREATED: "O&M request",
+    PROPOSAL_VIEWED: "Proposal",
+    PROPOSAL_ACCEPTED: "Proposal",
+    PROPOSAL_DECLINED: "Proposal",
+    PROPOSAL_CHANGE_REQUESTED: "Proposal",
+  };
+  return labels[kind] ?? "PlanSync";
+}
+
+const PUSH_BODY_MAX = 320;
+
+function buildPushDisplayBody(categoryLabel: string, detail: string | null): string {
+  const d = detail?.trim() ?? "";
+  const line = d.length > 0 ? `${categoryLabel}\n${d}` : categoryLabel;
+  return line.length <= PUSH_BODY_MAX ? line : `${line.slice(0, PUSH_BODY_MAX - 1)}…`;
+}
+
+function pushNotificationTag(kind: string, href: string): string {
+  const h = createHash("sha256").update(`${kind}:${href}`).digest("hex").slice(0, 24);
+  return `plansync-${h}`;
+}
 
 let vapidApplied = false;
 
@@ -34,6 +70,7 @@ export async function sendWebPushForUsers(opts: {
   title: string;
   body: string | null;
   href: string;
+  kind: string;
 }): Promise<void> {
   if (!ensureVapid(opts.env)) return;
   const url = absoluteAppUrl(opts.env, opts.href);
@@ -45,10 +82,19 @@ export async function sendWebPushForUsers(opts: {
   });
   if (subs.length === 0) return;
 
+  const categoryLabel = pushKindCategoryLabel(opts.kind);
+  const displayBody = buildPushDisplayBody(categoryLabel, opts.body);
+  const tag = pushNotificationTag(opts.kind, opts.href);
+  const timestamp = Date.now();
+
   const payload = JSON.stringify({
-    title: opts.title,
-    body: opts.body ?? "",
+    title: opts.title.trim() || "PlanSync",
+    body: displayBody,
     url,
+    kind: opts.kind,
+    categoryLabel,
+    tag,
+    timestamp,
   });
 
   await Promise.allSettled(
