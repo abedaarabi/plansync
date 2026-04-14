@@ -33,7 +33,11 @@ import {
 } from "lucide-react";
 import { fetchProjectSession } from "@/lib/api-client";
 import { projectScopedBaseFromPathname } from "@/lib/projectScopedPath";
-import { faviconUrlFromHostname, normalizeWorkspaceWebsite } from "@/lib/workspaceBranding";
+import {
+  faviconUrlFromHostname,
+  isGoogleFaviconUrl,
+  normalizeWorkspaceWebsite,
+} from "@/lib/workspaceBranding";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceOmBillingClient, isWorkspaceProClient } from "@/lib/workspaceSubscription";
@@ -198,6 +202,11 @@ export function EnterpriseSidebar({
     const n = normalizeWorkspaceWebsite(site);
     return n.ok ? faviconUrlFromHostname(n.hostname) : null;
   }, [ws?.logoUrl, ws?.website]);
+
+  const [workspaceLogoFailed, setWorkspaceLogoFailed] = useState(false);
+  useEffect(() => {
+    setWorkspaceLogoFailed(false);
+  }, [sidebarLogoSrc]);
 
   const GLOBAL_NAV = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -628,15 +637,21 @@ export function EnterpriseSidebar({
         <div className={`flex shrink-0 ${desktopIconRail ? "mx-auto" : ""}`}>
           <div
             className={
-              sidebarLogoSrc
+              sidebarLogoSrc && !workspaceLogoFailed
                 ? "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/95 shadow-[0_1px_2px_rgba(0,0,0,0.12)] ring-1 ring-black/5"
                 : "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/[0.08] bg-slate-900/35 ring-1 ring-white/[0.06]"
             }
             aria-hidden
           >
-            {sidebarLogoSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={sidebarLogoSrc} alt="" className="h-full w-full object-contain p-1.5" />
+            {sidebarLogoSrc && !workspaceLogoFailed ? (
+              // eslint-disable-next-line @next/next/no-img-element -- external workspace / favicon URLs; `referrerPolicy` helps in installed PWA / strict clients
+              <img
+                src={sidebarLogoSrc}
+                alt=""
+                referrerPolicy={isGoogleFaviconUrl(sidebarLogoSrc) ? "no-referrer" : undefined}
+                className="h-full w-full object-contain p-1.5"
+                onError={() => setWorkspaceLogoFailed(true)}
+              />
             ) : (
               <Image
                 src="/logo.svg"

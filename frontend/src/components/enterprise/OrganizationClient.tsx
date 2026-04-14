@@ -389,6 +389,7 @@ export function OrganizationClient() {
                       alt=""
                       width={40}
                       height={40}
+                      referrerPolicy="no-referrer"
                       className="h-10 w-10 rounded-md border border-[var(--enterprise-border)] bg-white object-contain p-1"
                     />
                     <p className="text-xs text-[var(--enterprise-text-muted)]">

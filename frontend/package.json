@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "dev:pwa": "PWA_IN_DEV=1 next dev --webpack",
+    "dev": "npm run pwa:assets && next dev",
+    "dev:pwa": "npm run pwa:assets && PWA_IN_DEV=1 next dev --webpack",
     "pwa:assets": "node scripts/generate-pwa-assets.mjs",
     "prebuild": "npm run pwa:assets",
     "build": "next build --webpack",

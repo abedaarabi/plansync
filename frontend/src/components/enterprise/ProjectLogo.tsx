@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FolderTree } from "lucide-react";
+import { isGoogleFaviconUrl } from "@/lib/workspaceBranding";
 
 type Props = {
   name: string;
@@ -33,6 +34,7 @@ export function ProjectLogo({
         alt=""
         width={size}
         height={size}
+        referrerPolicy={isGoogleFaviconUrl(logoUrl) ? "no-referrer" : undefined}
         className={`shrink-0 rounded-lg border border-[var(--enterprise-border)]/80 bg-white object-cover ${className}`}
         onError={() => setFailed(true)}
       />
