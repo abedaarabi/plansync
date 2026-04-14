@@ -834,14 +834,14 @@ export function TakeoffFormSlider() {
 
   const panel = (
     <div
-      className="no-print fixed inset-0 z-[85] flex justify-end bg-black/40 backdrop-blur-[2px]"
+      className="no-print fixed inset-0 z-[85] flex justify-end overflow-x-hidden overscroll-x-none bg-black/40 backdrop-blur-[2px]"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) closeTakeoffSlider();
       }}
     >
       <aside
-        className="flex h-full w-full max-w-md flex-col border-l border-[#334155] bg-[#0f172a] shadow-2xl"
+        className="flex h-full w-full min-w-0 max-w-md flex-col overflow-x-hidden border-l border-[#334155] bg-[#0f172a] shadow-2xl"
         role="dialog"
         aria-label={
           editZone
@@ -872,7 +872,7 @@ export function TakeoffFormSlider() {
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 [scrollbar-width:thin]">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-x-none px-4 py-3 [scrollbar-width:thin]">
           {isManualFlow ? (
             <div className="mb-4 rounded-lg border border-sky-500/35 bg-sky-950/40 px-3 py-2.5 text-[11px] text-sky-100">
               <p className="font-semibold uppercase tracking-wide text-sky-300/90">

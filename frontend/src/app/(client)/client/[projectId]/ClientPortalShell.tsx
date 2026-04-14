@@ -55,7 +55,7 @@ export function ClientPortalShell({
 
   return (
     <QueryProvider>
-      <div className="flex min-h-dvh flex-col bg-white text-slate-900">
+      <div className="flex min-h-dvh min-w-0 max-w-full flex-col overflow-x-hidden bg-white text-slate-900">
         <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="flex min-w-0 items-center gap-3">

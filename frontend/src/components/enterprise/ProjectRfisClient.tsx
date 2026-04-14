@@ -564,7 +564,7 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
             },
           }}
           ariaLabelledBy="rfi-create-title"
-          panelMaxWidthClass="max-w-[min(100vw-16px,520px)]"
+          panelMaxWidthClass="max-w-[min(calc(100dvw-16px),520px)]"
           bodyClassName="px-5 py-5"
           header={
             <div className="flex items-start gap-3 pr-1">

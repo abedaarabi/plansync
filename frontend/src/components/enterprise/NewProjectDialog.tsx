@@ -125,7 +125,7 @@ export function NewProjectDialog({
       onClose={onCancel}
       form={{ onSubmit }}
       ariaLabelledBy="new-project-dialog-title"
-      panelMaxWidthClass="w-[min(100%,calc(100vw-12px))] max-w-[min(1920px,calc(100vw-12px))]"
+      panelMaxWidthClass="w-[min(100%,calc(100dvw-12px))] max-w-[min(1920px,calc(100dvw-12px))]"
       headerClassName="px-4 sm:px-8 lg:px-10 xl:px-12"
       bodyClassName={`${panelPad} pb-8`}
       footerClassName={`${panelPad} sm:!justify-between sm:!items-center`}

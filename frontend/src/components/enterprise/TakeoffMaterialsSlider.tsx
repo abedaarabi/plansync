@@ -37,26 +37,26 @@ export function TakeoffMaterialsSlider({
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
-    const prevTouchAction = document.body.style.touchAction;
+    const prevOverflowX = document.body.style.overflowX;
     document.body.style.overflow = "hidden";
-    document.body.style.touchAction = "none";
+    document.body.style.overflowX = "hidden";
     return () => {
       document.body.style.overflow = prevOverflow;
-      document.body.style.touchAction = prevTouchAction;
+      document.body.style.overflowX = prevOverflowX;
     };
   }, [open]);
 
   if (!open || !mounted) return null;
   return createPortal(
     <div
-      className="fixed inset-0 z-50 overflow-hidden overscroll-none bg-black/40"
+      className="fixed inset-0 z-50 overflow-hidden overscroll-x-none overscroll-y-none bg-black/40"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <aside
-        className="ml-auto flex h-full w-full max-w-xl flex-col overflow-hidden border-l border-[#334155] bg-white shadow-2xl"
+        className="ml-auto flex h-full w-full min-w-0 max-w-xl flex-col overflow-hidden border-l border-[#334155] bg-white shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#E2E8F0] px-4 py-3">

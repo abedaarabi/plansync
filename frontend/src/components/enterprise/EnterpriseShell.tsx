@@ -84,10 +84,13 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!mobileNavOpen) return;
-    const prev = document.body.style.overflow;
+    const prevOverflow = document.body.style.overflow;
+    const prevOverflowX = document.body.style.overflowX;
     document.body.style.overflow = "hidden";
+    document.body.style.overflowX = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
+      document.body.style.overflowX = prevOverflowX;
     };
   }, [mobileNavOpen]);
 
@@ -100,7 +103,7 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
       <EnterpriseWorkspaceProvider>
         <ProjectSessionRedirect />
         <div
-          className="flex h-dvh min-h-0 w-full flex-col bg-[var(--enterprise-bg)] text-[var(--enterprise-text)] lg:flex-row"
+          className="flex h-dvh min-h-0 w-full min-w-0 max-w-full flex-col overflow-x-hidden bg-[var(--enterprise-bg)] text-[var(--enterprise-text)] lg:flex-row"
           style={{ fontFamily: "var(--font-inter), ui-sans-serif, system-ui, sans-serif" }}
         >
           {mobileNavOpen && (
@@ -124,7 +127,7 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
               desktopSidebarCollapsed={desktopSidebarCollapsed}
               onToggleDesktopSidebar={toggleDesktopSidebar}
             />
-            <main className="enterprise-scrollbar enterprise-main-canvas min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+            <main className="enterprise-scrollbar enterprise-main-canvas min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none">
               <div className="enterprise-main-inner min-h-full min-w-0 max-w-full">{children}</div>
             </main>
           </div>

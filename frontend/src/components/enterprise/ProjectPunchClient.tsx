@@ -1592,7 +1592,7 @@ function PunchDetailSlider({
       open={open}
       onClose={onClose}
       closeOnBackdrop={false}
-      panelMaxWidthClass="max-w-[min(100vw,560px)] sm:max-w-[560px]"
+      panelMaxWidthClass="max-w-[min(100dvw,560px)] sm:max-w-[560px]"
       ariaLabelledBy={headerId}
       header={
         <div>

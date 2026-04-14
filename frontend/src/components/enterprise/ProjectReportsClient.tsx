@@ -1272,7 +1272,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
       <EnterpriseSlideOver
         open={detailPanelOpen}
         onClose={closeSlide}
-        panelMaxWidthClass="max-w-[min(100vw,560px)] sm:max-w-[560px]"
+        panelMaxWidthClass="max-w-[min(100dvw,560px)] sm:max-w-[560px]"
         bodyClassName={SLIDER_BODY}
         footerClassName="border-t border-[#e2e8f0] bg-white px-4 py-4 sm:px-5"
         ariaLabelledBy={activeWeekly ? weeklyTitleId : newTitleId}

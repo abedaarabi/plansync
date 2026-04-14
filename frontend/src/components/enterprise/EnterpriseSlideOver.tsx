@@ -111,9 +111,12 @@ export function EnterpriseSlideOver({
   useEffect(() => {
     if (!shouldRender) return;
     const prevOverflow = document.body.style.overflow;
+    const prevOverflowX = document.body.style.overflowX;
     document.body.style.overflow = "hidden";
+    document.body.style.overflowX = "hidden";
     return () => {
       document.body.style.overflow = prevOverflow;
+      document.body.style.overflowX = prevOverflowX;
     };
   }, [shouldRender]);
 
@@ -135,12 +138,15 @@ export function EnterpriseSlideOver({
     (panelActive ? "opacity-100" : "opacity-0");
 
   const panelMotion =
-    `w-full ${panelMaxWidthClass} ${SLIDE_OVER_PANEL_TRANSITION} ` +
-    `fixed inset-y-0 right-0 z-[101] flex h-dvh max-h-dvh flex-col ${panelChromeClassName} ` +
+    `w-full min-w-0 max-w-full ${panelMaxWidthClass} ${SLIDE_OVER_PANEL_TRANSITION} ` +
+    `fixed inset-y-0 right-0 z-[101] flex h-dvh max-h-dvh flex-col overflow-x-hidden ${panelChromeClassName} ` +
     (panelActive ? "translate-x-0" : "translate-x-full");
 
   const shell = (
-    <div className={`fixed inset-0 ${overlayZClass}`} role="presentation">
+    <div
+      className={`fixed inset-0 overflow-x-hidden overscroll-x-none ${overlayZClass}`}
+      role="presentation"
+    >
       <button
         type="button"
         className={backdropClass}
@@ -156,7 +162,7 @@ export function EnterpriseSlideOver({
             className={headerClassName}
           />
           <div
-            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${bodyClassName ?? "px-5 py-5"}`}
+            className={`min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain overscroll-x-none ${bodyClassName ?? "px-5 py-5"}`}
           >
             {children}
           </div>
@@ -180,7 +186,7 @@ export function EnterpriseSlideOver({
             className={headerClassName}
           />
           <div
-            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${bodyClassName ?? "px-5 py-5"}`}
+            className={`min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain overscroll-x-none ${bodyClassName ?? "px-5 py-5"}`}
           >
             {children}
           </div>

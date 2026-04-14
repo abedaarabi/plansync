@@ -78,6 +78,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  /** PWA / standalone: match native apps — no pinch-to-zoom or accidental horizontal “page pan”. */
+  maximumScale: 1,
+  minimumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
   themeColor: "#f8fafc",
   colorScheme: "light",
@@ -91,10 +95,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} h-dvh overflow-x-hidden antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} h-dvh min-h-0 min-w-0 max-w-full overflow-x-hidden antialiased`}
     >
       <body
-        className="flex min-h-dvh min-w-0 flex-col overflow-x-hidden bg-[var(--enterprise-bg)] font-sans text-[var(--enterprise-text)] antialiased"
+        className="flex min-h-dvh min-w-0 max-w-full flex-col overflow-x-hidden bg-[var(--enterprise-bg)] font-sans text-[var(--enterprise-text)] antialiased"
         style={{ backgroundColor: "#f8fafc" }}
         suppressHydrationWarning
       >
