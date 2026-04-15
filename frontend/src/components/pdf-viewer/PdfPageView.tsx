@@ -601,6 +601,31 @@ export function PdfPageView({
     sl: number;
     st: number;
   } | null>(null);
+  const touchGestureRef = useRef<{
+    points: Map<number, { x: number; y: number }>;
+    pinchActive: boolean;
+    pinchStartDistance: number;
+    pinchStartScale: number;
+    pinchStartScrollLeft: number;
+    pinchStartScrollTop: number;
+    panPointerId: number | null;
+    panStartX: number;
+    panStartY: number;
+    panStartScrollLeft: number;
+    panStartScrollTop: number;
+  }>({
+    points: new Map(),
+    pinchActive: false,
+    pinchStartDistance: 0,
+    pinchStartScale: 1,
+    pinchStartScrollLeft: 0,
+    pinchStartScrollTop: 0,
+    panPointerId: null,
+    panStartX: 0,
+    panStartY: 0,
+    panStartScrollLeft: 0,
+    panStartScrollTop: 0,
+  });
   /** Dragging line-measure start/end or translating the whole chord before commit. */
   const measureLineDragRef = useRef<MeasureLineDrag | null>(null);
   /**
@@ -1505,6 +1530,35 @@ export function PdfPageView({
       const el = overlayRef.current;
       if (!el) return;
       if (compareReferenceOnly && tool !== "pan") return;
+      if (e.pointerType === "touch" && scrollContainerRef?.current) {
+        const tg = touchGestureRef.current;
+        tg.points.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const points = [...tg.points.values()];
+        const sc = scrollContainerRef.current;
+        if (points.length >= 2) {
+          const [a, b] = points;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          tg.pinchStartDistance = Math.max(1, Math.hypot(dx, dy));
+          tg.pinchStartScale = scale;
+          tg.pinchStartScrollLeft = sc.scrollLeft;
+          tg.pinchStartScrollTop = sc.scrollTop;
+          tg.pinchActive = true;
+          tg.panPointerId = null;
+          e.preventDefault();
+          return;
+        }
+        if (tool === "pan") {
+          tg.pinchActive = false;
+          tg.panPointerId = e.pointerId;
+          tg.panStartX = e.clientX;
+          tg.panStartY = e.clientY;
+          tg.panStartScrollLeft = sc.scrollLeft;
+          tg.panStartScrollTop = sc.scrollTop;
+          e.preventDefault();
+          return;
+        }
+      }
 
       const stPl = useViewerStore.getState();
       if (stPl.newIssuePlacementActive && !compareReferenceOnly) {
@@ -2354,6 +2408,54 @@ export function PdfPageView({
     (e: React.PointerEvent<HTMLDivElement>) => {
       const el = overlayRef.current;
       if (!el) return;
+      if (e.pointerType === "touch" && scrollContainerRef?.current) {
+        const tg = touchGestureRef.current;
+        if (tg.points.has(e.pointerId)) {
+          tg.points.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        }
+        const points = [...tg.points.values()];
+        const sc = scrollContainerRef.current;
+        if (tg.pinchActive && points.length >= 2) {
+          const [a, b] = points;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const distance = Math.max(1, Math.hypot(dx, dy));
+          const nextScale = Math.min(
+            VIEWER_SCALE_MAX,
+            Math.max(VIEWER_SCALE_MIN, tg.pinchStartScale * (distance / tg.pinchStartDistance)),
+          );
+          const ratio = nextScale / tg.pinchStartScale;
+          const rect = sc.getBoundingClientRect();
+          const cx = (a.x + b.x) / 2 - rect.left;
+          const cy = (a.y + b.y) / 2 - rect.top;
+          setScale(nextScale);
+          requestAnimationFrame(() => {
+            const scNow = scrollContainerRef?.current;
+            if (!scNow) return;
+            const nextLeft = tg.pinchStartScrollLeft * ratio + cx * (ratio - 1);
+            const nextTop = tg.pinchStartScrollTop * ratio + cy * (ratio - 1);
+            const maxL = Math.max(0, scNow.scrollWidth - scNow.clientWidth);
+            const maxT = Math.max(0, scNow.scrollHeight - scNow.clientHeight);
+            scNow.scrollLeft = Math.min(maxL, Math.max(0, nextLeft));
+            scNow.scrollTop = Math.min(maxT, Math.max(0, nextTop));
+          });
+          e.preventDefault();
+          return;
+        }
+        if (
+          tool === "pan" &&
+          tg.panPointerId === e.pointerId &&
+          !tg.pinchActive &&
+          tg.points.size === 1
+        ) {
+          const dx = e.clientX - tg.panStartX;
+          const dy = e.clientY - tg.panStartY;
+          sc.scrollLeft = tg.panStartScrollLeft - dx;
+          sc.scrollTop = tg.panStartScrollTop - dy;
+          e.preventDefault();
+          return;
+        }
+      }
       if (textCommentOpen) {
         setSnapHoverPathIndex(null);
         setBrushHoverNorm(null);
@@ -2829,6 +2931,12 @@ export function PdfPageView({
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const el = overlayRef.current;
+      if (e.pointerType === "touch") {
+        const tg = touchGestureRef.current;
+        tg.points.delete(e.pointerId);
+        if (tg.panPointerId === e.pointerId) tg.panPointerId = null;
+        if (tg.points.size < 2) tg.pinchActive = false;
+      }
 
       if (tool === "pan" && panSessionRef.current) {
         panSessionRef.current = null;
@@ -3388,6 +3496,10 @@ export function PdfPageView({
           onPointerUp={handlePointerUp}
           onPointerCancel={(e) => {
             const oel = overlayRef.current;
+            const tg = touchGestureRef.current;
+            tg.points.delete(e.pointerId);
+            tg.pinchActive = tg.points.size >= 2;
+            if (tg.panPointerId === e.pointerId) tg.panPointerId = null;
             measureLineDragRef.current = null;
             panSessionRef.current = null;
             setSelectMarquee(null);
