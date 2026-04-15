@@ -253,18 +253,6 @@ export function stripeRoutes(env: Env, auth: AuthLike) {
     const planRaw = typeof body.plan === "string" ? body.plan.trim().toLowerCase() : "";
     const planTier: "pro" | "enterprise" = planRaw === "enterprise" ? "enterprise" : "pro";
 
-    let priceId: string;
-    try {
-      priceId =
-        planTier === "enterprise"
-          ? await resolveEnterpriseMonthlyPriceId(stripe, env.STRIPE_PRICE_ENTERPRISE_MONTHLY)
-          : await resolveProMonthlyPriceId(stripe, env.STRIPE_PRICE_PRO_MONTHLY);
-    } catch (e) {
-      console.error("[stripe] resolve subscription price failed", e);
-      const msg = e instanceof Error ? e.message : "Could not resolve subscription price";
-      return c.json({ error: msg }, 400);
-    }
-
     const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
     if (!workspaceId) {
       return c.json({ error: "workspaceId is required" }, 400);
@@ -281,6 +269,18 @@ export function stripeRoutes(env: Env, auth: AuthLike) {
     const ws = await prisma.workspace.findUnique({ where: { id: workspaceId } });
     if (!ws) {
       return c.json({ error: "Workspace not found" }, 404);
+    }
+
+    let priceId: string;
+    try {
+      priceId =
+        planTier === "enterprise"
+          ? await resolveEnterpriseMonthlyPriceId(stripe, env.STRIPE_PRICE_ENTERPRISE_MONTHLY)
+          : await resolveProMonthlyPriceId(stripe, env.STRIPE_PRICE_PRO_MONTHLY);
+    } catch (e) {
+      console.error("[stripe] resolve subscription price failed", e);
+      const msg = e instanceof Error ? e.message : "Could not resolve subscription price";
+      return c.json({ error: msg }, 400);
     }
 
     /** `{CHECKOUT_SESSION_ID}` is replaced by Stripe — used to sync DB when webhooks do not reach localhost. */

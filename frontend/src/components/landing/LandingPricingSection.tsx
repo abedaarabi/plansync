@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { ArrowRight, Check, Cloud, Monitor } from "lucide-react";
 import { AnimateIn } from "./AnimateIn";
-import { ENTERPRISE_MONTHLY_PRICE_USD, PRO_MONTHLY_PRICE_USD } from "@/lib/productPricing";
+import {
+  ENTERPRISE_MONTHLY_PRICE_USD,
+  EXTRA_SEAT_MONTHLY_USD,
+  PRO_INCLUDED_SEATS,
+  PRO_MONTHLY_PRICE_USD,
+} from "@/lib/productPricing";
 import { ENTERPRISE_FEATURES, FREE_FEATURES, PRO_FEATURES } from "./constants";
 
 type LandingPricingSectionProps = {
@@ -97,7 +102,10 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                     <span className="text-lg font-normal text-slate-500">/month</span>
                   </div>
                   <p className="mt-2 text-sm font-medium text-slate-700">
-                    Unlimited users &amp; projects
+                    {PRO_INCLUDED_SEATS} members included · unlimited projects
+                  </p>
+                  <p className="mt-1 text-xs leading-snug text-slate-500">
+                    +${EXTRA_SEAT_MONTHLY_USD}/mo per additional member after {PRO_INCLUDED_SEATS}.
                   </p>
                   <p className="mt-0.5 text-sm text-slate-500">Everything in Free +</p>
                 </div>
@@ -145,7 +153,10 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                     <span className="text-lg font-normal text-slate-500">/month</span>
                   </div>
                   <p className="mt-2 text-sm font-medium text-slate-700">
-                    Unlimited users &amp; projects
+                    {PRO_INCLUDED_SEATS} members included · unlimited projects
+                  </p>
+                  <p className="mt-1 text-xs leading-snug text-slate-500">
+                    +${EXTRA_SEAT_MONTHLY_USD}/mo per additional member after {PRO_INCLUDED_SEATS}.
                   </p>
                   <p className="mt-0.5 text-sm text-slate-500">Pro + O&amp;M</p>
                 </div>
@@ -175,6 +186,11 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
             </div>
           </AnimateIn>
         </div>
+
+        <p className="mx-auto mt-10 max-w-2xl text-center text-xs leading-relaxed text-slate-500">
+          Seat counts follow internal (non-external) members and pending invites. Extra-seat billing
+          is applied when you exceed {PRO_INCLUDED_SEATS} — see billing after checkout.
+        </p>
       </div>
     </section>
   );

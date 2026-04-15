@@ -3,7 +3,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { patchProject, type PatchProjectBody } from "@/lib/api-client";
+import { Trash2 } from "lucide-react";
+import { deleteProject, patchProject, type PatchProjectBody } from "@/lib/api-client";
 import { buildProjectChangeRows } from "@/lib/projectChangeSummary";
 import { PROJECT_STAGES, type ProjectStageValue } from "@/lib/projectStage";
 import type { ProjectCurrencyCode } from "@/lib/projectCurrency";
@@ -12,6 +13,7 @@ import { logoUrlFromWebsiteInput } from "@/lib/websiteUrl";
 import { qk } from "@/lib/queryKeys";
 import type { Project } from "@/types/projects";
 import { ConfirmProjectSaveDialog } from "./ConfirmProjectSaveDialog";
+import { DeleteProjectConfirmDialog } from "./DeleteProjectConfirmDialog";
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
 import { ProjectCurrencyPicker } from "./ProjectCurrencyPicker";
 import { ProjectMeasurementSystemPicker } from "./ProjectMeasurementSystemPicker";
@@ -31,9 +33,19 @@ type Props = {
   onClose: () => void;
   project: Project | null;
   workspaceId: string | undefined;
+  /** Internal Admin / Super Admin — show delete project. */
+  canDeleteProject?: boolean;
+  onProjectDeleted?: (projectId: string) => void;
 };
 
-export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Props) {
+export function ProjectEditSlideOver({
+  open,
+  onClose,
+  project,
+  workspaceId,
+  canDeleteProject = false,
+  onProjectDeleted,
+}: Props) {
   const queryClient = useQueryClient();
 
   const [nameEd, setNameEd] = useState("");
@@ -51,6 +63,8 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
   const [measurementSystemEd, setMeasurementSystemEd] =
     useState<ProjectMeasurementSystem>("METRIC");
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const [geocodingLocation, setGeocodingLocation] = useState(false);
 
   /** When true, map clicks set the pin; typing location again switches back to address-based pin. */
@@ -66,7 +80,27 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
 
   function handleClose() {
     setConfirmSaveOpen(false);
+    setDeleteDialogOpen(false);
     onClose();
+  }
+
+  async function handleConfirmDeleteProject() {
+    if (!project) return;
+    setDeletePending(true);
+    try {
+      await deleteProject(project.id);
+      if (workspaceId) void queryClient.invalidateQueries({ queryKey: qk.projects(workspaceId) });
+      void queryClient.invalidateQueries({ queryKey: qk.project(project.id) });
+      void queryClient.invalidateQueries({ queryKey: qk.me() });
+      onProjectDeleted?.(project.id);
+      setDeleteDialogOpen(false);
+      toast.success("Project deleted");
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete project.");
+    } finally {
+      setDeletePending(false);
+    }
   }
 
   function hydrate(p: Project) {
@@ -601,8 +635,35 @@ export function ProjectEditSlideOver({ open, onClose, project, workspaceId }: Pr
               </div>
             </div>
           </div>
+
+          {canDeleteProject && project ? (
+            <div className="border-t border-red-200/70 pt-4 dark:border-red-900/35">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-red-700/90 dark:text-red-400/90">
+                Danger zone
+              </p>
+              <p className="mt-2 text-[13px] leading-relaxed text-[var(--enterprise-text-muted)]">
+                Permanently delete this project and all drawings, issues, RFIs, punch items, and
+                other data stored for it.
+              </p>
+              <button
+                type="button"
+                onClick={() => setDeleteDialogOpen(true)}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-300/90 bg-red-50/90 px-3 py-2 text-sm font-semibold text-red-800 transition hover:bg-red-100 dark:border-red-800/80 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-950/70"
+              >
+                <Trash2 className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+                Delete project…
+              </button>
+            </div>
+          ) : null}
         </div>
       </EnterpriseSlideOver>
+      <DeleteProjectConfirmDialog
+        open={deleteDialogOpen && !!project}
+        projectName={project?.name ?? ""}
+        isDeleting={deletePending}
+        onCancel={() => !deletePending && setDeleteDialogOpen(false)}
+        onConfirm={() => void handleConfirmDeleteProject()}
+      />
       <ConfirmProjectSaveDialog
         open={confirmSaveOpen && !!project}
         projectTitle={project ? nameEd.trim() || project.name : ""}

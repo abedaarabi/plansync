@@ -27,7 +27,8 @@ export type MeWorkspace = {
   };
   /** Workspace projects in use (Pro plan cap). */
   projectCount?: number;
-  maxProjects?: number;
+  /** Present cap, or `null` when workspace has no project limit */
+  maxProjects?: number | null;
 };
 
 export type MeResponse = {

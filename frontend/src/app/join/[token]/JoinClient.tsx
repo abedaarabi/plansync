@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Lock, Mail, User } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { workspaceGateUrl } from "@/lib/workspacePreference";
 
 type InvitePreview =
   | { valid: false; reason: "invalid" | "expired" }
@@ -66,7 +67,7 @@ export function JoinClient({ token }: { token: string }) {
       setError(j.error ?? "Could not join workspace.");
       return false;
     }
-    router.replace("/dashboard");
+    router.replace(workspaceGateUrl("/dashboard"));
     router.refresh();
     return true;
   }, [router, token]);

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { UserMenu } from "./UserMenu";
 import { ProjectPicker } from "./ProjectPicker";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import {
   fetchMeNotifications,
@@ -248,6 +249,7 @@ export function EnterpriseTopBar({
               <span style={{ color: DEFAULT_ENTERPRISE_PRIMARY_HEX }}>Sync</span>
             </span>
             <div className="hidden h-4 w-px shrink-0 bg-[var(--enterprise-border)] sm:block" />
+            <WorkspaceSwitcher />
 
             {isProjectContext ? (
               <nav

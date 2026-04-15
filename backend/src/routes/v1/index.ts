@@ -10,7 +10,9 @@ import { logActivity, logActivitySafe } from "../../lib/activity.js";
 import { maybeSendStorageAlerts } from "../../lib/storageAlerts.js";
 import {
   DEFAULT_STORAGE_QUOTA_BYTES,
+  EXTRA_SEAT_MONTHLY_USD,
   MAX_WORKSPACE_MEMBERS,
+  PRO_INCLUDED_SEATS,
   MAX_WORKSPACE_PROJECTS,
 } from "../../config/product.js";
 import { isWorkspaceOmBilling, isWorkspacePro } from "../../lib/subscription.js";
@@ -85,6 +87,7 @@ import { findBestUploadMatch } from "../../lib/uploadMatch.js";
 import {
   deleteFileFromS3AndDb,
   deleteFolderTreeFromDbAndS3,
+  deleteProjectAndAssets,
 } from "../../lib/deleteProjectAssets.js";
 import { deleteAllWorkspaceS3Objects } from "../../lib/deleteWorkspaceS3.js";
 import { logoUrlFromWebsiteUrl, normalizeWebsiteUrl } from "../../lib/websiteUrl.js";
@@ -1531,6 +1534,8 @@ export function v1Routes(
 
     return c.json({
       maxSeats: MAX_WORKSPACE_MEMBERS,
+      includedSeats: PRO_INCLUDED_SEATS,
+      extraSeatMonthlyUsd: EXTRA_SEAT_MONTHLY_USD,
       seatPressure: pressure,
       members: list.map((x) => ({
         id: x.id,
@@ -1724,7 +1729,6 @@ export function v1Routes(
       entityId: targetUserId,
       metadata: deleteAccountAfterRemoval ? { accountDeleted: true } : undefined,
     });
-
     return c.json({ ok: true, accountDeleted: deleteAccountAfterRemoval });
   });
 
@@ -1784,12 +1788,17 @@ export function v1Routes(
     if (!m) return c.json({ error: "Forbidden" }, 403);
     const gate = requirePro(m.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
-    if (await isProjectScopedMember(c.get("user").id, workspaceId)) {
+    // Admins often have `ProjectMember` rows when their access is limited to a subset of
+    // projects; they must still be able to create new projects (UI already restricts to managers).
+    if (
+      !isWorkspaceManagerRole(m.role) &&
+      (await isProjectScopedMember(c.get("user").id, workspaceId))
+    ) {
       return c.json({ error: "Project-scoped members cannot create projects" }, 403);
     }
 
     const projectCount = await prisma.project.count({ where: { workspaceId } });
-    if (projectCount >= MAX_WORKSPACE_PROJECTS) {
+    if (MAX_WORKSPACE_PROJECTS != null && projectCount >= MAX_WORKSPACE_PROJECTS) {
       return c.json(
         {
           error: `This workspace can have at most ${MAX_WORKSPACE_PROJECTS} projects on your plan.`,
@@ -1886,8 +1895,9 @@ export function v1Routes(
       where: { userId: c.get("user").id, project: { workspaceId } },
       select: { projectId: true },
     });
+    const seesAllWorkspaceProjects = !m.isExternal && isWorkspaceManagerRole(m.role);
     const projectWhere =
-      limited.length > 0
+      !seesAllWorkspaceProjects && limited.length > 0
         ? { workspaceId, id: { in: limited.map((r) => r.projectId) } }
         : { workspaceId };
     const projects = await prisma.project.findMany({
@@ -3351,6 +3361,8 @@ export function v1Routes(
 
     return c.json({
       maxSeats: MAX_WORKSPACE_MEMBERS,
+      includedSeats: PRO_INCLUDED_SEATS,
+      extraSeatMonthlyUsd: EXTRA_SEAT_MONTHLY_USD,
       seatPressure: pressure,
       members: rows.map((m) => ({
         userId: m.userId,
@@ -3578,6 +3590,52 @@ export function v1Routes(
       metadata: { updatedFields: Object.keys(data) },
     });
     return c.json(projectDetailApiJson(updated));
+  });
+
+  r.delete("/projects/:projectId", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const access = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const wm = access.ctx.workspaceMember;
+    const canManage =
+      !wm.isExternal && (wm.role === WorkspaceRole.SUPER_ADMIN || wm.role === WorkspaceRole.ADMIN);
+    if (!canManage) return c.json({ error: "Forbidden" }, 403);
+    const gate = requirePro(access.ctx.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const ws = await prisma.workspace.findUnique({
+      where: { id: access.ctx.project.workspaceId },
+      select: { storageUsedBytes: true, storageQuotaBytes: true },
+    });
+    if (!ws) return c.json({ error: "Workspace not found" }, 500);
+    const beforeUsed = ws.storageUsedBytes;
+    const projectName = access.ctx.project.name;
+
+    const result = await deleteProjectAndAssets(env, projectId);
+    if (!result.ok) {
+      if (result.error === "Not found") return c.json({ error: "Not found" }, 404);
+      return c.json({ error: result.error }, 500);
+    }
+
+    const dec = result.bytesFreed > ws.storageUsedBytes ? ws.storageUsedBytes : result.bytesFreed;
+    const updatedWs = await prisma.workspace.update({
+      where: { id: result.workspaceId },
+      data: { storageUsedBytes: { decrement: dec } },
+    });
+
+    await logActivitySafe(result.workspaceId, ActivityType.PROJECT_DELETED, {
+      actorUserId: c.get("user").id,
+      entityId: projectId,
+      metadata: { name: projectName },
+    });
+    await maybeSendStorageAlerts(
+      env,
+      result.workspaceId,
+      beforeUsed,
+      updatedWs.storageUsedBytes,
+      updatedWs.storageQuotaBytes,
+    );
+    return c.json({ ok: true });
   });
 
   registerCloudRoutes(r, needUser, env, auth);

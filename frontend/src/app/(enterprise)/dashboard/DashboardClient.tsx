@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   ArrowUpRight,
   Check,
@@ -23,7 +24,6 @@ import { WorkspaceUsageMeter, formatGiB } from "@/components/enterprise/Workspac
 import {
   createWorkspace,
   fetchDashboard,
-  fetchMe,
   fetchProjects,
   fetchWorkspaceMembers,
 } from "@/lib/api-client";
@@ -38,17 +38,15 @@ export function DashboardClient() {
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [createWorkspaceError, setCreateWorkspaceError] = useState<string | null>(null);
   const {
-    data: me,
-    isPending: meLoading,
-    error: meError,
+    me,
+    loading: meLoading,
     isError: meFetchFailed,
-  } = useQuery({
-    queryKey: qk.me(),
-    queryFn: fetchMe,
-  });
+    meError,
+    primary,
+  } = useEnterpriseWorkspace();
 
-  const wid = me?.workspaces[0]?.workspaceId;
-  const ws = me?.workspaces[0]?.workspace;
+  const wid = primary?.workspaceId;
+  const ws = primary?.workspace;
 
   const { data: dash, isPending: dashPending } = useQuery({
     queryKey: qk.dashboard(wid ?? ""),
@@ -56,13 +54,13 @@ export function DashboardClient() {
     enabled: Boolean(wid),
   });
 
-  const membership = me?.workspaces?.[0];
+  const membership = primary;
   const isAdmin = membership?.role === "ADMIN" || membership?.role === "SUPER_ADMIN";
 
   const { data: projects = [] } = useQuery({
     queryKey: qk.projects(wid ?? ""),
     queryFn: () => fetchProjects(wid!),
-    enabled: Boolean(wid && isWorkspaceProClient(me?.workspaces?.[0]?.workspace)),
+    enabled: Boolean(wid && isWorkspaceProClient(primary?.workspace)),
   });
 
   const { data: membersData } = useQuery({
@@ -221,16 +219,21 @@ export function DashboardClient() {
         ? 100
         : 0;
 
-  const maxProjects = membership?.maxProjects ?? 5;
+  const maxProjects = membership?.maxProjects;
   const isPro = isWorkspaceProClient(ws);
   const sub = dash?.workspace?.subscriptionStatus ?? ws?.subscriptionStatus ?? null;
   const projectCountForUsage =
     membership?.projectCount !== undefined ? membership.projectCount : isPro ? projects.length : 0;
   const projectUsagePct =
-    maxProjects > 0 ? Math.min(100, (projectCountForUsage / maxProjects) * 100) : 0;
-  const maxSeats = membersData?.maxSeats ?? 5;
+    maxProjects != null && maxProjects > 0
+      ? Math.min(100, (projectCountForUsage / maxProjects) * 100)
+      : 0;
+  const includedSeats = membersData?.includedSeats ?? 5;
+  const extraSeatUsd = membersData?.extraSeatMonthlyUsd ?? 9;
   const seatPressure = membersData?.seatPressure ?? 0;
-  const seatUsagePct = maxSeats > 0 ? Math.min(100, (seatPressure / maxSeats) * 100) : 0;
+  const seatDenominator = Math.max(includedSeats, 1);
+  const seatUsagePct = Math.min(100, (seatPressure / seatDenominator) * 100);
+  const extraSeatCount = Math.max(0, seatPressure - includedSeats);
   const storageUsageBarPct =
     storageQuota > 0 ? Math.min(100, (storageUsed / storageQuota) * 100) : 0;
 
@@ -409,15 +412,23 @@ export function DashboardClient() {
             />
             <WorkspaceUsageMeter
               label="Members"
-              usedLabel={`${seatPressure} / ${maxSeats}`}
+              usedLabel={
+                extraSeatCount > 0
+                  ? `${seatPressure} (${includedSeats} incl. + ${extraSeatCount} × $${extraSeatUsd}/mo)`
+                  : `${seatPressure} / ${includedSeats} included`
+              }
               pct={seatUsagePct}
-              warn={seatUsagePct >= 90}
+              warn={extraSeatCount > 0 || seatUsagePct >= 90}
             />
             <WorkspaceUsageMeter
               label="Projects"
-              usedLabel={`${projectCountForUsage} / ${maxProjects}`}
+              usedLabel={
+                maxProjects != null
+                  ? `${projectCountForUsage} / ${maxProjects}`
+                  : `${projectCountForUsage} projects · unlimited`
+              }
               pct={projectUsagePct}
-              warn={projectCountForUsage >= maxProjects}
+              warn={maxProjects != null && projectCountForUsage >= maxProjects}
             />
           </div>
         </section>

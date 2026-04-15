@@ -247,7 +247,14 @@ export function ProjectHubClient() {
         return;
       }
       if (!res.ok) {
-        setError("Could not create project.");
+        let msg = "Could not create project.";
+        try {
+          const j = (await res.json()) as { error?: unknown };
+          if (typeof j.error === "string") msg = j.error;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
         return;
       }
       const p = (await res.json()) as Project;
@@ -475,6 +482,11 @@ export function ProjectHubClient() {
         open={editOpen}
         project={editProject}
         workspaceId={wid}
+        canDeleteProject={isAdmin && !primary?.isExternal}
+        onProjectDeleted={() => {
+          setEditOpen(false);
+          setEditProject(null);
+        }}
         onClose={() => {
           setEditOpen(false);
           setEditProject(null);

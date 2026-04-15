@@ -193,7 +193,14 @@ export async function loadProjectWithAuth(
     where: { userId, project: { workspaceId: project.workspaceId } },
     select: { projectId: true },
   });
-  if (limited.length > 0 && !limited.some((r) => r.projectId === projectId)) {
+  /** Internal admins may have `ProjectMember` rows for scoped UI while still managing the whole workspace. */
+  const canAccessAnyProjectInWorkspace =
+    !wm.isExternal && (wm.role === WorkspaceRole.SUPER_ADMIN || wm.role === WorkspaceRole.ADMIN);
+  if (
+    limited.length > 0 &&
+    !limited.some((r) => r.projectId === projectId) &&
+    !canAccessAnyProjectInWorkspace
+  ) {
     return { error: "Forbidden", status: 403 };
   }
 

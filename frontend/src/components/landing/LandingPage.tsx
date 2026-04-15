@@ -2,11 +2,12 @@
 
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { LandingFaqSection } from "./LandingFaqSection";
-import { LandingFeaturesIntroSection } from "./LandingFeaturesIntroSection";
 import { LandingFinalCtaSection } from "./LandingFinalCtaSection";
 import { LandingHeroSection } from "./LandingHeroSection";
 import { LandingHowItWorksSection } from "./LandingHowItWorksSection";
+import { LandingPwaInstallSection } from "./LandingPwaInstallSection";
 import { LandingPricingSection } from "./LandingPricingSection";
+import { LandingSolutionsShowcaseSection } from "./LandingSolutionsShowcaseSection";
 import { LandingWalkthroughSection } from "./LandingWalkthroughSection";
 import { MarketingShell, useMarketingGoToFreeViewer } from "./MarketingShell";
 
@@ -21,9 +22,10 @@ function LandingHomeMain() {
         onGoToFreeViewer={goToFreeViewer}
       />
       <LandingWalkthroughSection />
+      <LandingSolutionsShowcaseSection />
       <LandingHowItWorksSection />
       <LandingPricingSection onGoToFreeViewer={goToFreeViewer} />
-      <LandingFeaturesIntroSection />
+      <LandingPwaInstallSection />
       <LandingFaqSection />
       <LandingFinalCtaSection onGoToFreeViewer={goToFreeViewer} />
     </>

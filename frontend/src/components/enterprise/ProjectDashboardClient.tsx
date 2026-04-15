@@ -101,6 +101,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
   const nowMs = useTickNowMs();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
+  const isAdmin = primary?.role === "ADMIN" || primary?.role === "SUPER_ADMIN";
   const isPro = isWorkspaceProClient(primary?.workspace);
 
   const { data: projects = [], isPending: projPending } = useQuery({
@@ -478,6 +479,10 @@ export function ProjectDashboardClient({ projectId }: Props) {
         open={editOpen}
         project={project}
         workspaceId={wid}
+        canDeleteProject={isAdmin && !primary?.isExternal}
+        onProjectDeleted={() => {
+          router.push("/projects");
+        }}
         onClose={() => setEditOpen(false)}
       />
 

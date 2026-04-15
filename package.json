@@ -26,6 +26,7 @@
     "db:push": "npm run db:push -w backend",
     "db:seed": "npm run db:seed -w backend",
     "db:seed:templates": "npm run db:seed:templates -w backend",
+    "db:seed:landing": "npm run db:seed:landing -w backend",
     "db:studio": "npm run db:studio -w backend",
     "db:validate": "npm run db:validate -w backend",
     "db:local:generate": "npm run db:local:generate -w backend",

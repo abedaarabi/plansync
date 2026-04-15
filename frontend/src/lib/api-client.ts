@@ -758,7 +758,12 @@ export type WorkspaceMemberRow = {
 };
 
 export type WorkspaceMembersResponse = {
+  /** Hard cap on members + pending seat pressure (anti-abuse). */
   maxSeats: number;
+  /** Seats included in base subscription price. */
+  includedSeats: number;
+  /** USD per month for each seat above `includedSeats`. */
+  extraSeatMonthlyUsd: number;
   seatPressure: number;
   members: WorkspaceMemberRow[];
 };
@@ -1162,6 +1167,20 @@ export async function patchProject(
   return j as ProjectMeta;
 }
 
+export async function deleteProject(projectId: string): Promise<void> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}`), {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    const err = j.error;
+    const msg = typeof err === "string" ? err : "Could not delete project.";
+    throw new Error(msg);
+  }
+}
+
 export async function fetchProject(projectId: string): Promise<ProjectMeta> {
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}`), {
     credentials: "include",
@@ -1183,6 +1202,8 @@ export type ProjectTeamMemberRow = {
 
 export type ProjectTeamResponse = {
   maxSeats: number;
+  includedSeats: number;
+  extraSeatMonthlyUsd: number;
   seatPressure: number;
   members: ProjectTeamMemberRow[];
 };

@@ -3,8 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
-import { LANDING_SOLUTIONS } from "@/lib/landingContent";
+import { getSolutionsByCategory } from "@/lib/landingContent";
 import { SolutionsDropdown } from "./SolutionsDropdown";
+
+const mobileConstructionSolutions = getSolutionsByCategory("construction");
+const mobileOperationsSolutions = getSolutionsByCategory("operations");
 
 type LandingNavProps = {
   scrolled: boolean;
@@ -39,30 +42,36 @@ export function LandingNav({
 
         <div className="hidden items-center gap-8 md:flex">
           <SolutionsDropdown />
-          <a
-            href="#walkthrough"
+          <Link
+            href="/#walkthrough"
             className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
           >
             Watch demo
-          </a>
-          <a
-            href="#features"
+          </Link>
+          <Link
+            href="/#features"
             className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
           >
             Features
-          </a>
-          <a
-            href="#compare"
+          </Link>
+          <Link
+            href="/#compare"
             className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
           >
             Pricing
-          </a>
-          <a
-            href="#faq"
+          </Link>
+          <Link
+            href="/#faq"
             className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
           >
             FAQ
-          </a>
+          </Link>
+          <Link
+            href="/#install"
+            className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
+          >
+            Install
+          </Link>
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
@@ -103,45 +112,73 @@ export function LandingNav({
       {mobileOpen && (
         <div className="border-t border-slate-200/80 bg-white px-6 pb-6 pt-4 md:hidden">
           <div className="flex flex-col gap-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              Solutions
-            </p>
-            <div className="flex flex-col gap-2 border-b border-slate-100 pb-4">
-              {LANDING_SOLUTIONS.map((s) => (
-                <Link
-                  key={s.slug}
-                  href={`/solutions/${s.slug}`}
-                  className="text-sm font-medium text-slate-700"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  {s.title}
-                </Link>
-              ))}
+            <div className="border-b border-slate-100 pb-4">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-blue-600">
+                Construction
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {mobileConstructionSolutions.map((s) => (
+                  <Link
+                    key={s.slug}
+                    href={`/solutions/${s.slug}`}
+                    className="text-sm font-medium text-slate-700"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    {s.title}
+                  </Link>
+                ))}
+              </div>
+              <p className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wider text-teal-600">
+                Operations & FM
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {mobileOperationsSolutions.map((s) => (
+                  <Link
+                    key={s.slug}
+                    href={`/solutions/${s.slug}`}
+                    className="text-sm font-medium text-slate-700"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    {s.title}
+                  </Link>
+                ))}
+              </div>
             </div>
-            <a
-              href="#walkthrough"
+            <Link
+              href="/#walkthrough"
               className="text-sm text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
               Watch demo
-            </a>
-            <a
-              href="#features"
+            </Link>
+            <Link
+              href="/#features"
               className="text-sm text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
               Features
-            </a>
-            <a
-              href="#compare"
+            </Link>
+            <Link
+              href="/#compare"
               className="text-sm text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
               Pricing
-            </a>
-            <a href="#faq" className="text-sm text-slate-600" onClick={() => setMobileOpen(false)}>
+            </Link>
+            <Link
+              href="/#faq"
+              className="text-sm text-slate-600"
+              onClick={() => setMobileOpen(false)}
+            >
               FAQ
-            </a>
+            </Link>
+            <Link
+              href="/#install"
+              className="text-sm text-slate-600"
+              onClick={() => setMobileOpen(false)}
+            >
+              Install
+            </Link>
             <hr className="border-slate-100" />
             {isLoggedIn ? (
               <Link href="/projects" className="text-sm font-medium text-slate-700">

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useState } from "react";
 import { ArrowRight, Loader2, Upload } from "lucide-react";
 import { PdfFileIcon } from "@/components/icons/PdfFileIcon";
+import { workspaceGateUrl } from "@/lib/workspacePreference";
 
 function ProgressBar({ step, total }: { step: number; total: number }) {
   const pct = (step / total) * 100;
@@ -40,7 +41,8 @@ function OnboardingContent() {
     } catch {
       /* ignore */
     }
-    router.push(nextDefault.startsWith("/") ? nextDefault : "/dashboard");
+    const path = nextDefault.startsWith("/") ? nextDefault : "/dashboard";
+    router.push(workspaceGateUrl(path));
   }, [nextDefault, router]);
 
   const onDropZone = useCallback(
@@ -194,7 +196,7 @@ function OnboardingContent() {
           )}
 
           <p className="mt-8 text-center text-sm text-slate-500">
-            <Link href="/dashboard" className="hover:text-slate-300">
+            <Link href={workspaceGateUrl("/dashboard")} className="hover:text-slate-300">
               Skip onboarding
             </Link>
           </p>

@@ -8,6 +8,7 @@ import { AlertCircle, ArrowRight, Loader2, Lock, Mail, User } from "lucide-react
 import { BrandStoryPanel, MarketingHeroBackdrop } from "@/components/BrandStoryPanel";
 import { SocialAuthButtons } from "@/components/SocialAuthButtons";
 import { authClient } from "@/lib/auth-client";
+import { workspaceGateUrl } from "@/lib/workspacePreference";
 
 const CARD_RADIUS = "16px";
 
@@ -99,8 +100,9 @@ export default function SignInPage() {
             setError("Please verify your email before signing in.");
             return;
           }
-          // Full navigation after session is confirmed.
-          window.location.assign(next.startsWith("/") ? next : `/${next}`);
+          // Full navigation after session is confirmed — workspace gate picks org when needed.
+          const nextPath = next.startsWith("/") ? next : `/${next}`;
+          window.location.assign(workspaceGateUrl(nextPath));
         }
       }
     } catch (ex) {
@@ -343,7 +345,10 @@ export default function SignInPage() {
                     </div>
                   </div>
 
-                  <SocialAuthButtons callbackURL={next} onError={setError} />
+                  <SocialAuthButtons
+                    callbackURL={workspaceGateUrl(next.startsWith("/") ? next : `/${next}`)}
+                    onError={setError}
+                  />
                 </div>
               </div>
 

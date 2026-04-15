@@ -1,32 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { LANDING_SOLUTIONS } from "@/lib/landingContent";
-import { SOLUTION_ICONS } from "./solutionIcons";
+import { ArrowUpRight, HardHat, Wrench } from "lucide-react";
+import { getSolutionsByCategory, SOLUTION_CATEGORIES } from "@/lib/landingContent";
+import type { SolutionCategory } from "@/lib/landingContent";
+import { SOLUTION_ICON_COLORS, SOLUTION_ICONS } from "./solutionIcons";
 
-const solutionGroups = [
-  {
-    title: "Core",
-    items: LANDING_SOLUTIONS.filter((s) =>
-      ["viewer", "issues", "rfis", "takeoff"].includes(s.slug),
-    ),
-  },
-  {
-    title: "O&M + FM",
-    items: LANDING_SOLUTIONS.filter((s) => s.slug.startsWith("om-")),
-  },
-] as const;
+const GROUPS: { category: SolutionCategory }[] = [
+  { category: "construction" },
+  { category: "operations" },
+];
 
-const tableShell =
-  "w-full overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--landing-cta)_22%,#e2e8f0)] bg-white shadow-[var(--enterprise-shadow-card)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_08%,transparent)]";
+/** Short phase labels — reads like a project app, not editorial copy. */
+const PART_LABEL: Record<SolutionCategory, string> = {
+  construction: "Delivery & field",
+  operations: "Handover & operations",
+};
+
+const CATEGORY_SHELL: Record<
+  SolutionCategory,
+  { Icon: typeof HardHat; topBar: string; iconTile: string }
+> = {
+  construction: {
+    Icon: HardHat,
+    topBar: "bg-blue-600",
+    iconTile: "bg-blue-50 text-blue-700 ring-1 ring-blue-200/80 shadow-sm shadow-blue-900/5",
+  },
+  operations: {
+    Icon: Wrench,
+    topBar: "bg-emerald-600",
+    iconTile:
+      "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/80 shadow-sm shadow-emerald-900/5",
+  },
+};
 
 type SolutionsDirectoryProps = {
-  /**
-   * Called after a solution link is activated (e.g. close mega-menu).
-   * Deferred so the Link can finish handing navigation to the router first.
-   */
   onNavigate?: () => void;
-  /** Extra classes on the outer wrapper. */
   className?: string;
 };
 
@@ -35,124 +44,99 @@ function scheduleNavigate(onNavigate?: () => void) {
   queueMicrotask(onNavigate);
 }
 
+/** Category panels + module cards — construction SaaS directory pattern. */
 export function SolutionsDirectory({ onNavigate, className = "" }: SolutionsDirectoryProps) {
   return (
-    <div className={`space-y-8 ${className}`}>
-      <div className="md:hidden space-y-6">
-        {solutionGroups.map((group) => (
-          <div key={group.title} className={tableShell}>
-            <div className="border-b border-[color-mix(in_srgb,var(--landing-cta)_18%,#e2e8f0)] bg-[color-mix(in_srgb,var(--landing-cta)_07%,white)] px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
-                {group.title}
-              </p>
-            </div>
-            <ul className="divide-y divide-slate-100">
-              {group.items.map((s) => {
-                const Icon = SOLUTION_ICONS[s.slug];
-                return (
-                  <li key={s.slug}>
-                    <Link
-                      href={`/solutions/${s.slug}`}
-                      onClick={() => scheduleNavigate(onNavigate)}
-                      className="flex gap-3 px-4 py-3.5 transition hover:bg-[color-mix(in_srgb,var(--landing-cta)_05%,white)]"
-                    >
-                      <span
-                        className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_22%,transparent)]"
-                        aria-hidden
-                      >
-                        <Icon className="h-4.5 w-4.5" strokeWidth={1.9} />
-                      </span>
-                      <span className="min-w-0 text-left">
-                        <span className="block text-sm font-semibold text-slate-900">
-                          {s.title}
-                        </span>
-                        <span className="mt-0.5 block text-xs leading-relaxed text-slate-600">
-                          {s.description}
-                        </span>
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-      </div>
+    <div className={`space-y-8 ${className}`.trim()}>
+      {GROUPS.map(({ category }) => {
+        const meta = SOLUTION_CATEGORIES[category];
+        const items = getSolutionsByCategory(category);
+        const shell = CATEGORY_SHELL[category];
 
-      <div className={`hidden md:block ${tableShell}`}>
-        <table className="w-full border-collapse text-left">
-          <thead>
-            <tr className="border-b border-[color-mix(in_srgb,var(--landing-cta)_20%,#e2e8f0)] bg-[color-mix(in_srgb,var(--landing-cta)_08%,white)]">
-              <th
-                scope="col"
-                className="w-[14%] px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--landing-cta)]"
-              >
-                Area
-              </th>
-              <th
-                scope="col"
-                className="w-[22%] px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--landing-cta)]"
-              >
-                Solution
-              </th>
-              <th
-                scope="col"
-                className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--landing-cta)]"
-              >
-                Summary
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {solutionGroups.map((group) =>
-              group.items.map((s, rowIdx) => {
-                const Icon = SOLUTION_ICONS[s.slug];
-                const isFirstInGroup = rowIdx === 0;
-                return (
-                  <tr
-                    key={s.slug}
-                    className="border-b border-slate-100 transition last:border-b-0 hover:bg-[color-mix(in_srgb,var(--landing-cta)_04%,white)]"
+        return (
+          <section
+            key={category}
+            id={`solutions-${category}`}
+            aria-labelledby={`cat-${category}`}
+            className="scroll-mt-24 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-(--enterprise-shadow-card)"
+          >
+            <div className={`h-1 w-full ${shell.topBar}`} aria-hidden />
+
+            <div className="border-b border-slate-100 bg-linear-to-b from-slate-50/95 to-white px-5 py-5 sm:px-6 sm:py-6">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+                <div className="flex min-w-0 items-start gap-4">
+                  <div
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${shell.iconTile}`}
+                    aria-hidden
                   >
-                    <td className="align-top px-4 py-3.5 text-sm font-medium text-slate-700">
-                      {isFirstInGroup ? (
-                        <span className="rounded-md bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] px-2 py-1 text-xs font-semibold text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_18%,transparent)]">
-                          {group.title}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="align-top px-4 py-3.5">
+                    <shell.Icon className="h-6 w-6" strokeWidth={1.75} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      {PART_LABEL[category]}
+                    </p>
+                    <h2
+                      id={`cat-${category}`}
+                      className="mt-1 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl"
+                    >
+                      {meta.label}
+                    </h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px]">
+                      {meta.description}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-col lg:items-end">
+                  <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200/90 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm">
+                    <span className="tabular-nums text-base text-slate-900">{items.length}</span>
+                    <span className="text-slate-500">modules</span>
+                  </div>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                    {meta.tagline}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5">
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {items.map((s) => {
+                  const Icon = SOLUTION_ICONS[s.slug];
+                  const colors = SOLUTION_ICON_COLORS[s.slug];
+                  return (
+                    <li key={s.slug}>
                       <Link
                         href={`/solutions/${s.slug}`}
                         onClick={() => scheduleNavigate(onNavigate)}
-                        className="group inline-flex items-start gap-3"
+                        className="group relative flex h-full min-h-28 flex-col rounded-xl border border-slate-200/80 bg-slate-50/40 p-4 transition hover:border-slate-300 hover:bg-white hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta) focus-visible:ring-offset-2"
                       >
+                        <ArrowUpRight
+                          className="absolute right-3 top-3 h-4 w-4 text-slate-300 transition group-hover:text-(--landing-cta)"
+                          strokeWidth={2}
+                          aria-hidden
+                        />
                         <span
-                          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_22%,transparent)] transition group-hover:bg-[color-mix(in_srgb,var(--landing-cta)_16%,white)]"
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200/60 bg-white shadow-sm ${colors.bg}`}
                           aria-hidden
                         >
-                          <Icon className="h-4.5 w-4.5" strokeWidth={1.9} />
+                          <Icon className={`h-5 w-5 ${colors.text}`} strokeWidth={1.85} />
                         </span>
-                        <span className="text-sm font-semibold text-slate-900 transition group-hover:text-[var(--landing-cta)]">
+                        <span className="mt-3 pr-6 text-[15px] font-semibold leading-snug text-slate-900">
                           {s.title}
                         </span>
+                        <span className="mt-1 text-sm leading-snug text-slate-600">
+                          {s.tagline}
+                        </span>
                       </Link>
-                    </td>
-                    <td className="align-top px-4 py-3.5">
-                      <Link
-                        href={`/solutions/${s.slug}`}
-                        onClick={() => scheduleNavigate(onNavigate)}
-                        className="block text-sm leading-relaxed text-slate-600 transition hover:text-slate-900"
-                      >
-                        {s.description}
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              }),
-            )}
-          </tbody>
-        </table>
-      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

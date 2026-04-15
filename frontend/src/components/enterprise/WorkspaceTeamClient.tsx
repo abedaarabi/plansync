@@ -484,10 +484,14 @@ export function WorkspaceTeamClient({
   }
 
   const currentUser = me?.user;
-  const maxSeats = peopleData?.maxSeats ?? 5;
+  const maxSeatCap = peopleData?.maxSeats ?? 250;
+  const includedSeats = peopleData?.includedSeats ?? 5;
+  const extraSeatUsd = peopleData?.extraSeatMonthlyUsd ?? 9;
   const seatPressure = peopleData?.seatPressure ?? 0;
-  const seatsRemaining = Math.max(0, maxSeats - seatPressure);
-  const seatPct = Math.min(100, (seatPressure / maxSeats) * 100);
+  const seatsRemainingUntilCap = Math.max(0, maxSeatCap - seatPressure);
+  const seatDenominator = Math.max(includedSeats, 1);
+  const seatPct = Math.min(100, (seatPressure / seatDenominator) * 100);
+  const extraSeatCount = Math.max(0, seatPressure - includedSeats);
   const teamMembers = peopleData?.members ?? [];
   const otherMembers = teamMembers.filter((m) => m.userId !== currentUser?.id);
   const superAdminCount = useMemo(
@@ -574,12 +578,19 @@ export function WorkspaceTeamClient({
             </div>
             <p className="mt-3 text-sm text-[#64748B]">
               <span className="font-medium text-[#0F172A]">
-                {membersPending ? "…" : seatPressure} of {maxSeats}
+                {membersPending ? "…" : seatPressure} of {includedSeats}
               </span>{" "}
-              seats used
+              included seats used
+              {extraSeatCount > 0 && !membersPending ? (
+                <span className="text-[#b45309]">
+                  {" "}
+                  · +{extraSeatCount} extra × ${extraSeatUsd}/mo
+                </span>
+              ) : null}
             </p>
             <p className="mt-1 text-sm text-[#64748B]">
-              {seatsRemaining} seat{seatsRemaining !== 1 ? "s" : ""} remaining on Pro plan ·{" "}
+              {seatsRemainingUntilCap} seat{seatsRemainingUntilCap !== 1 ? "s" : ""} remaining
+              before workspace cap ·{" "}
               <Link href="/organization" className="font-medium text-[#2563EB] hover:underline">
                 Organization settings
               </Link>

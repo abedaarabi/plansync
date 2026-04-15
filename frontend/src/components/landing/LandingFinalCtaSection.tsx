@@ -76,9 +76,9 @@ export function LandingFinalCtaSection({ onGoToFreeViewer }: LandingFinalCtaSect
           </div>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-blue-200/70">
-            <span>No installation</span>
+            <span>Runs in the browser · optional PWA install</span>
             <span className="hidden sm:inline">&middot;</span>
-            <span>No credit card</span>
+            <span>No credit card to start</span>
           </div>
         </AnimateIn>
       </div>

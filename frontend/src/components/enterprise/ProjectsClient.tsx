@@ -375,7 +375,14 @@ export function ProjectsClient() {
         return;
       }
       if (!res.ok) {
-        setError("Could not create project.");
+        let msg = "Could not create project.";
+        try {
+          const j = (await res.json()) as { error?: unknown };
+          if (typeof j.error === "string") msg = j.error;
+        } catch {
+          /* ignore */
+        }
+        setError(msg);
         return;
       }
       const p = (await res.json()) as Project;

@@ -33,6 +33,7 @@
     "db:push": "node ./scripts/load-root-env-run-prisma.mjs db push && node ./scripts/seed-folder-templates.mjs",
     "db:seed": "node ./scripts/load-root-env-run-prisma.mjs db seed",
     "db:seed:templates": "node ./scripts/seed-folder-templates.mjs",
+    "db:seed:landing": "tsx scripts/seed-landing-demo-project.ts",
     "db:backfill-project-dates": "tsx scripts/backfill-project-dates.ts",
     "db:studio": "node ./scripts/load-root-env-run-prisma.mjs studio",
     "db:validate": "node ./scripts/load-root-env-run-prisma.mjs validate",
