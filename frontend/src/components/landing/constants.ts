@@ -1,5 +1,6 @@
 export const YOUTUBE_WALKTHROUGH_ID = "B3aR-qLvCFo";
-export const YOUTUBE_HERO_DEMO_ID = "iaMkrdq1kko";
+export const YOUTUBE_HERO_DEMO_ID = "7g1qpgmHNg0";
+export const YOUTUBE_PDF_VERSION_CONTROL_ID = "4DnCFziN66o";
 
 export const FREE_FEATURES = [
   "Open any PDF",

@@ -8,7 +8,6 @@ import { LandingHowItWorksSection } from "./LandingHowItWorksSection";
 import { LandingPwaInstallSection } from "./LandingPwaInstallSection";
 import { LandingPricingSection } from "./LandingPricingSection";
 import { LandingSolutionsShowcaseSection } from "./LandingSolutionsShowcaseSection";
-import { LandingWalkthroughSection } from "./LandingWalkthroughSection";
 import { MarketingShell, useMarketingGoToFreeViewer } from "./MarketingShell";
 
 function LandingHomeMain() {
@@ -21,7 +20,6 @@ function LandingHomeMain() {
         prefersReducedMotion={prefersReducedMotion}
         onGoToFreeViewer={goToFreeViewer}
       />
-      <LandingWalkthroughSection />
       <LandingSolutionsShowcaseSection />
       <LandingHowItWorksSection />
       <LandingPricingSection onGoToFreeViewer={goToFreeViewer} />

@@ -6,6 +6,8 @@ type FileExplorerDeleteConfirmDialogProps = {
   open: boolean;
   targetName: string;
   targetType: "file" | "folder";
+  /** When set, deleting only this revision of a multi-version file (other revisions stay). */
+  fileRevisionToDelete?: number | null;
   confirmValue: string;
   onConfirmValueChange: (value: string) => void;
   deleting: boolean;
@@ -17,6 +19,7 @@ export function FileExplorerDeleteConfirmDialog({
   open,
   targetName,
   targetType,
+  fileRevisionToDelete,
   confirmValue,
   onConfirmValueChange,
   deleting,
@@ -58,7 +61,9 @@ export function FileExplorerDeleteConfirmDialog({
                 <span className="font-semibold text-[#0F172A]">&quot;{targetName}&quot;</span>.
                 {targetType === "folder"
                   ? " This removes the folder and everything inside it forever."
-                  : " This removes the file forever."}
+                  : fileRevisionToDelete != null
+                    ? ` This removes revision ${fileRevisionToDelete} only. Other revisions stay on the project.`
+                    : " This removes the file forever."}
               </p>
             </div>
           </div>
@@ -99,6 +104,8 @@ export function FileExplorerDeleteConfirmDialog({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Deleting...
               </>
+            ) : fileRevisionToDelete != null && targetType === "file" ? (
+              `Delete revision ${fileRevisionToDelete}`
             ) : (
               `Delete ${targetType}`
             )}

@@ -5,10 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   Calendar,
+  ChevronDown,
   Crosshair,
   FolderOpen,
   Link2,
-  MapPin,
   Paperclip,
   Pencil,
   Plus,
@@ -89,14 +89,12 @@ function isAnnotationAttachableToIssue(
 type IssueCardProps = {
   issue: IssueRow;
   isPatching: boolean;
-  isPlacingThis: boolean;
-  /** Sheet → server link in progress for this issue */
-  isPinLinking?: boolean;
+  isCollapsed: boolean;
   /** Selected by clicking its pin on the sheet — scroll target + emphasis. */
   isHighlighted?: boolean;
+  onToggleCollapse: (issueId: string) => void;
   onStatusChange: (issueId: string, status: string) => void;
   onFocusClick: (issue: IssueRow) => void;
-  onPlacePinClick: (issue: IssueRow) => void;
   onEditClick: (issue: IssueRow) => void;
   onDeleteClick: (issue: IssueRow) => void;
   onSetLinkTarget: (issue: IssueRow) => void;
@@ -106,12 +104,11 @@ type IssueCardProps = {
 const SidebarIssueCard = memo(function SidebarIssueCard({
   issue,
   isPatching,
-  isPlacingThis,
-  isPinLinking,
+  isCollapsed,
   isHighlighted,
+  onToggleCollapse,
   onStatusChange,
   onFocusClick,
-  onPlacePinClick,
   onEditClick,
   onDeleteClick,
   onSetLinkTarget,
@@ -122,186 +119,186 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
   const attachments = issueHasAttachments(issue);
   const sheetLabel = (issue.sheetName ?? issue.file.name).trim() || "Sheet";
   const rev = issue.sheetVersion ?? issue.fileVersion.version;
+  const statusBorderHex = issueStatusMarkerStrokeHex(issue.status);
 
   const actionBtn =
-    "viewer-focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-slate-200 transition hover:bg-slate-700/80 active:scale-[0.98]";
+    "viewer-focus-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-600/60 bg-slate-900/70 text-slate-200 transition hover:border-slate-500/70 hover:bg-slate-700/80 active:scale-[0.98]";
 
   return (
     <li id={`sidebar-issue-${issue.id}`}>
       <article
-        className={`overflow-hidden rounded-xl border transition-[box-shadow,background-color,border-color] duration-200 ${
+        className={`relative overflow-hidden rounded-lg border transition-[box-shadow,background-color,border-color] duration-200 ${
           isHighlighted
             ? "border-sky-500/45 bg-slate-800/95 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_12px_28px_-8px_rgba(0,0,0,0.45)]"
-            : "border-slate-600/45 bg-slate-800/35 hover:border-slate-500/55 hover:bg-slate-800/55"
+            : "bg-slate-800/45 hover:bg-slate-800/60"
         }`}
+        style={isHighlighted ? undefined : { borderColor: `${statusBorderHex}73` }}
       >
+        {!isHighlighted ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 left-0 w-1 rounded-l-lg opacity-95"
+            style={{ backgroundColor: statusBorderHex }}
+          />
+        ) : null}
         <div
-          className={`border-b border-slate-700/40 px-3.5 py-2.5 ${isHighlighted ? "bg-sky-950/15" : "bg-slate-900/25"}`}
+          className={`border-b border-slate-700/40 pl-3 pr-2.5 py-1.5 ${isHighlighted ? "bg-sky-950/15" : "bg-slate-900/30"}`}
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
               {issue.issueKind === "WORK_ORDER" ? (
-                <span className="shrink-0 rounded-md border border-slate-500/50 bg-slate-950/80 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-slate-400">
+                <span className="shrink-0 rounded border border-slate-500/50 bg-slate-950/80 px-1 py-0.5 text-[8px] font-bold text-slate-400">
                   WO
                 </span>
               ) : null}
               {attachments ? (
                 <span
-                  className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-amber-500/25 bg-amber-950/35 px-1.5 py-0.5 text-[9px] font-medium text-amber-100/90"
+                  className="inline-flex shrink-0 items-center gap-0.5 rounded border border-amber-500/25 bg-amber-950/35 px-1 py-0.5 text-[8px] font-medium text-amber-100/90"
                   title="Has reference photos, linked markups, or RFIs"
                 >
-                  <Paperclip className="h-2.5 w-2.5 opacity-90" strokeWidth={2.5} aria-hidden />
+                  <Paperclip className="h-2 w-2 opacity-90" strokeWidth={2.5} aria-hidden />
                   Attach
                 </span>
               ) : null}
             </div>
-            <label className="min-w-0 shrink">
-              <span className="sr-only">Issue status</span>
-              <select
-                value={issue.status}
-                onChange={(e) => onStatusChange(issue.id, e.target.value)}
-                disabled={isPatching}
-                className={`viewer-focus-ring max-w-44 cursor-pointer rounded-lg border-0 px-2.5 py-1.5 text-[10px] font-semibold shadow-sm disabled:opacity-50 sm:max-w-52 ${issueStatusBadgeClass(issue.status)}`}
+            <div className="flex items-center gap-1">
+              <label className="min-w-0 shrink">
+                <span className="sr-only">Issue status</span>
+                <select
+                  value={issue.status}
+                  onChange={(e) => onStatusChange(issue.id, e.target.value)}
+                  disabled={isPatching}
+                  className={`viewer-focus-ring max-w-40 cursor-pointer rounded-md border-0 px-2 py-1 text-[9px] font-semibold shadow-sm disabled:opacity-50 sm:max-w-48 ${issueStatusBadgeClass(issue.status)}`}
+                >
+                  {ISSUE_STATUS_ORDER.map((s) => (
+                    <option key={s} value={s}>
+                      {ISSUE_STATUS_LABEL[s]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => onToggleCollapse(issue.id)}
+                aria-label={isCollapsed ? "Expand issue card" : "Collapse issue card"}
+                aria-expanded={!isCollapsed}
+                className="viewer-focus-ring flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-600/60 bg-slate-900/70 text-slate-300 transition hover:bg-slate-700/80"
+                title={isCollapsed ? "Expand" : "Collapse"}
               >
-                {ISSUE_STATUS_ORDER.map((s) => (
-                  <option key={s} value={s}>
-                    {ISSUE_STATUS_LABEL[s]}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? "-rotate-90" : ""}`}
+                  strokeWidth={2}
+                />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-2.5 px-3.5 pb-3 pt-3">
-          <h3 className="text-[13px] font-semibold leading-snug tracking-tight text-slate-50 wrap-anywhere">
+        <div className="space-y-1.5 pl-3 pr-2.5 pb-2 pt-2">
+          <h3 className="text-[12px] font-semibold leading-tight tracking-tight text-slate-50 wrap-anywhere">
             {issue.title}
           </h3>
+          {isCollapsed ? null : (
+            <>
+              <div className="flex flex-wrap gap-1 text-[9px]">
+                <span className="inline-flex max-w-full items-center rounded bg-slate-950/70 px-1.5 py-0.5 font-medium text-slate-300 ring-1 ring-slate-700/50">
+                  <span className="truncate">{sheetLabel}</span>
+                </span>
+                <span className="inline-flex items-center rounded bg-slate-950/70 px-1.5 py-0.5 tabular-nums font-medium text-slate-400 ring-1 ring-slate-700/50">
+                  Rev {rev}
+                </span>
+                {issue.pageNumber != null ? (
+                  <span className="inline-flex items-center rounded bg-slate-950/70 px-1.5 py-0.5 tabular-nums font-medium text-slate-400 ring-1 ring-slate-700/50">
+                    p.{issue.pageNumber}
+                  </span>
+                ) : null}
+              </div>
 
-          <div className="flex flex-wrap gap-1.5 text-[10px]">
-            <span className="inline-flex max-w-full items-center rounded-md bg-slate-950/70 px-2 py-1 font-medium text-slate-300 ring-1 ring-slate-700/50">
-              <span className="truncate">{sheetLabel}</span>
-            </span>
-            <span className="inline-flex items-center rounded-md bg-slate-950/70 px-2 py-1 tabular-nums font-medium text-slate-400 ring-1 ring-slate-700/50">
-              Rev {rev}
-            </span>
-            {issue.pageNumber != null ? (
-              <span className="inline-flex items-center rounded-md bg-slate-950/70 px-2 py-1 tabular-nums font-medium text-slate-400 ring-1 ring-slate-700/50">
-                Page {issue.pageNumber}
-              </span>
-            ) : null}
-          </div>
+              {issue.location ? (
+                <p className="truncate text-[9px] leading-tight text-slate-500">{issue.location}</p>
+              ) : null}
 
-          {issue.location ? (
-            <p className="truncate text-[10px] leading-snug text-slate-500">{issue.location}</p>
-          ) : null}
-
-          {issue.assignee ? (
-            <div className="flex min-w-0 items-center gap-2 rounded-lg bg-slate-950/40 py-1.5 pl-1.5 pr-2 ring-1 ring-slate-700/40">
-              <ViewerUserThumb
-                name={issue.assignee.name}
-                email={issue.assignee.email}
-                image={issue.assignee.image}
-                className="h-7 w-7 text-[9px]"
-              />
-              <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-slate-300">
-                {issue.assignee.name || issue.assignee.email}
-              </p>
-            </div>
-          ) : (
-            <p className="text-[10px] italic text-slate-600">Unassigned</p>
-          )}
-
-          <div className="flex flex-wrap gap-1.5">
-            <span className="rounded-md bg-slate-950/80 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-slate-400 ring-1 ring-slate-700/50">
-              {ISSUE_PRIORITY_LABEL[pri] ?? pri}
-            </span>
-            {due ? (
-              <span
-                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-500/35 bg-amber-950/70 px-2 py-1 text-[11px] font-semibold tabular-nums text-amber-50 shadow-sm ring-1 ring-amber-600/25"
-                title={`Due ${due}`}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-slate-950/30 px-1.5 py-1 ring-1 ring-slate-700/35">
+                {issue.assignee ? (
+                  <div className="flex min-w-0 max-w-full flex-1 items-center gap-1.5">
+                    <ViewerUserThumb
+                      name={issue.assignee.name}
+                      email={issue.assignee.email}
+                      image={issue.assignee.image}
+                      className="h-5 w-5 shrink-0 text-[8px]"
+                    />
+                    <span className="min-w-0 truncate text-[10px] font-medium text-slate-300">
+                      {issue.assignee.name || issue.assignee.email}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-[9px] italic text-slate-600">Unassigned</span>
+                )}
+                <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+                  <span className="rounded bg-slate-950/80 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-400 ring-1 ring-slate-700/50">
+                    {ISSUE_PRIORITY_LABEL[pri] ?? pri}
+                  </span>
+                  {due ? (
+                    <span
+                      className="inline-flex shrink-0 items-center gap-0.5 rounded border border-amber-500/35 bg-amber-950/70 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-amber-50 ring-1 ring-amber-600/25"
+                      title={`Due ${due}`}
+                    >
+                      <Calendar
+                        className="h-3 w-3 shrink-0 text-amber-200"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                      Due {due}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              <div
+                className="flex flex-wrap items-center justify-end gap-1 border-t border-slate-700/35 pt-1.5 mt-1"
+                role="toolbar"
+                aria-label="Issue actions"
               >
-                <Calendar
-                  className="h-3.5 w-3.5 shrink-0 text-amber-200"
-                  strokeWidth={2}
-                  aria-hidden
-                />
-                Due {due}
-              </span>
-            ) : null}
-          </div>
-
-          <div
-            className="flex flex-wrap items-center justify-end gap-1.5 border-t border-slate-700/35 pt-3"
-            role="toolbar"
-            aria-label="Issue actions"
-          >
-            <button
-              type="button"
-              title="Edit details"
-              onClick={() => onEditClick(issue)}
-              className={`${actionBtn} border-slate-600/60 bg-slate-900/80`}
-            >
-              <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
-            </button>
-            <button
-              type="button"
-              title="Use this issue when linking selected markups (Select tool)"
-              onClick={() => onSetLinkTarget(issue)}
-              className={`${actionBtn} ${
-                isHighlighted
-                  ? "border-emerald-500/50 bg-emerald-950/50 text-emerald-50"
-                  : "border-slate-600/60 bg-slate-900/80"
-              }`}
-            >
-              <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
-            </button>
-            <button
-              type="button"
-              title="Delete issue"
-              disabled={isDeleting}
-              onClick={() => onDeleteClick(issue)}
-              className={`${actionBtn} border-red-500/30 bg-red-950/35 text-red-100 hover:bg-red-950/55 disabled:opacity-40`}
-            >
-              <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-            </button>
-            <button
-              type="button"
-              title={
-                issue.annotationId ? "Zoom to linked markup" : "Place a pin on the sheet first"
-              }
-              disabled={!issue.annotationId}
-              onClick={() => onFocusClick(issue)}
-              className={`${actionBtn} border-slate-600/60 bg-slate-900/80 disabled:cursor-not-allowed disabled:opacity-35`}
-            >
-              <Crosshair className="h-3.5 w-3.5" strokeWidth={2} />
-            </button>
-            <button
-              type="button"
-              title={
-                isPinLinking
-                  ? "Saving pin link…"
-                  : issue.annotationId
-                    ? "Move status pin on the sheet"
-                    : "Place status pin on the sheet"
-              }
-              disabled={isPinLinking}
-              onClick={() => onPlacePinClick(issue)}
-              className={`${actionBtn} ${
-                isPlacingThis
-                  ? "border-amber-500/55 bg-amber-950/45 text-amber-50"
-                  : "border-slate-600/60 bg-slate-900/80"
-              } disabled:cursor-not-allowed disabled:opacity-40`}
-            >
-              <MapPin className="h-3.5 w-3.5" strokeWidth={2} />
-            </button>
-          </div>
-
-          {isPlacingThis ? (
-            <p className="rounded-md bg-amber-950/30 px-2 py-1.5 text-center text-[10px] font-medium text-amber-100/95 ring-1 ring-amber-700/25">
-              Click the drawing to drop the pin.
-            </p>
-          ) : null}
+                <button
+                  type="button"
+                  title="Edit details"
+                  onClick={() => onEditClick(issue)}
+                  className={`${actionBtn} border-slate-600/60 bg-slate-900/80`}
+                >
+                  <Pencil className="h-3 w-3" strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  title="Use this issue when linking selected markups (Select tool)"
+                  onClick={() => onSetLinkTarget(issue)}
+                  className={`${actionBtn} ${
+                    isHighlighted
+                      ? "border-emerald-500/50 bg-emerald-950/50 text-emerald-50"
+                      : "border-slate-600/60 bg-slate-900/80"
+                  }`}
+                >
+                  <Link2 className="h-3 w-3" strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  title="Delete issue"
+                  disabled={isDeleting}
+                  onClick={() => onDeleteClick(issue)}
+                  className={`${actionBtn} border-red-500/30 bg-red-950/35 text-red-100 hover:bg-red-950/55 disabled:opacity-40`}
+                >
+                  <Trash2 className="h-3 w-3" strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  title={issue.annotationId ? "Zoom to linked markup" : "No sheet link yet"}
+                  disabled={!issue.annotationId}
+                  onClick={() => onFocusClick(issue)}
+                  className={`${actionBtn} border-slate-600/60 bg-slate-900/80 disabled:cursor-not-allowed disabled:opacity-35`}
+                >
+                  <Crosshair className="h-3 w-3" strokeWidth={2} />
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </article>
     </li>
@@ -314,15 +311,14 @@ export function SidebarIssuesTab() {
   const annotations = useViewerStore((s) => s.annotations);
   const requestSearchFocus = useViewerStore((s) => s.requestSearchFocus);
   const setPendingProSidebarTab = useViewerStore((s) => s.setPendingProSidebarTab);
-  const issuePlacement = useViewerStore((s) => s.issuePlacement);
   const setIssuePlacement = useViewerStore((s) => s.setIssuePlacement);
   const newIssuePlacementActive = useViewerStore((s) => s.newIssuePlacementActive);
   const setNewIssuePlacementActive = useViewerStore((s) => s.setNewIssuePlacementActive);
+  const setIssueFormSliderOpen = useViewerStore((s) => s.setIssueFormSliderOpen);
   const issueCreateDraft = useViewerStore((s) => s.issueCreateDraft);
   const setAnnotations = useViewerStore((s) => s.setAnnotations);
   const issuesSidebarFocusIssueId = useViewerStore((s) => s.issuesSidebarFocusIssueId);
   const setIssuesSidebarFocusIssueId = useViewerStore((s) => s.setIssuesSidebarFocusIssueId);
-  const issuePinLinkInFlightIssueId = useViewerStore((s) => s.issuePinLinkInFlightIssueId);
   const tool = useViewerStore((s) => s.tool);
   const selectedAnnotationIds = useViewerStore((s) => s.selectedAnnotationIds);
   const setSelectedAnnotationIds = useViewerStore((s) => s.setSelectedAnnotationIds);
@@ -332,6 +328,7 @@ export function SidebarIssuesTab() {
   const [patchingIssueId, setPatchingIssueId] = useState<string | null>(null);
   const [deletingIssueId, setDeletingIssueId] = useState<string | null>(null);
   const [deleteConfirmIssue, setDeleteConfirmIssue] = useState<IssueRow | null>(null);
+  const [collapsedIssueIds, setCollapsedIssueIds] = useState<string[]>([]);
 
   const viewerOperationsMode = useViewerStore((s) => s.viewerOperationsMode);
   const issuesQueryKey = qk.issuesForFileVersion(
@@ -372,6 +369,12 @@ export function SidebarIssuesTab() {
     }, 80);
     return () => window.clearTimeout(t);
   }, [issuesSidebarFocusIssueId, issuesPending, issues.length]);
+
+  useEffect(() => {
+    if (issues.length === 0) return;
+    const ids = new Set(issues.map((i) => i.id));
+    setCollapsedIssueIds((prev) => prev.filter((id) => ids.has(id)));
+  }, [issues]);
 
   /** Sync server issue metadata onto the pin and any attached markups (without undo noise). */
   useEffect(() => {
@@ -612,7 +615,9 @@ export function SidebarIssuesTab() {
         (x): x is string => Boolean(x),
       );
       if (annIds.length === 0) {
-        toast.message("No markup linked yet. Use the pin control to place one on the sheet.");
+        toast.message(
+          "No markup linked yet. Use New issue to add a pin on the sheet, or link markups with the link icon on an issue row.",
+        );
         return;
       }
       const st0 = useViewerStore.getState();
@@ -631,7 +636,7 @@ export function SidebarIssuesTab() {
       }
       if (!ann.linkedIssueId) {
         toast.message(
-          "This issue uses a classic markup link. Use “Place pin” to add a status-colored pin, or keep using this shape as-is.",
+          "This issue uses a classic markup link. The linked shape on the sheet stays as-is.",
           { duration: 6000 },
         );
       }
@@ -646,23 +651,6 @@ export function SidebarIssuesTab() {
     [requestSearchFocus, setPendingProSidebarTab],
   );
 
-  const onPlacePinClick = useCallback(
-    (issue: IssueRow) => {
-      setNewIssuePlacementActive(false);
-      const livePin = useViewerStore
-        .getState()
-        .annotations.find((a) => a.linkedIssueId === issue.id);
-      setIssuePlacement({
-        issueId: issue.id,
-        status: issue.status,
-        title: issue.title,
-        replaceAnnotationId: livePin?.id ?? issue.annotationId ?? null,
-        issueKind: issue.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION",
-      });
-    },
-    [setIssuePlacement, setNewIssuePlacementActive],
-  );
-
   const onDeleteClick = useCallback((issue: IssueRow) => {
     setDeleteConfirmIssue(issue);
   }, []);
@@ -673,7 +661,26 @@ export function SidebarIssuesTab() {
     setPendingProSidebarTab("issues");
   }, [setIssuePlacement, setNewIssuePlacementActive, setPendingProSidebarTab]);
 
-  const closeEditDialog = useCallback(() => setEditingIssue(null), []);
+  const closeEditDialog = useCallback(() => {
+    setIssueFormSliderOpen(false);
+    setEditingIssue(null);
+  }, [setIssueFormSliderOpen]);
+
+  const toggleIssueCollapse = useCallback((issueId: string) => {
+    setCollapsedIssueIds((prev) =>
+      prev.includes(issueId) ? prev.filter((id) => id !== issueId) : [...prev, issueId],
+    );
+  }, []);
+
+  const openIssueEdit = useCallback(
+    (issue: IssueRow) => {
+      setIssuePlacement(null);
+      setNewIssuePlacementActive(false);
+      setIssueFormSliderOpen(true);
+      setEditingIssue(issue);
+    },
+    [setIssuePlacement, setNewIssuePlacementActive, setIssueFormSliderOpen],
+  );
 
   if (!cloudFileVersionId || !viewerProjectId) {
     return (
@@ -729,21 +736,6 @@ export function SidebarIssuesTab() {
           <span className="font-semibold">New issue (draft):</span> use the form on the canvas to
           add title and details. Click the pin again if you closed it.{" "}
           <span className="text-[#94A3B8]">Issue pins are removed from the Issues tab only.</span>
-        </div>
-      ) : null}
-
-      {issuePlacement ? (
-        <div className="shrink-0 rounded-md border border-amber-500/40 bg-amber-950/55 px-2 py-1.5 text-[10px] leading-snug text-amber-100">
-          <span className="font-semibold">Placing pin:</span> {issuePlacement.title}. A banner also
-          appears above the drawing.{" "}
-          <button
-            type="button"
-            onClick={() => setIssuePlacement(null)}
-            className="font-medium text-amber-200 underline decoration-amber-400/60 underline-offset-2 hover:text-white"
-          >
-            Cancel
-          </button>
-          <span className="text-[#94A3B8]"> · Esc</span>
         </div>
       ) : null}
 
@@ -803,19 +795,18 @@ export function SidebarIssuesTab() {
             </p>
           </div>
         ) : (
-          <ul className="space-y-3 px-0.5 pb-1">
+          <ul className="space-y-2 px-0.5 pb-1">
             {issues.map((issue) => (
               <SidebarIssueCard
                 key={issue.id}
                 issue={issue}
                 isPatching={patchingIssueId === issue.id}
-                isPlacingThis={issuePlacement?.issueId === issue.id}
-                isPinLinking={issuePinLinkInFlightIssueId === issue.id}
+                isCollapsed={collapsedIssueIds.includes(issue.id)}
                 isHighlighted={issuesSidebarFocusIssueId === issue.id}
+                onToggleCollapse={toggleIssueCollapse}
                 onStatusChange={onIssueStatusChange}
                 onFocusClick={focusIssue}
-                onPlacePinClick={onPlacePinClick}
-                onEditClick={setEditingIssue}
+                onEditClick={openIssueEdit}
                 onDeleteClick={onDeleteClick}
                 onSetLinkTarget={onSetLinkTarget}
                 isDeleting={deletingIssueId === issue.id}

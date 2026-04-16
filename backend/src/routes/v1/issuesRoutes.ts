@@ -12,6 +12,7 @@ import {
 } from "@prisma/client";
 import { Resend } from "resend";
 import { prisma } from "../../lib/prisma.js";
+import { fileVersionWriteBlocked } from "../../lib/fileVersionLock.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectForMember, assertUserAssignableToProject } from "../../lib/projectAccess.js";
 import { canCreateIssues, issuesWhereForAuth, loadProjectWithAuth } from "../../lib/permissions.js";
@@ -264,16 +265,6 @@ function stripIssueLinkedAnnotationsFromViewerBlob(
   });
   if (nextAnnotations.length === annotations.length) return null;
   return { ...blobObj, annotations: nextAnnotations } as Prisma.InputJsonValue;
-}
-
-async function fileVersionWriteBlocked(fileVersionId: string, userId: string): Promise<boolean> {
-  const fv = await prisma.fileVersion.findUnique({
-    where: { id: fileVersionId },
-    select: { lockedByUserId: true, lockExpiresAt: true },
-  });
-  if (!fv?.lockedByUserId) return false;
-  if (fv.lockExpiresAt && fv.lockExpiresAt < new Date()) return false;
-  return fv.lockedByUserId !== userId;
 }
 
 async function sendIssueAssignedEmail(

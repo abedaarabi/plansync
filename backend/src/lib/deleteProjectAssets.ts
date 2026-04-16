@@ -41,6 +41,43 @@ export async function deleteFileFromS3AndDb(
   return { ok: true, bytesFreed };
 }
 
+/**
+ * Deletes one revision. If it is the only remaining revision, removes the whole `File` (same as full delete).
+ */
+export async function deleteFileVersionFromS3AndDb(
+  env: Env,
+  fileId: string,
+  version: number,
+): Promise<
+  { ok: true; bytesFreed: bigint; removedWholeFile: boolean } | { ok: false; error: string }
+> {
+  if (!Number.isInteger(version) || version < 1) {
+    return { ok: false, error: "Invalid version" };
+  }
+  const file = await prisma.file.findUnique({
+    where: { id: fileId },
+    include: { versions: true },
+  });
+  if (!file) return { ok: false, error: "Not found" };
+  const target = file.versions.find((v) => v.version === version);
+  if (!target) return { ok: false, error: "Version not found" };
+
+  if (file.versions.length <= 1) {
+    const r = await deleteFileFromS3AndDb(env, fileId);
+    if (!r.ok) return r;
+    return { ok: true, bytesFreed: r.bytesFreed, removedWholeFile: true };
+  }
+
+  const del = await deleteObject(env, target.s3Key);
+  if (!del.ok && del.error !== "S3 not configured") {
+    console.warn(`deleteObject failed for ${target.s3Key}:`, del.error);
+  }
+  await prisma.fileVersion.delete({
+    where: { fileId_version: { fileId, version } },
+  });
+  return { ok: true, bytesFreed: target.sizeBytes, removedWholeFile: false };
+}
+
 export async function deleteFolderTreeFromDbAndS3(
   env: Env,
   folderId: string,

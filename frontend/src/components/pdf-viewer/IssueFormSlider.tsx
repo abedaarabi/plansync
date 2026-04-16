@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
@@ -131,6 +131,10 @@ export function IssueFormSlider(props: Props) {
   const setIssueCreateDraft = useViewerStore((s) => s.setIssueCreateDraft);
   const updateAnnotation = useViewerStore((s) => s.updateAnnotation);
   const removeAnnotation = useViewerStore((s) => s.removeAnnotation);
+  const setIssuePlacement = useViewerStore((s) => s.setIssuePlacement);
+  const setNewIssuePlacementActive = useViewerStore((s) => s.setNewIssuePlacementActive);
+  const setIssueFormSliderOpen = useViewerStore((s) => s.setIssueFormSliderOpen);
+  const setTool = useViewerStore((s) => s.setTool);
 
   const qc = useQueryClient();
   const [mounted, setMounted] = useState(false);
@@ -340,6 +344,24 @@ export function IssueFormSlider(props: Props) {
   useEffect(() => {
     if (!open) setDeleteDialogOpen(false);
   }, [open]);
+
+  /**
+   * Clear armed pin modes; switch to Select so closing the form does not leave Draw tool placing
+   * markups. Sync `issueFormSliderOpen` for create flow (edit sets it synchronously in the sidebar).
+   */
+  useLayoutEffect(() => {
+    if (!open) return;
+    setIssuePlacement(null);
+    setNewIssuePlacementActive(false);
+    setTool("select");
+    setIssueFormSliderOpen(true);
+    return () => {
+      setIssuePlacement(null);
+      setNewIssuePlacementActive(false);
+      setTool("select");
+      setIssueFormSliderOpen(false);
+    };
+  }, [open, setIssuePlacement, setNewIssuePlacementActive, setTool, setIssueFormSliderOpen]);
 
   useEffect(() => {
     if (!open) return;

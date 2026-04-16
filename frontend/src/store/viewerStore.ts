@@ -275,6 +275,11 @@ interface ViewerState {
   newIssuePlacementActive: boolean;
   /** Opens create dialog; cleared after save/cancel. */
   issueCreateDraft: null | { annotationId: string };
+  /**
+   * Issue create/edit slider is open (portaled). Set synchronously when opening edit so the canvas
+   * does not receive clicks during the one-frame delay before `IssueFormSlider` mounts.
+   */
+  issueFormSliderOpen: boolean;
   /** Issues tab: scroll/highlight this server issue when its pin is selected on the sheet. */
   issuesSidebarFocusIssueId: string | null;
   /** Prevents dropping another sheet pin for the same issue while `patchIssue` is in flight. */
@@ -307,6 +312,7 @@ interface ViewerState {
   leftSidebarTab:
     | "draw"
     | "measure"
+    | "calibrate"
     | "pages"
     | "outline"
     | "issues"
@@ -314,7 +320,16 @@ interface ViewerState {
     | "sheetAi"
     | "collab";
   setLeftSidebarTab: (
-    t: "draw" | "measure" | "pages" | "outline" | "issues" | "takeoff" | "sheetAi" | "collab",
+    t:
+      | "draw"
+      | "measure"
+      | "calibrate"
+      | "pages"
+      | "outline"
+      | "issues"
+      | "takeoff"
+      | "sheetAi"
+      | "collab",
   ) => void;
   /**
    * Left tools rail (Draw / Measure / Pages / …). Used below `lg` only — wide layouts always show the panel;
@@ -368,6 +383,7 @@ interface ViewerState {
   ) => void;
   setNewIssuePlacementActive: (v: boolean) => void;
   setIssueCreateDraft: (d: null | { annotationId: string }) => void;
+  setIssueFormSliderOpen: (v: boolean) => void;
   setOmAssetPlacementActive: (v: boolean) => void;
   setOmAssetCreateDraft: (d: null | { annotationId: string }) => void;
   setIssuesSidebarFocusIssueId: (id: string | null) => void;
@@ -540,6 +556,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   issuePlacement: null,
   newIssuePlacementActive: false,
   issueCreateDraft: null,
+  issueFormSliderOpen: false,
   issuesSidebarFocusIssueId: null,
   issuePinLinkInFlightIssueId: null,
   omAssetPlacementActive: false,
@@ -945,6 +962,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
         : {}),
     }),
   setIssueCreateDraft: (issueCreateDraft) => set({ issueCreateDraft }),
+  setIssueFormSliderOpen: (issueFormSliderOpen) => set({ issueFormSliderOpen }),
   setOmAssetPlacementActive: (omAssetPlacementActive) =>
     set({
       omAssetPlacementActive,
@@ -973,6 +991,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       issuePlacement: null,
       newIssuePlacementActive: false,
       issueCreateDraft: null,
+      issueFormSliderOpen: false,
       omAssetPlacementActive: false,
       omAssetCreateDraft: null,
       issuesSidebarFocusIssueId: null,
@@ -1346,6 +1365,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       issuePlacement: null,
       newIssuePlacementActive: false,
       issueCreateDraft: null,
+      issueFormSliderOpen: false,
       omAssetPlacementActive: false,
       omAssetCreateDraft: null,
       issuesSidebarFocusIssueId: null,

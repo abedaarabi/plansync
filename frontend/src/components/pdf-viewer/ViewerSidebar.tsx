@@ -10,7 +10,6 @@ import {
   MessageSquare,
   Minus,
   Package,
-  Sparkles,
   Paintbrush,
   Pencil,
   PenTool,
@@ -84,7 +83,7 @@ function SectionTitle({ children }: { children: ReactNode }) {
 
 /** Same filled blue active state as viewer-toolbar-btn-active (top bar icons). */
 function sidebarPanelTabClass(selected: boolean): string {
-  return `viewer-focus-ring flex flex-col items-center gap-0.5 rounded-md border px-0.5 pb-2 pt-2 text-[8px] font-semibold uppercase tracking-[0.08em] transition duration-150 ${
+  return `viewer-focus-ring flex h-14 flex-col items-center justify-center gap-0.5 rounded-md border px-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] transition duration-150 ${
     selected
       ? "border-[rgba(37,99,235,0.55)] bg-[#2563EB] text-white shadow-[0_1px_3px_rgba(0,0,0,0.25)]"
       : "border-[#334155] bg-[#1E293B] text-[#94A3B8] hover:border-[#475569] hover:bg-[#334155] hover:text-[#F8FAFC]"
@@ -243,7 +242,15 @@ export function ViewerSidebar() {
     id: string;
   } | null>(null);
   const [sidebarTab, setSidebarTab] = useState<
-    "draw" | "measure" | "pages" | "outline" | "issues" | "takeoff" | "sheetAi" | "collab"
+    | "draw"
+    | "measure"
+    | "calibrate"
+    | "pages"
+    | "outline"
+    | "issues"
+    | "takeoff"
+    | "sheetAi"
+    | "collab"
   >("draw");
   const collabCtx = useViewerCollab();
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
@@ -342,7 +349,14 @@ export function ViewerSidebar() {
   useEffect(() => {
     if (!selectedAnn) return;
     setSidebarTab((t) => {
-      if (t === "pages" || t === "outline" || t === "sheetAi" || t === "collab") return t;
+      if (
+        t === "pages" ||
+        t === "outline" ||
+        t === "calibrate" ||
+        t === "sheetAi" ||
+        t === "collab"
+      )
+        return t;
       if (annotationIsIssuePin(selectedAnn) || annotationIsIssueLinkedMarkup(selectedAnn))
         return "issues";
       if (t === "takeoff") return t;
@@ -357,7 +371,7 @@ export function ViewerSidebar() {
     selectedAnn?.linkedIssueAttachment,
   ]);
 
-  /** Ruler / calibrate live under the Measure panel. */
+  /** Keep Measure/Calibrate tools on their matching panels. */
   useEffect(() => {
     if (tool !== "measure" && tool !== "calibrate") return;
     setSidebarTab((t) =>
@@ -368,7 +382,9 @@ export function ViewerSidebar() {
       t === "sheetAi" ||
       t === "collab"
         ? t
-        : "measure",
+        : tool === "calibrate"
+          ? "calibrate"
+          : "measure",
     );
   }, [tool]);
 
@@ -388,6 +404,7 @@ export function ViewerSidebar() {
     if (
       sidebarTab === "takeoff" ||
       sidebarTab === "issues" ||
+      sidebarTab === "calibrate" ||
       sidebarTab === "sheetAi" ||
       sidebarTab === "collab"
     )
@@ -474,7 +491,7 @@ export function ViewerSidebar() {
                 aria-selected={sidebarTab === "measure"}
                 onClick={() => {
                   setSidebarTab("measure");
-                  setTool("select");
+                  setTool("measure");
                 }}
                 title="Measure & scale — list shows measures only"
                 className={sidebarPanelTabClass(sidebarTab === "measure")}
@@ -506,13 +523,23 @@ export function ViewerSidebar() {
               </button>
             </div>
             {pdfUrl ? (
-              <div
-                className={`mt-1 grid gap-1 ${
-                  showProTabs ? (showCollabTab ? "grid-cols-2" : "grid-cols-3") : "grid-cols-1"
-                }`}
-              >
+              <div className={`mt-1 grid gap-1 ${showProTabs ? "grid-cols-4" : "grid-cols-1"}`}>
                 {showProTabs ? (
                   <>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={sidebarTab === "calibrate"}
+                      onClick={() => {
+                        setSidebarTab("calibrate");
+                        setTool("calibrate");
+                      }}
+                      title="Set drawing scale from a known length"
+                      className={sidebarPanelTabClass(sidebarTab === "calibrate")}
+                    >
+                      <Scaling className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      Cal
+                    </button>
                     <button
                       type="button"
                       role="tab"
@@ -542,21 +569,6 @@ export function ViewerSidebar() {
                     >
                       <Package className="h-3.5 w-3.5" strokeWidth={1.75} />
                       Takeoff
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={sidebarTab === "sheetAi"}
-                      onClick={() => {
-                        setSidebarTab("sheetAi");
-                        setTakeoffMode(false);
-                        setTakeoffInventoryDrawerFromSidebar(false);
-                      }}
-                      title="Takeoff assist — detect quantities on the sheet"
-                      className={sidebarPanelTabClass(sidebarTab === "sheetAi")}
-                    >
-                      <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      Assist
                     </button>
                     {showCollabTab ? (
                       <button
@@ -595,6 +607,48 @@ export function ViewerSidebar() {
         {pdfUrl && sidebarTab === "outline" && <SidebarOutlineTab />}
         {pdfUrl && sidebarTab === "issues" && showProTabs && <SidebarIssuesTab />}
         {pdfUrl && sidebarTab === "takeoff" && showProTabs && <SidebarTakeoffTab />}
+        {pdfUrl && sidebarTab === "calibrate" && showProTabs && (
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:thin]">
+            <CalibrationGuide />
+            <CalibrateTargetRow />
+            <SectionTitle>Units &amp; calibration</SectionTitle>
+            <div className="mb-2 space-y-1.5 rounded-md border border-[#334155] bg-[#1E293B] p-1.5">
+              <label className="flex items-center justify-between gap-1 text-[10px] text-[#94A3B8]">
+                <span>Units</span>
+                <select
+                  value={measureUnit}
+                  onChange={(e) => setMeasureUnit(e.target.value as MeasureUnit)}
+                  className="viewer-input-select max-w-[5.5rem]"
+                  title="Displayed units (values stored in mm)"
+                  aria-label="Measure units"
+                >
+                  <option value="mm">mm</option>
+                  <option value="cm">cm</option>
+                  <option value="m">m</option>
+                  <option value="in">in</option>
+                  <option value="ft">ft</option>
+                </select>
+              </label>
+              <p className="text-[8px] leading-snug text-[#64748B]">
+                Units and snap presets are saved with this document when you close the tab.
+              </p>
+              <button
+                type="button"
+                disabled={!pdfUrl || !pageCal}
+                onClick={() => clearCalibration(pageIdx0)}
+                title="Remove scale for this page"
+                className="w-full rounded-md border border-[#334155] py-1 text-[9px] font-medium text-[#94A3B8] transition hover:bg-[#334155] hover:text-[#F8FAFC] disabled:opacity-40"
+              >
+                Clear calibration
+              </button>
+              {!pageCal && (
+                <p className="text-[8px] leading-snug text-amber-500/90">
+                  Calibrate this page before measuring real lengths and areas.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
         {pdfUrl && sidebarTab === "sheetAi" && showProTabs && (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <SidebarSheetAiTab />
@@ -840,18 +894,10 @@ export function ViewerSidebar() {
                 </>
               )}
 
-            {tool === "select" && selectedOnPageIds.length === 0 && (
-              <p className="mb-2 rounded-md border border-slate-800/80 bg-slate-900/40 px-1.5 py-1.5 text-[9px] leading-snug text-slate-500">
-                Click a markup on the page. Drag to move; drag handles to resize. ⌘/Ctrl+click or
-                Shift+click for multi-select; drag a box on empty space. Text: set font size and
-                colors in the panel.
-              </p>
-            )}
-
             {sidebarTab === "draw" && (
               <>
                 <SectionTitle>Markup type</SectionTitle>
-                <div className="mb-3 grid grid-cols-3 gap-2">
+                <div className="mb-2 grid grid-cols-3 gap-1">
                   {markupShapes.map((m) => {
                     const Icon = m.icon;
                     const active = tool === "annotate" && markupShape === m.id;
@@ -864,13 +910,11 @@ export function ViewerSidebar() {
                           setTool("annotate");
                           setMarkupShape(m.id);
                         }}
-                        className={`viewer-focus-ring flex min-h-[48px] min-w-0 flex-col items-center justify-center gap-1 rounded-lg border px-0.5 py-1.5 text-[8px] font-semibold uppercase tracking-[0.06em] transition ${
-                          active
-                            ? "border-[#2563eb] bg-[#2563eb] text-white shadow-md"
-                            : "border-[#334155] bg-[#1E293B] text-[#94A3B8] hover:bg-[#334155] hover:text-[#F8FAFC]"
+                        className={`viewer-focus-ring viewer-markup-tool-btn min-w-0 uppercase tracking-[0.06em] ${
+                          active ? "viewer-markup-tool-btn-active" : ""
                         }`}
                       >
-                        <Icon className="h-5 w-5" strokeWidth={1.75} />
+                        <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
                         {m.label}
                       </button>
                     );
@@ -975,8 +1019,6 @@ export function ViewerSidebar() {
 
         {pdfUrl && sidebarTab === "measure" && (
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:thin]">
-            <CalibrationGuide />
-            <CalibrateTargetRow />
             {tool === "select" && selectedOnPageIds.length > 1 && (
               <>
                 <SectionTitle>Selection</SectionTitle>
@@ -1123,138 +1165,75 @@ export function ViewerSidebar() {
               </p>
             )}
 
-            <SectionTitle>Measure &amp; scale</SectionTitle>
-            <div className="mb-2 flex gap-1">
-              <button
-                type="button"
-                disabled={!pdfUrl}
-                title="Set scale from a known length on the sheet"
-                onClick={() => setTool("calibrate")}
-                className={`viewer-focus-ring viewer-markup-tool-btn min-w-0 flex-1 disabled:pointer-events-none disabled:opacity-40 ${
-                  tool === "calibrate" ? "viewer-markup-tool-btn-active" : ""
-                }`}
-              >
-                <Scaling className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Calibrate
-              </button>
-              <button
-                type="button"
-                disabled={!pdfUrl}
-                title="Place dimensions after calibration (line, area, angle, path)"
-                onClick={() => setTool("measure")}
-                className={`viewer-focus-ring viewer-markup-tool-btn min-w-0 flex-1 disabled:pointer-events-none disabled:opacity-40 ${
-                  tool === "measure" ? "viewer-markup-tool-btn-active" : ""
-                }`}
-              >
-                <Ruler className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Ruler
-              </button>
+            <SectionTitle>Measure tools</SectionTitle>
+            <div className="mb-2 grid grid-cols-2 gap-1">
+              {measureKindOptions.map((opt) => {
+                const OptIcon = opt.icon;
+                const active = measureKind === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    title={opt.hint}
+                    onClick={() => {
+                      setTool("measure");
+                      setMeasureKind(opt.id);
+                    }}
+                    className={`viewer-focus-ring viewer-markup-tool-btn ${
+                      active ? "viewer-markup-tool-btn-active" : ""
+                    }`}
+                  >
+                    <OptIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
-            {tool === "measure" && (
-              <>
-                <div className="mb-2 grid grid-cols-2 gap-1">
-                  {measureKindOptions.map((opt) => {
-                    const OptIcon = opt.icon;
-                    const active = measureKind === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        title={opt.hint}
-                        onClick={() => setMeasureKind(opt.id)}
-                        className={`viewer-focus-ring viewer-markup-tool-btn ${
-                          active ? "viewer-markup-tool-btn-active" : ""
-                        }`}
-                      >
-                        <OptIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <SectionTitle>Measure style</SectionTitle>
-                <div className="mb-2 space-y-1.5 rounded-md border border-[#334155] bg-[#1E293B] p-1.5">
-                  <label className="flex items-center justify-between gap-1 text-[10px] text-[#94A3B8]">
-                    <span>Line color</span>
-                    <input
-                      type="color"
-                      value={strokeColor}
-                      onChange={(e) => setStrokeColor(e.target.value)}
-                      className="h-7 w-10 cursor-pointer rounded border border-[#334155] bg-transparent"
-                    />
-                  </label>
-                  <label className="block text-[10px] text-[#94A3B8]">
-                    <span className="mb-0.5 block">Line width</span>
-                    <input
-                      type="range"
-                      min={1}
-                      max={8}
-                      value={strokeWidth}
-                      onChange={(e) => setStrokeWidth(Number(e.target.value))}
-                      className="viewer-range w-full"
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-1 text-[10px] text-[#94A3B8]">
-                    <span>Label color</span>
-                    <input
-                      type="color"
-                      value={measureLabelColor}
-                      onChange={(e) => setMeasureLabelColor(e.target.value)}
-                      className="h-7 w-10 cursor-pointer rounded border border-[#334155] bg-transparent"
-                    />
-                  </label>
-                  <label className="block text-[10px] text-[#94A3B8]">
-                    <span className="mb-0.5 flex items-center justify-between">
-                      <span>Label size</span>
-                      <span className="tabular-nums text-[#94A3B8]">{measureLabelFontSize}px</span>
-                    </span>
-                    <input
-                      type="range"
-                      min={6}
-                      max={28}
-                      value={measureLabelFontSize}
-                      onChange={(e) => setMeasureLabelFontSize(Number(e.target.value))}
-                      className="viewer-range w-full"
-                    />
-                  </label>
-                </div>
-              </>
-            )}
-            <SectionTitle>Units &amp; calibration</SectionTitle>
+            <SectionTitle>Measure style</SectionTitle>
             <div className="mb-2 space-y-1.5 rounded-md border border-[#334155] bg-[#1E293B] p-1.5">
               <label className="flex items-center justify-between gap-1 text-[10px] text-[#94A3B8]">
-                <span>Units</span>
-                <select
-                  value={measureUnit}
-                  onChange={(e) => setMeasureUnit(e.target.value as MeasureUnit)}
-                  className="viewer-input-select max-w-[5.5rem]"
-                  title="Displayed units (values stored in mm)"
-                  aria-label="Measure units"
-                >
-                  <option value="mm">mm</option>
-                  <option value="cm">cm</option>
-                  <option value="m">m</option>
-                  <option value="in">in</option>
-                  <option value="ft">ft</option>
-                </select>
+                <span>Line color</span>
+                <input
+                  type="color"
+                  value={strokeColor}
+                  onChange={(e) => setStrokeColor(e.target.value)}
+                  className="h-7 w-10 cursor-pointer rounded border border-[#334155] bg-transparent"
+                />
               </label>
-              <p className="text-[8px] leading-snug text-[#64748B]">
-                Units and snap presets are saved with this document when you close the tab.
-              </p>
-              <button
-                type="button"
-                disabled={!pdfUrl || !pageCal}
-                onClick={() => clearCalibration(pageIdx0)}
-                title="Remove scale for this page"
-                className="w-full rounded-md border border-[#334155] py-1 text-[9px] font-medium text-[#94A3B8] transition hover:bg-[#334155] hover:text-[#F8FAFC] disabled:opacity-40"
-              >
-                Clear calibration
-              </button>
-              {!pageCal && (
-                <p className="text-[8px] leading-snug text-amber-500/90">
-                  Calibrate this page before measuring real lengths and areas.
-                </p>
-              )}
+              <label className="block text-[10px] text-[#94A3B8]">
+                <span className="mb-0.5 block">Line width</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={8}
+                  value={strokeWidth}
+                  onChange={(e) => setStrokeWidth(Number(e.target.value))}
+                  className="viewer-range w-full"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-1 text-[10px] text-[#94A3B8]">
+                <span>Label color</span>
+                <input
+                  type="color"
+                  value={measureLabelColor}
+                  onChange={(e) => setMeasureLabelColor(e.target.value)}
+                  className="h-7 w-10 cursor-pointer rounded border border-[#334155] bg-transparent"
+                />
+              </label>
+              <label className="block text-[10px] text-[#94A3B8]">
+                <span className="mb-0.5 flex items-center justify-between">
+                  <span>Label size</span>
+                  <span className="tabular-nums text-[#94A3B8]">{measureLabelFontSize}px</span>
+                </span>
+                <input
+                  type="range"
+                  min={6}
+                  max={28}
+                  value={measureLabelFontSize}
+                  onChange={(e) => setMeasureLabelFontSize(Number(e.target.value))}
+                  className="viewer-range w-full"
+                />
+              </label>
             </div>
 
             <SectionTitle>All measures</SectionTitle>

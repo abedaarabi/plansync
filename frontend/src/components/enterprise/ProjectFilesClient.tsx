@@ -15,6 +15,7 @@ import {
   moveFileInProjectCache,
   moveFolderInProjectCache,
   removeFileFromProjectCache,
+  removeFileVersionFromProjectCache,
   removeFolderSubtreeFromProjectCache,
   replaceOptimisticFolder,
 } from "@/lib/projectsCache";
@@ -533,15 +534,33 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
 
     if (pendingDeletion.type === "file") {
       const file = pendingDeletion.file;
+      const sv = sortedVersions(file);
+      const fallback = sv[0]?.version ?? 1;
+      const pick = fileVersionPick[file.id];
+      const versionToDelete = pick != null && sv.some((x) => x.version === pick) ? pick : fallback;
+      const multiVersion = sv.length > 1;
+
       setDeletingKey(`file:${file.id}`);
-      removeFileFromProjectCache(queryClient, wid, projectId, file.id);
+      if (multiVersion) {
+        removeFileVersionFromProjectCache(queryClient, wid, projectId, file.id, versionToDelete);
+      } else {
+        removeFileFromProjectCache(queryClient, wid, projectId, file.id);
+      }
       try {
-        const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/files/${file.id}`), {
+        const q = multiVersion ? `?version=${encodeURIComponent(String(versionToDelete))}` : "";
+        const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/files/${file.id}${q}`), {
           method: "DELETE",
           credentials: "include",
         });
-        if (!res.ok) toast.error("Could not delete file.");
-        else {
+        if (!res.ok) {
+          toast.error("Could not delete file.");
+          await invalidate();
+        } else {
+          setFileVersionPick((p) => {
+            if (!(file.id in p)) return p;
+            const { [file.id]: _, ...rest } = p;
+            return rest;
+          });
           await invalidate();
           setPendingDeletion(null);
           setDeleteConfirmValue("");
@@ -720,6 +739,18 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             : (pendingDeletion?.folder.name ?? "")
         }
         targetType={pendingDeletion?.type ?? "file"}
+        fileRevisionToDelete={
+          pendingDeletion?.type === "file"
+            ? (() => {
+                const f = pendingDeletion.file;
+                const sv = sortedVersions(f);
+                if (sv.length <= 1) return null;
+                const fb = sv[0]?.version ?? 1;
+                const pk = fileVersionPick[f.id];
+                return pk != null && sv.some((x) => x.version === pk) ? pk : fb;
+              })()
+            : null
+        }
         confirmValue={deleteConfirmValue}
         onConfirmValueChange={setDeleteConfirmValue}
         deleting={Boolean(deletingKey)}

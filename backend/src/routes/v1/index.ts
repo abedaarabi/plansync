@@ -86,9 +86,11 @@ import { resolvedMimeType } from "../../lib/mime.js";
 import { findBestUploadMatch } from "../../lib/uploadMatch.js";
 import {
   deleteFileFromS3AndDb,
+  deleteFileVersionFromS3AndDb,
   deleteFolderTreeFromDbAndS3,
   deleteProjectAndAssets,
 } from "../../lib/deleteProjectAssets.js";
+import { fileVersionWriteBlocked } from "../../lib/fileVersionLock.js";
 import { deleteAllWorkspaceS3Objects } from "../../lib/deleteWorkspaceS3.js";
 import { logoUrlFromWebsiteUrl, normalizeWebsiteUrl } from "../../lib/websiteUrl.js";
 import { fileVersionPublicSelect, viewerStatePutSchema } from "../../lib/viewerState.js";
@@ -2287,6 +2289,7 @@ export function v1Routes(
   r.delete("/projects/:projectId/files/:fileId", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const fileId = c.req.param("fileId")!;
+    const versionRaw = c.req.query("version");
     const file = await prisma.file.findUnique({
       where: { id: fileId },
       include: { project: { include: { workspace: true } } },
@@ -2298,21 +2301,68 @@ export function v1Routes(
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const beforeUsed = delAccess.project.workspace.storageUsedBytes;
-    const result = await deleteFileFromS3AndDb(env, fileId);
-    if (!result.ok) return c.json({ error: result.error }, 500);
+
+    let bytesFreed: bigint;
+    if (versionRaw !== undefined && versionRaw !== "") {
+      const version = Number.parseInt(versionRaw, 10);
+      if (!Number.isFinite(version) || version < 1) {
+        return c.json({ error: "Invalid version" }, 400);
+      }
+      const fv = await prisma.fileVersion.findUnique({
+        where: { fileId_version: { fileId, version } },
+        select: { id: true },
+      });
+      if (!fv) return c.json({ error: "Version not found" }, 404);
+      if (await fileVersionWriteBlocked(fv.id, c.get("user").id)) {
+        return c.json({ error: "File is locked by another user" }, 409);
+      }
+      const result = await deleteFileVersionFromS3AndDb(env, fileId, version);
+      if (!result.ok) return c.json({ error: result.error }, 500);
+      bytesFreed = result.bytesFreed;
+
+      if (result.removedWholeFile) {
+        await logActivitySafe(file.project.workspaceId, ActivityType.FILE_DELETED, {
+          actorUserId: c.get("user").id,
+          entityId: fileId,
+          projectId,
+          metadata: { name: file.name },
+        });
+      } else {
+        await logActivitySafe(file.project.workspaceId, ActivityType.FILE_VERSION_DELETED, {
+          actorUserId: c.get("user").id,
+          entityId: fileId,
+          projectId,
+          metadata: { fileName: file.name, version },
+        });
+      }
+    } else {
+      const versions = await prisma.fileVersion.findMany({
+        where: { fileId },
+        select: { id: true },
+      });
+      for (const v of versions) {
+        if (await fileVersionWriteBlocked(v.id, c.get("user").id)) {
+          return c.json({ error: "File is locked by another user" }, 409);
+        }
+      }
+      const result = await deleteFileFromS3AndDb(env, fileId);
+      if (!result.ok) return c.json({ error: result.error }, 500);
+      bytesFreed = result.bytesFreed;
+      await logActivitySafe(file.project.workspaceId, ActivityType.FILE_DELETED, {
+        actorUserId: c.get("user").id,
+        entityId: fileId,
+        projectId,
+        metadata: { name: file.name },
+      });
+    }
 
     const ws = await prisma.workspace.update({
       where: { id: file.project.workspaceId },
-      data: { storageUsedBytes: { decrement: result.bytesFreed } },
+      data: { storageUsedBytes: { decrement: bytesFreed } },
     });
-    await logActivitySafe(file.project.workspaceId, ActivityType.FILE_DELETED, {
-      actorUserId: c.get("user").id,
-      entityId: fileId,
-      projectId,
-      metadata: { name: file.name },
-    });
+
     await maybeSendStorageAlerts(env, ws.id, beforeUsed, ws.storageUsedBytes, ws.storageQuotaBytes);
-    return c.json({ ok: true, bytesFreed: result.bytesFreed.toString() });
+    return c.json({ ok: true, bytesFreed: bytesFreed.toString() });
   });
 
   /** Move a file to another folder (or project root when `folderId` is null). */

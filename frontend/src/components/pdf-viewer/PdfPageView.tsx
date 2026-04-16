@@ -1529,6 +1529,11 @@ export function PdfPageView({
     (e: React.PointerEvent<HTMLDivElement>) => {
       const el = overlayRef.current;
       if (!el) return;
+      const stModal = useViewerStore.getState();
+      if (stModal.issueFormSliderOpen || stModal.issueCreateDraft) {
+        e.preventDefault();
+        return;
+      }
       if (compareReferenceOnly && tool !== "pan") return;
       if (e.pointerType === "touch" && scrollContainerRef?.current) {
         const tg = touchGestureRef.current;

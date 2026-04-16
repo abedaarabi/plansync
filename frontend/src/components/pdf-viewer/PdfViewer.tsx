@@ -110,6 +110,7 @@ export function PdfViewer() {
   const setTakeoffMoveZoneId = useViewerStore((s) => s.setTakeoffMoveZoneId);
   const setTakeoffVertexEditZoneId = useViewerStore((s) => s.setTakeoffVertexEditZoneId);
   const setIssueCreateDraft = useViewerStore((s) => s.setIssueCreateDraft);
+  const setIssueFormSliderOpen = useViewerStore((s) => s.setIssueFormSliderOpen);
   const tool = useViewerStore((s) => s.tool);
   const takeoffDrawKind = useViewerStore((s) => s.takeoffDrawKind);
   const mobileLeftToolsOpen = useViewerStore((s) => s.mobileLeftToolsOpen);
@@ -119,10 +120,10 @@ export function PdfViewer() {
     if (!takeoffRedrawZoneId) return null;
     return takeoffZones.find((z) => z.id === takeoffRedrawZoneId)?.measurementType ?? null;
   }, [takeoffRedrawZoneId, takeoffZones]);
-  const onIssueCreateDialogClose = useCallback(
-    () => setIssueCreateDraft(null),
-    [setIssueCreateDraft],
-  );
+  const onIssueCreateDialogClose = useCallback(() => {
+    setIssueFormSliderOpen(false);
+    setIssueCreateDraft(null);
+  }, [setIssueCreateDraft, setIssueFormSliderOpen]);
   const setOmAssetCreateDraft = useViewerStore((s) => s.setOmAssetCreateDraft);
   const setOmAssetPlacementActive = useViewerStore((s) => s.setOmAssetPlacementActive);
   const omAssetPlacementActive = useViewerStore((s) => s.omAssetPlacementActive);

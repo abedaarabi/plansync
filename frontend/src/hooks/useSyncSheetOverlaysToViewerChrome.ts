@@ -14,6 +14,7 @@ export function useSyncSheetOverlaysToViewerChrome() {
   const newIssuePlacementActive = useViewerStore((s) => s.newIssuePlacementActive);
   const issuePlacement = useViewerStore((s) => s.issuePlacement);
   const issueCreateDraft = useViewerStore((s) => s.issueCreateDraft);
+  const issueFormSliderOpen = useViewerStore((s) => s.issueFormSliderOpen);
   const omAssetPlacementActive = useViewerStore((s) => s.omAssetPlacementActive);
   const omAssetCreateDraft = useViewerStore((s) => s.omAssetCreateDraft);
 
@@ -33,10 +34,15 @@ export function useSyncSheetOverlaysToViewerChrome() {
   }, [tool, takeoffMode]);
 
   useEffect(() => {
-    if (newIssuePlacementActive || issuePlacement != null || issueCreateDraft != null) {
+    if (
+      newIssuePlacementActive ||
+      issuePlacement != null ||
+      issueCreateDraft != null ||
+      issueFormSliderOpen
+    ) {
       useViewerStore.getState().patchSheetOverlayVisibility({ showIssuePins: true });
     }
-  }, [newIssuePlacementActive, issuePlacement, issueCreateDraft]);
+  }, [newIssuePlacementActive, issuePlacement, issueCreateDraft, issueFormSliderOpen]);
 
   useEffect(() => {
     if (omAssetPlacementActive || omAssetCreateDraft != null) {

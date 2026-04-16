@@ -72,6 +72,20 @@ export function formatAuditPresentation(
           .filter(Boolean)
           .join(" · "),
       };
+    case "FILE_VERSION_DELETED":
+      return {
+        actionLabel: "Revision removed",
+        summary: fileName
+          ? `${fileName}${version != null ? ` · v${version}` : ""}`
+          : "File revision removed",
+        detail: [
+          fileName && `File: ${fileName}`,
+          version != null && `Removed revision: ${version}`,
+          fileId && `File id: ${fileId}`,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      };
     case "FILE_DELETED":
       return {
         actionLabel: "Deleted",

@@ -43,12 +43,6 @@ export function LandingNav({
         <div className="hidden items-center gap-8 md:flex">
           <SolutionsDropdown />
           <Link
-            href="/#walkthrough"
-            className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
-          >
-            Watch demo
-          </Link>
-          <Link
             href="/#features"
             className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
           >
@@ -93,7 +87,7 @@ export function LandingNav({
           <button
             type="button"
             onClick={onGoToFreeViewer}
-            className="btn-shine relative overflow-hidden rounded-full bg-[var(--landing-cta)] px-5 py-2 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_35%,transparent)] transition hover:bg-[var(--landing-cta-bright)] hover:ring-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)]"
+            className="btn-shine relative overflow-hidden rounded-full bg-(--landing-cta) px-5 py-2 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_35%,transparent)] transition hover:bg-(--landing-cta-bright) hover:ring-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)]"
           >
             Start Free &rarr;
           </button>
@@ -145,13 +139,6 @@ export function LandingNav({
               </div>
             </div>
             <Link
-              href="/#walkthrough"
-              className="text-sm text-slate-600"
-              onClick={() => setMobileOpen(false)}
-            >
-              Watch demo
-            </Link>
-            <Link
               href="/#features"
               className="text-sm text-slate-600"
               onClick={() => setMobileOpen(false)}
@@ -195,7 +182,7 @@ export function LandingNav({
                 setMobileOpen(false);
                 onGoToFreeViewer();
               }}
-              className="btn-shine relative overflow-hidden rounded-full bg-[var(--landing-cta)] px-5 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
+              className="btn-shine relative overflow-hidden rounded-full bg-(--landing-cta) px-5 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-(--landing-cta-bright)"
             >
               Start Free &rarr;
             </button>

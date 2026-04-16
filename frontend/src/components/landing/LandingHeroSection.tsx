@@ -81,7 +81,6 @@ export function LandingHeroSection({
       <div className="relative z-10 mx-auto w-full max-w-6xl px-6">
         <AnimateIn instant>
           <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14 xl:gap-16">
-            {/* Left — copy */}
             <div className="text-center lg:text-left">
               {/* Eyebrow badge */}
               <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] bg-[color-mix(in_srgb,var(--landing-cta)_14%,rgba(15,23,42,0.5))] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-blue-100 shadow-sm backdrop-blur-md lg:inline-flex">
@@ -140,31 +139,18 @@ export function LandingHeroSection({
               </div>
             </div>
 
-            {/* Right — product demo */}
             <div className="relative mx-auto w-full max-w-lg lg:mx-0 lg:max-w-none">
               <div
                 className="pointer-events-none absolute -inset-4 rounded-4xl bg-[radial-gradient(ellipse_at_50%_30%,rgba(59,130,246,0.22),transparent_58%)] blur-2xl sm:-inset-6"
                 aria-hidden
               />
               <div className="relative">
-                <div className="mb-3 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
-                  <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-blue-100/95 backdrop-blur-md">
-                    Product demo
-                  </span>
-                  <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold tabular-nums text-blue-100/80 backdrop-blur-sm">
-                    HD · YouTube
-                  </span>
-                </div>
                 <BrowserMockup
                   variant="elevated"
                   className="shadow-[0_32px_90px_-16px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.08)] ring-1 ring-white/12"
                 >
                   <LandingHeroDemoVideo />
                 </BrowserMockup>
-                <p className="mt-4 max-w-md text-center text-sm leading-relaxed text-blue-100/80 lg:text-left">
-                  Watch the viewer in motion — open a PDF, calibrate scale, measure, and mark up.
-                  Same workflow your team uses in Pro.
-                </p>
               </div>
             </div>
           </div>

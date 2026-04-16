@@ -84,6 +84,33 @@ export function removeFileFromProjectCache(
   });
 }
 
+/** Optimistically drop one revision; removes the file row if no versions remain. */
+export function removeFileVersionFromProjectCache(
+  queryClient: QueryClient,
+  workspaceId: string,
+  projectId: string,
+  fileId: string,
+  version: number,
+): void {
+  queryClient.setQueryData<Project[]>(qk.projects(workspaceId), (old) => {
+    if (!old) return old;
+    return old.map((p) => {
+      if (p.id !== projectId) return p;
+      return {
+        ...p,
+        files: p.files
+          .map((f) => {
+            if (f.id !== fileId) return f;
+            const nextVersions = f.versions.filter((v) => v.version !== version);
+            if (nextVersions.length === 0) return null;
+            return { ...f, versions: nextVersions };
+          })
+          .filter((f): f is CloudFile => f != null),
+      };
+    });
+  });
+}
+
 export function removeFolderSubtreeFromProjectCache(
   queryClient: QueryClient,
   workspaceId: string,
