@@ -28,6 +28,7 @@ import { sortedVersions } from "@/components/file-explorer/fileExplorerUtils";
 import { isPdfFile } from "@/lib/isPdfFile";
 import { qk } from "@/lib/queryKeys";
 import type { CloudFile, FileVersion } from "@/types/projects";
+import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetDetailSlide } from "@/components/enterprise/OmAssetDetailSlide";
@@ -607,17 +608,19 @@ export function OmAssetsClient({ projectId }: Props) {
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
-          <button
-            type="button"
-            onClick={() => {
-              setJustCreatedAsset(null);
-              setShowAdd(true);
-            }}
-            className="inline-flex min-h-11 items-center justify-center gap-2 self-stretch rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-xs)] transition hover:opacity-95 sm:min-h-10 sm:self-start"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2} />
-            Add asset
-          </button>
+          <EnterpriseAddPulseWrap className="self-stretch sm:self-start">
+            <button
+              type="button"
+              onClick={() => {
+                setJustCreatedAsset(null);
+                setShowAdd(true);
+              }}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 self-stretch rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-xs)] transition hover:opacity-95 sm:min-h-10 sm:self-start"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              Add asset
+            </button>
+          </EnterpriseAddPulseWrap>
         </div>
       </header>
 

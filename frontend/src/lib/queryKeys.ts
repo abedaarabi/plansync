@@ -86,4 +86,8 @@ export const qk = {
     ["proposals", "portalMessages", projectId, proposalId] as const,
   proposalRateHints: (workspaceId: string, q: string) =>
     ["proposals", "rateHints", workspaceId, q] as const,
+  projectProposalDocumentVersions: (projectId: string, proposalId: string) =>
+    ["proposals", "documentVersions", projectId, proposalId] as const,
+  projectProposalComments: (projectId: string, proposalId: string) =>
+    ["proposals", "comments", projectId, proposalId] as const,
 };

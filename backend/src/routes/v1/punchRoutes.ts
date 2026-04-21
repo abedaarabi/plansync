@@ -56,11 +56,24 @@ const ALLOWED_PUNCH_PHOTO_CONTENT_TYPES = new Set([
 
 const punchInclude = {
   assignee: { select: { id: true, name: true, email: true, image: true } },
+  assigneeLinks: {
+    orderBy: { createdAt: "asc" as const },
+    include: { user: { select: { id: true, name: true, email: true, image: true } } },
+  },
+  file: { select: { id: true, name: true } },
+  fileVersion: { select: { id: true, version: true, fileId: true } },
 } as const;
 
 type PunchRowDb = Prisma.PunchItemGetPayload<{ include: typeof punchInclude }>;
 
 function punchJson(row: PunchRowDb) {
+  const assignees = row.assigneeLinks.map((l) => ({
+    id: l.user.id,
+    name: l.user.name,
+    email: l.user.email,
+    image: l.user.image,
+  }));
+  const primary = assignees[0] ?? row.assignee;
   return {
     id: row.id,
     projectId: row.projectId,
@@ -73,13 +86,63 @@ function punchJson(row: PunchRowDb) {
     notes: row.notes,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
-    assigneeId: row.assigneeId,
+    assigneeId: primary?.id ?? row.assigneeId,
     templateId: row.templateId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    assignee: row.assignee,
+    assignee: primary ?? row.assignee,
+    assignees,
+    fileId: row.fileId,
+    file: row.file,
+    fileVersionId: row.fileVersionId,
+    fileVersion: row.fileVersion,
+    pageNumber: row.pageNumber,
     referencePhotos: parsePunchReferencePhotos(row.referencePhotos),
   };
+}
+
+async function resolvePunchDrawingFields(
+  projectId: string,
+  fileId: string | null | undefined,
+  fileVersionId: string | null | undefined,
+  pageNumber: number | null | undefined,
+): Promise<
+  | {
+      fileId: string | null;
+      fileVersionId: string | null;
+      pageNumber: number | null;
+    }
+  | { error: string }
+> {
+  if (fileVersionId) {
+    const fv = await prisma.fileVersion.findFirst({
+      where: { id: fileVersionId, file: { projectId } },
+      include: { file: true },
+    });
+    if (!fv) return { error: "File version not found in this project" };
+    if (fileId && fv.fileId !== fileId) return { error: "File version does not match file" };
+    return { fileId: fv.fileId, fileVersionId: fv.id, pageNumber: pageNumber ?? null };
+  }
+  if (fileId) {
+    const file = await prisma.file.findFirst({ where: { id: fileId, projectId } });
+    if (!file) return { error: "File not found in this project" };
+    return { fileId: file.id, fileVersionId: null, pageNumber: pageNumber ?? null };
+  }
+  return { fileId: null, fileVersionId: null, pageNumber: null };
+}
+
+async function syncPunchAssigneeLinks(
+  tx: Prisma.TransactionClient,
+  punchId: string,
+  userIds: string[],
+): Promise<void> {
+  const unique = [...new Set(userIds)];
+  await tx.punchAssigneeLink.deleteMany({ where: { punchItemId: punchId } });
+  if (unique.length > 0) {
+    await tx.punchAssigneeLink.createMany({
+      data: unique.map((userId) => ({ punchItemId: punchId, userId })),
+    });
+  }
 }
 
 async function nextPunchNumber(tx: Prisma.TransactionClient, projectId: string): Promise<number> {
@@ -164,6 +227,10 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
         priority: z.nativeEnum(PunchPriority).optional(),
         status: z.nativeEnum(PunchStatus).optional(),
         assigneeId: z.union([z.string().min(1), z.null()]).optional(),
+        assigneeIds: z.array(z.string().min(1)).max(20).optional(),
+        fileId: z.string().nullable().optional(),
+        fileVersionId: z.string().nullable().optional(),
+        pageNumber: z.number().int().min(1).max(10000).nullable().optional(),
         dueDateYmd: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -174,23 +241,26 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
-    const assigneeId =
-      body.data.assigneeId === undefined
-        ? undefined
-        : body.data.assigneeId === null
-          ? null
-          : body.data.assigneeId;
-    if (assigneeId) {
-      const check = await assertUserAssignableToProject(
-        assigneeId,
-        projectId,
-        res.project.workspaceId,
-      );
+    const assigneeIds =
+      body.data.assigneeIds !== undefined
+        ? [...new Set(body.data.assigneeIds.filter((x) => x.trim().length > 0))]
+        : body.data.assigneeId
+          ? [body.data.assigneeId]
+          : [];
+    for (const userId of assigneeIds) {
+      const check = await assertUserAssignableToProject(userId, projectId, res.project.workspaceId);
       if ("error" in check) return c.json({ error: check.error }, check.status);
     }
+    const draw = await resolvePunchDrawingFields(
+      projectId,
+      body.data.fileId,
+      body.data.fileVersionId,
+      body.data.pageNumber,
+    );
+    if ("error" in draw) return c.json({ error: draw.error }, 400);
     const row = await prisma.$transaction(async (tx) => {
       const punchNumber = await nextPunchNumber(tx, projectId);
-      return tx.punchItem.create({
+      const created = await tx.punchItem.create({
         data: {
           projectId,
           punchNumber,
@@ -200,7 +270,10 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
           priority: body.data.priority ?? PunchPriority.P2,
           status: body.data.status ?? PunchStatus.OPEN,
           notes: body.data.notes,
-          assigneeId,
+          assigneeId: assigneeIds[0] ?? null,
+          fileId: draw.fileId,
+          fileVersionId: draw.fileVersionId,
+          pageNumber: draw.pageNumber,
           dueDate: body.data.dueDateYmd ? dateFromYmd(body.data.dueDateYmd) : null,
           templateId:
             body.data.templateId === undefined
@@ -211,6 +284,8 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
         },
         include: punchInclude,
       });
+      await syncPunchAssigneeLinks(tx, created.id, assigneeIds);
+      return tx.punchItem.findUniqueOrThrow({ where: { id: created.id }, include: punchInclude });
     });
     await logActivity(res.project.workspaceId, ActivityType.PUNCH_CREATED, {
       actorUserId: c.get("user").id,
@@ -219,26 +294,29 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
       metadata: { location: row.location, trade: row.trade, punchNumber: row.punchNumber },
     });
 
-    if (row.assigneeId && row.assignee?.email) {
+    if (assigneeIds.length > 0) {
+      const rowAssignees = row.assigneeLinks.map((l) => l.user);
       const actor = await prisma.user.findUnique({
         where: { id: c.get("user").id },
         select: { name: true },
       });
       const assignerName = actor?.name?.trim() || "Someone";
       const punchListUrl = buildPunchListUrl(env, projectId, row.id);
-      void sendPunchAssignedEmail(env, {
-        assigneeEmail: row.assignee.email,
-        assignerName,
-        projectName: res.project.name,
-        punchListUrl,
-        punchNumber: row.punchNumber,
-        punchTitle: row.title,
-      }).catch((e) => console.error("[punch-email]", e));
+      for (const a of rowAssignees) {
+        void sendPunchAssignedEmail(env, {
+          assigneeEmail: a.email,
+          assignerName,
+          projectName: res.project.name,
+          punchListUrl,
+          punchNumber: row.punchNumber,
+          punchTitle: row.title,
+        }).catch((e) => console.error("[punch-email]", e));
+      }
       const titleBase = `Punch #${row.punchNumber}: ${row.title}`;
       void createUserNotifications({
         workspaceId: res.project.workspaceId,
         projectId,
-        recipientUserIds: [row.assigneeId],
+        recipientUserIds: rowAssignees.map((a) => a.id),
         kind: "PUNCH_ASSIGNED",
         title: titleBase.length > 120 ? `${titleBase.slice(0, 120)}…` : titleBase,
         body: res.project.name,
@@ -581,6 +659,10 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
         priority: z.nativeEnum(PunchPriority).optional(),
         status: z.nativeEnum(PunchStatus).optional(),
         assigneeId: z.union([z.string().min(1), z.null()]).optional(),
+        assigneeIds: z.array(z.string().min(1)).max(20).nullable().optional(),
+        fileId: z.string().nullable().optional(),
+        fileVersionId: z.string().nullable().optional(),
+        pageNumber: z.number().int().min(1).max(10000).nullable().optional(),
         dueDateYmd: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -609,7 +691,22 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
-    if (body.data.assigneeId) {
+    const patchAssigneeIds =
+      body.data.assigneeIds === undefined
+        ? undefined
+        : body.data.assigneeIds === null
+          ? []
+          : [...new Set(body.data.assigneeIds.filter((x) => x.trim().length > 0))];
+    if (patchAssigneeIds) {
+      for (const userId of patchAssigneeIds) {
+        const check = await assertUserAssignableToProject(
+          userId,
+          projectId,
+          res.project.workspaceId,
+        );
+        if ("error" in check) return c.json({ error: check.error }, check.status);
+      }
+    } else if (body.data.assigneeId) {
       const check = await assertUserAssignableToProject(
         body.data.assigneeId,
         projectId,
@@ -617,6 +714,14 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
       );
       if ("error" in check) return c.json({ error: check.error }, check.status);
     }
+    const previousAssigneeIds = (
+      await prisma.punchAssigneeLink.findMany({
+        where: { punchItemId: existing.id },
+        select: { userId: true },
+      })
+    ).map((x) => x.userId);
+    if (previousAssigneeIds.length === 0 && existing.assigneeId)
+      previousAssigneeIds.push(existing.assigneeId);
     const prevPhotos = parsePunchReferencePhotos(existing.referencePhotos);
     let nextReferencePhotos: PunchReferencePhotoParsed[] | undefined;
     let photosToDeleteFromS3: PunchReferencePhotoParsed[] = [];
@@ -665,6 +770,23 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
           : dateFromYmd(body.data.dueDateYmd);
     const completedAt =
       nextStatus === undefined ? undefined : nextStatus === PunchStatus.CLOSED ? new Date() : null;
+    const drawingTouched =
+      body.data.fileId !== undefined ||
+      body.data.fileVersionId !== undefined ||
+      body.data.pageNumber !== undefined;
+    let drawingPatch:
+      | { fileId: string | null; fileVersionId: string | null; pageNumber: number | null }
+      | undefined;
+    if (drawingTouched) {
+      const draw = await resolvePunchDrawingFields(
+        projectId,
+        body.data.fileId !== undefined ? body.data.fileId : existing.fileId,
+        body.data.fileVersionId !== undefined ? body.data.fileVersionId : existing.fileVersionId,
+        body.data.pageNumber !== undefined ? body.data.pageNumber : existing.pageNumber,
+      );
+      if ("error" in draw) return c.json({ error: draw.error }, 400);
+      drawingPatch = draw;
+    }
 
     const row = await prisma.$transaction(async (tx) => {
       if (bytesRemovedFromPhotos > 0n) {
@@ -673,7 +795,7 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
           data: { storageUsedBytes: { decrement: bytesRemovedFromPhotos } },
         });
       }
-      return tx.punchItem.update({
+      await tx.punchItem.update({
         where: { id: punchId },
         data: {
           ...(body.data.title !== undefined ? { title: body.data.title } : {}),
@@ -682,6 +804,13 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
           ...(body.data.priority !== undefined ? { priority: body.data.priority } : {}),
           ...(body.data.status !== undefined ? { status: body.data.status } : {}),
           ...(body.data.assigneeId !== undefined ? { assigneeId: body.data.assigneeId } : {}),
+          ...(drawingPatch
+            ? {
+                fileId: drawingPatch.fileId,
+                fileVersionId: drawingPatch.fileVersionId,
+                pageNumber: drawingPatch.pageNumber,
+              }
+            : {}),
           ...(dueDate !== undefined ? { dueDate } : {}),
           ...(body.data.notes !== undefined ? { notes: body.data.notes } : {}),
           ...(completedAt !== undefined ? { completedAt } : {}),
@@ -696,6 +825,14 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
         },
         include: punchInclude,
       });
+      if (patchAssigneeIds !== undefined) {
+        await syncPunchAssigneeLinks(tx, punchId, patchAssigneeIds);
+        await tx.punchItem.update({
+          where: { id: punchId },
+          data: { assigneeId: patchAssigneeIds[0] ?? null },
+        });
+      }
+      return tx.punchItem.findUniqueOrThrow({ where: { id: punchId }, include: punchInclude });
     });
 
     for (const ph of photosToDeleteFromS3) {
@@ -712,33 +849,36 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
       metadata: { location: row.location, trade: row.trade, status: row.status },
     });
 
-    const prevAssigneeId = existing.assigneeId;
-    const assigneeTouched = body.data.assigneeId !== undefined;
-    const shouldNotifyAssignee =
-      assigneeTouched &&
-      row.assigneeId &&
-      row.assigneeId !== prevAssigneeId &&
-      Boolean(row.assignee?.email);
-    if (shouldNotifyAssignee && row.assignee?.email) {
+    const newAssigneeSet =
+      patchAssigneeIds !== undefined
+        ? new Set(patchAssigneeIds)
+        : new Set(row.assigneeLinks.map((l) => l.userId));
+    const oldAssigneeSet = new Set(previousAssigneeIds);
+    const newlyAssignedIds = [...newAssigneeSet].filter((id) => !oldAssigneeSet.has(id));
+    if (newlyAssignedIds.length > 0) {
       const actor = await prisma.user.findUnique({
         where: { id: c.get("user").id },
         select: { name: true },
       });
       const assignerName = actor?.name?.trim() || "Someone";
       const punchListUrl = buildPunchListUrl(env, projectId, row.id);
-      void sendPunchAssignedEmail(env, {
-        assigneeEmail: row.assignee.email,
-        assignerName,
-        projectName: res.project.name,
-        punchListUrl,
-        punchNumber: row.punchNumber,
-        punchTitle: row.title,
-      }).catch((e) => console.error("[punch-email]", e));
+      for (const a of row.assigneeLinks
+        .map((l) => l.user)
+        .filter((x) => newlyAssignedIds.includes(x.id))) {
+        void sendPunchAssignedEmail(env, {
+          assigneeEmail: a.email,
+          assignerName,
+          projectName: res.project.name,
+          punchListUrl,
+          punchNumber: row.punchNumber,
+          punchTitle: row.title,
+        }).catch((e) => console.error("[punch-email]", e));
+      }
       const titleBase = `Punch #${row.punchNumber}: ${row.title}`;
       void createUserNotifications({
         workspaceId: res.project.workspaceId,
         projectId,
-        recipientUserIds: [row.assigneeId!],
+        recipientUserIds: newlyAssignedIds,
         kind: "PUNCH_ASSIGNED",
         title: titleBase.length > 120 ? `${titleBase.slice(0, 120)}…` : titleBase,
         body: res.project.name,
@@ -783,6 +923,20 @@ export function registerPunchRoutes(r: Hono, needUser: MiddlewareHandler, env: E
       where: { projectId, id: { in: body.data.ids } },
       data: update,
     });
+    if (body.data.assigneeId !== undefined) {
+      await prisma.punchAssigneeLink.deleteMany({
+        where: { punchItemId: { in: body.data.ids } },
+      });
+      if (body.data.assigneeId !== null) {
+        await prisma.punchAssigneeLink.createMany({
+          data: body.data.ids.map((punchItemId) => ({
+            punchItemId,
+            userId: body.data.assigneeId!,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
     await logActivitySafe(res.project.workspaceId, ActivityType.PUNCH_UPDATED, {
       actorUserId: c.get("user").id,
       projectId,

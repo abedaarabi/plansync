@@ -3,7 +3,7 @@
 import { parseServerViewerState } from "@/lib/viewerStateCloud";
 import { buildMergePatchFromRemote } from "@/lib/viewerStateMerge";
 import { setViewerCollabRevision } from "@/lib/viewerCollabRevision";
-import { useViewerStore } from "@/store/viewerStore";
+import { clampViewerScaleWithPageDims, useViewerStore } from "@/store/viewerStore";
 
 export function ViewerRevisionConflictDialog({
   open,
@@ -23,8 +23,15 @@ export function ViewerRevisionConflictDialog({
   const reloadLatest = () => {
     const parsed = parseServerViewerState(viewerState);
     if (parsed) {
-      const localAnn = useViewerStore.getState().annotations;
+      const st0 = useViewerStore.getState();
+      const localAnn = st0.annotations;
       const patch = buildMergePatchFromRemote(parsed, localAnn, numPages);
+      const pageForClamp = patch.currentPage ?? st0.currentPage;
+      patch.scale = clampViewerScaleWithPageDims(
+        patch.scale ?? 1,
+        st0.pageSizePtByPage,
+        pageForClamp,
+      );
       useViewerStore.setState({
         ...patch,
         historyPast: [],

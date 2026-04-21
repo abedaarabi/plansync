@@ -27,6 +27,7 @@ import {
   type OmInspectionTemplateRow,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
+import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmInspectionRunSlideOver } from "@/components/enterprise/OmInspectionRunSlideOver";
@@ -204,19 +205,21 @@ export function OmInspectionsClient({ projectId }: Props) {
             </div>
           </div>
           <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:w-auto sm:justify-end">
-            <button
-              type="button"
-              onClick={openNewInspection}
-              disabled={startRun.isPending}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
-            >
-              {startRun.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              ) : (
-                <Plus className="h-4 w-4" strokeWidth={2.5} />
-              )}
-              New inspection
-            </button>
+            <EnterpriseAddPulseWrap disabled={startRun.isPending} className="w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={openNewInspection}
+                disabled={startRun.isPending}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+              >
+                {startRun.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <Plus className="h-4 w-4" strokeWidth={2.5} />
+                )}
+                New inspection
+              </button>
+            </EnterpriseAddPulseWrap>
             <button
               type="button"
               onClick={() => setTemplateSlideOpen(true)}

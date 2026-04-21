@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { ProposalCoverEditor } from "@/components/enterprise/proposals/editor/ProposalCoverEditor";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   createProposalTemplate,
@@ -139,28 +140,28 @@ export function ProposalTemplatesClient({
             onChange={(e) => setName(e.target.value)}
           />
         </label>
-        <label className="mt-4 block text-sm">
-          <span className="text-slate-600">Body</span>
-          <textarea
-            className="mt-1 min-h-[220px] w-full rounded-lg border border-slate-200 p-3 font-mono text-sm"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-        </label>
-        <div className="mt-3">
-          <div className="text-xs font-semibold uppercase text-slate-500">Insert</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {VARS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                className="rounded-full bg-slate-100 px-2 py-1 text-xs font-mono text-slate-700"
-                onClick={() => setBody((b) => `${b}${v}`)}
-              >
-                {v}
-              </button>
-            ))}
+        <div className="mt-4">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-sm text-slate-600">Body</span>
+            <div className="flex flex-wrap gap-1.5">
+              {VARS.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[10px] text-slate-600 hover:bg-slate-100"
+                  onClick={() => setBody((b) => b + v)}
+                  title={`Insert ${v}`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
           </div>
+          <ProposalCoverEditor
+            content={body}
+            onChange={(html) => setBody(html)}
+            placeholder="Write your template here. Use variable chips above to insert dynamic values."
+          />
         </div>
         <div className="mt-4 flex gap-2">
           <button

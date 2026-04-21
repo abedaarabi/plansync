@@ -32,6 +32,7 @@ import {
   type MaterialTemplateField,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
+import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
 import { MaterialTemplateEditor } from "./MaterialTemplateEditor";
@@ -474,18 +475,20 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
             className="sr-only"
             onChange={onImportFile}
           />
-          <button
-            type="button"
-            onClick={() => {
-              setEditing(null);
-              setForm(emptyForm(sortedTplFields.map((f) => f.key)));
-              setPanelOpen(true);
-            }}
-            className="inline-flex items-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--enterprise-primary)]/20 transition hover:bg-[var(--enterprise-primary-deep)]"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2} />
-            Add material
-          </button>
+          <EnterpriseAddPulseWrap>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(null);
+                setForm(emptyForm(sortedTplFields.map((f) => f.key)));
+                setPanelOpen(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--enterprise-primary)]/20 transition hover:bg-[var(--enterprise-primary-deep)]"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              Add material
+            </button>
+          </EnterpriseAddPulseWrap>
         </div>
       </div>
 

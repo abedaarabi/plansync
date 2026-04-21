@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import {
@@ -114,6 +115,7 @@ type TopBarProps = {
 };
 
 export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {}) {
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInfoRef = useRef<HTMLDivElement>(null);
   const helpRef = useRef<HTMLDivElement>(null);
@@ -263,6 +265,17 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const tb = (active: boolean) =>
     `viewer-focus-ring viewer-toolbar-btn ${active ? "viewer-toolbar-btn-active" : ""}`;
 
+  const proProjectsNavClass =
+    "viewer-focus-ring flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-[#334155] bg-[#1E293B] px-2.5 text-[11px] font-medium tracking-tight text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155] active:scale-[0.98] sm:min-h-7";
+
+  const goBackOrProjects = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/projects");
+    }
+  };
+
   return (
     <header
       className="no-print relative flex h-10 shrink-0 items-stretch gap-0 border-b border-[#334155] bg-[#0F172A] text-[#F8FAFC]"
@@ -278,7 +291,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
       />
 
       <div
-        className="flex min-h-0 min-w-0 flex-1 items-center gap-2 overflow-x-auto px-2 py-1 [scrollbar-width:thin]"
+        className="flex min-h-0 min-w-0 flex-1 items-center gap-2 overflow-x-auto overflow-y-hidden px-2 py-1 [scrollbar-width:thin]"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
         <div className="flex shrink-0 items-center gap-2 border-r border-[#334155] pr-2.5">
@@ -323,10 +336,23 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             </button>
           ) : meHasProWorkspace(me ?? null) ? (
             <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                title="Back"
+                aria-label="Back"
+                onClick={goBackOrProjects}
+                className={`${proProjectsNavClass} xl:hidden`}
+              >
+                <span className="text-[#94A3B8]" aria-hidden>
+                  ←
+                </span>
+                <span className="hidden sm:inline">Back</span>
+              </button>
               <Link
                 href="/projects"
                 title="Back to Projects"
-                className="viewer-focus-ring flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-[#334155] bg-[#1E293B] px-2.5 text-[11px] font-medium tracking-tight text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155] active:scale-[0.98] sm:min-h-7"
+                aria-label="Back to Projects"
+                className={`${proProjectsNavClass} hidden xl:flex`}
               >
                 <span className="text-[#94A3B8]" aria-hidden>
                   ←

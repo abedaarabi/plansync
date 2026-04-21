@@ -13,7 +13,7 @@ import { parseServerViewerState } from "@/lib/viewerStateCloud";
 import { buildMergePatchFromRemote } from "@/lib/viewerStateMerge";
 import { getViewerCollabRevision, setViewerCollabRevision } from "@/lib/viewerCollabRevision";
 import { qk } from "@/lib/queryKeys";
-import { useViewerStore } from "@/store/viewerStore";
+import { clampViewerScaleWithPageDims, useViewerStore } from "@/store/viewerStore";
 import { useViewerCollabDesktop } from "@/hooks/useViewerCollabDesktop";
 import {
   ViewerCollabProvider,
@@ -219,6 +219,13 @@ export function ViewerCollabSync({
           if (!parsed) return;
           const localAnn = useViewerStore.getState().annotations;
           const patch = buildMergePatchFromRemote(parsed, localAnn, numPages);
+          const st0 = useViewerStore.getState();
+          const pageForClamp = patch.currentPage ?? st0.currentPage;
+          patch.scale = clampViewerScaleWithPageDims(
+            patch.scale ?? 1,
+            st0.pageSizePtByPage,
+            pageForClamp,
+          );
           useViewerStore.setState({
             ...patch,
             historyPast: [],

@@ -25,6 +25,7 @@ import {
   persistSheetOverlayVisibility,
   type SheetOverlayVisibility,
 } from "@/lib/viewerSheetOverlay";
+import { clampViewerScaleForLayout } from "@/lib/pdfCanvasRenderScale";
 
 /** Min / max viewer zoom (multiply viewport scale). */
 export const VIEWER_SCALE_MIN = 0.05;
@@ -39,6 +40,20 @@ function pageSizePts(
 ) {
   const pt = pageSizePtByPage[pageIndex0];
   return { w: pt?.wPt ?? 612, h: pt?.hPt ?? 792 };
+}
+
+/** Clamp scale for layout (touch) — use when applying scale outside {@link useViewerStore.getState}.setScale (e.g. cloud merge). */
+export function clampViewerScaleWithPageDims(
+  scale: number,
+  pageSizePtByPage: Record<number, { wPt: number; hPt: number }>,
+  currentPage1Based: number,
+): number {
+  const { w, h } = pageSizePts(pageSizePtByPage, currentPage1Based - 1);
+  return clampViewerScaleForLayout(
+    Math.min(VIEWER_SCALE_MAX, Math.max(VIEWER_SCALE_MIN, scale)),
+    w,
+    h,
+  );
 }
 
 export type Tool =
@@ -1058,12 +1073,22 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   },
 
   setPageSizePt: (pageIndex, wPt, hPt) =>
-    set((state) => ({
-      pageSizePtByPage: {
+    set((state) => {
+      const pageSizePtByPage = {
         ...state.pageSizePtByPage,
         [pageIndex]: { wPt, hPt },
-      },
-    })),
+      };
+      const { w, h } = pageSizePts(pageSizePtByPage, state.currentPage - 1);
+      const scale = clampViewerScaleForLayout(
+        Math.min(VIEWER_SCALE_MAX, Math.max(VIEWER_SCALE_MIN, state.scale)),
+        w,
+        h,
+      );
+      return {
+        pageSizePtByPage,
+        ...(Math.abs(scale - state.scale) > 1e-9 ? { scale } : {}),
+      };
+    }),
 
   setPdfSnapLayers: (pdfSnapLayers) => set({ pdfSnapLayers }),
   setToolbarHoveredLayerId: (toolbarHoveredLayerId) => set({ toolbarHoveredLayerId }),
@@ -1075,15 +1100,27 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
 
   setCurrentPage: (n) => {
     const max = get().numPages || 1;
-    set({
-      currentPage: Math.min(max, Math.max(1, n)),
-      selectedAnnotationIds: [],
+    const page = Math.min(max, Math.max(1, n));
+    set((state) => {
+      const { w, h } = pageSizePts(state.pageSizePtByPage, page - 1);
+      const scale = clampViewerScaleForLayout(
+        Math.min(VIEWER_SCALE_MAX, Math.max(VIEWER_SCALE_MIN, state.scale)),
+        w,
+        h,
+      );
+      return {
+        currentPage: page,
+        selectedAnnotationIds: [],
+        ...(Math.abs(scale - state.scale) > 1e-9 ? { scale } : {}),
+      };
     });
   },
 
   setScale: (s) =>
-    set({
-      scale: Math.min(VIEWER_SCALE_MAX, Math.max(VIEWER_SCALE_MIN, s)),
+    set((state) => {
+      const raw = Math.min(VIEWER_SCALE_MAX, Math.max(VIEWER_SCALE_MIN, s));
+      const { w, h } = pageSizePts(state.pageSizePtByPage, state.currentPage - 1);
+      return { scale: clampViewerScaleForLayout(raw, w, h) };
     }),
   setZoomDisplayBaseScale: (s) =>
     set({

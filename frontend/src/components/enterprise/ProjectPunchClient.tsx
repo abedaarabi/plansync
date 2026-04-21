@@ -10,14 +10,15 @@ import {
   ExternalLink,
   FileText,
   Loader2,
-  MapPin,
   Plus,
   Trash2,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import {
   applyPunchTemplate,
@@ -27,6 +28,7 @@ import {
   createPunchTemplate,
   deletePunchItem,
   fetchProject,
+  fetchProjects,
   fetchProjectPunch,
   fetchPunchTemplates,
   fetchWorkspaceMembers,
@@ -38,6 +40,7 @@ import {
   type PunchReferencePhotoRow,
   type PunchRow,
 } from "@/lib/api-client";
+import type { Project } from "@/types/projects";
 import { qk } from "@/lib/queryKeys";
 import { referencePhotoContentType } from "@/lib/referencePhotoMime";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
@@ -67,6 +70,12 @@ const PRIORITY_LABEL: Record<string, string> = {
   P2: "Medium",
   P3: "Low",
 };
+
+const PUNCH_SLIDE_LABEL = "block text-xs font-normal text-[var(--enterprise-text)]";
+const PUNCH_SLIDE_FIELD =
+  "mt-1 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/15";
+const PUNCH_SLIDE_SELECT =
+  "mt-1 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/15";
 
 function countPunchTemplateItems(itemsJson: unknown): number {
   if (Array.isArray(itemsJson)) return itemsJson.length;
@@ -106,7 +115,44 @@ function formatTableDate(iso: string | null): string {
 }
 
 function assigneeLabel(p: PunchRow): string {
+  const names =
+    p.assignees?.map((a) => a.name?.trim()).filter((x): x is string => Boolean(x)) ?? [];
+  if (names.length > 0) return names.join(", ");
   return p.assignee?.name?.trim() || "—";
+}
+
+function punchAssigneeIds(p: PunchRow): string[] {
+  const ids = new Set<string>();
+  if (p.assigneeId) ids.add(p.assigneeId);
+  for (const a of p.assignees ?? []) {
+    if (a.id) ids.add(a.id);
+  }
+  return [...ids];
+}
+
+type SheetPickRow = {
+  fileId: string;
+  fileName: string;
+  fileVersionId: string;
+  version: number;
+  label: string;
+};
+
+function sheetRowsForProject(project: Project | null): SheetPickRow[] {
+  if (!project) return [];
+  const out: SheetPickRow[] = [];
+  for (const f of project.files) {
+    for (const v of f.versions) {
+      out.push({
+        fileId: f.id,
+        fileName: f.name,
+        fileVersionId: v.id,
+        version: v.version,
+        label: `${f.name} (v${v.version})`,
+      });
+    }
+  }
+  return out.sort((a, b) => a.fileName.localeCompare(b.fileName) || b.version - a.version);
 }
 
 function PunchPhotoThumb({
@@ -167,7 +213,7 @@ function SortHeader({
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-[#94a3b8] hover:text-[#64748b]"
+      className="inline-flex items-center gap-1 text-[11px] font-normal uppercase tracking-wide text-[#0f172a] hover:text-[#111827]"
     >
       {label}
       {active ? (
@@ -207,7 +253,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
   const [newTitle, setNewTitle] = useState("");
   const [newLocation, setNewLocation] = useState("");
   const [newTrade, setNewTrade] = useState("General");
-  const [newAssignee, setNewAssignee] = useState("");
+  const [newAssignees, setNewAssignees] = useState<string[]>([]);
   const [newPriority, setNewPriority] = useState("P2");
   const [newDue, setNewDue] = useState("");
   const [newMsg, setNewMsg] = useState<string | null>(null);
@@ -237,6 +283,15 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
     queryKey: qk.projectPunchTemplates(projectId),
     queryFn: () => fetchPunchTemplates(projectId),
   });
+  const { data: projects = [] } = useQuery({
+    queryKey: qk.projects(workspaceId || "none"),
+    queryFn: () => fetchProjects(workspaceId),
+    enabled: workspaceId.length > 0,
+  });
+  const currentProject = useMemo(
+    () => projects.find((p) => p.id === projectId) ?? null,
+    [projects, projectId],
+  );
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -265,9 +320,10 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
       if (filterStatus !== "ALL" && r.status !== filterStatus) return false;
       if (filterPriority !== "ALL" && r.priority !== filterPriority) return false;
       if (filterLocation !== "ALL" && r.location !== filterLocation) return false;
+      const assigneeIds = punchAssigneeIds(r);
       if (filterAssignee === "UNASSIGNED") {
-        if (r.assigneeId) return false;
-      } else if (filterAssignee !== "ALL" && r.assigneeId !== filterAssignee) return false;
+        if (assigneeIds.length > 0) return false;
+      } else if (filterAssignee !== "ALL" && !assigneeIds.includes(filterAssignee)) return false;
       if (q) {
         const blob = [
           r.title,
@@ -403,7 +459,8 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         title: newTitle.trim(),
         location: newLocation.trim(),
         trade: newTrade.trim() || "General",
-        assigneeId: newAssignee || null,
+        assigneeIds: newAssignees,
+        assigneeId: newAssignees[0] || null,
         dueDateYmd: newDue || null,
         priority: newPriority,
       }),
@@ -413,7 +470,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
       setNewTitle("");
       setNewLocation("");
       setNewTrade("General");
-      setNewAssignee("");
+      setNewAssignees([]);
       setNewPriority("P2");
       setNewDue("");
       setNewMsg(null);
@@ -775,7 +832,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
               <button
                 type="button"
                 onClick={() => setManageTemplatesOpen(true)}
-                className="min-h-10 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] sm:shrink-0"
+                className="min-h-10 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-normal text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] sm:shrink-0"
               >
                 Edit checklists
               </button>
@@ -801,7 +858,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
               <table className="w-full min-w-[760px] border-collapse rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] md:min-w-[920px]">
                 <thead>
                   <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
-                    <th className="w-10 px-2 py-2 text-left">
+                    <th className="w-10 px-2 py-2 text-left text-[#0f172a]">
                       <input
                         type="checkbox"
                         className="h-4 w-4 rounded border-[var(--enterprise-border)]"
@@ -915,7 +972,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                           <td className="max-w-[220px] truncate px-3 font-medium text-[var(--enterprise-text)]">
                             {p.title}
                           </td>
-                          <td className="max-w-[160px] truncate px-3 text-[var(--enterprise-text-muted)]">
+                          <td className="max-w-[160px] truncate px-3 text-[#0f172a]">
                             {p.location}
                           </td>
                           <td className="px-3">
@@ -926,7 +983,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                               </span>
                             </div>
                           </td>
-                          <td className="whitespace-nowrap px-3 text-[var(--enterprise-text-muted)]">
+                          <td className="whitespace-nowrap px-3 text-[#0f172a]">
                             {formatTableDate(p.dueDate)}
                           </td>
                           <td className="px-3">
@@ -936,7 +993,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                               {STATUS_LABEL[st] ?? p.status}
                             </span>
                           </td>
-                          <td className="px-3 text-[var(--enterprise-text-muted)]">
+                          <td className="px-3 text-[#0f172a]">
                             {PRIORITY_LABEL[p.priority] ?? p.priority}
                           </td>
                         </tr>
@@ -955,22 +1012,26 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         className="fixed bottom-4 right-4 z-30 flex flex-col items-end gap-2 sm:hidden"
         style={{ bottom: "max(1rem, calc(1rem + env(safe-area-inset-bottom, 0px)))" }}
       >
-        <button
-          type="button"
-          onClick={() => setChecklistModalOpen(true)}
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)] shadow-lg"
-          aria-label="Add from checklist"
-        >
-          <FileText className="h-6 w-6" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setNewModalOpen(true)}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--enterprise-primary)] text-white shadow-lg"
-          aria-label="New punch item"
-        >
-          <Plus className="h-7 w-7" />
-        </button>
+        <EnterpriseAddPulseWrap variant="fab">
+          <button
+            type="button"
+            onClick={() => setChecklistModalOpen(true)}
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)] shadow-lg"
+            aria-label="Add from checklist"
+          >
+            <FileText className="h-6 w-6" />
+          </button>
+        </EnterpriseAddPulseWrap>
+        <EnterpriseAddPulseWrap variant="fab">
+          <button
+            type="button"
+            onClick={() => setNewModalOpen(true)}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--enterprise-primary)] text-white shadow-lg"
+            aria-label="New punch item"
+          >
+            <Plus className="h-7 w-7" />
+          </button>
+        </EnterpriseAddPulseWrap>
       </div>
 
       <PunchDetailSlider
@@ -978,6 +1039,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         punch={activePunch}
         projectId={projectId}
         members={members}
+        currentProject={currentProject}
         onClose={closeSlide}
         patchMut={patchMut}
         photoMut={photoMut}
@@ -985,403 +1047,229 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         deleteMut={deleteMut}
       />
 
-      {/* New item modal */}
-      {newModalOpen ? (
-        <div className="fixed inset-0 z-[102] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-[#0f172a]/50 backdrop-blur-[1px]"
-            aria-label="Close"
-            onClick={() => setNewModalOpen(false)}
-          />
-          <div
-            className="relative w-full max-w-md rounded-t-xl border border-[#e2e8f0] bg-white p-5 shadow-2xl sm:rounded-xl"
-            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 12px))" }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={newModalTitleId}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h2 id={newModalTitleId} className="text-lg font-semibold text-[#0f172a]">
-                New punch list item
-              </h2>
-              <button
-                type="button"
-                onClick={() => setNewModalOpen(false)}
-                className="rounded-lg p-2 text-[#94a3b8] hover:bg-[#f1f5f9]"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form
-              className="space-y-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!newTitle.trim() || !newLocation.trim()) {
-                  setNewMsg("Title and location are required.");
-                  return;
-                }
-                createMut.mutate();
-              }}
+      {/* New item — slide-over */}
+      <EnterpriseSlideOver
+        open={newModalOpen}
+        onClose={() => setNewModalOpen(false)}
+        overlayZClass="z-[102]"
+        panelMaxWidthClass="max-w-[min(100dvw,560px)] sm:max-w-[560px]"
+        ariaLabelledBy={newModalTitleId}
+        form={{
+          onSubmit: (e) => {
+            e.preventDefault();
+            if (!newTitle.trim() || !newLocation.trim()) {
+              setNewMsg("Title and location are required.");
+              return;
+            }
+            createMut.mutate();
+          },
+        }}
+        header={
+          <div>
+            <h2
+              id={newModalTitleId}
+              className="text-lg font-semibold text-[var(--enterprise-text)]"
             >
-              <label className="block text-xs font-semibold text-[#64748b]">
-                Title (required)
-                <input
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm"
-                  required
-                />
-              </label>
-              <label className="block text-xs font-semibold text-[#64748b]">
-                Location
-                <input
-                  value={newLocation}
-                  onChange={(e) => setNewLocation(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm"
-                  required
-                />
-              </label>
-              <label className="block text-xs font-semibold text-[#64748b]">
-                Trade
-                <input
-                  value={newTrade}
-                  onChange={(e) => setNewTrade(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm"
-                />
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-semibold text-[#64748b]">
-                  Assignee
-                  <select
-                    value={newAssignee}
-                    onChange={(e) => setNewAssignee(e.target.value)}
-                    className="mt-1 w-full rounded-md border border-[#e2e8f0] px-2 py-2 text-sm"
-                  >
-                    <option value="">Select…</option>
-                    {members.map((m) => (
-                      <option key={m.userId} value={m.userId}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block text-xs font-semibold text-[#64748b]">
-                  Priority
-                  <select
-                    value={newPriority}
-                    onChange={(e) => setNewPriority(e.target.value)}
-                    className="mt-1 w-full rounded-md border border-[#e2e8f0] px-2 py-2 text-sm"
-                  >
-                    {PRIORITIES.map((pr) => (
-                      <option key={pr} value={pr}>
-                        {PRIORITY_LABEL[pr]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <label className="block text-xs font-semibold text-[#64748b]">
-                Due date
-                <input
-                  type="date"
-                  value={newDue}
-                  onChange={(e) => setNewDue(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm"
-                />
-              </label>
-              {newMsg ? <p className="text-sm text-red-600">{newMsg}</p> : null}
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setNewModalOpen(false)}
-                  className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-sm font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMut.isPending}
-                  className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                >
-                  {createMut.isPending ? "Creating…" : "Create Item"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Add punch rows from a saved checklist */}
-      {checklistModalOpen ? (
-        <div className="fixed inset-0 z-[102] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-[#0f172a]/50 backdrop-blur-[1px]"
-            aria-label="Close"
-            onClick={() => setChecklistModalOpen(false)}
-          />
-          <div
-            className="relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-xl border border-[#e2e8f0] bg-white p-5 shadow-2xl sm:max-w-lg sm:rounded-xl"
-            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 12px))" }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="punch-checklist-modal-title"
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h2 id="punch-checklist-modal-title" className="text-lg font-semibold text-[#0f172a]">
-                Add from a checklist
-              </h2>
-              <button
-                type="button"
-                onClick={() => setChecklistModalOpen(false)}
-                className="rounded-lg p-2 text-[#94a3b8] hover:bg-[#f1f5f9]"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="mb-4 text-sm text-[#64748b]">
-              Pick a saved checklist. Each line becomes a new punch item on this project (you can
-              edit them afterward).
+              New punch list item
+            </h2>
+            <p className="mt-1 text-sm text-[var(--enterprise-text)]">
+              Required fields: title and location.
             </p>
-            {templates.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-[#cbd5e1] bg-[#f8fafc] p-6 text-center">
-                <p className="mb-3 text-sm text-[#64748b]">
-                  You don&apos;t have any saved checklists yet.
-                </p>
-                <button
-                  type="button"
-                  className="rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white"
-                  onClick={() => {
-                    setChecklistModalOpen(false);
-                    setManageTemplatesOpen(true);
-                  }}
-                >
-                  Create a checklist
-                </button>
-              </div>
-            ) : (
-              <ul className="space-y-2">
-                {templates.map((t) => {
-                  const n = countPunchTemplateItems(t.itemsJson);
-                  return (
-                    <li
-                      key={t.id}
-                      className="flex flex-col gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium text-[#0f172a]">{t.name}</p>
-                        <p className="text-xs text-[#64748b]">
-                          {n === 0
-                            ? "No lines (cannot add)"
-                            : `${n} punch line${n === 1 ? "" : "s"}`}
-                          {t.projectId ? " · This project" : " · All projects"}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={applyTplMut.isPending || n === 0}
-                        className="shrink-0 rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                        onClick={() => applyTplMut.mutate(t.id)}
-                      >
-                        {applyTplMut.isPending ? "Adding…" : "Add to punch list"}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+          </div>
+        }
+        footer={
+          <>
             <button
               type="button"
-              className="mt-4 w-full rounded-lg border border-[#e2e8f0] py-2 text-sm font-medium text-[#64748b]"
+              onClick={() => setNewModalOpen(false)}
+              className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)]"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={createMut.isPending}
+              className="rounded-xl bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-60"
+            >
+              {createMut.isPending ? "Creating…" : "Create Item"}
+            </button>
+          </>
+        }
+        bodyClassName="space-y-3 px-4 py-4"
+      >
+        <label className={PUNCH_SLIDE_LABEL}>
+          Title (required)
+          <input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            className={PUNCH_SLIDE_FIELD}
+            required
+          />
+        </label>
+        <label className={PUNCH_SLIDE_LABEL}>
+          Location
+          <input
+            value={newLocation}
+            onChange={(e) => setNewLocation(e.target.value)}
+            className={PUNCH_SLIDE_FIELD}
+            required
+          />
+        </label>
+        <label className={PUNCH_SLIDE_LABEL}>
+          Trade
+          <input
+            value={newTrade}
+            onChange={(e) => setNewTrade(e.target.value)}
+            className={PUNCH_SLIDE_FIELD}
+          />
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className={PUNCH_SLIDE_LABEL}>
+            Assignees
+            <div className="mt-1">
+              <EnterpriseMemberMultiPicker
+                members={members}
+                value={newAssignees}
+                onChange={setNewAssignees}
+              />
+            </div>
+          </label>
+          <label className={PUNCH_SLIDE_LABEL}>
+            Priority
+            <select
+              value={newPriority}
+              onChange={(e) => setNewPriority(e.target.value)}
+              className={PUNCH_SLIDE_SELECT}
+            >
+              {PRIORITIES.map((pr) => (
+                <option key={pr} value={pr}>
+                  {PRIORITY_LABEL[pr]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className={PUNCH_SLIDE_LABEL}>
+          Due date
+          <input
+            type="date"
+            value={newDue}
+            onChange={(e) => setNewDue(e.target.value)}
+            className={PUNCH_SLIDE_FIELD}
+          />
+        </label>
+        {newMsg ? <p className="text-sm text-red-600">{newMsg}</p> : null}
+      </EnterpriseSlideOver>
+
+      {/* Add from checklist — slide-over */}
+      <EnterpriseSlideOver
+        open={checklistModalOpen}
+        onClose={() => setChecklistModalOpen(false)}
+        overlayZClass="z-[102]"
+        panelMaxWidthClass="max-w-[min(100dvw,560px)] sm:max-w-[560px]"
+        ariaLabelledBy="punch-checklist-slide-title"
+        header={
+          <div>
+            <h2
+              id="punch-checklist-slide-title"
+              className="text-lg font-semibold text-[var(--enterprise-text)]"
+            >
+              Add from a checklist
+            </h2>
+            <p className="mt-1 text-sm text-[var(--enterprise-text)]">
+              Each line becomes a new punch item (you can edit afterward).
+            </p>
+          </div>
+        }
+        footer={
+          <button
+            type="button"
+            className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)]"
+            onClick={() => {
+              setChecklistModalOpen(false);
+              setManageTemplatesOpen(true);
+            }}
+          >
+            Create or edit checklists
+          </button>
+        }
+        bodyClassName="space-y-4 px-4 py-4"
+      >
+        {templates.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-6 text-center">
+            <p className="mb-3 text-sm text-[var(--enterprise-text-muted)]">
+              You don&apos;t have any saved checklists yet.
+            </p>
+            <button
+              type="button"
+              className="rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)]"
               onClick={() => {
                 setChecklistModalOpen(false);
                 setManageTemplatesOpen(true);
               }}
             >
-              Create or edit checklists
+              Create a checklist
             </button>
           </div>
-        </div>
-      ) : null}
-
-      {/* Save reusable checklists (templates) */}
-      {manageTemplatesOpen ? (
-        <div className="fixed inset-0 z-[102] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-[#0f172a]/50 backdrop-blur-[1px]"
-            aria-label="Close"
-            onClick={() => setManageTemplatesOpen(false)}
-          />
-          <div
-            className="relative max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-t-xl border border-[#e2e8f0] bg-white p-5 shadow-2xl sm:max-w-2xl sm:rounded-xl"
-            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom, 12px))" }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="punch-manage-checklists-title"
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h2
-                id="punch-manage-checklists-title"
-                className="text-lg font-semibold text-[#0f172a]"
-              >
-                Reusable checklists
-              </h2>
-              <button
-                type="button"
-                onClick={() => setManageTemplatesOpen(false)}
-                className="rounded-lg p-2 text-[#94a3b8] hover:bg-[#f1f5f9]"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="mb-3 text-xs text-[#64748b]">
-              Saved checklists you can add to this punch list anytime.
-            </p>
-            <ul className="mb-6 max-h-40 space-y-1 overflow-auto rounded-md border border-[#e2e8f0] bg-[#f8fafc] p-2">
-              {templates.length === 0 ? (
-                <li className="text-xs text-[#94a3b8]">None yet — add one below.</li>
-              ) : (
-                templates.map((t) => (
-                  <li
-                    key={t.id}
-                    className="flex items-center justify-between gap-2 text-sm text-[#334155]"
+        ) : (
+          <ul className="space-y-2">
+            {templates.map((t) => {
+              const n = countPunchTemplateItems(t.itemsJson);
+              return (
+                <li
+                  key={t.id}
+                  className="flex flex-col gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-[var(--enterprise-text)]">{t.name}</p>
+                    <p className="text-xs text-[var(--enterprise-text-muted)]">
+                      {n === 0 ? "No lines (cannot add)" : `${n} punch line${n === 1 ? "" : "s"}`}
+                      {t.projectId ? " · This project" : " · All projects"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={applyTplMut.isPending || n === 0}
+                    className="shrink-0 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50"
+                    onClick={() => applyTplMut.mutate(t.id)}
                   >
-                    <span className="min-w-0 truncate">{t.name}</span>
-                    <button
-                      type="button"
-                      className="shrink-0 text-xs font-semibold text-[#2563eb]"
-                      onClick={() => applyTplMut.mutate(t.id)}
-                    >
-                      Add to project
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
-            <p className="mb-2 text-xs font-semibold text-[#64748b]">New checklist</p>
-            <label className="mb-2 block text-xs text-[#64748b]">
-              Name
-              <input
-                value={tplName}
-                onChange={(e) => setTplName(e.target.value)}
-                placeholder="e.g. Level 1 walkthrough"
-                className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm"
-              />
-            </label>
-            <fieldset className="mb-3 text-xs text-[#64748b]">
-              <legend className="mb-1 font-semibold">Where to save</legend>
-              <div className="flex flex-wrap gap-3">
-                <label className="inline-flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="tplScope"
-                    checked={tplScope === "PROJECT"}
-                    onChange={() => setTplScope("PROJECT")}
-                  />
-                  This project only
-                </label>
-                <label className="inline-flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="tplScope"
-                    checked={tplScope === "WORKSPACE"}
-                    onChange={() => setTplScope("WORKSPACE")}
-                  />
-                  All projects in workspace
-                </label>
-              </div>
-            </fieldset>
-            <p className="mb-1 text-xs text-[#64748b]">
-              Lines to add when you use this checklist (title or location required per row).
+                    {applyTplMut.isPending ? "Adding…" : "Add to punch list"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </EnterpriseSlideOver>
+
+      {/* Reusable checklists (templates) — slide-over */}
+      <EnterpriseSlideOver
+        open={manageTemplatesOpen}
+        onClose={() => setManageTemplatesOpen(false)}
+        overlayZClass="z-[102]"
+        panelMaxWidthClass="max-w-[min(100dvw,720px)] sm:max-w-[720px]"
+        ariaLabelledBy="punch-manage-checklists-slide-title"
+        header={
+          <div>
+            <h2
+              id="punch-manage-checklists-slide-title"
+              className="text-lg font-semibold text-[var(--enterprise-text)]"
+            >
+              Reusable checklists
+            </h2>
+            <p className="mt-1 text-sm text-[var(--enterprise-text)]">
+              Saved lists you can apply to this punch list anytime.
             </p>
-            <div className="mb-2 overflow-x-auto rounded-md border border-[#e2e8f0]">
-              <table className="w-full min-w-[520px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-[#e2e8f0] bg-[#f1f5f9] text-left text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">
-                    <th className="px-2 py-2">What to fix</th>
-                    <th className="px-2 py-2">Where</th>
-                    <th className="px-2 py-2 w-28">Trade</th>
-                    <th className="w-10 px-1 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {tplDraftLines.map((row, i) => (
-                    <tr key={i} className="border-b border-[#f1f5f9] last:border-0">
-                      <td className="p-1">
-                        <input
-                          value={row.title}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setTplDraftLines((lines) =>
-                              lines.map((l, j) => (j === i ? { ...l, title: v } : l)),
-                            );
-                          }}
-                          placeholder="e.g. Patch drywall"
-                          className="w-full rounded border border-transparent bg-white px-2 py-1.5 text-sm hover:border-[#e2e8f0] focus:border-[#2563eb] focus:outline-none"
-                        />
-                      </td>
-                      <td className="p-1">
-                        <input
-                          value={row.location}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setTplDraftLines((lines) =>
-                              lines.map((l, j) => (j === i ? { ...l, location: v } : l)),
-                            );
-                          }}
-                          placeholder="e.g. Unit 12B"
-                          className="w-full rounded border border-transparent bg-white px-2 py-1.5 text-sm hover:border-[#e2e8f0] focus:border-[#2563eb] focus:outline-none"
-                        />
-                      </td>
-                      <td className="p-1">
-                        <input
-                          value={row.trade}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setTplDraftLines((lines) =>
-                              lines.map((l, j) => (j === i ? { ...l, trade: v } : l)),
-                            );
-                          }}
-                          placeholder="General"
-                          className="w-full rounded border border-transparent bg-white px-2 py-1.5 text-sm hover:border-[#e2e8f0] focus:border-[#2563eb] focus:outline-none"
-                        />
-                      </td>
-                      <td className="p-1 text-center">
-                        <button
-                          type="button"
-                          className="rounded p-1 text-[#94a3b8] hover:bg-[#fee2e2] hover:text-red-600 disabled:opacity-30"
-                          disabled={tplDraftLines.length <= 1}
-                          aria-label="Remove row"
-                          onClick={() =>
-                            setTplDraftLines((lines) =>
-                              lines.length <= 1 ? lines : lines.filter((_, j) => j !== i),
-                            )
-                          }
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          </div>
+        }
+        footer={
+          <>
             <button
               type="button"
-              className="mb-3 w-full rounded-lg border border-dashed border-[#cbd5e1] py-2 text-sm font-medium text-[#64748b] hover:bg-[#f8fafc]"
-              onClick={() =>
-                setTplDraftLines((lines) => [
-                  ...lines,
-                  { title: "", location: "", trade: "General" },
-                ])
-              }
+              onClick={() => setManageTemplatesOpen(false)}
+              className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)]"
             >
-              + Add another line
+              Cancel
             </button>
             <button
               type="button"
@@ -1394,13 +1282,155 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                 }
                 createTplMut.mutate();
               }}
-              className="w-full rounded-lg bg-[#2563eb] py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="rounded-xl bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50"
             >
               {createTplMut.isPending ? "Saving…" : "Save checklist"}
             </button>
+          </>
+        }
+        bodyClassName="space-y-4 px-4 py-4"
+      >
+        <ul className="max-h-40 space-y-1 overflow-auto rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-2">
+          {templates.length === 0 ? (
+            <li className="text-xs text-[var(--enterprise-text-muted)]">
+              None yet — add one below.
+            </li>
+          ) : (
+            templates.map((t) => (
+              <li
+                key={t.id}
+                className="flex items-center justify-between gap-2 text-sm text-[var(--enterprise-text)]"
+              >
+                <span className="min-w-0 truncate">{t.name}</span>
+                <button
+                  type="button"
+                  className="shrink-0 text-xs font-semibold text-[var(--enterprise-primary)]"
+                  onClick={() => applyTplMut.mutate(t.id)}
+                >
+                  Add to project
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+        <p className="text-xs font-semibold text-[var(--enterprise-text-muted)]">New checklist</p>
+        <label className="block text-xs text-[var(--enterprise-text-muted)]">
+          Name
+          <input
+            value={tplName}
+            onChange={(e) => setTplName(e.target.value)}
+            placeholder="e.g. Level 1 walkthrough"
+            className={PUNCH_SLIDE_FIELD}
+          />
+        </label>
+        <fieldset className="text-xs text-[var(--enterprise-text-muted)]">
+          <legend className="mb-1 font-semibold">Where to save</legend>
+          <div className="flex flex-wrap gap-3">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="tplScope"
+                checked={tplScope === "PROJECT"}
+                onChange={() => setTplScope("PROJECT")}
+              />
+              This project only
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="tplScope"
+                checked={tplScope === "WORKSPACE"}
+                onChange={() => setTplScope("WORKSPACE")}
+              />
+              All projects in workspace
+            </label>
           </div>
+        </fieldset>
+        <p className="text-xs text-[var(--enterprise-text-muted)]">
+          Lines to add when you use this checklist (title or location required per row).
+        </p>
+        <div className="overflow-x-auto rounded-lg border border-[var(--enterprise-border)]">
+          <table className="w-full min-w-[520px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                <th className="px-2 py-2">What to fix</th>
+                <th className="px-2 py-2">Where</th>
+                <th className="w-28 px-2 py-2">Trade</th>
+                <th className="w-10 px-1 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {tplDraftLines.map((row, i) => (
+                <tr key={i} className="border-b border-[var(--enterprise-border)]/60 last:border-0">
+                  <td className="p-1">
+                    <input
+                      value={row.title}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setTplDraftLines((lines) =>
+                          lines.map((l, j) => (j === i ? { ...l, title: v } : l)),
+                        );
+                      }}
+                      placeholder="e.g. Patch drywall"
+                      className="w-full rounded border border-transparent bg-[var(--enterprise-surface)] px-2 py-1.5 text-sm hover:border-[var(--enterprise-border)] focus:border-[var(--enterprise-primary)] focus:outline-none"
+                    />
+                  </td>
+                  <td className="p-1">
+                    <input
+                      value={row.location}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setTplDraftLines((lines) =>
+                          lines.map((l, j) => (j === i ? { ...l, location: v } : l)),
+                        );
+                      }}
+                      placeholder="e.g. Unit 12B"
+                      className="w-full rounded border border-transparent bg-[var(--enterprise-surface)] px-2 py-1.5 text-sm hover:border-[var(--enterprise-border)] focus:border-[var(--enterprise-primary)] focus:outline-none"
+                    />
+                  </td>
+                  <td className="p-1">
+                    <input
+                      value={row.trade}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setTplDraftLines((lines) =>
+                          lines.map((l, j) => (j === i ? { ...l, trade: v } : l)),
+                        );
+                      }}
+                      placeholder="General"
+                      className="w-full rounded border border-transparent bg-[var(--enterprise-surface)] px-2 py-1.5 text-sm hover:border-[var(--enterprise-border)] focus:border-[var(--enterprise-primary)] focus:outline-none"
+                    />
+                  </td>
+                  <td className="p-1 text-center">
+                    <button
+                      type="button"
+                      className="rounded p-1 text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
+                      disabled={tplDraftLines.length <= 1}
+                      aria-label="Remove row"
+                      onClick={() =>
+                        setTplDraftLines((lines) =>
+                          lines.length <= 1 ? lines : lines.filter((_, j) => j !== i),
+                        )
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      ) : null}
+        <button
+          type="button"
+          className="w-full rounded-xl border border-dashed border-[var(--enterprise-border)] py-2.5 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)]"
+          onClick={() =>
+            setTplDraftLines((lines) => [...lines, { title: "", location: "", trade: "General" }])
+          }
+        >
+          + Add another line
+        </button>
+      </EnterpriseSlideOver>
     </div>
   );
 }
@@ -1430,7 +1460,7 @@ function BulkAssignSelect({
   members,
   onApply,
 }: {
-  members: { userId: string; name: string }[];
+  members: { userId: string; name: string; email: string; image?: string | null }[];
   onApply: (userId: string | null) => void;
 }) {
   const [v, setV] = useState("");
@@ -1502,6 +1532,7 @@ function PunchDetailSlider({
   punch,
   projectId,
   members,
+  currentProject,
   onClose,
   patchMut,
   photoMut,
@@ -1511,7 +1542,8 @@ function PunchDetailSlider({
   open: boolean;
   punch: PunchRow | null;
   projectId: string;
-  members: { userId: string; name: string }[];
+  members: { userId: string; name: string; email: string; image?: string | null }[];
+  currentProject: Project | null;
   onClose: () => void;
   patchMut: {
     mutate: (
@@ -1531,6 +1563,8 @@ function PunchDetailSlider({
   const [location, setLocation] = useState("");
   const [trade, setTrade] = useState("");
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [drawingVersionId, setDrawingVersionId] = useState<string>("");
   const [dueYmd, setDueYmd] = useState("");
   const [priority, setPriority] = useState("P2");
   const [dirty, setDirty] = useState(false);
@@ -1542,6 +1576,8 @@ function PunchDetailSlider({
     setLocation(punch.location);
     setTrade(punch.trade);
     setAssigneeId(punch.assigneeId);
+    setAssigneeIds(punchAssigneeIds(punch));
+    setDrawingVersionId(punch.fileVersionId ?? "");
     setDueYmd(punch.dueDate ? punch.dueDate.slice(0, 10) : "");
     setPriority(punch.priority);
     setDirty(false);
@@ -1555,6 +1591,8 @@ function PunchDetailSlider({
     setLocation(punch.location);
     setTrade(punch.trade);
     setAssigneeId(punch.assigneeId);
+    setAssigneeIds(punchAssigneeIds(punch));
+    setDrawingVersionId(punch.fileVersionId ?? "");
     setDueYmd(punch.dueDate ? punch.dueDate.slice(0, 10) : "");
     setPriority(punch.priority);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync when server updatedAt changes
@@ -1562,6 +1600,8 @@ function PunchDetailSlider({
 
   if (!punch) return null;
   const photos = punch.referencePhotos ?? [];
+  const sheetRows = sheetRowsForProject(currentProject);
+  const selectedSheet = sheetRows.find((r) => r.fileVersionId === drawingVersionId) ?? null;
   const headerId = "punch-slide-title";
 
   const save = () => {
@@ -1573,7 +1613,11 @@ function PunchDetailSlider({
           location: location.trim(),
           trade: trade.trim(),
           notes: description.trim() ? description.trim() : null,
+          assigneeIds,
           assigneeId: assigneeId ?? null,
+          fileId: selectedSheet?.fileId ?? null,
+          fileVersionId: selectedSheet?.fileVersionId ?? null,
+          pageNumber: null,
           dueDateYmd: dueYmd || null,
           priority,
         },
@@ -1596,10 +1640,10 @@ function PunchDetailSlider({
       ariaLabelledBy={headerId}
       header={
         <div>
-          <p id={headerId} className="text-base font-semibold text-[#0f172a]">
+          <p id={headerId} className="text-base font-normal text-[#0f172a]">
             Punch List Item #{punch.punchNumber}
           </p>
-          <p className="mt-0.5 text-xs text-[#94a3b8]">Edit details below</p>
+          <p className="mt-0.5 text-xs text-[#0f172a]">Edit details below</p>
         </div>
       }
       footer={
@@ -1627,7 +1671,7 @@ function PunchDetailSlider({
       }
       bodyClassName="px-4 py-4 space-y-4 bg-white"
     >
-      <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+      <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
         Title
         <input
           value={title}
@@ -1638,7 +1682,7 @@ function PunchDetailSlider({
           className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm font-medium text-[#0f172a]"
         />
       </label>
-      <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+      <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
         Description / notes
         <textarea
           value={description}
@@ -1651,7 +1695,7 @@ function PunchDetailSlider({
         />
       </label>
       <div className="grid grid-cols-2 gap-3">
-        <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+        <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
           Location
           <input
             value={location}
@@ -1662,7 +1706,7 @@ function PunchDetailSlider({
             className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm"
           />
         </label>
-        <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+        <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
           Priority
           <select
             value={priority}
@@ -1680,7 +1724,7 @@ function PunchDetailSlider({
           </select>
         </label>
       </div>
-      <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+      <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
         Trade
         <input
           value={trade}
@@ -1692,25 +1736,21 @@ function PunchDetailSlider({
         />
       </label>
       <div className="grid grid-cols-2 gap-3">
-        <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
-          Assignee
-          <select
-            value={assigneeId ?? ""}
-            onChange={(e) => {
-              setAssigneeId(e.target.value || null);
-              setDirty(true);
-            }}
-            className="mt-1 w-full rounded-md border border-[#e2e8f0] px-2 py-2 text-sm"
-          >
-            <option value="">Unassigned</option>
-            {members.map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+        <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
+          Assignees
+          <div className="mt-1">
+            <EnterpriseMemberMultiPicker
+              members={members}
+              value={assigneeIds}
+              onChange={(selected) => {
+                setAssigneeIds(selected);
+                setAssigneeId(selected[0] ?? null);
+                setDirty(true);
+              }}
+            />
+          </div>
         </label>
-        <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+        <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
           Due date
           <input
             type="date"
@@ -1725,7 +1765,7 @@ function PunchDetailSlider({
       </div>
 
       <div>
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+        <p className="mb-2 text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
           Status
         </p>
         <div className="flex flex-wrap gap-1">
@@ -1753,7 +1793,7 @@ function PunchDetailSlider({
       </div>
 
       <div>
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+        <p className="mb-2 text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
           Photos
         </p>
         <input
@@ -1801,33 +1841,41 @@ function PunchDetailSlider({
       </div>
 
       <div className="rounded-lg border border-dashed border-[#cbd5e1] bg-[#f8fafc] p-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+        <p className="text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
           Drawing reference
         </p>
-        <p className="mt-1 text-[11px] leading-relaxed text-[#64748b]">
-          Open the project&apos;s drawings, pick a PDF sheet, then launch the viewer. (Per-item
-          sheet links will appear here when punch items are tied to files.)
-        </p>
+        <select
+          value={drawingVersionId}
+          onChange={(e) => {
+            setDrawingVersionId(e.target.value);
+            setDirty(true);
+          }}
+          className="mt-2 w-full rounded-md border border-[#e2e8f0] bg-white px-2 py-2 text-xs text-[#0f172a]"
+        >
+          <option value="">No drawing reference</option>
+          {sheetRows.map((r) => (
+            <option key={r.fileVersionId} value={r.fileVersionId}>
+              {r.label}
+            </option>
+          ))}
+        </select>
         <Link
-          href={`/projects/${projectId}/files`}
+          href={
+            selectedSheet
+              ? `/projects/${projectId}/files?fileVersionId=${encodeURIComponent(selectedSheet.fileVersionId)}`
+              : `/projects/${projectId}/files`
+          }
           className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-[#e2e8f0] bg-white py-2.5 text-xs font-semibold text-[#2563eb] hover:bg-[#eff6ff]"
         >
           <FileText className="h-4 w-4 shrink-0" />
-          Drawings &amp; files
+          {selectedSheet ? "Open selected sheet" : "Drawings & files"}
           <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
-        </Link>
-        <Link
-          href={`/projects/${projectId}/files`}
-          className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md border border-transparent py-2 text-xs font-semibold text-[#2563eb] underline-offset-2 hover:underline"
-        >
-          <MapPin className="h-3.5 w-3.5 shrink-0" />
-          Choose sheet to view
         </Link>
       </div>
 
       <div className="border-t border-[#e2e8f0] pt-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">Activity</p>
-        <p className="mt-1 text-xs text-[#64748b]">
+        <p className="text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">Activity</p>
+        <p className="mt-1 text-xs text-[#0f172a]">
           Created{" "}
           {new Date(punch.createdAt).toLocaleString("en-GB", {
             day: "numeric",
@@ -1836,7 +1884,7 @@ function PunchDetailSlider({
           })}
         </p>
         {punch.updatedAt !== punch.createdAt ? (
-          <p className="text-xs text-[#64748b]">
+          <p className="text-xs text-[#0f172a]">
             Last updated{" "}
             {new Date(punch.updatedAt).toLocaleString("en-GB", {
               day: "numeric",

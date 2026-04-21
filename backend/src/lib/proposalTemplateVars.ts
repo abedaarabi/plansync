@@ -82,6 +82,8 @@ const VARS: Record<string, (ctx: TemplateReplaceContext) => string> = {
   "proposal.total": (c) => c.proposalTotalFormatted,
   "proposal.expiry": (c) => c.proposalExpiryFormatted,
   "proposal.reference": (c) => c.proposalReference,
+  "today.date": () =>
+    new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
   "takeoff.table": (c) => c.takeoffTableHtml,
 };
 

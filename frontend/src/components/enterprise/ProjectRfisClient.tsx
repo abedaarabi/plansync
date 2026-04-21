@@ -26,6 +26,7 @@ import {
   SortAsc,
   Users,
 } from "lucide-react";
+import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
@@ -387,18 +388,23 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
               )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              resetModal();
-              setSlideOpen(true);
-            }}
+          <EnterpriseAddPulseWrap
             disabled={ctxLoading || !isPro}
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 self-stretch rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50 sm:h-10 sm:w-auto sm:min-h-0 sm:self-start sm:rounded-lg sm:px-4 sm:text-sm"
+            className="w-full self-stretch sm:w-auto sm:self-start"
           >
-            <Plus className="h-4 w-4" strokeWidth={1.75} />
-            New RFI
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                resetModal();
+                setSlideOpen(true);
+              }}
+              disabled={ctxLoading || !isPro}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 self-stretch rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50 sm:h-10 sm:w-auto sm:min-h-0 sm:self-start sm:rounded-lg sm:px-4 sm:text-sm"
+            >
+              <Plus className="h-4 w-4" strokeWidth={1.75} />
+              New RFI
+            </button>
+          </EnterpriseAddPulseWrap>
         </header>
 
         {!isPro ? (

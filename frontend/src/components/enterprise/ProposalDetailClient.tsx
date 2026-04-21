@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Copy, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -193,8 +193,9 @@ export function ProposalDetailClient({
         {editable ? (
           <Link
             href={`${base}/${proposalId}/edit`}
-            className="text-sm font-semibold text-[#2563EB] hover:underline"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#2563EB] px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
           >
+            <Loader2 className="hidden h-3.5 w-3.5" aria-hidden />
             Edit proposal
           </Link>
         ) : null}
@@ -321,6 +322,23 @@ export function ProposalDetailClient({
         ) : null}
 
         <div className="mt-6 flex flex-wrap gap-2 border-t border-slate-100 pt-6">
+          {/* Copy share link */}
+          {p.publicToken && (
+            <button
+              type="button"
+              onClick={() => {
+                const url = `${window.location.origin}/proposal/${p.publicToken}`;
+                void navigator.clipboard
+                  .writeText(url)
+                  .then(() => toast.success("Portal link copied"));
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium transition hover:bg-slate-50"
+              title="Copy client portal link"
+            >
+              <Copy className="h-4 w-4 shrink-0" aria-hidden />
+              Copy link
+            </button>
+          )}
           <button
             type="button"
             disabled={
@@ -379,6 +397,39 @@ export function ProposalDetailClient({
               </>
             ) : (
               "Review PDF"
+            )}
+          </button>
+          {/* Download PDF directly */}
+          <button
+            type="button"
+            disabled={
+              pdfLoading || reviewLoading || csvLoading || esignLoading || resendMut.isPending
+            }
+            onClick={async () => {
+              setPdfLoading(true);
+              try {
+                const blob = await fetchProposalPdfBlob(projectId, proposalId);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${p.reference}-proposal.pdf`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 5000);
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Download failed.");
+              } finally {
+                setPdfLoading(false);
+              }
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium disabled:opacity-60"
+          >
+            {pdfLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                Working…
+              </>
+            ) : (
+              "Download PDF"
             )}
           </button>
           {p.status === "ACCEPTED" && (
@@ -547,35 +598,61 @@ export function ProposalDetailClient({
 
       {(revData?.revisions?.length ?? 0) > 0 && (
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
-          <h2 className="font-semibold text-[#0F172A]">Sent versions</h2>
+          <h2 className="font-semibold text-[#0F172A]">Sent history</h2>
           <p className="mt-1 text-sm text-slate-600">
             Snapshot saved each time this proposal was emailed to the client.
           </p>
-          <ul className="mt-4 space-y-3 text-sm">
-            {revData!.revisions.map((r) => {
-              const snap = r.snapshot;
-              return (
-                <li
-                  key={r.id}
-                  className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2"
-                >
-                  <div className="font-medium text-slate-800">
-                    {new Date(r.sentAt).toLocaleString(undefined, {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                  <div className="text-slate-600">
-                    {snap?.title ?? "—"} · Total{" "}
-                    {snap?.total != null ? fmtMoney(String(snap.total), p.currency) : "—"}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="relative mt-4 ml-2">
+            <div className="absolute bottom-0 left-1.5 top-0 w-px bg-slate-100" aria-hidden />
+            <ul className="space-y-4">
+              {revData!.revisions.map((r, idx) => {
+                const snap = r.snapshot;
+                const isLatest = idx === 0;
+                return (
+                  <li key={r.id} className="relative flex gap-4 pl-6">
+                    <div
+                      className={`absolute left-0 top-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
+                        isLatest ? "border-[#2563EB] bg-white" : "border-slate-200 bg-slate-100"
+                      }`}
+                      aria-hidden
+                    >
+                      {isLatest && <div className="h-1.5 w-1.5 rounded-full bg-[#2563EB]" />}
+                    </div>
+                    <div className="min-w-0 flex-1 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2.5 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-1">
+                        <span className="font-medium text-slate-800">
+                          {new Date(r.sentAt).toLocaleString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        {isLatest && (
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                            Latest sent
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {snap?.title ?? p.title}
+                        {snap?.total != null && (
+                          <>
+                            {" "}
+                            ·{" "}
+                            <span className="font-medium text-slate-700">
+                              {fmtMoney(String(snap.total), p.currency)}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </div>
       )}
 

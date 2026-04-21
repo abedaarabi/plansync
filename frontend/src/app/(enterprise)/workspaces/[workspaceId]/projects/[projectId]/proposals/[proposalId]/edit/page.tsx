@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ProposalNewWizard } from "@/components/enterprise/ProposalNewWizard";
+import { ProposalEditorWorkspace } from "@/components/enterprise/proposals/editor/ProposalEditorWorkspace";
 
 export const metadata: Metadata = { title: "Edit proposal" };
 
@@ -8,12 +8,10 @@ type Props = { params: Promise<{ workspaceId: string; projectId: string; proposa
 export default async function WorkspaceEditProposalPage({ params }: Props) {
   const { workspaceId, projectId, proposalId } = await params;
   return (
-    <div className="enterprise-animate-in p-4 sm:p-6 lg:p-8">
-      <ProposalNewWizard
-        projectId={projectId}
-        workspaceId={workspaceId}
-        existingProposalId={proposalId}
-      />
-    </div>
+    <ProposalEditorWorkspace
+      projectId={projectId}
+      workspaceId={workspaceId}
+      existingProposalId={proposalId}
+    />
   );
 }

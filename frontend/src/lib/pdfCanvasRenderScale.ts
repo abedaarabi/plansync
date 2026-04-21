@@ -67,6 +67,34 @@ export function getMaxCanvasDpr(): number {
 }
 
 /**
+ * Max CSS width/height (px) for the on-screen page box on touch devices. Canvas rasterization is
+ * capped separately; without this, the layout still uses `pagePt × scale` and mobile Safari/Chrome
+ * can freeze or kill the tab when zoom approaches VIEWER_SCALE_MAX on large sheets.
+ */
+export function getViewerMaxLayoutCssEdge(): number {
+  if (typeof window === "undefined") return Number.POSITIVE_INFINITY;
+  if (!isCoarsePointer()) return Number.POSITIVE_INFINITY;
+  /* Keep in line with touch bitmap edge cap — huge scrollWidth/scrollHeight is what hurts layout. */
+  return 8192;
+}
+
+/**
+ * Limits viewer zoom so the page’s CSS box does not exceed {@link getViewerMaxLayoutCssEdge} on
+ * coarse pointers. No-op on desktop / SSR.
+ */
+export function clampViewerScaleForLayout(
+  scale: number,
+  pageWidthPt: number,
+  pageHeightPt: number,
+): number {
+  const maxEdge = getViewerMaxLayoutCssEdge();
+  if (!Number.isFinite(maxEdge)) return scale;
+  const bw = Math.max(pageWidthPt, 1e-6);
+  const bh = Math.max(pageHeightPt, 1e-6);
+  return Math.min(scale, maxEdge / Math.max(bw, bh));
+}
+
+/**
  * Effective PDF viewport scale for rasterization (PDF user units → canvas pixels).
  * @param baseWidth - viewport width at scale 1 (pdf.js)
  * @param baseHeight - viewport height at scale 1

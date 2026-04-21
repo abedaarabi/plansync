@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { FileSpreadsheet, Plus } from "lucide-react";
+import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
@@ -221,13 +222,15 @@ export function ProjectProposalsClient({
           >
             Templates
           </Link>
-          <Link
-            href={`${base}/new`}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] sm:min-h-10 sm:rounded-lg sm:px-3 sm:text-xs"
-          >
-            <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5" strokeWidth={1.75} />
-            New proposal
-          </Link>
+          <EnterpriseAddPulseWrap className="w-full sm:w-auto">
+            <Link
+              href={`${base}/new`}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] sm:min-h-10 sm:rounded-lg sm:px-3 sm:text-xs"
+            >
+              <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5" strokeWidth={1.75} />
+              New proposal
+            </Link>
+          </EnterpriseAddPulseWrap>
         </div>
       </header>
 
@@ -382,8 +385,19 @@ export function ProjectProposalsClient({
                       >
                         {p.title}
                       </Link>
-                      <div className="text-xs text-[var(--enterprise-text-muted)]">
-                        {p.reference}
+                      <div className="flex items-center gap-2 text-xs text-[var(--enterprise-text-muted)]">
+                        <span>{p.reference}</span>
+                        {(p.status === "DRAFT" ||
+                          p.status === "CHANGE_REQUESTED" ||
+                          p.status === "SENT" ||
+                          p.status === "VIEWED") && (
+                          <Link
+                            href={`${base}/${p.id}/edit`}
+                            className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--enterprise-text-muted)] transition hover:border-[var(--enterprise-primary)]/30 hover:text-[var(--enterprise-primary)]"
+                          >
+                            Edit
+                          </Link>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -425,43 +439,60 @@ function StatCard({ label, value }: { label: string; value: string }) {
 }
 
 function ProposalCard({ p, base }: { p: ProposalListRow; base: string }) {
+  const editable =
+    p.status === "DRAFT" ||
+    p.status === "CHANGE_REQUESTED" ||
+    p.status === "SENT" ||
+    p.status === "VIEWED";
   return (
     <li>
-      <Link
-        href={`${base}/${p.id}`}
-        className="block touch-manipulation rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/25 hover:shadow-[var(--enterprise-shadow-sm)] active:scale-[0.99]"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <span className="shrink-0 rounded-md bg-[var(--enterprise-bg)] px-2 py-1 font-mono text-xs font-semibold tabular-nums text-[var(--enterprise-text-muted)]">
-            #{String(p.sequenceNumber).padStart(3, "0")}
-          </span>
-          <span
-            className={`inline-flex max-w-[65%] shrink-0 rounded-full px-2.5 py-0.5 text-right text-xs font-medium ${STATUS_STYLE[p.status] ?? "bg-slate-100 text-slate-700"}`}
-          >
-            {proposalStatusLabel(p.status)}
-          </span>
-        </div>
-        <p className="mt-2 text-base font-semibold leading-snug text-[var(--enterprise-text)]">
-          {p.title}
-        </p>
-        <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">{p.reference}</p>
-        <dl className="mt-3 grid grid-cols-1 gap-2 text-xs text-[var(--enterprise-text-muted)] sm:grid-cols-3">
-          <div className="flex gap-1.5">
-            <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">Client</dt>
-            <dd className="min-w-0 truncate">{p.clientName}</dd>
+      <div className="block touch-manipulation rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
+        <Link
+          href={`${base}/${p.id}`}
+          className="block p-4 transition hover:border-[var(--enterprise-primary)]/25 active:scale-[0.99]"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <span className="shrink-0 rounded-md bg-[var(--enterprise-bg)] px-2 py-1 font-mono text-xs font-semibold tabular-nums text-[var(--enterprise-text-muted)]">
+              #{String(p.sequenceNumber).padStart(3, "0")}
+            </span>
+            <span
+              className={`inline-flex max-w-[65%] shrink-0 rounded-full px-2.5 py-0.5 text-right text-xs font-medium ${STATUS_STYLE[p.status] ?? "bg-slate-100 text-slate-700"}`}
+            >
+              {proposalStatusLabel(p.status)}
+            </span>
           </div>
-          <div className="flex gap-1.5">
-            <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">Sent</dt>
-            <dd className="tabular-nums">{formatSentDate(p.sentAt)}</dd>
+          <p className="mt-2 text-base font-semibold leading-snug text-[var(--enterprise-text)]">
+            {p.title}
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">{p.reference}</p>
+          <dl className="mt-3 grid grid-cols-1 gap-2 text-xs text-[var(--enterprise-text-muted)] sm:grid-cols-3">
+            <div className="flex gap-1.5">
+              <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">Client</dt>
+              <dd className="min-w-0 truncate">{p.clientName}</dd>
+            </div>
+            <div className="flex gap-1.5">
+              <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">Sent</dt>
+              <dd className="tabular-nums">{formatSentDate(p.sentAt)}</dd>
+            </div>
+            <div className="flex gap-1.5">
+              <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">Value</dt>
+              <dd className="font-semibold tabular-nums text-[var(--enterprise-text)]">
+                {fmtMoney(p.total, p.currency)}
+              </dd>
+            </div>
+          </dl>
+        </Link>
+        {editable && (
+          <div className="flex border-t border-[var(--enterprise-border)]/60 px-4 py-2">
+            <Link
+              href={`${base}/${p.id}/edit`}
+              className="text-xs font-medium text-[var(--enterprise-primary)] hover:underline"
+            >
+              Edit in editor →
+            </Link>
           </div>
-          <div className="flex gap-1.5">
-            <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">Value</dt>
-            <dd className="font-semibold tabular-nums text-[var(--enterprise-text)]">
-              {fmtMoney(p.total, p.currency)}
-            </dd>
-          </div>
-        </dl>
-      </Link>
+        )}
+      </div>
     </li>
   );
 }

@@ -1578,10 +1578,16 @@ export type PunchRow = {
   priority: string;
   status: string;
   assigneeId: string | null;
+  assignees?: { id: string; name: string; email: string; image: string | null }[];
   dueDate: string | null;
   completedAt: string | null;
   templateId: string | null;
   assignee: { id: string; name: string; email: string; image: string | null } | null;
+  fileId?: string | null;
+  file?: { id: string; name: string } | null;
+  fileVersionId?: string | null;
+  fileVersion?: { id: string; version: number; fileId: string } | null;
+  pageNumber?: number | null;
   notes: string | null;
   referencePhotos?: PunchReferencePhotoRow[];
   createdAt: string;
@@ -1619,6 +1625,10 @@ export async function createPunchItem(
     priority?: string;
     status?: string;
     assigneeId?: string | null;
+    assigneeIds?: string[];
+    fileId?: string | null;
+    fileVersionId?: string | null;
+    pageNumber?: number | null;
     dueDateYmd?: string | null;
     templateId?: string | null;
   },
@@ -1646,6 +1656,10 @@ export async function patchPunchItem(
     priority?: string;
     status?: string;
     assigneeId?: string | null;
+    assigneeIds?: string[] | null;
+    fileId?: string | null;
+    fileVersionId?: string | null;
+    pageNumber?: number | null;
     dueDateYmd?: string | null;
     referencePhotos?: PunchReferencePhotoRow[] | null;
   },
@@ -3888,6 +3902,159 @@ export async function postProposalExternalSignExport(
   };
   if (!res.ok) throw new Error(j.error ?? "Request failed.");
   return { configured: Boolean(j.configured), message: j.message };
+}
+
+// --- Proposal Document Versions ---
+
+export type ProposalDocumentVersionRow = {
+  id: string;
+  versionNumber: number;
+  contentJson: Record<string, unknown>;
+  contentHtml: string;
+  changeSummary: string;
+  createdBy: { id: string; name: string; email: string } | null;
+  createdAt: string;
+};
+
+export async function fetchProposalDocumentVersions(
+  projectId: string,
+  proposalId: string,
+): Promise<{ versions: ProposalDocumentVersionRow[] }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/document-versions`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load document versions.");
+  return res.json() as Promise<{ versions: ProposalDocumentVersionRow[] }>;
+}
+
+export async function saveProposalDocumentVersion(
+  projectId: string,
+  proposalId: string,
+  payload: { contentJson: Record<string, unknown>; contentHtml: string; changeSummary?: string },
+): Promise<ProposalDocumentVersionRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/document-versions`,
+    ),
+    { method: "POST", credentials: "include", headers: jsonHeaders, body: JSON.stringify(payload) },
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? "Could not save version.");
+  }
+  return res.json() as Promise<ProposalDocumentVersionRow>;
+}
+
+export async function restoreProposalDocumentVersion(
+  projectId: string,
+  proposalId: string,
+  versionId: string,
+): Promise<ProposalDocumentVersionRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/document-versions/${encodeURIComponent(versionId)}/restore`,
+    ),
+    { method: "POST", credentials: "include", headers: jsonHeaders },
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? "Could not restore version.");
+  }
+  return res.json() as Promise<ProposalDocumentVersionRow>;
+}
+
+// --- Proposal Internal Comments ---
+
+export type ProposalCommentRow = {
+  id: string;
+  body: string;
+  resolvedAt: string | null;
+  editedAt: string | null;
+  createdAt: string;
+  author: { id: string; name: string; email: string };
+};
+
+export async function fetchProposalComments(
+  projectId: string,
+  proposalId: string,
+): Promise<{ comments: ProposalCommentRow[] }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/comments`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load comments.");
+  return res.json() as Promise<{ comments: ProposalCommentRow[] }>;
+}
+
+export async function postProposalComment(
+  projectId: string,
+  proposalId: string,
+  body: string,
+): Promise<ProposalCommentRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/comments`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify({ body }),
+    },
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? "Could not post comment.");
+  }
+  return res.json() as Promise<ProposalCommentRow>;
+}
+
+export async function patchProposalComment(
+  projectId: string,
+  proposalId: string,
+  commentId: string,
+  patch: { body?: string; resolved?: boolean },
+): Promise<ProposalCommentRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/comments/${encodeURIComponent(commentId)}`,
+    ),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(patch),
+    },
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? "Could not update comment.");
+  }
+  return res.json() as Promise<ProposalCommentRow>;
+}
+
+export async function deleteProposalComment(
+  projectId: string,
+  proposalId: string,
+  commentId: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/comments/${encodeURIComponent(commentId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? "Could not delete comment.");
+  }
 }
 
 // --- Operations & Maintenance (O&M) ---

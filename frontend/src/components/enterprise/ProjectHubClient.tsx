@@ -16,6 +16,7 @@ import {
   Plus,
   Sparkles,
 } from "lucide-react";
+import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import {
   applyFolderStructure,
@@ -335,14 +336,16 @@ export function ProjectHubClient() {
           </h1>
         </div>
         {isAdmin && (
-          <button
-            type="button"
-            onClick={() => setProjectModal(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] ring-1 ring-[color-mix(in_srgb,var(--enterprise-primary)_30%,transparent)] transition hover:bg-[var(--enterprise-primary-deep)] sm:shrink-0"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2} />
-            New project
-          </button>
+          <EnterpriseAddPulseWrap>
+            <button
+              type="button"
+              onClick={() => setProjectModal(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] ring-1 ring-[color-mix(in_srgb,var(--enterprise-primary)_30%,transparent)] transition hover:bg-[var(--enterprise-primary-deep)] sm:shrink-0"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              New project
+            </button>
+          </EnterpriseAddPulseWrap>
         )}
       </header>
 

@@ -27,6 +27,7 @@ import {
   type TakeoffLineRow,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
+import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { AccessRestricted } from "@/components/enterprise/AccessRestricted";
 import { useTaskCreation } from "@/components/enterprise/useTaskCreation";
@@ -1223,10 +1224,12 @@ export function ProjectScheduleClient({ projectId }: Props) {
             <Save className="h-4 w-4" aria-hidden />
             Save now
           </button>
-          <button type="button" onClick={addRow} className={SCHEDULE_BTN_SECONDARY}>
-            <Plus className="h-4 w-4" aria-hidden />
-            Add top-level task
-          </button>
+          <EnterpriseAddPulseWrap>
+            <button type="button" onClick={addRow} className={SCHEDULE_BTN_SECONDARY}>
+              <Plus className="h-4 w-4" aria-hidden />
+              Add top-level task
+            </button>
+          </EnterpriseAddPulseWrap>
           <button
             type="button"
             onClick={() => {

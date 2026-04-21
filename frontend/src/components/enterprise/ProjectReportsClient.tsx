@@ -96,12 +96,12 @@ function SliderSectionCard({
         ) : null}
         <div className="min-w-0 flex-1 pt-0.5">
           {kicker ? (
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#94a3b8]">
+            <p className="text-[11px] font-normal uppercase tracking-[0.08em] text-[#0f172a]">
               {kicker}
             </p>
           ) : null}
           <h3
-            className={`text-[15px] font-semibold leading-snug tracking-tight text-[#0f172a] ${kicker ? "mt-0.5" : ""}`}
+            className={`text-[15px] font-normal leading-snug tracking-tight text-[#0f172a] ${kicker ? "mt-0.5" : ""}`}
           >
             {title}
           </h3>
@@ -184,7 +184,7 @@ function SortHeader({
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-[#94a3b8] hover:text-[#64748b]"
+      className="inline-flex items-center gap-1 text-[11px] font-normal uppercase tracking-wide text-[#0f172a] hover:text-[#111827]"
     >
       {label}
       {active ? (
@@ -787,10 +787,10 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               <ScrollText className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-2xl font-semibold tracking-tight text-[#0f172a] sm:text-3xl">
+              <h1 className="text-2xl font-normal tracking-tight text-[#0f172a] sm:text-3xl">
                 Field Reports
               </h1>
-              <p className="mt-1 text-sm leading-relaxed text-[#64748b]">
+              <p className="mt-1 text-sm leading-relaxed text-[#0f172a]">
                 Daily logs and weekly rollups for this project.
               </p>
             </div>
@@ -799,7 +799,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
             <button
               type="button"
               onClick={() => exportFieldReportsCsv(project?.name ?? "project", sortedRows, numMap)}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold text-[#0f172a] shadow-sm transition hover:bg-white sm:h-9 sm:px-3 sm:text-xs"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-normal text-[#0f172a] shadow-sm transition hover:bg-white sm:h-9 sm:px-3 sm:text-xs"
               style={{ borderColor: BORDER, backgroundColor: TABLE_BG }}
             >
               <Download className="h-4 w-4" strokeWidth={1.75} />
@@ -813,7 +813,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 setNewAuthor(members[0]?.name ?? "");
                 setNewModalOpen(true);
               }}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 sm:h-9 sm:px-3 sm:text-xs"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-normal text-white shadow-sm transition hover:opacity-95 sm:h-9 sm:px-3 sm:text-xs"
               style={{ backgroundColor: PRIMARY, borderRadius: 8 }}
             >
               <Plus className="h-4 w-4" strokeWidth={1.75} />
@@ -838,7 +838,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               style={{ borderColor: BORDER, backgroundColor: TABLE_BG, borderRadius: 8 }}
             >
               <p className="text-2xl font-bold tabular-nums text-[#0f172a]">{n}</p>
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[#64748b]">
+              <p className="text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
                 {label}
               </p>
             </div>
@@ -1090,7 +1090,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 <tbody>
                   {sortedRows.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center text-sm text-[#64748b]">
+                      <td colSpan={8} className="px-4 py-12 text-center text-sm text-[#0f172a]">
                         No reports match your filters.
                       </td>
                     </tr>
@@ -1153,11 +1153,11 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                                 Daily
                               </span>
                             </td>
-                            <td className="max-w-[140px] truncate px-3 text-[#475569]">
+                            <td className="max-w-[140px] truncate px-3 text-[#0f172a]">
                               {r.authorLabel?.trim() || "—"}
                             </td>
                             <td className="px-3">
-                              <div className="flex items-center gap-2 text-[#475569]">
+                              <div className="flex items-center gap-2 text-[#0f172a]">
                                 {wx === "—" ? <span>—</span> : <WeatherIcon text={wx} />}
                                 <span className="truncate">{wx === "—" ? "" : wx}</span>
                               </div>
@@ -1234,8 +1234,8 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                               Weekly
                             </span>
                           </td>
-                          <td className="px-3 text-[#94a3b8]">Auto</td>
-                          <td className="px-3 text-[#94a3b8]">—</td>
+                          <td className="px-3 text-[#0f172a]">Auto</td>
+                          <td className="px-3 text-[#0f172a]">—</td>
                           <td className="px-3 tabular-nums text-[#0f172a]">{weeklyWorkers(w)}</td>
                           <td className="px-3">
                             <span
@@ -1285,7 +1285,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               >
                 {`${activeWeekly.weekLabel} — ${formatWeekEndingLabel(activeWeekly.weekEndingFriday)}`}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-[#64748b]">
+              <p className="mt-1 text-xs leading-relaxed text-[#0f172a]">
                 Auto-generated from daily reports in this work week.
               </p>
             </div>
@@ -1294,7 +1294,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               <p id={newTitleId} className="text-base font-semibold tracking-tight text-[#0f172a]">
                 Field Report #{activeDaily ? (numMap.get(activeDaily.id) ?? "—") : ""}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-[#64748b]">
+              <p className="mt-1 text-xs leading-relaxed text-[#0f172a]">
                 Daily · {activeDaily ? formatReportTableDate(activeDaily.reportDate) : ""}
               </p>
               {activeDaily ? (
@@ -1426,13 +1426,13 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
             >
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-[#64748b]">Report type</label>
+                  <label className="text-xs font-normal text-[#0f172a]">Report type</label>
                   <select disabled={readOnly} className={`${SLIDER_INPUT} w-full`}>
                     <option>Daily</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-[#64748b]">Written by</label>
+                  <label className="text-xs font-normal text-[#0f172a]">Written by</label>
                   <input
                     disabled={readOnly}
                     value={draftMeta.authorLabel}
@@ -1441,7 +1441,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-[#64748b]">Report date</label>
+                  <label className="text-xs font-normal text-[#0f172a]">Report date</label>
                   <input
                     type="date"
                     disabled={readOnly}
@@ -1451,7 +1451,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-[#64748b]">Status</label>
+                  <label className="text-xs font-normal text-[#0f172a]">Status</label>
                   <select
                     disabled={readOnly}
                     value={draftMeta.status}
@@ -1572,7 +1572,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-[#64748b]">Work conditions</label>
+                <label className="text-xs font-normal text-[#0f172a]">Work conditions</label>
                 <select
                   disabled={readOnly}
                   className={`${SLIDER_INPUT} w-full`}
@@ -1660,7 +1660,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
       {/* New report modal — portaled above EnterpriseSlideOver (body-level z-100/101) */}
       {newModalOpen && typeof document !== "undefined"
         ? createPortal(
-            <div className="fixed inset-0 z-[200] flex items-end justify-center p-0 sm:items-center sm:p-4">
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
               <button
                 type="button"
                 className="absolute inset-0 bg-[#0f172a]/50 backdrop-blur-[1px]"
@@ -1674,12 +1674,12 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 aria-labelledby="new-fr-title"
               >
                 <div className="mb-4 flex items-start justify-between gap-2">
-                  <h2 id="new-fr-title" className="text-lg font-semibold text-[#0f172a]">
+                  <h2 id="new-fr-title" className="text-lg font-normal text-[#0f172a]">
                     New Field Report
                   </h2>
                   <button
                     type="button"
-                    className="rounded-lg p-1 text-[#64748b] hover:bg-[#f1f5f9]"
+                    className="rounded-lg p-1 text-[#0f172a] hover:bg-[#f1f5f9]"
                     onClick={() => setNewModalOpen(false)}
                   >
                     ×
@@ -1687,13 +1687,13 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 </div>
                 <div className="space-y-4 text-sm">
                   <div>
-                    <p className="mb-2 text-xs font-medium text-[#64748b]">Report type</p>
+                    <p className="mb-2 text-xs font-normal text-[#0f172a]">Report type</p>
                     <div className="flex flex-col gap-2">
                       <label className="flex items-center gap-2">
                         <input type="radio" name="rt" defaultChecked readOnly />
                         Daily
                       </label>
-                      <label className="flex cursor-not-allowed items-center gap-2 text-[#94a3b8]">
+                      <label className="flex cursor-not-allowed items-center gap-2 text-[#0f172a]">
                         <input type="radio" name="rt" disabled className="opacity-50" />
                         Weekly (auto-generated from dailies)
                       </label>
@@ -1701,7 +1701,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-[#64748b]">Date</label>
+                      <label className="text-xs text-[#0f172a]">Date</label>
                       <input
                         type="date"
                         value={newReportDate}
@@ -1710,7 +1710,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-[#64748b]">Written by</label>
+                      <label className="text-xs text-[#0f172a]">Written by</label>
                       <select
                         value={newAuthor}
                         onChange={(e) => setNewAuthor(e.target.value)}
@@ -1729,14 +1729,14 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                   <div className="flex justify-end gap-2 pt-2">
                     <button
                       type="button"
-                      className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-sm font-medium text-[#475569]"
+                      className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-sm font-normal text-[#0f172a]"
                       onClick={() => setNewModalOpen(false)}
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      className="rounded-lg px-4 py-2 text-sm font-normal text-white disabled:opacity-60"
                       style={{ backgroundColor: PRIMARY }}
                       disabled={createMut.isPending}
                       onClick={() => createMut.mutate()}
@@ -1754,7 +1754,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
       {/* Send modal — portaled above slide-over shell */}
       {sendModalOpen && typeof document !== "undefined"
         ? createPortal(
-            <div className="fixed inset-0 z-[201] flex items-end justify-center p-0 sm:items-center sm:p-4">
+            <div className="fixed inset-0 z-[201] flex items-center justify-center p-4">
               <button
                 type="button"
                 className="absolute inset-0 bg-[#0f172a]/50 backdrop-blur-[1px]"
@@ -1766,13 +1766,13 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 style={{ borderColor: BORDER }}
               >
                 <div className="mb-4 flex items-start justify-between">
-                  <h2 className="text-lg font-semibold text-[#0f172a]">
+                  <h2 className="text-lg font-normal text-[#0f172a]">
                     Send Report
                     {sendTarget?.titleSuffix ?? ""}
                   </h2>
                   <button
                     type="button"
-                    className="rounded-lg p-1 text-[#64748b] hover:bg-[#f1f5f9]"
+                    className="rounded-lg p-1 text-[#0f172a] hover:bg-[#f1f5f9]"
                     onClick={() => setSendModalOpen(false)}
                   >
                     ×
@@ -1780,19 +1780,19 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 </div>
                 <div className="space-y-3 text-sm">
                   <div>
-                    <label className="text-xs text-[#64748b]">Recipients</label>
+                    <label className="text-xs text-[#0f172a]">Recipients</label>
                     <input
                       value={sendRecipients}
                       onChange={(e) => setSendRecipients(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-[#e2e8f0] px-2 py-2"
                       placeholder="client@example.com, pm@example.com"
                     />
-                    <p className="mt-1 text-xs text-[#64748b]">
+                    <p className="mt-1 text-xs text-[#0f172a]">
                       Separate multiple addresses with commas, spaces, or semicolons.
                     </p>
                   </div>
                   <div>
-                    <label className="text-xs text-[#64748b]">Message (optional)</label>
+                    <label className="text-xs text-[#0f172a]">Message (optional)</label>
                     <textarea
                       value={sendMessage}
                       onChange={(e) => setSendMessage(e.target.value)}
@@ -1802,7 +1802,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                     />
                   </div>
                   <div>
-                    <p className="mb-1 text-xs font-medium text-[#64748b]">Include</p>
+                    <p className="mb-1 text-xs font-normal text-[#0f172a]">Include</p>
                     {(
                       [
                         ["weather", "Weather summary"],
@@ -1825,26 +1825,26 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                       </label>
                     ))}
                   </div>
-                  <p className="text-xs leading-relaxed text-[#64748b]">
+                  <p className="text-xs leading-relaxed text-[#0f172a]">
                     The email uses the last saved version of each report on the server (unsaved
                     edits in the panel are not included).
                   </p>
                   {sendTarget?.alreadySent ? (
-                    <p className="text-xs font-medium text-[#b45309]">
+                    <p className="text-xs font-normal text-[#b45309]">
                       This report was already sent to client and cannot be sent again.
                     </p>
                   ) : null}
                   <div className="flex justify-end gap-2 pt-2">
                     <button
                       type="button"
-                      className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-sm font-medium"
+                      className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-sm font-normal"
                       onClick={() => setSendModalOpen(false)}
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      className="inline-flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-normal text-white disabled:opacity-60"
                       style={{ backgroundColor: PRIMARY }}
                       disabled={
                         sendEmailMut.isPending ||

@@ -2100,6 +2100,252 @@ Rules: Do not invent quantities or prices. No legal guarantees. Keep under 400 w
       message: "External e-sign handoff is not configured for this workspace.",
     });
   });
+
+  // ---- Document Versions ----
+
+  r.get("/projects/:projectId/proposals/:proposalId/document-versions", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const proposalId = c.req.param("proposalId")!;
+    const access = await loadProjectForMember(projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const pro = requirePro(access.project.workspace);
+    if (pro) return c.json({ error: pro.error }, pro.status);
+    const p = await prisma.proposal.findFirst({ where: { id: proposalId, projectId } });
+    if (!p) return c.json({ error: "Not found" }, 404);
+    const versions = await prisma.proposalDocumentVersion.findMany({
+      where: { proposalId },
+      orderBy: { versionNumber: "desc" },
+      include: { createdBy: { select: { id: true, name: true, email: true } } },
+    });
+    return c.json({
+      versions: versions.map((v) => ({
+        id: v.id,
+        versionNumber: v.versionNumber,
+        contentJson: v.contentJson,
+        contentHtml: v.contentHtml,
+        changeSummary: v.changeSummary,
+        createdBy: v.createdBy,
+        createdAt: v.createdAt.toISOString(),
+      })),
+    });
+  });
+
+  r.post("/projects/:projectId/proposals/:proposalId/document-versions", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const proposalId = c.req.param("proposalId")!;
+    const access = await loadProjectForMember(projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const pro = requirePro(access.project.workspace);
+    if (pro) return c.json({ error: pro.error }, pro.status);
+    const p = await prisma.proposal.findFirst({ where: { id: proposalId, projectId } });
+    if (!p) return c.json({ error: "Not found" }, 404);
+    const body = await c.req.json<{
+      contentJson: unknown;
+      contentHtml: string;
+      changeSummary?: string;
+    }>();
+    if (!body.contentJson || typeof body.contentHtml !== "string") {
+      return c.json({ error: "contentJson and contentHtml are required" }, 400);
+    }
+    const latest = await prisma.proposalDocumentVersion.findFirst({
+      where: { proposalId },
+      orderBy: { versionNumber: "desc" },
+      select: { versionNumber: true },
+    });
+    const nextVersion = (latest?.versionNumber ?? 0) + 1;
+    const version = await prisma.proposalDocumentVersion.create({
+      data: {
+        proposalId,
+        versionNumber: nextVersion,
+        contentJson: body.contentJson as Prisma.InputJsonValue,
+        contentHtml: body.contentHtml,
+        changeSummary: body.changeSummary ?? "",
+        createdById: c.get("user").id,
+      },
+      include: { createdBy: { select: { id: true, name: true, email: true } } },
+    });
+    // Also update the proposal coverNote with the rendered HTML
+    await prisma.proposal.update({
+      where: { id: proposalId },
+      data: { coverNote: body.contentHtml },
+    });
+    return c.json({
+      id: version.id,
+      versionNumber: version.versionNumber,
+      contentJson: version.contentJson,
+      contentHtml: version.contentHtml,
+      changeSummary: version.changeSummary,
+      createdBy: version.createdBy,
+      createdAt: version.createdAt.toISOString(),
+    });
+  });
+
+  r.post(
+    "/projects/:projectId/proposals/:proposalId/document-versions/:versionId/restore",
+    needUser,
+    async (c) => {
+      const projectId = c.req.param("projectId")!;
+      const proposalId = c.req.param("proposalId")!;
+      const versionId = c.req.param("versionId")!;
+      const access = await loadProjectForMember(projectId, c.get("user").id);
+      if ("error" in access) return c.json({ error: access.error }, access.status);
+      const pro = requirePro(access.project.workspace);
+      if (pro) return c.json({ error: pro.error }, pro.status);
+      const p = await prisma.proposal.findFirst({ where: { id: proposalId, projectId } });
+      if (!p) return c.json({ error: "Not found" }, 404);
+      const source = await prisma.proposalDocumentVersion.findFirst({
+        where: { id: versionId, proposalId },
+      });
+      if (!source) return c.json({ error: "Version not found" }, 404);
+      const latest = await prisma.proposalDocumentVersion.findFirst({
+        where: { proposalId },
+        orderBy: { versionNumber: "desc" },
+        select: { versionNumber: true },
+      });
+      const nextVersion = (latest?.versionNumber ?? 0) + 1;
+      const restored = await prisma.proposalDocumentVersion.create({
+        data: {
+          proposalId,
+          versionNumber: nextVersion,
+          contentJson: source.contentJson as Prisma.InputJsonValue,
+          contentHtml: source.contentHtml,
+          changeSummary: `Restored from v${source.versionNumber}`,
+          createdById: c.get("user").id,
+        },
+        include: { createdBy: { select: { id: true, name: true, email: true } } },
+      });
+      await prisma.proposal.update({
+        where: { id: proposalId },
+        data: { coverNote: source.contentHtml },
+      });
+      return c.json({
+        id: restored.id,
+        versionNumber: restored.versionNumber,
+        contentJson: restored.contentJson,
+        contentHtml: restored.contentHtml,
+        changeSummary: restored.changeSummary,
+        createdBy: restored.createdBy,
+        createdAt: restored.createdAt.toISOString(),
+      });
+    },
+  );
+
+  // ---- Internal Comments ----
+
+  r.get("/projects/:projectId/proposals/:proposalId/comments", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const proposalId = c.req.param("proposalId")!;
+    const access = await loadProjectForMember(projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const pro = requirePro(access.project.workspace);
+    if (pro) return c.json({ error: pro.error }, pro.status);
+    const p = await prisma.proposal.findFirst({ where: { id: proposalId, projectId } });
+    if (!p) return c.json({ error: "Not found" }, 404);
+    const comments = await prisma.proposalComment.findMany({
+      where: { proposalId },
+      orderBy: { createdAt: "asc" },
+      include: { author: { select: { id: true, name: true, email: true } } },
+    });
+    return c.json({
+      comments: comments.map((cm) => ({
+        id: cm.id,
+        body: cm.body,
+        resolvedAt: cm.resolvedAt?.toISOString() ?? null,
+        editedAt: cm.editedAt?.toISOString() ?? null,
+        createdAt: cm.createdAt.toISOString(),
+        author: cm.author,
+      })),
+    });
+  });
+
+  r.post("/projects/:projectId/proposals/:proposalId/comments", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const proposalId = c.req.param("proposalId")!;
+    const access = await loadProjectForMember(projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const pro = requirePro(access.project.workspace);
+    if (pro) return c.json({ error: pro.error }, pro.status);
+    const p = await prisma.proposal.findFirst({ where: { id: proposalId, projectId } });
+    if (!p) return c.json({ error: "Not found" }, 404);
+    const body = await c.req.json<{ body: string }>();
+    if (!body.body?.trim()) return c.json({ error: "body is required" }, 400);
+    const comment = await prisma.proposalComment.create({
+      data: { proposalId, authorId: c.get("user").id, body: body.body.trim() },
+      include: { author: { select: { id: true, name: true, email: true } } },
+    });
+    return c.json({
+      id: comment.id,
+      body: comment.body,
+      resolvedAt: comment.resolvedAt?.toISOString() ?? null,
+      editedAt: comment.editedAt?.toISOString() ?? null,
+      createdAt: comment.createdAt.toISOString(),
+      author: comment.author,
+    });
+  });
+
+  r.patch("/projects/:projectId/proposals/:proposalId/comments/:commentId", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const proposalId = c.req.param("proposalId")!;
+    const commentId = c.req.param("commentId")!;
+    const access = await loadProjectForMember(projectId, c.get("user").id);
+    if ("error" in access) return c.json({ error: access.error }, access.status);
+    const pro = requirePro(access.project.workspace);
+    if (pro) return c.json({ error: pro.error }, pro.status);
+    const comment = await prisma.proposalComment.findFirst({
+      where: { id: commentId, proposalId },
+      include: { author: { select: { id: true, name: true, email: true } } },
+    });
+    if (!comment) return c.json({ error: "Not found" }, 404);
+    const body = await c.req.json<{ body?: string; resolved?: boolean }>();
+    const updated = await prisma.proposalComment.update({
+      where: { id: commentId },
+      data: {
+        ...(body.body != null ? { body: body.body.trim(), editedAt: new Date() } : {}),
+        ...(body.resolved === true ? { resolvedAt: new Date() } : {}),
+        ...(body.resolved === false ? { resolvedAt: null } : {}),
+      },
+      include: { author: { select: { id: true, name: true, email: true } } },
+    });
+    return c.json({
+      id: updated.id,
+      body: updated.body,
+      resolvedAt: updated.resolvedAt?.toISOString() ?? null,
+      editedAt: updated.editedAt?.toISOString() ?? null,
+      createdAt: updated.createdAt.toISOString(),
+      author: updated.author,
+    });
+  });
+
+  r.delete(
+    "/projects/:projectId/proposals/:proposalId/comments/:commentId",
+    needUser,
+    async (c) => {
+      const projectId = c.req.param("projectId")!;
+      const proposalId = c.req.param("proposalId")!;
+      const commentId = c.req.param("commentId")!;
+      const access = await loadProjectForMember(projectId, c.get("user").id);
+      if ("error" in access) return c.json({ error: access.error }, access.status);
+      const comment = await prisma.proposalComment.findFirst({
+        where: { id: commentId, proposalId },
+      });
+      if (!comment) return c.json({ error: "Not found" }, 404);
+      if (comment.authorId !== c.get("user").id) {
+        const wm = await prisma.workspaceMember.findUnique({
+          where: {
+            workspaceId_userId: {
+              workspaceId: access.project.workspace.id,
+              userId: c.get("user").id,
+            },
+          },
+          select: { role: true },
+        });
+        const isAdmin = wm?.role === WorkspaceRole.ADMIN || wm?.role === WorkspaceRole.SUPER_ADMIN;
+        if (!isAdmin) return c.json({ error: "Forbidden" }, 403);
+      }
+      await prisma.proposalComment.delete({ where: { id: commentId } });
+      return c.json({ ok: true });
+    },
+  );
 }
 
 function csvEscape(s: string): string {
