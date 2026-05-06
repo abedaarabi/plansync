@@ -8,6 +8,7 @@
     "prebuild": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
+    "pretypecheck": "node ./scripts/load-root-env-run-prisma.mjs generate",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "db:generate": "node ./scripts/load-root-env-run-prisma.mjs generate",
