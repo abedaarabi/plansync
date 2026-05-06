@@ -903,23 +903,23 @@ export function registerRfiRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
       drawPatch = draw;
     }
 
-    const {
-      dueDate: dueYmd,
-      status: _stIgnored,
-      answerMessageId: _answerMessageIdOmit,
-      officialResponse: _officialResponseOmit,
-      issueIds: _issueIdsOmit,
-      assigneeUserIds: _omitAssigneeIds,
-      assignedToUserId: _omitAssignedSingle,
-      fileId: _of,
-      fileVersionId: _ofv,
-      pageNumber: _opn,
-      pinNormX: _opx,
-      pinNormY: _opy,
-      voidReason: voidReasonIn,
-      ...scalarFields
-    } = data;
+    const { dueDate: dueYmd, voidReason: voidReasonIn, ...scalarFields } = data;
     const updateData: Prisma.RfiUncheckedUpdateInput = { ...scalarFields };
+    for (const k of [
+      "status",
+      "answerMessageId",
+      "officialResponse",
+      "issueIds",
+      "assigneeUserIds",
+      "assignedToUserId",
+      "fileId",
+      "fileVersionId",
+      "pageNumber",
+      "pinNormX",
+      "pinNormY",
+    ] as const) {
+      delete (updateData as Record<string, unknown>)[k];
+    }
     if (assigneeIdsToSync !== undefined) {
       updateData.assignedToUserId = assigneeIdsToSync[0] ?? null;
     }

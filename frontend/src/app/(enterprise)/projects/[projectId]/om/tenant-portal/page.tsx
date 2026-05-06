@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { OmTenantPortalClient } from "@/components/enterprise/OmTenantPortalClient";
 
-export const metadata: Metadata = { title: "Tenant portal" };
+export const metadata: Metadata = { title: "Occupant hub" };
 
 type Props = { params: Promise<{ projectId: string }> };
 

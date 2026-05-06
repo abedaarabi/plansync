@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import PDFDocument from "pdfkit";
 import { z } from "zod";
 import {
@@ -24,11 +24,25 @@ import { Resend } from "resend";
 import { createUserNotifications } from "../../lib/userNotifications.js";
 import {
   buildAssetDocumentKey,
+  buildIssueReferencePhotoKey,
   newUploadId,
   s3KeyMatchesAssetDocument,
+  s3KeyMatchesIssueReferencePhoto,
 } from "../../lib/fileUpload.js";
+import {
+  ALLOWED_ISSUE_PHOTO_CONTENT_TYPES,
+  MAX_ISSUE_PHOTO_BYTES,
+  MAX_ISSUE_REFERENCE_PHOTOS,
+  parseReferencePhotos,
+  referencePhotosToJsonValue,
+  type IssueReferencePhotoParsed,
+} from "../../lib/issueReferencePhotos.js";
 import { deleteObject, presignGet, presignPut } from "../../lib/s3.js";
+import { broadcastIssuesChanged } from "../../lib/viewerCollabHub.js";
+import { collaborationGloballyEnabled } from "../../lib/viewerCollabPolicy.js";
 import { inviteFromAddress } from "../../lib/inviteEmail.js";
+import { buildViewerIssuePath } from "../../lib/issueAssignEmail.js";
+import { occupantSubmitRateLimited } from "../../lib/occupantSubmitRateLimit.js";
 import { buildTransactionalEmailHtml } from "../../lib/transactionalEmailLayout.js";
 
 function startOfUtcWeek(d: Date): Date {
@@ -131,6 +145,36 @@ async function getDefaultFileVersion(projectId: string) {
     fileVersionId: file.versions[0]!.id,
     fileVersion: file.versions[0]!,
     file,
+  };
+}
+
+const OCCUPANT_PHOTO_TOKEN_MS = 60 * 60 * 1000;
+
+type OmAssetRowDb = Prisma.AssetGetPayload<{
+  include: {
+    file: { select: { id: true; name: true } };
+    fileVersion: { select: { id: true; version: true } };
+  };
+}>;
+
+function toOmAssetJson(a: OmAssetRowDb) {
+  const {
+    occupantScanSecret,
+    installDate,
+    warrantyExpires,
+    lastServiceAt,
+    createdAt,
+    updatedAt,
+    ...rest
+  } = a;
+  return {
+    ...rest,
+    hasOccupantQr: Boolean(occupantScanSecret),
+    installDate: installDate?.toISOString() ?? null,
+    warrantyExpires: warrantyExpires?.toISOString() ?? null,
+    lastServiceAt: lastServiceAt?.toISOString() ?? null,
+    createdAt: createdAt.toISOString(),
+    updatedAt: updatedAt.toISOString(),
   };
 }
 
@@ -534,16 +578,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         fileVersion: { select: { id: true, version: true } },
       },
     });
-    return c.json(
-      rows.map((a) => ({
-        ...a,
-        installDate: a.installDate?.toISOString() ?? null,
-        warrantyExpires: a.warrantyExpires?.toISOString() ?? null,
-        lastServiceAt: a.lastServiceAt?.toISOString() ?? null,
-        createdAt: a.createdAt.toISOString(),
-        updatedAt: a.updatedAt.toISOString(),
-      })),
-    );
+    return c.json(rows.map(toOmAssetJson));
   });
 
   r.post("/projects/:projectId/om/assets", needUser, async (c) => {
@@ -590,6 +625,10 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       return c.json({ error: "fileId and fileVersionId must be set together" }, 400);
     }
 
+    const occupantScanSecret = ctx.settings.modules.omTenantPortal
+      ? randomBytes(24).toString("hex")
+      : null;
+
     const row = await prisma.asset.create({
       data: {
         projectId,
@@ -609,6 +648,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         pageNumber: d.pageNumber ?? null,
         annotationId: d.annotationId ?? null,
         pinJson: d.pinJson === undefined ? undefined : (d.pinJson as Prisma.InputJsonValue),
+        ...(occupantScanSecret ? { occupantScanSecret } : {}),
       },
       include: {
         file: { select: { id: true, name: true } },
@@ -623,14 +663,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       metadata: { omAssetCreated: row.tag },
     });
 
-    return c.json({
-      ...row,
-      installDate: row.installDate?.toISOString() ?? null,
-      warrantyExpires: row.warrantyExpires?.toISOString() ?? null,
-      lastServiceAt: row.lastServiceAt?.toISOString() ?? null,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    });
+    return c.json(toOmAssetJson(row));
   });
 
   r.patch("/projects/:projectId/om/assets/:assetId", needUser, async (c) => {
@@ -721,14 +754,45 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       },
     });
 
-    return c.json({
-      ...row,
-      installDate: row.installDate?.toISOString() ?? null,
-      warrantyExpires: row.warrantyExpires?.toISOString() ?? null,
-      lastServiceAt: row.lastServiceAt?.toISOString() ?? null,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    });
+    return c.json(toOmAssetJson(row));
+  });
+
+  r.post("/projects/:projectId/om/assets/:assetId/occupant-scan-secret", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const assetId = c.req.param("assetId")!;
+    const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (ctx.workspaceMember.role !== "SUPER_ADMIN" && ctx.workspaceMember.role !== "ADMIN") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    if (
+      !ctx.project.operationsMode ||
+      !ctx.settings.modules.omAssets ||
+      !ctx.settings.modules.omTenantPortal
+    ) {
+      return c.json({ error: "Not enabled" }, 403);
+    }
+    const gate = requireOmBilling(ctx.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const existing = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
+    if (!existing) return c.json({ error: "Not found" }, 404);
+
+    const body = z
+      .object({ rotate: z.boolean().optional() })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    let secret = existing.occupantScanSecret;
+    if (!secret || body.data.rotate) {
+      secret = randomBytes(24).toString("hex");
+      await prisma.asset.update({
+        where: { id: assetId },
+        data: { occupantScanSecret: secret },
+      });
+    }
+    return c.json({ occupantScanSecret: secret });
   });
 
   r.get("/projects/:projectId/om/assets/:assetId/documents", needUser, async (c) => {
@@ -1747,10 +1811,17 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     const gate = requireOmBilling(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
-    const rows = await prisma.occupantPortalToken.findMany({
+    let rows = await prisma.occupantPortalToken.findMany({
       where: { projectId, revokedAt: null },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
     });
+    if (rows.length === 0) {
+      const tok = randomBytes(24).toString("hex");
+      const created = await prisma.occupantPortalToken.create({
+        data: { projectId, token: tok, label: "Building link" },
+      });
+      rows = [created];
+    }
     return c.json(
       rows.map((t) => ({
         id: t.id,
@@ -1760,6 +1831,79 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         createdAt: t.createdAt.toISOString(),
       })),
     );
+  });
+
+  r.get("/projects/:projectId/om/occupant-tokens/revoked", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (ctx.workspaceMember.role !== "SUPER_ADMIN" && ctx.workspaceMember.role !== "ADMIN") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    if (!ctx.project.operationsMode || !ctx.settings.modules.omTenantPortal) {
+      return c.json({ error: "Occupant portal is not enabled" }, 403);
+    }
+    const gate = requireOmBilling(ctx.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const rows = await prisma.occupantPortalToken.findMany({
+      where: { projectId, revokedAt: { not: null } },
+      orderBy: { revokedAt: "desc" },
+      take: 40,
+      select: { id: true, label: true, token: true, createdAt: true, revokedAt: true },
+    });
+    return c.json(
+      rows.map((t) => ({
+        id: t.id,
+        label: t.label,
+        createdAt: t.createdAt.toISOString(),
+        revokedAt: t.revokedAt!.toISOString(),
+        tokenSuffix: t.token.length > 8 ? t.token.slice(-6) : t.token,
+      })),
+    );
+  });
+
+  r.post("/projects/:projectId/om/occupant-tokens/:tokenId/revoke", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const tokenId = c.req.param("tokenId")!;
+    const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (ctx.workspaceMember.role !== "SUPER_ADMIN" && ctx.workspaceMember.role !== "ADMIN") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    if (!ctx.project.operationsMode || !ctx.settings.modules.omTenantPortal) {
+      return c.json({ error: "Occupant portal is not enabled" }, 403);
+    }
+    const gate = requireOmBilling(ctx.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const now = new Date();
+    const activeCount = await prisma.occupantPortalToken.count({
+      where: {
+        projectId,
+        revokedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+    });
+    if (activeCount <= 1) {
+      return c.json(
+        { error: "Keep at least one active building link. Add another before revoking." },
+        400,
+      );
+    }
+
+    const row = await prisma.occupantPortalToken.findFirst({
+      where: { id: tokenId, projectId, revokedAt: null },
+    });
+    if (!row) return c.json({ error: "Not found or already revoked" }, 404);
+
+    await prisma.occupantPortalToken.update({
+      where: { id: row.id },
+      data: { revokedAt: now },
+    });
+    return c.json({ ok: true as const });
   });
 
   r.post("/projects/:projectId/om/occupant-tokens", needUser, async (c) => {
@@ -1822,6 +1966,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     const [
       assetTotal,
       assetsLinkedToDrawing,
+      assetsWithOccupantSecret,
       openWorkOrders,
       maintRows,
       inspectionTemplateCount,
@@ -1829,9 +1974,11 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       activeOccupantTokens,
       openPunchItems,
       constructionOpenIssues,
+      openOccupantRequests,
     ] = await Promise.all([
       prisma.asset.count({ where: { projectId } }),
       prisma.asset.count({ where: { projectId, fileId: { not: null } } }),
+      prisma.asset.count({ where: { projectId, occupantScanSecret: { not: null } } }),
       prisma.issue.count({
         where: {
           projectId,
@@ -1865,6 +2012,13 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         where: {
           projectId,
           issueKind: IssueKind.CONSTRUCTION,
+          status: { in: [IssueStatus.OPEN, IssueStatus.IN_PROGRESS] },
+        },
+      }),
+      prisma.issue.count({
+        where: {
+          projectId,
+          issueKind: IssueKind.OCCUPANT,
           status: { in: [IssueStatus.OPEN, IssueStatus.IN_PROGRESS] },
         },
       }),
@@ -1903,9 +2057,11 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         },
         occupantPortal: {
           activeMagicLinks: activeOccupantTokens,
+          assetsWithOccupantSecret,
         },
         punchOpen: openPunchItems,
         constructionIssuesOpen: constructionOpenIssues,
+        tenantRequestsOpen: openOccupantRequests,
       },
     });
   });
@@ -2012,9 +2168,12 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       assetsLinkedToDrawing,
       openWo,
       inProgressWo,
+      openTenantReq,
+      inProgressTenantReq,
       maintRows,
       schedulesForWeek,
       recentWo,
+      recentTenantReq,
     ] = await Promise.all([
       prisma.asset.count({ where: { projectId } }),
       prisma.asset.count({ where: { projectId, fileId: { not: null } } }),
@@ -2023,6 +2182,12 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       }),
       prisma.issue.count({
         where: { projectId, issueKind: IssueKind.WORK_ORDER, status: IssueStatus.IN_PROGRESS },
+      }),
+      prisma.issue.count({
+        where: { projectId, issueKind: IssueKind.OCCUPANT, status: IssueStatus.OPEN },
+      }),
+      prisma.issue.count({
+        where: { projectId, issueKind: IssueKind.OCCUPANT, status: IssueStatus.IN_PROGRESS },
       }),
       prisma.maintenanceSchedule.findMany({
         where: { asset: { projectId }, isActive: true, nextDueAt: { not: null } },
@@ -2042,6 +2207,18 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       }),
       prisma.issue.findMany({
         where: { projectId, issueKind: IssueKind.WORK_ORDER },
+        orderBy: { updatedAt: "desc" },
+        take: 8,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.issue.findMany({
+        where: { projectId, issueKind: IssueKind.OCCUPANT },
         orderBy: { updatedAt: "desc" },
         take: 8,
         select: {
@@ -2077,6 +2254,8 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       kpis: {
         openWorkOrders: openWo,
         inProgressWorkOrders: inProgressWo,
+        openTenantRequests: openTenantReq,
+        inProgressTenantRequests: inProgressTenantReq,
         maintenanceScheduledThisWeek: schedulesForWeek.length,
         assetsTracked: assetTotal,
         overdueMaintenanceTasks: maintenanceOverdue,
@@ -2093,6 +2272,13 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         health: ppmHealthLabel(s.nextDueAt, now),
       })),
       recentWorkOrders: recentWo.map((i) => ({
+        id: i.id,
+        title: i.title,
+        status: i.status,
+        priority: i.priority,
+        updatedAt: i.updatedAt.toISOString(),
+      })),
+      recentTenantRequests: recentTenantReq.map((i) => ({
         id: i.id,
         title: i.title,
         status: i.status,
@@ -2146,6 +2332,63 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       `attachment; filename="asset-register-${projectId.slice(0, 8)}.csv"`,
     );
     return c.body(body);
+  });
+
+  /** CSV export: occupant QR URLs per asset (uses primary active building link). */
+  r.get("/projects/:projectId/om/reports/occupant-asset-qr-urls.csv", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (ctx.workspaceMember.role !== "SUPER_ADMIN" && ctx.workspaceMember.role !== "ADMIN") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    if (
+      !ctx.project.operationsMode ||
+      !ctx.settings.modules.omAssets ||
+      !ctx.settings.modules.omTenantPortal
+    ) {
+      return c.json({ error: "Not enabled" }, 403);
+    }
+    const gate = requireOmBilling(ctx.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const now = new Date();
+    const tokenRow = await prisma.occupantPortalToken.findFirst({
+      where: {
+        projectId,
+        revokedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!tokenRow) {
+      return c.json({ error: "Create a building portal link on the Tenant portal first." }, 400);
+    }
+
+    const base = env.PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+    const assets = await prisma.asset.findMany({
+      where: { projectId, occupantScanSecret: { not: null } },
+      orderBy: [{ tag: "asc" }],
+      select: { tag: true, name: true, occupantScanSecret: true },
+    });
+
+    const header = ["Asset tag", "Asset name", "Occupant QR URL"];
+    const lines = [
+      header.map(csvEscapeCell).join(","),
+      ...assets.map((a) =>
+        [a.tag, a.name, `${base}/occupant/${tokenRow.token}?a=${a.occupantScanSecret}`]
+          .map((x) => csvEscapeCell(x))
+          .join(","),
+      ),
+    ];
+    const csvBody = lines.join("\r\n");
+    c.header("Content-Type", "text/csv; charset=utf-8");
+    c.header(
+      "Content-Disposition",
+      `attachment; filename="occupant-asset-qr-${projectId.slice(0, 8)}.csv"`,
+    );
+    return c.body(csvBody);
   });
 
   /** Create a work order from an inspection checklist item (failed / follow-up). */
@@ -2211,14 +2454,36 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
   });
 }
 
+function occupantPortalHeadlineFromSettingsJson(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const ui = o.omTenantPortalUi;
+  if (!ui || typeof ui !== "object") return null;
+  const h = (ui as Record<string, unknown>).headline;
+  return typeof h === "string" && h.trim() ? h.trim().slice(0, 200) : null;
+}
+
 /** Public occupant routes (no session). */
 export function registerOccupantPublicRoutes(r: Hono, env: Env) {
   r.get("/occupant/:token/meta", async (c) => {
     const token = c.req.param("token")!;
+    const assetSecretRaw = c.req.query("a")?.trim();
+    if (assetSecretRaw && assetSecretRaw.length > 80) {
+      return c.json({ error: "Invalid equipment link" }, 400);
+    }
+
     const row = await prisma.occupantPortalToken.findFirst({
       where: { token, revokedAt: null },
       include: {
-        project: { select: { id: true, name: true, operationsMode: true, workspaceId: true } },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            operationsMode: true,
+            workspaceId: true,
+            settingsJson: true,
+          },
+        },
       },
     });
     if (!row) return c.json({ error: "Invalid or expired link" }, 404);
@@ -2226,9 +2491,28 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
     if (row.expiresAt && row.expiresAt < new Date()) {
       return c.json({ error: "This link has expired" }, 403);
     }
+
+    let asset: {
+      tag: string;
+      name: string;
+      category: string | null;
+      locationLabel: string | null;
+    } | null = null;
+    if (assetSecretRaw) {
+      const a = await prisma.asset.findFirst({
+        where: { projectId: row.projectId, occupantScanSecret: assetSecretRaw },
+        select: { tag: true, name: true, category: true, locationLabel: true },
+      });
+      if (!a) return c.json({ error: "Invalid equipment link" }, 404);
+      asset = a;
+    }
+
+    const occupantHeadline = occupantPortalHeadlineFromSettingsJson(row.project.settingsJson);
     return c.json({
       projectId: row.project.id,
       projectName: row.project.name,
+      occupantHeadline,
+      asset,
     });
   });
 
@@ -2241,6 +2525,7 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
         room: z.string().max(120).optional(),
         reporterName: z.string().min(1).max(200),
         reporterEmail: z.string().email(),
+        assetSecret: z.string().min(1).max(80).optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
@@ -2267,42 +2552,142 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
     const gate = requireOmBilling(link.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
-    const defaultFv = await getDefaultFileVersion(link.projectId);
-    if (!defaultFv) {
-      return c.json(
-        { error: "This building has no drawings yet — please contact facilities." },
-        400,
-      );
+    const clientIp =
+      c.req.header("cf-connecting-ip")?.trim() ||
+      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+      c.req.header("x-real-ip")?.trim() ||
+      undefined;
+    if (occupantSubmitRateLimited(token, clientIp)) {
+      return c.json({ error: "Too many requests. Please try again in a minute." }, 429);
     }
 
-    const loc = [
+    const assetSecret = body.data.assetSecret?.trim();
+    let boundAsset: {
+      id: string;
+      tag: string;
+      name: string;
+      locationLabel: string | null;
+      fileId: string | null;
+      fileVersionId: string | null;
+      pageNumber: number | null;
+      annotationId: string | null;
+    } | null = null;
+    if (assetSecret) {
+      const a = await prisma.asset.findFirst({
+        where: { projectId: link.projectId, occupantScanSecret: assetSecret },
+        select: {
+          id: true,
+          tag: true,
+          name: true,
+          locationLabel: true,
+          fileId: true,
+          fileVersionId: true,
+          pageNumber: true,
+          annotationId: true,
+        },
+      });
+      if (!a) return c.json({ error: "Invalid equipment link" }, 400);
+      boundAsset = a;
+    }
+
+    type ResolvedDrawing = {
+      fileId: string;
+      fileVersionId: string;
+      pageNumber: number | null;
+      annotationId: string | null;
+      sheetName: string | null;
+      sheetVersion: number | null;
+    };
+
+    let resolvedDrawing: ResolvedDrawing | undefined;
+    if (boundAsset?.fileId && boundAsset?.fileVersionId) {
+      const fv = await prisma.fileVersion.findFirst({
+        where: {
+          id: boundAsset.fileVersionId,
+          fileId: boundAsset.fileId,
+          file: { projectId: link.projectId },
+        },
+        include: { file: { select: { name: true } } },
+      });
+      if (fv) {
+        resolvedDrawing = {
+          fileId: boundAsset.fileId,
+          fileVersionId: boundAsset.fileVersionId,
+          pageNumber: boundAsset.pageNumber ?? null,
+          annotationId: boundAsset.annotationId ?? null,
+          sheetName: fv.file.name,
+          sheetVersion: fv.version,
+        };
+      }
+    }
+
+    if (!resolvedDrawing) {
+      const defaultFv = await getDefaultFileVersion(link.projectId);
+      if (!defaultFv) {
+        return c.json(
+          { error: "This building has no drawings yet — please contact facilities." },
+          400,
+        );
+      }
+      resolvedDrawing = {
+        fileId: defaultFv.fileId,
+        fileVersionId: defaultFv.fileVersionId,
+        pageNumber: null,
+        annotationId: null,
+        sheetName: defaultFv.file.name,
+        sheetVersion: defaultFv.fileVersion.version,
+      };
+    }
+
+    const { fileId, fileVersionId, pageNumber, annotationId, sheetName, sheetVersion } =
+      resolvedDrawing;
+
+    const floorRoom = [
       body.data.floor && `Floor ${body.data.floor}`,
       body.data.room && `Room ${body.data.room}`,
     ]
       .filter(Boolean)
       .join(" · ");
 
+    const location = [boundAsset?.locationLabel?.trim() || null, floorRoom || null]
+      .filter(Boolean)
+      .join(" · ");
+
+    const title = boundAsset
+      ? `Occupant request — ${boundAsset.tag} — ${boundAsset.name}${floorRoom ? ` (${floorRoom})` : ""}`
+      : `Occupant request${floorRoom ? ` — ${floorRoom}` : ""}`;
+
+    const photoToken = randomBytes(32).toString("hex");
+    const photoExpires = new Date(Date.now() + OCCUPANT_PHOTO_TOKEN_MS);
+
     const issue = await prisma.issue.create({
       data: {
         workspaceId: link.project.workspaceId,
         projectId: link.projectId,
-        fileId: defaultFv.fileId,
-        fileVersionId: defaultFv.fileVersionId,
-        title: `Occupant request${loc ? ` — ${loc}` : ""}`,
+        fileId,
+        fileVersionId,
+        sheetName,
+        sheetVersion,
+        pageNumber,
+        annotationId,
+        title,
         description: body.data.description,
-        location: loc || null,
-        issueKind: IssueKind.WORK_ORDER,
+        location: location || null,
+        issueKind: IssueKind.OCCUPANT,
         status: IssueStatus.OPEN,
         priority: IssuePriority.MEDIUM,
         reporterName: body.data.reporterName.trim(),
         reporterEmail: body.data.reporterEmail.trim().toLowerCase(),
+        assetId: boundAsset?.id ?? null,
+        occupantPhotoToken: photoToken,
+        occupantPhotoTokenExpiresAt: photoExpires,
       },
     });
 
     await logActivity(link.project.workspaceId, ActivityType.ISSUE_CREATED, {
       entityId: issue.id,
       projectId: link.projectId,
-      metadata: { occupantPortal: true, title: issue.title },
+      metadata: { occupantPortal: true, title: issue.title, assetId: boundAsset?.id },
     });
 
     const admins = await prisma.workspaceMember.findMany({
@@ -2314,14 +2699,37 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
       select: { userId: true },
     });
 
+    const projectInternals = await prisma.projectMember.findMany({
+      where: { projectId: link.projectId, projectRole: "INTERNAL" },
+      select: { userId: true },
+    });
+
+    const notifyUserIds = new Set<string>();
+    for (const a of admins) notifyUserIds.add(a.userId);
+    for (const p of projectInternals) notifyUserIds.add(p.userId);
+
+    const viewerParams = {
+      issueId: issue.id,
+      fileId: issue.fileId,
+      fileVersionId: issue.fileVersionId,
+      projectId: issue.projectId,
+      fileName: sheetName?.trim() ? sheetName.trim() : "Drawing",
+      version: sheetVersion ?? 1,
+    };
+    const viewerPath = buildViewerIssuePath(viewerParams);
+    const baseUrl = env.PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+    const viewerAbs = baseUrl ? `${baseUrl}${viewerPath}` : viewerPath;
+    const tenantListAbs = baseUrl
+      ? `${baseUrl}/projects/${link.projectId}/om/tenant-requests/${issue.id}`
+      : `/projects/${link.projectId}/om/tenant-requests/${issue.id}`;
+
     const key = env.RESEND_API_KEY?.trim();
     const from = inviteFromAddress(env);
     if (key && from) {
       const resend = new Resend(key);
-      const base = env.PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
-      for (const a of admins) {
+      for (const uid of notifyUserIds) {
         const u = await prisma.user.findUnique({
-          where: { id: a.userId },
+          where: { id: uid },
           select: { email: true },
         });
         if (!u?.email) continue;
@@ -2330,24 +2738,268 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
             from,
             to: u.email,
             subject: `PlanSync O&M: New occupant request — ${issue.title.slice(0, 80)}`,
-            text: `A new request was submitted via the occupant portal.\n\n${issue.title}\n\nReporter: ${body.data.reporterName} <${body.data.reporterEmail}>\n\n${base ? `${base}/projects/${link.projectId}/issues` : ""}`,
+            text: `A new request was submitted via the occupant portal.\n\n${issue.title}\n\nReporter: ${body.data.reporterName} <${body.data.reporterEmail}>\n\nOpen request: ${tenantListAbs}\nOpen in viewer: ${viewerAbs}`,
           })
           .catch((e) => console.error("[occupant-email]", e));
       }
+
+      void resend.emails
+        .send({
+          from,
+          to: body.data.reporterEmail.trim().toLowerCase(),
+          subject: `We received your request — ${link.project.name}`,
+          text: `Hello ${body.data.reporterName.trim()},\n\nThank you for contacting us about ${link.project.name}. We have received your maintenance request and our team will review it soon. If we need more information, we will reach out to you.\n\n— Facilities team`,
+        })
+        .catch((e) => console.error("[occupant-reporter-email]", e));
     }
 
-    if (admins.length > 0) {
+    if (notifyUserIds.size > 0) {
       void createUserNotifications({
         workspaceId: link.project.workspaceId,
         projectId: link.projectId,
-        recipientUserIds: admins.map((a) => a.userId),
+        recipientUserIds: [...notifyUserIds],
         kind: "ISSUE_CREATED",
         title: `Occupant request: ${issue.title.length > 100 ? `${issue.title.slice(0, 100)}…` : issue.title}`,
         body: body.data.reporterName,
-        href: `/projects/${link.projectId}/issues`,
+        href: `/projects/${link.projectId}/om/tenant-requests/${issue.id}`,
       }).catch((e) => console.error("[occupant-notify]", e));
     }
 
-    return c.json({ ok: true as const, issueId: issue.id });
+    return c.json({
+      ok: true as const,
+      issueId: issue.id,
+      occupantPhotoToken: photoToken,
+      occupantPhotoExpiresAt: photoExpires.toISOString(),
+    });
+  });
+
+  r.post("/occupant/:token/issues/:issueId/reference-photos/presign", async (c) => {
+    const portalToken = c.req.param("token")!;
+    const issueId = c.req.param("issueId")!;
+
+    const link = await prisma.occupantPortalToken.findFirst({
+      where: { token: portalToken, revokedAt: null },
+      include: { project: { include: { workspace: true } } },
+    });
+    if (!link) return c.json({ error: "Invalid or expired link" }, 404);
+    if (!link.project.operationsMode) return c.json({ error: "This portal is not active" }, 403);
+    if (link.expiresAt && link.expiresAt < new Date()) {
+      return c.json({ error: "This link has expired" }, 403);
+    }
+
+    const settings = parseProjectSettingsJson(link.project.settingsJson);
+    if (!settings.modules.omTenantPortal || !settings.modules.issues) {
+      return c.json({ error: "Reporting is disabled for this building" }, 403);
+    }
+
+    const gate = requireOmBilling(link.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const body = z
+      .object({
+        occupantPhotoToken: z.string().min(1).max(200),
+        fileName: z.string().min(1),
+        contentType: z.string().default("application/octet-stream"),
+        sizeBytes: z.coerce.bigint(),
+      })
+      .safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    const issue = await prisma.issue.findFirst({
+      where: { id: issueId, projectId: link.projectId },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        fileVersionId: true,
+        referencePhotos: true,
+        occupantPhotoToken: true,
+        occupantPhotoTokenExpiresAt: true,
+      },
+    });
+    if (!issue) return c.json({ error: "Not found" }, 404);
+    if (
+      !issue.occupantPhotoToken ||
+      issue.occupantPhotoToken !== body.data.occupantPhotoToken.trim()
+    ) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    if (!issue.occupantPhotoTokenExpiresAt || issue.occupantPhotoTokenExpiresAt < new Date()) {
+      return c.json({ error: "Upload window expired" }, 403);
+    }
+
+    const ct = body.data.contentType.trim().toLowerCase();
+    if (!ALLOWED_ISSUE_PHOTO_CONTENT_TYPES.has(ct)) {
+      return c.json(
+        {
+          error: "Only JPEG, PNG, WebP, GIF, or HEIC/HEIF images are allowed for reference photos",
+        },
+        400,
+      );
+    }
+
+    if (body.data.sizeBytes <= 0n) {
+      return c.json({ error: "File is empty" }, 400);
+    }
+    if (body.data.sizeBytes > MAX_ISSUE_PHOTO_BYTES) {
+      return c.json({ error: "File too large (max 15 MB per reference photo)" }, 400);
+    }
+
+    const existing = parseReferencePhotos(issue.referencePhotos);
+    if (existing.length >= MAX_ISSUE_REFERENCE_PHOTOS) {
+      return c.json(
+        { error: `At most ${MAX_ISSUE_REFERENCE_PHOTOS} reference photos per issue` },
+        400,
+      );
+    }
+
+    const ws = link.project.workspace;
+    const newUsed = ws.storageUsedBytes + body.data.sizeBytes;
+    if (newUsed > ws.storageQuotaBytes) {
+      return c.json({ error: "Storage quota exceeded" }, 400);
+    }
+
+    const uploadId = newUploadId();
+    const s3Key = buildIssueReferencePhotoKey(
+      issue.workspaceId,
+      issue.projectId,
+      uploadId,
+      body.data.fileName,
+    );
+    let uploadUrl: string | null;
+    try {
+      uploadUrl = await presignPut(env, s3Key, ct);
+    } catch (e) {
+      console.error("[occupant issue photo presign]", e);
+      return c.json(
+        { error: "Could not create upload URL. Check S3 credentials and bucket configuration." },
+        503,
+      );
+    }
+    if (!uploadUrl) {
+      return c.json({ error: "S3 not configured" }, 503);
+    }
+    return c.json({ uploadUrl, key: s3Key });
+  });
+
+  r.post("/occupant/:token/issues/:issueId/reference-photos/complete", async (c) => {
+    const portalToken = c.req.param("token")!;
+    const issueId = c.req.param("issueId")!;
+
+    const link = await prisma.occupantPortalToken.findFirst({
+      where: { token: portalToken, revokedAt: null },
+      include: { project: { include: { workspace: true } } },
+    });
+    if (!link) return c.json({ error: "Invalid or expired link" }, 404);
+    if (!link.project.operationsMode) return c.json({ error: "This portal is not active" }, 403);
+    if (link.expiresAt && link.expiresAt < new Date()) {
+      return c.json({ error: "This link has expired" }, 403);
+    }
+
+    const settings = parseProjectSettingsJson(link.project.settingsJson);
+    if (!settings.modules.omTenantPortal || !settings.modules.issues) {
+      return c.json({ error: "Reporting is disabled for this building" }, 403);
+    }
+
+    const gate = requireOmBilling(link.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const body = z
+      .object({
+        occupantPhotoToken: z.string().min(1).max(200),
+        key: z.string().min(1),
+        fileName: z.string().min(1),
+        contentType: z.string().default("image/jpeg"),
+        sizeBytes: z.coerce.bigint(),
+      })
+      .safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    const issue = await prisma.issue.findFirst({
+      where: { id: issueId, projectId: link.projectId },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        fileVersionId: true,
+        referencePhotos: true,
+        occupantPhotoToken: true,
+        occupantPhotoTokenExpiresAt: true,
+      },
+    });
+    if (!issue) return c.json({ error: "Not found" }, 404);
+    if (
+      !issue.occupantPhotoToken ||
+      issue.occupantPhotoToken !== body.data.occupantPhotoToken.trim()
+    ) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    if (!issue.occupantPhotoTokenExpiresAt || issue.occupantPhotoTokenExpiresAt < new Date()) {
+      return c.json({ error: "Upload window expired" }, 403);
+    }
+
+    if (body.data.sizeBytes <= 0n) {
+      return c.json({ error: "File is empty" }, 400);
+    }
+    if (body.data.sizeBytes > MAX_ISSUE_PHOTO_BYTES) {
+      return c.json({ error: "File too large (max 15 MB per reference photo)" }, 400);
+    }
+
+    if (!s3KeyMatchesIssueReferencePhoto(body.data.key, issue.workspaceId, issue.projectId)) {
+      return c.json({ error: "Invalid upload key" }, 400);
+    }
+
+    const ct = body.data.contentType.trim().toLowerCase();
+    if (!ALLOWED_ISSUE_PHOTO_CONTENT_TYPES.has(ct)) {
+      return c.json({ error: "Invalid content type for reference photo" }, 400);
+    }
+
+    const existing = parseReferencePhotos(issue.referencePhotos);
+    if (existing.length >= MAX_ISSUE_REFERENCE_PHOTOS) {
+      return c.json(
+        { error: `At most ${MAX_ISSUE_REFERENCE_PHOTOS} reference photos per issue` },
+        400,
+      );
+    }
+
+    const ws = link.project.workspace;
+    const newUsed = ws.storageUsedBytes + body.data.sizeBytes;
+    if (newUsed > ws.storageQuotaBytes) {
+      return c.json({ error: "Storage quota exceeded" }, 400);
+    }
+
+    const photoId = randomUUID();
+    const entry: IssueReferencePhotoParsed = {
+      id: photoId,
+      s3Key: body.data.key,
+      fileName: body.data.fileName,
+      contentType: ct,
+      createdAt: new Date().toISOString(),
+      sizeBytes: Number(
+        body.data.sizeBytes > BigInt(Number.MAX_SAFE_INTEGER)
+          ? BigInt(Number.MAX_SAFE_INTEGER)
+          : body.data.sizeBytes,
+      ),
+    };
+
+    const next = [...existing, entry];
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.workspace.update({
+        where: { id: issue.workspaceId },
+        data: { storageUsedBytes: { increment: body.data.sizeBytes } },
+      });
+      return tx.issue.update({
+        where: { id: issue.id },
+        data: { referencePhotos: referencePhotosToJsonValue(next) },
+        select: { fileVersionId: true },
+      });
+    });
+
+    if (collaborationGloballyEnabled(env)) {
+      broadcastIssuesChanged(updated.fileVersionId);
+    }
+
+    return c.json({ ok: true as const, photoId });
   });
 }

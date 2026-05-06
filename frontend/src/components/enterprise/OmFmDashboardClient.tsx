@@ -8,13 +8,21 @@ import {
   Building2,
   CalendarRange,
   ClipboardList,
+  Download,
+  Inbox,
   LayoutGrid,
   Package,
   Wrench,
 } from "lucide-react";
-import { fetchOmFmDashboard, fetchProjectSession, omAssetRegisterCsvUrl } from "@/lib/api-client";
+import {
+  fetchOmFmDashboard,
+  fetchProjectSession,
+  omAssetRegisterCsvUrl,
+  omOccupantAssetQrCsvUrl,
+} from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 
 type Props = { projectId: string };
 
@@ -47,6 +55,11 @@ function Kpi({
 }
 
 export function OmFmDashboardClient({ projectId }: Props) {
+  const { primary } = useEnterpriseWorkspace();
+  const pBase = primary?.workspace.id
+    ? `/workspaces/${primary.workspace.id}/projects/${projectId}`
+    : `/projects/${projectId}`;
+
   const { data: session, isPending: sessionPending } = useQuery({
     queryKey: qk.projectSession(projectId),
     queryFn: () => fetchProjectSession(projectId),
@@ -161,6 +174,17 @@ export function OmFmDashboardClient({ projectId }: Props) {
             >
               Download asset register (CSV)
             </a>
+            {session.settings.modules.omTenantPortal &&
+            session.settings.modules.omAssets &&
+            (session.workspaceRole === "SUPER_ADMIN" || session.workspaceRole === "ADMIN") ? (
+              <a
+                href={omOccupantAssetQrCsvUrl(projectId)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-medium text-[var(--enterprise-text)] shadow-sm hover:bg-[var(--enterprise-bg)]"
+              >
+                <Download className="h-4 w-4 shrink-0" aria-hidden />
+                Occupant QR URLs (CSV)
+              </a>
+            ) : null}
             <Link
               href={`/projects/${projectId}/om/handover`}
               className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white"
@@ -182,7 +206,17 @@ export function OmFmDashboardClient({ projectId }: Props) {
             value={dash.kpis.openWorkOrders}
             tone={dash.kpis.openWorkOrders > 0 ? "amber" : "emerald"}
           />
-          <Kpi label="In progress" value={dash.kpis.inProgressWorkOrders} tone="neutral" />
+          <Kpi
+            label="Open occupant requests"
+            value={dash.kpis.openTenantRequests}
+            tone={dash.kpis.openTenantRequests > 0 ? "amber" : "emerald"}
+          />
+          <Kpi label="WO in progress" value={dash.kpis.inProgressWorkOrders} tone="neutral" />
+          <Kpi
+            label="Occupant requests in progress"
+            value={dash.kpis.inProgressTenantRequests}
+            tone="neutral"
+          />
           <Kpi
             label="PPM this week"
             value={dash.kpis.maintenanceScheduledThisWeek}
@@ -222,7 +256,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
         <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
@@ -301,6 +335,42 @@ export function OmFmDashboardClient({ projectId }: Props) {
             </ul>
           )}
         </section>
+
+        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
+              <Inbox className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
+              Recent occupant requests
+            </h2>
+            <Link
+              href={`${pBase}/om/tenant-requests`}
+              className="text-xs font-semibold text-[var(--enterprise-primary)] underline"
+            >
+              Open list
+            </Link>
+          </div>
+          {dash.recentTenantRequests.length === 0 ? (
+            <p className="text-sm text-[var(--enterprise-text-muted)]">No occupant requests yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {dash.recentTenantRequests.map((w) => (
+                <li
+                  key={w.id}
+                  className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2"
+                >
+                  <p className="text-sm font-medium text-[var(--enterprise-text)]">{w.title}</p>
+                  <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
+                    {w.status.replace(/_/g, " ")} · {w.priority} ·{" "}
+                    {new Date(w.updatedAt).toLocaleString(undefined, {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
 
       <section className="flex flex-wrap gap-3">
@@ -319,11 +389,18 @@ export function OmFmDashboardClient({ projectId }: Props) {
           Inspections
         </Link>
         <Link
-          href={`/projects/${projectId}/om/tenant-portal`}
+          href={`${pBase}/om/tenant-requests`}
+          className="enterprise-card enterprise-card-hover inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-[var(--enterprise-text)]"
+        >
+          <Inbox className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
+          Occupant inbox
+        </Link>
+        <Link
+          href={`${pBase}/om/tenant-portal`}
           className="enterprise-card enterprise-card-hover inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-[var(--enterprise-text)]"
         >
           <Building2 className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
-          Tenant portal
+          Occupant hub
         </Link>
       </section>
     </div>

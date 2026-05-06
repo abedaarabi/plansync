@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   FileCheck2,
   FileStack,
+  Inbox,
   LayoutDashboard,
   LayoutGrid,
   MessageSquareQuote,
@@ -243,6 +244,29 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           href: `/projects/${projectId}/om/work-orders`,
           icon: Wrench,
         });
+        out.push({
+          id: "om-construction-issues",
+          label: "Construction issues",
+          hint: "Filtered list",
+          href: `/projects/${projectId}/issues?issueKind=CONSTRUCTION`,
+          icon: MapPin,
+        });
+        if (mod.omTenantPortal) {
+          out.push({
+            id: "om-tenant-hub",
+            label: "Occupant hub",
+            hint: "Overview and links",
+            href: `/projects/${projectId}/om/tenant-portal`,
+            icon: LayoutDashboard,
+          });
+          out.push({
+            id: "om-tenant-req",
+            label: "Occupant inbox",
+            hint: "Triage occupant submissions",
+            href: `/projects/${projectId}/om/tenant-requests`,
+            icon: Inbox,
+          });
+        }
       }
       if (mod.omMaintenance) {
         out.push({
@@ -260,15 +284,6 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           hint: "Templates & runs",
           href: `/projects/${projectId}/om/inspections`,
           icon: ClipboardList,
-        });
-      }
-      if (mod.omTenantPortal) {
-        out.push({
-          id: "om-tenant",
-          label: "Tenant portal",
-          hint: "Occupant links",
-          href: `/projects/${projectId}/om/tenant-portal`,
-          icon: Building2,
         });
       }
     } else if (mod.issues) {

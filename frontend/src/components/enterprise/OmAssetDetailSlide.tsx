@@ -18,6 +18,7 @@ import { qk } from "@/lib/queryKeys";
 import type { CloudFile } from "@/types/projects";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetDocumentsBlock } from "@/components/enterprise/OmAssetDocumentsBlock";
+import { OmAssetTenantQrBlock } from "@/components/enterprise/OmAssetTenantQrBlock";
 
 function formatDetailDate(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -60,9 +61,11 @@ export function OmAssetDetailSlide({
     enabled: open && Boolean(assetId),
   });
 
+  const assetIssuesKey = "WORK_ORDER,OCCUPANT";
   const { data: assetWorkOrders = [] } = useQuery({
-    queryKey: qk.issuesForProject(projectId, undefined, "WORK_ORDER", assetId),
-    queryFn: () => fetchIssuesForProject(projectId, { issueKind: "WORK_ORDER", assetId }),
+    queryKey: qk.issuesForProject(projectId, undefined, assetIssuesKey, assetId),
+    queryFn: () =>
+      fetchIssuesForProject(projectId, { issueKinds: ["WORK_ORDER", "OCCUPANT"], assetId }),
     enabled: open && Boolean(assetId),
   });
 
@@ -226,6 +229,14 @@ export function OmAssetDetailSlide({
           </dl>
         </section>
 
+        <OmAssetTenantQrBlock
+          projectId={projectId}
+          assetId={asset.id}
+          assetTag={asset.tag}
+          assetName={asset.name}
+          enabled={open}
+        />
+
         <OmAssetDocumentsBlock projectId={projectId} assetId={asset.id} enabled={open} />
 
         <section>
@@ -297,10 +308,12 @@ export function OmAssetDetailSlide({
 
         <section>
           <h3 className="mb-2 border-b border-[var(--enterprise-border)] pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-            Open work orders
+            Open work orders &amp; tenant requests
           </h3>
           {openWorkOrders.length === 0 ? (
-            <p className="text-[13px] text-[var(--enterprise-text-muted)]">No open work orders.</p>
+            <p className="text-[13px] text-[var(--enterprise-text-muted)]">
+              No open work orders or tenant requests for this asset.
+            </p>
           ) : (
             <ul className="space-y-2">
               {openWorkOrders.map((wo: IssueRow) => (

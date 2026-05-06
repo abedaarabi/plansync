@@ -98,8 +98,8 @@ export function SheetAiPanel() {
       const ids: string[] = [];
       for (const it of items) {
         if (it.pageIndex !== pageIdx0) continue;
-        let minX = clamp01(it.minX);
-        let minY = clamp01(it.minY);
+        const minX = clamp01(it.minX);
+        const minY = clamp01(it.minY);
         let maxX = clamp01(it.maxX);
         let maxY = clamp01(it.maxY);
         if (maxX <= minX) maxX = Math.min(1, minX + 0.04);
@@ -209,8 +209,8 @@ export function SheetAiPanel() {
     (cat: TakeoffAssistCategory) => {
       const it = takeoffResult?.items.find((x) => x.category === cat && x.pageIndex === pageIdx0);
       if (!it) return;
-      let minX = clamp01(it.minX);
-      let minY = clamp01(it.minY);
+      const minX = clamp01(it.minX);
+      const minY = clamp01(it.minY);
       let maxX = clamp01(it.maxX);
       let maxY = clamp01(it.maxY);
       if (maxX <= minX) maxX = Math.min(1, minX + 0.06);

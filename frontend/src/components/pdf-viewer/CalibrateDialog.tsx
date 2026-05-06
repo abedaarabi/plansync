@@ -9,48 +9,70 @@ type Props = {
   onConfirm: (knownLengthMm: number) => void;
   onCancel: () => void;
   measureUnit: MeasureUnit;
-  /** Page overlay (same box as calibration clicks) — used with midNorm for screen position */
+  /** Page overlay (same box as calibration clicks) — fallback anchor when repositioning */
   anchorRef: React.RefObject<HTMLElement | null>;
-  /** Midpoint of the two calibration points in normalized page coords (0–1) */
-  midNorm: { x: number; y: number } | null;
+  /** Second calibration point in normalized overlay coords (0–1) */
+  anchorNorm: { x: number; y: number } | null;
+  /** Viewport position of the completing click — keeps the popover near the cursor */
+  pointerClient: { x: number; y: number } | null;
   /** Pre-fill from last successful calibration on this page (localStorage). */
   initialKnownMm: number | null;
 };
 
 const POP_W = 248;
-const POP_H_EST = 152;
-const GAP = 8;
-const PAD = 8;
+/** Only used before the panel is measured — real height is much larger due to body text */
+const POP_H_FALLBACK = 220;
+const GAP = 10;
+const PAD = 10;
 
 function useCalibratePopoverStyle(
   open: boolean,
   anchorRef: React.RefObject<HTMLElement | null>,
-  midNorm: { x: number; y: number } | null,
+  anchorNorm: { x: number; y: number } | null,
+  pointerClient: { x: number; y: number } | null,
+  panelRef: React.RefObject<HTMLElement | null>,
 ) {
   const [style, setStyle] = useState<React.CSSProperties | null>(null);
 
   const update = useCallback(() => {
-    const el = anchorRef.current;
-    if (!el || !midNorm || typeof window === "undefined") {
+    if (!open || !anchorNorm || typeof window === "undefined") {
       setStyle(null);
       return;
     }
-    const r = el.getBoundingClientRect();
-    const ax = r.left + midNorm.x * r.width;
-    const ay = r.top + midNorm.y * r.height;
+    const el = anchorRef.current;
+    const r = el?.getBoundingClientRect();
+    const pr = panelRef.current?.getBoundingClientRect();
+    const rawH = pr?.height ?? 0;
+    const rawW = pr?.width ?? 0;
+    const panelH = Math.max(POP_H_FALLBACK, Math.ceil(rawH > 8 ? rawH : POP_H_FALLBACK));
+    const panelW = Math.max(POP_W, Math.ceil(rawW > 8 ? rawW : POP_W));
 
-    let top = ay - GAP - POP_H_EST;
-    if (top < PAD) {
-      top = ay + GAP;
-      if (top + POP_H_EST > window.innerHeight - PAD) {
-        top = Math.max(PAD, window.innerHeight - PAD - POP_H_EST);
-      }
-    } else if (top + POP_H_EST > window.innerHeight - PAD) {
-      top = Math.max(PAD, window.innerHeight - PAD - POP_H_EST);
+    let ax: number;
+    let ay: number;
+    if (pointerClient) {
+      ax = pointerClient.x;
+      ay = pointerClient.y;
+    } else if (r) {
+      ax = r.left + anchorNorm.x * r.width;
+      ay = r.top + anchorNorm.y * r.height;
+    } else {
+      setStyle(null);
+      return;
     }
 
-    let left = ax - POP_W / 2;
-    left = Math.min(Math.max(left, PAD), window.innerWidth - PAD - POP_W);
+    let top = ay - GAP - panelH;
+    if (top < PAD) {
+      top = ay + GAP;
+    }
+    if (top + panelH > window.innerHeight - PAD) {
+      top = window.innerHeight - PAD - panelH;
+    }
+    if (top < PAD) {
+      top = PAD;
+    }
+
+    let left = ax - panelW / 2;
+    left = Math.min(Math.max(left, PAD), window.innerWidth - PAD - panelW);
 
     setStyle({
       position: "fixed",
@@ -58,24 +80,52 @@ function useCalibratePopoverStyle(
       left,
       width: POP_W,
       zIndex: 100,
+      visibility: "visible",
     });
-  }, [anchorRef, midNorm]);
+  }, [open, anchorRef, anchorNorm, pointerClient, panelRef]);
 
   useLayoutEffect(() => {
-    if (!open) {
+    if (!open || !anchorNorm) {
       setStyle(null);
       return;
     }
+    let cancelled = false;
+    const el = anchorRef.current;
+    let roPanel: ResizeObserver | null = null;
+    const tryObservePanel = () => {
+      const panelEl = panelRef.current;
+      if (!panelEl || roPanel || typeof ResizeObserver === "undefined") return;
+      roPanel = new ResizeObserver(() => update());
+      roPanel.observe(panelEl);
+    };
     update();
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
+    const roOverlay =
+      typeof ResizeObserver !== "undefined" && el ? new ResizeObserver(() => update()) : null;
+    if (el) roOverlay?.observe(el);
+    tryObservePanel();
+    const raf0 = requestAnimationFrame(() => {
+      if (cancelled) return;
+      tryObservePanel();
+      update();
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        tryObservePanel();
+        update();
+      });
+    });
     return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf0);
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
+      roOverlay?.disconnect();
+      roPanel?.disconnect();
     };
-  }, [open, update]);
+  }, [open, anchorNorm, update]);
 
-  return open ? style : null;
+  return open && anchorNorm ? style : null;
 }
 
 export function CalibrateDialog({
@@ -84,7 +134,8 @@ export function CalibrateDialog({
   onCancel,
   measureUnit,
   anchorRef,
-  midNorm,
+  anchorNorm,
+  pointerClient,
   initialKnownMm,
 }: Props) {
   const [value, setValue] = useState("");
@@ -95,7 +146,13 @@ export function CalibrateDialog({
     setMounted(true);
   }, []);
 
-  const popoverStyle = useCalibratePopoverStyle(open, anchorRef, midNorm);
+  const popoverStyle = useCalibratePopoverStyle(
+    open,
+    anchorRef,
+    anchorNorm,
+    pointerClient,
+    panelRef,
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -115,9 +172,18 @@ export function CalibrateDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onCancel]);
 
-  if (!open || !mounted || typeof document === "undefined" || !popoverStyle || !midNorm) {
+  if (!open || !mounted || typeof document === "undefined" || !anchorNorm) {
     return null;
   }
+
+  const safeStyle: React.CSSProperties = popoverStyle ?? {
+    position: "fixed",
+    left: -9999,
+    top: -9999,
+    width: POP_W,
+    zIndex: 100,
+    visibility: "hidden",
+  };
 
   return createPortal(
     <>
@@ -129,7 +195,7 @@ export function CalibrateDialog({
       />
       <div
         ref={panelRef}
-        style={popoverStyle}
+        style={safeStyle}
         className="rounded-lg border border-[#334155] bg-[#1E293B] p-3 text-[#F8FAFC] shadow-2xl ring-1 ring-black/25 print:hidden"
         role="dialog"
         aria-labelledby="calibrate-title"

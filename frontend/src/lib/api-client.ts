@@ -112,6 +112,7 @@ export type ProjectSessionResponse = {
     modules: ProjectSessionModules;
     clientVisibility: ProjectSessionClientVisibility;
     omHandover: ProjectSessionOmHandover;
+    omTenantPortalUi: { headline: string | null };
   };
   uiMode: "internal" | "client" | "contractor" | "sub";
 };
@@ -133,6 +134,7 @@ export async function patchProjectSettings(
     modules?: Partial<ProjectSessionModules>;
     clientVisibility?: Partial<ProjectSessionClientVisibility>;
     omHandover?: Partial<ProjectSessionOmHandover>;
+    omTenantPortalUi?: { headline?: string | null };
   },
 ): Promise<{ projectId: string; settings: ProjectSessionResponse["settings"] }> {
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/settings`), {
@@ -2342,12 +2344,15 @@ export type IssueRow = {
   reporterEmail?: string | null;
 };
 
+export type IssueKindApi = "WORK_ORDER" | "CONSTRUCTION" | "OCCUPANT";
+
 export async function fetchIssuesForFileVersion(
   fileVersionId: string,
-  opts?: { issueKind?: "WORK_ORDER" | "CONSTRUCTION" },
+  opts?: { issueKind?: IssueKindApi; issueKinds?: IssueKindApi[] },
 ): Promise<IssueRow[]> {
   const params = new URLSearchParams();
-  if (opts?.issueKind) params.set("issueKind", opts.issueKind);
+  if (opts?.issueKinds?.length) params.set("issueKinds", opts.issueKinds.join(","));
+  else if (opts?.issueKind) params.set("issueKind", opts.issueKind);
   const q = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(
     apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/issues${q}`),
@@ -2365,13 +2370,15 @@ export async function fetchIssuesForProject(
   opts?: {
     fileVersionId?: string;
     assetId?: string;
-    issueKind?: "WORK_ORDER" | "CONSTRUCTION";
+    issueKind?: IssueKindApi;
+    issueKinds?: IssueKindApi[];
   },
 ): Promise<IssueRow[]> {
   const params = new URLSearchParams();
   if (opts?.fileVersionId) params.set("fileVersionId", opts.fileVersionId);
   if (opts?.assetId) params.set("assetId", opts.assetId);
-  if (opts?.issueKind) params.set("issueKind", opts.issueKind);
+  if (opts?.issueKinds?.length) params.set("issueKinds", opts.issueKinds.join(","));
+  else if (opts?.issueKind) params.set("issueKind", opts.issueKind);
   const q = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/issues${q}`), {
     credentials: "include",
@@ -2540,6 +2547,7 @@ export async function patchIssue(
     pageNumber?: number | null;
     /** Replace linked RFIs for this issue. */
     rfiIds?: string[];
+    issueKind?: IssueKindApi;
   },
 ): Promise<IssueRow> {
   const res = await fetch(apiUrl(`/api/v1/issues/${encodeURIComponent(issueId)}`), {
@@ -4080,6 +4088,8 @@ export type OmAssetRow = {
   pinJson: unknown;
   file: { id: string; name: string } | null;
   fileVersion: { id: string; version: number } | null;
+  /** True when a tenant portal equipment QR secret exists for this asset. */
+  hasOccupantQr: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -4137,6 +4147,34 @@ export async function createOmAsset(
     throw new Error(typeof j.error === "string" ? j.error : "Could not create asset.");
   }
   return res.json() as Promise<OmAssetRow>;
+}
+
+export async function postOmAssetOccupantScanSecret(
+  projectId: string,
+  assetId: string,
+  body?: { rotate?: boolean },
+): Promise<{ occupantScanSecret: string }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}/occupant-scan-secret`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body ?? {}),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    occupantScanSecret?: string;
+  };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not configure equipment QR.");
+  }
+  if (!j.occupantScanSecret) throw new Error("Invalid response.");
+  return { occupantScanSecret: j.occupantScanSecret };
 }
 
 export async function deleteOmAsset(projectId: string, assetId: string): Promise<void> {
@@ -4329,9 +4367,10 @@ export type OmHandoverSummary = {
     workOrdersOpen: number;
     maintenance: { schedulesTracked: number; overdue: number; dueSoon: number };
     inspections: { templates: number; completedRuns: number };
-    occupantPortal: { activeMagicLinks: number };
+    occupantPortal: { activeMagicLinks: number; assetsWithOccupantSecret: number };
     punchOpen: number;
     constructionIssuesOpen: number;
+    tenantRequestsOpen: number;
   };
 };
 
@@ -4397,6 +4436,8 @@ export type OmFmDashboardResponse = {
   kpis: {
     openWorkOrders: number;
     inProgressWorkOrders: number;
+    openTenantRequests: number;
+    inProgressTenantRequests: number;
     maintenanceScheduledThisWeek: number;
     assetsTracked: number;
     overdueMaintenanceTasks: number;
@@ -4419,6 +4460,13 @@ export type OmFmDashboardResponse = {
     priority: string;
     updatedAt: string;
   }[];
+  recentTenantRequests: {
+    id: string;
+    title: string;
+    status: string;
+    priority: string;
+    updatedAt: string;
+  }[];
 };
 
 export async function fetchOmFmDashboard(projectId: string): Promise<OmFmDashboardResponse> {
@@ -4432,6 +4480,12 @@ export async function fetchOmFmDashboard(projectId: string): Promise<OmFmDashboa
     throw new Error(typeof j.error === "string" ? j.error : "Could not load FM dashboard.");
   }
   return res.json() as Promise<OmFmDashboardResponse>;
+}
+
+export function omOccupantAssetQrCsvUrl(projectId: string): string {
+  return apiUrl(
+    `/api/v1/projects/${encodeURIComponent(projectId)}/om/reports/occupant-asset-qr-urls.csv`,
+  );
 }
 
 export function omAssetRegisterCsvUrl(projectId: string): string {
@@ -4773,16 +4827,98 @@ export async function postOccupantToken(
   return res.json() as Promise<OccupantTokenRow>;
 }
 
+export type RevokedOccupantTokenRow = {
+  id: string;
+  label: string;
+  createdAt: string;
+  revokedAt: string;
+  tokenSuffix: string;
+};
+
+export async function fetchRevokedOccupantTokens(
+  projectId: string,
+): Promise<RevokedOccupantTokenRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/occupant-tokens/revoked`),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load revoked links.");
+  return res.json() as Promise<RevokedOccupantTokenRow[]>;
+}
+
+export async function revokeOccupantToken(projectId: string, tokenId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/occupant-tokens/${encodeURIComponent(tokenId)}/revoke`,
+    ),
+    { method: "POST", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not revoke link.");
+  }
+}
+
+export async function downloadOccupantAssetQrCsv(projectId: string): Promise<void> {
+  const res = await fetch(omOccupantAssetQrCsvUrl(projectId), { credentials: "include" });
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not download CSV.");
+  }
+  const blob = await res.blob();
+  const dispo = res.headers.get("Content-Disposition");
+  const match = dispo?.match(/filename="([^"]+)"/);
+  const filename = match?.[1] ?? `occupant-asset-qr-${projectId.slice(0, 8)}.csv`;
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export type OccupantPortalMeta = {
+  projectId: string;
+  projectName: string;
+  occupantHeadline?: string | null;
+  asset: {
+    tag: string;
+    name: string;
+    category: string | null;
+    locationLabel: string | null;
+  } | null;
+};
+
 export async function fetchOccupantMeta(
   token: string,
-): Promise<{ projectId: string; projectName: string }> {
-  const res = await fetch(apiUrl(`/api/v1/occupant/${encodeURIComponent(token)}/meta`));
+  opts?: { assetSecret?: string },
+): Promise<OccupantPortalMeta> {
+  const q = new URLSearchParams();
+  if (opts?.assetSecret?.trim()) q.set("a", opts.assetSecret.trim());
+  const qs = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(apiUrl(`/api/v1/occupant/${encodeURIComponent(token)}/meta${qs}`));
   if (!res.ok) {
     const j = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(typeof j.error === "string" ? j.error : "Invalid link.");
   }
-  return res.json() as Promise<{ projectId: string; projectName: string }>;
+  return res.json() as Promise<OccupantPortalMeta>;
 }
+
+export type OccupantSubmitResult = {
+  ok: true;
+  issueId: string;
+  occupantPhotoToken: string;
+  occupantPhotoExpiresAt: string;
+};
 
 export async function postOccupantSubmit(
   token: string,
@@ -4792,8 +4928,9 @@ export async function postOccupantSubmit(
     room?: string;
     reporterName: string;
     reporterEmail: string;
+    assetSecret?: string;
   },
-): Promise<{ ok: true; issueId: string }> {
+): Promise<OccupantSubmitResult> {
   const res = await fetch(apiUrl(`/api/v1/occupant/${encodeURIComponent(token)}/submit`), {
     method: "POST",
     headers: jsonHeaders,
@@ -4803,6 +4940,8 @@ export async function postOccupantSubmit(
     error?: unknown;
     ok?: boolean;
     issueId?: string;
+    occupantPhotoToken?: string;
+    occupantPhotoExpiresAt?: string;
   };
   if (!res.ok) {
     const err = j.error;
@@ -4810,6 +4949,78 @@ export async function postOccupantSubmit(
       typeof err === "string" ? err : Array.isArray(err) ? "Invalid request" : "Could not submit.";
     throw new Error(msg);
   }
-  if (!j.issueId) throw new Error("Invalid response.");
-  return { ok: true as const, issueId: j.issueId };
+  if (!j.issueId || !j.occupantPhotoToken || !j.occupantPhotoExpiresAt) {
+    throw new Error("Invalid response.");
+  }
+  return {
+    ok: true as const,
+    issueId: j.issueId,
+    occupantPhotoToken: j.occupantPhotoToken,
+    occupantPhotoExpiresAt: j.occupantPhotoExpiresAt,
+  };
+}
+
+export async function presignOccupantIssueReferencePhoto(
+  portalToken: string,
+  issueId: string,
+  body: {
+    occupantPhotoToken: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+  },
+): Promise<{ uploadUrl: string; key: string }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/occupant/${encodeURIComponent(portalToken)}/issues/${encodeURIComponent(issueId)}/reference-photos/presign`,
+    ),
+    {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    uploadUrl?: string;
+    key?: string;
+  };
+  if (!res.ok) {
+    throw new Error(j.error ?? "Could not start photo upload.");
+  }
+  if (!j.uploadUrl || !j.key) throw new Error("Invalid presign response.");
+  return { uploadUrl: j.uploadUrl, key: j.key };
+}
+
+export async function completeOccupantIssueReferencePhoto(
+  portalToken: string,
+  issueId: string,
+  body: {
+    occupantPhotoToken: string;
+    key: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+  },
+): Promise<{ ok: true; photoId: string }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/occupant/${encodeURIComponent(portalToken)}/issues/${encodeURIComponent(issueId)}/reference-photos/complete`,
+    ),
+    {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    ok?: boolean;
+    photoId?: string;
+  };
+  if (!res.ok) {
+    throw new Error(j.error ?? "Could not save photo.");
+  }
+  if (!j.photoId) throw new Error("Invalid response.");
+  return { ok: true as const, photoId: j.photoId };
 }

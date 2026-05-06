@@ -132,7 +132,7 @@ export function CalibrationGuide() {
     {
       title: "Second end",
       detail:
-        "Move the pointer to the other end — a live length appears in your selected unit (PDF space before calibration, or calibrated lengths after). Hold Shift to lock horizontal or vertical from the first point. Click along the same straight edge.",
+        "Move the pointer to the other end — the line follows smoothly over the drawing; geometry gently pulls the segment (same as Measure). Hold Shift to lock horizontal or vertical from the first point. Hold Option (Alt) to turn off snap and use the cursor exactly. Click along the same straight edge.",
       done: hasSecond,
     },
     {

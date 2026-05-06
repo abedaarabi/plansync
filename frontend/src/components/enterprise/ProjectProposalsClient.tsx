@@ -120,7 +120,7 @@ export function ProjectProposalsClient({
       m.set(p.status, (m.get(p.status) ?? 0) + 1);
     }
     return m;
-  }, [data?.proposals]);
+  }, [data]);
 
   const filteredProposals = useMemo(() => {
     if (!data?.proposals) return [];
@@ -138,7 +138,7 @@ export function ProjectProposalsClient({
       );
     }
     return rows;
-  }, [data?.proposals, filter, search]);
+  }, [data, filter, search]);
 
   if (ctxLoading || (isPro && !wid)) {
     return <EnterpriseLoadingState label="Loading workspace…" />;

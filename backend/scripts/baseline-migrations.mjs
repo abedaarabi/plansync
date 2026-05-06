@@ -51,13 +51,16 @@ async function main() {
       continue;
     }
 
-    const r = spawnSync(
-      "npx",
-      ["prisma", "migrate", "resolve", "--applied", name],
-      { cwd: backendRoot, stdio: "inherit", shell: true, env: process.env },
-    );
+    const r = spawnSync("npx", ["prisma", "migrate", "resolve", "--applied", name], {
+      cwd: backendRoot,
+      stdio: "inherit",
+      shell: true,
+      env: process.env,
+    });
     if (r.status !== 0) {
-      console.error(`\nFailed on ${name}. If it says already recorded, you can continue from the next.`);
+      console.error(
+        `\nFailed on ${name}. If it says already recorded, you can continue from the next.`,
+      );
       process.exit(r.status ?? 1);
     }
   }

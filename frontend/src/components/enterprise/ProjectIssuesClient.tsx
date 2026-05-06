@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import {
+  ArrowUpCircle,
   Activity,
   Archive,
   Calendar,
@@ -28,6 +29,7 @@ import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadin
 import {
   fetchIssuesForProject,
   fetchProject,
+  fetchProjectSession,
   fetchWorkspaceMembers,
   formatIssueLockHint,
   patchIssue,
@@ -94,12 +96,18 @@ type IssueRowProps = {
   issue: IssueRow;
   isPatching: boolean;
   onStatusChange: (issueId: string, status: string) => void;
+  showPromoteOccupant?: boolean;
+  onPromoteToWorkOrder?: (issueId: string) => void;
+  promoteBusy?: boolean;
 };
 
 const ProjectIssueTableRow = memo(function ProjectIssueTableRow({
   issue,
   isPatching,
   onStatusChange,
+  showPromoteOccupant,
+  onPromoteToWorkOrder,
+  promoteBusy,
 }: IssueRowProps) {
   const pri = issue.priority ?? "MEDIUM";
   const priClass = priorityBadgeClassLight(pri);
@@ -134,6 +142,17 @@ const ProjectIssueTableRow = memo(function ProjectIssueTableRow({
             <span className="line-clamp-2 text-sm font-medium leading-snug text-[var(--enterprise-text)]">
               {issue.title}
             </span>
+            {showPromoteOccupant && issue.issueKind === "OCCUPANT" && onPromoteToWorkOrder ? (
+              <button
+                type="button"
+                disabled={promoteBusy}
+                onClick={() => onPromoteToWorkOrder(issue.id)}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-[11px] font-semibold text-[var(--enterprise-primary)] shadow-sm hover:bg-[var(--enterprise-primary-soft)] disabled:opacity-50"
+              >
+                <ArrowUpCircle className="h-3.5 w-3.5" aria-hidden />
+                Promote to work order
+              </button>
+            ) : null}
             <p className="mt-1 flex items-center gap-1 text-[11px] tabular-nums text-[var(--enterprise-text-muted)]">
               <span className="line-clamp-1">
                 {issue.sheetName ?? issue.file.name} · v
@@ -219,8 +238,7 @@ export function ProjectIssuesClient({
   listTitle = "Issues",
 }: {
   projectId: string;
-  /** When set, only loads construction vs work-order issues from the API. */
-  issueKindFilter?: "WORK_ORDER" | "CONSTRUCTION";
+  issueKindFilter?: "WORK_ORDER" | "CONSTRUCTION" | "OCCUPANT";
   listTitle?: string;
 }) {
   const qc = useQueryClient();
@@ -234,7 +252,7 @@ export function ProjectIssuesClient({
   const [assigneeFilter, setAssigneeFilter] = useState<AssigneeFilter>("ALL");
   const [msg, setMsg] = useState<string | null>(null);
   const [patchingIssueId, setPatchingIssueId] = useState<string | null>(null);
-
+  const [promotingIssueId, setPromotingIssueId] = useState<string | null>(null);
   const clearAssetFilterHref = useMemo(() => {
     if (!filterAssetId || !pathname) return null;
     const p = new URLSearchParams(searchParams.toString());
@@ -252,6 +270,15 @@ export function ProjectIssuesClient({
         assetId: filterAssetId,
       }),
   });
+
+  const { data: projectSession } = useQuery({
+    queryKey: qk.projectSession(projectId),
+    queryFn: () => fetchProjectSession(projectId),
+  });
+
+  const canPromoteOccupant = Boolean(
+    issueKindFilter === "OCCUPANT" && projectSession && !projectSession.isExternal,
+  );
 
   const { data: project } = useQuery({
     queryKey: qk.project(projectId),
@@ -323,12 +350,40 @@ export function ProjectIssuesClient({
     },
   });
 
+  const promoteMut = useMutation({
+    mutationFn: (id: string) => patchIssue(id, { issueKind: "WORK_ORDER" }),
+    onMutate: (id) => {
+      setPromotingIssueId(id);
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["issues", "project", projectId], exact: false });
+      await qc.invalidateQueries({ queryKey: ["issues", "fileVersion"], exact: false });
+      toast.success("Promoted to work order.");
+      setMsg(null);
+    },
+    onError: (e: Error) => {
+      toast.error(
+        e instanceof ProRequiredError ? "Pro subscription required." : formatIssueLockHint(e),
+      );
+    },
+    onSettled: () => {
+      setPromotingIssueId(null);
+    },
+  });
+
   const onIssueStatusChange = useCallback(
     (issueId: string, status: string) => {
       patchMut.mutate({ id: issueId, status });
     },
     [patchMut],
   );
+
+  const listItemNoun =
+    issueKindFilter === "WORK_ORDER"
+      ? "work orders"
+      : issueKindFilter === "OCCUPANT"
+        ? "tenant requests"
+        : "issues";
 
   const stats = useMemo(() => {
     let open = 0;
@@ -389,7 +444,7 @@ export function ProjectIssuesClient({
               <p className="mt-1.5 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
                 {stats.total === 0
                   ? `No ${listTitle.toLowerCase()} recorded for this project yet.`
-                  : `${stats.total} ${issueKindFilter === "WORK_ORDER" ? "work orders" : "issues"} in this project`}
+                  : `${stats.total} ${listItemNoun} in this project`}
               </p>
             ) : null}
           </div>
@@ -406,8 +461,7 @@ export function ProjectIssuesClient({
       {filterAssetId ? (
         <div className="enterprise-card flex flex-wrap items-center justify-between gap-3 border border-[var(--enterprise-primary)]/30 bg-[var(--enterprise-primary-soft)] px-4 py-3 text-sm">
           <p className="text-[var(--enterprise-text)]">
-            Showing {issueKindFilter === "WORK_ORDER" ? "work orders" : "issues"} linked to one
-            asset.
+            Showing {listItemNoun} linked to one asset.
           </p>
           {clearAssetFilterHref ? (
             <Link
@@ -650,6 +704,9 @@ export function ProjectIssuesClient({
                       issue={issue}
                       isPatching={patchingIssueId === issue.id}
                       onStatusChange={onIssueStatusChange}
+                      showPromoteOccupant={canPromoteOccupant}
+                      onPromoteToWorkOrder={(id) => promoteMut.mutate(id)}
+                      promoteBusy={promotingIssueId === issue.id}
                     />
                   ))
                 )}

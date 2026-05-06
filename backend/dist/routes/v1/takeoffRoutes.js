@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
+import { fileVersionWriteBlocked } from "../../lib/fileVersionLock.js";
 import { jsonObjectForResponse } from "../../lib/materialTemplate.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectForMember } from "../../lib/projectAccess.js";
@@ -57,17 +58,6 @@ function takeoffRowJson(row) {
             }
             : null,
     };
-}
-async function fileVersionWriteBlocked(fileVersionId, userId) {
-    const fv = await prisma.fileVersion.findUnique({
-        where: { id: fileVersionId },
-        select: { lockedByUserId: true, lockExpiresAt: true },
-    });
-    if (!fv?.lockedByUserId)
-        return false;
-    if (fv.lockExpiresAt && fv.lockExpiresAt < new Date())
-        return false;
-    return fv.lockedByUserId !== userId;
 }
 async function loadFileVersionForTakeoff(fileVersionId) {
     return prisma.fileVersion.findUnique({

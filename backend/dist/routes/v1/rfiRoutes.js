@@ -773,8 +773,23 @@ export function registerRfiRoutes(r, needUser, env) {
                 return c.json({ error: draw.error }, 400);
             drawPatch = draw;
         }
-        const { dueDate: dueYmd, status: _stIgnored, answerMessageId: _answerMessageIdOmit, officialResponse: _officialResponseOmit, issueIds: _issueIdsOmit, assigneeUserIds: _omitAssigneeIds, assignedToUserId: _omitAssignedSingle, fileId: _of, fileVersionId: _ofv, pageNumber: _opn, pinNormX: _opx, pinNormY: _opy, voidReason: voidReasonIn, ...scalarFields } = data;
+        const { dueDate: dueYmd, voidReason: voidReasonIn, ...scalarFields } = data;
         const updateData = { ...scalarFields };
+        for (const k of [
+            "status",
+            "answerMessageId",
+            "officialResponse",
+            "issueIds",
+            "assigneeUserIds",
+            "assignedToUserId",
+            "fileId",
+            "fileVersionId",
+            "pageNumber",
+            "pinNormX",
+            "pinNormY",
+        ]) {
+            delete updateData[k];
+        }
         if (assigneeIdsToSync !== undefined) {
             updateData.assignedToUserId = assigneeIdsToSync[0] ?? null;
         }

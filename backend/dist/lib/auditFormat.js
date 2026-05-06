@@ -54,6 +54,20 @@ export function formatAuditPresentation(type, metadata) {
                     .filter(Boolean)
                     .join(" · "),
             };
+        case "FILE_VERSION_DELETED":
+            return {
+                actionLabel: "Revision removed",
+                summary: fileName
+                    ? `${fileName}${version != null ? ` · v${version}` : ""}`
+                    : "File revision removed",
+                detail: [
+                    fileName && `File: ${fileName}`,
+                    version != null && `Removed revision: ${version}`,
+                    fileId && `File id: ${fileId}`,
+                ]
+                    .filter(Boolean)
+                    .join(" · "),
+            };
         case "FILE_DELETED":
             return {
                 actionLabel: "Deleted",
@@ -269,6 +283,18 @@ export function formatAuditPresentation(type, metadata) {
                 detail: str(m.reportDate)
                     ? `Removed field report (${String(m.reportDate)}).`
                     : "Field report removed.",
+            };
+        case "FIELD_REPORT_EMAILED":
+            return {
+                actionLabel: "Field report emailed",
+                summary: typeof m.recipientCount === "number"
+                    ? `Sent to ${String(m.recipientCount)} recipient(s)`
+                    : "Field report emailed",
+                detail: str(m.mode) === "weekly" && str(m.weekEndingFriday)
+                    ? `Weekly summary (week ending ${String(m.weekEndingFriday)}).`
+                    : str(m.reportDate)
+                        ? `Daily report (${String(m.reportDate)}).`
+                        : "Field report sent by email.",
             };
         default:
             return {

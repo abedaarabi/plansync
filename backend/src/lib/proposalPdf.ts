@@ -25,7 +25,7 @@ export function proposalCoverPlainForPdf(raw: string): string {
 }
 
 function htmlCoverToPdfPlain(html: string): string {
-  let s = html
+  const s = html
     .replace(/<\s*br\s*\/?>/gi, "\n")
     .replace(/<\/\s*p\s*>/gi, "\n\n")
     .replace(/<\s*p[^>]*>/gi, "")

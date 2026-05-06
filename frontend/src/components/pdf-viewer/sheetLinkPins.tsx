@@ -411,7 +411,7 @@ export function SheetLinkPin({
   }
 
   const status = a.issueStatus ?? "OPEN";
-  const kind = a.linkedIssueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION";
+  const kind = a.linkedIssueKind === "CONSTRUCTION" ? "CONSTRUCTION" : "WORK_ORDER";
   const priority = a.linkedIssuePriority ?? "MEDIUM";
   const initials = truncatePinLabel(
     (a.linkedIssueAssigneeInitials ?? "").trim() || issueAssigneeShortLabel(a.author, undefined),

@@ -5,14 +5,12 @@ import { workspaceLogoUrlForClients } from "./workspaceLogo.js";
 
 /** JSON-safe workspace row; `logoUrl` is a browser-loadable URL (hosted or external). Omits `logoS3Key`. */
 export function workspaceJson(ws: Workspace, env?: Env) {
-  const { logoS3Key, logoUrl: _rawLogo, storageUsedBytes, storageQuotaBytes, ...rest } = ws;
-  const logoUrl =
-    env != null
-      ? workspaceLogoUrlForClients(env, { id: ws.id, logoS3Key, logoUrl: ws.logoUrl })
-      : ws.logoUrl;
+  const { logoS3Key, logoUrl, storageUsedBytes, storageQuotaBytes, ...rest } = ws;
+  const logoUrlForJson =
+    env != null ? workspaceLogoUrlForClients(env, { id: ws.id, logoS3Key, logoUrl }) : logoUrl;
   return {
     ...rest,
-    logoUrl,
+    logoUrl: logoUrlForJson,
     storageUsedBytes: storageUsedBytes.toString(),
     storageQuotaBytes: storageQuotaBytes.toString(),
   };

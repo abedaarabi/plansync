@@ -91,12 +91,16 @@ function parseOptionalEmailNull(v) {
 function parseBool(v, defaultVal) {
     return typeof v === "boolean" ? v : defaultVal;
 }
+const DEFAULT_OM_TENANT_PORTAL_UI = {
+    headline: null,
+};
 export function parseProjectSettingsJson(raw) {
     if (raw == null || typeof raw !== "object") {
         return {
             modules: { ...DEFAULT_MODULES },
             clientVisibility: { ...DEFAULT_CLIENT_VISIBILITY },
             omHandover: { ...DEFAULT_OM_HANDOVER },
+            omTenantPortalUi: { ...DEFAULT_OM_TENANT_PORTAL_UI },
         };
     }
     const o = raw;
@@ -107,6 +111,15 @@ export function parseProjectSettingsJson(raw) {
     const h = o.omHandover && typeof o.omHandover === "object"
         ? o.omHandover
         : {};
+    const ui = o.omTenantPortalUi && typeof o.omTenantPortalUi === "object"
+        ? o.omTenantPortalUi
+        : {};
+    const headlineRaw = ui.headline;
+    const parsedHeadline = headlineRaw === null || headlineRaw === undefined
+        ? null
+        : typeof headlineRaw === "string" && headlineRaw.trim()
+            ? headlineRaw.trim().slice(0, 200)
+            : null;
     const handoverCompletedAt = h.handoverCompletedAt === null
         ? null
         : typeof h.handoverCompletedAt === "string" && h.handoverCompletedAt.trim()
@@ -158,10 +171,13 @@ export function parseProjectSettingsJson(raw) {
             handoverWizardCompletedAt,
             buildingOwnerEmail: parseOptionalEmailNull(h.buildingOwnerEmail) ?? DEFAULT_OM_HANDOVER.buildingOwnerEmail,
         },
+        omTenantPortalUi: {
+            headline: parsedHeadline,
+        },
     };
 }
 export function mergeProjectSettingsPatch(current, patch) {
-    let om = { ...current.omHandover };
+    const om = { ...current.omHandover };
     if (patch.omHandover) {
         const p = patch.omHandover;
         if (p.notes !== undefined) {
@@ -221,6 +237,7 @@ export function mergeProjectSettingsPatch(current, patch) {
         modules: { ...current.modules, ...patch.modules },
         clientVisibility: { ...current.clientVisibility, ...patch.clientVisibility },
         omHandover: om,
+        omTenantPortalUi: { ...current.omTenantPortalUi },
     };
 }
 /** When enabling `operationsMode`, optionally turn off construction-heavy modules (Super Admin choice). */

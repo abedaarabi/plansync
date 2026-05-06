@@ -126,44 +126,50 @@ function StatCard({
   return inner;
 }
 
+function projectScopedBase(projectId: string, workspaceId: string | undefined | null): string {
+  return workspaceId
+    ? `/workspaces/${workspaceId}/projects/${projectId}`
+    : `/projects/${projectId}`;
+}
+
 const QUICK_LINKS: {
-  href: (projectId: string) => string;
+  path: string;
   label: string;
   hint: string;
   icon: ComponentType<{ className?: string }>;
 }[] = [
   {
-    href: (id) => `/projects/${id}/om/assets`,
+    path: "/om/assets",
     label: "Assets",
     hint: "Equipment & drawing pins",
     icon: Package,
   },
   {
-    href: (id) => `/projects/${id}/om/work-orders`,
+    path: "/om/work-orders",
     label: "Work orders",
     hint: "O&M tasks",
     icon: Wrench,
   },
   {
-    href: (id) => `/projects/${id}/om/maintenance`,
+    path: "/om/maintenance",
     label: "Maintenance",
     hint: "PPM schedules",
     icon: ClipboardList,
   },
   {
-    href: (id) => `/projects/${id}/om/inspections`,
+    path: "/om/inspections",
     label: "Inspections",
     hint: "Templates & runs",
     icon: ClipboardCheck,
   },
   {
-    href: (id) => `/projects/${id}/om/tenant-portal`,
-    label: "Tenant portal",
-    hint: "Occupant links",
+    path: "/om/tenant-portal",
+    label: "Occupant hub",
+    hint: "Overview & building links",
     icon: Link2,
   },
   {
-    href: (id) => `/projects/${id}/files`,
+    path: "/files",
     label: "Files & drawings",
     hint: "O&M manuals & plans",
     icon: FolderOpen,
@@ -375,15 +381,19 @@ export function OmHandoverClient({ projectId }: Props) {
   }
 
   const r = summary.readiness;
+  const pBase = projectScopedBase(projectId, primary?.workspace.id);
   const assetsOk = r.assets.total === 0 || r.assets.linkedToDrawing >= r.assets.total;
   const woOk = r.workOrdersOpen === 0;
+  const trOk = r.tenantRequestsOpen === 0;
   const maintOk = r.maintenance.overdue === 0;
   const punchOk = r.punchOpen === 0;
   const ciOk = r.constructionIssuesOpen === 0;
   const inspectionsOk = r.inspections.templates === 0 || r.inspections.completedRuns > 0;
-  const portalOk = r.occupantPortal.activeMagicLinks > 0;
+  const portalOk =
+    r.occupantPortal.activeMagicLinks > 0 &&
+    (r.assets.total === 0 || r.occupantPortal.assetsWithOccupantSecret > 0);
 
-  const readinessChecks = [assetsOk, woOk, maintOk, inspectionsOk, punchOk, ciOk, portalOk];
+  const readinessChecks = [assetsOk, woOk, trOk, maintOk, inspectionsOk, punchOk, ciOk, portalOk];
   const passedCount = readinessChecks.filter(Boolean).length;
   const totalChecks = readinessChecks.length;
   const readinessPct = Math.round((passedCount / totalChecks) * 100);
@@ -552,15 +562,27 @@ export function OmHandoverClient({ projectId }: Props) {
                 ? "No assets yet — add equipment when ready."
                 : `${r.assets.linkedToDrawing} / ${r.assets.total} linked to a sheet`
             }
-            href={`/projects/${projectId}/om/assets`}
+            href={`${pBase}/om/assets`}
           />
           <StatCard
             title="Open work orders"
             ok={woOk}
             detail={
-              r.workOrdersOpen === 0 ? "No open work orders." : `${r.workOrdersOpen} open (O&M)`
+              r.workOrdersOpen === 0
+                ? "No open internal work orders."
+                : `${r.workOrdersOpen} open (O&M)`
             }
-            href={`/projects/${projectId}/om/work-orders`}
+            href={`${pBase}/om/work-orders`}
+          />
+          <StatCard
+            title="Open tenant requests"
+            ok={trOk}
+            detail={
+              r.tenantRequestsOpen === 0
+                ? "No open occupant submissions."
+                : `${r.tenantRequestsOpen} open (occupant inbox)`
+            }
+            href={`${pBase}/om/tenant-requests`}
           />
           <StatCard
             title="Maintenance (PPM)"
@@ -570,19 +592,19 @@ export function OmHandoverClient({ projectId }: Props) {
                 ? "No active schedules yet."
                 : `${r.maintenance.overdue} overdue · ${r.maintenance.dueSoon} due soon (30d)`
             }
-            href={`/projects/${projectId}/om/maintenance`}
+            href={`${pBase}/om/maintenance`}
           />
           <StatCard
             title="Inspections"
             ok={inspectionsOk}
             detail={`${r.inspections.templates} template(s) · ${r.inspections.completedRuns} completed run(s)`}
-            href={`/projects/${projectId}/om/inspections`}
+            href={`${pBase}/om/inspections`}
           />
           <StatCard
             title="Punch list"
             ok={punchOk}
             detail={r.punchOpen === 0 ? "No open punch items." : `${r.punchOpen} open items`}
-            href={`/projects/${projectId}/punch`}
+            href={`${pBase}/punch`}
           />
           <StatCard
             title="Construction issues"
@@ -592,17 +614,19 @@ export function OmHandoverClient({ projectId }: Props) {
                 ? "No open construction issues."
                 : `${r.constructionIssuesOpen} open (construction)`
             }
-            href={`/projects/${projectId}/issues`}
+            href={`${pBase}/issues?issueKind=CONSTRUCTION`}
           />
           <StatCard
-            title="Tenant portal"
+            title="Occupant program"
             ok={portalOk}
             detail={
               r.occupantPortal.activeMagicLinks === 0
-                ? "No active occupant links — add one for occupant reporting."
-                : `${r.occupantPortal.activeMagicLinks} active magic link(s)`
+                ? "No active building links — enable in project settings."
+                : r.assets.total > 0 && r.occupantPortal.assetsWithOccupantSecret === 0
+                  ? `${r.occupantPortal.activeMagicLinks} active link(s) — add occupant QR on assets.`
+                  : `${r.occupantPortal.activeMagicLinks} active link(s) · ${r.occupantPortal.assetsWithOccupantSecret} / ${r.assets.total} assets with occupant QR`
             }
-            href={`/projects/${projectId}/om/tenant-portal`}
+            href={`${pBase}/om/tenant-portal`}
           />
         </div>
       </section>
@@ -712,10 +736,10 @@ export function OmHandoverClient({ projectId }: Props) {
           Quick links
         </h2>
         <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
-          {QUICK_LINKS.map(({ href, label, hint, icon: Icon }) => (
+          {QUICK_LINKS.map(({ path, label, hint, icon: Icon }) => (
             <li key={label} className="min-w-0">
               <Link
-                href={href(projectId)}
+                href={`${pBase}${path}`}
                 className="enterprise-card enterprise-card-hover group flex min-h-[4.5rem] items-center gap-3 p-3 outline-none ring-[var(--enterprise-primary)]/40 transition-transform focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--enterprise-bg)] active:scale-[0.995] sm:min-h-0 sm:p-4"
               >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)] sm:h-11 sm:w-11">

@@ -1,4 +1,6 @@
+import { loadEnv } from "./env.js";
 import { prisma } from "./prisma.js";
+import { isWebPushConfigured, sendWebPushForUsers } from "./webPush.js";
 /** Creator + primary assignee + all assignee links (deduped). */
 export function rfiParticipantUserIds(rfi) {
     const s = new Set();
@@ -34,4 +36,20 @@ export async function createUserNotifications(opts) {
             actorUserId: opts.actorUserId ?? null,
         })),
     });
+    try {
+        const env = loadEnv();
+        if (isWebPushConfigured(env)) {
+            void sendWebPushForUsers({
+                env,
+                userIds: ids,
+                title: opts.title,
+                body: opts.body,
+                href: opts.href,
+                kind: opts.kind,
+            }).catch((e) => console.error("[web-push-notify]", e));
+        }
+    }
+    catch (e) {
+        console.error("[web-push-notify-env]", e);
+    }
 }

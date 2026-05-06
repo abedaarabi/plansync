@@ -1,13 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { PunchPriority, PunchStatus, ActivityType, Prisma } from "@prisma/client";
+import { Resend } from "resend";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectForMember, assertUserAssignableToProject } from "../../lib/projectAccess.js";
 import { logActivity, logActivitySafe } from "../../lib/activity.js";
+import { inviteFromAddress } from "../../lib/inviteEmail.js";
+import { buildPunchAssignedEmailHtml, buildPunchAssignedEmailText, buildPunchListPath, buildPunchListUrl, } from "../../lib/punchAssignEmail.js";
+import { createUserNotifications } from "../../lib/userNotifications.js";
 import { buildPunchReferencePhotoKey, newUploadId, s3KeyMatchesPunchReferencePhoto, } from "../../lib/fileUpload.js";
 import { deleteObject, presignGet, presignPut } from "../../lib/s3.js";
 import { MAX_PUNCH_PHOTO_BYTES, MAX_PUNCH_REFERENCE_PHOTOS, parsePunchReferencePhotos, punchPhotosStorageBytes, punchReferencePhotosToJsonValue, } from "../../lib/punchReferencePhotos.js";
+import { normalizePunchTemplateItemsJson } from "../../lib/punchTemplateItems.js";
 function requirePro(workspace) {
     if (!isWorkspacePro(workspace)) {
         return { error: "Pro subscription required", status: 402 };
@@ -28,8 +33,21 @@ const ALLOWED_PUNCH_PHOTO_CONTENT_TYPES = new Set([
 ]);
 const punchInclude = {
     assignee: { select: { id: true, name: true, email: true, image: true } },
+    assigneeLinks: {
+        orderBy: { createdAt: "asc" },
+        include: { user: { select: { id: true, name: true, email: true, image: true } } },
+    },
+    file: { select: { id: true, name: true } },
+    fileVersion: { select: { id: true, version: true, fileId: true } },
 };
 function punchJson(row) {
+    const assignees = row.assigneeLinks.map((l) => ({
+        id: l.user.id,
+        name: l.user.name,
+        email: l.user.email,
+        image: l.user.image,
+    }));
+    const primary = assignees[0] ?? row.assignee;
     return {
         id: row.id,
         projectId: row.projectId,
@@ -42,13 +60,48 @@ function punchJson(row) {
         notes: row.notes,
         dueDate: row.dueDate ? row.dueDate.toISOString() : null,
         completedAt: row.completedAt ? row.completedAt.toISOString() : null,
-        assigneeId: row.assigneeId,
+        assigneeId: primary?.id ?? row.assigneeId,
         templateId: row.templateId,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
-        assignee: row.assignee,
+        assignee: primary ?? row.assignee,
+        assignees,
+        fileId: row.fileId,
+        file: row.file,
+        fileVersionId: row.fileVersionId,
+        fileVersion: row.fileVersion,
+        pageNumber: row.pageNumber,
         referencePhotos: parsePunchReferencePhotos(row.referencePhotos),
     };
+}
+async function resolvePunchDrawingFields(projectId, fileId, fileVersionId, pageNumber) {
+    if (fileVersionId) {
+        const fv = await prisma.fileVersion.findFirst({
+            where: { id: fileVersionId, file: { projectId } },
+            include: { file: true },
+        });
+        if (!fv)
+            return { error: "File version not found in this project" };
+        if (fileId && fv.fileId !== fileId)
+            return { error: "File version does not match file" };
+        return { fileId: fv.fileId, fileVersionId: fv.id, pageNumber: pageNumber ?? null };
+    }
+    if (fileId) {
+        const file = await prisma.file.findFirst({ where: { id: fileId, projectId } });
+        if (!file)
+            return { error: "File not found in this project" };
+        return { fileId: file.id, fileVersionId: null, pageNumber: pageNumber ?? null };
+    }
+    return { fileId: null, fileVersionId: null, pageNumber: null };
+}
+async function syncPunchAssigneeLinks(tx, punchId, userIds) {
+    const unique = [...new Set(userIds)];
+    await tx.punchAssigneeLink.deleteMany({ where: { punchItemId: punchId } });
+    if (unique.length > 0) {
+        await tx.punchAssigneeLink.createMany({
+            data: unique.map((userId) => ({ punchItemId: punchId, userId })),
+        });
+    }
 }
 async function nextPunchNumber(tx, projectId) {
     const agg = await tx.punchItem.aggregate({
@@ -56,6 +109,39 @@ async function nextPunchNumber(tx, projectId) {
         _max: { punchNumber: true },
     });
     return (agg._max.punchNumber ?? 0) + 1;
+}
+async function sendPunchAssignedEmail(env, input) {
+    const key = env.RESEND_API_KEY?.trim();
+    const from = inviteFromAddress(env);
+    if (!key || !from)
+        return;
+    const resend = new Resend(key);
+    const bulk = typeof input.bulkCount === "number" && input.bulkCount > 1;
+    const payload = {
+        assignerName: input.assignerName,
+        projectName: input.projectName,
+        punchListUrl: input.punchListUrl,
+        punchNumber: input.punchNumber,
+        punchTitle: input.punchTitle,
+        bulkCount: input.bulkCount,
+    };
+    const subject = bulk
+        ? `PlanSync: ${input.bulkCount} punch items assigned`
+        : (() => {
+            const num = input.punchNumber ?? "?";
+            const t = (input.punchTitle ?? "").trim();
+            const part = t.length > 0 ? `${t.slice(0, 60)}${t.length > 60 ? "…" : ""}` : "";
+            return part.length > 0
+                ? `PlanSync: punch assigned — #${num} ${part}`
+                : `PlanSync: punch assigned — #${num}`;
+        })();
+    await resend.emails.send({
+        from,
+        to: input.assigneeEmail,
+        subject,
+        html: buildPunchAssignedEmailHtml(env, payload),
+        text: buildPunchAssignedEmailText(payload),
+    });
 }
 export function registerPunchRoutes(r, needUser, env) {
     r.get("/projects/:projectId/punch", needUser, async (c) => {
@@ -89,6 +175,10 @@ export function registerPunchRoutes(r, needUser, env) {
             priority: z.nativeEnum(PunchPriority).optional(),
             status: z.nativeEnum(PunchStatus).optional(),
             assigneeId: z.union([z.string().min(1), z.null()]).optional(),
+            assigneeIds: z.array(z.string().min(1)).max(20).optional(),
+            fileId: z.string().nullable().optional(),
+            fileVersionId: z.string().nullable().optional(),
+            pageNumber: z.number().int().min(1).max(10000).nullable().optional(),
             dueDateYmd: z
                 .string()
                 .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -100,19 +190,22 @@ export function registerPunchRoutes(r, needUser, env) {
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
-        const assigneeId = body.data.assigneeId === undefined
-            ? undefined
-            : body.data.assigneeId === null
-                ? null
-                : body.data.assigneeId;
-        if (assigneeId) {
-            const check = await assertUserAssignableToProject(assigneeId, projectId, res.project.workspaceId);
+        const assigneeIds = body.data.assigneeIds !== undefined
+            ? [...new Set(body.data.assigneeIds.filter((x) => x.trim().length > 0))]
+            : body.data.assigneeId
+                ? [body.data.assigneeId]
+                : [];
+        for (const userId of assigneeIds) {
+            const check = await assertUserAssignableToProject(userId, projectId, res.project.workspaceId);
             if ("error" in check)
                 return c.json({ error: check.error }, check.status);
         }
+        const draw = await resolvePunchDrawingFields(projectId, body.data.fileId, body.data.fileVersionId, body.data.pageNumber);
+        if ("error" in draw)
+            return c.json({ error: draw.error }, 400);
         const row = await prisma.$transaction(async (tx) => {
             const punchNumber = await nextPunchNumber(tx, projectId);
-            return tx.punchItem.create({
+            const created = await tx.punchItem.create({
                 data: {
                     projectId,
                     punchNumber,
@@ -122,7 +215,10 @@ export function registerPunchRoutes(r, needUser, env) {
                     priority: body.data.priority ?? PunchPriority.P2,
                     status: body.data.status ?? PunchStatus.OPEN,
                     notes: body.data.notes,
-                    assigneeId,
+                    assigneeId: assigneeIds[0] ?? null,
+                    fileId: draw.fileId,
+                    fileVersionId: draw.fileVersionId,
+                    pageNumber: draw.pageNumber,
                     dueDate: body.data.dueDateYmd ? dateFromYmd(body.data.dueDateYmd) : null,
                     templateId: body.data.templateId === undefined
                         ? undefined
@@ -132,6 +228,8 @@ export function registerPunchRoutes(r, needUser, env) {
                 },
                 include: punchInclude,
             });
+            await syncPunchAssigneeLinks(tx, created.id, assigneeIds);
+            return tx.punchItem.findUniqueOrThrow({ where: { id: created.id }, include: punchInclude });
         });
         await logActivity(res.project.workspaceId, ActivityType.PUNCH_CREATED, {
             actorUserId: c.get("user").id,
@@ -139,7 +237,186 @@ export function registerPunchRoutes(r, needUser, env) {
             projectId,
             metadata: { location: row.location, trade: row.trade, punchNumber: row.punchNumber },
         });
+        if (assigneeIds.length > 0) {
+            const rowAssignees = row.assigneeLinks.map((l) => l.user);
+            const actor = await prisma.user.findUnique({
+                where: { id: c.get("user").id },
+                select: { name: true },
+            });
+            const assignerName = actor?.name?.trim() || "Someone";
+            const punchListUrl = buildPunchListUrl(env, projectId, row.id);
+            for (const a of rowAssignees) {
+                void sendPunchAssignedEmail(env, {
+                    assigneeEmail: a.email,
+                    assignerName,
+                    projectName: res.project.name,
+                    punchListUrl,
+                    punchNumber: row.punchNumber,
+                    punchTitle: row.title,
+                }).catch((e) => console.error("[punch-email]", e));
+            }
+            const titleBase = `Punch #${row.punchNumber}: ${row.title}`;
+            void createUserNotifications({
+                workspaceId: res.project.workspaceId,
+                projectId,
+                recipientUserIds: rowAssignees.map((a) => a.id),
+                kind: "PUNCH_ASSIGNED",
+                title: titleBase.length > 120 ? `${titleBase.slice(0, 120)}…` : titleBase,
+                body: res.project.name,
+                href: buildPunchListPath(projectId, row.id),
+                actorUserId: c.get("user").id,
+            }).catch((e) => console.error("[punch-notification]", e));
+        }
         return c.json(punchJson(row));
+    });
+    /* Static paths under /punch must be registered before /:punchId so "templates" is never treated as an id. */
+    r.get("/projects/:projectId/punch/templates", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const res = await loadProjectForMember(projectId, c.get("user").id);
+        if ("error" in res)
+            return c.json({ error: res.error }, res.status);
+        const rows = await prisma.punchTemplate.findMany({
+            where: {
+                workspaceId: res.project.workspaceId,
+                isArchived: false,
+                OR: [{ projectId }, { projectId: null }],
+            },
+            orderBy: [{ projectId: "desc" }, { updatedAt: "desc" }],
+        });
+        return c.json(rows.map((row) => ({
+            ...row,
+            createdAt: row.createdAt.toISOString(),
+            updatedAt: row.updatedAt.toISOString(),
+        })));
+    });
+    r.post("/projects/:projectId/punch/templates", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const res = await loadProjectForMember(projectId, c.get("user").id);
+        if ("error" in res)
+            return c.json({ error: res.error }, res.status);
+        const gate = requirePro(res.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const body = z
+            .object({
+            name: z.string().min(1).max(180),
+            description: z.string().max(1000).optional(),
+            scope: z.enum(["WORKSPACE", "PROJECT"]).default("PROJECT"),
+            items: z
+                .array(z.object({
+                title: z.string().min(1).max(200),
+                location: z.string().min(1).max(500),
+                trade: z.string().min(1).max(120),
+                priority: z.nativeEnum(PunchPriority).optional(),
+                notes: z.string().max(5000).optional(),
+            }))
+                .min(1)
+                .max(500),
+        })
+            .safeParse(await c.req.json());
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const row = await prisma.punchTemplate.create({
+            data: {
+                workspaceId: res.project.workspaceId,
+                projectId: body.data.scope === "PROJECT" ? projectId : null,
+                name: body.data.name,
+                description: body.data.description,
+                createdById: c.get("user").id,
+                itemsJson: body.data.items,
+            },
+        });
+        return c.json({
+            ...row,
+            createdAt: row.createdAt.toISOString(),
+            updatedAt: row.updatedAt.toISOString(),
+        });
+    });
+    r.post("/projects/:projectId/punch/templates/:templateId/apply", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const templateId = c.req.param("templateId");
+        const res = await loadProjectForMember(projectId, c.get("user").id);
+        if ("error" in res)
+            return c.json({ error: res.error }, res.status);
+        const gate = requirePro(res.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const template = await prisma.punchTemplate.findFirst({
+            where: {
+                id: templateId,
+                workspaceId: res.project.workspaceId,
+                OR: [{ projectId }, { projectId: null }],
+            },
+        });
+        if (!template)
+            return c.json({ error: "Template not found" }, 404);
+        const items = normalizePunchTemplateItemsJson(template.itemsJson);
+        if (items.length === 0)
+            return c.json({ error: "Template has no items" }, 400);
+        const created = await prisma.$transaction(async (tx) => {
+            let n = await nextPunchNumber(tx, projectId);
+            const createdIds = [];
+            for (const it of items) {
+                const row = await tx.punchItem.create({
+                    data: {
+                        projectId,
+                        punchNumber: n,
+                        templateId: template.id,
+                        title: it.title?.trim() || "Punch item",
+                        location: it.location?.trim() || "TBD",
+                        trade: it.trade?.trim() || "General",
+                        priority: it.priority ?? PunchPriority.P2,
+                        status: PunchStatus.OPEN,
+                        notes: it.notes?.trim() || null,
+                    },
+                });
+                createdIds.push(row.id);
+                n += 1;
+            }
+            return createdIds.length;
+        });
+        await logActivitySafe(res.project.workspaceId, ActivityType.PUNCH_CREATED, {
+            actorUserId: c.get("user").id,
+            projectId,
+            metadata: { templateId: template.id, templateName: template.name, count: created },
+        });
+        return c.json({ ok: true, created });
+    });
+    r.get("/projects/:projectId/punch/export.csv", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const res = await loadProjectForMember(projectId, c.get("user").id);
+        if ("error" in res)
+            return c.json({ error: res.error }, res.status);
+        const gate = requirePro(res.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const rows = await prisma.punchItem.findMany({
+            where: { projectId },
+            include: punchInclude,
+            orderBy: [{ punchNumber: "desc" }],
+        });
+        const escape = (v) => `"${v.replaceAll(`"`, `""`)}"`;
+        const csv = [
+            "punchNumber,id,title,location,trade,priority,status,assignee,dueDate,notes,updatedAt",
+            ...rows.map((row) => [
+                row.punchNumber,
+                row.id,
+                row.title,
+                row.location,
+                row.trade,
+                row.priority,
+                row.status,
+                row.assignee?.name ?? "",
+                row.dueDate ? row.dueDate.toISOString().slice(0, 10) : "",
+                row.notes ?? "",
+                row.updatedAt.toISOString(),
+            ]
+                .map((v) => escape(String(v)))
+                .join(",")),
+        ].join("\n");
+        c.header("Content-Type", "text/csv; charset=utf-8");
+        c.header("Content-Disposition", `attachment; filename="punch-${projectId}.csv"`);
+        return c.body(csv);
     });
     r.post("/projects/:projectId/punch/:punchId/photos/presign", needUser, async (c) => {
         const projectId = c.req.param("projectId");
@@ -327,6 +604,10 @@ export function registerPunchRoutes(r, needUser, env) {
             priority: z.nativeEnum(PunchPriority).optional(),
             status: z.nativeEnum(PunchStatus).optional(),
             assigneeId: z.union([z.string().min(1), z.null()]).optional(),
+            assigneeIds: z.array(z.string().min(1)).max(20).nullable().optional(),
+            fileId: z.string().nullable().optional(),
+            fileVersionId: z.string().nullable().optional(),
+            pageNumber: z.number().int().min(1).max(10000).nullable().optional(),
             dueDateYmd: z
                 .string()
                 .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -340,7 +621,12 @@ export function registerPunchRoutes(r, needUser, env) {
                 fileName: z.string().min(1).max(220),
                 contentType: z.string().max(120).optional(),
                 createdAt: z.string().max(80).optional(),
-                sizeBytes: z.number().int().min(0).max(80 * 1024 * 1024).optional(),
+                sizeBytes: z
+                    .number()
+                    .int()
+                    .min(0)
+                    .max(80 * 1024 * 1024)
+                    .optional(),
             }))
                 .max(MAX_PUNCH_REFERENCE_PHOTOS)
                 .nullable()
@@ -349,11 +635,29 @@ export function registerPunchRoutes(r, needUser, env) {
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
-        if (body.data.assigneeId) {
+        const patchAssigneeIds = body.data.assigneeIds === undefined
+            ? undefined
+            : body.data.assigneeIds === null
+                ? []
+                : [...new Set(body.data.assigneeIds.filter((x) => x.trim().length > 0))];
+        if (patchAssigneeIds) {
+            for (const userId of patchAssigneeIds) {
+                const check = await assertUserAssignableToProject(userId, projectId, res.project.workspaceId);
+                if ("error" in check)
+                    return c.json({ error: check.error }, check.status);
+            }
+        }
+        else if (body.data.assigneeId) {
             const check = await assertUserAssignableToProject(body.data.assigneeId, projectId, res.project.workspaceId);
             if ("error" in check)
                 return c.json({ error: check.error }, check.status);
         }
+        const previousAssigneeIds = (await prisma.punchAssigneeLink.findMany({
+            where: { punchItemId: existing.id },
+            select: { userId: true },
+        })).map((x) => x.userId);
+        if (previousAssigneeIds.length === 0 && existing.assigneeId)
+            previousAssigneeIds.push(existing.assigneeId);
         const prevPhotos = parsePunchReferencePhotos(existing.referencePhotos);
         let nextReferencePhotos;
         let photosToDeleteFromS3 = [];
@@ -376,7 +680,9 @@ export function registerPunchRoutes(r, needUser, env) {
             }
             nextReferencePhotos = incoming.map((r) => {
                 const match = prevPhotos.find((p) => p.id === r.id && p.s3Key === r.s3Key);
-                const sizeBytes = typeof r.sizeBytes === "number" && r.sizeBytes > 0 ? r.sizeBytes : (match?.sizeBytes ?? 0);
+                const sizeBytes = typeof r.sizeBytes === "number" && r.sizeBytes > 0
+                    ? r.sizeBytes
+                    : (match?.sizeBytes ?? 0);
                 return {
                     id: r.id,
                     s3Key: r.s3Key,
@@ -396,11 +702,17 @@ export function registerPunchRoutes(r, needUser, env) {
             : body.data.dueDateYmd === null
                 ? null
                 : dateFromYmd(body.data.dueDateYmd);
-        const completedAt = nextStatus === undefined
-            ? undefined
-            : nextStatus === PunchStatus.CLOSED
-                ? new Date()
-                : null;
+        const completedAt = nextStatus === undefined ? undefined : nextStatus === PunchStatus.CLOSED ? new Date() : null;
+        const drawingTouched = body.data.fileId !== undefined ||
+            body.data.fileVersionId !== undefined ||
+            body.data.pageNumber !== undefined;
+        let drawingPatch;
+        if (drawingTouched) {
+            const draw = await resolvePunchDrawingFields(projectId, body.data.fileId !== undefined ? body.data.fileId : existing.fileId, body.data.fileVersionId !== undefined ? body.data.fileVersionId : existing.fileVersionId, body.data.pageNumber !== undefined ? body.data.pageNumber : existing.pageNumber);
+            if ("error" in draw)
+                return c.json({ error: draw.error }, 400);
+            drawingPatch = draw;
+        }
         const row = await prisma.$transaction(async (tx) => {
             if (bytesRemovedFromPhotos > 0n) {
                 await tx.workspace.update({
@@ -408,7 +720,7 @@ export function registerPunchRoutes(r, needUser, env) {
                     data: { storageUsedBytes: { decrement: bytesRemovedFromPhotos } },
                 });
             }
-            return tx.punchItem.update({
+            await tx.punchItem.update({
                 where: { id: punchId },
                 data: {
                     ...(body.data.title !== undefined ? { title: body.data.title } : {}),
@@ -417,6 +729,13 @@ export function registerPunchRoutes(r, needUser, env) {
                     ...(body.data.priority !== undefined ? { priority: body.data.priority } : {}),
                     ...(body.data.status !== undefined ? { status: body.data.status } : {}),
                     ...(body.data.assigneeId !== undefined ? { assigneeId: body.data.assigneeId } : {}),
+                    ...(drawingPatch
+                        ? {
+                            fileId: drawingPatch.fileId,
+                            fileVersionId: drawingPatch.fileVersionId,
+                            pageNumber: drawingPatch.pageNumber,
+                        }
+                        : {}),
                     ...(dueDate !== undefined ? { dueDate } : {}),
                     ...(body.data.notes !== undefined ? { notes: body.data.notes } : {}),
                     ...(completedAt !== undefined ? { completedAt } : {}),
@@ -430,6 +749,14 @@ export function registerPunchRoutes(r, needUser, env) {
                 },
                 include: punchInclude,
             });
+            if (patchAssigneeIds !== undefined) {
+                await syncPunchAssigneeLinks(tx, punchId, patchAssigneeIds);
+                await tx.punchItem.update({
+                    where: { id: punchId },
+                    data: { assigneeId: patchAssigneeIds[0] ?? null },
+                });
+            }
+            return tx.punchItem.findUniqueOrThrow({ where: { id: punchId }, include: punchInclude });
         });
         for (const ph of photosToDeleteFromS3) {
             const del = await deleteObject(env, ph.s3Key);
@@ -443,6 +770,42 @@ export function registerPunchRoutes(r, needUser, env) {
             projectId,
             metadata: { location: row.location, trade: row.trade, status: row.status },
         });
+        const newAssigneeSet = patchAssigneeIds !== undefined
+            ? new Set(patchAssigneeIds)
+            : new Set(row.assigneeLinks.map((l) => l.userId));
+        const oldAssigneeSet = new Set(previousAssigneeIds);
+        const newlyAssignedIds = [...newAssigneeSet].filter((id) => !oldAssigneeSet.has(id));
+        if (newlyAssignedIds.length > 0) {
+            const actor = await prisma.user.findUnique({
+                where: { id: c.get("user").id },
+                select: { name: true },
+            });
+            const assignerName = actor?.name?.trim() || "Someone";
+            const punchListUrl = buildPunchListUrl(env, projectId, row.id);
+            for (const a of row.assigneeLinks
+                .map((l) => l.user)
+                .filter((x) => newlyAssignedIds.includes(x.id))) {
+                void sendPunchAssignedEmail(env, {
+                    assigneeEmail: a.email,
+                    assignerName,
+                    projectName: res.project.name,
+                    punchListUrl,
+                    punchNumber: row.punchNumber,
+                    punchTitle: row.title,
+                }).catch((e) => console.error("[punch-email]", e));
+            }
+            const titleBase = `Punch #${row.punchNumber}: ${row.title}`;
+            void createUserNotifications({
+                workspaceId: res.project.workspaceId,
+                projectId,
+                recipientUserIds: newlyAssignedIds,
+                kind: "PUNCH_ASSIGNED",
+                title: titleBase.length > 120 ? `${titleBase.slice(0, 120)}…` : titleBase,
+                body: res.project.name,
+                href: buildPunchListPath(projectId, row.id),
+                actorUserId: c.get("user").id,
+            }).catch((e) => console.error("[punch-notification]", e));
+        }
         return c.json(punchJson(row));
     });
     r.post("/projects/:projectId/punch/bulk", needUser, async (c) => {
@@ -478,6 +841,20 @@ export function registerPunchRoutes(r, needUser, env) {
             where: { projectId, id: { in: body.data.ids } },
             data: update,
         });
+        if (body.data.assigneeId !== undefined) {
+            await prisma.punchAssigneeLink.deleteMany({
+                where: { punchItemId: { in: body.data.ids } },
+            });
+            if (body.data.assigneeId !== null) {
+                await prisma.punchAssigneeLink.createMany({
+                    data: body.data.ids.map((punchItemId) => ({
+                        punchItemId,
+                        userId: body.data.assigneeId,
+                    })),
+                    skipDuplicates: true,
+                });
+            }
+        }
         await logActivitySafe(res.project.workspaceId, ActivityType.PUNCH_UPDATED, {
             actorUserId: c.get("user").id,
             projectId,
@@ -488,6 +865,53 @@ export function registerPunchRoutes(r, needUser, env) {
                 assigneeChanged: body.data.assigneeId !== undefined,
             },
         });
+        if (body.data.assigneeId !== undefined && body.data.assigneeId !== null) {
+            const assignee = await prisma.user.findUnique({
+                where: { id: body.data.assigneeId },
+                select: { email: true },
+            });
+            const email = assignee?.email?.trim();
+            if (email) {
+                const actor = await prisma.user.findUnique({
+                    where: { id: c.get("user").id },
+                    select: { name: true },
+                });
+                const assignerName = actor?.name?.trim() || "Someone";
+                const n = body.data.ids.length;
+                const one = n === 1
+                    ? await prisma.punchItem.findFirst({
+                        where: { projectId, id: body.data.ids[0] },
+                        select: { id: true, punchNumber: true, title: true },
+                    })
+                    : null;
+                const punchListUrl = buildPunchListUrl(env, projectId, one?.id ?? null);
+                const bulkCount = n > 1 ? n : undefined;
+                void sendPunchAssignedEmail(env, {
+                    assigneeEmail: email,
+                    assignerName,
+                    projectName: res.project.name,
+                    punchListUrl,
+                    ...(bulkCount !== undefined ? { bulkCount } : {}),
+                    ...(one ? { punchNumber: one.punchNumber, punchTitle: one.title } : {}),
+                }).catch((e) => console.error("[punch-email-bulk]", e));
+                const notifTitle = one != null
+                    ? (() => {
+                        const t = `Punch #${one.punchNumber}: ${one.title}`;
+                        return t.length > 120 ? `${t.slice(0, 120)}…` : t;
+                    })()
+                    : `${n} punch item${n === 1 ? "" : "s"} assigned`;
+                void createUserNotifications({
+                    workspaceId: res.project.workspaceId,
+                    projectId,
+                    recipientUserIds: [body.data.assigneeId],
+                    kind: "PUNCH_ASSIGNED",
+                    title: notifTitle,
+                    body: res.project.name,
+                    href: buildPunchListPath(projectId, one?.id ?? null),
+                    actorUserId: c.get("user").id,
+                }).catch((e) => console.error("[punch-notification-bulk]", e));
+            }
+        }
         return c.json({ ok: true });
     });
     r.delete("/projects/:projectId/punch/:punchId", needUser, async (c) => {
@@ -526,154 +950,5 @@ export function registerPunchRoutes(r, needUser, env) {
             metadata: { location: existing.location, trade: existing.trade },
         });
         return c.json({ ok: true });
-    });
-    r.get("/projects/:projectId/punch/export.csv", needUser, async (c) => {
-        const projectId = c.req.param("projectId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
-        if (gate)
-            return c.json({ error: gate.error }, gate.status);
-        const rows = await prisma.punchItem.findMany({
-            where: { projectId },
-            include: punchInclude,
-            orderBy: [{ punchNumber: "desc" }],
-        });
-        const escape = (v) => `"${v.replaceAll(`"`, `""`)}"`;
-        const csv = [
-            "punchNumber,id,title,location,trade,priority,status,assignee,dueDate,notes,updatedAt",
-            ...rows.map((row) => [
-                row.punchNumber,
-                row.id,
-                row.title,
-                row.location,
-                row.trade,
-                row.priority,
-                row.status,
-                row.assignee?.name ?? "",
-                row.dueDate ? row.dueDate.toISOString().slice(0, 10) : "",
-                row.notes ?? "",
-                row.updatedAt.toISOString(),
-            ]
-                .map((v) => escape(String(v)))
-                .join(",")),
-        ].join("\n");
-        c.header("Content-Type", "text/csv; charset=utf-8");
-        c.header("Content-Disposition", `attachment; filename="punch-${projectId}.csv"`);
-        return c.body(csv);
-    });
-    r.get("/projects/:projectId/punch/templates", needUser, async (c) => {
-        const projectId = c.req.param("projectId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const rows = await prisma.punchTemplate.findMany({
-            where: {
-                workspaceId: res.project.workspaceId,
-                isArchived: false,
-                OR: [{ projectId }, { projectId: null }],
-            },
-            orderBy: [{ projectId: "desc" }, { updatedAt: "desc" }],
-        });
-        return c.json(rows.map((row) => ({
-            ...row,
-            createdAt: row.createdAt.toISOString(),
-            updatedAt: row.updatedAt.toISOString(),
-        })));
-    });
-    r.post("/projects/:projectId/punch/templates", needUser, async (c) => {
-        const projectId = c.req.param("projectId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
-        if (gate)
-            return c.json({ error: gate.error }, gate.status);
-        const body = z
-            .object({
-            name: z.string().min(1).max(180),
-            description: z.string().max(1000).optional(),
-            scope: z.enum(["WORKSPACE", "PROJECT"]).default("PROJECT"),
-            items: z
-                .array(z.object({
-                title: z.string().min(1).max(200),
-                location: z.string().min(1).max(500),
-                trade: z.string().min(1).max(120),
-                priority: z.nativeEnum(PunchPriority).optional(),
-                notes: z.string().max(5000).optional(),
-            }))
-                .min(1)
-                .max(500),
-        })
-            .safeParse(await c.req.json());
-        if (!body.success)
-            return c.json({ error: body.error.flatten() }, 400);
-        const row = await prisma.punchTemplate.create({
-            data: {
-                workspaceId: res.project.workspaceId,
-                projectId: body.data.scope === "PROJECT" ? projectId : null,
-                name: body.data.name,
-                description: body.data.description,
-                createdById: c.get("user").id,
-                itemsJson: body.data.items,
-            },
-        });
-        return c.json({
-            ...row,
-            createdAt: row.createdAt.toISOString(),
-            updatedAt: row.updatedAt.toISOString(),
-        });
-    });
-    r.post("/projects/:projectId/punch/templates/:templateId/apply", needUser, async (c) => {
-        const projectId = c.req.param("projectId");
-        const templateId = c.req.param("templateId");
-        const res = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in res)
-            return c.json({ error: res.error }, res.status);
-        const gate = requirePro(res.project.workspace);
-        if (gate)
-            return c.json({ error: gate.error }, gate.status);
-        const template = await prisma.punchTemplate.findFirst({
-            where: {
-                id: templateId,
-                workspaceId: res.project.workspaceId,
-                OR: [{ projectId }, { projectId: null }],
-            },
-        });
-        if (!template)
-            return c.json({ error: "Template not found" }, 404);
-        const itemsRaw = Array.isArray(template.itemsJson) ? template.itemsJson : [];
-        const items = itemsRaw;
-        if (items.length === 0)
-            return c.json({ error: "Template has no items" }, 400);
-        const created = await prisma.$transaction(async (tx) => {
-            let n = await nextPunchNumber(tx, projectId);
-            const createdIds = [];
-            for (const it of items) {
-                const row = await tx.punchItem.create({
-                    data: {
-                        projectId,
-                        punchNumber: n,
-                        templateId: template.id,
-                        title: it.title?.trim() || "Punch item",
-                        location: it.location?.trim() || "TBD",
-                        trade: it.trade?.trim() || "General",
-                        priority: it.priority ?? PunchPriority.P2,
-                        status: PunchStatus.OPEN,
-                        notes: it.notes?.trim() || null,
-                    },
-                });
-                createdIds.push(row.id);
-                n += 1;
-            }
-            return createdIds.length;
-        });
-        await logActivitySafe(res.project.workspaceId, ActivityType.PUNCH_CREATED, {
-            actorUserId: c.get("user").id,
-            projectId,
-            metadata: { templateId: template.id, templateName: template.name, count: created },
-        });
-        return c.json({ ok: true, created });
     });
 }

@@ -49,6 +49,12 @@ export async function mergeSheetAiPageInDb(fileVersionId, pageIndex0, patch) {
         tableOfContents: patch.tableOfContents ?? prev.tableOfContents,
         updatedAt: new Date().toISOString(),
     };
+    if (patch.takeoffAssist !== undefined) {
+        next.takeoffAssist = patch.takeoffAssist;
+    }
+    else if (prev.takeoffAssist) {
+        next.takeoffAssist = prev.takeoffAssist;
+    }
     if (patch.chatMessages !== undefined) {
         next.chatMessages = patch.chatMessages;
     }
@@ -67,6 +73,9 @@ export async function saveSheetAiSummaryToDb(fileVersionId, pageIndex0, payload)
         readingsTable: payload.readingsTable,
         tableOfContents: payload.tableOfContents,
     });
+}
+export async function saveTakeoffAssistToDb(fileVersionId, pageIndex0, takeoffAssist) {
+    await mergeSheetAiPageInDb(fileVersionId, pageIndex0, { takeoffAssist });
 }
 const MAX_CACHED_CHAT_MESSAGES = 48;
 export async function saveSheetAiChatToDb(fileVersionId, pageIndex0, chatMessages) {

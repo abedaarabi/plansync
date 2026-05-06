@@ -1,5 +1,4 @@
 import type { Project, Workspace } from "@prisma/client";
-import { WorkspaceRole } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import {
   isWorkspaceAdmin as isWorkspaceAdminFromPermissions,

@@ -7,7 +7,7 @@ import {
 
 function mockController() {
   const controller = {
-    enqueue: (_u: Uint8Array) => {
+    enqueue: () => {
       /* no-op */
     },
     close: () => {

@@ -452,7 +452,7 @@ export function buildViewerCollabWsHandler(args: {
     onOpen(_evt, ws) {
       registerViewerCollabWs(fileVersionId, connectionId, ws);
     },
-    onMessage(evt, ws) {
+    onMessage(evt) {
       if (typeof evt.data !== "string") return;
       let j: {
         type?: string;
@@ -489,7 +489,7 @@ export function buildViewerCollabWsHandler(args: {
         broadcastSelection(fileVersionId, connectionId, userId, annotationIds, listInPresence);
       }
     },
-    onClose(_evt, ws) {
+    onClose() {
       unregisterViewerCollabWs(fileVersionId, connectionId);
     },
   };

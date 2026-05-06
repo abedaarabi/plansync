@@ -54,6 +54,11 @@ export const qk = {
       issueKind ?? "all",
       assetId ?? "all",
     ] as const,
+  /** Single issue row (detail routes, cache merge after PATCH). */
+  issueById: (issueId: string) => ["issues", "byId", issueId] as const,
+  /** Short-lived S3 GET URL for issue reference photo. */
+  issueRefPhotoReadUrl: (issueId: string, photoId: string) =>
+    ["issues", "refPhotoReadUrl", issueId, photoId] as const,
   omHandover: (projectId: string) => ["om", "handover", projectId] as const,
   omFmDashboard: (projectId: string) => ["om", "fmDashboard", projectId] as const,
   omAssets: (projectId: string, searchQ?: string) =>
@@ -67,6 +72,7 @@ export const qk = {
   omInspectionTemplates: (projectId: string) => ["om", "inspectionTemplates", projectId] as const,
   omInspectionRuns: (projectId: string) => ["om", "inspectionRuns", projectId] as const,
   occupantTokens: (projectId: string) => ["om", "occupantTokens", projectId] as const,
+  occupantTokensRevoked: (projectId: string) => ["om", "occupantTokensRevoked", projectId] as const,
   /** Persisted Sheet AI smart sheet + chat (GET cache; invalidate after POST summary/chat). */
   sheetAiSheetCache: (fileVersionId: string, pageIndex0: number) =>
     ["sheetAi", "sheetCache", fileVersionId, pageIndex0] as const,

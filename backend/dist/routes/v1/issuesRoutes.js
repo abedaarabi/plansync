@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ActivityType, IssueKind, IssuePriority, IssueStatus, RfiStatus, } from "@prisma/client";
 import { Resend } from "resend";
 import { prisma } from "../../lib/prisma.js";
+import { fileVersionWriteBlocked } from "../../lib/fileVersionLock.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectForMember, assertUserAssignableToProject } from "../../lib/projectAccess.js";
 import { canCreateIssues, issuesWhereForAuth, loadProjectWithAuth } from "../../lib/permissions.js";
@@ -14,74 +15,41 @@ import { buildIssueAssignedEmailHtml, buildIssueAssignedEmailText, buildViewerIs
 import { createUserNotifications } from "../../lib/userNotifications.js";
 import { broadcastViewerState } from "../../lib/viewerCollabHub.js";
 import { collaborationGloballyEnabled } from "../../lib/viewerCollabPolicy.js";
+import { ALLOWED_ISSUE_PHOTO_CONTENT_TYPES, issuePhotosStorageBytes, MAX_ISSUE_PHOTO_BYTES, MAX_ISSUE_PHOTO_SKETCH_BYTES, MAX_ISSUE_REFERENCE_PHOTOS, parseReferencePhotos, referencePhotosToJsonValue, sketchJsonByteSize, } from "../../lib/issueReferencePhotos.js";
 function requirePro(workspace) {
     if (!isWorkspacePro(workspace)) {
         return { error: "Pro subscription required", status: 402 };
     }
     return null;
 }
-const MAX_ISSUE_REFERENCE_PHOTOS = 12;
-const MAX_ISSUE_PHOTO_BYTES = 15n * 1024n * 1024n;
-const MAX_ISSUE_PHOTO_SKETCH_BYTES = 48_000;
-const ALLOWED_ISSUE_PHOTO_CONTENT_TYPES = new Set([
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    /** Common default from iPhone / iPad camera. */
-    "image/heic",
-    "image/heif",
-]);
-function sketchJsonByteSize(sk) {
-    try {
-        return new TextEncoder().encode(JSON.stringify(sk)).length;
-    }
-    catch {
-        return MAX_ISSUE_PHOTO_SKETCH_BYTES + 1;
-    }
-}
-function parseReferencePhotos(v) {
-    if (!Array.isArray(v))
-        return [];
-    const out = [];
-    for (const x of v) {
-        if (!x || typeof x !== "object")
-            continue;
-        const o = x;
-        const id = typeof o.id === "string" && o.id.trim() ? o.id.trim().slice(0, 80) : "";
-        const s3Key = typeof o.s3Key === "string" && o.s3Key.trim() ? o.s3Key.trim().slice(0, 500) : "";
-        const fileName = typeof o.fileName === "string" && o.fileName.trim() ? o.fileName.trim().slice(0, 200) : "";
-        if (!id || !s3Key || !fileName)
-            continue;
-        const contentType = typeof o.contentType === "string" ? o.contentType.trim().slice(0, 120) : undefined;
-        const createdAt = typeof o.createdAt === "string" && o.createdAt.trim()
-            ? o.createdAt.trim().slice(0, 80)
-            : new Date().toISOString();
-        let sizeBytes = 0;
-        if (typeof o.sizeBytes === "number" && Number.isFinite(o.sizeBytes) && o.sizeBytes >= 0) {
-            sizeBytes = Math.min(Math.floor(o.sizeBytes), 80 * 1024 * 1024);
+const VALID_ISSUE_KIND_QUERY = new Set(["CONSTRUCTION", "WORK_ORDER", "OCCUPANT"]);
+/** Single `issueKind` or comma-separated `issueKinds=WORK_ORDER,OCCUPANT`. */
+function parseIssueKindsFromQuery(c) {
+    const multi = c.req.query("issueKinds")?.trim();
+    if (multi) {
+        const parts = multi
+            .split(/,/g)
+            .map((s) => s.trim())
+            .filter(Boolean);
+        const out = [];
+        for (const p of parts) {
+            if (VALID_ISSUE_KIND_QUERY.has(p))
+                out.push(p);
         }
-        const sketchRaw = "sketch" in o ? o.sketch : undefined;
-        const sketch = sketchRaw !== undefined && sketchJsonByteSize(sketchRaw) <= MAX_ISSUE_PHOTO_SKETCH_BYTES
-            ? sketchRaw
-            : undefined;
-        out.push({
-            id,
-            s3Key,
-            fileName,
-            contentType,
-            createdAt,
-            sizeBytes,
-            ...(sketch !== undefined ? { sketch } : {}),
-        });
+        const uniq = [...new Set(out)];
+        return uniq.length ? uniq : undefined;
     }
-    return out.slice(0, MAX_ISSUE_REFERENCE_PHOTOS);
+    const one = c.req.query("issueKind")?.trim();
+    if (one && VALID_ISSUE_KIND_QUERY.has(one))
+        return [one];
+    return undefined;
 }
-function referencePhotosToJsonValue(photos) {
-    return JSON.parse(JSON.stringify(photos));
-}
-function issuePhotosStorageBytes(photos) {
-    return photos.reduce((n, p) => n + BigInt(p.sizeBytes || 0), 0n);
+function issueKindWhere(kinds) {
+    if (!kinds?.length)
+        return {};
+    if (kinds.length === 1)
+        return { issueKind: kinds[0] };
+    return { issueKind: { in: kinds } };
 }
 /** Parse `YYYY-MM-DD` from client date inputs; noon UTC avoids TZ edge shifts. */
 function dateFromYmd(s) {
@@ -102,7 +70,10 @@ const issueInclude = {
     },
 };
 const CARRY_FORWARD_META_KEY = "__carryForwardFromFileVersionId";
-function issueRowJson(row) {
+function issueRowJson(row, opts) {
+    const mask = Boolean(opts?.maskPortalReporter) &&
+        row.issueKind === IssueKind.OCCUPANT &&
+        Boolean(row.reporterEmail || row.reporterName);
     return {
         id: row.id,
         workspaceId: row.workspaceId,
@@ -157,8 +128,8 @@ function issueRowJson(row) {
         externalAssigneeName: row.externalAssigneeName,
         acknowledgedAt: row.acknowledgedAt ? row.acknowledgedAt.toISOString() : null,
         resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
-        reporterName: row.reporterName,
-        reporterEmail: row.reporterEmail,
+        reporterName: mask ? null : row.reporterName,
+        reporterEmail: mask ? null : row.reporterEmail,
     };
 }
 function asObject(v) {
@@ -214,17 +185,6 @@ function stripIssueLinkedAnnotationsFromViewerBlob(blobUnknown, issueId, issueAn
         return null;
     return { ...blobObj, annotations: nextAnnotations };
 }
-async function fileVersionWriteBlocked(fileVersionId, userId) {
-    const fv = await prisma.fileVersion.findUnique({
-        where: { id: fileVersionId },
-        select: { lockedByUserId: true, lockExpiresAt: true },
-    });
-    if (!fv?.lockedByUserId)
-        return false;
-    if (fv.lockExpiresAt && fv.lockExpiresAt < new Date())
-        return false;
-    return fv.lockedByUserId !== userId;
-}
 async function sendIssueAssignedEmail(env, input) {
     const key = env.RESEND_API_KEY?.trim();
     const from = inviteFromAddress(env);
@@ -256,31 +216,28 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
         });
         if (!fv)
             return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+        const access = await loadProjectWithAuth(fv.file.projectId, c.get("user").id);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
-        const gate = requirePro(access.project.workspace);
+        const gate = requirePro(access.ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
-        const issueKindRaw = c.req.query("issueKind")?.trim();
-        const issueKind = issueKindRaw === "WORK_ORDER" || issueKindRaw === "CONSTRUCTION"
-            ? issueKindRaw
-            : undefined;
+        const kinds = parseIssueKindsFromQuery(c);
+        const kindClause = issueKindWhere(kinds);
         const rows = await prisma.issue.findMany({
-            where: { fileVersionId, ...(issueKind ? { issueKind } : {}) },
+            where: { fileVersionId, ...kindClause },
             include: issueInclude,
             orderBy: { createdAt: "desc" },
         });
-        return c.json(rows.map(issueRowJson));
+        const mask = access.ctx.workspaceMember.isExternal;
+        return c.json(rows.map((row) => issueRowJson(row, { maskPortalReporter: mask })));
     });
     r.get("/projects/:projectId/issues", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const fileVersionId = c.req.query("fileVersionId")?.trim() || undefined;
         const assetIdFilter = c.req.query("assetId")?.trim() || undefined;
-        const issueKindRaw = c.req.query("issueKind")?.trim();
-        const issueKind = issueKindRaw === "WORK_ORDER" || issueKindRaw === "CONSTRUCTION"
-            ? issueKindRaw
-            : undefined;
+        const kinds = parseIssueKindsFromQuery(c);
+        const kindClause = issueKindWhere(kinds);
         const userId = c.get("user").id;
         const auth = await loadProjectWithAuth(projectId, userId);
         if ("error" in auth)
@@ -298,13 +255,14 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
                 projectId,
                 ...(fileVersionId ? { fileVersionId } : {}),
                 ...(assetIdFilter ? { assetId: assetIdFilter } : {}),
-                ...(issueKind ? { issueKind } : {}),
+                ...kindClause,
                 ...scope,
             },
             include: issueInclude,
             orderBy: { createdAt: "desc" },
         });
-        return c.json(rows.map(issueRowJson));
+        const mask = ctx.workspaceMember.isExternal;
+        return c.json(rows.map((row) => issueRowJson(row, { maskPortalReporter: mask })));
     });
     r.get("/issues/:issueId", needUser, async (c) => {
         const issueId = c.req.param("issueId");
@@ -331,7 +289,8 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
         });
         if (allowed === 0)
             return c.json({ error: "Not found" }, 404);
-        return c.json(issueRowJson(row));
+        const mask = ctx.workspaceMember.isExternal;
+        return c.json(issueRowJson(row, { maskPortalReporter: mask }));
     });
     r.post("/issues/:issueId/reference-photos/presign", needUser, async (c) => {
         const issueId = c.req.param("issueId");
@@ -494,7 +453,7 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             });
         });
         notifyIssues(updated.fileVersionId);
-        return c.json(issueRowJson(updated));
+        return c.json(issueRowJson(updated, { maskPortalReporter: ctx.workspaceMember.isExternal }));
     });
     r.get("/issues/:issueId/reference-photos/:photoId/presign-read", needUser, async (c) => {
         const issueId = c.req.param("issueId");
@@ -589,6 +548,9 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
         const gate = requirePro(file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (body.data.issueKind === IssueKind.OCCUPANT) {
+            return c.json({ error: "Tenant requests are created only through the occupant portal" }, 400);
+        }
         const fv = await prisma.fileVersion.findFirst({
             where: { id: body.data.fileVersionId, fileId: file.id },
         });
@@ -761,7 +723,7 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             }).catch((e) => console.error("[issue-email-external]", e));
         }
         notifyIssues(issue.fileVersionId);
-        return c.json(issueRowJson(issue));
+        return c.json(issueRowJson(issue, { maskPortalReporter: ctx.workspaceMember.isExternal }));
     });
     r.post("/file-versions/:newFileVersionId/issues/carry-forward", needUser, async (c) => {
         const newFileVersionId = c.req.param("newFileVersionId");
@@ -917,10 +879,10 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
         });
         if (!issue)
             return c.json({ error: "Not found" }, 404);
-        const issuePatchAccess = await loadProjectForMember(issue.projectId, c.get("user").id);
-        if ("error" in issuePatchAccess)
-            return c.json({ error: issuePatchAccess.error }, issuePatchAccess.status);
-        const gate = requirePro(issuePatchAccess.project.workspace);
+        const issuePatchAuth = await loadProjectWithAuth(issue.projectId, c.get("user").id);
+        if ("error" in issuePatchAuth)
+            return c.json({ error: issuePatchAuth.error }, issuePatchAuth.status);
+        const gate = requirePro(issuePatchAuth.ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
         if (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id)) {
@@ -974,6 +936,19 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
+        if (body.data.issueKind !== undefined) {
+            if (body.data.issueKind === IssueKind.OCCUPANT && issue.issueKind !== IssueKind.OCCUPANT) {
+                return c.json({ error: "Cannot set issue kind to tenant request manually" }, 400);
+            }
+            if (issue.issueKind === IssueKind.OCCUPANT && body.data.issueKind !== IssueKind.WORK_ORDER) {
+                return c.json({ error: "Tenant requests can only be promoted to internal work orders" }, 400);
+            }
+            if (issue.issueKind === IssueKind.OCCUPANT &&
+                body.data.issueKind === IssueKind.WORK_ORDER &&
+                issuePatchAuth.ctx.workspaceMember.isExternal) {
+                return c.json({ error: "Forbidden" }, 403);
+            }
+        }
         const prevPhotosForRef = parseReferencePhotos(issue.referencePhotos);
         let nextReferencePhotos;
         let photosToDeleteFromS3 = [];
@@ -1142,11 +1117,15 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             }
             return tx.issue.findUniqueOrThrow({ where: { id: u.id }, include: issueInclude });
         });
+        const promotedToWo = issue.issueKind === IssueKind.OCCUPANT && body.data.issueKind === IssueKind.WORK_ORDER;
         await logActivity(issue.workspaceId, ActivityType.ISSUE_UPDATED, {
             actorUserId: c.get("user").id,
             entityId: issue.id,
             projectId: issue.projectId,
-            metadata: { title: updated.title },
+            metadata: {
+                title: updated.title,
+                ...(promotedToWo ? { occupantPromotedToWorkOrder: true } : {}),
+            },
         });
         const shouldNotifyAssignee = nextAssigneeId !== undefined && nextAssigneeId !== null && nextAssigneeId !== prevAssigneeId;
         if (shouldNotifyAssignee && updated.assigneeId && updated.assignee?.email) {
@@ -1211,7 +1190,9 @@ export function registerIssuesRoutes(r, needUser, env, opts) {
             void deleteObject(env, p.s3Key).catch((e) => console.error("[issue reference photo delete after patch]", p.s3Key, e));
         }
         notifyIssues(issue.fileVersionId);
-        return c.json(issueRowJson(updated));
+        return c.json(issueRowJson(updated, {
+            maskPortalReporter: issuePatchAuth.ctx.workspaceMember.isExternal,
+        }));
     });
     r.delete("/issues/:issueId", needUser, async (c) => {
         const issueId = c.req.param("issueId");

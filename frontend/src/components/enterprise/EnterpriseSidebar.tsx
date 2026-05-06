@@ -11,6 +11,7 @@ import {
   ChartGantt,
   ChevronDown,
   History,
+  Inbox,
   Pin,
   PinOff,
   ClipboardCheck,
@@ -201,7 +202,7 @@ export function EnterpriseSidebar({
     if (!site) return null;
     const n = normalizeWorkspaceWebsite(site);
     return n.ok ? faviconUrlFromHostname(n.hostname) : null;
-  }, [ws?.logoUrl, ws?.website]);
+  }, [ws]);
 
   const [workspaceLogoFailed, setWorkspaceLogoFailed] = useState(false);
   useEffect(() => {
@@ -296,6 +297,23 @@ export function EnterpriseSidebar({
           label: "Work orders",
           icon: Wrench,
         });
+        omItems.push({
+          href: `${omBase}/issues?issueKind=CONSTRUCTION`,
+          label: "Construction issues",
+          icon: MapPin,
+        });
+        if (mod.omTenantPortal) {
+          omItems.push({
+            href: `${omBase}/om/tenant-portal`,
+            label: "Occupant hub",
+            icon: LayoutDashboard,
+          });
+          omItems.push({
+            href: `${omBase}/om/tenant-requests`,
+            label: "Occupant inbox",
+            icon: Inbox,
+          });
+        }
       }
       if (mod.omMaintenance) {
         omItems.push({
@@ -311,18 +329,11 @@ export function EnterpriseSidebar({
           icon: ClipboardList,
         });
       }
-      if (mod.omTenantPortal) {
-        omItems.push({
-          href: `${omBase}/om/tenant-portal`,
-          label: "Tenant portal",
-          icon: Building2,
-        });
-      }
       sections.push({
         id: "om",
         title: "O&M",
         description:
-          "Operations — handover, assets, work orders, maintenance, inspections, tenant portal",
+          "Operations — handover, assets, work orders, maintenance, inspections, occupant hub",
         railIcon: LayoutGrid,
         railLabel: "O&M",
         items: omItems,

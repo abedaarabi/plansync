@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Download,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -19,7 +20,9 @@ import {
   createOmAsset,
   deleteOmAsset,
   fetchOmAssets,
+  fetchProjectSession,
   fetchProjects,
+  omOccupantAssetQrCsvUrl,
   patchOmAsset,
   type OmAssetRow,
   ProRequiredError,
@@ -369,6 +372,12 @@ export function OmAssetsClient({ projectId }: Props) {
     queryFn: () => fetchOmAssets(projectId, { q: debouncedListQ || undefined }),
   });
 
+  const { data: projectSession } = useQuery({
+    queryKey: qk.projectSession(projectId),
+    queryFn: () => fetchProjectSession(projectId),
+    staleTime: 30_000,
+  });
+
   const needProjectFiles = Boolean(wid && (showAdd || editingAsset || linkAsset || detailAsset));
   const { data: projects = [] } = useQuery({
     queryKey: qk.projects(wid ?? ""),
@@ -608,6 +617,20 @@ export function OmAssetsClient({ projectId }: Props) {
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
+          {projectSession &&
+          projectSession.operationsMode &&
+          projectSession.settings.modules.omTenantPortal &&
+          projectSession.settings.modules.omAssets &&
+          (projectSession.workspaceRole === "SUPER_ADMIN" ||
+            projectSession.workspaceRole === "ADMIN") ? (
+            <a
+              href={omOccupantAssetQrCsvUrl(projectId)}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 self-stretch rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-medium text-[var(--enterprise-text)] shadow-sm hover:bg-[var(--enterprise-bg)] sm:w-auto"
+            >
+              <Download className="h-4 w-4 shrink-0" aria-hidden />
+              Occupant QR URLs (CSV)
+            </a>
+          ) : null}
           <EnterpriseAddPulseWrap className="self-stretch sm:self-start">
             <button
               type="button"

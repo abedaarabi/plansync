@@ -442,10 +442,10 @@ export function IssueFormSlider(props: Props) {
           linkedIssueTitle: row.title,
           issueStatus: row.status,
           color: issueStatusMarkerStrokeHex(row.status),
-          linkedIssueKind: row.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION",
+          linkedIssueKind: row.issueKind === "CONSTRUCTION" ? "CONSTRUCTION" : "WORK_ORDER",
         });
         const pri = row.priority ?? "MEDIUM";
-        const k = row.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION";
+        const k = row.issueKind === "CONSTRUCTION" ? "CONSTRUCTION" : "WORK_ORDER";
         for (const aid of linkedMarkupIds) {
           updateAnnotation(aid, {
             linkedIssueId: row.id,
@@ -500,7 +500,7 @@ export function IssueFormSlider(props: Props) {
           issueStatus: row.status,
           linkedIssueTitle: row.title,
           color: issueStatusMarkerStrokeHex(row.status),
-          linkedIssueKind: row.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION",
+          linkedIssueKind: row.issueKind === "CONSTRUCTION" ? "CONSTRUCTION" : "WORK_ORDER",
         });
       }
       toast.success(viewerOperationsMode ? "Work order updated" : "Issue updated");

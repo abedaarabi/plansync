@@ -25,29 +25,29 @@ model User {
 
   workspaceMembers        WorkspaceMember[]
   projectMembers          ProjectMember[]
-  emailInvitesSent        EmailInvite[]            @relation("EmailInviteInviter")
-  activityLogs            ActivityLog[]            @relation("ActivityActor")
-  issuesAssigned          Issue[]                  @relation("IssueAssignee")
-  issuesCreated           Issue[]                  @relation("IssueCreator")
+  emailInvitesSent        EmailInvite[]             @relation("EmailInviteInviter")
+  activityLogs            ActivityLog[]             @relation("ActivityActor")
+  issuesAssigned          Issue[]                   @relation("IssueAssignee")
+  issuesCreated           Issue[]                   @relation("IssueCreator")
   fileVersions            FileVersion[]
-  rfisCreated             Rfi[]                    @relation("RfiCreator")
-  rfisAssigned            Rfi[]                    @relation("RfiAssignee")
+  rfisCreated             Rfi[]                     @relation("RfiCreator")
+  rfisAssigned            Rfi[]                     @relation("RfiAssignee")
   rfiAssigneeLinks        RfiAssigneeLink[]
-  rfiAttachments          RfiAttachment[]          @relation("RfiAttachmentUploader")
-  assetDocumentsUploaded  AssetDocument[]          @relation("AssetDocumentUploader")
-  rfiMessages             RfiMessage[]             @relation("RfiMessageAuthor")
-  notifications           UserNotification[]       @relation("NotificationRecipient")
-  notificationsAsActor    UserNotification[]       @relation("NotificationActor")
-  proposalsCreated        Proposal[]               @relation("ProposalCreator")
+  rfiAttachments          RfiAttachment[]           @relation("RfiAttachmentUploader")
+  assetDocumentsUploaded  AssetDocument[]           @relation("AssetDocumentUploader")
+  rfiMessages             RfiMessage[]              @relation("RfiMessageAuthor")
+  notifications           UserNotification[]        @relation("NotificationRecipient")
+  notificationsAsActor    UserNotification[]        @relation("NotificationActor")
+  proposalsCreated        Proposal[]                @relation("ProposalCreator")
   proposalDocVersions     ProposalDocumentVersion[] @relation("ProposalDocVersionCreator")
-  proposalComments        ProposalComment[]        @relation("ProposalCommentAuthor")
+  proposalComments        ProposalComment[]         @relation("ProposalCommentAuthor")
   cloudStorageConnections CloudStorageConnection[]
-  punchItemsAssigned      PunchItem[]              @relation("PunchAssignee")
+  punchItemsAssigned      PunchItem[]               @relation("PunchAssignee")
   punchAssigneeLinks      PunchAssigneeLink[]
-  punchTemplatesCreated   PunchTemplate[]          @relation("PunchTemplateCreator")
+  punchTemplatesCreated   PunchTemplate[]           @relation("PunchTemplateCreator")
   punchHistoryActions     PunchItemHistory[]
-  inspectionRunsSignedOff InspectionRun[]          @relation("InspectionRunSignedOff")
-  inspectionRunsCreated   InspectionRun[]          @relation("InspectionRunCreated")
+  inspectionRunsSignedOff InspectionRun[]           @relation("InspectionRunSignedOff")
+  inspectionRunsCreated   InspectionRun[]           @relation("InspectionRunCreated")
   takeoffViewPresets      TakeoffViewPreset[]
   takeoffSyncRuns         TakeoffSyncRun[]
   takeoffSnapshots        TakeoffSnapshot[]
@@ -581,6 +581,8 @@ model FileVersion {
 enum IssueKind {
   CONSTRUCTION
   WORK_ORDER
+  /// Submitted via anonymous occupant / tenant portal (QR or building link).
+  OCCUPANT
 }
 
 enum IssueStatus {
@@ -648,6 +650,10 @@ model Issue {
   reporterName  String?
   reporterEmail String?
 
+  /// Short-lived secret for anonymous reference photo uploads after occupant submit.
+  occupantPhotoToken          String?
+  occupantPhotoTokenExpiresAt DateTime?
+
   workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   file        File        @relation(fields: [fileId], references: [id], onDelete: Cascade)
@@ -701,6 +707,9 @@ model Asset {
   pageNumber    Int?
   annotationId  String?
   pinJson       Json?
+
+  /// Unguessable token for per-asset tenant portal QR (`/occupant/{portal}?a=...`).
+  occupantScanSecret String? @unique
 
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   file        File?        @relation(fields: [fileId], references: [id], onDelete: SetNull)
@@ -1056,34 +1065,34 @@ enum PunchStatus {
 }
 
 model PunchItem {
-  id              String             @id @default(cuid())
+  id              String              @id @default(cuid())
   projectId       String
-  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   /// Monotonic per project (display #); assigned at create.
   punchNumber     Int
-  title           String             @default("Punch item")
+  title           String              @default("Punch item")
   location        String
   trade           String
-  priority        PunchPriority      @default(P2)
-  status          PunchStatus        @default(OPEN)
+  priority        PunchPriority       @default(P2)
+  status          PunchStatus         @default(OPEN)
   notes           String?
   dueDate         DateTime?
   completedAt     DateTime?
   assigneeId      String?
-  assignee        User?              @relation("PunchAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignee        User?               @relation("PunchAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   assigneeLinks   PunchAssigneeLink[]
   fileId          String?
-  file            File?              @relation("PunchDrawingFile", fields: [fileId], references: [id], onDelete: SetNull)
+  file            File?               @relation("PunchDrawingFile", fields: [fileId], references: [id], onDelete: SetNull)
   fileVersionId   String?
-  fileVersion     FileVersion?       @relation("PunchDrawingVersion", fields: [fileVersionId], references: [id], onDelete: SetNull)
+  fileVersion     FileVersion?        @relation("PunchDrawingVersion", fields: [fileVersionId], references: [id], onDelete: SetNull)
   pageNumber      Int?
   templateId      String?
-  template        PunchTemplate?     @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  template        PunchTemplate?      @relation(fields: [templateId], references: [id], onDelete: SetNull)
   /// Reference images (S3 keys); same shape as issue reference photos minus sketch.
   referencePhotos Json?
   history         PunchItemHistory[]
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   @@unique([projectId, punchNumber])
   @@index([projectId])
@@ -1250,10 +1259,10 @@ model Proposal {
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
-  workspace      Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project        Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy      User                    @relation("ProposalCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  template       ProposalTemplate?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  workspace        Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project          Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy        User                      @relation("ProposalCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  template         ProposalTemplate?         @relation(fields: [templateId], references: [id], onDelete: SetNull)
   takeoffSources   ProposalTakeoffSource[]
   items            ProposalItem[]
   attachments      ProposalAttachment[]
@@ -1307,19 +1316,19 @@ model ProposalRevision {
 /// Immutable content snapshots created on every explicit "save version" action (or auto-save).
 /// Separate from ProposalRevision which only snapshots on send.
 model ProposalDocumentVersion {
-  id          String   @id @default(cuid())
-  proposalId  String
-  proposal    Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  proposalId    String
+  proposal      Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
   versionNumber Int
   /// Serialized TipTap JSON document for the cover letter
-  contentJson Json
+  contentJson   Json
   /// Rendered HTML (precomputed for fast preview/PDF)
-  contentHtml String   @db.Text
+  contentHtml   String   @db.Text
   /// Human-readable summary of what changed (auto or user-entered)
-  changeSummary String  @default("")
-  createdById String?
-  createdBy   User?    @relation("ProposalDocVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
+  changeSummary String   @default("")
+  createdById   String?
+  createdBy     User?    @relation("ProposalDocVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
 
   @@unique([proposalId, versionNumber])
   @@index([proposalId, createdAt])
@@ -1327,15 +1336,15 @@ model ProposalDocumentVersion {
 
 /// Internal staff comments on a proposal (not visible to clients).
 model ProposalComment {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   proposalId String
-  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposal   Proposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
   authorId   String
-  author     User     @relation("ProposalCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  body       String   @db.Text
+  author     User      @relation("ProposalCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  body       String    @db.Text
   resolvedAt DateTime?
   editedAt   DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([proposalId, createdAt])
 }

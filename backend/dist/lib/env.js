@@ -81,6 +81,11 @@ const schema = z.object({
         const t = String(v).trim().toLowerCase();
         return t !== "0" && t !== "false" && t !== "off" && t !== "no";
     }, z.boolean()),
+    /** Web Push (VAPID). All three required together for push send + public key endpoint. */
+    VAPID_PUBLIC_KEY: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
+    VAPID_PRIVATE_KEY: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
+    /** e.g. mailto:support@example.com or https://example.com (Web Push spec). */
+    VAPID_SUBJECT: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
 });
 export function buildCorsAllowList(env) {
     const list = [env.CORS_ORIGIN, env.PUBLIC_APP_URL];

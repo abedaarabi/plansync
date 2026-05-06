@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Settings } from "lucide-react";
+import { useEffect, useState } from "react";
 import { fetchProjectSession, patchProject, patchProjectSettings } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { isSuperAdmin } from "@/lib/workspaceRole";
 import { isWorkspaceOmBillingClient } from "@/lib/workspaceSubscription";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
+import { OccupantPortalLinksSettings } from "./OccupantPortalLinksSettings";
 import { AccessRestricted } from "./AccessRestricted";
 
 type Props = { projectId: string };
@@ -34,6 +36,13 @@ export function ProjectSettingsClient({ projectId }: Props) {
       await queryClient.invalidateQueries({ queryKey: qk.projectSession(projectId) });
     },
   });
+
+  const [occupantHeadlineDraft, setOccupantHeadlineDraft] = useState("");
+
+  useEffect(() => {
+    if (!session) return;
+    setOccupantHeadlineDraft(session.settings.omTenantPortalUi?.headline ?? "");
+  }, [session]);
 
   const opModeMutation = useMutation({
     mutationFn: (operationsMode: boolean) => patchProject(projectId, { operationsMode }),
@@ -135,7 +144,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
               O&amp;M navigation and hubs are included with the{" "}
               <strong className="font-semibold">Enterprise</strong> workspace plan. Upgrade under{" "}
               <strong className="font-semibold">Organization → Plan &amp; billing</strong> so this
-              project can use handover, assets, maintenance, inspections, and the tenant portal
+              project can use handover, assets, maintenance, inspections, and occupant reporting
               after you turn on Operations mode.
             </p>
             <div className="mt-3">
@@ -164,9 +173,58 @@ export function ProjectSettingsClient({ projectId }: Props) {
             {row("O&M: Inspections", m.omInspections ?? true, (v) =>
               toggleModule("omInspections", v),
             )}
-            {row("O&M: Tenant portal", m.omTenantPortal ?? true, (v) =>
+            {row("O&M: Occupant portal", m.omTenantPortal ?? true, (v) =>
               toggleModule("omTenantPortal", v),
             )}
+            {m.omTenantPortal ? (
+              <>
+                <OccupantPortalLinksSettings projectId={projectId} />
+                <div className="border-b border-[var(--enterprise-border)] py-4 last:border-0">
+                  <label className="block text-sm font-medium text-[var(--enterprise-text)]">
+                    Occupant page headline
+                  </label>
+                  <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
+                    Optional line shown at the top of the public occupant form (building or
+                    equipment scan). Leave blank to use the default.
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input
+                      type="text"
+                      maxLength={200}
+                      value={occupantHeadlineDraft}
+                      onChange={(e) => setOccupantHeadlineDraft(e.target.value)}
+                      disabled={mutation.isPending}
+                      placeholder="e.g. Report a maintenance issue for this building"
+                      className="min-h-11 w-full max-w-xl rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]"
+                    />
+                    <button
+                      type="button"
+                      disabled={
+                        mutation.isPending ||
+                        occupantHeadlineDraft.trim() ===
+                          (session.settings.omTenantPortalUi?.headline ?? "").trim()
+                      }
+                      onClick={() =>
+                        mutation.mutate({
+                          projectId,
+                          patch: {
+                            omTenantPortalUi: {
+                              headline:
+                                occupantHeadlineDraft.trim().length === 0
+                                  ? null
+                                  : occupantHeadlineDraft.trim(),
+                            },
+                          },
+                        })
+                      }
+                      className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      Save headline
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : null}
           </>
         ) : null}
       </section>

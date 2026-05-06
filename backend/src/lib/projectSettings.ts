@@ -93,10 +93,16 @@ export type ClientVisibility = {
   allowClientComment: boolean;
 };
 
+/** Optional occupant portal public page copy (headline on `/occupant/...`). */
+export type OmTenantPortalUiSettings = {
+  headline: string | null;
+};
+
 export type ProjectSettingsResolved = {
   modules: ProjectModules;
   clientVisibility: ClientVisibility;
   omHandover: OmHandoverSettings;
+  omTenantPortalUi: OmTenantPortalUiSettings;
 };
 
 const DEFAULT_MODULES: ProjectModules = {
@@ -156,12 +162,17 @@ function parseBool(v: unknown, defaultVal: boolean): boolean {
   return typeof v === "boolean" ? v : defaultVal;
 }
 
+const DEFAULT_OM_TENANT_PORTAL_UI: OmTenantPortalUiSettings = {
+  headline: null,
+};
+
 export function parseProjectSettingsJson(raw: unknown): ProjectSettingsResolved {
   if (raw == null || typeof raw !== "object") {
     return {
       modules: { ...DEFAULT_MODULES },
       clientVisibility: { ...DEFAULT_CLIENT_VISIBILITY },
       omHandover: { ...DEFAULT_OM_HANDOVER },
+      omTenantPortalUi: { ...DEFAULT_OM_TENANT_PORTAL_UI },
     };
   }
   const o = raw as Record<string, unknown>;
@@ -175,6 +186,17 @@ export function parseProjectSettingsJson(raw: unknown): ProjectSettingsResolved 
     o.omHandover && typeof o.omHandover === "object"
       ? (o.omHandover as Record<string, unknown>)
       : {};
+  const ui =
+    o.omTenantPortalUi && typeof o.omTenantPortalUi === "object"
+      ? (o.omTenantPortalUi as Record<string, unknown>)
+      : {};
+  const headlineRaw = ui.headline;
+  const parsedHeadline =
+    headlineRaw === null || headlineRaw === undefined
+      ? null
+      : typeof headlineRaw === "string" && headlineRaw.trim()
+        ? headlineRaw.trim().slice(0, 200)
+        : null;
 
   const handoverCompletedAt =
     h.handoverCompletedAt === null
@@ -244,6 +266,9 @@ export function parseProjectSettingsJson(raw: unknown): ProjectSettingsResolved 
       buildingOwnerEmail:
         parseOptionalEmailNull(h.buildingOwnerEmail) ?? DEFAULT_OM_HANDOVER.buildingOwnerEmail,
     },
+    omTenantPortalUi: {
+      headline: parsedHeadline,
+    },
   };
 }
 
@@ -255,7 +280,7 @@ export function mergeProjectSettingsPatch(
     omHandover?: Partial<OmHandoverSettings>;
   },
 ): ProjectSettingsResolved {
-  let om: OmHandoverSettings = { ...current.omHandover };
+  const om: OmHandoverSettings = { ...current.omHandover };
   if (patch.omHandover) {
     const p = patch.omHandover;
     if (p.notes !== undefined) {
@@ -312,6 +337,7 @@ export function mergeProjectSettingsPatch(
     modules: { ...current.modules, ...patch.modules },
     clientVisibility: { ...current.clientVisibility, ...patch.clientVisibility },
     omHandover: om,
+    omTenantPortalUi: { ...current.omTenantPortalUi },
   };
 }
 

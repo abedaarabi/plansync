@@ -150,6 +150,10 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
                 <span className="shrink-0 rounded border border-slate-500/50 bg-slate-950/80 px-1 py-0.5 text-[8px] font-bold text-slate-400">
                   WO
                 </span>
+              ) : issue.issueKind === "OCCUPANT" ? (
+                <span className="shrink-0 rounded border border-sky-500/40 bg-sky-950/80 px-1 py-0.5 text-[8px] font-bold text-sky-200">
+                  TN
+                </span>
               ) : null}
               {attachments ? (
                 <span
@@ -331,16 +335,14 @@ export function SidebarIssuesTab() {
   const [collapsedIssueIds, setCollapsedIssueIds] = useState<string[]>([]);
 
   const viewerOperationsMode = useViewerStore((s) => s.viewerOperationsMode);
-  const issuesQueryKey = qk.issuesForFileVersion(
-    cloudFileVersionId ?? "",
-    viewerOperationsMode ? "WORK_ORDER" : null,
-  );
+  const omIssueKindKey = viewerOperationsMode ? "WORK_ORDER,OCCUPANT" : null;
+  const issuesQueryKey = qk.issuesForFileVersion(cloudFileVersionId ?? "", omIssueKindKey);
 
   const { data: issues = [], isPending: issuesPending } = useQuery({
     queryKey: issuesQueryKey,
     queryFn: () =>
       fetchIssuesForFileVersion(cloudFileVersionId!, {
-        issueKind: viewerOperationsMode ? "WORK_ORDER" : undefined,
+        issueKinds: viewerOperationsMode ? ["WORK_ORDER", "OCCUPANT"] : undefined,
       }),
     enabled: Boolean(cloudFileVersionId),
   });
@@ -410,7 +412,7 @@ export function SidebarIssuesTab() {
 
       const hex = issueStatusMarkerStrokeHex(issue.status);
       const kind: "WORK_ORDER" | "CONSTRUCTION" =
-        issue.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION";
+        issue.issueKind === "CONSTRUCTION" ? "CONSTRUCTION" : "WORK_ORDER";
       const pri = issue.priority ?? "MEDIUM";
       const assigneeShort = issueAssigneeShortLabel(issue.assignee?.name, issue.assignee?.email);
       const dnum = displayNumById.get(issue.id);
@@ -512,7 +514,7 @@ export function SidebarIssuesTab() {
       const pri = row.priority ?? "MEDIUM";
       const assigneeShort = issueAssigneeShortLabel(row.assignee?.name, row.assignee?.email);
       const hex = issueStatusMarkerStrokeHex(row.status);
-      const k = row.issueKind === "WORK_ORDER" ? "WORK_ORDER" : "CONSTRUCTION";
+      const k = row.issueKind === "CONSTRUCTION" ? "CONSTRUCTION" : "WORK_ORDER";
       for (const ann of linked) {
         if (ann.linkedIssueAttachment) {
           st.updateAnnotation(ann.id, {

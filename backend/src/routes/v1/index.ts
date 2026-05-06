@@ -34,8 +34,6 @@ import {
   ProjectMeasurementSystem,
   ProjectMemberRole,
   ProjectStage,
-  PunchPriority,
-  PunchStatus,
   WorkspaceRole,
 } from "@prisma/client";
 import { loadProjectWithAuth } from "../../lib/permissions.js";
@@ -713,7 +711,7 @@ export function v1Routes(
       .replace(/^-|-$/g, "")
       .slice(0, 48);
     const fallbackSlug = `workspace-${randomBytes(3).toString("hex")}`;
-    let candidate = baseSlug || fallbackSlug;
+    const candidate = baseSlug || fallbackSlug;
     let ws: Awaited<ReturnType<typeof prisma.workspace.create>> | null = null;
     for (let attempt = 0; attempt < 6; attempt++) {
       const slug =
@@ -1965,6 +1963,11 @@ export function v1Routes(
             schedule: z.boolean().optional(),
           })
           .optional(),
+        omTenantPortalUi: z
+          .object({
+            headline: z.string().max(200).nullable().optional(),
+          })
+          .optional(),
         clientVisibility: z
           .object({
             showIssues: z.boolean().optional(),
@@ -2002,10 +2005,35 @@ export function v1Routes(
     raw.modules = merged.modules;
     raw.clientVisibility = merged.clientVisibility;
     raw.omHandover = merged.omHandover;
+    if (body.data.omTenantPortalUi !== undefined) {
+      const prevUi =
+        raw.omTenantPortalUi && typeof raw.omTenantPortalUi === "object"
+          ? { ...(raw.omTenantPortalUi as Record<string, unknown>) }
+          : {};
+      raw.omTenantPortalUi = { ...prevUi, ...body.data.omTenantPortalUi };
+    }
     const updated = await prisma.project.update({
       where: { id: projectId },
       data: { settingsJson: raw as Prisma.InputJsonValue },
     });
+    if (
+      body.data.modules?.omTenantPortal === true &&
+      !current.modules.omTenantPortal &&
+      updated.operationsMode
+    ) {
+      const n = await prisma.occupantPortalToken.count({
+        where: { projectId, revokedAt: null },
+      });
+      if (n === 0) {
+        await prisma.occupantPortalToken.create({
+          data: {
+            projectId,
+            token: randomBytes(24).toString("hex"),
+            label: "Building link",
+          },
+        });
+      }
+    }
     return c.json({
       projectId: updated.id,
       settings: parseProjectSettingsJson(updated.settingsJson),
@@ -3003,7 +3031,8 @@ export function v1Routes(
         typeof baseRevisionRaw === "number" && Number.isFinite(baseRevisionRaw)
           ? baseRevisionRaw
           : undefined;
-      const { baseRevision: _br, ...rest } = raw;
+      const rest = { ...raw };
+      delete rest.baseRevision;
       const body = viewerStatePutSchema.safeParse(rest);
       if (!body.success) return c.json({ error: body.error.flatten() }, 400);
 
