@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { UserMenu } from "./UserMenu";
+import { EnterpriseIconButton } from "./EnterpriseIconButton";
 import { ProjectPicker } from "./ProjectPicker";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
@@ -38,17 +39,7 @@ import { isWorkspaceProClient, trialDaysLeft } from "@/lib/workspaceSubscription
 import { isSuperAdmin } from "@/lib/workspaceRole";
 import { clearAppBadgeSafe, syncAppBadgeFromUnreadCount } from "@/lib/appBadge";
 import Link from "next/link";
-
-const TOOL_LABELS: Record<string, string> = {
-  files: "Files & Drawings",
-  issues: "Issues",
-  rfi: "RFIs",
-  takeoff: "Quantity Takeoff",
-  punch: "Punch List",
-  reports: "Field Reports",
-  team: "Team",
-  settings: "Project Settings",
-};
+import { useTranslations } from "next-intl";
 
 const TOOL_ICONS: Record<string, LucideIcon> = {
   files: FileStack,
@@ -61,17 +52,17 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   settings: Settings,
 };
 
-const GLOBAL_TITLES: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/account": "Account",
-  "/organization": "Organization",
-  "/projects": "Projects",
-  "/materials": "Materials",
-};
-
-function resolveGlobalTitle(pathname: string): string | null {
-  if (GLOBAL_TITLES[pathname]) return GLOBAL_TITLES[pathname];
-  if (pathname.includes("/materials")) return "Materials";
+function resolveGlobalTitle(pathname: string, tGlobal: (key: string) => string): string | null {
+  const exact: Record<string, string> = {
+    "/dashboard": "dashboard",
+    "/account": "account",
+    "/organization": "organization",
+    "/projects": "projects",
+    "/materials": "materials",
+  };
+  const k = exact[pathname];
+  if (k) return tGlobal(k);
+  if (pathname.includes("/materials")) return tGlobal("materials");
   return null;
 }
 
@@ -101,19 +92,6 @@ function extractToolSegment(pathname: string): string | null {
   return match ? match[1] : null;
 }
 
-function formatNotifyTime(iso: string): string {
-  const d = new Date(iso);
-  const diff = Math.max(0, Date.now() - d.getTime());
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m`;
-  const h = Math.floor(mins / 60);
-  if (h < 24) return `${h}h`;
-  const days = Math.floor(h / 24);
-  if (days < 7) return `${days}d`;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
 export function EnterpriseTopBar({
   onOpenCommandPalette,
   onToggleMobileNav,
@@ -122,6 +100,26 @@ export function EnterpriseTopBar({
   onToggleDesktopSidebar,
 }: EnterpriseTopBarProps) {
   const pathname = usePathname();
+  const t = useTranslations("app.topBar");
+  const tTools = useTranslations("app.topBar.tools");
+  const tGlobal = useTranslations("app.topBar.global");
+
+  const formatNotifyTime = useCallback(
+    (iso: string) => {
+      const d = new Date(iso);
+      const diff = Math.max(0, Date.now() - d.getTime());
+      const mins = Math.floor(diff / 60_000);
+      if (mins < 1) return t("timeJustNow");
+      if (mins < 60) return `${mins}m`;
+      const h = Math.floor(mins / 60);
+      if (h < 24) return `${h}h`;
+      const days = Math.floor(h / 24);
+      if (days < 7) return `${days}d`;
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    },
+    [t],
+  );
+
   const qc = useQueryClient();
   const { primary, me } = useEnterpriseWorkspace();
   const pathWid = pathname.match(/^\/workspaces\/([^/]+)/)?.[1];
@@ -198,10 +196,14 @@ export function EnterpriseTopBar({
   }
 
   const projectId = extractProjectId(pathname);
+  const globalPageTitle = resolveGlobalTitle(pathname, tGlobal);
   const isProjectContext = Boolean(projectId);
   const activeProject = projectId ? projects.find((p) => p.id === projectId) : null;
   const toolSegment = extractToolSegment(pathname);
-  const toolLabel = toolSegment ? (TOOL_LABELS[toolSegment] ?? null) : null;
+  const toolLabel =
+    toolSegment && Object.hasOwn(TOOL_ICONS, toolSegment)
+      ? tTools(toolSegment as keyof typeof TOOL_ICONS)
+      : null;
   const ToolIcon = toolSegment ? TOOL_ICONS[toolSegment] : undefined;
   /** Project sub-routes live under `/projects/...` only; workspace-prefixed pages exist only for takeoff, team, and materials. */
   const projectHomeHref = projectId ? `/projects/${projectId}/home` : "/projects";
@@ -211,11 +213,11 @@ export function EnterpriseTopBar({
       <div className="flex h-[var(--enterprise-topbar-h)] min-h-[var(--enterprise-topbar-h)] w-full items-center justify-between gap-1.5 px-2 sm:gap-3 sm:px-4 lg:gap-4 lg:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px] sm:gap-2 sm:text-[13px] md:text-sm">
           {/* Mobile menu */}
-          <button
+          <EnterpriseIconButton
             type="button"
             onClick={onToggleMobileNav}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30 lg:hidden"
-            aria-label={mobileNavOpen ? "Close navigation menu" : "Open navigation menu"}
+            className="border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 text-[var(--enterprise-text)] lg:hidden"
+            aria-label={mobileNavOpen ? t("closeMenu") : t("openMenu")}
             aria-expanded={mobileNavOpen}
             aria-controls="enterprise-sidebar-panel"
           >
@@ -224,7 +226,7 @@ export function EnterpriseTopBar({
             ) : (
               <Menu className="h-[18px] w-[18px]" strokeWidth={1.75} />
             )}
-          </button>
+          </EnterpriseIconButton>
 
           {/* Breadcrumb */}
           <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 md:gap-3">
@@ -232,8 +234,8 @@ export function EnterpriseTopBar({
               type="button"
               onClick={onToggleDesktopSidebar}
               className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 lg:flex"
-              aria-label={desktopSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={`${desktopSidebarCollapsed ? "Expand" : "Collapse"} sidebar`}
+              aria-label={desktopSidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+              title={desktopSidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
             >
               {desktopSidebarCollapsed ? (
                 <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
@@ -254,13 +256,13 @@ export function EnterpriseTopBar({
             {isProjectContext ? (
               <nav
                 className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden text-[12px] sm:gap-1 sm:text-[13px]"
-                aria-label="Breadcrumb"
+                aria-label={t("breadcrumb")}
               >
                 <Link
                   href="/projects"
                   className="hidden min-[400px]:inline shrink-0 font-medium text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-text)]"
                 >
-                  Projects
+                  {t("projects")}
                 </Link>
                 <ChevronRight className="hidden min-[400px]:inline h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)] opacity-50" />
                 <Link
@@ -291,12 +293,12 @@ export function EnterpriseTopBar({
             ) : (
               <nav
                 className="flex min-w-0 flex-1 items-center gap-1 text-[12px] sm:text-[13px]"
-                aria-label="Workspace context"
+                aria-label={t("workspaceContext")}
               >
-                {resolveGlobalTitle(pathname) ? (
+                {globalPageTitle ? (
                   <>
                     <span className="max-w-[7rem] truncate font-medium text-[var(--enterprise-text)] sm:max-w-[200px]">
-                      {resolveGlobalTitle(pathname)}
+                      {globalPageTitle}
                     </span>
                     <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)] opacity-50" />
                   </>
@@ -315,15 +317,17 @@ export function EnterpriseTopBar({
             >
               {activeWs.stripeSubscriptionId
                 ? trialDays === 0
-                  ? "Manage billing"
+                  ? t("trialManageBilling")
                   : trialDays != null
-                    ? `${trialDays}d left · Stripe trial`
-                    : "Stripe trial"
+                    ? t("trialStripe", { days: trialDays })
+                    : t("trialStripeGeneric")
                 : trialDays === 0
-                  ? "Trial ended - upgrade"
+                  ? t("trialEnded")
                   : trialDays != null
-                    ? `${trialDays} day${trialDays === 1 ? "" : "s"} left in trial`
-                    : "Free trial"}
+                    ? trialDays === 1
+                      ? t("trialOneDayLeft")
+                      : t("trialManyDaysLeft", { days: trialDays })
+                    : t("trialFree")}
             </Link>
           ) : null}
 
@@ -331,27 +335,29 @@ export function EnterpriseTopBar({
           <button
             type="button"
             onClick={onOpenCommandPalette}
-            aria-label="Search"
+            aria-label={t("search")}
             className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)]/95 bg-[var(--enterprise-surface)]/90 text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:w-auto sm:max-w-[min(100%,280px)] sm:justify-start sm:gap-2 sm:px-3 sm:text-left sm:text-[13px]"
           >
             <Search className="h-3.5 w-3.5 shrink-0 opacity-80" strokeWidth={1.75} />
-            <span className="hidden flex-1 sm:inline">Search…</span>
+            <span className="hidden flex-1 sm:inline">{t("searchEllipsis")}</span>
             <kbd className="ml-auto hidden rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--enterprise-text-muted)] md:inline">
-              ⌘K
+              {t("searchShortcut")}
             </kbd>
           </button>
 
           {/* Notifications */}
           <div ref={notifWrapRef} className="relative">
-            <button
+            <EnterpriseIconButton
               type="button"
+              className="relative text-[var(--enterprise-text-muted)]"
               onClick={() => {
                 setNotifOpen((o) => !o);
                 void notifQuery.refetch();
               }}
-              className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--enterprise-border)]/95 bg-[var(--enterprise-surface)]/90 text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25"
               aria-label={
-                unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"
+                unreadCount > 0
+                  ? t("notificationsUnread", { count: unreadCount })
+                  : t("notifications")
               }
               aria-expanded={notifOpen}
               aria-haspopup="dialog"
@@ -362,17 +368,17 @@ export function EnterpriseTopBar({
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               ) : null}
-            </button>
+            </EnterpriseIconButton>
 
             {notifOpen ? (
               <div
                 role="dialog"
-                aria-label="Notifications"
+                aria-label={t("notifications")}
                 className="fixed left-2 right-2 top-[calc(var(--enterprise-topbar-offset)_+_0.25rem)] z-[100] max-h-[min(24rem,70vh)] w-auto overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-lg sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-[calc(100%+6px)] sm:mt-0 sm:max-h-[min(24rem,70vh)] sm:w-[min(calc(100vw-1.5rem),22rem)] md:w-[24rem]"
               >
                 <div className="flex items-center justify-between gap-2 border-b border-[var(--enterprise-border)] px-3 py-2.5">
                   <span className="text-sm font-semibold text-[var(--enterprise-text)]">
-                    Notifications
+                    {t("notifications")}
                   </span>
                   {unreadCount > 0 ? (
                     <button
@@ -381,22 +387,20 @@ export function EnterpriseTopBar({
                       onClick={() => markAllMut.mutate()}
                       className="text-xs font-medium text-[var(--enterprise-primary)] hover:underline disabled:opacity-50"
                     >
-                      Mark all read
+                      {t("markAllRead")}
                     </button>
                   ) : null}
                 </div>
                 <div className="max-h-[min(24rem,70vh)] overflow-y-auto">
                   {notifQuery.isPending ? (
                     <p className="px-3 py-6 text-center text-sm text-[var(--enterprise-text-muted)]">
-                      Loading…
+                      {t("notifLoading")}
                     </p>
                   ) : notifQuery.isError ? (
-                    <p className="px-3 py-6 text-center text-sm text-red-600">
-                      Could not load notifications.
-                    </p>
+                    <p className="px-3 py-6 text-center text-sm text-red-600">{t("notifError")}</p>
                   ) : notifItems.length === 0 ? (
                     <p className="px-3 py-6 text-center text-sm text-[var(--enterprise-text-muted)]">
-                      No notifications yet. RFI updates for your projects will appear here.
+                      {t("notifEmpty")}
                     </p>
                   ) : (
                     <ul className="divide-y divide-[var(--enterprise-border)]">
@@ -467,7 +471,7 @@ export function EnterpriseTopBar({
                     onClick={() => setNotifOpen(false)}
                     className="text-xs font-medium text-[var(--enterprise-primary)] hover:underline"
                   >
-                    Device alerts: manage in Account
+                    {t("deviceAlertsLink")}
                   </Link>
                 </div>
               </div>

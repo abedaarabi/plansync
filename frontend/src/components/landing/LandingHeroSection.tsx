@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ArrowRight } from "lucide-react";
 import { AnimateIn } from "./AnimateIn";
 import { BrowserMockup } from "./BrowserMockup";
@@ -12,16 +13,17 @@ type LandingHeroSectionProps = {
   onGoToFreeViewer: () => void;
 };
 
-const STAT_CHIPS = [
-  { value: "Free forever", label: "PDF viewer" },
-  { value: "14-day", label: "Pro trial" },
-  { value: "No lock-in", label: "Cancel anytime" },
+const STAT_KEYS = [
+  { valueKey: "stat1Value" as const, labelKey: "stat1Label" as const },
+  { valueKey: "stat2Value" as const, labelKey: "stat2Label" as const },
+  { valueKey: "stat3Value" as const, labelKey: "stat3Label" as const },
 ];
 
 export function LandingHeroSection({
   prefersReducedMotion,
   onGoToFreeViewer,
 }: LandingHeroSectionProps) {
+  const t = useTranslations("hero");
   return (
     <section
       id="hero"
@@ -88,23 +90,17 @@ export function LandingHeroSection({
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--landing-cta) opacity-60" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-(--landing-cta)" />
                 </span>
-                Construction management platform
+                {t("eyebrow")}
               </p>
 
               {/* Headline */}
               <h1 className="text-balance text-4xl font-bold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-[54px] lg:leading-[1.07]">
-                Plans, issues & RFIs —{" "}
-                <span className="relative whitespace-nowrap text-blue-200 [text-shadow:0_2px_32px_rgba(37,99,235,0.5)]">
-                  one source of truth
-                </span>{" "}
-                for your team
+                {t("title")}
               </h1>
 
               {/* Sub-copy */}
               <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-blue-100/85 sm:mt-7 sm:text-xl lg:mx-0">
-                Everyone works from the same drawings. Field issues and formal RFIs stay tied to the
-                plan — not buried in email. Start free in your browser; upgrade when your team needs
-                the cloud.
+                {t("sub")}
               </p>
 
               {/* CTAs */}
@@ -112,28 +108,30 @@ export function LandingHeroSection({
                 <button
                   type="button"
                   onClick={onGoToFreeViewer}
-                  className="btn-shine relative inline-flex min-h-13 flex-1 items-center justify-center gap-2 overflow-hidden rounded-xl bg-(--landing-cta) px-8 py-3.5 text-base font-semibold text-(--landing-cta-text) shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)] transition hover:bg-(--landing-cta-bright) hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta) focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 active:scale-[0.98] sm:flex-none sm:px-9"
+                  className="btn-shine relative inline-flex min-h-13 flex-1 min-w-0 items-center justify-center gap-2 overflow-hidden rounded-xl bg-(--landing-cta) px-8 py-3.5 text-base font-semibold text-(--landing-cta-text) shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)] transition hover:bg-(--landing-cta-bright) hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta) focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 active:scale-[0.98] sm:flex-none sm:px-9"
                 >
-                  Open free viewer
+                  {t("openViewer")}
                   <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
                 </button>
                 <Link
                   href="/sign-in"
-                  className="inline-flex min-h-13 flex-1 items-center justify-center gap-2 rounded-xl border-2 border-white/80 bg-white/8 px-8 py-3.5 text-base font-semibold text-white shadow-sm backdrop-blur-sm transition hover:border-white hover:bg-white/16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:flex-none sm:px-9"
+                  className="inline-flex min-h-13 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border-2 border-white/80 bg-white/8 px-8 py-3.5 text-base font-semibold text-white shadow-sm backdrop-blur-sm transition hover:border-white hover:bg-white/16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:flex-none sm:px-9"
                 >
-                  Start Pro Trial
+                  {t("startTrial")}
                 </Link>
               </div>
 
               {/* Stat chips */}
               <div className="mt-9 flex flex-wrap items-stretch justify-center gap-3 lg:justify-start">
-                {STAT_CHIPS.map((chip) => (
+                {STAT_KEYS.map((chip) => (
                   <div
-                    key={chip.label}
+                    key={chip.labelKey}
                     className="flex flex-col items-center rounded-xl border border-white/10 bg-white/[0.07] px-5 py-3 text-center backdrop-blur-sm sm:items-start sm:text-left"
                   >
-                    <span className="text-base font-bold text-white">{chip.value}</span>
-                    <span className="text-[11px] font-medium text-blue-200/60">{chip.label}</span>
+                    <span className="text-base font-bold text-white">{t(chip.valueKey)}</span>
+                    <span className="text-[11px] font-medium text-blue-200/60">
+                      {t(chip.labelKey)}
+                    </span>
                   </div>
                 ))}
               </div>

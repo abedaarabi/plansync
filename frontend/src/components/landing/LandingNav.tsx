@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Menu, X } from "lucide-react";
 import { getSolutionsByCategory } from "@/lib/landingContent";
+import { LandingLanguageSwitcher } from "./LandingLanguageSwitcher";
 import { SolutionsDropdown } from "./SolutionsDropdown";
 
 const mobileConstructionSolutions = getSolutionsByCategory("construction");
@@ -24,6 +26,7 @@ export function LandingNav({
   isLoggedIn,
   onGoToFreeViewer,
 }: LandingNavProps) {
+  const t = useTranslations("nav");
   return (
     <nav
       className={`fixed inset-x-0 top-0 z-50 border-b transition-[background,box-shadow,border-color] duration-300 ${
@@ -46,42 +49,43 @@ export function LandingNav({
             href="/#features"
             className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
           >
-            Features
+            {t("features")}
           </Link>
           <Link
             href="/#compare"
             className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
           >
-            Pricing
+            {t("pricing")}
           </Link>
           <Link
             href="/#faq"
             className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
           >
-            FAQ
+            {t("faq")}
           </Link>
           <Link
             href="/#install"
             className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
           >
-            Install
+            {t("install")}
           </Link>
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
+          <LandingLanguageSwitcher />
           {isLoggedIn ? (
             <Link
               href="/projects"
               className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
             >
-              Dashboard
+              {t("dashboard")}
             </Link>
           ) : (
             <Link
               href="/sign-in"
               className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
             >
-              Sign In
+              {t("signIn")}
             </Link>
           )}
           <button
@@ -89,7 +93,7 @@ export function LandingNav({
             onClick={onGoToFreeViewer}
             className="btn-shine relative overflow-hidden rounded-full bg-(--landing-cta) px-5 py-2 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_35%,transparent)] transition hover:bg-(--landing-cta-bright) hover:ring-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)]"
           >
-            Start Free &rarr;
+            {t("startFree")}
           </button>
         </div>
 
@@ -97,7 +101,7 @@ export function LandingNav({
           type="button"
           className="text-slate-800 md:hidden"
           onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label="Toggle menu"
+          aria-label={t("toggleMenu")}
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
@@ -108,7 +112,7 @@ export function LandingNav({
           <div className="flex flex-col gap-4">
             <div className="border-b border-slate-100 pb-4">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-blue-600">
-                Construction
+                {t("construction")}
               </p>
               <div className="flex flex-col gap-1.5">
                 {mobileConstructionSolutions.map((s) => (
@@ -123,7 +127,7 @@ export function LandingNav({
                 ))}
               </div>
               <p className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wider text-teal-600">
-                Operations & FM
+                {t("operationsFm")}
               </p>
               <div className="flex flex-col gap-1.5">
                 {mobileOperationsSolutions.map((s) => (
@@ -143,37 +147,38 @@ export function LandingNav({
               className="text-sm text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
-              Features
+              {t("features")}
             </Link>
             <Link
               href="/#compare"
               className="text-sm text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
-              Pricing
+              {t("pricing")}
             </Link>
             <Link
               href="/#faq"
               className="text-sm text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
-              FAQ
+              {t("faq")}
             </Link>
             <Link
               href="/#install"
               className="text-sm text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
-              Install
+              {t("install")}
             </Link>
+            <LandingLanguageSwitcher variant="mobile" />
             <hr className="border-slate-100" />
             {isLoggedIn ? (
               <Link href="/projects" className="text-sm font-medium text-slate-700">
-                Dashboard
+                {t("dashboard")}
               </Link>
             ) : (
               <Link href="/sign-in" className="text-sm font-medium text-slate-700">
-                Sign In
+                {t("signIn")}
               </Link>
             )}
             <button
@@ -184,7 +189,7 @@ export function LandingNav({
               }}
               className="btn-shine relative overflow-hidden rounded-full bg-(--landing-cta) px-5 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-(--landing-cta-bright)"
             >
-              Start Free &rarr;
+              {t("startFree")}
             </button>
           </div>
         </div>

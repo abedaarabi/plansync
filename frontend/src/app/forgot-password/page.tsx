@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AlertCircle, ArrowLeft, Loader2, Mail } from "lucide-react";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseAuthLayout } from "@/components/auth/EnterpriseAuthLayout";
 import { authClient } from "@/lib/auth-client";
 
@@ -87,10 +88,11 @@ export default function ForgotPasswordPage() {
             </div>
           )}
 
-          <button
+          <EnterpriseButton
             type="submit"
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/25 transition hover:bg-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/50 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55"
+            fullWidth
+            loading={loading}
+            className="gap-2 shadow-md shadow-blue-600/25"
           >
             {loading ? (
               <>
@@ -100,7 +102,7 @@ export default function ForgotPasswordPage() {
             ) : (
               "Send reset link"
             )}
-          </button>
+          </EnterpriseButton>
 
           <p className="text-center text-sm">
             <Link href="/sign-in" className="font-medium text-[#2563EB] hover:underline">

@@ -1,0 +1,208 @@
+{
+  "nav": {
+    "features": "Fonctionnalités",
+    "pricing": "Tarifs",
+    "faq": "FAQ",
+    "install": "Installer",
+    "signIn": "Connexion",
+    "dashboard": "Tableau de bord",
+    "startFree": "Commencer gratuitement →",
+    "toggleMenu": "Ouvrir le menu",
+    "construction": "Construction",
+    "operationsFm": "Exploitation & FM"
+  },
+  "hero": {
+    "eyebrow": "Plateforme de gestion de construction",
+    "title": "Plans, risques et RFIs — une seule source de vérité pour votre équipe",
+    "titleHighlight": "une seule source de vérité",
+    "sub": "Tout le monde travaille sur les mêmes plans. Les anomalies terrain et les RFIs officielles restent liées au dessin — pas noyées dans les e-mails. Commencez gratuitement dans le navigateur ; passez à une offre supérieure quand votre équipe a besoin du cloud.",
+    "openViewer": "Ouvrir la visionneuse gratuite",
+    "startTrial": "Essai Pro",
+    "stat1Value": "Gratuit pour toujours",
+    "stat1Label": "Visionneuse PDF",
+    "stat2Value": "14 jours",
+    "stat2Label": "essai Pro",
+    "stat3Value": "Sans engagement",
+    "stat3Label": "Résiliez quand vous voulez"
+  },
+  "solutionsIntro": {
+    "eyebrow": "Plateforme",
+    "line1": "Deux outils.",
+    "line2": "Un flux connecté.",
+    "body": "Le chantier et l’exploitation partagent un même espace — plans, anomalies, RFIs et données de réception restent liés au lieu d’être isolés dans plusieurs applications.",
+    "allSolutionsCta": "Voir les {count} solutions"
+  },
+  "constructionCard": {
+    "label": "Construction",
+    "title": "Des outils de chantier pour chaque équipe",
+    "body": "Plans, anomalies, RFIs et métrés — alignés sur la façon dont les chefs de chantier et AM travaillent vraiment.",
+    "extra": "Stockage cloud, révisions PDF, planning, audits, propositions",
+    "cta": "Découvrir la construction"
+  },
+  "operationsCard": {
+    "label": "Exploitation & FM",
+    "title": "L’exploitation du bâtiment dès le jour 1",
+    "body": "Réception, équipements, maintenance et tableaux de bord — structurés pour les équipes FM, pas pour des tickets génériques.",
+    "extra": "Ordres de travail, inspections, portail occupants",
+    "cta": "Découvrir l’exploitation"
+  },
+  "howItWorks": {
+    "eyebrow": "Comment ça marche",
+    "title": "Du PDF à la clarté projet",
+    "description": "Commencez seul avec la version gratuite, puis invitez votre équipe vers Pro lorsque plans, anomalies et RFIs doivent vivre au même endroit.",
+    "step1Title": "Importez vos plans",
+    "step1Body": "Ouvrez des PDF instantanément dans la visionneuse gratuite, ou importez dans Pro quand toute l’équipe partage un même jeu de plans.",
+    "step2Title": "Annoter et mesurer",
+    "step2Body": "Calibrez l’échelle, mesurez et annotez — la même précision en bungalow technique ou au bureau.",
+    "step3Title": "Coordonner en Pro",
+    "step3Body": "Posez des anomalies sur le plan, pilotez des RFIs avec un vrai workflow, et gardez tout le monde sur la même révision.",
+    "step4Title": "Clôturer la boucle",
+    "step4Body": "Suivez le statut du terrain à la réponse, exportez les métrés et les plans annotés, et visitez le chantier sereinement."
+  },
+  "pricing": {
+    "eyebrow": "Tarifs",
+    "title": "Gratuit pour commencer. Pro ou Enterprise quand vous êtes prêt.",
+    "subtitle": "Consultez et annotez des PDF gratuitement — ajoutez Pro pour la collaboration d’équipe, ou Enterprise pour l’exploitation et la maintenance.",
+    "freeLabel": "Gratuit",
+    "freePrice": "0 €",
+    "freeTagline": "Sans inscription",
+    "freeTagline2": "Visionneuse PDF locale",
+    "openViewer": "Ouvrir la visionneuse gratuite",
+    "popular": "Le plus populaire",
+    "proLabel": "Pro",
+    "perMonth": "/mois",
+    "proIncluded": "{seats} membres inclus · projets illimités",
+    "proExtraSeat": "+{extra} €/mois par membre supplémentaire après {seats}.",
+    "proEverything": "Tout ce qui est dans Gratuit +",
+    "startTrial14": "Démarrer l’essai 14 jours",
+    "enterpriseLabel": "Enterprise",
+    "enterpriseBlurb": "Pro + E&M",
+    "footnote": "Les sièges comptent les membres internes et les invitations en attente. La facturation des sièges supplémentaires s’applique au-delà de {seats} — voir la facturation après paiement.",
+    "freeFeatures": [
+      "Ouvrir tout PDF",
+      "Calibrer l’échelle",
+      "Mesurer et annoter",
+      "Annoter les plans",
+      "Exporter le PDF annoté",
+      "Fonctionne hors ligne",
+      "Les fichiers ne quittent pas l’appareil"
+    ],
+    "proFeatures": [
+      "Stockage cloud 20 Go",
+      "Collaboration d’équipe",
+      "Anomalies sur les plans",
+      "Workflow RFIs",
+      "Métré des quantités",
+      "Contrôle de version PDF",
+      "Planning projet"
+    ],
+    "enterpriseFeatures": [
+      "Tout dans Pro",
+      "Mode exploitation et maintenance",
+      "Réception, actifs et ordres de travail",
+      "Planning d’entretien et inspections",
+      "Portail occupants"
+    ]
+  },
+  "pwa": {
+    "eyebrow": "Installer",
+    "title": "Ajouter PlanSync à votre appareil",
+    "subtitle": "Installez ou ajoutez à l’écran d’accueil, connectez-vous, puis activez les alertes — en quelques étapes.",
+    "step1Heading": "Installer ou ajouter à l’écran d’accueil",
+    "step1Lead": "Choisissez votre appareil — suivez ces repères pour que PlanSync s’ouvre comme une application normale.",
+    "desktopLabel": "Ordinateur (Chrome / Edge) :",
+    "desktopBody": "cherchez l’icône d’installation dans la barre d’adresse, ou le menu application → Installer PlanSync.",
+    "iosLabel": "iPhone / iPad (Safari) :",
+    "iosBody": "Partager → Sur l’écran d’accueil, puis ouvrez depuis l’icône.",
+    "androidLabel": "Android (Chrome) :",
+    "androidBody": "menu → Installer l’application ou Ajouter à l’écran d’accueil.",
+    "installApp": "Installer l’app",
+    "installHint": "Si le bouton d’installation n’apparaît pas, le navigateur a peut-être déjà installé l’application — utilisez le menu du navigateur.",
+    "step2Title": "Connexion",
+    "step2Body": "Ouvrez PlanSync depuis votre raccourci et connectez-vous à votre espace. Un compte est nécessaire avant d’activer les notifications push.",
+    "step3Title": "Activer les notifications",
+    "step3Body": "Allez dans Compte (menu profil) → Alertes sur cet appareil et activez-les. Lorsque le navigateur demande, choisissez Autoriser pour recevoir RFIs, anomalies et autres mises à jour hors de l’app.",
+    "notifChrome": "Chrome / Edge :",
+    "notifChromeBody": "si vous avez bloqué les alertes, utilisez le cadenas ou l’icône du site → Paramètres du site → Notifications → Autoriser.",
+    "notifSafari": "Safari (iOS) :",
+    "notifSafariBody": "ajoutez d’abord PlanSync à l’écran d’accueil, puis vérifiez Réglages iOS → Notifications (ou Apps) pour PlanSync.",
+    "stepsAria": "Étapes d’installation et de notification",
+    "footer": "La PWA dépend du navigateur. La visionneuse gratuite fonctionne dans l’onglet sans installation. Les notifications nécessitent un espace connecté et un navigateur compatible Web Push."
+  },
+  "finalCta": {
+    "title": "Commencez gratuitement aujourd’hui",
+    "body": "Ouvrez la visionneuse gratuite en quelques secondes — sans inscription.",
+    "bodyLine2": "Passez à Pro quand votre équipe est prête.",
+    "openViewer": "Ouvrir la visionneuse gratuite",
+    "startTrial": "Essai Pro",
+    "footnote1": "Dans le navigateur · installation PWA optionnelle",
+    "footnote2": "Pas de carte bancaire pour commencer"
+  },
+  "footer": {
+    "tagline": "L’espace plans pour les équipes qui ne peuvent pas se permettre de travailler sur de mauvaises informations.",
+    "product": "Produit",
+    "howItWorks": "Comment ça marche",
+    "allSolutions": "Toutes les solutions",
+    "features": "Fonctionnalités",
+    "pricing": "Tarifs",
+    "freeViewer": "Visionneuse gratuite",
+    "changelog": "Journal des versions",
+    "solutionsHeading": "Solutions",
+    "company": "Entreprise",
+    "about": "À propos",
+    "blog": "Blog",
+    "contact": "Contact",
+    "legal": "Mentions légales",
+    "privacy": "Politique de confidentialité",
+    "terms": "Conditions d’utilisation",
+    "cookies": "Politique cookies",
+    "rights": "Tous droits réservés.",
+    "openViewerCta": "Ouvrir la visionneuse PDF gratuite"
+  },
+  "faq": {
+    "eyebrow": "FAQ",
+    "title": "Questions fréquentes",
+    "subtitle": "Facturation, stockage et gratuit vs Pro.",
+    "items": [
+      {
+        "q": "Le gratuit est-il vraiment gratuit pour toujours ?",
+        "a": "Oui. La visionneuse PDF locale est gratuite pour toujours. Pas de limite cachée, pas d’expiration, pas de carte."
+      },
+      {
+        "q": "Où sont stockés mes fichiers en gratuit ?",
+        "a": "Les fichiers gratuits ne quittent jamais votre navigateur. Tout reste en local sur votre appareil. Nous ne voyons ni ne téléchargez vos PDF."
+      },
+      {
+        "q": "Où sont stockés les fichiers Pro ?",
+        "a": "Les fichiers Pro sont stockés en toute sécurité sur AWS S3 dans votre compte. Seule votre équipe y accède. Tous les transferts sont chiffrés."
+      },
+      {
+        "q": "Puis-je résilier Pro à tout moment ?",
+        "a": "Oui. Résiliez depuis vos paramètres de facturation. Sans engagement."
+      },
+      {
+        "q": "Que deviennent mes données si je résilie ?",
+        "a": "Vous gardez l’accès jusqu’à la fin de la période payée. Exportez vos données à tout moment avant résiliation."
+      },
+      {
+        "q": "Comment fonctionne l’essai de 14 jours ?",
+        "a": "Accès Pro complet 14 jours, sans carte bancaire. Passez à une offre payante pendant ou après l’essai."
+      },
+      {
+        "q": "Puis-je passer de Gratuit à Pro ?",
+        "a": "Oui. Vos annotations et mesures locales migrent automatiquement vers le cloud lors du passage à Pro."
+      },
+      {
+        "q": "Prenez-vous en charge DWG/CAD ?",
+        "a": "Pour l’instant PDF uniquement. DXF/DWG est sur notre feuille de route."
+      }
+    ]
+  },
+  "language": {
+    "label": "Langue",
+    "switchTo": "Changer de langue"
+  },
+  "auth": {
+    "signInTitle": "Connexion"
+  }
+}

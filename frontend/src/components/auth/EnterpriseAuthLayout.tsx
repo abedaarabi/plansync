@@ -12,7 +12,7 @@ export function EnterpriseAuthLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[var(--enterprise-auth-bg)] font-[family-name:var(--font-inter)]">
+    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-[var(--enterprise-auth-bg)] pb-[env(safe-area-inset-bottom,0px)] pt-[env(safe-area-inset-top,0px)] font-[family-name:var(--font-inter)]">
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.35]"
         style={{

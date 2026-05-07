@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AlertCircle, ArrowRight, Loader2, Lock, Mail, User } from "lucide-react";
 import { BrandStoryPanel, MarketingHeroBackdrop } from "@/components/BrandStoryPanel";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { SocialAuthButtons } from "@/components/SocialAuthButtons";
 import { authClient } from "@/lib/auth-client";
 import { workspaceGateUrl } from "@/lib/workspacePreference";
@@ -314,10 +315,13 @@ export default function SignInPage() {
                       </div>
                     ) : null}
 
-                    <button
+                    <EnterpriseButton
                       type="submit"
                       disabled={loading}
-                      className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-600/25 transition hover:bg-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/50 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55"
+                      variant="primary"
+                      fullWidth
+                      loading={loading}
+                      className="shadow-md shadow-blue-600/25 ring-0 focus-visible:ring-[#2563EB]/50"
                     >
                       {loading ? (
                         <>
@@ -333,7 +337,7 @@ export default function SignInPage() {
                           />
                         </>
                       )}
-                    </button>
+                    </EnterpriseButton>
                   </form>
 
                   <div className="relative">

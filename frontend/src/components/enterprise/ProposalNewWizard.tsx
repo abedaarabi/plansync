@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { ProposalLetterPreviewDialog } from "@/components/enterprise/ProposalLetterPreviewDialog";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
@@ -363,9 +364,12 @@ export function ProposalNewWizard({
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <Link href={basePath} className="text-sm font-medium text-[#2563EB] hover:underline">
+    <div className="mx-auto min-w-0 max-w-4xl space-y-6 px-1 sm:px-0">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <Link
+          href={basePath}
+          className="min-w-0 shrink truncate text-sm font-medium text-[var(--enterprise-primary)] hover:underline"
+        >
           ← Proposals
         </Link>
         <div className="text-sm text-slate-500">Step {step} of 3</div>
@@ -391,11 +395,10 @@ export function ProposalNewWizard({
             <Field label="Valid until" value={validUntil} onChange={setValidUntil} type="date" />
           </div>
           <div className="mt-6 flex justify-end">
-            <button
+            <EnterpriseButton
               type="button"
               disabled={step1ContinueMut.isPending || !title || !clientName || !clientEmail}
               onClick={() => step1ContinueMut.mutate()}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
             >
               {step1ContinueMut.isPending ? (
                 <>
@@ -405,7 +408,7 @@ export function ProposalNewWizard({
               ) : (
                 "Next →"
               )}
-            </button>
+            </EnterpriseButton>
           </div>
         </div>
       )}

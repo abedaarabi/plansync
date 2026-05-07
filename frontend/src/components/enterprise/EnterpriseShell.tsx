@@ -112,7 +112,7 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
             className="flex h-dvh min-h-0 w-full min-w-0 max-w-full flex-col overflow-x-hidden bg-[var(--enterprise-bg)] text-[var(--enterprise-text)]"
             style={{ fontFamily: "var(--font-inter), ui-sans-serif, system-ui, sans-serif" }}
           >
-            <header className="flex h-[var(--enterprise-topbar-h)] shrink-0 items-center justify-between gap-3 border-b border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_88%,transparent)] px-4 shadow-[0_1px_0_0_rgba(255,255,255,0.72)_inset] backdrop-blur-xl sm:px-6">
+            <header className="flex h-[var(--enterprise-topbar-h)] shrink-0 items-center justify-between gap-3 border-b border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_88%,transparent)] px-4 pt-[env(safe-area-inset-top,0px)] shadow-[0_1px_0_0_rgba(255,255,255,0.72)_inset] backdrop-blur-xl sm:px-6">
               <Link
                 href="/projects"
                 className="select-none text-[15px] font-bold tracking-tight text-[var(--enterprise-text)]"

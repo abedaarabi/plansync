@@ -8,3 +8,5 @@ package-lock.json
 **/public/workbox-*.js.map
 frontend/public/sw.js
 frontend/public/workbox-*.js
+**/public/worker-*.js
+frontend/public/worker-*.js

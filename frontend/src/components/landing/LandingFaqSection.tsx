@@ -1,10 +1,16 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { LANDING_FAQ } from "@/lib/landingContent";
+import { useMessages, useTranslations } from "next-intl";
 import { AnimateIn } from "./AnimateIn";
 
+type FaqItem = { q: string; a: string };
+
 export function LandingFaqSection() {
+  const t = useTranslations("faq");
+  const messages = useMessages() as { faq?: { items?: FaqItem[] } };
+  const items: FaqItem[] = messages.faq?.items ?? [];
+
   return (
     <section
       className="relative scroll-mt-20 border-t border-slate-200/60 bg-[var(--enterprise-bg)] py-24 sm:py-32"
@@ -13,18 +19,18 @@ export function LandingFaqSection() {
       <div className="mx-auto max-w-3xl px-6">
         <AnimateIn className="text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
-            FAQ
+            {t("eyebrow")}
           </p>
           <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            Frequently asked questions
+            {t("title")}
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-sm text-slate-600 sm:text-base">
-            Billing, storage, and how Free vs Pro works.
+            {t("subtitle")}
           </p>
         </AnimateIn>
 
         <div className="mt-12 rounded-2xl border border-slate-200/90 bg-white p-1 shadow-[var(--enterprise-shadow-card)] sm:mt-14 sm:p-2">
-          {LANDING_FAQ.map((item, i) => (
+          {items.map((item, i) => (
             <AnimateIn key={item.q} delay={i * 40}>
               <details className="group border-b border-slate-100 last:border-0 first:rounded-t-xl last:rounded-b-xl open:bg-slate-50/50">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-4 text-left text-[15px] font-semibold text-slate-900 transition-colors hover:text-[var(--landing-cta)] sm:px-5 sm:py-5 [&::-webkit-details-marker]:hidden">

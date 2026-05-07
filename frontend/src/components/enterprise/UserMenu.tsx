@@ -3,13 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ChevronDown, LogOut, UserRound } from "lucide-react";
+import { AppLocaleSelect } from "@/components/i18n/AppLocaleSelect";
 import { authClient } from "@/lib/auth-client";
 import { clearAppBadgeSafe } from "@/lib/appBadge";
 import { userInitials } from "@/lib/user-initials";
 
 export function UserMenu() {
   const router = useRouter();
+  const t = useTranslations("app.userMenu");
   const { data: session, isPending } = authClient.useSession();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -59,7 +62,7 @@ export function UserMenu() {
         href="/sign-in?next=/dashboard"
         className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/40 hover:bg-[var(--enterprise-hover-surface)]"
       >
-        Sign in
+        {t("signIn")}
       </Link>
     );
   }
@@ -82,7 +85,7 @@ export function UserMenu() {
           )}
         </span>
         <span className="hidden min-w-0 flex-1 truncate text-xs font-medium text-[var(--enterprise-text)] sm:block">
-          {name || email.split("@")[0] || "Account"}
+          {name || email.split("@")[0] || t("displayFallback")}
         </span>
         <ChevronDown
           className="hidden h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)] sm:block"
@@ -98,9 +101,12 @@ export function UserMenu() {
         >
           <div className="border-b border-[var(--enterprise-border)]/80 bg-[var(--enterprise-bg)]/50 px-3 py-2.5">
             <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">
-              {name || "Your account"}
+              {name || t("yourAccount")}
             </p>
             <p className="truncate text-xs text-[var(--enterprise-text-muted)]">{email}</p>
+          </div>
+          <div className="border-b border-[var(--enterprise-border)]/80 px-3 py-2.5">
+            <AppLocaleSelect variant="enterprise" />
           </div>
           <Link
             href="/account"
@@ -109,7 +115,7 @@ export function UserMenu() {
             onClick={() => setOpen(false)}
           >
             <UserRound className="h-4 w-4 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
-            Account
+            {t("account")}
           </Link>
           <button
             type="button"
@@ -118,7 +124,7 @@ export function UserMenu() {
             onClick={() => void onSignOut()}
           >
             <LogOut className="h-4 w-4 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
-            Log out
+            {t("logOut")}
           </button>
         </div>
       ) : null}

@@ -44,6 +44,7 @@ import type { ProjectMeasurementSystem } from "@/lib/projectMeasurement";
 import type { CloudFile, FileVersion, Folder as ProjectFolder, Project } from "@/types/projects";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
+import { useTranslations } from "next-intl";
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
 import {
   NewProjectDialog,
@@ -101,6 +102,8 @@ function sortedFileVersions(f: CloudFile): FileVersion[] {
 export function ProjectsClient() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const tp = useTranslations("app.pages.projects");
+  const tc = useTranslations("app.pages.common");
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
   const isAdmin = primary?.role === "ADMIN" || primary?.role === "SUPER_ADMIN";
@@ -224,12 +227,12 @@ export function ProjectsClient() {
   const loadError = useMemo(() => {
     if (!projectsQueryError) return null;
     if (projectsQueryError instanceof ProRequiredError) {
-      return "Cloud projects require an active Pro subscription.";
+      return tp("loadErrorPro");
     }
     return projectsQueryError instanceof Error
       ? projectsQueryError.message
-      : "Could not load projects.";
-  }, [projectsQueryError]);
+      : tp("loadErrorGeneric");
+  }, [projectsQueryError, tp]);
 
   const [error, setError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -767,7 +770,7 @@ export function ProjectsClient() {
   if (ctxLoading || (Boolean(wid && isPro) && projectsPending)) {
     return (
       <div className="p-4 sm:p-6">
-        <EnterpriseLoadingState message="Loading projects…" label="Loading workspace projects" />
+        <EnterpriseLoadingState message={tc("loadingProjects")} label={tc("loadingProjectsAria")} />
       </div>
     );
   }
@@ -775,7 +778,7 @@ export function ProjectsClient() {
   if (!primary || !wid) {
     return (
       <div className="enterprise-card p-8 text-sm text-[var(--enterprise-text-muted)]">
-        Sign in and join a workspace to manage projects.
+        {tp("signInGate")}
       </div>
     );
   }
@@ -783,8 +786,9 @@ export function ProjectsClient() {
   if (!isPro) {
     return (
       <div className="enterprise-alert-warning p-6 text-sm">
-        Cloud projects and file uploads require an{" "}
-        <strong className="font-semibold">active Pro</strong> workspace subscription.
+        {tp("proGateBefore")}
+        <strong className="font-semibold">{tp("proGateStrong")}</strong>
+        {tp("proGateAfter")}
       </div>
     );
   }
@@ -795,7 +799,7 @@ export function ProjectsClient() {
         <aside className="enterprise-card w-full shrink-0 p-4 lg:w-72">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
-              Projects
+              {tp("title")}
             </h2>
             {isAdmin ? (
               <button
@@ -804,7 +808,7 @@ export function ProjectsClient() {
                 className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary)] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)]"
               >
                 <Plus className="h-3 w-3" />
-                New
+                {tp("new")}
               </button>
             ) : null}
           </div>
@@ -845,7 +849,7 @@ export function ProjectsClient() {
           </ul>
           {projects.length === 0 ? (
             <p className="mt-4 text-xs text-[var(--enterprise-text-muted)]">
-              {isAdmin ? "Create a project to upload drawings." : "No projects yet."}
+              {isAdmin ? tp("emptyAdmin") : tp("emptyMember")}
             </p>
           ) : null}
         </aside>
@@ -864,10 +868,9 @@ export function ProjectsClient() {
                     aria-hidden
                   />
                   <div>
-                    <p className="font-semibold">Upload in progress</p>
+                    <p className="font-semibold">{tp("uploadInProgress")}</p>
                     <p className="mt-0.5 text-[12px] leading-snug text-[var(--enterprise-text-muted)]">
-                      You can keep working elsewhere in the app — we&apos;ll notify you here when
-                      the file is ready.
+                      {tp("uploadInProgressHint")}
                     </p>
                   </div>
                 </div>
@@ -896,16 +899,14 @@ export function ProjectsClient() {
                 </nav>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs text-[var(--enterprise-text-muted)]">
-                    {itemCount} item{itemCount === 1 ? "" : "s"} in this folder
-                    {sortedFiles.length > 0
-                      ? ` · ${sortedFiles.length} file${sortedFiles.length === 1 ? "" : "s"}`
-                      : ""}
+                    {tp("itemsInFolder", { count: itemCount })}
+                    {sortedFiles.length > 0 ? tp("filesCount", { count: sortedFiles.length }) : ""}
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="inline-flex rounded-lg border border-[var(--enterprise-border)] p-0.5">
                       <button
                         type="button"
-                        title="Grid view"
+                        title={tp("gridView")}
                         onClick={() => setViewMode("grid")}
                         className={`rounded-md p-1.5 ${viewMode === "grid" ? "bg-slate-100 shadow-sm" : "text-[var(--enterprise-text-muted)]"}`}
                       >
@@ -913,7 +914,7 @@ export function ProjectsClient() {
                       </button>
                       <button
                         type="button"
-                        title="List view"
+                        title={tp("listView")}
                         onClick={() => setViewMode("list")}
                         className={`rounded-md p-1.5 ${viewMode === "list" ? "bg-slate-100 shadow-sm" : "text-[var(--enterprise-text-muted)]"}`}
                       >
@@ -926,7 +927,7 @@ export function ProjectsClient() {
                       className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-white px-3 py-2 text-xs font-medium"
                     >
                       <FolderPlus className="h-3.5 w-3.5" />
-                      New folder
+                      {tp("newFolder")}
                     </button>
                     <label
                       className={`inline-flex select-none items-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 py-2 text-xs font-semibold text-white transition ${
@@ -941,7 +942,7 @@ export function ProjectsClient() {
                       ) : (
                         <Upload className="h-3.5 w-3.5 shrink-0" />
                       )}
-                      {uploading ? "Uploading…" : "Upload file"}
+                      {uploading ? tp("uploading") : tp("uploadFile")}
                       <input
                         type="file"
                         className="sr-only"
@@ -960,10 +961,10 @@ export function ProjectsClient() {
                       <FileText className="h-10 w-10 opacity-90" strokeWidth={1.25} aria-hidden />
                     </div>
                     <p className="mt-4 text-base font-semibold text-[var(--enterprise-text)]">
-                      No files yet
+                      {tp("noFilesYet")}
                     </p>
                     <p className="mt-1 max-w-sm text-[14px] text-[var(--enterprise-subtitle)]">
-                      Upload your first file to get started
+                      {tp("uploadFirstHint")}
                     </p>
                     <label
                       className={`mt-6 inline-flex select-none items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition ${
@@ -978,7 +979,7 @@ export function ProjectsClient() {
                       ) : (
                         <Upload className="h-4 w-4 shrink-0" />
                       )}
-                      {uploading ? "Uploading…" : "Upload file"}
+                      {uploading ? tp("uploading") : tp("uploadFile")}
                       <input
                         type="file"
                         className="sr-only"
@@ -992,11 +993,11 @@ export function ProjectsClient() {
                     <table className="w-full min-w-[640px] text-left text-sm">
                       <thead>
                         <tr className="border-b border-[var(--enterprise-border)] text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                          <th className="pb-2 pl-2 pr-4">Name</th>
-                          <th className="pb-2 pr-4">Modified</th>
-                          <th className="pb-2 pr-4">Size</th>
-                          <th className="pb-2 pr-4">Version</th>
-                          <th className="min-w-[4.5rem] pb-2" aria-label="Actions" />
+                          <th className="pb-2 pl-2 pr-4">{tp("tableName")}</th>
+                          <th className="pb-2 pr-4">{tp("tableModified")}</th>
+                          <th className="pb-2 pr-4">{tp("tableSize")}</th>
+                          <th className="pb-2 pr-4">{tp("tableVersion")}</th>
+                          <th className="min-w-[4.5rem] pb-2" aria-label={tp("tableActions")} />
                         </tr>
                       </thead>
                       <tbody>

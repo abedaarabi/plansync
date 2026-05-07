@@ -1,21 +1,40 @@
 "use client";
 
 import Link from "next/link";
+import { useMessages, useTranslations } from "next-intl";
 import { ArrowRight, Check, Cloud, Monitor } from "lucide-react";
 import { AnimateIn } from "./AnimateIn";
+import {
+  ENTERPRISE_FEATURES as ENTERPRISE_FEATURES_DEFAULT,
+  FREE_FEATURES as FREE_FEATURES_DEFAULT,
+  PRO_FEATURES as PRO_FEATURES_DEFAULT,
+} from "./constants";
 import {
   ENTERPRISE_MONTHLY_PRICE_USD,
   EXTRA_SEAT_MONTHLY_USD,
   PRO_INCLUDED_SEATS,
   PRO_MONTHLY_PRICE_USD,
 } from "@/lib/productPricing";
-import { ENTERPRISE_FEATURES, FREE_FEATURES, PRO_FEATURES } from "./constants";
 
 type LandingPricingSectionProps = {
   onGoToFreeViewer: () => void;
 };
 
+type PricingMsgs = {
+  pricing?: {
+    freeFeatures?: string[];
+    proFeatures?: string[];
+    enterpriseFeatures?: string[];
+  };
+};
+
 export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectionProps) {
+  const t = useTranslations("pricing");
+  const messages = useMessages() as PricingMsgs;
+  const freeFeatures = messages.pricing?.freeFeatures ?? FREE_FEATURES_DEFAULT;
+  const proFeatures = messages.pricing?.proFeatures ?? PRO_FEATURES_DEFAULT;
+  const enterpriseFeatures = messages.pricing?.enterpriseFeatures ?? ENTERPRISE_FEATURES_DEFAULT;
+
   return (
     <section
       className="landing-band-pricing relative scroll-mt-20 border-t border-slate-200/60 py-24 sm:py-32"
@@ -24,20 +43,19 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
       <div className="relative mx-auto max-w-6xl px-6">
         <AnimateIn className="text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
-            Pricing
+            {t("eyebrow")}
           </p>
           <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            Free to start. Pro or Enterprise when you&apos;re ready.
+            {t("title")}
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
-            View and mark up PDFs for free — add Pro for team collaboration, or Enterprise for
-            Operations &amp; Maintenance on top.
+            {t("subtitle")}
           </p>
         </AnimateIn>
 
         <div className="mt-16 grid gap-8 lg:grid-cols-3 lg:gap-8">
           <AnimateIn delay={100}>
-            <div className="flex h-full flex-col rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[var(--enterprise-shadow-card)] sm:p-9">
+            <div className="flex h-full min-w-0 flex-col rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[var(--enterprise-shadow-card)] sm:p-9">
               <div className="flex items-start gap-4">
                 <div
                   className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 ring-1 ring-slate-200/80"
@@ -47,18 +65,20 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                    Free
+                    {t("freeLabel")}
                   </div>
-                  <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900">$0</div>
-                  <p className="mt-1 text-sm text-slate-600">No signup needed</p>
-                  <p className="mt-0.5 text-sm text-slate-500">Local PDF viewer</p>
+                  <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
+                    {t("freePrice")}
+                  </div>
+                  <p className="mt-1 text-sm text-slate-600">{t("freeTagline")}</p>
+                  <p className="mt-0.5 text-sm text-slate-500">{t("freeTagline2")}</p>
                 </div>
               </div>
 
               <ul className="mt-8 flex flex-1 flex-col gap-2.5">
-                {FREE_FEATURES.map((f) => (
+                {freeFeatures.map((f, i) => (
                   <li
-                    key={f}
+                    key={`${f}-${i}`}
                     className="flex items-start gap-3 rounded-xl px-1 py-1.5 text-sm text-slate-700"
                   >
                     <Check
@@ -73,17 +93,17 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
               <button
                 type="button"
                 onClick={onGoToFreeViewer}
-                className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
+                className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
               >
-                Open free viewer <ArrowRight className="h-4 w-4" />
+                {t("openViewer")} <ArrowRight className="h-4 w-4 shrink-0" />
               </button>
             </div>
           </AnimateIn>
 
           <AnimateIn delay={200}>
-            <div className="relative flex h-full flex-col rounded-3xl border-2 border-[var(--landing-cta)] bg-white p-8 shadow-[0_28px_56px_-24px_rgba(37,99,235,0.11),var(--enterprise-shadow-card)] ring-4 ring-[color-mix(in_srgb,var(--landing-cta)_12%,transparent)] sm:p-9">
-              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-[var(--landing-cta)] px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-blue-600/25">
-                Most Popular
+            <div className="relative flex h-full min-w-0 flex-col rounded-3xl border-2 border-[var(--landing-cta)] bg-white p-8 shadow-[0_28px_56px_-24px_rgba(37,99,235,0.11),var(--enterprise-shadow-card)] ring-4 ring-[color-mix(in_srgb,var(--landing-cta)_12%,transparent)] sm:p-9">
+              <div className="absolute -top-3.5 start-1/2 -translate-x-1/2 rounded-full bg-[var(--landing-cta)] px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-blue-600/25">
+                {t("popular")}
               </div>
 
               <div className="flex items-start gap-4">
@@ -95,26 +115,29 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-semibold uppercase tracking-widest text-[var(--landing-cta)]">
-                    Pro
+                    {t("proLabel")}
                   </div>
                   <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
                     ${PRO_MONTHLY_PRICE_USD}
-                    <span className="text-lg font-normal text-slate-500">/month</span>
+                    <span className="text-lg font-normal text-slate-500">{t("perMonth")}</span>
                   </div>
                   <p className="mt-2 text-sm font-medium text-slate-700">
-                    {PRO_INCLUDED_SEATS} members included · unlimited projects
+                    {t("proIncluded", { seats: PRO_INCLUDED_SEATS })}
                   </p>
                   <p className="mt-1 text-xs leading-snug text-slate-500">
-                    +${EXTRA_SEAT_MONTHLY_USD}/mo per additional member after {PRO_INCLUDED_SEATS}.
+                    {t("proExtraSeat", {
+                      extra: EXTRA_SEAT_MONTHLY_USD,
+                      seats: PRO_INCLUDED_SEATS,
+                    })}
                   </p>
-                  <p className="mt-0.5 text-sm text-slate-500">Everything in Free +</p>
+                  <p className="mt-0.5 text-sm text-slate-500">{t("proEverything")}</p>
                 </div>
               </div>
 
               <ul className="mt-8 flex flex-1 flex-col gap-2.5">
-                {PRO_FEATURES.map((f) => (
+                {proFeatures.map((f, i) => (
                   <li
-                    key={f}
+                    key={`${f}-${i}`}
                     className="flex items-start gap-3 rounded-xl px-1 py-1.5 text-sm text-slate-700"
                   >
                     <Check
@@ -128,15 +151,15 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
 
               <Link
                 href="/sign-in"
-                className="btn-shine relative mt-8 flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[var(--landing-cta)] py-3.5 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
+                className="btn-shine relative mt-8 flex min-h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[var(--landing-cta)] py-3.5 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
               >
-                Start 14-day Trial <ArrowRight className="h-4 w-4" />
+                {t("startTrial14")} <ArrowRight className="h-4 w-4 shrink-0" />
               </Link>
             </div>
           </AnimateIn>
 
           <AnimateIn delay={300}>
-            <div className="flex h-full flex-col rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[var(--enterprise-shadow-card)] sm:p-9">
+            <div className="flex h-full min-w-0 flex-col rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[var(--enterprise-shadow-card)] sm:p-9">
               <div className="flex items-start gap-4">
                 <div
                   className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 ring-1 ring-slate-200/80"
@@ -146,26 +169,29 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-semibold uppercase tracking-widest text-slate-600">
-                    Enterprise
+                    {t("enterpriseLabel")}
                   </div>
                   <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
                     ${ENTERPRISE_MONTHLY_PRICE_USD}
-                    <span className="text-lg font-normal text-slate-500">/month</span>
+                    <span className="text-lg font-normal text-slate-500">{t("perMonth")}</span>
                   </div>
                   <p className="mt-2 text-sm font-medium text-slate-700">
-                    {PRO_INCLUDED_SEATS} members included · unlimited projects
+                    {t("proIncluded", { seats: PRO_INCLUDED_SEATS })}
                   </p>
                   <p className="mt-1 text-xs leading-snug text-slate-500">
-                    +${EXTRA_SEAT_MONTHLY_USD}/mo per additional member after {PRO_INCLUDED_SEATS}.
+                    {t("proExtraSeat", {
+                      extra: EXTRA_SEAT_MONTHLY_USD,
+                      seats: PRO_INCLUDED_SEATS,
+                    })}
                   </p>
-                  <p className="mt-0.5 text-sm text-slate-500">Pro + O&amp;M</p>
+                  <p className="mt-0.5 text-sm text-slate-500">{t("enterpriseBlurb")}</p>
                 </div>
               </div>
 
               <ul className="mt-8 flex flex-1 flex-col gap-2.5">
-                {ENTERPRISE_FEATURES.map((f) => (
+                {enterpriseFeatures.map((f, i) => (
                   <li
-                    key={f}
+                    key={`${f}-${i}`}
                     className="flex items-start gap-3 rounded-xl px-1 py-1.5 text-sm text-slate-700"
                   >
                     <Check
@@ -179,17 +205,16 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
 
               <Link
                 href="/sign-in"
-                className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
+                className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
               >
-                Start 14-day Trial <ArrowRight className="h-4 w-4" />
+                {t("startTrial14")} <ArrowRight className="h-4 w-4 shrink-0" />
               </Link>
             </div>
           </AnimateIn>
         </div>
 
         <p className="mx-auto mt-10 max-w-2xl text-center text-xs leading-relaxed text-slate-500">
-          Seat counts follow internal (non-external) members and pending invites. Extra-seat billing
-          is applied when you exceed {PRO_INCLUDED_SEATS} — see billing after checkout.
+          {t("footnote", { seats: PRO_INCLUDED_SEATS })}
         </p>
       </div>
     </section>

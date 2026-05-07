@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ArrowRight, HardHat, Link2, Wrench } from "lucide-react";
 import { getSolutionsByCategory, LANDING_SOLUTIONS } from "@/lib/landingContent";
 import { AnimateIn } from "./AnimateIn";
@@ -25,6 +26,10 @@ const operationsExtraCount =
   getSolutionsByCategory("operations").length - FEATURED_OPERATIONS.length;
 
 export function LandingSolutionsShowcaseSection() {
+  const tIntro = useTranslations("solutionsIntro");
+  const tCons = useTranslations("constructionCard");
+  const tOps = useTranslations("operationsCard");
+
   return (
     <section
       id="features"
@@ -41,21 +46,24 @@ export function LandingSolutionsShowcaseSection() {
 
       <div className="relative mx-auto max-w-6xl px-6">
         <AnimateIn className="mx-auto max-w-3xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/90 bg-white/90 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-600 shadow-sm backdrop-blur-sm">
-            <Link2 className="h-3 w-3 text-(--landing-cta)" strokeWidth={2.5} aria-hidden />
-            Platform
+          <div className="inline-flex min-w-0 items-center gap-2 rounded-full border border-slate-200/90 bg-white/90 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-600 shadow-sm backdrop-blur-sm">
+            <Link2
+              className="h-3 w-3 shrink-0 text-(--landing-cta)"
+              strokeWidth={2.5}
+              aria-hidden
+            />
+            {tIntro("eyebrow")}
           </div>
           <h2 className="mt-8 text-pretty text-[2rem] font-semibold leading-[1.12] tracking-tight text-slate-900 sm:text-[2.65rem] sm:leading-[1.08]">
             <span className="block text-slate-500 sm:text-[1.85rem] sm:leading-snug">
-              Two tools.
+              {tIntro("line1")}
             </span>
             <span className="mt-1 block bg-linear-to-br from-slate-900 via-slate-800 to-slate-700 bg-clip-text text-transparent sm:mt-0">
-              One connected workflow.
+              {tIntro("line2")}
             </span>
           </h2>
           <p className="mx-auto mt-6 max-w-xl text-[17px] leading-relaxed text-slate-600 sm:text-lg sm:leading-relaxed">
-            Field delivery and building operations share one workspace — drawings, issues, RFIs, and
-            handover data stay linked instead of siloed in different apps.
+            {tIntro("body")}
           </p>
         </AnimateIn>
 
@@ -77,14 +85,13 @@ export function LandingSolutionsShowcaseSection() {
                     </div>
                     <div className="min-w-0 pt-0.5">
                       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-700/90">
-                        Construction
+                        {tCons("label")}
                       </p>
                       <h3 className="mt-1.5 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
-                        Job site tools for every team
+                        {tCons("title")}
                       </h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-[15px]">
-                        Plans, issues, RFIs, and takeoff — aligned with how supers and PMs actually
-                        work.
+                        {tCons("body")}
                       </p>
                     </div>
                   </div>
@@ -126,9 +133,7 @@ export function LandingSolutionsShowcaseSection() {
                       >
                         +{constructionExtraCount}
                       </span>
-                      <span className="text-sm leading-snug text-slate-600">
-                        Cloud storage, PDF revisions, schedule, audits, proposals
-                      </span>
+                      <span className="text-sm leading-snug text-slate-600">{tCons("extra")}</span>
                     </div>
                   </li>
                 </ul>
@@ -138,8 +143,8 @@ export function LandingSolutionsShowcaseSection() {
                     href="/solutions/viewer"
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-(--landing-cta) px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:bg-(--landing-cta-bright) sm:w-auto"
                   >
-                    Explore Construction tools
-                    <ArrowRight className="h-4 w-4" />
+                    {tCons("cta")}
+                    <ArrowRight className="h-4 w-4 shrink-0" />
                   </Link>
                 </div>
               </div>
@@ -163,14 +168,13 @@ export function LandingSolutionsShowcaseSection() {
                     </div>
                     <div className="min-w-0 pt-0.5">
                       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-800/90">
-                        Operations &amp; FM
+                        {tOps("label")}
                       </p>
                       <h3 className="mt-1.5 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
-                        Building operations from day one
+                        {tOps("title")}
                       </h3>
                       <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-[15px]">
-                        Handover, assets, maintenance, and dashboards — structured for facilities
-                        teams, not generic tickets.
+                        {tOps("body")}
                       </p>
                     </div>
                   </div>
@@ -212,9 +216,7 @@ export function LandingSolutionsShowcaseSection() {
                       >
                         +{operationsExtraCount}
                       </span>
-                      <span className="text-sm leading-snug text-slate-600">
-                        Work orders, inspections, tenant portal
-                      </span>
+                      <span className="text-sm leading-snug text-slate-600">{tOps("extra")}</span>
                     </div>
                   </li>
                 </ul>
@@ -224,8 +226,8 @@ export function LandingSolutionsShowcaseSection() {
                     href="/solutions/om-handover"
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200/90 bg-slate-50 px-5 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-white sm:w-auto"
                   >
-                    Explore Operations tools
-                    <ArrowRight className="h-4 w-4" />
+                    {tOps("cta")}
+                    <ArrowRight className="h-4 w-4 shrink-0" />
                   </Link>
                 </div>
               </div>
@@ -238,8 +240,8 @@ export function LandingSolutionsShowcaseSection() {
             href="/solutions"
             className="inline-flex items-center gap-2 rounded-full border border-slate-200/90 bg-white/90 px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-900/3 transition hover:border-slate-300 hover:bg-white hover:text-slate-900"
           >
-            View all {LANDING_SOLUTIONS.length} solutions
-            <ArrowRight className="h-4 w-4 text-(--landing-cta)" />
+            {tIntro("allSolutionsCta", { count: LANDING_SOLUTIONS.length })}
+            <ArrowRight className="h-4 w-4 shrink-0 text-(--landing-cta)" />
           </Link>
         </AnimateIn>
       </div>

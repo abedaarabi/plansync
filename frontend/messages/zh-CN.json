@@ -1,0 +1,208 @@
+{
+  "nav": {
+    "features": "功能",
+    "pricing": "定价",
+    "faq": "常见问题",
+    "install": "安装",
+    "signIn": "登录",
+    "dashboard": "控制台",
+    "startFree": "免费开始 →",
+    "toggleMenu": "切换菜单",
+    "construction": "施工",
+    "operationsFm": "运维与设施管理"
+  },
+  "hero": {
+    "eyebrow": "建造管理平台",
+    "title": "图纸、问题与 RFI — 团队的单一真实来源",
+    "titleHighlight": "单一真实来源",
+    "sub": "所有人基于同一套图纸工作。现场问题与正式 RFI 始终关联在图纸上 — 而不是淹没在邮件里。在浏览器中免费开始；当团队需要云端协作时再升级。",
+    "openViewer": "打开免费查看器",
+    "startTrial": "开始 Pro 试用",
+    "stat1Value": "永久免费",
+    "stat1Label": "PDF 查看器",
+    "stat2Value": "14 天",
+    "stat2Label": "Pro 试用",
+    "stat3Value": "无捆绑",
+    "stat3Label": "随时取消"
+  },
+  "solutionsIntro": {
+    "eyebrow": "平台",
+    "line1": "两套工具。",
+    "line2": "一个连通的工作流。",
+    "body": "交付与楼宇运营共享同一工作区 — 图纸、问题、RFI 与移交数据保持关联，而不是分散在不同应用中。",
+    "allSolutionsCta": "查看全部 {count} 个解决方案"
+  },
+  "constructionCard": {
+    "label": "施工",
+    "title": "面向每个团队的现场工具",
+    "body": "图纸、问题、RFI 与算量 — 贴合领班与项目经理的真实工作方式。",
+    "extra": "云存储、PDF 版本、进度计划、审计、提案",
+    "cta": "探索施工工具"
+  },
+  "operationsCard": {
+    "label": "运维与设施管理",
+    "title": "从第一天起管理楼宇运营",
+    "body": "移交、资产、维护与看板 — 为 FM 团队结构化设计，而非通用工单。",
+    "extra": "工单、检查、租户门户",
+    "cta": "探索运营工具"
+  },
+  "howItWorks": {
+    "eyebrow": "工作原理",
+    "title": "从 PDF 到项目清晰透明",
+    "description": "先独自使用免费版；当图纸、问题与 RFI 需要集中管理时，再邀请团队升级到 Pro。",
+    "step1Title": "导入图纸",
+    "step1Body": "在免费查看器中立即打开 PDF，或在团队需要共享同一套图纸时上传到 Pro。",
+    "step2Title": "标注与测量",
+    "step2Body": "校准比例、测量与批注 — 无论是在现场箱房还是办公室都同样精准。",
+    "step3Title": "在 Pro 中协同",
+    "step3Body": "在图纸上创建问题、按流程处理 RFI，并让所有人查看同一版图纸。",
+    "step4Title": "闭环收尾",
+    "step4Body": "跟踪从现场到回复的状态，导出算量与带标记图纸，自信巡查现场。"
+  },
+  "pricing": {
+    "eyebrow": "定价",
+    "title": "免费起步。准备好再选 Pro 或 Enterprise。",
+    "subtitle": "免费查看与标注 PDF — Pro 用于团队协作，Enterprise 增加运维与维护功能。",
+    "freeLabel": "免费",
+    "freePrice": "$0",
+    "freeTagline": "无需注册",
+    "freeTagline2": "本地 PDF 查看器",
+    "openViewer": "打开免费查看器",
+    "popular": "最受欢迎",
+    "proLabel": "Pro",
+    "perMonth": "/月",
+    "proIncluded": "含 {seats} 名成员 · 项目不限",
+    "proExtraSeat": "第 {seats} 名之后每位每月 +{extra} USD。",
+    "proEverything": "包含免费版全部功能 +",
+    "startTrial14": "开始 14 天试用",
+    "enterpriseLabel": "Enterprise",
+    "enterpriseBlurb": "Pro + 运维",
+    "footnote": "席位统计包含内部成员与待接受邀请。超过 {seats} 后按额外席位计费 — 结账后可在账单中查看。",
+    "freeFeatures": [
+      "打开任意 PDF",
+      "校准比例",
+      "测量与标注",
+      "在图纸上批注",
+      "导出带标记 PDF",
+      "可离线使用",
+      "文件不离开本机"
+    ],
+    "proFeatures": [
+      "20GB 云存储",
+      "团队协作",
+      "图纸上问题跟踪",
+      "RFI 工作流",
+      "工程量算量",
+      "PDF 版本管理",
+      "项目进度计划"
+    ],
+    "enterpriseFeatures": [
+      "包含 Pro 全部功能",
+      "运维与维护模式",
+      "移交、资产与工单",
+      "维护计划与检查",
+      "租户门户"
+    ]
+  },
+  "pwa": {
+    "eyebrow": "安装",
+    "title": "将 PlanSync 安装到设备",
+    "subtitle": "安装或添加到主屏幕、登录，然后开启提醒 — 只需几步。",
+    "step1Heading": "安装或添加到主屏幕",
+    "step1Lead": "选择设备 — 按以下提示让 PlanSync 像普通应用一样打开。",
+    "desktopLabel": "桌面（Chrome / Edge）：",
+    "desktopBody": "在地址栏查找安装图标，或使用应用菜单 → 安装 PlanSync。",
+    "iosLabel": "iPhone / iPad（Safari）：",
+    "iosBody": "共享 → 添加到主屏幕，然后从图标打开。",
+    "androidLabel": "Android（Chrome）：",
+    "androidBody": "菜单 → 安装应用或添加到主屏幕。",
+    "installApp": "安装应用",
+    "installHint": "若未显示安装按钮，可能浏览器已安装 — 请使用浏览器菜单。",
+    "step2Title": "登录",
+    "step2Body": "从新快捷方式打开 PlanSync 并登录工作区。启用推送提醒前需要先注册账户。",
+    "step3Title": "开启通知",
+    "step3Body": "前往账户（个人资料菜单）→ 本机提醒并开启。浏览器询问时选择“允许”，以便在应用外接收 RFI、问题与其他更新。",
+    "notifChrome": "Chrome / Edge：",
+    "notifChromeBody": "若曾屏蔽提醒，请点击锁或站点图标 → 站点设置 → 通知 → 允许。",
+    "notifSafari": "Safari（iOS）：",
+    "notifSafariBody": "请先将 PlanSync 添加到主屏幕，然后在 iOS 设置 → 通知中检查 PlanSync。",
+    "stepsAria": "安装与通知步骤",
+    "footer": "PWA 能力取决于浏览器。免费查看器可在标签页直接使用。通知需要登录工作区及支持 Web Push 的浏览器。"
+  },
+  "finalCta": {
+    "title": "今天免费开始",
+    "body": "几秒钟内打开免费查看器 — 无需注册。",
+    "bodyLine2": "团队准备好后再升级到 Pro。",
+    "openViewer": "打开免费查看器",
+    "startTrial": "开始 Pro 试用",
+    "footnote1": "在浏览器中运行 · 可选安装 PWA",
+    "footnote2": "开始无需信用卡"
+  },
+  "footer": {
+    "tagline": "为绝不能基于错误信息施工的团队而设的图纸工作区。",
+    "product": "产品",
+    "howItWorks": "工作原理",
+    "allSolutions": "全部解决方案",
+    "features": "功能",
+    "pricing": "定价",
+    "freeViewer": "免费查看器",
+    "changelog": "更新日志",
+    "solutionsHeading": "解决方案",
+    "company": "公司",
+    "about": "关于",
+    "blog": "博客",
+    "contact": "联系",
+    "legal": "法律",
+    "privacy": "隐私政策",
+    "terms": "服务条款",
+    "cookies": "Cookie 政策",
+    "rights": "保留所有权利。",
+    "openViewerCta": "打开免费 PDF 查看器"
+  },
+  "faq": {
+    "eyebrow": "常见问题",
+    "title": "常见问题",
+    "subtitle": "计费、存储与免费版/Pro 的区别。",
+    "items": [
+      {
+        "q": "免费版真的永久免费吗？",
+        "a": "是的。本地 PDF 查看器永久免费。无隐藏限制、无到期日、无需信用卡。"
+      },
+      {
+        "q": "免费版文件存在哪里？",
+        "a": "免费文件不会离开浏览器，全部保留在你设备本地。我们不会查看或上传你的 PDF。"
+      },
+      {
+        "q": "Pro 文件存在哪里？",
+        "a": "Pro 文件安全存储在你的账户的 AWS S3 中。仅团队可访问，传输均加密。"
+      },
+      {
+        "q": "可以随时取消 Pro 吗？",
+        "a": "可以。随时在账单设置中取消，无任何捆绑。"
+      },
+      {
+        "q": "取消后数据会怎样？",
+        "a": "在当前账单周期结束前仍可访问。请在取消前导出数据。"
+      },
+      {
+        "q": "14 天试用如何运作？",
+        "a": "14 天完整 Pro 功能，无需信用卡。可在试用期间或之后随时升级。"
+      },
+      {
+        "q": "可以从免费版升级到 Pro 吗？",
+        "a": "可以。升级时本地标注与测量会自动迁移到云端。"
+      },
+      {
+        "q": "是否支持 DWG/CAD？",
+        "a": "目前仅支持 PDF。DXF/DWG 已在路线图中。"
+      }
+    ]
+  },
+  "language": {
+    "label": "语言",
+    "switchTo": "切换语言"
+  },
+  "auth": {
+    "signInTitle": "登录"
+  }
+}

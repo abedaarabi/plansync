@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   ArrowUpRight,
@@ -31,9 +31,13 @@ import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { isSuperAdmin } from "@/lib/workspaceRole";
 import { computeWorkspaceHealthScore } from "@/lib/dashboardHealth";
 import { qk } from "@/lib/queryKeys";
+import { useTranslations } from "next-intl";
+
 export function DashboardClient() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const td = useTranslations("app.pages.dashboard");
+  const tc = useTranslations("app.pages.common");
   const [workspaceName, setWorkspaceName] = useState("");
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [createWorkspaceError, setCreateWorkspaceError] = useState<string | null>(null);
@@ -73,24 +77,24 @@ export function DashboardClient() {
 
   if (loading) {
     return (
-      <EnterpriseLoadingState message="Loading dashboard…" label="Loading workspace dashboard" />
+      <EnterpriseLoadingState message={tc("loadingDashboard")} label={tc("loadingDashboardAria")} />
     );
   }
 
   if (meFetchFailed && meError) {
     return (
       <div className="enterprise-alert-danger p-6 text-sm">
-        {meError instanceof Error ? meError.message : "Failed to load"}
+        {meError instanceof Error ? meError.message : tc("failedToLoad")}
         <p className="enterprise-alert-danger-muted mt-2 text-xs">
-          Ensure the API is running (
+          {td("devHintApi")}
           <code className="rounded bg-[var(--enterprise-semantic-danger-border)]/40 px-1">
             npm run dev:backend
           </code>{" "}
-          from the repo root) and{" "}
+          {td("devHintFromRoot")}{" "}
           <code className="rounded bg-[var(--enterprise-semantic-danger-border)]/40 px-1">
             DATABASE_URL
           </code>{" "}
-          is set.
+          {td("devHintDb")}
         </p>
       </div>
     );
@@ -99,14 +103,12 @@ export function DashboardClient() {
   if (!me) {
     return (
       <div className="enterprise-card p-8 text-center">
-        <p className="text-[var(--enterprise-text)]">
-          Sign in to view your cloud workspace dashboard.
-        </p>
+        <p className="text-[var(--enterprise-text)]">{td("signInPrompt")}</p>
         <Link
           href="/sign-in?next=/dashboard"
           className="mt-4 inline-flex rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-medium text-white"
         >
-          Sign in
+          {td("signInCta")}
         </Link>
       </div>
     );
@@ -137,7 +139,7 @@ export function DashboardClient() {
       await queryClient.invalidateQueries({ queryKey: qk.me() });
       router.push("/projects");
     } catch (err) {
-      setCreateWorkspaceError(err instanceof Error ? err.message : "Could not create workspace.");
+      setCreateWorkspaceError(err instanceof Error ? err.message : td("couldNotCreateWorkspace"));
     } finally {
       setCreatingWorkspace(false);
     }
@@ -148,10 +150,10 @@ export function DashboardClient() {
       <div className="enterprise-animate-in space-y-6">
         <section className="enterprise-card max-w-2xl p-6 sm:p-8">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--enterprise-text)]">
-            Create your workspace
+            {td("createWorkspaceTitle")}
           </h1>
           <p className="mt-2 text-[14px] text-[var(--enterprise-text-muted)]">
-            New accounts need a workspace first. After this step, you can add your first project.
+            {td("createWorkspaceBody")}
           </p>
           <form onSubmit={onCreateWorkspace} className="mt-6 space-y-4">
             <div>
@@ -159,14 +161,14 @@ export function DashboardClient() {
                 htmlFor="workspace-name"
                 className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]"
               >
-                Workspace name
+                {td("workspaceNameLabel")}
               </label>
               <input
                 id="workspace-name"
                 value={workspaceName}
                 onChange={(e) => setWorkspaceName(e.target.value)}
                 className="mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
-                placeholder="Acme Construction"
+                placeholder={td("workspaceNamePlaceholder")}
                 required
               />
             </div>
@@ -178,11 +180,13 @@ export function DashboardClient() {
               disabled={creatingWorkspace}
               className="inline-flex rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--enterprise-primary-deep)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {creatingWorkspace ? "Creating..." : "Create workspace"}
+              {creatingWorkspace ? td("creating") : td("createWorkspaceCta")}
             </button>
           </form>
           <p className="mt-4 text-xs text-[var(--enterprise-text-muted)]">
-            You will be redirected to <strong>Projects</strong> to add your first project.
+            {td("redirectPrefix")}
+            <strong className="text-[var(--enterprise-text)]">{td("redirectEmphasis")}</strong>
+            {td("redirectSuffix")}
           </p>
         </section>
       </div>
@@ -237,17 +241,72 @@ export function DashboardClient() {
   const storageUsageBarPct =
     storageQuota > 0 ? Math.min(100, (storageUsed / storageQuota) * 100) : 0;
 
-  const checklist: { id: string; label: string; done: boolean }[] = [
-    { id: "1", label: "Create account", done: true },
-    { id: "2", label: "Create workspace", done: hasWorkspace },
-    { id: "3", label: "Upload first drawing", done: fileCount > 0 },
-    { id: "4", label: "Invite a team member", done: memberCount > 1 },
-    { id: "5", label: "Track your first issue", done: issueTotal > 0 },
-  ];
+  const checklist = useMemo(
+    (): { id: string; label: string; done: boolean }[] => [
+      { id: "1", label: td("checklistCreateAccount"), done: true },
+      { id: "2", label: td("checklistCreateWorkspace"), done: hasWorkspace },
+      { id: "3", label: td("checklistUploadDrawing"), done: fileCount > 0 },
+      { id: "4", label: td("checklistInviteTeam"), done: memberCount > 1 },
+      { id: "5", label: td("checklistTrackIssue"), done: issueTotal > 0 },
+    ],
+    [td, hasWorkspace, fileCount, memberCount, issueTotal],
+  );
   const doneCount = checklist.filter((c) => c.done).length;
   const progressPct = (doneCount / checklist.length) * 100;
 
   const firstProject = projects[0];
+
+  const kpiRows = useMemo(
+    () => [
+      {
+        key: "projects",
+        label: td("kpiProjects"),
+        value: String(projectCount),
+        hint: hasWorkspace ? td("kpiProjectsHint1") : td("kpiProjectsHint2"),
+        icon: FileStack,
+        tone: "text-[var(--enterprise-primary)]",
+      },
+      {
+        key: "pdfs",
+        label: td("kpiCloudPdfs"),
+        value: String(fileCount),
+        hint: td("kpiCloudPdfsHint"),
+        icon: FileStack,
+        tone: "text-blue-600",
+      },
+      {
+        key: "issues",
+        label: td("kpiOpenIssues"),
+        value: String(openIssues),
+        hint: td("kpiOpenIssuesHint", { closed: closedIssues, total: issueTotal }),
+        icon: Flag,
+        tone: openIssues === 0 ? "text-emerald-600" : "text-amber-700",
+      },
+      {
+        key: "storage",
+        label: td("kpiStorage"),
+        value: `${(storageUsed / 1024 ** 3).toFixed(2)} GB`,
+        hint: td("kpiStorageHint", {
+          pct: storagePct,
+          quota: (storageQuota / 1024 ** 3).toFixed(0),
+        }),
+        icon: HardDrive,
+        tone: storagePct > 85 ? "text-red-600" : "text-[var(--enterprise-text)]",
+      },
+    ],
+    [
+      td,
+      hasWorkspace,
+      projectCount,
+      fileCount,
+      openIssues,
+      closedIssues,
+      issueTotal,
+      storageUsed,
+      storageQuota,
+      storagePct,
+    ],
+  );
 
   return (
     <div className="enterprise-animate-in space-y-8">
@@ -260,10 +319,10 @@ export function DashboardClient() {
         <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--enterprise-text-muted)]">
-              Workspace
+              {td("workspaceEyebrow")}
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-[28px]">
-              Welcome back, {firstName}
+              {td("welcomeBack", { name: firstName })}
             </h1>
             <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--enterprise-subtitle)]">
               {dash?.workspace?.name ? (
@@ -274,24 +333,24 @@ export function DashboardClient() {
                   {" · "}
                 </>
               ) : null}
-              Track uploads, issues, and team momentum in one place.
+              {td("heroSubtitle")}
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {sub === "active" ? (
                 <span className="enterprise-badge-success px-3 py-1 text-[12px] font-semibold">
-                  Pro active
+                  {td("subActive")}
                 </span>
               ) : sub === "trialing" && isPro ? (
                 <span className="enterprise-badge-warning px-3 py-1 text-[12px] font-semibold">
-                  Trial
+                  {td("subTrial")}
                 </span>
               ) : sub === "trialing" && !isPro ? (
                 <span className="enterprise-badge-neutral px-3 py-1 text-[12px] font-semibold">
-                  Trial ended
+                  {td("subTrialEnded")}
                 </span>
               ) : (
                 <span className="enterprise-badge-neutral px-3 py-1 text-[12px] font-semibold">
-                  Free
+                  {td("subFree")}
                 </span>
               )}
               <Link
@@ -300,7 +359,7 @@ export function DashboardClient() {
                 }
                 className="inline-flex items-center rounded-full border border-[var(--enterprise-border)] bg-white/80 px-3 py-1 text-[12px] font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35"
               >
-                Billing & plan
+                {td("billingAndPlan")}
               </Link>
             </div>
           </div>
@@ -318,10 +377,10 @@ export function DashboardClient() {
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                  Health score
+                  {td("healthScore")}
                 </p>
                 <p className="mt-0.5 text-sm text-[var(--enterprise-text-muted)]">
-                  From issues, storage &amp; activity trend
+                  {td("healthScoreHint")}
                 </p>
               </div>
             </div>
@@ -332,7 +391,7 @@ export function DashboardClient() {
                   {momentum >= 0 ? "+" : ""}
                   {momentum}%
                 </strong>
-                <span className="text-emerald-800/90"> vs prior week</span>
+                <span className="text-emerald-800/90"> {td("momentumVsPrior")}</span>
               </span>
             </div>
           </div>
@@ -341,38 +400,9 @@ export function DashboardClient() {
 
       {/* KPI strip */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          {
-            label: "Projects",
-            value: String(projectCount),
-            hint: hasWorkspace ? "Active in workspace" : "Create via API or UI",
-            icon: FileStack,
-            tone: "text-[var(--enterprise-primary)]",
-          },
-          {
-            label: "Cloud PDFs",
-            value: String(fileCount),
-            hint: "Files in cloud storage",
-            icon: FileStack,
-            tone: "text-blue-600",
-          },
-          {
-            label: "Open issues",
-            value: String(openIssues),
-            hint: `${closedIssues} resolved · ${issueTotal} total`,
-            icon: Flag,
-            tone: openIssues === 0 ? "text-emerald-600" : "text-amber-700",
-          },
-          {
-            label: "Storage",
-            value: `${(storageUsed / 1024 ** 3).toFixed(2)} GB`,
-            hint: `${storagePct}% of ${(storageQuota / 1024 ** 3).toFixed(0)} GB`,
-            icon: HardDrive,
-            tone: storagePct > 85 ? "text-red-600" : "text-[var(--enterprise-text)]",
-          },
-        ].map((k) => (
+        {kpiRows.map((k) => (
           <div
-            key={k.label}
+            key={k.key}
             className="enterprise-card enterprise-card-hover flex gap-4 p-5 transition duration-200 hover:-translate-y-0.5"
           >
             <div
@@ -398,34 +428,42 @@ export function DashboardClient() {
       {isAdmin && hasWorkspace && wid ? (
         <section className="enterprise-card p-6">
           <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-            Workspace usage
+            {td("workspaceUsage")}
           </h2>
           <p className="mt-1 text-[13px] text-[var(--enterprise-text-muted)]">
-            Storage, seats, and project limits for your plan.
+            {td("workspaceUsageDesc")}
           </p>
           <div className="mt-4 max-w-md">
             <WorkspaceUsageMeter
-              label="Storage"
+              label={td("usageLabelStorage")}
               usedLabel={`${formatGiB(storageUsed)} / ${formatGiB(storageQuota)} GB`}
               pct={storageUsageBarPct}
               warn={storageUsageBarPct >= 85}
             />
             <WorkspaceUsageMeter
-              label="Members"
+              label={td("usageLabelMembers")}
               usedLabel={
                 extraSeatCount > 0
-                  ? `${seatPressure} (${includedSeats} incl. + ${extraSeatCount} × $${extraSeatUsd}/mo)`
-                  : `${seatPressure} / ${includedSeats} included`
+                  ? td("membersExtra", {
+                      pressure: seatPressure,
+                      included: includedSeats,
+                      extra: extraSeatCount,
+                      usd: extraSeatUsd,
+                    })
+                  : td("membersIncluded", {
+                      pressure: seatPressure,
+                      included: includedSeats,
+                    })
               }
               pct={seatUsagePct}
               warn={extraSeatCount > 0 || seatUsagePct >= 90}
             />
             <WorkspaceUsageMeter
-              label="Projects"
+              label={td("usageLabelProjects")}
               usedLabel={
                 maxProjects != null
                   ? `${projectCountForUsage} / ${maxProjects}`
-                  : `${projectCountForUsage} projects · unlimited`
+                  : td("projectsUsageUnlimited", { n: projectCountForUsage })
               }
               pct={projectUsagePct}
               warn={maxProjects != null && projectCountForUsage >= maxProjects}
@@ -439,11 +477,10 @@ export function DashboardClient() {
         <section className="enterprise-card xl:col-span-2 overflow-hidden p-0">
           <div className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-6 py-4">
             <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
-              Project health &amp; momentum
+              {td("chartTitle")}
             </h2>
             <p className="mt-1 text-[13px] text-[var(--enterprise-text-muted)]">
-              Daily workspace events (uploads, issues, invites) with a 7-day rolling average —
-              higher sustained activity usually means healthier delivery cadence.
+              {td("chartSubtitle")}
             </p>
           </div>
           <div className="p-6 pt-4">
@@ -451,18 +488,18 @@ export function DashboardClient() {
             <div className="mt-4 flex flex-wrap gap-6 border-t border-[var(--enterprise-border)]/80 pt-4 text-[13px] text-[var(--enterprise-text-muted)]">
               <span className="inline-flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden />
-                Last 7 days:{" "}
+                {td("last7Days")}{" "}
                 <strong className="font-semibold text-[var(--enterprise-text)]">
                   {last7Total}
                 </strong>{" "}
-                events
+                {td("events")}
               </span>
               <span className="inline-flex items-center gap-2">
                 <Users className="h-4 w-4 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
                 <strong className="font-semibold text-[var(--enterprise-text)]">
                   {memberCount}
                 </strong>{" "}
-                seats in use
+                {td("seatsInUse")}
               </span>
             </div>
           </div>
@@ -470,7 +507,7 @@ export function DashboardClient() {
 
         <section className="enterprise-card flex flex-col p-6">
           <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-            Quick actions
+            {td("quickActions")}
           </h2>
           <ul className="mt-4 flex flex-1 flex-col gap-2">
             <li>
@@ -483,7 +520,7 @@ export function DashboardClient() {
                     className="h-4 w-4 text-[var(--enterprise-primary)]"
                     strokeWidth={1.75}
                   />
-                  New project
+                  {td("actionNewProject")}
                 </span>
                 <ArrowUpRight className="h-4 w-4 opacity-50" />
               </Link>
@@ -495,7 +532,7 @@ export function DashboardClient() {
               >
                 <span className="flex items-center gap-2">
                   <Upload className="h-4 w-4 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
-                  Upload PDF
+                  {td("actionUploadPdf")}
                 </span>
                 <ArrowUpRight className="h-4 w-4 opacity-50" />
               </Link>
@@ -510,7 +547,7 @@ export function DashboardClient() {
                     className="h-4 w-4 text-[var(--enterprise-primary)]"
                     strokeWidth={1.75}
                   />
-                  Invite team
+                  {td("actionInviteTeam")}
                 </span>
                 <ArrowUpRight className="h-4 w-4 opacity-50" />
               </Link>
@@ -523,10 +560,10 @@ export function DashboardClient() {
         <section className="enterprise-card p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-              Getting started
+              {td("gettingStarted")}
             </h2>
             <span className="text-[13px] font-medium text-[var(--enterprise-text-muted)]">
-              {doneCount} of {checklist.length}
+              {td("progressCount", { done: doneCount, total: checklist.length })}
             </span>
           </div>
           <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
@@ -563,7 +600,7 @@ export function DashboardClient() {
 
         <section>
           <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-            Your projects
+            {td("yourProjects")}
           </h2>
           {firstProject ? (
             <Link
@@ -577,7 +614,10 @@ export function DashboardClient() {
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-[var(--enterprise-text)]">{firstProject.name}</p>
                   <p className="mt-0.5 text-[13px] text-[var(--enterprise-text-muted)]">
-                    {firstProject.files.length} files · {issueTotal} issues
+                    {td("projectFilesIssues", {
+                      files: firstProject.files.length,
+                      issues: issueTotal,
+                    })}
                   </p>
                 </div>
                 <ArrowUpRight className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]" />
@@ -589,15 +629,17 @@ export function DashboardClient() {
                 className="mx-auto h-10 w-10 text-[var(--enterprise-primary)] opacity-80"
                 strokeWidth={1.25}
               />
-              <p className="mt-3 font-semibold text-[var(--enterprise-text)]">No projects yet</p>
+              <p className="mt-3 font-semibold text-[var(--enterprise-text)]">
+                {td("noProjectsYet")}
+              </p>
               <p className="mt-1 text-[14px] text-[var(--enterprise-text-muted)]">
-                Create a project to organize drawings and uploads.
+                {td("noProjectsBody")}
               </p>
               <Link
                 href="/projects"
                 className="mt-5 inline-flex rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--enterprise-primary-deep)]"
               >
-                Go to Projects
+                {td("goToProjects")}
               </Link>
             </div>
           )}
@@ -605,7 +647,9 @@ export function DashboardClient() {
       </div>
 
       <section className="enterprise-card p-6 sm:max-w-md">
-        <h2 className="text-[13px] font-semibold text-[var(--enterprise-text)]">Shortcuts</h2>
+        <h2 className="text-[13px] font-semibold text-[var(--enterprise-text)]">
+          {td("shortcuts")}
+        </h2>
         <ul className="mt-4 space-y-2">
           <li>
             <Link
@@ -617,7 +661,7 @@ export function DashboardClient() {
                   className="h-4 w-4 text-[var(--enterprise-primary)]"
                   strokeWidth={1.75}
                 />
-                Projects &amp; uploads
+                {td("shortcutProjectsUploads")}
               </span>
               <ArrowUpRight className="h-4 w-4 opacity-50" />
             </Link>
@@ -627,7 +671,7 @@ export function DashboardClient() {
               href="/account"
               className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2.5 text-sm text-[var(--enterprise-text-muted)] transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
             >
-              Account settings
+              {td("shortcutAccountSettings")}
               <ArrowUpRight className="h-4 w-4 opacity-50" />
             </Link>
           </li>
@@ -636,7 +680,7 @@ export function DashboardClient() {
               href="/organization"
               className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2.5 text-sm text-[var(--enterprise-text-muted)] transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
             >
-              Organization
+              {td("shortcutOrganization")}
               <ArrowUpRight className="h-4 w-4 opacity-50" />
             </Link>
           </li>

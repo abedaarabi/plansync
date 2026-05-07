@@ -1,0 +1,208 @@
+{
+  "nav": {
+    "features": "Funktioner",
+    "pricing": "Priser",
+    "faq": "FAQ",
+    "install": "Installer",
+    "signIn": "Log ind",
+    "dashboard": "Oversigt",
+    "startFree": "Start gratis →",
+    "toggleMenu": "Skift menu",
+    "construction": "Byggeri",
+    "operationsFm": "Drift & FM"
+  },
+  "hero": {
+    "eyebrow": "Platform til byggeledelse",
+    "title": "Planer, afvigelser og RFIs — én sandhedskilde for dit team",
+    "titleHighlight": "én sandhedskilde",
+    "sub": "Alle arbejder ud fra de samme tegninger. Feltsager og formelle RFIs forbliver koblet til planen — ikke begravet i e-mail. Start gratis i browseren; opgrader når teamet har brug for skyen.",
+    "openViewer": "Åbn gratis fremviser",
+    "startTrial": "Start Pro-prøve",
+    "stat1Value": "Gratis for altid",
+    "stat1Label": "PDF-fremviser",
+    "stat2Value": "14 dage",
+    "stat2Label": "Pro-prøve",
+    "stat3Value": "Ingen binding",
+    "stat3Label": "Opsig når som helst"
+  },
+  "solutionsIntro": {
+    "eyebrow": "Platform",
+    "line1": "To værktøjer.",
+    "line2": "Én sammenhængende arbejdsgang.",
+    "body": "Udførelse og bygningsdrift deler ét arbejdsområde — tegninger, sager, RFIs og overleveringsdata forbliver koblet i stedet for at ligge i separate apps.",
+    "allSolutionsCta": "Se alle {count} løsninger"
+  },
+  "constructionCard": {
+    "label": "Byggeri",
+    "title": "Værktøjer til byggepladsen for hvert team",
+    "body": "Planer, sager, RFIs og mængder — tilpasset hvordan ledere og projektledere reelt arbejder.",
+    "extra": "Cloud-lager, PDF-revisioner, tidsplan, audits, tilbud",
+    "cta": "Udforsk byggeri-værktøjer"
+  },
+  "operationsCard": {
+    "label": "Drift & FM",
+    "title": "Bygningsdrift fra dag ét",
+    "body": "Overlevering, aktiviteter, vedligehold og dashboards — struktureret til FM-teams, ikke generiske tickets.",
+    "extra": "Arbejdsordrer, inspektioner, lejerportal",
+    "cta": "Udforsk driftsværktøjer"
+  },
+  "howItWorks": {
+    "eyebrow": "Sådan virker det",
+    "title": "Fra PDF til projektklarhed",
+    "description": "Start alene på Free, og inviter teamet til Pro når tegninger, sager og RFIs skal bo ét sted.",
+    "step1Title": "Medbring dine planer",
+    "step1Body": "Åbn PDF-filer med det samme i gratis fremviser, eller upload til Pro når hele teamet deler ét sæt tegninger.",
+    "step2Title": "Annoter og mål",
+    "step2Body": "Kalibrér skala, mål og annotér — samme præcision i container eller på kontoret.",
+    "step3Title": "Koordinér i Pro",
+    "step3Body": "Placer sager på tegningen, kør RFIs med ordentlig workflow, og hold alle på samme revision.",
+    "step4Title": "Luk cirklen",
+    "step4Body": "Følg status fra felt til svar, eksporter mængder og markerede ark, og gå trygt på byggepladsen."
+  },
+  "pricing": {
+    "eyebrow": "Priser",
+    "title": "Gratis at starte. Pro eller Enterprise når I er klar.",
+    "subtitle": "Vis og annotér PDF’er gratis — tilføj Pro til teamsamarbejde, eller Enterprise til drift og vedligehold.",
+    "freeLabel": "Gratis",
+    "freePrice": "0 kr.",
+    "freeTagline": "Ingen tilmelding",
+    "freeTagline2": "Lokal PDF-fremviser",
+    "openViewer": "Åbn gratis fremviser",
+    "popular": "Mest populære",
+    "proLabel": "Pro",
+    "perMonth": "/md.",
+    "proIncluded": "{seats} medlemmer inkluderet · ubegrænsede projekter",
+    "proExtraSeat": "+{extra} USD/md. pr. ekstra medlem efter {seats}.",
+    "proEverything": "Alt i Gratis +",
+    "startTrial14": "Start 14 dages prøve",
+    "enterpriseLabel": "Enterprise",
+    "enterpriseBlurb": "Pro + O&M",
+    "footnote": "Pladser tæller interne medlemmer og afventende invitationer. Ekstra plads faktureres når I overstiger {seats} — se fakturering efter køb.",
+    "freeFeatures": [
+      "Åbn enhver PDF",
+      "Kalibrér skala",
+      "Mål og annotering",
+      "Annotér tegninger",
+      "Eksporter markeret PDF",
+      "Virker offline",
+      "Filer forlader aldrig enheden"
+    ],
+    "proFeatures": [
+      "Cloud-lager 20 GB",
+      "Teamsamarbejde",
+      "Sager på tegninger",
+      "RFI-workflow",
+      "Mængdeopmåling",
+      "PDF-versionsstyring",
+      "Projekttidsplan"
+    ],
+    "enterpriseFeatures": [
+      "Alt i Pro",
+      "Drift og vedligehold",
+      "Overlevering, aktiver og arbejdsordrer",
+      "Vedligeholdelsesplaner og inspektioner",
+      "Lejerportal"
+    ]
+  },
+  "pwa": {
+    "eyebrow": "Installér",
+    "title": "Tilføj PlanSync på din enhed",
+    "subtitle": "Installér eller tilføj til startskærm, log ind, og slå besked til — på få trin.",
+    "step1Heading": "Installér eller tilføj til startskærm",
+    "step1Lead": "Vælg din enhed — brug disse tip så PlanSync åbner som en almindelig app.",
+    "desktopLabel": "Desktop (Chrome / Edge):",
+    "desktopBody": "Led efter install-ikonet i adresselinjen eller appmenuen → Installer PlanSync.",
+    "iosLabel": "iPhone / iPad (Safari):",
+    "iosBody": "Del → Tilføj til hjemmeskærm, åbn derefter fra ikonet.",
+    "androidLabel": "Android (Chrome):",
+    "androidBody": "menu → Installer app eller Tilføj til startskærm.",
+    "installApp": "Installer app",
+    "installHint": "Hvis install-knappen ikke vises, har browseren måske allerede installeret appen — brug browsermenuen.",
+    "step2Title": "Log ind",
+    "step2Body": "Åbn PlanSync fra din genvej og log ind på dit workspace. Der kræves konto før push-beskeder.",
+    "step3Title": "Slå besked til",
+    "step3Body": "Gå til Konto (profilmenu) → Beskeder på denne enhed og slå dem til. Når browseren spørger, vælg Tillad så vi kan nå dig med RFIs og opdateringer uden for appen.",
+    "notifChrome": "Chrome / Edge:",
+    "notifChromeBody": "Hvis du blokerede beskeder tidligere, brug hængelås eller siteikon → Webstedsindstillinger → Notifikationer → Tillad.",
+    "notifSafari": "Safari (iOS):",
+    "notifSafariBody": "Tilføj først PlanSync til hjemmeskærmen, tjek iOS Indstillinger → Notifikationer for PlanSync.",
+    "stepsAria": "Installations- og notifikationstrin",
+    "footer": "PWA afhænger af browseren. Den gratis fremviser virker i fanen uden install. Beskeder kræver et logget workspace og Web Push-understøttelse."
+  },
+  "finalCta": {
+    "title": "Start gratis i dag",
+    "body": "Åbn den gratis fremviser på sekunder — uden tilmelding.",
+    "bodyLine2": "Opgrader til Pro når teamet er klar.",
+    "openViewer": "Åbn gratis fremviser",
+    "startTrial": "Start Pro-prøve",
+    "footnote1": "Kører i browseren · valgfri PWA-installation",
+    "footnote2": "Intet kort for at starte"
+  },
+  "footer": {
+    "tagline": "Arbejdsområdet for byggetegninger til teams der ikke har råd til forkert information.",
+    "product": "Produkt",
+    "howItWorks": "Sådan virker det",
+    "allSolutions": "Alle løsninger",
+    "features": "Funktioner",
+    "pricing": "Priser",
+    "freeViewer": "Gratis fremviser",
+    "changelog": "Ændringslog",
+    "solutionsHeading": "Løsninger",
+    "company": "Virksomhed",
+    "about": "Om os",
+    "blog": "Blog",
+    "contact": "Kontakt",
+    "legal": "Jura",
+    "privacy": "Privatlivspolitik",
+    "terms": "Servicevilkår",
+    "cookies": "Cookiepolitik",
+    "rights": "Alle rettigheder forbeholdes.",
+    "openViewerCta": "Åbn gratis PDF-fremviser"
+  },
+  "faq": {
+    "eyebrow": "FAQ",
+    "title": "Ofte stillede spørgsmål",
+    "subtitle": "Fakturering, lagring og Gratis vs Pro.",
+    "items": [
+      {
+        "q": "Er Gratis virkelig gratis for altid?",
+        "a": "Ja. Den lokale PDF-fremviser er gratis for altid. Ingen skjulte grænser, ingen udløb, intet kort."
+      },
+      {
+        "q": "Hvor gemmes mine filer på Gratis?",
+        "a": "Gratis filer forlader aldrig din browser. Alt ligger lokalt på din enhed. Vi ser eller uploader aldrig dine PDF’er."
+      },
+      {
+        "q": "Hvor gemmes Pro-filer?",
+        "a": "Pro-filer gemmes sikkert på AWS S3 i din konto. Kun dit team kan få adgang. Alle overførsler er krypteret."
+      },
+      {
+        "q": "Kan jeg opsige Pro når som helst?",
+        "a": "Ja. Opsig når som helst i dine faktureringsindstillinger. Ingen binding."
+      },
+      {
+        "q": "Hvad sker der med mine data hvis jeg opsiger?",
+        "a": "Du beholder adgang indtil slutningen af betalingsperioden. Eksporter dine data før opsigelse."
+      },
+      {
+        "q": "Hvordan fungerer 14-dages prøven?",
+        "a": "Fuld Pro-adgang i 14 dage uden kort. Opgrader når som helst under eller efter prøven."
+      },
+      {
+        "q": "Kan jeg opgradere fra Gratis til Pro?",
+        "a": "Ja. Dine lokale markeringer og målinger migreres automatisk til skyen ved opgradering."
+      },
+      {
+        "q": "Understøtter I DWG/CAD?",
+        "a": "Indtil videre kun PDF. DXF/DWG er på vores roadmap."
+      }
+    ]
+  },
+  "language": {
+    "label": "Sprog",
+    "switchTo": "Skift sprog"
+  },
+  "auth": {
+    "signInTitle": "Log ind"
+  }
+}

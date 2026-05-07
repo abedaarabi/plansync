@@ -1,0 +1,208 @@
+{
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "faq": "FAQ",
+    "install": "Install",
+    "signIn": "Sign In",
+    "dashboard": "Dashboard",
+    "startFree": "Start Free →",
+    "toggleMenu": "Toggle menu",
+    "construction": "Construction",
+    "operationsFm": "Operations & FM"
+  },
+  "hero": {
+    "eyebrow": "Construction management platform",
+    "title": "Plans, issues & RFIs — one source of truth for your team",
+    "titleHighlight": "one source of truth",
+    "sub": "Everyone works from the same drawings. Field issues and formal RFIs stay tied to the plan — not buried in email. Start free in your browser; upgrade when your team needs the cloud.",
+    "openViewer": "Open free viewer",
+    "startTrial": "Start Pro Trial",
+    "stat1Value": "Free forever",
+    "stat1Label": "PDF viewer",
+    "stat2Value": "14-day",
+    "stat2Label": "Pro trial",
+    "stat3Value": "No lock-in",
+    "stat3Label": "Cancel anytime"
+  },
+  "solutionsIntro": {
+    "eyebrow": "Platform",
+    "line1": "Two tools.",
+    "line2": "One connected workflow.",
+    "body": "Field delivery and building operations share one workspace — drawings, issues, RFIs, and handover data stay linked instead of siloed in different apps.",
+    "allSolutionsCta": "View all {count} solutions"
+  },
+  "constructionCard": {
+    "label": "Construction",
+    "title": "Job site tools for every team",
+    "body": "Plans, issues, RFIs, and takeoff — aligned with how supers and PMs actually work.",
+    "extra": "Cloud storage, PDF revisions, schedule, audits, proposals",
+    "cta": "Explore Construction tools"
+  },
+  "operationsCard": {
+    "label": "Operations & FM",
+    "title": "Building operations from day one",
+    "body": "Handover, assets, maintenance, and dashboards — structured for facilities teams, not generic tickets.",
+    "extra": "Work orders, inspections, tenant portal",
+    "cta": "Explore Operations tools"
+  },
+  "howItWorks": {
+    "eyebrow": "How it works",
+    "title": "From PDF to project clarity",
+    "description": "Start alone on Free, then invite your team to Pro when drawings, issues, and RFIs need to live in one place.",
+    "step1Title": "Bring your plans",
+    "step1Body": "Open PDFs in the free viewer instantly, or upload to Pro when your whole team needs one shared set of sheets.",
+    "step2Title": "Mark up and measure",
+    "step2Body": "Calibrate scale, take measurements, and annotate — the same precision whether you are in the trailer or at your desk.",
+    "step3Title": "Coordinate in Pro",
+    "step3Body": "Drop issues on the drawing, run RFIs with a real workflow, and keep everyone looking at the same revision.",
+    "step4Title": "Close the loop",
+    "step4Body": "Track status from field to answer, export takeoffs and marked sheets, and walk the job with confidence."
+  },
+  "pricing": {
+    "eyebrow": "Pricing",
+    "title": "Free to start. Pro or Enterprise when you're ready.",
+    "subtitle": "View and mark up PDFs for free — add Pro for team collaboration, or Enterprise for Operations & Maintenance on top.",
+    "freeLabel": "Free",
+    "freePrice": "$0",
+    "freeTagline": "No signup needed",
+    "freeTagline2": "Local PDF viewer",
+    "openViewer": "Open free viewer",
+    "popular": "Most Popular",
+    "proLabel": "Pro",
+    "perMonth": "/month",
+    "proIncluded": "{seats} members included · unlimited projects",
+    "proExtraSeat": "+{extra} USD/month for each additional member after {seats}.",
+    "proEverything": "Everything in Free +",
+    "startTrial14": "Start 14-day Trial",
+    "enterpriseLabel": "Enterprise",
+    "enterpriseBlurb": "Pro + O&M",
+    "footnote": "Seat counts follow internal (non-external) members and pending invites. Extra-seat billing is applied when you exceed {seats} — see billing after checkout.",
+    "freeFeatures": [
+      "Open any PDF",
+      "Calibrate scale",
+      "Measure & markup",
+      "Annotate drawings",
+      "Export marked PDF",
+      "Works offline",
+      "Files never leave device"
+    ],
+    "proFeatures": [
+      "Cloud storage 20GB",
+      "Team collaboration",
+      "Issues on drawings",
+      "RFIs workflow",
+      "Quantity takeoff",
+      "PDF version control",
+      "Project schedule"
+    ],
+    "enterpriseFeatures": [
+      "Everything in Pro",
+      "Operations & Maintenance mode",
+      "Handover, assets & work orders",
+      "Maintenance schedules & inspections",
+      "Tenant portal"
+    ]
+  },
+  "pwa": {
+    "eyebrow": "Install",
+    "title": "Add PlanSync to your device",
+    "subtitle": "Install or add to home screen, sign in, then turn on alerts — all in a few steps.",
+    "step1Heading": "Install or add to home screen",
+    "step1Lead": "Pick your device — use these hints so PlanSync opens like a normal app.",
+    "desktopLabel": "Desktop (Chrome / Edge):",
+    "desktopBody": "look for the install icon in the address bar, or the app menu → Install PlanSync.",
+    "iosLabel": "iPhone / iPad (Safari):",
+    "iosBody": "Share → Add to Home Screen, then open from the icon.",
+    "androidLabel": "Android (Chrome):",
+    "androidBody": "menu → Install app or Add to Home screen.",
+    "installApp": "Install app",
+    "installHint": "If the install button doesn’t appear here, your browser may have already installed the app — use your browser’s menu instead.",
+    "step2Title": "Sign in",
+    "step2Body": "Open PlanSync from your new shortcut and sign in to your workspace. You need an account before you can enable push alerts.",
+    "step3Title": "Turn on notifications",
+    "step3Body": "Go to Account (profile menu) → Alerts on this device and switch them on. When your browser asks, choose Allow so we can reach you with RFIs, issues, and other updates when you're not in the app.",
+    "notifChrome": "Chrome / Edge:",
+    "notifChromeBody": "if you blocked alerts earlier, use the lock or site icon in the address bar → Site settings → Notifications → Allow.",
+    "notifSafari": "Safari (iOS):",
+    "notifSafariBody": "add PlanSync to the Home Screen first, then check iOS Settings → Notifications (or Apps) for PlanSync.",
+    "stepsAria": "Install and notification steps",
+    "footer": "PWA availability depends on your browser. The free viewer works in the tab without installing. Notifications need a signed-in workspace and a browser that supports web push."
+  },
+  "finalCta": {
+    "title": "Start for free today",
+    "body": "Open the free viewer in seconds — no signup needed.",
+    "bodyLine2": "Upgrade to Pro when your team is ready.",
+    "openViewer": "Open free viewer",
+    "startTrial": "Start Pro Trial",
+    "footnote1": "Runs in the browser · optional PWA install",
+    "footnote2": "No credit card to start"
+  },
+  "footer": {
+    "tagline": "The construction drawing workspace for teams who can't afford to work off the wrong information.",
+    "product": "Product",
+    "howItWorks": "How it works",
+    "allSolutions": "All solutions",
+    "features": "Features",
+    "pricing": "Pricing",
+    "freeViewer": "Free viewer",
+    "changelog": "Changelog",
+    "solutionsHeading": "Solutions",
+    "company": "Company",
+    "about": "About",
+    "blog": "Blog",
+    "contact": "Contact",
+    "legal": "Legal",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "cookies": "Cookie Policy",
+    "rights": "All rights reserved.",
+    "openViewerCta": "Open free PDF viewer"
+  },
+  "faq": {
+    "eyebrow": "FAQ",
+    "title": "Frequently asked questions",
+    "subtitle": "Billing, storage, and how Free vs Pro works.",
+    "items": [
+      {
+        "q": "Is Free really free forever?",
+        "a": "Yes. The local PDF viewer is free forever. No hidden limits, no expiry, no credit card."
+      },
+      {
+        "q": "Where are my files stored on Free?",
+        "a": "Free files never leave your browser. Everything stays on your device locally. We never see or upload your PDFs."
+      },
+      {
+        "q": "Where are Pro files stored?",
+        "a": "Pro files are stored securely on AWS S3 in your account. Only your team can access them. All transfers are encrypted."
+      },
+      {
+        "q": "Can I cancel Pro anytime?",
+        "a": "Yes. Cancel anytime from your billing settings. No questions asked, no lock-in."
+      },
+      {
+        "q": "What happens to my data if I cancel?",
+        "a": "You keep access until the end of your billing period. Export your data anytime before cancelling."
+      },
+      {
+        "q": "How does the 14-day trial work?",
+        "a": "Full Pro access for 14 days, no credit card needed. Upgrade anytime during or after the trial."
+      },
+      {
+        "q": "Can I upgrade from Free to Pro?",
+        "a": "Yes. Your local markups and measurements migrate automatically to the cloud when you upgrade."
+      },
+      {
+        "q": "Do you support DWG/CAD files?",
+        "a": "Currently PDF only. DXF/DWG support is on our roadmap and coming soon."
+      }
+    ]
+  },
+  "language": {
+    "label": "Language",
+    "switchTo": "Switch language"
+  },
+  "auth": {
+    "signInTitle": "Sign in"
+  }
+}

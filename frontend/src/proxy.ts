@@ -1,6 +1,42 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { LOCALE_COOKIE } from "@/lib/i18n/config";
+import { MW_LOCALE, readResolvedLocaleFromRequest } from "@/lib/i18n/resolveInitialLocale";
+
+const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+/** Injects `MW_LOCALE` for RSC + sets `NEXT_LOCALE` when missing (merged from former `middleware.ts`; Next 16 allows only `proxy`, not both). */
+function withLocaleNext(request: NextRequest): NextResponse {
+  const locale = readResolvedLocaleFromRequest(request);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(MW_LOCALE, locale);
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+  if (!request.cookies.get(LOCALE_COOKIE)) {
+    response.cookies.set(LOCALE_COOKIE, locale, {
+      path: "/",
+      maxAge: LOCALE_COOKIE_MAX_AGE,
+      sameSite: "lax",
+    });
+  }
+  return response;
+}
+
+function withLocaleRedirect(request: NextRequest, url: URL): NextResponse {
+  const response = NextResponse.redirect(url);
+  const locale = readResolvedLocaleFromRequest(request);
+  if (!request.cookies.get(LOCALE_COOKIE)) {
+    response.cookies.set(LOCALE_COOKIE, locale, {
+      path: "/",
+      maxAge: LOCALE_COOKIE_MAX_AGE,
+      sameSite: "lax",
+    });
+  }
+  return response;
+}
+
 /** Enterprise app routes — require a valid Better Auth session (see `app/api/[[...path]]/route.ts` → Hono). */
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -47,7 +83,7 @@ function redirectToSignIn(request: NextRequest): NextResponse {
   signIn.pathname = "/sign-in";
   signIn.search = "";
   signIn.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
-  return NextResponse.redirect(signIn);
+  return withLocaleRedirect(request, signIn);
 }
 
 function redirectToNotInvited(request: NextRequest): NextResponse {
@@ -55,7 +91,7 @@ function redirectToNotInvited(request: NextRequest): NextResponse {
   denied.pathname = "/not-invited";
   denied.search = "";
   denied.searchParams.set("from", `${request.nextUrl.pathname}${request.nextUrl.search}`);
-  return NextResponse.redirect(denied);
+  return withLocaleRedirect(request, denied);
 }
 
 type SessionPayload = { user?: unknown } | null;
@@ -132,13 +168,13 @@ async function requestHasSession(request: NextRequest): Promise<boolean> {
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === "/") {
     if (await requestHasSession(request)) {
-      return NextResponse.redirect(new URL("/projects", request.url));
+      return withLocaleRedirect(request, new URL("/projects", request.url));
     }
-    return NextResponse.next();
+    return withLocaleNext(request);
   }
 
   if (!isProtectedPath(request.nextUrl.pathname) && !isCloudViewerRequest(request)) {
-    return NextResponse.next();
+    return withLocaleNext(request);
   }
 
   const base = authCheckBase(request);
@@ -177,7 +213,7 @@ export async function proxy(request: NextRequest) {
       return redirectToSignIn(request);
     }
     if (authData && authData.user && authData.session) {
-      return NextResponse.next();
+      return withLocaleNext(request);
     }
     return redirectToSignIn(request);
   }
@@ -203,7 +239,7 @@ export async function proxy(request: NextRequest) {
         if (!ok) return redirectToNotInvited(request);
       }
     }
-    return NextResponse.next();
+    return withLocaleNext(request);
   }
 
   return redirectToSignIn(request);
@@ -211,27 +247,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/",
-    "/dashboard",
-    "/dashboard/:path*",
-    "/account",
-    "/account/:path*",
-    "/organization",
-    "/organization/:path*",
-    "/projects",
-    "/projects/:path*",
-    "/workspaces",
-    "/workspaces/:path*",
-    "/client",
-    "/client/:path*",
-    "/sheets",
-    "/sheets/:path*",
-    "/rfi",
-    "/rfi/:path*",
-    "/punch",
-    "/punch/:path*",
-    "/reports",
-    "/reports/:path*",
-    "/viewer",
+    // All HTML/API paths except Next internals (auth gating below; locale on every pass)
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico).*)",
   ],
 };

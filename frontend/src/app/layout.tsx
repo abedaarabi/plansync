@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { AppToaster } from "@/components/AppToaster";
+import { AppIntlProvider } from "@/components/providers/AppIntlProvider";
 import { UmamiAnalytics } from "@/components/UmamiAnalytics";
+import { getMessagesForLocale } from "@/lib/i18n/messages";
+import { getAppLocale } from "@/lib/i18n/serverLocale";
 import appleSplashScreens from "@/lib/pwaAppleSplashScreens.json";
 import { getSiteOrigin } from "@/lib/siteUrl";
 import "./globals.css";
@@ -75,6 +78,8 @@ export const metadata: Metadata = {
   },
 };
 
+export const dynamic = "force-dynamic";
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -87,14 +92,19 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getAppLocale();
+  const messages = getMessagesForLocale(locale);
+  const dir = locale === "ar" ? "rtl" : "ltr";
+
   return (
     <html
-      lang="en"
+      lang={locale}
+      dir={dir}
       className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} h-dvh min-h-0 min-w-0 max-w-full overflow-x-hidden antialiased`}
     >
       <body
@@ -104,7 +114,9 @@ export default function RootLayout({
       >
         <UmamiAnalytics />
         <AppToaster />
-        {children}
+        <AppIntlProvider locale={locale} messages={messages}>
+          {children}
+        </AppIntlProvider>
       </body>
     </html>
   );

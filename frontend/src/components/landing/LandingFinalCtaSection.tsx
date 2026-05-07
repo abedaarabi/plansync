@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ArrowRight } from "lucide-react";
 import { AnimateIn } from "./AnimateIn";
 
@@ -10,6 +11,7 @@ type LandingFinalCtaSectionProps = {
 };
 
 export function LandingFinalCtaSection({ onGoToFreeViewer }: LandingFinalCtaSectionProps) {
+  const t = useTranslations("finalCta");
   return (
     <section
       id="cta"
@@ -51,34 +53,34 @@ export function LandingFinalCtaSection({ onGoToFreeViewer }: LandingFinalCtaSect
       <div className="relative z-10 mx-auto max-w-3xl px-6 py-24 text-center sm:px-8 sm:py-32 md:py-36">
         <AnimateIn>
           <h2 className="text-3xl font-bold tracking-tight text-blue-50 drop-shadow-[0_1px_20px_rgba(37,99,235,0.2)] sm:text-4xl">
-            Start for free today
+            {t("title")}
           </h2>
           <p className="mx-auto mt-5 max-w-lg text-base leading-relaxed text-blue-100/85">
-            Open the free viewer in seconds — no signup needed.
+            {t("body")}
             <br />
-            Upgrade to Pro when your team is ready.
+            {t("bodyLine2")}
           </p>
 
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <div className="mt-10 flex min-w-0 flex-col items-center justify-center gap-4 sm:flex-row">
             <button
               type="button"
               onClick={onGoToFreeViewer}
-              className="inline-flex items-center gap-2 rounded-xl bg-[var(--landing-cta)] px-7 py-3.5 text-base font-semibold text-[var(--landing-cta-text)] shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] transition hover:bg-[var(--landing-cta-bright)] hover:shadow-[color-mix(in_srgb,var(--landing-cta)_38%,transparent)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--landing-cta)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-xl bg-[var(--landing-cta)] px-7 py-3.5 text-base font-semibold text-[var(--landing-cta-text)] shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] transition hover:bg-[var(--landing-cta-bright)] hover:shadow-[color-mix(in_srgb,var(--landing-cta)_38%,transparent)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--landing-cta)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
-              Open free viewer <ArrowRight className="h-4 w-4" />
+              {t("openViewer")} <ArrowRight className="h-4 w-4 shrink-0" />
             </button>
             <Link
               href="/sign-in"
-              className="inline-flex items-center gap-2 rounded-xl border-2 border-white/90 bg-white/[0.07] px-7 py-3.5 text-base font-semibold text-white backdrop-blur-sm transition hover:border-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-xl border-2 border-white/90 bg-white/[0.07] px-7 py-3.5 text-base font-semibold text-white backdrop-blur-sm transition hover:border-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
-              Start Pro Trial
+              {t("startTrial")}
             </Link>
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-blue-200/70">
-            <span>Runs in the browser · optional PWA install</span>
+          <div className="mt-6 flex min-w-0 flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-blue-200/70">
+            <span className="max-w-[22rem] text-center">{t("footnote1")}</span>
             <span className="hidden sm:inline">&middot;</span>
-            <span>No credit card to start</span>
+            <span>{t("footnote2")}</span>
           </div>
         </AnimateIn>
       </div>

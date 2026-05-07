@@ -1,0 +1,208 @@
+{
+  "nav": {
+    "features": "Funciones",
+    "pricing": "Precios",
+    "faq": "FAQ",
+    "install": "Instalar",
+    "signIn": "Iniciar sesión",
+    "dashboard": "Panel",
+    "startFree": "Empezar gratis →",
+    "toggleMenu": "Abrir menú",
+    "construction": "Construcción",
+    "operationsFm": "Operaciones y FM"
+  },
+  "hero": {
+    "eyebrow": "Plataforma de gestión de construcción",
+    "title": "Planos, incidencias y RFIs — una sola fuente de verdad para tu equipo",
+    "titleHighlight": "una sola fuente de verdad",
+    "sub": "Todos trabajan con los mismos planos. Las incidencias de obra y los RFIs formales permanecen vinculados al plano — no perdidos en el correo. Empieza gratis en el navegador; amplía cuando tu equipo necesite la nube.",
+    "openViewer": "Abrir visor gratuito",
+    "startTrial": "Prueba Pro",
+    "stat1Value": "Gratis para siempre",
+    "stat1Label": "Visor PDF",
+    "stat2Value": "14 días",
+    "stat2Label": "prueba Pro",
+    "stat3Value": "Sin permanencia",
+    "stat3Label": "Cancela cuando quieras"
+  },
+  "solutionsIntro": {
+    "eyebrow": "Plataforma",
+    "line1": "Dos herramientas.",
+    "line2": "Un flujo conectado.",
+    "body": "Obra y operaciones comparten un mismo espacio de trabajo — planos, incidencias, RFIs y datos de recepción permanecen enlazados en lugar de quedar aislados en distintas aplicaciones.",
+    "allSolutionsCta": "Ver las {count} soluciones"
+  },
+  "constructionCard": {
+    "label": "Construcción",
+    "title": "Herramientas de obra para cada equipo",
+    "body": "Planos, incidencias, RFIs y mediciones — alineados con cómo trabajan capataces y PM.",
+    "extra": "Almacenamiento en la nube, revisiones PDF, programación, auditorías, propuestas",
+    "cta": "Explorar herramientas de construcción"
+  },
+  "operationsCard": {
+    "label": "Operaciones y FM",
+    "title": "Operación del edificio desde el primer día",
+    "body": "Recepción, activos, mantenimiento y paneles — pensados para equipos de FM, no tickets genéricos.",
+    "extra": "Órdenes de trabajo, inspecciones, portal de inquilinos",
+    "cta": "Explorar herramientas de operaciones"
+  },
+  "howItWorks": {
+    "eyebrow": "Cómo funciona",
+    "title": "Del PDF a la claridad del proyecto",
+    "description": "Empieza solo con la versión gratuita e invita a tu equipo a Pro cuando planos, incidencias y RFIs deban vivir en un solo lugar.",
+    "step1Title": "Trae tus planos",
+    "step1Body": "Abre PDF al instante en el visor gratuito o súbelos a Pro cuando todo el equipo comparta un mismo juego de planos.",
+    "step2Title": "Marcación y medición",
+    "step2Body": "Calibra la escala, mide y anota — la misma precisión en la caseta o en la oficina.",
+    "step3Title": "Coordinación en Pro",
+    "step3Body": "Coloca incidencias en el plano, gestiona RFIs con un flujo real y mantén a todos en la misma revisión.",
+    "step4Title": "Cierra el ciclo",
+    "step4Body": "Sigue el estado de obra a respuesta, exporta mediciones y planos marcados y recorre la obra con confianza."
+  },
+  "pricing": {
+    "eyebrow": "Precios",
+    "title": "Empieza gratis. Pro o Enterprise cuando estés listo.",
+    "subtitle": "Visualiza y marca PDF gratis — añade Pro para colaboración en equipo, o Enterprise para operación y mantenimiento.",
+    "freeLabel": "Gratis",
+    "freePrice": "$0",
+    "freeTagline": "Sin registro",
+    "freeTagline2": "Visor PDF local",
+    "openViewer": "Abrir visor gratuito",
+    "popular": "Más popular",
+    "proLabel": "Pro",
+    "perMonth": "/mes",
+    "proIncluded": "{seats} miembros incluidos · proyectos ilimitados",
+    "proExtraSeat": "+{extra} USD/mes por miembro adicional después de {seats}.",
+    "proEverything": "Todo lo de Gratis +",
+    "startTrial14": "Iniciar prueba de 14 días",
+    "enterpriseLabel": "Enterprise",
+    "enterpriseBlurb": "Pro + O&M",
+    "footnote": "Los asientos cuentan miembros internos e invitaciones pendientes. Se factura asiento extra al superar {seats} — consulta la facturación tras el pago.",
+    "freeFeatures": [
+      "Abrir cualquier PDF",
+      "Calibrar escala",
+      "Medir y marcar",
+      "Anotar planos",
+      "Exportar PDF marcado",
+      "Funciona sin conexión",
+      "Los archivos no salen del dispositivo"
+    ],
+    "proFeatures": [
+      "Almacenamiento en la nube 20 GB",
+      "Colaboración en equipo",
+      "Incidencias en planos",
+      "Flujo de RFIs",
+      "Cubicación de cantidades",
+      "Control de versiones PDF",
+      "Programa del proyecto"
+    ],
+    "enterpriseFeatures": [
+      "Todo en Pro",
+      "Modo operación y mantenimiento",
+      "Recepción, activos y órdenes de trabajo",
+      "Planes de mantenimiento e inspecciones",
+      "Portal de inquilinos"
+    ]
+  },
+  "pwa": {
+    "eyebrow": "Instalar",
+    "title": "Añade PlanSync a tu dispositivo",
+    "subtitle": "Instala o añade a la pantalla de inicio, inicia sesión y activa alertas — en pocos pasos.",
+    "step1Heading": "Instalar o añadir a la pantalla de inicio",
+    "step1Lead": "Elige tu dispositivo — sigue estas pistas para que PlanSync se abra como una app normal.",
+    "desktopLabel": "Escritorio (Chrome / Edge):",
+    "desktopBody": "busca el icono de instalación en la barra de direcciones o el menú de la app → Instalar PlanSync.",
+    "iosLabel": "iPhone / iPad (Safari):",
+    "iosBody": "Compartir → Añadir a pantalla de inicio, luego abre desde el icono.",
+    "androidLabel": "Android (Chrome):",
+    "androidBody": "menú → Instalar app o Añadir a pantalla de inicio.",
+    "installApp": "Instalar app",
+    "installHint": "Si no aparece el botón de instalar, el navegador puede haber instalado ya la app — usa el menú del navegador.",
+    "step2Title": "Iniciar sesión",
+    "step2Body": "Abre PlanSync desde tu acceso directo e inicia sesión en tu espacio de trabajo. Necesitas cuenta antes de activar notificaciones push.",
+    "step3Title": "Activar notificaciones",
+    "step3Body": "Ve a Cuenta (menú de perfil) → Alertas en este dispositivo y actívalas. Cuando el navegador pregunte, elige Permitir para recibir RFIs, incidencias y actualizaciones fuera de la app.",
+    "notifChrome": "Chrome / Edge:",
+    "notifChromeBody": "si bloqueaste alertas antes, usa el candado o icono del sitio → Configuración del sitio → Notificaciones → Permitir.",
+    "notifSafari": "Safari (iOS):",
+    "notifSafariBody": "añade PlanSync a la pantalla de inicio primero, luego revisa Ajustes iOS → Notificaciones para PlanSync.",
+    "stepsAria": "Pasos de instalación y notificaciones",
+    "footer": "La PWA depende del navegador. El visor gratuito funciona sin instalar. Las notificaciones requieren espacio con sesión y un navegador con soporte Web Push."
+  },
+  "finalCta": {
+    "title": "Empieza gratis hoy",
+    "body": "Abre el visor gratuito en segundos — sin registro.",
+    "bodyLine2": "Pasa a Pro cuando tu equipo esté listo.",
+    "openViewer": "Abrir visor gratuito",
+    "startTrial": "Prueba Pro",
+    "footnote1": "En el navegador · instalación PWA opcional",
+    "footnote2": "Sin tarjeta para empezar"
+  },
+  "footer": {
+    "tagline": "El espacio de trabajo para planos de construcción de equipos que no pueden permitirse trabajar con información incorrecta.",
+    "product": "Producto",
+    "howItWorks": "Cómo funciona",
+    "allSolutions": "Todas las soluciones",
+    "features": "Funciones",
+    "pricing": "Precios",
+    "freeViewer": "Visor gratuito",
+    "changelog": "Historial de cambios",
+    "solutionsHeading": "Soluciones",
+    "company": "Empresa",
+    "about": "Sobre nosotros",
+    "blog": "Blog",
+    "contact": "Contacto",
+    "legal": "Legal",
+    "privacy": "Política de privacidad",
+    "terms": "Términos del servicio",
+    "cookies": "Política de cookies",
+    "rights": "Todos los derechos reservados.",
+    "openViewerCta": "Abrir visor PDF gratuito"
+  },
+  "faq": {
+    "eyebrow": "FAQ",
+    "title": "Preguntas frecuentes",
+    "subtitle": "Facturación, almacenamiento y Gratis vs Pro.",
+    "items": [
+      {
+        "q": "¿Gratis es gratis para siempre?",
+        "a": "Sí. El visor PDF local es gratis para siempre. Sin límites ocultos, sin caducidad, sin tarjeta."
+      },
+      {
+        "q": "¿Dónde se guardan mis archivos en Gratis?",
+        "a": "Los archivos gratis nunca salen del navegador. Todo permanece en local en tu dispositivo. No vemos ni subimos tus PDF."
+      },
+      {
+        "q": "¿Dónde se guardan los archivos Pro?",
+        "a": "Los archivos Pro se almacenan de forma segura en AWS S3 en tu cuenta. Solo tu equipo puede acceder. Todas las transferencias van cifradas."
+      },
+      {
+        "q": "¿Puedo cancelar Pro en cualquier momento?",
+        "a": "Sí. Cancela cuando quieras en la configuración de facturación. Sin permanencia."
+      },
+      {
+        "q": "¿Qué pasa con mis datos si cancelo?",
+        "a": "Mantienes el acceso hasta el final del periodo de facturación. Exporta tus datos antes de cancelar."
+      },
+      {
+        "q": "¿Cómo funciona la prueba de 14 días?",
+        "a": "Acceso Pro completo 14 días, sin tarjeta. Mejora el plan en cualquier momento durante o después."
+      },
+      {
+        "q": "¿Puedo pasar de Gratis a Pro?",
+        "a": "Sí. Tus marcas y mediciones locales migran automáticamente a la nube al mejorar."
+      },
+      {
+        "q": "¿Soportáis DWG/CAD?",
+        "a": "De momento solo PDF. DXF/DWG está en nuestro roadmap."
+      }
+    ]
+  },
+  "language": {
+    "label": "Idioma",
+    "switchTo": "Cambiar idioma"
+  },
+  "auth": {
+    "signInTitle": "Iniciar sesión"
+  }
+}

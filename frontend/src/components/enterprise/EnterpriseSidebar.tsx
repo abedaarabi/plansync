@@ -32,6 +32,7 @@ import {
   House,
   MapPin,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { fetchProjectSession } from "@/lib/api-client";
 import { projectScopedBaseFromPathname } from "@/lib/projectScopedPath";
 import {
@@ -147,6 +148,7 @@ export function EnterpriseSidebar({
   onCloseMobile,
   desktopCollapsed,
 }: EnterpriseSidebarProps) {
+  const t = useTranslations("app.shell");
   const pathname = usePathname();
   /** false until layout sync — avoids treating desktop as mobile before matchMedia runs. */
   const [isDesktopLg, setIsDesktopLg] = useState(false);
@@ -209,35 +211,30 @@ export function EnterpriseSidebar({
     setWorkspaceLogoFailed(false);
   }, [sidebarLogoSrc]);
 
-  const GLOBAL_NAV = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/projects", label: "Projects", icon: FileStack },
-  ];
-
   const PROJECT_NAV_SECTIONS = useMemo((): NavSection[] => {
     if (!projectId) return [];
     const omBase = projectScopedBaseFromPathname(pathname) ?? `/projects/${projectId}`;
     const ui = projectSession?.uiMode;
     if (ui === "contractor" || ui === "sub") {
       const items: NavItem[] = [
-        { href: `/projects/${projectId}/home`, label: "Home", icon: House },
-        { href: `/projects/${projectId}/files`, label: "My Drawings", icon: FileStack },
+        { href: `/projects/${projectId}/home`, label: t("home"), icon: House },
+        { href: `/projects/${projectId}/files`, label: t("myDrawings"), icon: FileStack },
       ];
       if (mod.issues)
-        items.push({ href: `/projects/${projectId}/issues`, label: "My Issues", icon: MapPin });
+        items.push({ href: `/projects/${projectId}/issues`, label: t("myIssues"), icon: MapPin });
       if (mod.punch)
         items.push({
           href: `/projects/${projectId}/punch`,
-          label: "Punch List",
+          label: t("punchList"),
           icon: ClipboardCheck,
         });
       return [
         {
           id: "contractor",
-          title: "Site Workspace",
-          description: "Home, drawings, and site tools",
+          title: t("siteWorkspace"),
+          description: t("siteWorkspaceDesc"),
           railIcon: House,
-          railLabel: "Site",
+          railLabel: t("siteRail"),
           items,
         },
       ];
@@ -247,26 +244,30 @@ export function EnterpriseSidebar({
     const showAudit = workspaceRole !== "MEMBER";
 
     const projectItems: NavItem[] = [
-      { href: `/projects/${projectId}/home`, label: "Home", icon: House },
-      { href: `/projects/${projectId}/files`, label: "Files & Drawings", icon: FileStack },
+      { href: `/projects/${projectId}/home`, label: t("home"), icon: House },
+      { href: `/projects/${projectId}/files`, label: t("filesDrawings"), icon: FileStack },
     ];
     if (mod.schedule)
       projectItems.push({
         href: `/projects/${projectId}/schedule`,
-        label: "Schedule",
+        label: t("schedule"),
         icon: ChartGantt,
       });
     if (!operationsMode && mod.issues) {
-      projectItems.push({ href: `/projects/${projectId}/issues`, label: "Issues", icon: MapPin });
+      projectItems.push({
+        href: `/projects/${projectId}/issues`,
+        label: t("issues"),
+        icon: MapPin,
+      });
     }
 
     const sections: NavSection[] = [
       {
         id: "core",
-        title: "Project Workspace",
-        description: "Home, files, and drawings",
+        title: t("projectWorkspace"),
+        description: t("projectWorkspaceDesc"),
         railIcon: House,
-        railLabel: "Project",
+        railLabel: t("projectRail"),
         items: projectItems,
       },
     ];
@@ -275,42 +276,42 @@ export function EnterpriseSidebar({
       const omItems: NavItem[] = [
         {
           href: `${omBase}/om/dashboard`,
-          label: "FM dashboard",
+          label: t("fmDashboard"),
           icon: LayoutGrid,
         },
         {
           href: `${omBase}/om/handover`,
-          label: "Handover",
+          label: t("handover"),
           icon: FileCheck2,
         },
       ];
       if (mod.omAssets) {
         omItems.push({
           href: `${omBase}/om/assets`,
-          label: "Assets",
+          label: t("assets"),
           icon: Package,
         });
       }
       if (mod.issues) {
         omItems.push({
           href: `${omBase}/om/work-orders`,
-          label: "Work orders",
+          label: t("workOrders"),
           icon: Wrench,
         });
         omItems.push({
           href: `${omBase}/issues?issueKind=CONSTRUCTION`,
-          label: "Construction issues",
+          label: t("constructionIssues"),
           icon: MapPin,
         });
         if (mod.omTenantPortal) {
           omItems.push({
             href: `${omBase}/om/tenant-portal`,
-            label: "Occupant hub",
+            label: t("occupantHub"),
             icon: LayoutDashboard,
           });
           omItems.push({
             href: `${omBase}/om/tenant-requests`,
-            label: "Occupant inbox",
+            label: t("occupantInbox"),
             icon: Inbox,
           });
         }
@@ -318,24 +319,23 @@ export function EnterpriseSidebar({
       if (mod.omMaintenance) {
         omItems.push({
           href: `${omBase}/om/maintenance`,
-          label: "Maintenance",
+          label: t("maintenance"),
           icon: CalendarRange,
         });
       }
       if (mod.omInspections) {
         omItems.push({
           href: `${omBase}/om/inspections`,
-          label: "Inspections",
+          label: t("inspections"),
           icon: ClipboardList,
         });
       }
       sections.push({
         id: "om",
-        title: "O&M",
-        description:
-          "Operations — handover, assets, work orders, maintenance, inspections, occupant hub",
+        title: t("omTitle"),
+        description: t("omDesc"),
         railIcon: LayoutGrid,
-        railLabel: "O&M",
+        railLabel: t("omRail"),
         items: omItems,
       });
     }
@@ -344,13 +344,13 @@ export function EnterpriseSidebar({
     if (mod.rfis)
       coordinationItems.push({
         href: `/projects/${projectId}/rfi`,
-        label: "RFIs",
+        label: t("rfis"),
         icon: MessageSquareQuote,
       });
     if (mod.takeoff) {
       coordinationItems.push({
         href: wid ? `/workspaces/${wid}/projects/${projectId}/takeoff` : "#",
-        label: "Quantity Takeoff",
+        label: t("quantityTakeoff"),
         icon: Ruler,
         disabled: !wid,
       });
@@ -360,7 +360,7 @@ export function EnterpriseSidebar({
         href: wid
           ? `/workspaces/${wid}/projects/${projectId}/proposals`
           : `/projects/${projectId}/proposals`,
-        label: "Proposals",
+        label: t("proposals"),
         icon: FileSpreadsheet,
         disabled: !wid,
       });
@@ -368,23 +368,23 @@ export function EnterpriseSidebar({
     if (mod.punch)
       coordinationItems.push({
         href: `/projects/${projectId}/punch`,
-        label: "Punch List",
+        label: t("punchList"),
         icon: ClipboardCheck,
       });
     if (mod.fieldReports)
       coordinationItems.push({
         href: `/projects/${projectId}/reports`,
-        label: "Field Reports",
+        label: t("fieldReports"),
         icon: ClipboardList,
       });
 
     if (coordinationItems.length > 0) {
       sections.push({
         id: "coordination",
-        title: "Collaboration",
-        description: "RFIs, takeoff, proposals, punch, field reports",
+        title: t("collaboration"),
+        description: t("collaborationDesc"),
         railIcon: MessageSquareQuote,
-        railLabel: "Collab",
+        railLabel: t("collabRail"),
         items: coordinationItems,
       });
     }
@@ -392,35 +392,36 @@ export function EnterpriseSidebar({
     const adminItems: NavItem[] = [
       {
         href: wid ? `/workspaces/${wid}/projects/${projectId}/team` : `/projects/${projectId}/team`,
-        label: "Team",
+        label: t("team"),
         icon: Users,
       },
     ];
     if (showAudit) {
       adminItems.push({
         href: `/projects/${projectId}/audit`,
-        label: "Audit log",
+        label: t("auditLog"),
         icon: ScrollText,
       });
     }
     adminItems.push({
       href: `/projects/${projectId}/settings`,
-      label: "Project Settings",
+      label: t("projectSettings"),
       icon: Settings,
       disabled: !isSuperAdmin(workspaceRole),
     });
 
     sections.push({
       id: "team-admin",
-      title: "Workspace Control",
-      description: "Team, audit, project settings",
+      title: t("workspaceControl"),
+      description: t("workspaceControlDesc"),
       railIcon: Users,
-      railLabel: "Control",
+      railLabel: t("controlRail"),
       items: adminItems,
     });
 
     return sections;
   }, [
+    t,
     pathname,
     projectId,
     wid,
@@ -434,17 +435,16 @@ export function EnterpriseSidebar({
   const globalMainSection = useMemo(
     (): NavSection => ({
       id: "main",
-      title: "Overview",
-      description: "Dashboard and projects",
+      title: t("overview"),
+      description: t("overviewDesc"),
       railIcon: LayoutDashboard,
-      railLabel: "Overview",
-      items: GLOBAL_NAV.map((item) => ({
-        href: item.href,
-        label: item.label,
-        icon: item.icon,
-      })),
+      railLabel: t("overviewRail"),
+      items: [
+        { href: "/dashboard", label: t("dashboard"), icon: LayoutDashboard },
+        { href: "/projects", label: t("projects"), icon: FileStack },
+      ],
     }),
-    [],
+    [t],
   );
 
   const SIDEBAR_NAV_PRIMARY = useMemo((): NavSection[] => {
@@ -457,14 +457,14 @@ export function EnterpriseSidebar({
     const list: NavSection[] = [
       {
         id: "materials",
-        title: "Resource Hub",
-        description: "Material library and procurement tools",
+        title: t("resourceHub"),
+        description: t("resourceHubDesc"),
         railIcon: Package,
-        railLabel: "Resources",
+        railLabel: t("resourcesRail"),
         items: [
           {
             href: wid ? `/workspaces/${wid}/materials` : "#",
-            label: "Resource Hub",
+            label: t("resourceHub"),
             icon: Package,
             disabled: !wid,
           },
@@ -474,15 +474,15 @@ export function EnterpriseSidebar({
     if (isSuperAdmin(workspaceRole)) {
       list.push({
         id: "organization",
-        title: "Organization",
-        description: "Organization",
+        title: t("organization"),
+        description: t("organizationDesc"),
         railIcon: Building2,
-        railLabel: "Org",
-        items: [{ href: "/organization", label: "Organization", icon: Building2 }],
+        railLabel: t("orgRail"),
+        items: [{ href: "/organization", label: t("organization"), icon: Building2 }],
       });
     }
     return list;
-  }, [wid, workspaceRole]);
+  }, [wid, workspaceRole, t]);
 
   const SIDEBAR_NAV_SECTIONS = useMemo(
     (): NavSection[] => [...SIDEBAR_NAV_PRIMARY, ...SIDEBAR_RAIL_FOOTER_SECTIONS],
@@ -601,7 +601,7 @@ export function EnterpriseSidebar({
     return pathname === href;
   }
 
-  const workspaceTitle = loading ? "…" : ws?.name?.trim() || "Workspace";
+  const workspaceTitle = loading ? t("workspaceLoading") : ws?.name?.trim() || t("workspace");
   /** lg icon-only rail: hide workspace title visually, keep sr-only for a11y */
   const desktopIconRail = Boolean(railCollapsed && isDesktopLg);
 
@@ -643,7 +643,7 @@ export function EnterpriseSidebar({
         className={`enterprise-sidebar-header flex min-h-[3.25rem] shrink-0 items-center px-3 py-2.5 ${
           desktopIconRail ? "justify-center lg:px-2" : "gap-2.5"
         }`}
-        aria-label={desktopIconRail ? `Workspace: ${workspaceTitle}` : undefined}
+        aria-label={desktopIconRail ? t("workspaceNamedAria", { name: workspaceTitle }) : undefined}
       >
         <div className={`flex shrink-0 ${desktopIconRail ? "mx-auto" : ""}`}>
           <div
@@ -676,7 +676,7 @@ export function EnterpriseSidebar({
         </div>
         <div className={desktopIconRail ? "sr-only" : "min-w-0 flex-1 leading-tight"}>
           <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-            Workspace
+            {t("workspaceSection")}
           </p>
           <p
             className="truncate text-[15px] font-semibold tracking-[-0.02em] text-[var(--enterprise-sidebar-active)]"
@@ -689,7 +689,7 @@ export function EnterpriseSidebar({
           type="button"
           onClick={onCloseMobile}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#94A3B8] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[#F8FAFC] lg:hidden"
-          aria-label="Close navigation"
+          aria-label={t("closeNav")}
         >
           <X className="h-[18px] w-[18px]" strokeWidth={1.75} />
         </button>
@@ -700,16 +700,16 @@ export function EnterpriseSidebar({
         className={`flex min-h-0 flex-1 flex-col gap-1 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${
           useTwoLevelNav ? "overflow-hidden" : "overflow-y-auto"
         }`}
-        aria-label="Main"
+        aria-label={t("mainNav")}
       >
         {isProjectContext && !railCollapsed ? (
           <Link
             href="/projects"
             onClick={afterNav}
-            title="Projects"
+            title={t("jumpToProjects")}
             className="mb-1 flex shrink-0 items-center rounded-md px-3 py-2 text-[13px] font-medium text-[#94A3B8] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[#F8FAFC]"
           >
-            <span>Projects</span>
+            <span>{t("projects")}</span>
           </Link>
         ) : null}
 
@@ -719,17 +719,17 @@ export function EnterpriseSidebar({
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2 shadow-[0_6px_20px_rgba(2,6,23,0.18)]">
                 <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5">
                   <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                    Quick Access
+                    {t("quickAccess")}
                   </span>
                   {canPinCurrent && currentQuickNavItem ? (
                     <button
                       type="button"
                       onClick={() => pinHref(currentQuickNavItem.href)}
                       className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
-                      title={`Pin ${currentQuickNavItem.label}`}
+                      title={t("pinTooltip", { label: currentQuickNavItem.label })}
                     >
                       <Pin className="h-3 w-3" strokeWidth={1.75} />
-                      Pin current
+                      {t("pinCurrent")}
                     </button>
                   ) : null}
                 </div>
@@ -760,8 +760,8 @@ export function EnterpriseSidebar({
                             type="button"
                             onClick={() => unpinHref(item.href)}
                             className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-white/[0.06] hover:text-slate-100"
-                            title={`Unpin ${item.label}`}
-                            aria-label={`Unpin ${item.label}`}
+                            title={t("unpinTooltip", { label: item.label })}
+                            aria-label={t("unpinTooltip", { label: item.label })}
                           >
                             <PinOff className="h-3.5 w-3.5" strokeWidth={1.75} />
                           </button>
@@ -776,7 +776,7 @@ export function EnterpriseSidebar({
                   >
                     <div className="mb-1 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">
                       <History className="h-3 w-3" strokeWidth={1.75} />
-                      Recent
+                      {t("recent")}
                     </div>
                     <div className="space-y-1">
                       {recentItems.map((item) => {
@@ -886,7 +886,7 @@ export function EnterpriseSidebar({
                             ? "border-white/30 bg-white/15 text-white"
                             : "border-white/15 bg-black/25 text-slate-300/90"
                         }`}
-                        aria-label={`${section.items.length} links`}
+                        aria-label={t("sectionLinksCount", { count: section.items.length })}
                       >
                         {section.items.length}
                       </span>
@@ -907,7 +907,7 @@ export function EnterpriseSidebar({
                         const active = linkActiveInSection(section, item);
                         const ItemIcon = item.icon;
                         const disabled = "disabled" in item && item.disabled;
-                        const t = section.title?.trim();
+                        const sectionHeading = section.title?.trim();
                         return (
                           <Link
                             key={`${section.id}-${item.href}`}
@@ -916,7 +916,14 @@ export function EnterpriseSidebar({
                               if (disabled) e.preventDefault();
                               else afterNav();
                             }}
-                            title={t ? `${t}: ${item.label}` : item.label}
+                            title={
+                              sectionHeading
+                                ? t("sectionItemTitle", {
+                                    section: sectionHeading,
+                                    label: item.label,
+                                  })
+                                : item.label
+                            }
                             className={`group relative flex items-center gap-2.5 rounded-lg py-2 pl-2.5 pr-2 text-[13px] font-medium tracking-[-0.01em] transition-[color,background-color,border-color,transform] ${
                               active
                                 ? "border border-[color-mix(in_srgb,var(--enterprise-primary)_35%,rgba(255,255,255,0.22))] bg-[linear-gradient(90deg,rgba(37,99,235,0.22),rgba(37,99,235,0.06))] text-white shadow-[inset_2px_0_0_0_var(--enterprise-primary)]"
@@ -947,7 +954,7 @@ export function EnterpriseSidebar({
               <div
                 key={section.id}
                 role="group"
-                aria-label={section.title?.trim() || section.description || "Navigation"}
+                aria-label={section.title?.trim() || section.description || t("navigationFallback")}
                 className={
                   sectionIndex > 0
                     ? railCollapsed
@@ -977,7 +984,7 @@ export function EnterpriseSidebar({
                     const active = linkActiveInSection(section, item);
                     const Icon = item.icon;
                     const disabled = "disabled" in item && item.disabled;
-                    const t = section.title?.trim();
+                    const sectionHeading = section.title?.trim();
                     return (
                       <Link
                         key={`${section.id}-${item.href}`}
@@ -986,7 +993,14 @@ export function EnterpriseSidebar({
                           if (disabled) e.preventDefault();
                           else afterNav();
                         }}
-                        title={railCollapsed && t ? `${t}: ${item.label}` : item.label}
+                        title={
+                          railCollapsed && sectionHeading
+                            ? t("sectionItemTitle", {
+                                section: sectionHeading,
+                                label: item.label,
+                              })
+                            : item.label
+                        }
                         className={navLinkClass(active, disabled)}
                       >
                         <Icon className={iconClass(active)} strokeWidth={1.75} />
@@ -1005,7 +1019,7 @@ export function EnterpriseSidebar({
                     : "mt-3 border-t border-white/[0.08] pt-3 lg:mt-3.5 lg:pt-3.5"
                 }
                 role="group"
-                aria-label="Workspace"
+                aria-label={t("workspaceSection")}
               >
                 {railCollapsed ? (
                   <div

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ArrowRight } from "lucide-react";
 import { LANDING_SOLUTIONS } from "@/lib/landingContent";
 
@@ -10,6 +11,7 @@ type LandingFooterProps = {
 };
 
 export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
+  const t = useTranslations("footer");
   return (
     <footer className="border-t border-slate-800/80 bg-[#0F172A] text-white">
       <div className="mx-auto max-w-6xl px-6 pt-16 pb-8 sm:pt-20">
@@ -26,15 +28,12 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               />
               <span className="text-base font-bold tracking-tight">PlanSync</span>
             </div>
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-400">
-              The construction drawing workspace for teams who can&apos;t afford to work off the
-              wrong information.
-            </p>
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-400">{t("tagline")}</p>
           </div>
 
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Product
+              {t("product")}
             </h4>
             <ul className="mt-4 flex flex-col gap-3">
               <li>
@@ -42,7 +41,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                   href="/#how-it-works"
                   className="text-sm text-slate-300 transition hover:text-white"
                 >
-                  How it works
+                  {t("howItWorks")}
                 </Link>
               </li>
               <li>
@@ -50,7 +49,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                   href="/solutions"
                   className="text-sm text-slate-300 transition hover:text-white"
                 >
-                  All solutions
+                  {t("allSolutions")}
                 </Link>
               </li>
               <li>
@@ -58,7 +57,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                   href="/#features"
                   className="text-sm text-slate-300 transition hover:text-white"
                 >
-                  Features
+                  {t("features")}
                 </Link>
               </li>
               <li>
@@ -66,7 +65,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                   href="/#compare"
                   className="text-sm text-slate-300 transition hover:text-white"
                 >
-                  Pricing
+                  {t("pricing")}
                 </Link>
               </li>
               <li>
@@ -75,15 +74,15 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                   onClick={onGoToFreeViewer}
                   className="text-sm text-slate-300 transition hover:text-white"
                 >
-                  Free viewer
+                  {t("freeViewer")}
                 </button>
               </li>
               <li>
-                <span className="text-sm text-slate-500">Changelog</span>
+                <span className="text-sm text-slate-500">{t("changelog")}</span>
               </li>
             </ul>
             <p className="mt-6 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Solutions
+              {t("solutionsHeading")}
             </p>
             <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {LANDING_SOLUTIONS.map((s) => (
@@ -101,14 +100,14 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
 
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Company
+              {t("company")}
             </h4>
             <ul className="mt-4 flex flex-col gap-3">
               <li>
-                <span className="text-sm text-slate-500">About</span>
+                <span className="text-sm text-slate-500">{t("about")}</span>
               </li>
               <li>
-                <span className="text-sm text-slate-500">Blog</span>
+                <span className="text-sm text-slate-500">{t("blog")}</span>
               </li>
               <li>
                 <a
@@ -117,28 +116,30 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                   rel="noopener noreferrer"
                   className="text-sm text-slate-300 transition hover:text-white"
                 >
-                  Contact
+                  {t("contact")}
                 </a>
               </li>
             </ul>
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Legal</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              {t("legal")}
+            </h4>
             <ul className="mt-4 flex flex-col gap-3">
               <li>
                 <Link
                   href="/privacy"
                   className="text-sm text-slate-300 transition hover:text-white"
                 >
-                  Privacy Policy
+                  {t("privacy")}
                 </Link>
               </li>
               <li>
-                <span className="text-sm text-slate-500">Terms of Service</span>
+                <span className="text-sm text-slate-500">{t("terms")}</span>
               </li>
               <li>
-                <span className="text-sm text-slate-500">Cookie Policy</span>
+                <span className="text-sm text-slate-500">{t("cookies")}</span>
               </li>
             </ul>
           </div>
@@ -146,14 +147,14 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
 
         <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-slate-800 pt-8 sm:flex-row">
           <p className="text-xs text-slate-500" suppressHydrationWarning>
-            &copy; {new Date().getFullYear()} PlanSync. All rights reserved.
+            &copy; {new Date().getFullYear()} PlanSync. {t("rights")}
           </p>
           <button
             type="button"
             onClick={onGoToFreeViewer}
             className="inline-flex items-center gap-2 text-xs font-medium text-sky-400 transition hover:text-sky-300"
           >
-            Open free PDF viewer <ArrowRight className="h-3 w-3" />
+            {t("openViewerCta")} <ArrowRight className="h-3 w-3" />
           </button>
         </div>
       </div>

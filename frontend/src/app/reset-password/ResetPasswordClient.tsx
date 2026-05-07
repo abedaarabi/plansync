@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { AlertCircle, Loader2, Lock } from "lucide-react";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseAuthLayout } from "@/components/auth/EnterpriseAuthLayout";
 import { authClient } from "@/lib/auth-client";
 
@@ -62,7 +63,7 @@ export function ResetPasswordClient() {
         <div className="space-y-4 text-center">
           <Link
             href="/forgot-password"
-            className="inline-flex w-full items-center justify-center rounded-xl bg-[#2563EB] py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/25 transition hover:bg-[#1d4ed8]"
+            className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--enterprise-primary)] py-3 text-sm font-semibold text-white shadow-md transition hover:bg-[var(--enterprise-primary-deep)]"
           >
             Request a new link
           </Link>
@@ -86,7 +87,7 @@ export function ResetPasswordClient() {
         <div className="space-y-4 text-center">
           <Link
             href="/forgot-password"
-            className="inline-flex w-full items-center justify-center rounded-xl bg-[#2563EB] py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/25 transition hover:bg-[#1d4ed8]"
+            className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--enterprise-primary)] py-3 text-sm font-semibold text-white shadow-md transition hover:bg-[var(--enterprise-primary-deep)]"
           >
             Request a new link
           </Link>
@@ -184,11 +185,7 @@ export function ResetPasswordClient() {
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2563EB] py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/25 transition hover:bg-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/50 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55"
-        >
+        <EnterpriseButton type="submit" fullWidth loading={loading} className="gap-2 shadow-md">
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -197,7 +194,7 @@ export function ResetPasswordClient() {
           ) : (
             "Update password"
           )}
-        </button>
+        </EnterpriseButton>
       </form>
     </EnterpriseAuthLayout>
   );
