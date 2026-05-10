@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { buildPdfOpenOptions, setupPdfWorker } from "@/lib/pdf";
 import { pdfUnitsToMm } from "@/lib/pagePaperInfo";
 import { useViewerStore } from "@/store/viewerStore";
 
@@ -123,7 +122,11 @@ function PageThumbnailCard({
   );
 }
 
-export function SidebarPagesTab() {
+type SidebarPagesTabProps = {
+  pdfDoc: PDFDocumentProxy | null;
+};
+
+export function SidebarPagesTab({ pdfDoc }: SidebarPagesTabProps) {
   const pdfUrl = useViewerStore((s) => s.pdfUrl);
   const numPages = useViewerStore((s) => s.numPages);
   const currentPage = useViewerStore((s) => s.currentPage);
@@ -131,8 +134,6 @@ export function SidebarPagesTab() {
   const pageSizePtByPage = useViewerStore((s) => s.pageSizePtByPage);
   const annotations = useViewerStore((s) => s.annotations);
 
-  const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const activeWrapRef = useRef<HTMLDivElement | null>(null);
 
   const markupsByPage = useMemo(() => {
@@ -147,36 +148,6 @@ export function SidebarPagesTab() {
     () => (numPages > 0 ? Array.from({ length: numPages }, (_, i) => i + 1) : []),
     [numPages],
   );
-
-  useEffect(() => {
-    if (!pdfUrl) {
-      setDoc(null);
-      setLoadError(null);
-      return;
-    }
-    let cancelled = false;
-    let loadingTask: { destroy?: () => void; promise: Promise<PDFDocumentProxy> } | null = null;
-    let openedDoc: { destroy?: () => void } | null = null;
-    setLoadError(null);
-    setDoc(null);
-    (async () => {
-      try {
-        const pdfjs = await import("pdfjs-dist");
-        setupPdfWorker(pdfjs);
-        loadingTask = pdfjs.getDocument(buildPdfOpenOptions(pdfUrl));
-        const d = await loadingTask.promise;
-        if (!cancelled) setDoc(d);
-        openedDoc = d;
-      } catch {
-        if (!cancelled) setLoadError("Could not load page previews.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-      loadingTask?.destroy?.();
-      openedDoc?.destroy?.();
-    };
-  }, [pdfUrl]);
 
   useEffect(() => {
     activeWrapRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -194,11 +165,7 @@ export function SidebarPagesTab() {
     return <p className="px-1 text-center text-[10px] text-slate-500">Loading page count…</p>;
   }
 
-  if (loadError) {
-    return <p className="px-1 text-center text-[10px] text-red-400">{loadError}</p>;
-  }
-
-  if (!doc) {
+  if (!pdfDoc) {
     return <p className="px-1 text-center text-[10px] text-slate-500">Loading previews…</p>;
   }
 
@@ -219,7 +186,7 @@ export function SidebarPagesTab() {
           return (
             <div key={pg} ref={isActive ? activeWrapRef : undefined}>
               <PageThumbnailCard
-                doc={doc}
+                doc={pdfDoc}
                 pageNumber={pg}
                 isActive={isActive}
                 onSelect={() => setCurrentPage(pg)}

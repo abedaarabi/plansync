@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, ChevronDown, HardHat, Wrench } from "lucide-react";
@@ -19,6 +20,9 @@ const featuredOperations = getSolutionsByCategory("operations").filter((s) =>
 );
 
 export function SolutionsDropdown() {
+  const t = useTranslations("solutionsMenu");
+  const navT = useTranslations("nav");
+  const solutionT = useTranslations("solutionCopy");
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -36,6 +40,9 @@ export function SolutionsDropdown() {
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
+  const getLocalizedSolution = (slug: string, field: "title" | "tagline", fallback: string) =>
+    solutionT.has(`${slug}.${field}`) ? solutionT(`${slug}.${field}`) : fallback;
+
   const overlay =
     open && typeof document !== "undefined"
       ? createPortal(
@@ -43,7 +50,7 @@ export function SolutionsDropdown() {
             {/* Backdrop */}
             <button
               type="button"
-              aria-label="Close solutions menu"
+              aria-label={t("closeMenu")}
               className="fixed inset-0 z-40 cursor-default"
               onClick={() => setOpen(false)}
             />
@@ -52,27 +59,25 @@ export function SolutionsDropdown() {
             <div
               role="dialog"
               aria-modal="true"
-              aria-label="Solutions menu"
-              className="fixed inset-x-0 top-16 z-50 flex justify-center px-4 sm:px-6"
+              aria-label={t("menuAria")}
+              className="fixed inset-x-0 top-16 z-50"
             >
-              <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5">
-                {/* Two-column grid */}
-                <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-                  {/* ── Construction column ── */}
-                  <div className="p-5 sm:p-6">
+              <div className="border-y border-slate-200/80 bg-white/98 shadow-[0_28px_60px_-36px_rgba(15,23,42,0.25)] backdrop-blur-sm">
+                <div className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(260px,0.78fr)] lg:gap-5 lg:py-6">
+                  <section className="rounded-2xl border border-blue-100/80 bg-blue-50/40 p-4 lg:p-5">
                     <div className="mb-4 flex items-center gap-2.5">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 shadow-sm shadow-blue-600/30">
                         <HardHat className="h-4 w-4 text-white" strokeWidth={1.8} />
                       </span>
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-blue-600">
-                          Construction
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-blue-700">
+                          {t("constructionLabel")}
                         </p>
-                        <p className="text-[11px] text-slate-400">Job site to office</p>
+                        <p className="text-[11px] text-slate-500">{t("constructionTagline")}</p>
                       </div>
                     </div>
 
-                    <ul className="space-y-0.5">
+                    <ul className="space-y-1">
                       {featuredConstruction.map((s) => {
                         const Icon = SOLUTION_ICONS[s.slug];
                         const colors = SOLUTION_ICON_COLORS[s.slug];
@@ -81,7 +86,7 @@ export function SolutionsDropdown() {
                             <Link
                               href={`/solutions/${s.slug}`}
                               onClick={() => setOpen(false)}
-                              className="group flex items-start gap-3 rounded-xl p-2.5 transition hover:bg-slate-50"
+                              className="group flex items-start gap-3 rounded-xl border border-transparent bg-white/70 p-2.5 transition hover:border-blue-200/80 hover:bg-white"
                             >
                               <span
                                 className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ${colors.bg} ${colors.ring}`}
@@ -91,10 +96,10 @@ export function SolutionsDropdown() {
                               </span>
                               <span className="min-w-0">
                                 <span className="block text-sm font-semibold text-slate-900 transition group-hover:text-blue-700">
-                                  {s.title}
+                                  {getLocalizedSolution(s.slug, "title", s.title)}
                                 </span>
                                 <span className="block text-xs leading-relaxed text-slate-500">
-                                  {s.tagline}
+                                  {getLocalizedSolution(s.slug, "tagline", s.tagline)}
                                 </span>
                               </span>
                             </Link>
@@ -106,28 +111,27 @@ export function SolutionsDropdown() {
                     <Link
                       href="/solutions/audit"
                       onClick={() => setOpen(false)}
-                      className="mt-3 flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100/80"
                     >
-                      <span>+ Audit, proposals, cloud storage</span>
+                      <span>{t("constructionExtra")}</span>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
-                  </div>
+                  </section>
 
-                  {/* ── Operations column ── */}
-                  <div className="p-5 sm:p-6">
+                  <section className="rounded-2xl border border-teal-100/80 bg-teal-50/40 p-4 lg:p-5">
                     <div className="mb-4 flex items-center gap-2.5">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-600 shadow-sm shadow-teal-600/30">
                         <Wrench className="h-4 w-4 text-white" strokeWidth={1.8} />
                       </span>
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-teal-600">
-                          Operations & FM
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-teal-700">
+                          {t("operationsLabel")}
                         </p>
-                        <p className="text-[11px] text-slate-400">Handover to daily ops</p>
+                        <p className="text-[11px] text-slate-500">{t("operationsTagline")}</p>
                       </div>
                     </div>
 
-                    <ul className="space-y-0.5">
+                    <ul className="space-y-1">
                       {featuredOperations.map((s) => {
                         const Icon = SOLUTION_ICONS[s.slug];
                         const colors = SOLUTION_ICON_COLORS[s.slug];
@@ -136,7 +140,7 @@ export function SolutionsDropdown() {
                             <Link
                               href={`/solutions/${s.slug}`}
                               onClick={() => setOpen(false)}
-                              className="group flex items-start gap-3 rounded-xl p-2.5 transition hover:bg-slate-50"
+                              className="group flex items-start gap-3 rounded-xl border border-transparent bg-white/70 p-2.5 transition hover:border-teal-200/80 hover:bg-white"
                             >
                               <span
                                 className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ${colors.bg} ${colors.ring}`}
@@ -146,10 +150,10 @@ export function SolutionsDropdown() {
                               </span>
                               <span className="min-w-0">
                                 <span className="block text-sm font-semibold text-slate-900 transition group-hover:text-teal-700">
-                                  {s.title}
+                                  {getLocalizedSolution(s.slug, "title", s.title)}
                                 </span>
                                 <span className="block text-xs leading-relaxed text-slate-500">
-                                  {s.tagline}
+                                  {getLocalizedSolution(s.slug, "tagline", s.tagline)}
                                 </span>
                               </span>
                             </Link>
@@ -161,27 +165,55 @@ export function SolutionsDropdown() {
                     <Link
                       href="/solutions"
                       onClick={() => setOpen(false)}
-                      className="mt-3 flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-teal-600 transition hover:bg-teal-50 hover:text-teal-700"
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100/80"
                     >
-                      <span>View all Operations tools</span>
+                      <span>{t("viewAllOperations")}</span>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
-                  </div>
-                </div>
+                  </section>
 
-                {/* Footer */}
-                <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-5 py-3 sm:px-6">
-                  <p className="text-xs text-slate-500">
-                    {LANDING_SOLUTIONS.length} tools across both product areas
-                  </p>
-                  <Link
-                    href="/solutions"
-                    onClick={() => setOpen(false)}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-(--landing-cta) transition hover:text-(--landing-cta-bright)"
-                  >
-                    Browse all solutions
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
+                  <aside className="rounded-2xl border border-slate-200/90 bg-slate-50/80 p-4 lg:p-5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      {t("toolsCount", { count: LANDING_SOLUTIONS.length })}
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                      {t("quickLinksBody")}
+                    </p>
+                    <div className="mt-4 space-y-2">
+                      <Link
+                        href="/solutions"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-100"
+                      >
+                        {t("browseAll")}
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                      <Link
+                        href="/use-cases"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-100"
+                      >
+                        {navT("useCases")}
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                      <Link
+                        href="/case-studies"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-100"
+                      >
+                        {navT("caseStudies")}
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                      <Link
+                        href="/pricing"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-100"
+                      >
+                        {navT("pricing")}
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </div>
+                  </aside>
                 </div>
               </div>
             </div>
@@ -199,7 +231,7 @@ export function SolutionsDropdown() {
         aria-haspopup="dialog"
         className="flex items-center gap-1 text-sm font-medium text-slate-600 transition hover:text-slate-900"
       >
-        Solutions
+        {t("trigger")}
         <ChevronDown
           className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
           strokeWidth={2.5}

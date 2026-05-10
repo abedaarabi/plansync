@@ -7,7 +7,7 @@ import { ArrowRight } from "lucide-react";
 import { LANDING_SOLUTIONS } from "@/lib/landingContent";
 
 type LandingFooterProps = {
-  onGoToFreeViewer: () => void;
+  onGoToFreeViewer: (source?: string) => void;
 };
 
 export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
@@ -62,7 +62,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               </li>
               <li>
                 <Link
-                  href="/#compare"
+                  href="/pricing"
                   className="text-sm text-slate-300 transition hover:text-white"
                 >
                   {t("pricing")}
@@ -71,7 +71,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               <li>
                 <button
                   type="button"
-                  onClick={onGoToFreeViewer}
+                  onClick={() => onGoToFreeViewer("footer_free_viewer")}
                   className="text-sm text-slate-300 transition hover:text-white"
                 >
                   {t("freeViewer")}
@@ -104,10 +104,20 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
             </h4>
             <ul className="mt-4 flex flex-col gap-3">
               <li>
-                <span className="text-sm text-slate-500">{t("about")}</span>
+                <Link
+                  href="/use-cases"
+                  className="text-sm text-slate-300 transition hover:text-white"
+                >
+                  {t("about")}
+                </Link>
               </li>
               <li>
-                <span className="text-sm text-slate-500">{t("blog")}</span>
+                <Link
+                  href="/case-studies"
+                  className="text-sm text-slate-300 transition hover:text-white"
+                >
+                  {t("blog")}
+                </Link>
               </li>
               <li>
                 <a
@@ -151,7 +161,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
           </p>
           <button
             type="button"
-            onClick={onGoToFreeViewer}
+            onClick={() => onGoToFreeViewer("footer_bottom_open_viewer")}
             className="inline-flex items-center gap-2 text-xs font-medium text-sky-400 transition hover:text-sky-300"
           >
             {t("openViewerCta")} <ArrowRight className="h-3 w-3" />

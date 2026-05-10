@@ -107,6 +107,8 @@ import { registerRfiRoutes } from "./rfiRoutes.js";
 import { registerTakeoffRoutes } from "./takeoffRoutes.js";
 import { registerProposalRoutes } from "./proposalRoutes.js";
 import { registerSheetAiRoutes } from "./sheetAiRoutes.js";
+import { geminiConfigured, geminiMarketingLandingChat } from "../../lib/geminiSheetAi.js";
+import { marketingChatRateLimited } from "../../lib/marketingChatRateLimit.js";
 import { registerCloudRoutes } from "./cloudRoutes.js";
 import { registerPunchRoutes } from "./punchRoutes.js";
 import { registerScheduleRoutes } from "./scheduleRoutes.js";
@@ -306,6 +308,51 @@ export function v1Routes(
         "Cache-Control": "public, max-age=604800",
       },
     });
+  });
+
+  const marketingChatBodyLimit = bodyLimit({
+    maxSize: 48 * 1024,
+    onError: (c) => c.json({ error: "Payload too large" }, 413),
+  });
+  const marketingChatMessageSchema = z.object({
+    role: z.enum(["user", "model"]),
+    content: z.string().max(8000),
+  });
+
+  /** Public: landing-page assistant (Gemini text). Unauthenticated; rate-limited per IP. */
+  r.post("/public/marketing/chat", marketingChatBodyLimit, async (c) => {
+    if (!geminiConfigured(env)) {
+      return c.json({ error: "Assistant is temporarily unavailable." }, 503);
+    }
+    const clientIp =
+      c.req.header("cf-connecting-ip")?.trim() ||
+      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+      c.req.header("x-real-ip")?.trim() ||
+      "unknown";
+    if (marketingChatRateLimited(clientIp)) {
+      return c.json({ error: "Too many requests. Please try again shortly." }, 429);
+    }
+    const raw = await c.req.json().catch(() => null);
+    const parsed = z
+      .object({
+        locale: z.string().max(16).optional(),
+        messages: z.array(marketingChatMessageSchema).min(1).max(24),
+      })
+      .safeParse(raw);
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+    const last = parsed.data.messages[parsed.data.messages.length - 1];
+    if (!last || last.role !== "user") {
+      return c.json({ error: "Last message must be from the visitor." }, 400);
+    }
+    try {
+      const reply = await geminiMarketingLandingChat(env, parsed.data);
+      return c.json({ reply });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Chat failed";
+      return c.json({ error: msg }, 502);
+    }
   });
 
   /** Public: validate invite token for join page (no auth). */

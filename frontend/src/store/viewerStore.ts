@@ -131,7 +131,7 @@ export interface Annotation {
   /** When set with {@link linkedIssueId}, this markup is linked for context but is not the issue location pin. */
   linkedIssueAttachment?: boolean;
   /** Drives on-sheet pin shape (hex vs circle); defaults to construction when unset. */
-  linkedIssueKind?: "WORK_ORDER" | "CONSTRUCTION";
+  linkedIssueKind?: "WORK_ORDER" | "CONSTRUCTION" | "OCCUPANT";
   /** Snapshot of issue status for coloring; update when status changes in Issues tab. */
   issueStatus?: string;
   /** Issue title for on-sheet affordances (tooltip chip when selected). */
@@ -288,8 +288,8 @@ interface ViewerState {
   };
   /** PlanGrid-style: toolbar “New issue” → click sheet to place pin, then dialog. */
   newIssuePlacementActive: boolean;
-  /** Opens create dialog; cleared after save/cancel. */
-  issueCreateDraft: null | { annotationId: string };
+  /** Opens create dialog; optional pre-placed pin id, cleared after save/cancel. */
+  issueCreateDraft: null | { annotationId: string | null };
   /**
    * Issue create/edit slider is open (portaled). Set synchronously when opening edit so the canvas
    * does not receive clicks during the one-frame delay before `IssueFormSlider` mounts.
@@ -397,7 +397,7 @@ interface ViewerState {
     },
   ) => void;
   setNewIssuePlacementActive: (v: boolean) => void;
-  setIssueCreateDraft: (d: null | { annotationId: string }) => void;
+  setIssueCreateDraft: (d: null | { annotationId: string | null }) => void;
   setIssueFormSliderOpen: (v: boolean) => void;
   setOmAssetPlacementActive: (v: boolean) => void;
   setOmAssetCreateDraft: (d: null | { annotationId: string }) => void;

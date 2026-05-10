@@ -924,7 +924,7 @@ export function PdfViewer() {
                 mobileLeftToolsOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-full"
               } lg:relative lg:inset-auto lg:z-auto lg:w-full lg:translate-x-0 lg:border-0 lg:shadow-none`}
             >
-              <ViewerSidebar />
+              <ViewerSidebar pdfDoc={pdfDoc} />
             </div>
           </div>
           <div className="viewer-canvas-area relative col-start-2 row-start-2 row-end-3 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--viewer-canvas)] shadow-[inset_0_0_0_1px_rgba(226,232,240,0.9)] print:overflow-visible md:shadow-[inset_0_0_0_1px_rgba(51,65,85,0.08)]">

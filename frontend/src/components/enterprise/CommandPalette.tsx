@@ -145,6 +145,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
     if (!projectId) return out;
 
+    const projectBase = wid ? `/workspaces/${wid}/projects/${projectId}` : `/projects/${projectId}`;
     const ui = projectSession?.uiMode;
     if (ui === "contractor" || ui === "sub") {
       out.push(
@@ -152,14 +153,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           id: "phome",
           label: "Project home",
           hint: "Home",
-          href: `/projects/${projectId}/home`,
+          href: `${projectBase}/home`,
           icon: House,
         },
         {
           id: "files",
           label: "My Drawings",
           hint: "Project files",
-          href: `/projects/${projectId}/files`,
+          href: `${projectBase}/files`,
           icon: FileStack,
         },
       );
@@ -168,7 +169,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           id: "issues",
           label: "Open My Issues",
           hint: "Issues",
-          href: `/projects/${projectId}/issues`,
+          href: `${projectBase}/issues`,
           icon: MapPin,
         });
       }
@@ -177,7 +178,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           id: "punch",
           label: "Open Punch List",
           hint: "Field punch items",
-          href: `/projects/${projectId}/punch`,
+          href: `${projectBase}/punch`,
           icon: ClipboardCheck,
         });
       }
@@ -192,14 +193,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         id: "phome",
         label: "Project home",
         hint: "Home",
-        href: `/projects/${projectId}/home`,
+        href: `${projectBase}/home`,
         icon: House,
       },
       {
         id: "files",
         label: "Files & Drawings",
         hint: "Project files",
-        href: `/projects/${projectId}/files`,
+        href: `${projectBase}/files`,
         icon: FileStack,
       },
     );
@@ -208,7 +209,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         id: "schedule",
         label: "Construction schedule",
         hint: "Timeline & phases",
-        href: `/projects/${projectId}/schedule`,
+        href: `${projectBase}/schedule`,
         icon: ChartGantt,
       });
     }
@@ -217,14 +218,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         id: "om-fm-dashboard",
         label: "FM dashboard",
         hint: "KPIs, maintenance & work orders",
-        href: `/projects/${projectId}/om/dashboard`,
+        href: `${projectBase}/om/dashboard`,
         icon: LayoutGrid,
       });
       out.push({
         id: "om-handover",
         label: "Handover",
         hint: "Readiness & FM brief",
-        href: `/projects/${projectId}/om/handover`,
+        href: `${projectBase}/om/handover`,
         icon: FileCheck2,
       });
       if (mod.omAssets) {
@@ -232,7 +233,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           id: "om-assets",
           label: "Assets",
           hint: "O&M equipment",
-          href: `/projects/${projectId}/om/assets`,
+          href: `${projectBase}/om/assets`,
           icon: Package,
         });
       }
@@ -241,14 +242,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           id: "om-wo",
           label: "Work orders",
           hint: "O&M",
-          href: `/projects/${projectId}/om/work-orders`,
+          href: `${projectBase}/om/work-orders`,
           icon: Wrench,
         });
         out.push({
           id: "om-construction-issues",
           label: "Construction issues",
           hint: "Filtered list",
-          href: `/projects/${projectId}/issues?issueKind=CONSTRUCTION`,
+          href: `${projectBase}/issues?issueKind=CONSTRUCTION`,
           icon: MapPin,
         });
         if (mod.omTenantPortal) {
@@ -256,14 +257,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             id: "om-tenant-hub",
             label: "Occupant hub",
             hint: "Overview and links",
-            href: `/projects/${projectId}/om/tenant-portal`,
+            href: `${projectBase}/om/tenant-portal`,
             icon: LayoutDashboard,
           });
           out.push({
             id: "om-tenant-req",
             label: "Occupant inbox",
             hint: "Triage occupant submissions",
-            href: `/projects/${projectId}/om/tenant-requests`,
+            href: `${projectBase}/om/tenant-requests`,
             icon: Inbox,
           });
         }
@@ -273,7 +274,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           id: "om-maint",
           label: "Maintenance (PPM)",
           hint: "Schedules",
-          href: `/projects/${projectId}/om/maintenance`,
+          href: `${projectBase}/om/maintenance`,
           icon: CalendarRange,
         });
       }
@@ -282,7 +283,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           id: "om-insp",
           label: "Inspections",
           hint: "Templates & runs",
-          href: `/projects/${projectId}/om/inspections`,
+          href: `${projectBase}/om/inspections`,
           icon: ClipboardList,
         });
       }
@@ -291,7 +292,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         id: "issues",
         label: "Open Issues",
         hint: "Issues",
-        href: `/projects/${projectId}/issues`,
+        href: `${projectBase}/issues`,
         icon: MapPin,
       });
     }
@@ -300,7 +301,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         id: "rfi",
         label: "Open RFIs",
         hint: "Requests for information",
-        href: `/projects/${projectId}/rfi`,
+        href: `${projectBase}/rfi`,
         icon: MessageSquareQuote,
       });
     }
@@ -329,7 +330,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         id: "punch",
         label: "Open Punch List",
         hint: "Field punch items",
-        href: `/projects/${projectId}/punch`,
+        href: `${projectBase}/punch`,
         icon: ClipboardCheck,
       });
     }
@@ -338,7 +339,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         id: "reports",
         label: "Open Field Reports",
         hint: "Daily logs & photos",
-        href: `/projects/${projectId}/reports`,
+        href: `${projectBase}/reports`,
         icon: ClipboardList,
       });
     }
@@ -346,7 +347,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       id: "team",
       label: "Team",
       hint: "Project team",
-      href: wid ? `/workspaces/${wid}/projects/${projectId}/team` : `/projects/${projectId}/team`,
+      href: `${projectBase}/team`,
       icon: Users,
     });
     if (showAudit) {
@@ -354,7 +355,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         id: "audit",
         label: "Audit log",
         hint: "Activity history",
-        href: `/projects/${projectId}/audit`,
+        href: `${projectBase}/audit`,
         icon: ScrollText,
       });
     }
@@ -363,7 +364,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         id: "proj-settings",
         label: "Project Settings",
         hint: "Currency & modules",
-        href: `/projects/${projectId}/settings`,
+        href: `${projectBase}/settings`,
         icon: Settings,
       });
     }

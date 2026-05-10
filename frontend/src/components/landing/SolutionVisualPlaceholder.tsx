@@ -54,18 +54,32 @@ export function SolutionVisualPlaceholder({
         aria-hidden
       />
 
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-        <div className={`rounded-2xl border p-3 shadow-md ring-1 ${iconBorder}`}>
-          <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${iconBg}`}>
-            <ImageIcon className={`h-6 w-6 ${iconColor}`} strokeWidth={1.4} aria-hidden />
+      <div className="absolute inset-0 flex flex-col justify-between p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className={`text-sm font-semibold tracking-tight ${titleColor}`}>{label}</p>
+            <p className={`text-xs font-medium ${hintColor}`}>{hint}</p>
+          </div>
+          <div className={`rounded-xl border p-2.5 shadow-md ring-1 ${iconBorder}`}>
+            <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${iconBg}`}>
+              <ImageIcon className={`h-5 w-5 ${iconColor}`} strokeWidth={1.4} aria-hidden />
+            </div>
           </div>
         </div>
-        <div className="space-y-1">
-          <p className={`text-sm font-semibold tracking-tight ${titleColor}`}>{label}</p>
-          <p className={`text-xs font-medium tabular-nums ${hintColor}`}>{hint}</p>
+        <div className="space-y-2">
+          <div className="grid grid-cols-[1.2fr_1fr] gap-2">
+            <div className="h-16 rounded-lg border border-white/70 bg-white/80" />
+            <div className="h-16 rounded-lg border border-white/70 bg-white/70" />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="h-8 rounded-md border border-white/70 bg-white/70" />
+            <div className="h-8 rounded-md border border-white/70 bg-white/70" />
+            <div className="h-8 rounded-md border border-white/70 bg-white/70" />
+          </div>
+          <div className="h-2 rounded-full bg-[color-mix(in_srgb,var(--landing-cta)_20%,white)]" />
         </div>
-        <p className={`max-w-65 text-[11px] leading-relaxed ${footColor}`}>
-          Drop your screen capture here when ready — keeps layout and focus crisp.
+        <p className={`text-[11px] leading-relaxed ${footColor}`}>
+          Preview frame tuned for product storytelling.
         </p>
       </div>
     </div>

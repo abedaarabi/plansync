@@ -2,18 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronRight, LayoutGrid } from "lucide-react";
-import {
-  getSolutionsByCategory,
-  LANDING_SOLUTIONS,
-  LANDING_SOLUTIONS_SECTION,
-} from "@/lib/landingContent";
+import { useTranslations } from "next-intl";
+import { ArrowRight, ChevronRight, LayoutGrid } from "lucide-react";
+import { getSolutionsByCategory, LANDING_SOLUTIONS } from "@/lib/landingContent";
+import { trackMarketingEvent } from "@/lib/marketingAnalytics";
 import { AnimateIn } from "./AnimateIn";
 import { MarketingShell, useMarketingGoToFreeViewer } from "./MarketingShell";
 import { SolutionsDirectory } from "./SolutionsDirectory";
 import { SolutionVisualPlaceholder } from "./SolutionVisualPlaceholder";
 
 function SolutionsIndexPageInner() {
+  const t = useTranslations("solutionsPages");
   const goToFreeViewer = useMarketingGoToFreeViewer();
   const nConstruction = getSolutionsByCategory("construction").length;
   const nOperations = getSolutionsByCategory("operations").length;
@@ -32,7 +31,7 @@ function SolutionsIndexPageInner() {
               href="/"
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
             >
-              Home
+              {t("breadcrumbs.home")}
             </Link>
             <Link
               href="/"
@@ -56,10 +55,10 @@ function SolutionsIndexPageInner() {
               aria-label="Breadcrumb"
             >
               <Link href="/" className="font-medium transition hover:text-slate-900">
-                Home
+                {t("breadcrumbs.home")}
               </Link>
               <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
-              <span className="font-semibold text-slate-900">Solutions</span>
+              <span className="font-semibold text-slate-900">{t("breadcrumbs.solutions")}</span>
             </nav>
 
             <AnimateIn>
@@ -72,14 +71,14 @@ function SolutionsIndexPageInner() {
                         strokeWidth={2}
                         aria-hidden
                       />
-                      {LANDING_SOLUTIONS_SECTION.eyebrow}
+                      {t("landingSection.eyebrow")}
                     </div>
 
                     <h1 className="mt-5 text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl lg:text-[2.25rem] lg:leading-tight">
-                      {LANDING_SOLUTIONS_SECTION.title}
+                      {t("landingSection.title")}
                     </h1>
                     <p className="mt-5 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-[17px] sm:leading-relaxed">
-                      {LANDING_SOLUTIONS_SECTION.description}
+                      {t("landingSection.description")}
                     </p>
 
                     <div className="mt-8 flex flex-wrap gap-2">
@@ -87,54 +86,61 @@ function SolutionsIndexPageInner() {
                         <span className="font-semibold tabular-nums text-slate-900">
                           {LANDING_SOLUTIONS.length}
                         </span>
-                        <span className="text-slate-500">total modules</span>
+                        <span className="text-slate-500">{t("stats.totalModules")}</span>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200/60 bg-blue-50/50 px-3 py-2 text-xs shadow-sm">
                         <span className="font-semibold tabular-nums text-blue-900">
                           {nConstruction}
                         </span>
-                        <span className="text-blue-800/80">construction</span>
+                        <span className="text-blue-800/80">{t("stats.construction")}</span>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-200/60 bg-emerald-50/50 px-3 py-2 text-xs shadow-sm">
                         <span className="font-semibold tabular-nums text-emerald-900">
                           {nOperations}
                         </span>
-                        <span className="text-emerald-800/80">operations</span>
+                        <span className="text-emerald-800/80">{t("stats.operations")}</span>
                       </div>
                     </div>
 
                     <div className="mt-8 flex flex-wrap gap-3">
                       <button
                         type="button"
-                        onClick={goToFreeViewer}
+                        onClick={() => goToFreeViewer("solutions_index_open_viewer")}
                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-(--landing-cta) px-5 py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-(--landing-cta-bright)"
                       >
-                        Open free viewer
+                        {t("openViewer")}
                       </button>
                       <Link
                         href="/sign-in"
+                        onClick={() =>
+                          trackMarketingEvent("marketing_cta_click", {
+                            ctaType: "start_trial",
+                            source: "solutions_index_trial",
+                            destination: "/sign-in",
+                          })
+                        }
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/90 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
                       >
-                        Start Pro trial
+                        {t("startTrial")}
                       </Link>
                       <Link
                         href="#solutions-construction"
                         className="inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-slate-600 transition hover:text-slate-900"
                       >
-                        Jump to modules
+                        {t("jumpToModules")}
                       </Link>
                     </div>
                   </div>
 
                   <div className="hidden lg:block">
                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                      Workspace overview
+                      {t("workspaceOverview")}
                     </p>
                     <SolutionVisualPlaceholder
                       tone="slate"
                       accentSolidBg="bg-blue-600"
-                      label="Product preview"
-                      hint="Screenshot or diagram"
+                      label="Connected workspace"
+                      hint="Drawings, RFIs, issues, and FM data in one place"
                       aspectClass="aspect-[4/3] min-h-[200px]"
                       className="w-full rounded-xl shadow-sm"
                     />
@@ -145,6 +151,62 @@ function SolutionsIndexPageInner() {
 
             <div className="mt-10 sm:mt-12">
               <SolutionsDirectory />
+            </div>
+            <div className="mt-12 grid gap-4 md:grid-cols-3">
+              <Link
+                href="/use-cases"
+                className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  {t("cards.useCases.label")}
+                </p>
+                <h2 className="mt-2 text-base font-semibold text-slate-900">
+                  {t("cards.useCases.title")}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  {t("cards.useCases.body")}
+                </p>
+                <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-(--landing-cta)">
+                  {t("cards.useCases.cta")}
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </Link>
+              <Link
+                href="/case-studies"
+                className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  {t("cards.caseStudies.label")}
+                </p>
+                <h2 className="mt-2 text-base font-semibold text-slate-900">
+                  {t("cards.caseStudies.title")}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  {t("cards.caseStudies.body")}
+                </p>
+                <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-(--landing-cta)">
+                  {t("cards.caseStudies.cta")}
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </Link>
+              <Link
+                href="/pricing"
+                className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  {t("cards.pricing.label")}
+                </p>
+                <h2 className="mt-2 text-base font-semibold text-slate-900">
+                  {t("cards.pricing.title")}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  {t("cards.pricing.body")}
+                </p>
+                <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-(--landing-cta)">
+                  {t("cards.pricing.cta")}
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </Link>
             </div>
           </div>
         </div>

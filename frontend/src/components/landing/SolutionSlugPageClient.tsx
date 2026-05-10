@@ -2,10 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ArrowLeft, ArrowRight, Check, ChevronRight } from "lucide-react";
 import { MarketingHeroBackdrop } from "@/components/BrandStoryPanel";
 import type { SolutionSlug } from "@/lib/landingContent";
 import { LANDING_SOLUTIONS, SOLUTION_CATEGORIES } from "@/lib/landingContent";
+import { trackMarketingEvent } from "@/lib/marketingAnalytics";
 import { SOLUTION_ICON_COLORS, SOLUTION_ICONS } from "./solutionIcons";
 import { AnimateIn } from "./AnimateIn";
 import { MarketingShell, useMarketingGoToFreeViewer } from "./MarketingShell";
@@ -17,6 +19,7 @@ type SolutionSlugPageClientProps = {
 };
 
 function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
+  const t = useTranslations("solutionsPages");
   const goToFreeViewer = useMarketingGoToFreeViewer();
   const solution = LANDING_SOLUTIONS.find((s) => s.slug === slug)!;
   const Icon = SOLUTION_ICONS[slug];
@@ -50,7 +53,7 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
             >
               <ArrowLeft className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
-              Solutions
+              {t("breadcrumbs.solutions")}
             </Link>
             <Link
               href="/"
@@ -75,11 +78,11 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
               aria-label="Breadcrumb"
             >
               <Link href="/" className="font-medium transition hover:text-slate-900">
-                Home
+                {t("breadcrumbs.home")}
               </Link>
               <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
               <Link href="/solutions" className="font-medium transition hover:text-slate-900">
-                Solutions
+                {t("breadcrumbs.solutions")}
               </Link>
               <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
               <span className="font-semibold text-slate-900">{solution.title}</span>
@@ -106,7 +109,9 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
                       >
                         {categoryMeta.label}
                       </span>
-                      <span className="text-xs font-medium text-slate-400">Solution overview</span>
+                      <span className="text-xs font-medium text-slate-400">
+                        {t("solutionOverview")}
+                      </span>
                     </div>
 
                     <div className="mt-6 flex items-start gap-4">
@@ -146,17 +151,24 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
                     <div className="mt-10 flex flex-wrap items-center gap-3">
                       <button
                         type="button"
-                        onClick={goToFreeViewer}
+                        onClick={() => goToFreeViewer(`solution_${slug}_open_viewer`)}
                         className="btn-shine inline-flex items-center gap-2 rounded-xl bg-(--landing-cta) px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-(--landing-cta-bright) active:scale-[0.99]"
                       >
-                        Open free viewer
+                        {t("openViewer")}
                         <ArrowRight className="h-4 w-4" aria-hidden />
                       </button>
                       <Link
                         href="/sign-in"
+                        onClick={() =>
+                          trackMarketingEvent("marketing_cta_click", {
+                            ctaType: "start_trial",
+                            source: `solution_${slug}_trial`,
+                            destination: "/sign-in",
+                          })
+                        }
                         className={`inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-6 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:shadow-md`}
                       >
-                        Start Pro trial
+                        {t("startTrial")}
                       </Link>
                     </div>
                   </div>
@@ -168,9 +180,29 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
                     </p>
                     <SolutionVisualPlaceholder
                       accentSolidBg={colors.solidBg}
-                      label={`${solution.title} · hero`}
-                      hint="Drop your best UI frame here"
+                      label={`${solution.title} in production`}
+                      hint="Workflow preview with role-based actions and reporting"
                     />
+                    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                      <Link
+                        href="/use-cases"
+                        className="rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                      >
+                        {t("cards.useCases.label")}
+                      </Link>
+                      <Link
+                        href="/case-studies"
+                        className="rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                      >
+                        {t("cards.caseStudies.label")}
+                      </Link>
+                      <Link
+                        href="/pricing"
+                        className="rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                      >
+                        {t("cards.pricing.label")}
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -193,14 +225,13 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
                   >
                     <Icon className="h-3.5 w-3.5" strokeWidth={2} />
                   </span>
-                  Deep dive
+                  {t("deepDive")}
                 </span>
                 <h2 className="max-w-2xl text-balance text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                  How {solution.title} works in PlanSync
+                  {t("deepDiveTitle", { solution: solution.title })}
                 </h2>
                 <p className="max-w-lg text-sm leading-relaxed text-slate-500 sm:text-base">
-                  Interactive preview below — swap in real screenshots anytime without changing
-                  layout.
+                  {t("deepDiveBody")}
                 </p>
               </div>
 

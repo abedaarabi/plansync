@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   ArrowUpRight,
@@ -241,72 +241,55 @@ export function DashboardClient() {
   const storageUsageBarPct =
     storageQuota > 0 ? Math.min(100, (storageUsed / storageQuota) * 100) : 0;
 
-  const checklist = useMemo(
-    (): { id: string; label: string; done: boolean }[] => [
-      { id: "1", label: td("checklistCreateAccount"), done: true },
-      { id: "2", label: td("checklistCreateWorkspace"), done: hasWorkspace },
-      { id: "3", label: td("checklistUploadDrawing"), done: fileCount > 0 },
-      { id: "4", label: td("checklistInviteTeam"), done: memberCount > 1 },
-      { id: "5", label: td("checklistTrackIssue"), done: issueTotal > 0 },
-    ],
-    [td, hasWorkspace, fileCount, memberCount, issueTotal],
-  );
+  const checklist: { id: string; label: string; done: boolean }[] = [
+    { id: "1", label: td("checklistCreateAccount"), done: true },
+    { id: "2", label: td("checklistCreateWorkspace"), done: hasWorkspace },
+    { id: "3", label: td("checklistUploadDrawing"), done: fileCount > 0 },
+    { id: "4", label: td("checklistInviteTeam"), done: memberCount > 1 },
+    { id: "5", label: td("checklistTrackIssue"), done: issueTotal > 0 },
+  ];
   const doneCount = checklist.filter((c) => c.done).length;
   const progressPct = (doneCount / checklist.length) * 100;
 
   const firstProject = projects[0];
 
-  const kpiRows = useMemo(
-    () => [
-      {
-        key: "projects",
-        label: td("kpiProjects"),
-        value: String(projectCount),
-        hint: hasWorkspace ? td("kpiProjectsHint1") : td("kpiProjectsHint2"),
-        icon: FileStack,
-        tone: "text-[var(--enterprise-primary)]",
-      },
-      {
-        key: "pdfs",
-        label: td("kpiCloudPdfs"),
-        value: String(fileCount),
-        hint: td("kpiCloudPdfsHint"),
-        icon: FileStack,
-        tone: "text-blue-600",
-      },
-      {
-        key: "issues",
-        label: td("kpiOpenIssues"),
-        value: String(openIssues),
-        hint: td("kpiOpenIssuesHint", { closed: closedIssues, total: issueTotal }),
-        icon: Flag,
-        tone: openIssues === 0 ? "text-emerald-600" : "text-amber-700",
-      },
-      {
-        key: "storage",
-        label: td("kpiStorage"),
-        value: `${(storageUsed / 1024 ** 3).toFixed(2)} GB`,
-        hint: td("kpiStorageHint", {
-          pct: storagePct,
-          quota: (storageQuota / 1024 ** 3).toFixed(0),
-        }),
-        icon: HardDrive,
-        tone: storagePct > 85 ? "text-red-600" : "text-[var(--enterprise-text)]",
-      },
-    ],
-    [
-      td,
-      hasWorkspace,
-      projectCount,
-      fileCount,
-      openIssues,
-      closedIssues,
-      issueTotal,
-      storageUsed,
-      storageQuota,
-      storagePct,
-    ],
-  );
+  const kpiRows = [
+    {
+      key: "projects",
+      label: td("kpiProjects"),
+      value: String(projectCount),
+      hint: hasWorkspace ? td("kpiProjectsHint1") : td("kpiProjectsHint2"),
+      icon: FileStack,
+      tone: "text-[var(--enterprise-primary)]",
+    },
+    {
+      key: "pdfs",
+      label: td("kpiCloudPdfs"),
+      value: String(fileCount),
+      hint: td("kpiCloudPdfsHint"),
+      icon: FileStack,
+      tone: "text-blue-600",
+    },
+    {
+      key: "issues",
+      label: td("kpiOpenIssues"),
+      value: String(openIssues),
+      hint: td("kpiOpenIssuesHint", { closed: closedIssues, total: issueTotal }),
+      icon: Flag,
+      tone: openIssues === 0 ? "text-emerald-600" : "text-amber-700",
+    },
+    {
+      key: "storage",
+      label: td("kpiStorage"),
+      value: `${(storageUsed / 1024 ** 3).toFixed(2)} GB`,
+      hint: td("kpiStorageHint", {
+        pct: storagePct,
+        quota: (storageQuota / 1024 ** 3).toFixed(0),
+      }),
+      icon: HardDrive,
+      tone: storagePct > 85 ? "text-red-600" : "text-[var(--enterprise-text)]",
+    },
+  ];
 
   return (
     <div className="enterprise-animate-in space-y-8">

@@ -168,13 +168,25 @@ export async function runOmMaintenanceReminders(env) {
             "",
             `Open: ${appOrigin}/projects/${items[0].projectId}/om/maintenance`,
         ].join("\n");
-        await resend.emails.send({
-            from,
-            to: emails,
-            subject: `PlanSync O&M: ${items.length} maintenance reminder(s) — ${workspaceName}`,
-            html,
-            text,
-        });
+        try {
+            const sent = await resend.emails.send({
+                from,
+                to: emails,
+                subject: `PlanSync O&M: ${items.length} maintenance reminder(s) — ${workspaceName}`,
+                html,
+                text,
+            });
+            if (sent.error) {
+                console.error("[om-maintenance-reminders] resend send_failed", sent.error.message);
+                workspacesSkipped += 1;
+                continue;
+            }
+        }
+        catch (err) {
+            console.error("[om-maintenance-reminders] resend exception", err);
+            workspacesSkipped += 1;
+            continue;
+        }
         await prisma.omMaintenanceReminderDigest.create({
             data: { workspaceId, digestDate: dayKey },
         });

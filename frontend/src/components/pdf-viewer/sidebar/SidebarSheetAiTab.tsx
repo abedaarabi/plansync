@@ -4,18 +4,23 @@ import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { fetchIssuesForFileVersion } from "@/lib/api-client";
+import { fetchIssuesForFileVersion, type IssueKindApi } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { useViewerStore } from "@/store/viewerStore";
 
 export function SidebarSheetAiTab() {
   const qc = useQueryClient();
   const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
+  const viewerOperationsMode = useViewerStore((s) => s.viewerOperationsMode);
   const clearSheetAiFromDrawing = useViewerStore((s) => s.clearSheetAiFromDrawing);
+  const issueKinds: IssueKindApi[] | undefined = viewerOperationsMode
+    ? ["WORK_ORDER", "OCCUPANT"]
+    : undefined;
+  const issueKindsKey = viewerOperationsMode ? "WORK_ORDER,OCCUPANT" : null;
 
   useQuery({
-    queryKey: qk.issuesForFileVersion(cloudFileVersionId ?? ""),
-    queryFn: () => fetchIssuesForFileVersion(cloudFileVersionId!),
+    queryKey: qk.issuesForFileVersion(cloudFileVersionId ?? "", issueKindsKey),
+    queryFn: () => fetchIssuesForFileVersion(cloudFileVersionId!, { issueKinds }),
     enabled: Boolean(cloudFileVersionId),
   });
 
@@ -26,14 +31,16 @@ export function SidebarSheetAiTab() {
       st.takeoffZones.filter((z) => z.fromSheetAi).length;
     await clearSheetAiFromDrawing();
     if (cloudFileVersionId) {
-      void qc.invalidateQueries({ queryKey: qk.issuesForFileVersion(cloudFileVersionId) });
+      void qc.invalidateQueries({
+        queryKey: qk.issuesForFileVersion(cloudFileVersionId, issueKindsKey),
+      });
     }
     if (n === 0) {
       toast.message("No Assist overlays on the drawing.");
     } else {
       toast.success("Removed Assist highlights, markups, pins, and takeoff zones from the sheet.");
     }
-  }, [clearSheetAiFromDrawing, cloudFileVersionId, qc]);
+  }, [clearSheetAiFromDrawing, cloudFileVersionId, issueKindsKey, qc]);
 
   if (!cloudFileVersionId) {
     return (

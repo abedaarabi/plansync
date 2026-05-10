@@ -83,10 +83,8 @@ export const dynamic = "force-dynamic";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  /** PWA / standalone: match native apps — no pinch-to-zoom or accidental horizontal “page pan”. */
-  maximumScale: 1,
-  minimumScale: 1,
-  userScalable: false,
+  /** Keep zoom enabled for accessibility in browser and standalone modes. */
+  userScalable: true,
   viewportFit: "cover",
   themeColor: "#f8fafc",
   colorScheme: "light",

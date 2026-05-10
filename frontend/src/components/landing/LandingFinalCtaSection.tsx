@@ -4,10 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ArrowRight } from "lucide-react";
+import { trackMarketingEvent } from "@/lib/marketingAnalytics";
 import { AnimateIn } from "./AnimateIn";
 
 type LandingFinalCtaSectionProps = {
-  onGoToFreeViewer: () => void;
+  onGoToFreeViewer: (source?: string) => void;
 };
 
 export function LandingFinalCtaSection({ onGoToFreeViewer }: LandingFinalCtaSectionProps) {
@@ -15,7 +16,7 @@ export function LandingFinalCtaSection({ onGoToFreeViewer }: LandingFinalCtaSect
   return (
     <section
       id="cta"
-      className="relative isolate scroll-mt-20 min-h-[26rem] overflow-hidden border-t border-white/[0.06] sm:min-h-[30rem]"
+      className="relative isolate scroll-mt-20 min-h-104 overflow-hidden border-t border-white/6 sm:min-h-120"
     >
       <div className="pointer-events-none absolute inset-0" aria-hidden>
         <Image
@@ -52,10 +53,10 @@ export function LandingFinalCtaSection({ onGoToFreeViewer }: LandingFinalCtaSect
 
       <div className="relative z-10 mx-auto max-w-3xl px-6 py-24 text-center sm:px-8 sm:py-32 md:py-36">
         <AnimateIn>
-          <h2 className="text-3xl font-bold tracking-tight text-blue-50 drop-shadow-[0_1px_20px_rgba(37,99,235,0.2)] sm:text-4xl">
+          <h2 className="text-[2.05rem] font-bold tracking-tight text-blue-50 drop-shadow-[0_1px_20px_rgba(37,99,235,0.2)] sm:text-[2.5rem]">
             {t("title")}
           </h2>
-          <p className="mx-auto mt-5 max-w-lg text-base leading-relaxed text-blue-100/85">
+          <p className="mx-auto mt-5 max-w-lg text-[1.02rem] leading-relaxed text-blue-100/85">
             {t("body")}
             <br />
             {t("bodyLine2")}
@@ -64,13 +65,20 @@ export function LandingFinalCtaSection({ onGoToFreeViewer }: LandingFinalCtaSect
           <div className="mt-10 flex min-w-0 flex-col items-center justify-center gap-4 sm:flex-row">
             <button
               type="button"
-              onClick={onGoToFreeViewer}
-              className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-xl bg-[var(--landing-cta)] px-7 py-3.5 text-base font-semibold text-[var(--landing-cta-text)] shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] transition hover:bg-[var(--landing-cta-bright)] hover:shadow-[color-mix(in_srgb,var(--landing-cta)_38%,transparent)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--landing-cta)] focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              onClick={() => onGoToFreeViewer("final_cta_open_viewer")}
+              className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-xl bg-(--landing-cta) px-7 py-3.5 text-base font-semibold text-(--landing-cta-text) shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] transition hover:bg-(--landing-cta-bright) hover:shadow-[color-mix(in_srgb,var(--landing-cta)_38%,transparent)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta) focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
               {t("openViewer")} <ArrowRight className="h-4 w-4 shrink-0" />
             </button>
             <Link
               href="/sign-in"
+              onClick={() =>
+                trackMarketingEvent("marketing_cta_click", {
+                  ctaType: "start_trial",
+                  source: "final_cta_trial",
+                  destination: "/sign-in",
+                })
+              }
               className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-xl border-2 border-white/90 bg-white/[0.07] px-7 py-3.5 text-base font-semibold text-white backdrop-blur-sm transition hover:border-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
               {t("startTrial")}
@@ -78,7 +86,7 @@ export function LandingFinalCtaSection({ onGoToFreeViewer }: LandingFinalCtaSect
           </div>
 
           <div className="mt-6 flex min-w-0 flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-blue-200/70">
-            <span className="max-w-[22rem] text-center">{t("footnote1")}</span>
+            <span className="max-w-88 text-center">{t("footnote1")}</span>
             <span className="hidden sm:inline">&middot;</span>
             <span>{t("footnote2")}</span>
           </div>

@@ -54,15 +54,15 @@ export function LandingSolutionsShowcaseSection() {
             />
             {tIntro("eyebrow")}
           </div>
-          <h2 className="mt-8 text-pretty text-[2rem] font-semibold leading-[1.12] tracking-tight text-slate-900 sm:text-[2.65rem] sm:leading-[1.08]">
-            <span className="block text-slate-500 sm:text-[1.85rem] sm:leading-snug">
+          <h2 className="mt-8 text-pretty text-[2.05rem] font-semibold leading-[1.1] tracking-tight text-slate-900 sm:text-[2.7rem] sm:leading-[1.07]">
+            <span className="block text-slate-500 sm:text-[1.8rem] sm:leading-snug">
               {tIntro("line1")}
             </span>
             <span className="mt-1 block bg-linear-to-br from-slate-900 via-slate-800 to-slate-700 bg-clip-text text-transparent sm:mt-0">
               {tIntro("line2")}
             </span>
           </h2>
-          <p className="mx-auto mt-6 max-w-xl text-[17px] leading-relaxed text-slate-600 sm:text-lg sm:leading-relaxed">
+          <p className="mx-auto mt-6 max-w-xl text-[1.03rem] leading-relaxed text-slate-600 sm:text-[1.08rem] sm:leading-relaxed">
             {tIntro("body")}
           </p>
         </AnimateIn>
@@ -87,10 +87,10 @@ export function LandingSolutionsShowcaseSection() {
                       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-700/90">
                         {tCons("label")}
                       </p>
-                      <h3 className="mt-1.5 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+                      <h3 className="mt-1.5 text-[1.3rem] font-semibold tracking-tight text-slate-900 sm:text-[1.45rem]">
                         {tCons("title")}
                       </h3>
-                      <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-[15px]">
+                      <p className="mt-2 text-[0.94rem] leading-relaxed text-slate-600 sm:text-[0.98rem]">
                         {tCons("body")}
                       </p>
                     </div>
@@ -152,7 +152,7 @@ export function LandingSolutionsShowcaseSection() {
           </AnimateIn>
 
           <AnimateIn delay={120}>
-            <article className="group relative flex h-full min-h-105 flex-col overflow-hidden rounded-[1.65rem] border border-slate-200/85 bg-white shadow-[0_32px_64px_-28px_rgba(15,23,42,0.14),0_0_0_1px_rgba(15,23,42,0.03)] ring-1 ring-slate-900/2.5">
+            <article className="group relative flex h-full min-h-105 flex-col overflow-hidden rounded-[1.65rem] border border-slate-200/85 bg-white shadow-[0_32px_64px_-28px_rgba(15,23,42,0.14),0_0_0_1px_rgba(15,23,42,0.03)] ring-1 ring-slate-900/2.5 lg:translate-y-4">
               <div
                 className="h-1.5 w-full bg-linear-to-r from-emerald-700 via-teal-600 to-cyan-500"
                 aria-hidden
@@ -170,10 +170,10 @@ export function LandingSolutionsShowcaseSection() {
                       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-800/90">
                         {tOps("label")}
                       </p>
-                      <h3 className="mt-1.5 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+                      <h3 className="mt-1.5 text-[1.3rem] font-semibold tracking-tight text-slate-900 sm:text-[1.45rem]">
                         {tOps("title")}
                       </h3>
-                      <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-[15px]">
+                      <p className="mt-2 text-[0.94rem] leading-relaxed text-slate-600 sm:text-[0.98rem]">
                         {tOps("body")}
                       </p>
                     </div>

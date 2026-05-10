@@ -2,6 +2,8 @@
   "nav": {
     "features": "Features",
     "pricing": "Pricing",
+    "useCases": "Use Cases",
+    "caseStudies": "Case Studies",
     "faq": "FAQ",
     "install": "Install",
     "signIn": "Sign In",
@@ -11,11 +13,47 @@
     "construction": "Construction",
     "operationsFm": "Operations & FM"
   },
+  "solutionsMenu": {
+    "trigger": "Solutions",
+    "closeMenu": "Close solutions menu",
+    "menuAria": "Solutions menu",
+    "constructionLabel": "Construction",
+    "constructionTagline": "Job site to office",
+    "constructionExtra": "+ Audit, proposals, cloud storage",
+    "operationsLabel": "Operations & FM",
+    "operationsTagline": "Handover to daily ops",
+    "viewAllOperations": "View all Operations tools",
+    "toolsCount": "{count} tools across both product areas",
+    "browseAll": "Browse all solutions",
+    "quickLinksBody": "Explore the full product map or jump to high-intent pages."
+  },
+  "solutionCopy": {
+    "viewer": { "title": "PDF viewer", "tagline": "Measure & annotate any PDF" },
+    "issues": { "title": "Issues on drawings", "tagline": "Track issues on the drawing" },
+    "rfis": { "title": "RFI workflow", "tagline": "Formal process, not email" },
+    "takeoff": { "title": "Quantity takeoff", "tagline": "Auto-calculate quantities" },
+    "audit": { "title": "Site audit", "tagline": "Systematic site quality checks" },
+    "proposal": { "title": "Proposals", "tagline": "Win bids with professional docs" },
+    "cloud-storage": { "title": "Cloud storage", "tagline": "Team files in one secure place" },
+    "pdf-version-control": {
+      "title": "PDF version control",
+      "tagline": "Always the right sheet revision"
+    },
+    "schedule": { "title": "Project schedule", "tagline": "Milestones the whole team can see" },
+    "om-handover": { "title": "O&M + handover", "tagline": "Structured closeout packages" },
+    "om-assets": { "title": "Asset register", "tagline": "Searchable asset database" },
+    "om-maintenance": { "title": "Maintenance", "tagline": "Prevent failures before they happen" },
+    "om-work-orders": { "title": "Work orders", "tagline": "Assign, track, and close" },
+    "om-inspections": { "title": "Inspections", "tagline": "Templates for compliance" },
+    "om-tenant-portal": { "title": "Tenant portal", "tagline": "Structured occupant requests" },
+    "om-fm-dashboard": { "title": "FM dashboard", "tagline": "Live operational overview" }
+  },
   "hero": {
     "eyebrow": "Construction management platform",
     "title": "Plans, issues & RFIs — one source of truth for your team",
     "titleHighlight": "one source of truth",
     "sub": "Everyone works from the same drawings. Field issues and formal RFIs stay tied to the plan — not buried in email. Start free in your browser; upgrade when your team needs the cloud.",
+    "subValueFirst": "Cut coordination delays with one shared workflow for drawings, issues, and RFIs. Start free in-browser, then scale to cloud collaboration when your team is ready.",
     "openViewer": "Open free viewer",
     "startTrial": "Start Pro Trial",
     "stat1Value": "Free forever",
@@ -138,6 +176,227 @@
     "footnote1": "Runs in the browser · optional PWA install",
     "footnote2": "No credit card to start"
   },
+  "proofSection": {
+    "eyebrow": "Why teams switch",
+    "title": "Built for real construction and FM workflows",
+    "body": "PlanSync keeps drawing context, field updates, and formal workflows in one system, so teams move faster with less coordination overhead.",
+    "caseStudiesCta": "Read case studies",
+    "useCasesCta": "Explore use cases",
+    "proof1": {
+      "title": "Traceable project records",
+      "body": "Every issue, RFI, and response remains linked to exact drawing context for clearer accountability."
+    },
+    "proof2": {
+      "title": "Faster handoffs",
+      "body": "From bid to handover, teams work in one connected data flow instead of disconnected spreadsheets and inboxes."
+    },
+    "proof3": {
+      "title": "Measurable impact",
+      "body": "Role-based pages and proof modules focus visitors on outcomes that drive trial starts and pipeline quality."
+    }
+  },
+  "solutionsPages": {
+    "landingSection": {
+      "eyebrow": "Solutions",
+      "title": "What PlanSync solves",
+      "description": "Whether you are checking one detail or coordinating an entire delivery workflow, PlanSync connects drawings, field updates, and formal coordination in one place."
+    },
+    "breadcrumbs": {
+      "home": "Home",
+      "solutions": "Solutions"
+    },
+    "stats": {
+      "totalModules": "total modules",
+      "construction": "construction",
+      "operations": "operations"
+    },
+    "openViewer": "Open free viewer",
+    "startTrial": "Start Pro trial",
+    "jumpToModules": "Jump to modules",
+    "workspaceOverview": "Workspace overview",
+    "solutionOverview": "Solution overview",
+    "deepDive": "Deep dive",
+    "deepDiveTitle": "How {solution} works in PlanSync",
+    "deepDiveBody": "Interactive preview below that keeps the layout stable for future product media swaps.",
+    "cards": {
+      "useCases": {
+        "label": "Use cases",
+        "title": "Role-based workflows by team",
+        "body": "See implementation blueprints for contractors, owners, and FM teams.",
+        "cta": "Explore use cases"
+      },
+      "caseStudies": {
+        "label": "Case studies",
+        "title": "Proof from real project teams",
+        "body": "Outcome summaries and rollout patterns you can reuse in your own deployment.",
+        "cta": "Read case studies"
+      },
+      "pricing": {
+        "label": "Pricing",
+        "title": "Choose the right plan mix",
+        "body": "Start on Free and scale into Pro or Enterprise based on project maturity.",
+        "cta": "Compare plans"
+      }
+    }
+  },
+  "pricingPage": {
+    "eyebrow": "Pricing",
+    "title": "Transparent plans for solo users, project teams, and enterprise operations",
+    "body": "Start free in-browser, then upgrade when your coordination workflows, cloud storage, and operations requirements grow.",
+    "openViewer": "Open free viewer",
+    "startTrial": "Start Pro trial"
+  },
+  "useCasesPage": {
+    "eyebrow": "Use cases",
+    "title": "Blueprints for how teams run PlanSync in real projects",
+    "body": "Pick the workflow closest to your team setup, then adapt the same rollout pattern in your own delivery model.",
+    "openViewer": "Open free viewer",
+    "seePricing": "See pricing",
+    "linkedSolutions": "Linked solutions",
+    "readUseCase": "Read use case",
+    "deliveryBlueprint": "Delivery blueprint",
+    "breadcrumbs": {
+      "home": "Home",
+      "useCases": "Use cases"
+    },
+    "cards": {
+      "general-contractor-delivery": {
+        "audience": "Construction teams",
+        "title": "General contractor delivery workflow",
+        "body": "Coordinate field teams, PMs, and office stakeholders on one live drawing set."
+      },
+      "subcontractor-quantity-workflow": {
+        "audience": "Trade contractors",
+        "title": "Subcontractor quantity workflow",
+        "body": "Move from takeoff to proposal with fewer manual handoffs and cleaner revision control."
+      },
+      "owner-handover-and-operations": {
+        "audience": "Owners and PMO",
+        "title": "Owner handover and operations launch",
+        "body": "Turn closeout data into operational assets without rebuilding records in another system."
+      },
+      "facility-team-service-operations": {
+        "audience": "FM operations",
+        "title": "Facilities service operations",
+        "body": "Run recurring maintenance and service requests with traceable operational history."
+      }
+    },
+    "detail": {
+      "general-contractor-delivery": {
+        "summary": "A delivery flow for GCs that keeps sheet revisions, field issues, and formal RFIs aligned in one workspace.",
+        "step1Title": "Standardize the drawing source",
+        "step1Body": "Upload current revisions and align project teams to one approved sheet set.",
+        "step2Title": "Capture issues in context",
+        "step2Body": "Drop field issues directly on drawings with owners, priority, and due dates.",
+        "step3Title": "Escalate uncertainty with RFIs",
+        "step3Body": "Convert unresolved issues into formal RFIs with an auditable response trail.",
+        "step4Title": "Close with schedule visibility",
+        "step4Body": "Link actions to milestones so handoffs and closeout windows stay realistic."
+      },
+      "subcontractor-quantity-workflow": {
+        "summary": "A bid-ready workflow for trades that reduces rework between takeoff, pricing, and proposal assembly.",
+        "step1Title": "Measure from calibrated plans",
+        "step1Body": "Use consistent scales and zone logic for repeatable quantity outputs.",
+        "step2Title": "Roll up quantities by package",
+        "step2Body": "Aggregate measured items by trade package and scope segment.",
+        "step3Title": "Assemble client-ready proposals",
+        "step3Body": "Generate polished proposal drafts directly from measured data.",
+        "step4Title": "Protect revision history",
+        "step4Body": "Track drawing updates and quantity deltas to keep bid assumptions defensible."
+      },
+      "owner-handover-and-operations": {
+        "summary": "A handover model for owners that preserves closeout clarity and accelerates day-one operational readiness.",
+        "step1Title": "Structure closeout packages",
+        "step1Body": "Organize as-builts, manuals, and warranties under asset-linked records.",
+        "step2Title": "Map maintainable assets",
+        "step2Body": "Create searchable asset registers with location and service metadata.",
+        "step3Title": "Set preventive schedules",
+        "step3Body": "Define recurring maintenance plans before transition to steady operations.",
+        "step4Title": "Run early inspections",
+        "step4Body": "Validate condition and compliance workflows during the first service window."
+      },
+      "facility-team-service-operations": {
+        "summary": "A service operations flow for FM teams balancing recurring maintenance with reactive requests.",
+        "step1Title": "Centralize incoming demand",
+        "step1Body": "Route occupant requests into structured work orders with ownership and priority.",
+        "step2Title": "Execute repeatable inspections",
+        "step2Body": "Use templates to keep site checks consistent across buildings.",
+        "step3Title": "Track work completion",
+        "step3Body": "Capture updates and closure evidence directly on each service task.",
+        "step4Title": "Review live operational KPIs",
+        "step4Body": "Monitor backlog and asset health trends from a shared FM dashboard."
+      }
+    }
+  },
+  "caseStudiesPage": {
+    "eyebrow": "Case studies",
+    "title": "How project teams used PlanSync to speed up delivery and reduce coordination drag",
+    "body": "These examples model rollout sequences and measurable outcomes you can use in your own implementation.",
+    "viewUseCases": "View use cases",
+    "openViewer": "Open free viewer",
+    "readStudy": "Read case study",
+    "results": "Results",
+    "whatChanged": "What changed",
+    "nextSteps": "Next steps",
+    "viewRelatedUseCase": "View related use case",
+    "viewPricing": "View pricing",
+    "breadcrumbs": {
+      "home": "Home",
+      "caseStudies": "Case studies"
+    },
+    "cards": {
+      "harbor-residential-fast-rfi-turnaround": {
+        "title": "Harbor Residential cut RFI turnaround by 43%",
+        "summary": "A GC replaced fragmented email approvals with drawing-linked issue and RFI workflows.",
+        "metric1": "43% faster RFI response cycle",
+        "metric2": "31% fewer unresolved field issues at weekly review",
+        "metric3": "18% reduction in coordination meeting time"
+      },
+      "metro-mech-estimating-cycle-reduction": {
+        "title": "Metro Mechanical shortened estimating cycles by 35%",
+        "summary": "A subcontractor unified takeoff outputs and proposal generation across revisions.",
+        "metric1": "35% faster bid package turnaround",
+        "metric2": "28% fewer quantity-change surprises",
+        "metric3": "22% less estimator rework across revisions"
+      },
+      "citytower-handover-to-fm": {
+        "title": "CityTower launched FM operations 6 weeks earlier",
+        "summary": "An owner team moved from closeout packets to asset-linked operations workflows.",
+        "metric1": "6 weeks earlier operational readiness",
+        "metric2": "52% fewer missing handover documents",
+        "metric3": "39% faster first-response time for tenant requests"
+      }
+    },
+    "detail": {
+      "harbor-residential-fast-rfi-turnaround": {
+        "overview": "Harbor Residential standardized issue capture and RFI escalation in one shared drawing workflow.",
+        "change1Title": "Unified project sheet control",
+        "change1Body": "All field and office teams aligned around one live revision source.",
+        "change2Title": "Context-first issue triage",
+        "change2Body": "Teams reduced back-and-forth by assigning issues with precise sheet locations.",
+        "change3Title": "Formalized RFI closure path",
+        "change3Body": "Open questions moved through a visible, accountable approval chain."
+      },
+      "metro-mech-estimating-cycle-reduction": {
+        "overview": "Metro Mechanical connected takeoff data, revision control, and proposal output in one estimating flow.",
+        "change1Title": "Repeatable quantity structure",
+        "change1Body": "Estimators reused package templates instead of rebuilding worksheets each cycle.",
+        "change2Title": "Revision-aware bid workflow",
+        "change2Body": "Drawing updates were tracked and reflected quickly in bid assumptions.",
+        "change3Title": "Proposal standardization",
+        "change3Body": "Client-facing proposals were generated from aligned internal quantity data."
+      },
+      "citytower-handover-to-fm": {
+        "overview": "CityTower built operational continuity from closeout by attaching records to maintainable assets.",
+        "change1Title": "Asset-linked document handover",
+        "change1Body": "Manuals, warranties, and closeout records moved into searchable asset cards.",
+        "change2Title": "Preventive maintenance activation",
+        "change2Body": "Recurring service schedules were configured before occupancy ramped up.",
+        "change3Title": "Tenant request channel launch",
+        "change3Body": "Occupants submitted structured requests with status visibility from day one."
+      }
+    }
+  },
   "footer": {
     "tagline": "The construction drawing workspace for teams who can't afford to work off the wrong information.",
     "product": "Product",
@@ -197,6 +456,31 @@
         "a": "Currently PDF only. DXF/DWG support is on our roadmap and coming soon."
       }
     ]
+  },
+  "chatbot": {
+    "title": "PlanSync Assistant",
+    "subtitle": "Live product guidance",
+    "open": "Need help?",
+    "close": "Close assistant",
+    "send": "Send message",
+    "inputLabel": "Ask about PlanSync",
+    "placeholder": "Ask about pricing, viewer, or team plans...",
+    "welcome": "Hi! I can help you pick the right PlanSync setup in under a minute. What would you like to know?",
+    "quickPromptPricing": "How much does PlanSync cost?",
+    "quickPromptViewer": "What can I do in the free viewer?",
+    "quickPromptTrial": "How does the Pro trial work?",
+    "quickPromptOperations": "Do you support operations and maintenance teams?",
+    "replyPricing": "You can start on Free at no cost. Pro adds team workflows with a 14-day trial, and Enterprise adds operations and maintenance modules.",
+    "replyViewer": "The free viewer lets you open PDFs in-browser, calibrate scale, measure, annotate, and export marked sheets without sign-up.",
+    "replyTrial": "Pro includes a 14-day trial so your team can test cloud collaboration, issues, RFIs, and project workflows before subscribing.",
+    "replyOperations": "Yes. Enterprise includes handover, assets, maintenance scheduling, inspections, work orders, and tenant portal workflows.",
+    "replyFallback": "I can help with pricing, free viewer features, Pro trial, or operations workflows. Pick a quick option below or ask in your own words.",
+    "ctaOpenViewer": "Open free viewer",
+    "ctaStartTrial": "Start Pro trial",
+    "thinking": "Thinking…",
+    "errorGeneric": "Something went wrong. Please try again in a moment.",
+    "errorUnavailable": "The assistant is temporarily unavailable. Please try again later.",
+    "errorRateLimit": "Too many messages. Please wait a few minutes and try again."
   },
   "language": {
     "label": "Language",

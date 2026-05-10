@@ -14,7 +14,7 @@ import {
   Table,
   X,
 } from "lucide-react";
-import { fetchIssuesForFileVersion, fetchMe } from "@/lib/api-client";
+import { fetchIssuesForFileVersion, fetchMe, type IssueKindApi } from "@/lib/api-client";
 import {
   DEFAULT_SHEET_EXPORT_INCLUDE,
   filterAnnotationsForExport,
@@ -91,9 +91,14 @@ export function SheetExportDialog({ open, onClose, pdfDoc, exportCanvasRef }: Pr
   const calibrationByPage = useViewerStore((s) => s.calibrationByPage);
   const pageSizePtByPage = useViewerStore((s) => s.pageSizePtByPage);
   const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
+  const viewerOperationsMode = useViewerStore((s) => s.viewerOperationsMode);
   const takeoffItems = useViewerStore((s) => s.takeoffItems);
   const takeoffZones = useViewerStore((s) => s.takeoffZones);
   const takeoffPackageStatus = useViewerStore((s) => s.takeoffPackageStatus);
+  const issueKinds: IssueKindApi[] | undefined = viewerOperationsMode
+    ? ["WORK_ORDER", "OCCUPANT"]
+    : undefined;
+  const issueKindsKey = viewerOperationsMode ? "WORK_ORDER,OCCUPANT" : null;
 
   const { data: me } = useQuery({
     queryKey: qk.me(),
@@ -104,8 +109,8 @@ export function SheetExportDialog({ open, onClose, pdfDoc, exportCanvasRef }: Pr
   const showTakeoff = viewerHasProSheetFeatures(me ?? null, cloudFileVersionId);
 
   const { data: sheetIssues = [], isPending: sheetIssuesPending } = useQuery({
-    queryKey: qk.issuesForFileVersion(cloudFileVersionId ?? ""),
-    queryFn: () => fetchIssuesForFileVersion(cloudFileVersionId!),
+    queryKey: qk.issuesForFileVersion(cloudFileVersionId ?? "", issueKindsKey),
+    queryFn: () => fetchIssuesForFileVersion(cloudFileVersionId!, { issueKinds }),
     enabled: Boolean(cloudFileVersionId) && meHasProWorkspace(me ?? null),
     staleTime: 30_000,
   });

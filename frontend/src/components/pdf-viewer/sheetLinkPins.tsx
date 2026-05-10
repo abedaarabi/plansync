@@ -386,7 +386,7 @@ export function SheetLinkPin({
     linkedOmAssetTag?: string;
     linkedIssueId?: string;
     issueDraft?: boolean;
-    linkedIssueKind?: "WORK_ORDER" | "CONSTRUCTION";
+    linkedIssueKind?: "WORK_ORDER" | "CONSTRUCTION" | "OCCUPANT";
     issueStatus?: string;
     linkedIssueTitle?: string;
     linkedIssuePriority?: string;
@@ -411,7 +411,12 @@ export function SheetLinkPin({
   }
 
   const status = a.issueStatus ?? "OPEN";
-  const kind = a.linkedIssueKind === "CONSTRUCTION" ? "CONSTRUCTION" : "WORK_ORDER";
+  const kind =
+    a.linkedIssueKind === "CONSTRUCTION"
+      ? "CONSTRUCTION"
+      : a.linkedIssueKind === "OCCUPANT"
+        ? "OCCUPANT"
+        : "WORK_ORDER";
   const priority = a.linkedIssuePriority ?? "MEDIUM";
   const initials = truncatePinLabel(
     (a.linkedIssueAssigneeInitials ?? "").trim() || issueAssigneeShortLabel(a.author, undefined),
@@ -434,7 +439,7 @@ export function SheetLinkPin({
     <title>{`${numLabel} ${title}\n${sub}${hasAttachments ? "\nHas attachments" : ""}`}</title>
   );
 
-  if (kind === "WORK_ORDER") {
+  if (kind === "WORK_ORDER" || kind === "OCCUPANT") {
     return (
       <g>
         {common}

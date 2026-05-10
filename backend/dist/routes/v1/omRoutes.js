@@ -92,8 +92,8 @@ export function ppmHealthLabel(nextDueAt, now = new Date()) {
         return "dueSoon";
     return "onTrack";
 }
-async function getDefaultFileVersion(projectId) {
-    const file = await prisma.file.findFirst({
+async function getDefaultFileVersion(projectId, db = prisma) {
+    const file = await db.file.findFirst({
         where: { projectId },
         orderBy: { createdAt: "asc" },
         include: { versions: { orderBy: { version: "desc" }, take: 1 } },
@@ -120,12 +120,12 @@ function toOmAssetJson(a) {
         updatedAt: updatedAt.toISOString(),
     };
 }
-async function resolveInspectionRunDrawing(projectId, run) {
+async function resolveInspectionRunDrawing(projectId, run, db = prisma) {
     let fileId = run.fileId;
     let fileVersionId = run.fileVersionId;
     let pageNumber = run.pageNumber ?? 1;
     if (!fileId || !fileVersionId) {
-        const def = await getDefaultFileVersion(projectId);
+        const def = await getDefaultFileVersion(projectId, db);
         if (!def)
             return { ok: false, error: "No project drawing to attach" };
         fileId = def.fileId;
@@ -135,17 +135,17 @@ async function resolveInspectionRunDrawing(projectId, run) {
     return { ok: true, fileId, fileVersionId, pageNumber };
 }
 /** Create a work order issue linked to the inspection run’s sheet (or project default drawing). */
-async function createInspectionRunWorkOrderIssue(projectId, workspaceId, userId, run, params) {
-    const draw = await resolveInspectionRunDrawing(projectId, run);
+async function createInspectionRunWorkOrderIssue(projectId, workspaceId, userId, run, params, db = prisma) {
+    const draw = await resolveInspectionRunDrawing(projectId, run, db);
     if (!draw.ok)
         return { error: draw.error };
-    const file = await prisma.file.findFirst({
+    const file = await db.file.findFirst({
         where: { id: draw.fileId, projectId },
         include: { project: true },
     });
     if (!file)
         return { error: "File not found" };
-    const fv = await prisma.fileVersion.findFirst({
+    const fv = await db.fileVersion.findFirst({
         where: { id: draw.fileVersionId, fileId: file.id },
     });
     if (!fv)
@@ -156,7 +156,7 @@ async function createInspectionRunWorkOrderIssue(projectId, workspaceId, userId,
     ];
     if (params.note?.trim())
         descLines.push(`Note: ${params.note.trim()}`);
-    const issue = await prisma.issue.create({
+    const issue = await db.issue.create({
         data: {
             workspaceId,
             projectId,
@@ -409,6 +409,8 @@ export function registerOmRoutes(r, needUser, env) {
         if ("error" in auth)
             return c.json({ error: auth.error }, auth.status);
         const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
         if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
             return c.json({ error: "Operations assets are not enabled" }, 403);
         }
@@ -660,6 +662,8 @@ export function registerOmRoutes(r, needUser, env) {
         if ("error" in auth)
             return c.json({ error: auth.error }, auth.status);
         const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
         if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
             return c.json({ error: "Operations assets are not enabled" }, 403);
         }
@@ -931,6 +935,8 @@ export function registerOmRoutes(r, needUser, env) {
         if ("error" in auth)
             return c.json({ error: auth.error }, auth.status);
         const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
         if (!ctx.project.operationsMode || !ctx.settings.modules.omMaintenance) {
             return c.json({ error: "Maintenance module is not enabled" }, 403);
         }
@@ -1176,6 +1182,8 @@ export function registerOmRoutes(r, needUser, env) {
         if ("error" in auth)
             return c.json({ error: auth.error }, auth.status);
         const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
         if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
             return c.json({ error: "Inspections are not enabled" }, 403);
         }
@@ -1267,6 +1275,8 @@ export function registerOmRoutes(r, needUser, env) {
         if ("error" in auth)
             return c.json({ error: auth.error }, auth.status);
         const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
         if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
             return c.json({ error: "Inspections are not enabled" }, 403);
         }
@@ -1494,36 +1504,58 @@ export function registerOmRoutes(r, needUser, env) {
         if (wantWo && fails.length > 0 && !ctx.settings.modules.issues) {
             return c.json({ error: "Issues module is disabled; turn off work order creation or enable issues." }, 403);
         }
-        const updated = await prisma.inspectionRun.update({
-            where: { id: runId },
-            data: {
-                resultJson: body.data.resultJson,
-                status: InspectionRunStatus.COMPLETED,
-                completedAt: new Date(),
-                signedOffById: userId,
-            },
-            include: { template: { select: { id: true, name: true } } },
-        });
-        const woIds = [];
-        if (wantWo && fails.length > 0) {
-            for (const f of fails) {
-                if (f.followUpIssueId?.trim())
-                    continue;
-                const label = checklist.find((it) => it.id === f.itemId)?.label?.trim() || f.itemId;
-                const created = await createInspectionRunWorkOrderIssue(projectId, ctx.project.workspaceId, userId, run, {
-                    title: `Work order: ${label}`,
-                    itemLabel: label,
-                    note: f.note,
+        let updated;
+        const createdWorkOrders = [];
+        try {
+            updated = await prisma.$transaction(async (tx) => {
+                const txUpdated = await tx.inspectionRun.update({
+                    where: { id: runId },
+                    data: {
+                        resultJson: body.data.resultJson,
+                        status: InspectionRunStatus.COMPLETED,
+                        completedAt: new Date(),
+                        signedOffById: userId,
+                    },
+                    include: { template: { select: { id: true, name: true } } },
                 });
-                if ("error" in created)
-                    return c.json({ error: created.error }, 400);
-                woIds.push(created.id);
+                if (wantWo && fails.length > 0) {
+                    for (const f of fails) {
+                        if (f.followUpIssueId?.trim())
+                            continue;
+                        const label = checklist.find((it) => it.id === f.itemId)?.label?.trim() || f.itemId;
+                        const created = await createInspectionRunWorkOrderIssue(projectId, ctx.project.workspaceId, userId, run, {
+                            title: `Work order: ${label}`,
+                            itemLabel: label,
+                            note: f.note,
+                        }, tx);
+                        if ("error" in created) {
+                            throw new Error(`WORK_ORDER_CREATE_FAILED:${created.error}`);
+                        }
+                        createdWorkOrders.push({ id: created.id, title: created.title });
+                    }
+                }
+                return txUpdated;
+            });
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : "Failed to complete inspection";
+            if (msg.startsWith("WORK_ORDER_CREATE_FAILED:")) {
+                return c.json({ error: msg.slice("WORK_ORDER_CREATE_FAILED:".length) || "Failed to create work order" }, 400);
+            }
+            console.error("[inspection-complete] transaction failed", err);
+            return c.json({ error: "Failed to complete inspection" }, 500);
+        }
+        for (const created of createdWorkOrders) {
+            try {
                 await logActivity(ctx.project.workspaceId, ActivityType.ISSUE_CREATED, {
                     actorUserId: userId,
                     entityId: created.id,
                     projectId,
                     metadata: { title: created.title, fromInspectionRun: runId },
                 });
+            }
+            catch (err) {
+                console.error("[inspection-complete] log issue activity", err);
             }
         }
         const runForPdf = await prisma.inspectionRun.findFirst({
@@ -1571,7 +1603,7 @@ export function registerOmRoutes(r, needUser, env) {
         return c.json({
             id: updated.id,
             status: updated.status,
-            workOrderIds: woIds,
+            workOrderIds: createdWorkOrders.map((w) => w.id),
             reportPdfPath: `/api/v1/projects/${projectId}/om/inspection-runs/${runId}/report.pdf`,
             completedAt: updated.completedAt.toISOString(),
             buildingOwnerNotify,
@@ -1584,6 +1616,8 @@ export function registerOmRoutes(r, needUser, env) {
         if ("error" in auth)
             return c.json({ error: auth.error }, auth.status);
         const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
         if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
             return c.json({ error: "Inspections are not enabled" }, 403);
         }
@@ -2303,7 +2337,7 @@ export function registerOccupantPublicRoutes(r, env) {
             c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
             c.req.header("x-real-ip")?.trim() ||
             undefined;
-        if (occupantSubmitRateLimited(token, clientIp)) {
+        if (await occupantSubmitRateLimited(link.project.workspaceId, token, clientIp)) {
             return c.json({ error: "Too many requests. Please try again in a minute." }, 429);
         }
         const assetSecret = body.data.assetSecret?.trim();

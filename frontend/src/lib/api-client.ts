@@ -3648,6 +3648,40 @@ export type PublicProposalPayload = {
   expired: boolean;
 };
 
+export type LandingMarketingChatMessage = { role: "user" | "model"; content: string };
+
+export async function fetchLandingMarketingChat(body: {
+  locale: string;
+  messages: LandingMarketingChatMessage[];
+}): Promise<{ reply: string }> {
+  const res = await fetch(apiUrl("/api/v1/public/marketing/chat"), {
+    method: "POST",
+    credentials: "omit",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let msg = readJsonErrorBody(
+      (await res.json().catch(() => ({}))) as Record<string, unknown>,
+      res,
+      "Could not reach assistant.",
+    );
+    if (res.status === 429) {
+      msg = "Too many requests. Please try again shortly.";
+    } else if (res.status === 503) {
+      msg = "Assistant is temporarily unavailable.";
+    }
+    const err = new Error(msg) as Error & { httpStatus: number };
+    err.httpStatus = res.status;
+    throw err;
+  }
+  const data = (await res.json()) as { reply?: string };
+  if (typeof data.reply !== "string" || !data.reply.trim()) {
+    throw new Error("Invalid assistant response.");
+  }
+  return { reply: data.reply.trim() };
+}
+
 export async function fetchPublicProposal(token: string): Promise<PublicProposalPayload> {
   const res = await fetch(apiUrl(`/api/v1/public/proposals/${encodeURIComponent(token)}`), {
     credentials: "omit",

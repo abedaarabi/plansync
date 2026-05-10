@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import {
   ArrowRight,
   Circle,
@@ -214,7 +215,11 @@ const measureKindOptions: {
   },
 ];
 
-export function ViewerSidebar() {
+type ViewerSidebarProps = {
+  pdfDoc: PDFDocumentProxy | null;
+};
+
+export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
   const pdfUrl = useViewerStore((s) => s.pdfUrl);
   const tool = useViewerStore((s) => s.tool);
   const currentPage = useViewerStore((s) => s.currentPage);
@@ -389,11 +394,15 @@ export function ViewerSidebar() {
   }, [tool]);
 
   useEffect(() => {
-    if (!pendingProSidebarTab || !showProTabs) return;
+    if (!pendingProSidebarTab) return;
+    if (!showProTabs) {
+      setPendingProSidebarTab(null);
+      return;
+    }
     const tab = pendingProSidebarTab;
     setSidebarTab(tab);
     setPendingProSidebarTab(null);
-  }, [pendingProSidebarTab, showProTabs, viewerOperationsMode, setPendingProSidebarTab]);
+  }, [pendingProSidebarTab, showProTabs, setPendingProSidebarTab]);
 
   useEffect(() => {
     setLeftSidebarTab(sidebarTab);
@@ -523,7 +532,7 @@ export function ViewerSidebar() {
               </button>
             </div>
             {pdfUrl ? (
-              <div className={`mt-1 grid gap-1 ${showProTabs ? "grid-cols-4" : "grid-cols-1"}`}>
+              <div className={`mt-1 grid gap-1 ${showCollabTab ? "grid-cols-5" : "grid-cols-4"}`}>
                 {showProTabs ? (
                   <>
                     <button
@@ -545,15 +554,11 @@ export function ViewerSidebar() {
                       role="tab"
                       aria-selected={sidebarTab === "issues"}
                       onClick={() => setSidebarTab("issues")}
-                      title={
-                        viewerOperationsMode
-                          ? "Work orders for this sheet"
-                          : "Issues for this sheet"
-                      }
+                      title="Issues for this sheet"
                       className={sidebarPanelTabClass(sidebarTab === "issues")}
                     >
                       <ListChecks className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      {viewerOperationsMode ? "WO" : "Issues"}
+                      Issues
                     </button>
                     <button
                       type="button"
@@ -569,6 +574,21 @@ export function ViewerSidebar() {
                     >
                       <Package className="h-3.5 w-3.5" strokeWidth={1.75} />
                       Takeoff
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={sidebarTab === "sheetAi"}
+                      onClick={() => {
+                        setSidebarTab("sheetAi");
+                        setTakeoffMode(false);
+                        setTakeoffInventoryDrawerFromSidebar(false);
+                      }}
+                      title="Assist tools"
+                      className={sidebarPanelTabClass(sidebarTab === "sheetAi")}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      Assist
                     </button>
                     {showCollabTab ? (
                       <button
@@ -603,8 +623,8 @@ export function ViewerSidebar() {
           </p>
         )}
 
-        {pdfUrl && sidebarTab === "pages" && <SidebarPagesTab />}
-        {pdfUrl && sidebarTab === "outline" && <SidebarOutlineTab />}
+        {pdfUrl && sidebarTab === "pages" && <SidebarPagesTab pdfDoc={pdfDoc} />}
+        {pdfUrl && sidebarTab === "outline" && <SidebarOutlineTab pdfDoc={pdfDoc} />}
         {pdfUrl && sidebarTab === "issues" && showProTabs && <SidebarIssuesTab />}
         {pdfUrl && sidebarTab === "takeoff" && showProTabs && <SidebarTakeoffTab />}
         {pdfUrl && sidebarTab === "calibrate" && showProTabs && (

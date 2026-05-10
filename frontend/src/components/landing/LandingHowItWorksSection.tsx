@@ -26,13 +26,13 @@ export function LandingHowItWorksSection() {
       />
       <div className="relative mx-auto max-w-6xl px-6">
         <AnimateIn className="text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-(--landing-cta)">
             {t("eyebrow")}
           </p>
-          <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          <h2 className="mt-3 text-balance text-[2rem] font-bold tracking-tight text-slate-900 sm:text-[2.45rem]">
             {t("title")}
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
+          <p className="mx-auto mt-4 max-w-2xl text-[1rem] leading-relaxed text-slate-600 sm:text-[1.08rem]">
             {t("description")}
           </p>
         </AnimateIn>
@@ -40,17 +40,23 @@ export function LandingHowItWorksSection() {
         <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
           {STEPS.map((step, i) => (
             <AnimateIn key={step.titleKey} delay={60 + i * 50}>
-              <div className="relative flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
+              <div
+                className={`relative flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm ${
+                  i % 2 === 1 ? "lg:translate-y-4" : ""
+                }`}
+              >
                 <span
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--landing-cta)_12%,white)] text-sm font-bold text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_25%,transparent)]"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--landing-cta)_12%,white)] text-sm font-bold text-(--landing-cta) ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_25%,transparent)]"
                   aria-hidden
                 >
                   {i + 1}
                 </span>
-                <h3 className="mt-4 text-base font-bold tracking-tight text-slate-900">
+                <h3 className="mt-4 text-[1.04rem] font-bold tracking-tight text-slate-900">
                   {t(step.titleKey)}
                 </h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600">{t(step.bodyKey)}</p>
+                <p className="mt-2 text-[0.95rem] leading-relaxed text-slate-600">
+                  {t(step.bodyKey)}
+                </p>
               </div>
             </AnimateIn>
           ))}

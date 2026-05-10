@@ -280,14 +280,18 @@ export function registerIssuesRoutes(
     if (!fv) return c.json({ error: "Not found" }, 404);
     const access = await loadProjectWithAuth(fv.file.projectId, c.get("user").id);
     if ("error" in access) return c.json({ error: access.error }, access.status);
+    if (!access.ctx.settings.modules.issues) {
+      return c.json([]);
+    }
     const gate = requirePro(access.ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const kinds = parseIssueKindsFromQuery(c);
     const kindClause = issueKindWhere(kinds);
+    const scope = issuesWhereForAuth(access.ctx, c.get("user").id);
 
     const rows = await prisma.issue.findMany({
-      where: { fileVersionId, ...kindClause },
+      where: { fileVersionId, ...kindClause, ...scope },
       include: issueInclude,
       orderBy: { createdAt: "desc" },
     });
@@ -997,8 +1001,16 @@ export function registerIssuesRoutes(
     const issuePatchAuth = await loadProjectWithAuth(issue.projectId, c.get("user").id);
     if ("error" in issuePatchAuth)
       return c.json({ error: issuePatchAuth.error }, issuePatchAuth.status);
+    if (!issuePatchAuth.ctx.settings.modules.issues) {
+      return c.json({ error: "Not found" }, 404);
+    }
     const gate = requirePro(issuePatchAuth.ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
+    const issuePatchScope = issuesWhereForAuth(issuePatchAuth.ctx, c.get("user").id);
+    const issuePatchAllowed = await prisma.issue.count({
+      where: { id: issueId, projectId: issue.projectId, ...issuePatchScope },
+    });
+    if (issuePatchAllowed === 0) return c.json({ error: "Not found" }, 404);
 
     if (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id)) {
       return c.json({ error: "File is locked by another user" }, 409);
@@ -1361,10 +1373,18 @@ export function registerIssuesRoutes(
       include: { workspace: true },
     });
     if (!issue) return c.json({ error: "Not found" }, 404);
-    const delAccess = await loadProjectForMember(issue.projectId, c.get("user").id);
+    const delAccess = await loadProjectWithAuth(issue.projectId, c.get("user").id);
     if ("error" in delAccess) return c.json({ error: delAccess.error }, delAccess.status);
-    const gate = requirePro(delAccess.project.workspace);
+    if (!delAccess.ctx.settings.modules.issues) {
+      return c.json({ error: "Not found" }, 404);
+    }
+    const gate = requirePro(delAccess.ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
+    const delScope = issuesWhereForAuth(delAccess.ctx, c.get("user").id);
+    const delAllowed = await prisma.issue.count({
+      where: { id: issueId, projectId: issue.projectId, ...delScope },
+    });
+    if (delAllowed === 0) return c.json({ error: "Not found" }, 404);
 
     if (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id)) {
       return c.json({ error: "File is locked by another user" }, 409);

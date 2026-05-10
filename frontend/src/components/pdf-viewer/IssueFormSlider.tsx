@@ -52,7 +52,7 @@ import { ViewerUserThumb } from "./ViewerUserThumb";
 type CreateProps = {
   variant: "create";
   open: boolean;
-  annotationId: string;
+  annotationId: string | null;
   onClose: () => void;
 };
 
@@ -135,6 +135,7 @@ export function IssueFormSlider(props: Props) {
   const setNewIssuePlacementActive = useViewerStore((s) => s.setNewIssuePlacementActive);
   const setIssueFormSliderOpen = useViewerStore((s) => s.setIssueFormSliderOpen);
   const setTool = useViewerStore((s) => s.setTool);
+  const currentPage = useViewerStore((s) => s.currentPage);
 
   const qc = useQueryClient();
   const [mounted, setMounted] = useState(false);
@@ -180,14 +181,16 @@ export function IssueFormSlider(props: Props) {
       };
     }
     const ann =
-      props.variant === "create" ? annotations.find((a) => a.id === props.annotationId) : undefined;
-    const pageNumber = ann ? ann.pageIndex + 1 : null;
+      props.variant === "create" && props.annotationId
+        ? annotations.find((a) => a.id === props.annotationId)
+        : undefined;
+    const pageNumber = ann ? ann.pageIndex + 1 : currentPage;
     return {
       sheetName: viewerFileName?.trim() || "Sheet",
       sheetVersion: parsedUrlVersion,
       pageNumber,
     };
-  }, [annotations, parsedUrlVersion, props, variant, viewerFileName]);
+  }, [annotations, currentPage, parsedUrlVersion, props, variant, viewerFileName]);
 
   const { data: project } = useQuery({
     queryKey: qk.project(resolvedProjectId ?? ""),
@@ -203,10 +206,8 @@ export function IssueFormSlider(props: Props) {
   });
 
   const viewerOperationsMode = useViewerStore((s) => s.viewerOperationsMode);
-  const issuesQueryKey = qk.issuesForFileVersion(
-    cloudFileVersionId ?? "",
-    viewerOperationsMode ? "WORK_ORDER" : null,
-  );
+  const omIssueKindKey = viewerOperationsMode ? "WORK_ORDER,OCCUPANT" : null;
+  const issuesQueryKey = qk.issuesForFileVersion(cloudFileVersionId ?? "", omIssueKindKey);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -262,7 +263,7 @@ export function IssueFormSlider(props: Props) {
       const pinId = props.annotationId;
       return annotations.filter((a) => {
         if (a.pageIndex !== pageIdx) return false;
-        if (a.id === pinId) return false;
+        if (pinId && a.id === pinId) return false;
         if (a.type === "measurement") return false;
         if (a.fromSheetAi) return false;
         if (a.linkedOmAssetId || a.omAssetDraft) return false;
@@ -400,7 +401,8 @@ export function IssueFormSlider(props: Props) {
 
   useEffect(() => {
     if (variant !== "create" || !open) return;
-    const annId = props.variant === "create" ? props.annotationId : "";
+    const annId = props.variant === "create" ? props.annotationId : null;
+    if (!annId) return;
     const ann = annotations.find((a) => a.id === annId);
     if (!ann) {
       setIssueCreateDraft(null);
@@ -417,7 +419,7 @@ export function IssueFormSlider(props: Props) {
         fileVersionId: cloudFileVersionId!,
         title: title.trim(),
         description: description.trim() || undefined,
-        annotationId: variant === "create" ? props.annotationId : undefined,
+        ...(variant === "create" && props.annotationId ? { annotationId: props.annotationId } : {}),
         assigneeId: assigneeId || undefined,
         status,
         priority,
@@ -432,20 +434,38 @@ export function IssueFormSlider(props: Props) {
     },
     onSuccess: (row) => {
       void qc.invalidateQueries({ queryKey: issuesQueryKey });
+      if (cloudFileVersionId) {
+        void qc.invalidateQueries({
+          queryKey: ["issues", "fileVersion", cloudFileVersionId],
+          exact: false,
+        });
+      }
       void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
       if (resolvedProjectId)
         void qc.invalidateQueries({ queryKey: qk.projectRfis(resolvedProjectId) });
       if (variant === "create") {
-        updateAnnotation(props.annotationId, {
-          linkedIssueId: row.id,
-          issueDraft: false,
-          linkedIssueTitle: row.title,
-          issueStatus: row.status,
-          color: issueStatusMarkerStrokeHex(row.status),
-          linkedIssueKind: row.issueKind === "CONSTRUCTION" ? "CONSTRUCTION" : "WORK_ORDER",
-        });
+        if (props.annotationId) {
+          updateAnnotation(props.annotationId, {
+            linkedIssueId: row.id,
+            issueDraft: false,
+            linkedIssueTitle: row.title,
+            issueStatus: row.status,
+            color: issueStatusMarkerStrokeHex(row.status),
+            linkedIssueKind:
+              row.issueKind === "CONSTRUCTION"
+                ? "CONSTRUCTION"
+                : row.issueKind === "OCCUPANT"
+                  ? "OCCUPANT"
+                  : "WORK_ORDER",
+          });
+        }
         const pri = row.priority ?? "MEDIUM";
-        const k = row.issueKind === "CONSTRUCTION" ? "CONSTRUCTION" : "WORK_ORDER";
+        const k =
+          row.issueKind === "CONSTRUCTION"
+            ? "CONSTRUCTION"
+            : row.issueKind === "OCCUPANT"
+              ? "OCCUPANT"
+              : "WORK_ORDER";
         for (const aid of linkedMarkupIds) {
           updateAnnotation(aid, {
             linkedIssueId: row.id,
@@ -459,7 +479,7 @@ export function IssueFormSlider(props: Props) {
         setIssueCreateDraft(null);
         onClose();
       }
-      toast.success(viewerOperationsMode ? "Work order created" : "Issue created");
+      toast.success("Issue created");
     },
     onError: (e: Error) => toast.error(formatIssueLockHint(e)),
   });
@@ -491,6 +511,12 @@ export function IssueFormSlider(props: Props) {
         if (!old) return old;
         return old.map((i) => (i.id === row.id ? row : i));
       });
+      if (cloudFileVersionId) {
+        void qc.invalidateQueries({
+          queryKey: ["issues", "fileVersion", cloudFileVersionId],
+          exact: false,
+        });
+      }
       void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
       if (resolvedProjectId)
         void qc.invalidateQueries({ queryKey: qk.projectRfis(resolvedProjectId) });
@@ -500,10 +526,15 @@ export function IssueFormSlider(props: Props) {
           issueStatus: row.status,
           linkedIssueTitle: row.title,
           color: issueStatusMarkerStrokeHex(row.status),
-          linkedIssueKind: row.issueKind === "CONSTRUCTION" ? "CONSTRUCTION" : "WORK_ORDER",
+          linkedIssueKind:
+            row.issueKind === "CONSTRUCTION"
+              ? "CONSTRUCTION"
+              : row.issueKind === "OCCUPANT"
+                ? "OCCUPANT"
+                : "WORK_ORDER",
         });
       }
-      toast.success(viewerOperationsMode ? "Work order updated" : "Issue updated");
+      toast.success("Issue updated");
       onClose();
     },
     onError: (e: Error) => toast.error(formatIssueLockHint(e)),
@@ -538,6 +569,12 @@ export function IssueFormSlider(props: Props) {
         if (!old) return old;
         return old.map((i) => (i.id === row.id ? row : i));
       });
+      if (cloudFileVersionId) {
+        void qc.invalidateQueries({
+          queryKey: ["issues", "fileVersion", cloudFileVersionId],
+          exact: false,
+        });
+      }
       void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
       toast.success("Reference photo added");
     },
@@ -555,6 +592,12 @@ export function IssueFormSlider(props: Props) {
         if (!old) return old;
         return old.map((i) => (i.id === row.id ? row : i));
       });
+      if (cloudFileVersionId) {
+        void qc.invalidateQueries({
+          queryKey: ["issues", "fileVersion", cloudFileVersionId],
+          exact: false,
+        });
+      }
       void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
       toast.success("Photo removed");
     },
@@ -579,6 +622,12 @@ export function IssueFormSlider(props: Props) {
     onSuccess: (_, id) => {
       const issueFv = props.variant === "edit" ? props.issue.fileVersionId : undefined;
       void qc.invalidateQueries({ queryKey: issuesQueryKey });
+      if (cloudFileVersionId) {
+        void qc.invalidateQueries({
+          queryKey: ["issues", "fileVersion", cloudFileVersionId],
+          exact: false,
+        });
+      }
       void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
       const st = useViewerStore.getState();
       const linked = st.annotations.filter((a) => a.linkedIssueId === id);
@@ -596,11 +645,11 @@ export function IssueFormSlider(props: Props) {
     onError: (e: Error) => toast.error(formatIssueLockHint(e)),
   });
 
-  const annotationId = variant === "create" ? props.annotationId : "";
+  const annotationId = variant === "create" ? props.annotationId : null;
 
   const canSubmit =
     Boolean(workspaceId && fileId && cloudFileVersionId && title.trim().length > 0) &&
-    (variant === "edit" || (Boolean(annotationId) && sheetContext.pageNumber != null));
+    (variant === "edit" || sheetContext.pageNumber != null);
 
   const assignableMembers = (membersRes?.members ?? []).filter((m) => m.email?.trim());
 
@@ -674,7 +723,7 @@ export function IssueFormSlider(props: Props) {
     )
       return;
     if (variant === "create") {
-      removeAnnotation(annotationId);
+      if (annotationId) removeAnnotation(annotationId);
       setIssueCreateDraft(null);
     }
     onClose();
@@ -771,7 +820,7 @@ export function IssueFormSlider(props: Props) {
               </h2>
               <p className="text-[11px] leading-relaxed text-slate-500">
                 {variant === "create"
-                  ? "The pin is saved on the sheet. Add a title and any details below."
+                  ? "Add a title and any details below. A sheet pin and linked markups are optional."
                   : "Update this issue and save your changes."}
               </p>
             </div>
@@ -922,8 +971,8 @@ export function IssueFormSlider(props: Props) {
                   Linked markups
                 </h3>
                 <p className="text-[11px] leading-relaxed text-slate-500">
-                  Add shapes or text on this page to the issue. They stay as markups (not a second
-                  pin) and update when the issue changes.
+                  Optional: add shapes or text on this page to the issue. They stay as markups (not
+                  a second pin) and update when the issue changes.
                 </p>
                 {attachableMarkups.length === 0 ? (
                   <p className="text-[11px] text-slate-500">

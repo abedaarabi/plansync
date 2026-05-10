@@ -97,10 +97,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
         <h1 className="text-lg font-semibold text-[var(--enterprise-text)]">FM dashboard</h1>
         <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
           Turn on{" "}
-          <Link
-            href={`/projects/${projectId}/settings`}
-            className="text-[var(--enterprise-primary)] underline"
-          >
+          <Link href={`${pBase}/settings`} className="text-[var(--enterprise-primary)] underline">
             Operations mode
           </Link>{" "}
           (Super Admin) to use facility management tools.
@@ -157,7 +154,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
                 <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
                   Complete the{" "}
                   <Link
-                    href={`/projects/${projectId}/om/handover`}
+                    href={`${pBase}/om/handover`}
                     className="font-medium text-[var(--enterprise-primary)] underline"
                   >
                     handover wizard
@@ -186,7 +183,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
               </a>
             ) : null}
             <Link
-              href={`/projects/${projectId}/om/handover`}
+              href={`${pBase}/om/handover`}
               className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white"
             >
               Handover hub
@@ -264,7 +261,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
               Upcoming maintenance (this week)
             </h2>
             <Link
-              href={`/projects/${projectId}/om/maintenance`}
+              href={`${pBase}/om/maintenance`}
               className="text-xs font-semibold text-[var(--enterprise-primary)] underline"
             >
               All schedules
@@ -307,7 +304,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
               Recent work orders
             </h2>
             <Link
-              href={`/projects/${projectId}/om/work-orders`}
+              href={`${pBase}/om/work-orders`}
               className="text-xs font-semibold text-[var(--enterprise-primary)] underline"
             >
               Open list
@@ -375,14 +372,14 @@ export function OmFmDashboardClient({ projectId }: Props) {
 
       <section className="flex flex-wrap gap-3">
         <Link
-          href={`/projects/${projectId}/om/assets`}
+          href={`${pBase}/om/assets`}
           className="enterprise-card enterprise-card-hover inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-[var(--enterprise-text)]"
         >
           <Package className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
           Assets
         </Link>
         <Link
-          href={`/projects/${projectId}/om/inspections`}
+          href={`${pBase}/om/inspections`}
           className="enterprise-card enterprise-card-hover inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-[var(--enterprise-text)]"
         >
           <ClipboardList className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />

@@ -182,6 +182,8 @@ model Workspace {
 
   /// Daily O&M maintenance digest emails — idempotency (one row per workspace per UTC day).
   omMaintenanceReminderDigests OmMaintenanceReminderDigest[]
+  /// Public occupant submit rate-limit buckets (distributed counters).
+  occupantSubmitRateLimits OccupantSubmitRateLimit[]
 }
 
 /// Tracks POST /internal/om-maintenance-reminders digest already sent for a workspace/day (UTC).
@@ -196,6 +198,23 @@ model OmMaintenanceReminderDigest {
 
   @@unique([workspaceId, digestDate])
   @@index([digestDate])
+}
+
+/// Distributed rate-limit buckets for public occupant submissions (per minute window).
+model OccupantSubmitRateLimit {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  portalTokenHash String
+  clientIpHash    String
+  windowStart     DateTime
+  count           Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, portalTokenHash, clientIpHash, windowStart])
+  @@index([workspaceId, windowStart])
 }
 
 /// Grouping label (e.g. Concrete, Steel, Finishes). Unique per workspace (case-insensitive via nameKey).

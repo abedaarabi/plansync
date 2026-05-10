@@ -15,6 +15,7 @@ import {
   PRO_INCLUDED_SEATS,
   PRO_MONTHLY_PRICE_USD,
 } from "@/lib/productPricing";
+import { trackMarketingEvent } from "@/lib/marketingAnalytics";
 
 type LandingPricingSectionProps = {
   onGoToFreeViewer: () => void;
@@ -92,7 +93,13 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
 
               <button
                 type="button"
-                onClick={onGoToFreeViewer}
+                onClick={() => {
+                  trackMarketingEvent("marketing_pricing_interaction", {
+                    plan: "free",
+                    action: "open_viewer",
+                  });
+                  onGoToFreeViewer();
+                }}
                 className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
               >
                 {t("openViewer")} <ArrowRight className="h-4 w-4 shrink-0" />
@@ -151,6 +158,12 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
 
               <Link
                 href="/sign-in"
+                onClick={() =>
+                  trackMarketingEvent("marketing_pricing_interaction", {
+                    plan: "pro",
+                    action: "start_trial",
+                  })
+                }
                 className="btn-shine relative mt-8 flex min-h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[var(--landing-cta)] py-3.5 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
               >
                 {t("startTrial14")} <ArrowRight className="h-4 w-4 shrink-0" />
@@ -205,6 +218,12 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
 
               <Link
                 href="/sign-in"
+                onClick={() =>
+                  trackMarketingEvent("marketing_pricing_interaction", {
+                    plan: "enterprise",
+                    action: "start_trial",
+                  })
+                }
                 className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
               >
                 {t("startTrial14")} <ArrowRight className="h-4 w-4 shrink-0" />

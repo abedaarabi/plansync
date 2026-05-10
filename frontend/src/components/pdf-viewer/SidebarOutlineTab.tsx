@@ -2,15 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { setupPdfWorker } from "@/lib/pdf";
 import { getFlatOutline, type FlatOutlineItem } from "@/lib/pdfOutlineNav";
 import { useViewerStore } from "@/store/viewerStore";
 
-export function SidebarOutlineTab() {
+type SidebarOutlineTabProps = {
+  pdfDoc: PDFDocumentProxy | null;
+};
+
+export function SidebarOutlineTab({ pdfDoc }: SidebarOutlineTabProps) {
   const pdfUrl = useViewerStore((s) => s.pdfUrl);
   const setCurrentPage = useViewerStore((s) => s.setCurrentPage);
 
-  const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [items, setItems] = useState<FlatOutlineItem[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [outlineQuery, setOutlineQuery] = useState("");
@@ -22,24 +24,17 @@ export function SidebarOutlineTab() {
   }, [items, outlineQuery]);
 
   useEffect(() => {
-    if (!pdfUrl) {
-      setDoc(null);
+    if (!pdfUrl || !pdfDoc) {
       setItems([]);
       setErr(null);
       return;
     }
     let cancelled = false;
-    setDoc(null);
     setItems([]);
     setErr(null);
     (async () => {
       try {
-        const pdfjs = await import("pdfjs-dist");
-        setupPdfWorker(pdfjs);
-        const d = await pdfjs.getDocument({ url: pdfUrl }).promise;
-        if (cancelled) return;
-        setDoc(d);
-        const outline = await getFlatOutline(d);
+        const outline = await getFlatOutline(pdfDoc);
         if (!cancelled) setItems(outline);
       } catch {
         if (!cancelled) setErr("Could not read outline.");
@@ -48,7 +43,7 @@ export function SidebarOutlineTab() {
     return () => {
       cancelled = true;
     };
-  }, [pdfUrl]);
+  }, [pdfUrl, pdfDoc]);
 
   if (!pdfUrl) {
     return (
@@ -62,7 +57,7 @@ export function SidebarOutlineTab() {
     return <p className="px-1 text-center text-[10px] text-red-400">{err}</p>;
   }
 
-  if (!doc) {
+  if (!pdfDoc) {
     return <p className="px-1 text-center text-[10px] text-slate-500">Loading outline…</p>;
   }
 
