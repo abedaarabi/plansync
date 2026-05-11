@@ -11,7 +11,6 @@ import {
 } from "./constants";
 import {
   ENTERPRISE_MONTHLY_PRICE_USD,
-  EXTRA_SEAT_MONTHLY_USD,
   PRO_INCLUDED_SEATS,
   PRO_MONTHLY_PRICE_USD,
 } from "@/lib/productPricing";
@@ -131,12 +130,6 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                   <p className="mt-2 text-sm font-medium text-slate-700">
                     {t("proIncluded", { seats: PRO_INCLUDED_SEATS })}
                   </p>
-                  <p className="mt-1 text-xs leading-snug text-slate-500">
-                    {t("proExtraSeat", {
-                      extra: EXTRA_SEAT_MONTHLY_USD,
-                      seats: PRO_INCLUDED_SEATS,
-                    })}
-                  </p>
                   <p className="mt-0.5 text-sm text-slate-500">{t("proEverything")}</p>
                 </div>
               </div>
@@ -190,12 +183,6 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                   </div>
                   <p className="mt-2 text-sm font-medium text-slate-700">
                     {t("proIncluded", { seats: PRO_INCLUDED_SEATS })}
-                  </p>
-                  <p className="mt-1 text-xs leading-snug text-slate-500">
-                    {t("proExtraSeat", {
-                      extra: EXTRA_SEAT_MONTHLY_USD,
-                      seats: PRO_INCLUDED_SEATS,
-                    })}
                   </p>
                   <p className="mt-0.5 text-sm text-slate-500">{t("enterpriseBlurb")}</p>
                 </div>

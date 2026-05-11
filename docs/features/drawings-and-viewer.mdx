@@ -1,0 +1,38 @@
+---
+title: "Drawings and Viewer"
+description: "File management, PDF viewing, and collaboration capabilities."
+---
+
+# Drawings and Viewer
+
+PlanSync’s drawing system combines file storage, versioning, and viewer collaboration.
+
+## File and folder management
+
+- Create folder structures in each project
+- Upload files with version-aware workflows
+- Rename and reorganize folders/files
+- Remove outdated files safely
+
+## Viewer capabilities
+
+- Open project files in-browser
+- Navigate sheet versions
+- Save/restore viewer state
+- Lock file versions for controlled editing periods
+
+## Collaboration
+
+For workspaces with collaboration enabled:
+
+- Presence and heartbeat APIs keep active viewer sessions visible
+- Event streams support real-time viewer updates
+- Sessions can be explicitly ended/left
+
+## Public/free viewer
+
+PlanSync also includes a standalone viewer experience for non-workspace usage. This is separate from authenticated project data.
+
+## Storage guidance
+
+Upload and read access is handled through presigned URL flows. Keep object store credentials in your backend environment only.

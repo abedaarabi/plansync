@@ -1,0 +1,54 @@
+---
+title: "Workspaces and Projects"
+description: "Core account model, access model, and project setup guidance."
+---
+
+# Workspaces and Projects
+
+PlanSync is organized as **Workspace -> Project -> Modules**.
+
+## Workspace fundamentals
+
+A workspace is your top-level account boundary for:
+
+- Members and roles
+- Branding and identity
+- Billing plan and quotas
+- Shared material libraries
+
+## Roles and permissions
+
+Workspace roles:
+
+- `SUPER_ADMIN`: full admin, billing, organization settings
+- `ADMIN`: workspace management and project management
+- `MEMBER`: normal contributor access
+
+Project-level membership can be scoped for external collaborators.
+
+## Project fundamentals
+
+A project contains operational data like:
+
+- Files and drawing versions
+- Issues, RFIs, punch items
+- Field reports and schedule
+- Takeoff lines and proposals
+- O&M assets, maintenance schedules, inspections, occupant tokens
+
+## Recommended launch order
+
+1. Configure workspace branding and team
+2. Create project and baseline settings
+3. Upload drawings and structure folders
+4. Enable modules and assign module owners
+5. Define portal visibility before sharing externally
+
+## Plan gating
+
+Some modules require paid plans:
+
+- Pro plan: core advanced construction workflows
+- Enterprise/O&M plan: operations and maintenance modules
+
+If users see `402` API responses or disabled features in UI, check workspace billing status and enabled modules first.

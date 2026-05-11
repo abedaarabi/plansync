@@ -1,0 +1,94 @@
+---
+title: "Projects and Workspaces API"
+description: "Common workspace, member, invite, and project endpoints for integrations."
+---
+
+# Projects and Workspaces API
+
+These are the most common endpoints for account and project integration workflows.
+
+All routes below are prefixed by `/api/v1` and require a valid member session unless noted.
+
+## User and workspace context
+
+- `GET /me`
+- `GET /me/notifications`
+- `PATCH /me/notifications/read`
+- `POST /me/notifications/read-all`
+- `PATCH /me/viewer-presence`
+
+## Workspace lifecycle
+
+- `POST /workspaces`
+- `GET /workspaces/:workspaceId`
+- `PATCH /workspaces/:workspaceId`
+- `DELETE /workspaces/:workspaceId`
+
+## Invites and membership
+
+- `GET /workspaces/:workspaceId/invites`
+- `POST /workspaces/:workspaceId/invites`
+- `DELETE /workspaces/:workspaceId/invites/:inviteId`
+- `GET /workspaces/:workspaceId/email-invites`
+- `POST /workspaces/:workspaceId/email-invites`
+- `POST /workspaces/:workspaceId/email-invites/:inviteId/resend`
+- `PATCH /workspaces/:workspaceId/email-invites/:inviteId`
+- `DELETE /workspaces/:workspaceId/email-invites/:inviteId`
+- `GET /workspaces/:workspaceId/members`
+- `POST /workspaces/:workspaceId/members`
+- `PATCH /workspaces/:workspaceId/members/:userId`
+- `PATCH /workspaces/:workspaceId/members/:userId/project-access`
+- `DELETE /workspaces/:workspaceId/members/:userId`
+
+## Projects
+
+- `POST /workspaces/:workspaceId/projects`
+- `GET /workspaces/:workspaceId/projects`
+- `GET /projects/:projectId`
+- `PATCH /projects/:projectId`
+- `DELETE /projects/:projectId`
+- `GET /projects/:projectId/session`
+- `PATCH /projects/:projectId/settings`
+- `GET /projects/:projectId/team`
+- `DELETE /projects/:projectId/members/:userId`
+
+## Dashboard and reporting helpers
+
+- `GET /workspaces/:workspaceId/dashboard`
+- `GET /projects/:projectId/dashboard`
+- `GET /projects/:projectId/audit-logs`
+- `GET /projects/:projectId/audit-logs/export`
+
+## Common integration use cases
+
+- Sync internal directory users to workspace memberships
+- Sync project roster and status into BI/reporting tools
+- Pull audit logs for compliance records
+
+## Key path parameters
+
+- `workspaceId`: the workspace container for projects, members, and invites
+- `projectId`: the project resource for settings, team, and reporting routes
+- `userId`: target member identifier for access/role updates
+
+## Example: create a project
+
+```bash
+curl -X POST "https://app.plansync.com/api/v1/workspaces/ws_123/projects" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: better-auth.session_token=<session-cookie>" \
+  -d '{
+    "name": "Tower A Renovation",
+    "location": "Dubai",
+    "currency": "AED"
+  }'
+```
+
+```json
+{
+  "id": "proj_abc123",
+  "workspaceId": "ws_123",
+  "name": "Tower A Renovation",
+  "stage": "Execution"
+}
+```

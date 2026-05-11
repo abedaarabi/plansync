@@ -1,0 +1,86 @@
+---
+title: "Issues, RFIs, and Punch API"
+description: "Field coordination and quality tracking endpoint groups."
+---
+
+# Issues, RFIs, and Punch API
+
+These endpoints support day-to-day field coordination and closeout workflows.
+
+All routes are under `/api/v1` and require authenticated member sessions.
+
+## Issues
+
+Base routes:
+
+- `GET /projects/:projectId/issues`
+- `POST /projects/:projectId/issues`
+- `PATCH /projects/:projectId/issues/:issueId`
+- `DELETE /projects/:projectId/issues/:issueId`
+
+Common supporting routes include assignment, linking, and reference photo upload completion patterns.
+
+## RFIs
+
+Base routes:
+
+- `GET /projects/:projectId/rfi`
+- `POST /projects/:projectId/rfi`
+- `GET /projects/:projectId/rfi/:rfiId`
+- `PATCH /projects/:projectId/rfi/:rfiId`
+- `POST /projects/:projectId/rfi/:rfiId/messages`
+- `POST /projects/:projectId/rfi/:rfiId/attachments/presign`
+- `POST /projects/:projectId/rfi/:rfiId/attachments/complete`
+
+RFI endpoints also support assignees, responses, and issue links.
+
+## Punch lists
+
+Base routes:
+
+- `GET /projects/:projectId/punch`
+- `POST /projects/:projectId/punch`
+- `PATCH /projects/:projectId/punch/:punchId`
+- `DELETE /projects/:projectId/punch/:punchId`
+
+Punch includes reference-photo presign/complete flows and CSV export patterns.
+
+## Field reports
+
+- `GET /projects/:projectId/field-reports`
+- `POST /projects/:projectId/field-reports`
+- `PATCH /projects/:projectId/field-reports/:reportId`
+- `DELETE /projects/:projectId/field-reports/:reportId`
+- `POST /projects/:projectId/field-reports/send-email`
+
+## Integration tips
+
+- Sync IDs from your source system to PlanSync IDs in your own integration table
+- Treat linked drawing/file version references as authoritative context
+- Handle `402` responses where plan-gated modules are not active
+
+## Example: create issue
+
+```bash
+curl -X POST "https://app.plansync.com/api/v1/projects/proj_abc123/issues" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: better-auth.session_token=<session-cookie>" \
+  -d '{
+    "title": "Water leak near AHU-02",
+    "description": "Observed at ceiling tile line C4.",
+    "priority": "HIGH",
+    "status": "OPEN",
+    "issueKind": "WORK_ORDER"
+  }'
+```
+
+```json
+{
+  "id": "iss_abc123",
+  "projectId": "proj_abc123",
+  "title": "Water leak near AHU-02",
+  "status": "OPEN",
+  "priority": "HIGH",
+  "issueKind": "WORK_ORDER"
+}
+```

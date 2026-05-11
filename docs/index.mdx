@@ -1,0 +1,41 @@
+---
+title: "PlanSync Documentation"
+description: "Customer documentation for PlanSync product workflows and integration APIs."
+---
+
+# PlanSync Documentation
+
+PlanSync helps construction and operations teams manage drawings, field workflows, proposals, and O&M in one workspace.
+
+This documentation is written for:
+
+- Customers using the app day to day
+- Workspace admins configuring teams and permissions
+- Client IT teams integrating PlanSync with internal systems
+
+## What you can do in PlanSync
+
+- Manage workspaces, members, and projects
+- Upload and organize drawings/files with version control
+- Track issues, RFIs, punch lists, and field reports
+- Create takeoffs and estimate proposals
+- Run O&M workflows: assets, maintenance, inspections, work orders, occupant reporting
+- Share client-facing and public token-based portals
+
+## Product areas
+
+- Start with [Getting Started](getting-started/overview)
+- Review construction modules in [Features](features/construction-workflows)
+- Review O&M in [Operations & Maintenance](operations/overview)
+- Learn portal experiences in [Portals](portals/client-and-proposal-portals)
+- Manage billing and permissions in [Admin](admin/workspace-admin)
+
+## Integration APIs
+
+PlanSync exposes APIs under `/api/v1` and `/api/stripe`.
+
+- Most endpoints use authenticated user sessions (cookie-based Better Auth)
+- Some endpoints are public but token-protected (proposal and occupant portals)
+- Internal automation routes exist for your own infrastructure and should not be exposed to customer systems
+
+Go to [API Reference](api-reference/overview) for integration guidance.

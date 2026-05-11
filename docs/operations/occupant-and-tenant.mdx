@@ -1,0 +1,36 @@
+---
+title: "Occupant and Tenant Workflows"
+description: "Public reporting flows and occupant token operations."
+---
+
+# Occupant and Tenant Workflows
+
+PlanSync supports public issue reporting for occupants/tenants without requiring a full account.
+
+## Occupant tokens
+
+Workspace teams can issue/revoke occupant tokens per project. Tokens are used for:
+
+- Public metadata lookup
+- Issue submission
+- Photo upload flows
+
+## Public submission flow
+
+Typical sequence:
+
+1. Retrieve token metadata
+2. Submit issue details
+3. Presign and complete reference photo uploads (optional)
+
+These routes are intentionally separate from normal member session routes.
+
+## Privacy and abuse protection
+
+- Tokens should be treated as secrets
+- Public submissions are rate-limited
+- Reported user identity data can be masked in selected contexts
+
+## Tenant requests in app
+
+Submitted occupant/tenant issues feed into internal issue workflows where operations teams can triage, assign, and resolve work.

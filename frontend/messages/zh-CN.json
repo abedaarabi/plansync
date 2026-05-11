@@ -72,7 +72,6 @@
     "proLabel": "Pro",
     "perMonth": "/月",
     "proIncluded": "含 {seats} 名成员 · 项目不限",
-    "proExtraSeat": "第 {seats} 名之后每位每月 +{extra} USD。",
     "proEverything": "包含免费版全部功能 +",
     "startTrial14": "开始 14 天试用",
     "enterpriseLabel": "Enterprise",

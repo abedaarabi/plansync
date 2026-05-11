@@ -1,0 +1,63 @@
+---
+title: "API Overview"
+description: "How PlanSync APIs are organized and how customer integrations should use them."
+---
+
+# API Overview
+
+PlanSync API surface is organized into three layers:
+
+- `/api/auth/*` for Better Auth session flows
+- `/api/v1/*` for product APIs
+- `/api/stripe/*` for billing-related operations
+
+## Base URL and proxy behavior
+
+In production, use your app domain base URL.  
+In local development, the web app usually proxies `/api/*` through the frontend host.
+
+The OpenAPI source of truth for this documentation is:
+
+- `openapi/openapi.yaml`
+
+## Response patterns
+
+Most endpoints return JSON.
+
+Common behaviors:
+
+- `200/201` success payloads
+- `400` validation/body shape issues
+- `401` unauthenticated
+- `403` authenticated but not allowed (including email verification requirements)
+- `402` plan entitlement required
+- `404` resource not found
+
+## Important integration note
+
+Current customer integrations use authenticated user sessions (cookies) rather than dedicated customer API keys.
+
+If your system needs machine-to-machine API keys, that must be added as a separate product enhancement.
+
+## Common endpoint families
+
+- Workspace/project management
+- Files, uploads, viewer state/collaboration
+- Issues, RFIs, punch lists, field reports
+- Takeoff, materials, schedule
+- Proposals and O&M modules
+- Public token routes (proposal and occupant portals)
+
+Continue to [Authentication](authentication) before implementing any integration.
+
+## Example: health check
+
+```bash
+curl -X GET "https://app.plansync.com/api/v1/health"
+```
+
+```json
+{
+  "ok": true
+}
+```

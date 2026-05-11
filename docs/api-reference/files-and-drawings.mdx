@@ -1,0 +1,88 @@
+---
+title: "Files and Drawings API"
+description: "File management, upload flows, drawing access, and viewer collaboration endpoints."
+---
+
+# Files and Drawings API
+
+Use these endpoints to integrate drawing/file workflows.
+
+All routes are under `/api/v1` and generally require a session.
+
+## Folder and file operations
+
+- `POST /projects/:projectId/folders`
+- `POST /projects/:projectId/folders/apply-structure`
+- `PATCH /projects/:projectId/folders/:folderId`
+- `DELETE /projects/:projectId/folders/:folderId`
+- `PATCH /projects/:projectId/files/:fileId`
+- `DELETE /projects/:projectId/files/:fileId`
+- `POST /projects/:projectId/files/:fileId/open`
+
+## Upload and retrieval flow
+
+- `POST /projects/:projectId/uploads/preview`
+- `POST /files/presign-upload`
+- `POST /files/complete-upload`
+- `GET /files/:fileId/presign-read`
+- `GET /files/:fileId/content`
+- `GET /files/:fileId/resolved-revision`
+- `POST /files/:fileId/open`
+
+Typical write sequence:
+
+1. Preview/check upload constraints
+2. Request presigned upload target
+3. Upload directly to object storage
+4. Complete upload in PlanSync
+
+## Viewer and collaboration
+
+- `GET /file-versions/:fileVersionId/viewer-state`
+- `GET /file-versions/:fileVersionId/viewer-collab/events`
+- `POST /file-versions/:fileVersionId/viewer-collab/heartbeat`
+- `POST /file-versions/:fileVersionId/viewer-collab/leave`
+- `POST /file-versions/:fileVersionId/viewer-collab/end-session`
+- `POST /files/:fileVersionId/lock`
+- `DELETE /files/:fileVersionId/lock`
+
+## AI drawing helpers
+
+- `GET /file-versions/:fileVersionId/ai/sheet-cache`
+- `POST /file-versions/:fileVersionId/ai/sheet-summary`
+- `POST /file-versions/:fileVersionId/ai/chat`
+- `POST /file-versions/:fileVersionId/ai/takeoff-detect`
+
+## Cloud storage connectors
+
+- `GET /cloud/connections`
+- `GET /cloud/{provider}/authorize`
+- `GET /cloud/{provider}/callback`
+- `DELETE /cloud/{provider}`
+- `POST /cloud/{provider}/browse`
+- `POST /cloud/{provider}/open-link`
+- `POST /cloud/{provider}/import`
+
+Where `{provider}` is `google`, `microsoft`, or `dropbox`.
+
+## Example: presign upload
+
+```bash
+curl -X POST "https://app.plansync.com/api/v1/files/presign-upload" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: better-auth.session_token=<session-cookie>" \
+  -d '{
+    "projectId": "proj_abc123",
+    "fileName": "A-101.pdf",
+    "contentType": "application/pdf",
+    "sizeBytes": 2350012
+  }'
+```
+
+```json
+{
+  "uploadUrl": "https://s3.amazonaws.com/...",
+  "s3Key": "workspaces/ws_123/projects/proj_abc123/files/...",
+  "uploadId": "upl_abc123"
+}
+```

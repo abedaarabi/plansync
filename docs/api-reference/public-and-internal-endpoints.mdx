@@ -1,0 +1,76 @@
+---
+title: "Public and Internal Endpoints"
+description: "Which endpoints are safe for customer-facing use and which are internal-only."
+---
+
+# Public and Internal Endpoints
+
+This page helps integration teams separate supported public routes from internal automation routes.
+
+## Public routes (no member session required)
+
+### Health and branding
+
+- `GET /api/v1/health`
+- `GET /api/v1/public/workspaces/:workspaceId/logo`
+- `GET /api/v1/public/brand/email-icon.png`
+- `POST /api/v1/public/marketing/chat`
+
+### Invite token validation/acceptance
+
+- `GET /api/v1/invites/:token`
+- `GET /api/v1/email-invites/:token`
+- `POST /api/v1/invites/:token/accept`
+- `POST /api/v1/email-invites/:token/accept`
+
+### Proposal portal (tokenized)
+
+- `GET /api/v1/public/proposals/:token`
+- `POST /api/v1/public/proposals/:token/view`
+- `POST /api/v1/public/proposals/:token/accept`
+- `POST /api/v1/public/proposals/:token/decline`
+- `POST /api/v1/public/proposals/:token/request-changes`
+- `GET /api/v1/public/proposals/:token/messages`
+- `POST /api/v1/public/proposals/:token/messages`
+
+### Occupant portal (tokenized)
+
+- `GET /api/v1/occupant/:token/meta`
+- `POST /api/v1/occupant/:token/submit`
+- `POST /api/v1/occupant/:token/issues/:issueId/reference-photos/presign`
+- `POST /api/v1/occupant/:token/issues/:issueId/reference-photos/complete`
+
+## Internal automation routes (not customer integration APIs)
+
+These are intended for trusted infrastructure (scheduled jobs/ops) only:
+
+- `GET /api/v1/internal/collab-metrics`
+- `POST /api/v1/internal/om-maintenance-reminders`
+- `POST /api/v1/internal/proposal-reminders`
+
+Use secret-based protection and private network controls for these routes.
+
+## Stripe webhook route
+
+- `POST /api/stripe/webhook`
+
+This route is for Stripe to call your backend, not for customer system integrations.
+
+## Security recommendations
+
+- Do not expose internal endpoints in public API clients
+- Rotate and revoke leaked tokens quickly
+- Keep audit and observability around all external callback and public-token traffic
+
+## Example: occupant submit
+
+```bash
+curl -X POST "https://app.plansync.com/api/v1/occupant/<token>/submit" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "AC not cooling in unit 807",
+    "description": "Started this morning and still blowing warm air.",
+    "reporterName": "Sam Lee",
+    "reporterEmail": "sam@example.com"
+  }'
+```

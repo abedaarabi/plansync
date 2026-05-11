@@ -46,6 +46,7 @@ model User {
   punchAssigneeLinks      PunchAssigneeLink[]
   punchTemplatesCreated   PunchTemplate[]           @relation("PunchTemplateCreator")
   punchHistoryActions     PunchItemHistory[]
+  projectApiKeysCreated   ProjectApiKey[]           @relation("ProjectApiKeyCreator")
   inspectionRunsSignedOff InspectionRun[]           @relation("InspectionRunSignedOff")
   inspectionRunsCreated   InspectionRun[]           @relation("InspectionRunCreated")
   takeoffViewPresets      TakeoffViewPreset[]
@@ -450,11 +451,31 @@ model Project {
   inspectionRuns       InspectionRun[]
   occupantPortalTokens OccupantPortalToken[]
   scheduleTasks        ScheduleTask[]
+  apiKeys              ProjectApiKey[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([workspaceId])
+}
+
+/// Project-scoped integration API key (plaintext shown only at creation; DB stores hash).
+model ProjectApiKey {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String   @default("Integration key")
+  keyPrefix   String
+  keyHash     String   @unique
+  createdById String
+  createdBy   User     @relation("ProjectApiKeyCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId, revokedAt])
+  @@index([createdById])
 }
 
 /// Construction schedule row (WBS-style hierarchy + Gantt dates).

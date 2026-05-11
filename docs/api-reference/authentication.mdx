@@ -1,0 +1,62 @@
+---
+title: "Authentication"
+description: "Session auth model, email verification behavior, and tokenized public routes."
+---
+
+# Authentication
+
+PlanSync uses Better Auth session authentication for most protected APIs.
+
+## Session model
+
+For protected endpoints:
+
+- Authenticate a user through `/api/auth/*`
+- Send requests with session cookies
+- Ensure browser/client supports credentials on same site/app domain
+
+Example authenticated request with cookie:
+
+```bash
+curl -X GET "https://app.plansync.com/api/v1/me" \
+  -H "Cookie: better-auth.session_token=<session-cookie>"
+```
+
+## Email verification behavior
+
+Most session-protected routes require verified email status.
+
+Possible responses:
+
+- `401 Unauthorized` when no valid session exists
+- `403 Email verification required` when user is signed in but not verified
+
+Invite acceptance flows are an exception and can run before verification finalization.
+
+## Authorization model
+
+After authentication, route-level checks enforce:
+
+- Workspace membership
+- Project membership
+- Manager/admin/super-admin requirements for management actions
+- Plan requirements for premium features
+
+## Public token routes
+
+Some APIs do not require member sessions but do require opaque tokens:
+
+- Proposal portal endpoints (`/api/v1/public/proposals/:token/*`)
+- Occupant endpoints (`/api/v1/occupant/:token/*`)
+
+Treat these tokens as secrets.
+
+Example token route:
+
+```bash
+curl -X GET "https://app.plansync.com/api/v1/public/proposals/<token>"
+```
+
+## Internal automation routes
+
+Certain routes are intended for your own secure infrastructure and use a secret header/key pattern (for scheduled jobs). Do not expose these routes directly to customer systems.

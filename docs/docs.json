@@ -1,0 +1,173 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "PlanSync",
+  "theme": "mint",
+  "colors": {
+    "primary": "#0F766E",
+    "light": "#14B8A6",
+    "dark": "#115E59"
+  },
+  "api": {
+    "openapi": "openapi/openapi.yaml",
+    "playground": {
+      "display": "interactive",
+      "proxy": true
+    },
+    "examples": {
+      "languages": ["curl", "javascript", "python"],
+      "defaults": "required",
+      "prefill": true,
+      "autogenerate": true
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Product Docs",
+        "groups": [
+          {
+            "group": "Start Here",
+            "pages": [
+              "index",
+              "getting-started/overview",
+              "getting-started/workspaces-and-projects"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/construction-workflows",
+              "features/drawings-and-viewer",
+              "features/takeoff-and-materials",
+              "features/proposals"
+            ]
+          },
+          {
+            "group": "Operations & Maintenance",
+            "pages": ["operations/overview", "operations/occupant-and-tenant"]
+          },
+          {
+            "group": "Portals",
+            "pages": ["portals/client-and-proposal-portals"]
+          },
+          {
+            "group": "Admin",
+            "pages": ["admin/workspace-admin"]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/overview",
+              "api-reference/authentication",
+              "api-reference/projects-and-workspaces",
+              "api-reference/files-and-drawings",
+              "api-reference/issues-rfis-punch",
+              "api-reference/proposals-and-operations",
+              "api-reference/public-and-internal-endpoints"
+            ]
+          },
+          {
+            "group": "Health",
+            "pages": ["api-reference/endpoints/health/service-health-check"]
+          },
+          {
+            "group": "Identity",
+            "pages": ["api-reference/endpoints/identity/current-user-and-workspace-memberships"]
+          },
+          {
+            "group": "Workspaces",
+            "pages": [
+              "api-reference/endpoints/workspaces/list-projects-in-a-workspace",
+              "api-reference/endpoints/workspaces/create-project-in-workspace"
+            ]
+          },
+          {
+            "group": "Issues",
+            "pages": [
+              "api-reference/endpoints/issues/list-issues-for-project",
+              "api-reference/endpoints/issues/create-issue"
+            ]
+          },
+          {
+            "group": "RFIs",
+            "pages": [
+              "api-reference/endpoints/rfis/list-rfis",
+              "api-reference/endpoints/rfis/create-rfi"
+            ]
+          },
+          {
+            "group": "Punch",
+            "pages": [
+              "api-reference/endpoints/punch/list-punch-items",
+              "api-reference/endpoints/punch/create-punch-item"
+            ]
+          },
+          {
+            "group": "Field Reports",
+            "pages": [
+              "api-reference/endpoints/field-reports/list-field-reports",
+              "api-reference/endpoints/field-reports/create-field-report"
+            ]
+          },
+          {
+            "group": "Files",
+            "pages": [
+              "api-reference/endpoints/files/request-presigned-upload-target",
+              "api-reference/endpoints/files/complete-file-upload-after-object-storage-upload"
+            ]
+          },
+          {
+            "group": "Proposals",
+            "pages": [
+              "api-reference/endpoints/proposals/list-proposals",
+              "api-reference/endpoints/proposals/create-proposal"
+            ]
+          },
+          {
+            "group": "Public Portals",
+            "pages": [
+              "api-reference/endpoints/public-portals/public-proposal-by-token",
+              "api-reference/endpoints/public-portals/public-occupant-portal-metadata",
+              "api-reference/endpoints/public-portals/submit-occupant-issue"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "api-reference/endpoints/operations/list-o&m-assets",
+              "api-reference/endpoints/operations/create-o&m-asset",
+              "api-reference/endpoints/operations/list-maintenance-schedules",
+              "api-reference/endpoints/operations/create-maintenance-schedule"
+            ]
+          },
+          {
+            "group": "Schedule",
+            "pages": [
+              "api-reference/endpoints/schedule/get-project-schedule",
+              "api-reference/endpoints/schedule/replace-project-schedule"
+            ]
+          },
+          {
+            "group": "Materials",
+            "pages": [
+              "api-reference/endpoints/materials/list-workspace-materials",
+              "api-reference/endpoints/materials/create-workspace-material"
+            ]
+          },
+          {
+            "group": "Billing",
+            "pages": [
+              "api-reference/endpoints/billing/create-checkout-session-for-workspace-billing",
+              "api-reference/endpoints/billing/stripe-webhook-receiver-internal"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

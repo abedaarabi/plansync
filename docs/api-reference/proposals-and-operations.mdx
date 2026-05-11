@@ -1,0 +1,96 @@
+---
+title: "Proposals and Operations API"
+description: "Proposal, O&M, schedule, and materials endpoints used by customer integrations."
+---
+
+# Proposals and Operations API
+
+This section covers two major groups often used by customer operations teams.
+
+## Proposals
+
+Session-protected routes under `/api/v1`:
+
+- `GET /projects/:projectId/proposals`
+- `POST /projects/:projectId/proposals`
+- `GET /projects/:projectId/proposals/:proposalId`
+- `PATCH /projects/:projectId/proposals/:proposalId`
+- `DELETE /projects/:projectId/proposals/:proposalId`
+- `POST /projects/:projectId/proposals/:proposalId/preview`
+- `POST /projects/:projectId/proposals/:proposalId/send`
+- `POST /projects/:projectId/proposals/:proposalId/resend`
+- `POST /projects/:projectId/proposals/:proposalId/duplicate`
+- `GET /projects/:projectId/proposals/:proposalId/pdf`
+- `GET /projects/:projectId/proposals/:proposalId/revisions`
+- `GET /projects/:projectId/proposals/:proposalId/comments`
+- `POST /projects/:projectId/proposals/:proposalId/comments`
+
+Workspace template and analytics helpers:
+
+- `GET /workspaces/:workspaceId/proposal-templates`
+- `POST /workspaces/:workspaceId/proposal-templates`
+- `PATCH /workspaces/:workspaceId/proposal-templates/:templateId`
+- `DELETE /workspaces/:workspaceId/proposal-templates/:templateId`
+- `GET /projects/:projectId/proposals/analytics/summary`
+
+## Operations and maintenance
+
+Asset and maintenance routes:
+
+- `GET /projects/:projectId/om/assets`
+- `POST /projects/:projectId/om/assets`
+- `PATCH /projects/:projectId/om/assets/:assetId`
+- `DELETE /projects/:projectId/om/assets/:assetId`
+- `GET /projects/:projectId/om/maintenance`
+- `POST /projects/:projectId/om/maintenance`
+- `PATCH /projects/:projectId/om/maintenance/:scheduleId`
+- `POST /projects/:projectId/om/maintenance/generate-work-orders`
+- `POST /projects/:projectId/om/maintenance/:scheduleId/complete`
+
+Inspection and reporting routes:
+
+- `GET /projects/:projectId/om/inspection-templates`
+- `POST /projects/:projectId/om/inspection-templates`
+- `GET /projects/:projectId/om/inspection-runs`
+- `POST /projects/:projectId/om/inspection-runs`
+- `PATCH /projects/:projectId/om/inspection-runs/:runId`
+- `POST /projects/:projectId/om/inspection-runs/:runId/complete`
+- `GET /projects/:projectId/om/inspection-runs/:runId/report.pdf`
+- `GET /projects/:projectId/om/fm-dashboard`
+
+## Schedule and materials
+
+- `GET /projects/:projectId/schedule`
+- `PUT /projects/:projectId/schedule`
+- `GET /workspaces/:workspaceId/materials`
+- `POST /workspaces/:workspaceId/materials`
+- `PATCH /workspaces/:workspaceId/materials/:materialId`
+- `DELETE /workspaces/:workspaceId/materials/:materialId`
+
+## Billing routes note
+
+Billing endpoints are under `/api/stripe` and are generally app-session actions (checkout, portal, subscription changes), not a general-purpose external billing API.
+
+## Example: create proposal
+
+```bash
+curl -X POST "https://app.plansync.com/api/v1/projects/proj_abc123/proposals" \
+  -H "Content-Type: application/json" \
+  -H "Cookie: better-auth.session_token=<session-cookie>" \
+  -d '{
+    "title": "Mechanical Retrofit Package",
+    "clientName": "Acme Property Group",
+    "clientEmail": "ops@acme.com",
+    "validUntil": "2026-12-31T00:00:00.000Z"
+  }'
+```
+
+```json
+{
+  "id": "prop_abc123",
+  "projectId": "proj_abc123",
+  "title": "Mechanical Retrofit Package",
+  "status": "DRAFT",
+  "total": "0.00"
+}
+```
