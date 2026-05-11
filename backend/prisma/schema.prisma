@@ -183,7 +183,7 @@ model Workspace {
   /// Daily O&M maintenance digest emails — idempotency (one row per workspace per UTC day).
   omMaintenanceReminderDigests OmMaintenanceReminderDigest[]
   /// Public occupant submit rate-limit buckets (distributed counters).
-  occupantSubmitRateLimits OccupantSubmitRateLimit[]
+  occupantSubmitRateLimits     OccupantSubmitRateLimit[]
 }
 
 /// Tracks POST /internal/om-maintenance-reminders digest already sent for a workspace/day (UTC).
