@@ -1158,12 +1158,24 @@ export function ProjectScheduleClient({ projectId }: Props) {
           ? "Save failed — fix and edit to retry"
           : "Saved";
 
+  const totalTasks = allRows.length;
+  const delayedTasks = allRows.filter((t) => normalizeStatus(t.status) === "delayed").length;
+  const inProgressTasks = allRows.filter((t) => normalizeStatus(t.status) === "in_progress").length;
+  const completedTasks = allRows.filter((t) => normalizeStatus(t.status) === "completed").length;
+  const avgProgress =
+    totalTasks === 0
+      ? 0
+      : Math.round(
+          allRows.reduce((sum, t) => sum + Math.max(0, Math.min(100, t.progressPercent)), 0) /
+            totalTasks,
+        );
+
   const ganttBands = monthBands(range.min, range.max);
   const ganttWeeks = weekGrid(range.min, range.max);
   const ganttToday = todayLinePct(range.min, range.max);
 
   return (
-    <div className="schedule-print-root enterprise-animate-in space-y-4">
+    <div className="schedule-print-root enterprise-animate-in mx-auto max-w-[1600px] space-y-4">
       {panelTask ? (
         <button
           type="button"
@@ -1188,28 +1200,60 @@ export function ProjectScheduleClient({ projectId }: Props) {
         }}
       />
 
-      <header className="no-print flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]"
-            aria-hidden
-          >
-            <ChartGantt className="h-5 w-5" strokeWidth={1.75} />
+      <header className="no-print rounded-2xl border border-[var(--enterprise-border)] bg-linear-to-r from-[var(--enterprise-surface)] to-[var(--enterprise-bg)] p-4 shadow-[var(--enterprise-shadow-xs)] sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]"
+              aria-hidden
+            >
+              <ChartGantt className="h-5 w-5" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
+                Construction schedule
+              </h1>
+              <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+                Field-ready task plan with dependencies, date ranges, and gantt timeline controls.
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
-              Construction schedule
-            </h1>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                Tasks
+              </p>
+              <p className="text-lg font-semibold text-[var(--enterprise-text)]">{totalTasks}</p>
+            </div>
+            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                In progress
+              </p>
+              <p className="text-lg font-semibold text-blue-700">{inProgressTasks}</p>
+            </div>
+            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                Delayed
+              </p>
+              <p className="text-lg font-semibold text-rose-700">{delayedTasks}</p>
+            </div>
+            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                Completed
+              </p>
+              <p className="text-lg font-semibold text-emerald-700">{completedTasks}</p>
+            </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[var(--enterprise-border)] pt-3">
           <span
-            className="text-xs text-[var(--enterprise-text-muted)]"
+            className="rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1 text-xs text-[var(--enterprise-text-muted)]"
             aria-live="polite"
             title="Changes are saved automatically after you stop editing"
           >
             {saveLabel}
             {saveTimeLabel ? ` · Last saved ${saveTimeLabel}` : ""}
+            {` · Avg progress ${avgProgress}%`}
           </span>
           <button
             type="button"
@@ -1279,6 +1323,21 @@ export function ProjectScheduleClient({ projectId }: Props) {
         </div>
       ) : (
         <>
+          <div className="no-print flex flex-wrap items-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs text-[var(--enterprise-text-muted)]">
+            <span className="font-medium text-[var(--enterprise-text)]">Timeline legend:</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-blue-700">
+              In progress
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">
+              Delayed
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">
+              Completed
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-slate-700">
+              Not started
+            </span>
+          </div>
           <section
             className="schedule-print-grid hidden min-h-[420px] overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] lg:flex lg:min-h-[620px] lg:h-[calc(100vh-13.5rem)] lg:flex-col"
             aria-label="Schedule grid and timeline"

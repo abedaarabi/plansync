@@ -96,19 +96,34 @@ export function LandingNav({
               {t("dashboard")}
             </Link>
           ) : (
-            <Link
-              href="/sign-in"
-              onClick={() =>
-                trackMarketingEvent("marketing_cta_click", {
-                  ctaType: "sign_in",
-                  source: "nav_desktop",
-                  destination: "/sign-in",
-                })
-              }
-              className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-900/3 hover:text-slate-900"
-            >
-              {t("signIn")}
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/sign-in"
+                onClick={() =>
+                  trackMarketingEvent("marketing_cta_click", {
+                    ctaType: "sign_in",
+                    source: "nav_desktop",
+                    destination: "/sign-in",
+                  })
+                }
+                className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                {t("signIn")}
+              </Link>
+              <Link
+                href="/sign-in?mode=sign-up"
+                onClick={() =>
+                  trackMarketingEvent("marketing_cta_click", {
+                    ctaType: "sign_up",
+                    source: "nav_desktop",
+                    destination: "/sign-in?mode=sign-up",
+                  })
+                }
+                className="rounded-lg border border-slate-900/15 bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Sign up
+              </Link>
+            </div>
           )}
           <button
             type="button"
@@ -213,19 +228,34 @@ export function LandingNav({
                 {t("dashboard")}
               </Link>
             ) : (
-              <Link
-                href="/sign-in"
-                onClick={() =>
-                  trackMarketingEvent("marketing_cta_click", {
-                    ctaType: "sign_in",
-                    source: "nav_mobile",
-                    destination: "/sign-in",
-                  })
-                }
-                className="text-sm font-medium text-slate-700"
-              >
-                {t("signIn")}
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/sign-in"
+                  onClick={() =>
+                    trackMarketingEvent("marketing_cta_click", {
+                      ctaType: "sign_in",
+                      source: "nav_mobile",
+                      destination: "/sign-in",
+                    })
+                  }
+                  className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  {t("signIn")}
+                </Link>
+                <Link
+                  href="/sign-in?mode=sign-up"
+                  onClick={() =>
+                    trackMarketingEvent("marketing_cta_click", {
+                      ctaType: "sign_up",
+                      source: "nav_mobile",
+                      destination: "/sign-in?mode=sign-up",
+                    })
+                  }
+                  className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  Sign up
+                </Link>
+              </div>
             )}
             <button
               type="button"

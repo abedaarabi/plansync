@@ -79,7 +79,7 @@ export function LandingFinalCtaSection({ onGoToFreeViewer }: LandingFinalCtaSect
                   destination: "/sign-in",
                 })
               }
-              className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-xl border-2 border-white/90 bg-white/[0.07] px-7 py-3.5 text-base font-semibold text-white backdrop-blur-sm transition hover:border-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-xl border border-white/45 bg-white/5 px-7 py-3.5 text-base font-semibold text-white/95 backdrop-blur-sm transition hover:border-white/80 hover:bg-white/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
               {t("startTrial")}
             </Link>

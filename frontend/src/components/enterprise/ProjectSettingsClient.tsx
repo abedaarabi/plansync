@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Settings } from "lucide-react";
+import { KeyRound, Settings, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   createProjectApiKey,
@@ -11,6 +11,7 @@ import {
   patchProject,
   patchProjectSettings,
   revokeProjectApiKey,
+  type ProjectSessionResponse,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
@@ -49,6 +50,12 @@ export function ProjectSettingsClient({ projectId }: Props) {
   const [occupantHeadlineDraft, setOccupantHeadlineDraft] = useState("");
   const [apiKeyNameDraft, setApiKeyNameDraft] = useState("");
   const [newApiKeyPlainText, setNewApiKeyPlainText] = useState<string | null>(null);
+  const [modulesDraft, setModulesDraft] = useState<
+    ProjectSessionResponse["settings"]["modules"] | null
+  >(null);
+  const [clientVisibilityDraft, setClientVisibilityDraft] = useState<
+    ProjectSessionResponse["settings"]["clientVisibility"] | null
+  >(null);
 
   const apiKeysQuery = useQuery({
     queryKey: qk.projectApiKeys(projectId),
@@ -75,6 +82,8 @@ export function ProjectSettingsClient({ projectId }: Props) {
   useEffect(() => {
     if (!session) return;
     setOccupantHeadlineDraft(session.settings.omTenantPortalUi?.headline ?? "");
+    setModulesDraft(session.settings.modules);
+    setClientVisibilityDraft(session.settings.clientVisibility);
   }, [session]);
 
   const opModeMutation = useMutation({
@@ -93,58 +102,89 @@ export function ProjectSettingsClient({ projectId }: Props) {
     return <AccessRestricted backHref={`/projects/${projectId}/home`} />;
   }
 
-  const m = session.settings.modules;
-  const c = session.settings.clientVisibility;
+  const m = modulesDraft ?? session.settings.modules;
+  const c = clientVisibilityDraft ?? session.settings.clientVisibility;
   const om = session.operationsMode;
   const ws = primary?.workspace;
   const omBilling = isWorkspaceOmBillingClient(ws);
   const billingHref = isSuperAdmin(primary?.role) ? "/organization?tab=billing" : "/organization";
 
   function toggleModule(key: keyof typeof m, value: boolean) {
+    setModulesDraft((prev) => ({ ...(prev ?? m), [key]: value }));
     mutation.mutate({ projectId, patch: { modules: { [key]: value } } });
   }
 
   function toggleClient(key: keyof typeof c, value: boolean) {
+    setClientVisibilityDraft((prev) => ({
+      ...(prev ?? c),
+      [key]: value,
+    }));
     mutation.mutate({ projectId, patch: { clientVisibility: { [key]: value } } });
   }
 
+  const sectionClass =
+    "rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 shadow-[var(--enterprise-shadow-xs)] sm:p-6";
+
   const row = (label: string, on: boolean, onToggle: (v: boolean) => void, disabled?: boolean) => (
-    <div className="flex flex-col gap-2 border-b border-[var(--enterprise-border)] py-4 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 rounded-xl border border-[var(--enterprise-border)]/75 bg-[var(--enterprise-bg)]/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
       <span className="text-sm font-medium text-[var(--enterprise-text)]">{label}</span>
-      <label className="inline-flex cursor-pointer items-center gap-2">
-        <span className="text-xs text-[var(--enterprise-text-muted)]">{on ? "On" : "Off"}</span>
-        <input
-          type="checkbox"
-          className="h-5 w-10 min-h-[44px] min-w-[44px] cursor-pointer accent-[var(--enterprise-primary)]"
-          checked={on}
-          disabled={disabled || mutation.isPending}
-          onChange={(e) => onToggle(e.target.checked)}
-        />
-      </label>
+      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1">
+        <span className="text-xs font-medium text-[var(--enterprise-text-muted)]">
+          {on ? "On" : "Off"}
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label={`${label} toggle`}
+          disabled={disabled}
+          onClick={() => onToggle(!on)}
+          className={`relative inline-flex h-6 w-11 min-h-[44px] min-w-[44px] items-center rounded-full border transition ${
+            on
+              ? "border-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]"
+              : "border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]"
+          } disabled:cursor-not-allowed disabled:opacity-50`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
+              on ? "translate-x-5" : "translate-x-1"
+            }`}
+            aria-hidden
+          />
+        </button>
+      </div>
     </div>
   );
 
   return (
-    <div className="enterprise-animate-in space-y-8 p-4 sm:p-6 lg:p-8">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-4">
-        <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]"
-          aria-hidden
-        >
-          <Settings className="h-5 w-5" strokeWidth={1.75} />
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
-            Project settings
-          </h1>
-          <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
-            {session.projectName} — modules and client portal visibility (Super Admin only).
-          </p>
+    <div className="enterprise-animate-in mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+      <header className="rounded-2xl border border-[var(--enterprise-border)] bg-linear-to-r from-[var(--enterprise-surface)] to-[var(--enterprise-bg)] p-5 shadow-[var(--enterprise-shadow-xs)] sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]"
+              aria-hidden
+            >
+              <Settings className="h-5 w-5" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
+                Project settings
+              </h1>
+              <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+                {session.projectName} — modules, integrations, and client visibility controls.
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-2 self-start rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1 text-xs font-semibold text-[var(--enterprise-text-muted)]">
+            <ShieldCheck className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" />
+            Super Admin controls
+          </span>
         </div>
       </header>
 
-      <section className="enterprise-card divide-y divide-[var(--enterprise-border)] p-4 sm:p-6">
-        <h2 className="pb-2 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+      <section className={sectionClass}>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
           Modules
         </h2>
         {!canEditSettings ? (
@@ -152,8 +192,8 @@ export function ProjectSettingsClient({ projectId }: Props) {
             Module toggles are editable by Super Admin only.
           </p>
         ) : (
-          <>
-            <p className="pb-4 text-xs text-[var(--enterprise-text-muted)]">
+          <div className="space-y-3">
+            <p className="pb-1 text-xs text-[var(--enterprise-text-muted)]">
               Disabled modules are hidden from the sidebar for everyone on this project.
             </p>
             {row("Issues", m.issues, (v) => toggleModule("issues", v))}
@@ -163,18 +203,25 @@ export function ProjectSettingsClient({ projectId }: Props) {
             {row("Punch List", m.punch, (v) => toggleModule("punch", v))}
             {row("Field Reports", m.fieldReports, (v) => toggleModule("fieldReports", v))}
             {row("Construction schedule", m.schedule, (v) => toggleModule("schedule", v))}
-          </>
+          </div>
         )}
       </section>
 
-      <section className="enterprise-card p-4 sm:p-6">
-        <h2 className="pb-2 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-          Integration API keys
-        </h2>
-        <p className="pb-4 text-xs text-[var(--enterprise-text-muted)]">
-          Admin and Super Admin can create project-scoped API keys for integrations. New keys are
-          shown once, then hidden.
-        </p>
+      <section className={sectionClass}>
+        <div className="mb-4 flex items-start gap-3">
+          <div className="mt-0.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-2 text-[var(--enterprise-primary)]">
+            <KeyRound className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+              Integration API keys
+            </h2>
+            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
+              Admin and Super Admin can create project-scoped API keys for integrations. New keys
+              are shown once, then hidden.
+            </p>
+          </div>
+        </div>
         {newApiKeyPlainText ? (
           <div className="mb-4 rounded-xl border border-emerald-300/80 bg-emerald-50 px-4 py-3">
             <p className="text-xs font-semibold text-emerald-900">Copy and store this key now</p>
@@ -235,7 +282,10 @@ export function ProjectSettingsClient({ projectId }: Props) {
                     {k.name}
                   </p>
                   <p className="text-xs text-[var(--enterprise-text-muted)]">
-                    {k.keyPrefix}... | Created {new Date(k.createdAt).toLocaleString()} | Last used{" "}
+                    <span className="rounded bg-[var(--enterprise-bg)] px-1.5 py-0.5 font-mono text-[11px]">
+                      {k.keyPrefix}...
+                    </span>{" "}
+                    | Created {new Date(k.createdAt).toLocaleString()} | Last used{" "}
                     {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleString() : "Never"}
                   </p>
                   {k.revokedAt ? (
@@ -262,7 +312,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
         </div>
       </section>
 
-      <section className="enterprise-card divide-y divide-[var(--enterprise-border)] p-4 sm:p-6">
+      <section className={sectionClass}>
         <h2 className="pb-2 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
           Operations &amp; Maintenance
         </h2>
@@ -374,7 +424,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
       </section>
 
       {canEditSettings ? (
-        <section className="enterprise-card divide-y divide-[var(--enterprise-border)] p-4 sm:p-6">
+        <section className={sectionClass}>
           <h2 className="pb-2 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
             Client visibility
           </h2>

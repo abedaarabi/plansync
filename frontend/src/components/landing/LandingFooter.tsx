@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Link2, Mail } from "lucide-react";
 import { LANDING_SOLUTIONS } from "@/lib/landingContent";
 
 type LandingFooterProps = {
@@ -89,7 +89,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                 <li key={s.slug}>
                   <Link
                     href={`/solutions/${s.slug}`}
-                    className="text-sm text-slate-300 transition hover:text-[var(--landing-cta)]"
+                    className="text-sm text-slate-300 transition hover:text-(--landing-cta)"
                   >
                     {s.title}
                   </Link>
@@ -121,15 +121,41 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               </li>
               <li>
                 <a
-                  href="https://www.linkedin.com/company/plansyncdev/"
+                  href="mailto:support@plansync.dev"
+                  className="text-sm text-slate-300 transition hover:text-white"
+                >
+                  support@plansync.dev
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.linkedin.com/company/plansyncdev/?viewAsMember=true"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-slate-300 transition hover:text-white"
                 >
-                  {t("contact")}
+                  LinkedIn
                 </a>
               </li>
             </ul>
+            <div className="mt-5 flex items-center gap-2">
+              <a
+                href="mailto:support@plansync.dev"
+                className="inline-flex items-center gap-2 rounded-full border border-slate-700/90 bg-slate-900/40 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:text-white"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                Support
+              </a>
+              <a
+                href="https://www.linkedin.com/company/plansyncdev/?viewAsMember=true"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-slate-700/90 bg-slate-900/40 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:text-white"
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                LinkedIn
+              </a>
+            </div>
           </div>
 
           <div>
@@ -146,10 +172,17 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                 </Link>
               </li>
               <li>
-                <span className="text-sm text-slate-500">{t("terms")}</span>
+                <Link href="/terms" className="text-sm text-slate-300 transition hover:text-white">
+                  {t("terms")}
+                </Link>
               </li>
               <li>
-                <span className="text-sm text-slate-500">{t("cookies")}</span>
+                <Link
+                  href="/cookies"
+                  className="text-sm text-slate-300 transition hover:text-white"
+                >
+                  {t("cookies")}
+                </Link>
               </li>
             </ul>
           </div>

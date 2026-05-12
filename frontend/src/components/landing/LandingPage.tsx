@@ -1,6 +1,7 @@
 "use client";
 
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
+import { useEffect, useState } from "react";
 import { LandingFaqSection } from "./LandingFaqSection";
 import { LandingFinalCtaSection } from "./LandingFinalCtaSection";
 import { LandingChatAssistant } from "./LandingChatAssistant";
@@ -34,10 +35,17 @@ function LandingHomeMain() {
 }
 
 export function LandingPage() {
+  const [showChatAssistant, setShowChatAssistant] = useState(false);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setShowChatAssistant(true), 1200);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
   return (
     <MarketingShell>
       <LandingHomeMain />
-      <LandingChatAssistant />
+      {showChatAssistant ? <LandingChatAssistant /> : null}
     </MarketingShell>
   );
 }

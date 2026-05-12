@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, CheckCircle2, ShieldCheck, Users2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { trackMarketingEvent } from "@/lib/marketingAnalytics";
 import { getHeroExperimentVariant, type HeroExperimentVariant } from "@/lib/marketingExperiments";
@@ -142,10 +142,25 @@ export function LandingHeroSection({
                       variant: heroVariant,
                     })
                   }
-                  className="inline-flex min-h-13 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border-2 border-white/80 bg-white/8 px-8 py-3.5 text-[0.96rem] font-semibold text-white shadow-sm backdrop-blur-sm transition hover:border-white hover:bg-white/16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:flex-none sm:px-9"
+                  className="inline-flex min-h-13 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-white/40 bg-white/5 px-8 py-3.5 text-[0.96rem] font-semibold text-white shadow-sm backdrop-blur-sm transition hover:border-white/65 hover:bg-white/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:flex-none sm:px-9"
                 >
                   {t("startTrial")}
                 </Link>
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5 text-xs text-blue-100/90 lg:justify-start">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/8 px-3 py-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
+                  No signup for viewer
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/8 px-3 py-1.5">
+                  <Users2 className="h-3.5 w-3.5 text-sky-300" />
+                  Used by PMs, GCs, and Subs
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/8 px-3 py-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
+                  Secure cloud option
+                </span>
               </div>
 
               {/* Stat chips */}
