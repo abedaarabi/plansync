@@ -461,18 +461,18 @@ model Project {
 
 /// Project-scoped integration API key (plaintext shown only at creation; DB stores hash).
 model ProjectApiKey {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name        String   @default("Integration key")
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String    @default("Integration key")
   keyPrefix   String
-  keyHash     String   @unique
+  keyHash     String    @unique
   createdById String
-  createdBy   User     @relation("ProjectApiKeyCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdBy   User      @relation("ProjectApiKeyCreator", fields: [createdById], references: [id], onDelete: Cascade)
   lastUsedAt  DateTime?
   revokedAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([projectId, revokedAt])
   @@index([createdById])
