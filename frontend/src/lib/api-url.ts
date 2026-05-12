@@ -6,28 +6,12 @@ export function getPublicApiBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? "").trim().replace(/\/$/, "");
 }
 
-function preferSameOriginApiInBrowser(base: string): boolean {
-  if (typeof window === "undefined") return false;
-  const forceDirect = (process.env.NEXT_PUBLIC_FORCE_DIRECT_API ?? "").trim().toLowerCase();
-  if (forceDirect === "1" || forceDirect === "true" || forceDirect === "yes") return false;
-  if (!base) return true;
-  try {
-    const apiHost = new URL(base).hostname.toLowerCase();
-    const pageHost = window.location.hostname.toLowerCase();
-    const normalize = (host: string) => host.replace(/^www\./, "").replace(/^api\./, "");
-    return normalize(apiHost) === normalize(pageHost);
-  } catch {
-    return true;
-  }
-}
-
 /** Prefix `/api/...` with the public API origin when configured. */
 export function apiUrl(path: string): string {
   if (!path.startsWith("/api/")) {
     throw new Error(`apiUrl: path must start with /api/, got: ${path}`);
   }
   const base = getPublicApiBaseUrl();
-  if (preferSameOriginApiInBrowser(base)) return path;
   return base ? `${base}${path}` : path;
 }
 
@@ -67,10 +51,6 @@ export function wsApiUrl(path: string): string {
     throw new Error(`wsApiUrl: path must start with /api/, got: ${path}`);
   }
   const base = getPublicApiBaseUrl();
-  if (preferSameOriginApiInBrowser(base) && typeof window !== "undefined") {
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${proto}//${window.location.host}${path}`;
-  }
   if (base) {
     const u = new URL(base);
     u.protocol = u.protocol === "https:" ? "wss:" : "ws:";

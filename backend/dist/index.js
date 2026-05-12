@@ -36,7 +36,7 @@ const corsOrigins = buildCorsAllowList(env);
 app.use("*", cors({
     origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
     credentials: true,
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
 }));

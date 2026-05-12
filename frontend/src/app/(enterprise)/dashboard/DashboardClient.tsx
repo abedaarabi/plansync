@@ -292,14 +292,14 @@ export function DashboardClient() {
   ];
 
   return (
-    <div className="enterprise-animate-in space-y-8">
+    <div className="enterprise-animate-in space-y-6 md:space-y-8">
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-gradient-to-br from-[var(--enterprise-surface)] via-white to-blue-50/40 p-6 shadow-[var(--enterprise-shadow-card)] sm:p-8">
+      <section className="relative overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-gradient-to-br from-[var(--enterprise-surface)] via-white to-blue-50/40 p-5 shadow-[var(--enterprise-shadow-card)] sm:p-6 lg:p-8">
         <div
           className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[var(--enterprise-primary)]/8 blur-3xl"
           aria-hidden
         />
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="relative flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--enterprise-text-muted)]">
               {td("workspaceEyebrow")}
@@ -347,8 +347,8 @@ export function DashboardClient() {
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-col items-stretch gap-3 sm:flex-row lg:flex-col">
-            <div className="enterprise-card flex min-w-[200px] items-center gap-4 px-5 py-4">
+          <div className="flex shrink-0 flex-col items-stretch gap-3 sm:flex-row md:max-w-[340px] md:flex-col">
+            <div className="enterprise-card flex min-w-0 items-center gap-4 px-4 py-4 sm:px-5">
               <div
                 className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/15 to-blue-600/5 ring-1 ring-blue-500/20"
                 aria-hidden
@@ -382,11 +382,11 @@ export function DashboardClient() {
       </section>
 
       {/* KPI strip */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {kpiRows.map((k) => (
           <div
             key={k.key}
-            className="enterprise-card enterprise-card-hover flex gap-4 p-5 transition duration-200 hover:-translate-y-0.5"
+            className="enterprise-card enterprise-card-hover flex gap-4 p-4 transition duration-200 hover:-translate-y-0.5 sm:p-5"
           >
             <div
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-bg)] ${k.tone}`}
@@ -397,7 +397,7 @@ export function DashboardClient() {
               <p className="text-[12px] font-medium text-[var(--enterprise-text-muted)]">
                 {k.label}
               </p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-[var(--enterprise-text)]">
+              <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
                 {k.value}
               </p>
               <p className="mt-1 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
@@ -409,7 +409,7 @@ export function DashboardClient() {
       </div>
 
       {isAdmin && hasWorkspace && wid ? (
-        <section className="enterprise-card p-6">
+        <section className="enterprise-card p-5 sm:p-6">
           <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
             {td("workspaceUsage")}
           </h2>
@@ -456,9 +456,9 @@ export function DashboardClient() {
       ) : null}
 
       {/* Chart + team snapshot */}
-      <div className="grid gap-6 xl:grid-cols-3">
-        <section className="enterprise-card xl:col-span-2 overflow-hidden p-0">
-          <div className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-6 py-4">
+      <div className="grid gap-6 lg:grid-cols-3">
+        <section className="enterprise-card overflow-hidden p-0 lg:col-span-2">
+          <div className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-5 py-4 sm:px-6">
             <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
               {td("chartTitle")}
             </h2>
@@ -466,7 +466,7 @@ export function DashboardClient() {
               {td("chartSubtitle")}
             </p>
           </div>
-          <div className="p-6 pt-4">
+          <div className="p-5 pt-4 sm:p-6 sm:pt-4">
             <DashboardActivityChart data={activitySeries} />
             <div className="mt-4 flex flex-wrap gap-6 border-t border-[var(--enterprise-border)]/80 pt-4 text-[13px] text-[var(--enterprise-text-muted)]">
               <span className="inline-flex items-center gap-2">
@@ -488,7 +488,7 @@ export function DashboardClient() {
           </div>
         </section>
 
-        <section className="enterprise-card flex flex-col p-6">
+        <section className="enterprise-card flex flex-col p-5 sm:p-6">
           <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
             {td("quickActions")}
           </h2>
@@ -496,7 +496,7 @@ export function DashboardClient() {
             <li>
               <Link
                 href="/projects"
-                className="flex items-center justify-between gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)]"
+                className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)]"
               >
                 <span className="flex items-center gap-2">
                   <FileStack
@@ -511,7 +511,7 @@ export function DashboardClient() {
             <li>
               <Link
                 href="/projects"
-                className="flex items-center justify-between gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)]"
+                className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)]"
               >
                 <span className="flex items-center gap-2">
                   <Upload className="h-4 w-4 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
@@ -523,7 +523,7 @@ export function DashboardClient() {
             <li>
               <Link
                 href="/organization?tab=people"
-                className="flex items-center justify-between gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)]"
+                className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)]"
               >
                 <span className="flex items-center gap-2">
                   <UserPlus
@@ -539,8 +539,8 @@ export function DashboardClient() {
         </section>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="enterprise-card p-6">
+      <div className="grid gap-6 md:grid-cols-2">
+        <section className="enterprise-card p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               {td("gettingStarted")}
@@ -629,7 +629,7 @@ export function DashboardClient() {
         </section>
       </div>
 
-      <section className="enterprise-card p-6 sm:max-w-md">
+      <section className="enterprise-card p-5 sm:p-6 lg:max-w-md">
         <h2 className="text-[13px] font-semibold text-[var(--enterprise-text)]">
           {td("shortcuts")}
         </h2>

@@ -87,15 +87,46 @@ const schema = z.object({
     /** e.g. mailto:support@example.com or https://example.com (Web Push spec). */
     VAPID_SUBJECT: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional()),
 });
+function originAliases(origin) {
+    try {
+        const u = new URL(origin);
+        const out = new Set([u.origin]);
+        const host = u.hostname.toLowerCase();
+        // www <-> apex
+        if (host.startsWith("www.")) {
+            out.add(`${u.protocol}//${host.slice(4)}${u.port ? `:${u.port}` : ""}`);
+        }
+        else {
+            out.add(`${u.protocol}//www.${host}${u.port ? `:${u.port}` : ""}`);
+        }
+        // app.<domain> / api.<domain> -> allow apex + www + app variants.
+        if (host.startsWith("app.") || host.startsWith("api.")) {
+            const apex = host.slice(host.indexOf(".") + 1);
+            out.add(`${u.protocol}//${apex}${u.port ? `:${u.port}` : ""}`);
+            out.add(`${u.protocol}//www.${apex}${u.port ? `:${u.port}` : ""}`);
+            out.add(`${u.protocol}//app.${apex}${u.port ? `:${u.port}` : ""}`);
+        }
+        return [...out];
+    }
+    catch {
+        return [origin];
+    }
+}
 export function buildCorsAllowList(env) {
-    const list = [env.CORS_ORIGIN, env.PUBLIC_APP_URL];
+    const base = [env.CORS_ORIGIN, env.PUBLIC_APP_URL];
     if (env.PUBLIC_API_URL?.trim())
-        list.push(env.PUBLIC_API_URL.trim());
+        base.push(env.PUBLIC_API_URL.trim());
+    const list = [];
+    for (const item of base) {
+        if (!item)
+            continue;
+        list.push(...originAliases(item));
+    }
     if (env.CORS_EXTRA_ORIGINS?.trim()) {
         for (const o of env.CORS_EXTRA_ORIGINS.split(",")) {
             const t = o.trim();
             if (t)
-                list.push(t);
+                list.push(...originAliases(t));
         }
     }
     return [...new Set(list.filter(Boolean))];

@@ -19,6 +19,11 @@ const withPWA = withPWAInit({
   /** Avoid precaching very large marketing assets */
   publicExcludes: ["!images/**/*"],
   workboxOptions: {
+    /**
+     * Keep Workbox bundling stable with Next 16 webpack builds.
+     * Production mode can intermittently hang in terser `renderChunk`.
+     */
+    mode: "development",
     skipWaiting: true,
     clientsClaim: true,
     /** Pro / job-site: prefer cached shell when offline; PDF bytes still come from network or IndexedDB in-app */

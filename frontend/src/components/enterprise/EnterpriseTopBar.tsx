@@ -210,12 +210,13 @@ export function EnterpriseTopBar({
 
   return (
     <header className="sticky top-0 z-50 flex shrink-0 flex-col border-b border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_88%,transparent)] pt-[env(safe-area-inset-top,0px)] shadow-[0_1px_0_0_rgba(255,255,255,0.72)_inset,0_8px_36px_-22px_rgba(15,23,42,0.04)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--enterprise-surface)_78%,transparent)]">
-      <div className="flex h-[var(--enterprise-topbar-h)] min-h-[var(--enterprise-topbar-h)] w-full items-center justify-between gap-1.5 px-2 sm:gap-3 sm:px-4 lg:gap-4 lg:px-6">
+      <div className="flex h-[var(--enterprise-topbar-h)] min-h-[var(--enterprise-topbar-h)] w-full items-center justify-between gap-1.5 px-2 sm:gap-2.5 sm:px-3 md:gap-3 md:px-4 lg:gap-4 lg:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px] sm:gap-2 sm:text-[13px] md:text-sm">
           {/* Mobile menu */}
           <EnterpriseIconButton
             type="button"
             onClick={onToggleMobileNav}
+            size="md"
             className="border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 text-[var(--enterprise-text)] lg:hidden"
             aria-label={mobileNavOpen ? t("closeMenu") : t("openMenu")}
             aria-expanded={mobileNavOpen}
@@ -309,11 +310,11 @@ export function EnterpriseTopBar({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2 md:gap-2.5">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5 md:gap-2">
           {activeWs?.subscriptionStatus === "trialing" ? (
             <Link
               href={isSuperAdmin(primary?.role) ? "/organization?tab=billing" : "/organization"}
-              className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 sm:inline-flex"
+              className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 md:inline-flex"
             >
               {activeWs.stripeSubscriptionId
                 ? trialDays === 0
@@ -336,11 +337,11 @@ export function EnterpriseTopBar({
             type="button"
             onClick={onOpenCommandPalette}
             aria-label={t("search")}
-            className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)]/95 bg-[var(--enterprise-surface)]/90 text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:w-auto sm:max-w-[min(100%,280px)] sm:justify-start sm:gap-2 sm:px-3 sm:text-left sm:text-[13px]"
+            className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)]/95 bg-[var(--enterprise-surface)]/90 text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:w-auto sm:max-w-[min(48vw,220px)] sm:justify-start sm:gap-2 sm:px-2.5 sm:text-left sm:text-[13px] lg:max-w-[min(100%,280px)] lg:px-3"
           >
             <Search className="h-3.5 w-3.5 shrink-0 opacity-80" strokeWidth={1.75} />
             <span className="hidden flex-1 sm:inline">{t("searchEllipsis")}</span>
-            <kbd className="ml-auto hidden rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--enterprise-text-muted)] md:inline">
+            <kbd className="ml-auto hidden rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--enterprise-text-muted)] lg:inline">
               {t("searchShortcut")}
             </kbd>
           </button>
@@ -374,9 +375,9 @@ export function EnterpriseTopBar({
               <div
                 role="dialog"
                 aria-label={t("notifications")}
-                className="fixed left-2 right-2 top-[calc(var(--enterprise-topbar-offset)_+_0.25rem)] z-[100] max-h-[min(24rem,70vh)] w-auto overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-lg sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-[calc(100%+6px)] sm:mt-0 sm:max-h-[min(24rem,70vh)] sm:w-[min(calc(100vw-1.5rem),22rem)] md:w-[24rem]"
+                className="fixed left-2 right-2 top-[calc(var(--enterprise-topbar-offset)_+_0.25rem)] z-[100] max-h-[min(24rem,70vh)] w-auto overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-lg sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-[calc(100%+6px)] sm:mt-0 sm:max-h-[min(24rem,70vh)] sm:w-[min(calc(100vw-1.5rem),24rem)] md:w-[26rem]"
               >
-                <div className="flex items-center justify-between gap-2 border-b border-[var(--enterprise-border)] px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2 border-b border-[var(--enterprise-border)] px-3 py-3">
                   <span className="text-sm font-semibold text-[var(--enterprise-text)]">
                     {t("notifications")}
                   </span>
@@ -385,7 +386,7 @@ export function EnterpriseTopBar({
                       type="button"
                       disabled={markAllMut.isPending}
                       onClick={() => markAllMut.mutate()}
-                      className="text-xs font-medium text-[var(--enterprise-primary)] hover:underline disabled:opacity-50"
+                      className="min-h-10 rounded-md px-2 text-xs font-medium text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
                     >
                       {t("markAllRead")}
                     </button>
@@ -409,7 +410,7 @@ export function EnterpriseTopBar({
                           <Link
                             href={n.href}
                             onClick={() => onNotificationNavigate(n)}
-                            className={`flex gap-2.5 px-3 py-2.5 transition hover:bg-[var(--enterprise-hover-surface)] ${
+                            className={`flex min-h-12 gap-2.5 px-3 py-2.5 transition hover:bg-[var(--enterprise-hover-surface)] ${
                               n.readAt ? "" : "bg-[var(--enterprise-primary)]/[0.06]"
                             }`}
                           >
@@ -465,11 +466,11 @@ export function EnterpriseTopBar({
                     </ul>
                   )}
                 </div>
-                <div className="border-t border-[var(--enterprise-border)] px-3 py-2">
+                <div className="border-t border-[var(--enterprise-border)] px-3 py-2.5">
                   <Link
                     href="/account"
                     onClick={() => setNotifOpen(false)}
-                    className="text-xs font-medium text-[var(--enterprise-primary)] hover:underline"
+                    className="inline-flex min-h-10 items-center rounded-md px-2 text-xs font-medium text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)]"
                   >
                     {t("deviceAlertsLink")}
                   </Link>

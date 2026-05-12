@@ -607,7 +607,7 @@ export function EnterpriseSidebar({
 
   const navLinkClass = (active: boolean, disabled?: boolean, iconOnly?: boolean) => {
     const io = iconOnly === undefined ? railCollapsed : iconOnly;
-    return `enterprise-sidebar-nav-link group flex items-center rounded-md py-2 text-[13px] font-medium tracking-[-0.01em] transition-[color,background-color,box-shadow] duration-150 ${
+    return `enterprise-sidebar-nav-link group flex min-h-11 items-center rounded-md py-2 text-[13px] font-medium tracking-[-0.01em] transition-[color,background-color,box-shadow] duration-150 ${
       io ? "justify-center gap-0 px-2" : "gap-2.5 px-3"
     } ${
       active
@@ -632,7 +632,7 @@ export function EnterpriseSidebar({
     <aside
       id="enterprise-sidebar-panel"
       data-sidebar-collapsed={railCollapsed ? "true" : "false"}
-      className={`enterprise-sidebar-panel fixed bottom-0 left-0 top-[var(--enterprise-topbar-offset)] z-40 flex min-h-0 w-[min(280px,88vw)] shrink-0 flex-col overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] lg:static lg:top-auto lg:z-auto lg:h-auto lg:min-h-0 lg:max-h-none lg:translate-x-0 lg:self-stretch lg:border-b-0 lg:shadow-none lg:transition-none ${
+      className={`enterprise-sidebar-panel fixed bottom-0 left-0 top-[var(--enterprise-topbar-offset)] z-40 flex min-h-0 w-[min(300px,88vw)] shrink-0 flex-col overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] sm:w-[min(320px,82vw)] lg:static lg:top-auto lg:z-auto lg:h-auto lg:min-h-0 lg:max-h-none lg:translate-x-0 lg:self-stretch lg:border-b-0 lg:shadow-none lg:transition-none ${
         railCollapsed ? "lg:w-[72px]" : useTwoLevelNav ? "lg:w-[248px]" : "lg:w-[236px]"
       } ${
         mobileOpen ? "translate-x-0" : "-translate-x-full"
@@ -688,7 +688,7 @@ export function EnterpriseSidebar({
         <button
           type="button"
           onClick={onCloseMobile}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#94A3B8] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[#F8FAFC] lg:hidden"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[#94A3B8] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[#F8FAFC] lg:hidden"
           aria-label={t("closeNav")}
         >
           <X className="h-[18px] w-[18px]" strokeWidth={1.75} />
@@ -697,7 +697,7 @@ export function EnterpriseSidebar({
 
       {/* Navigation */}
       <nav
-        className={`flex min-h-0 flex-1 flex-col gap-1 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${
+        className={`flex min-h-0 flex-1 flex-col gap-1 px-2.5 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-3 ${
           useTwoLevelNav ? "overflow-hidden" : "overflow-y-auto"
         }`}
         aria-label={t("mainNav")}

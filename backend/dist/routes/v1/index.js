@@ -32,6 +32,7 @@ function projectRoleFromInviteKind(kind) {
     }
 }
 import { mergeProjectSettingsPatch, parseProjectCurrency, parseProjectSettingsJson, } from "../../lib/projectSettings.js";
+import { newProjectApiKey } from "../../lib/projectApiKeys.js";
 import { fileVersionJson, projectDetailApiJson, projectRowJson, projectTreeJson, workspaceJson, } from "../../lib/json.js";
 import { cloneSettingsJson, mergeTakeoffPricingIntoSettingsJson, } from "../../lib/takeoffPricing.js";
 import { buildUploadObjectKey, folderKeyFromFolderId, newUploadId, s3KeyMatchesFileUpload, upsertFileForUpload, } from "../../lib/fileUpload.js";
@@ -53,6 +54,8 @@ import { registerRfiRoutes } from "./rfiRoutes.js";
 import { registerTakeoffRoutes } from "./takeoffRoutes.js";
 import { registerProposalRoutes } from "./proposalRoutes.js";
 import { registerSheetAiRoutes } from "./sheetAiRoutes.js";
+import { geminiConfigured, geminiMarketingLandingChat } from "../../lib/geminiSheetAi.js";
+import { marketingChatRateLimited } from "../../lib/marketingChatRateLimit.js";
 import { registerCloudRoutes } from "./cloudRoutes.js";
 import { registerPunchRoutes } from "./punchRoutes.js";
 import { registerScheduleRoutes } from "./scheduleRoutes.js";
@@ -181,6 +184,49 @@ export function v1Routes(auth, env, deps) {
                 "Cache-Control": "public, max-age=604800",
             },
         });
+    });
+    const marketingChatBodyLimit = bodyLimit({
+        maxSize: 48 * 1024,
+        onError: (c) => c.json({ error: "Payload too large" }, 413),
+    });
+    const marketingChatMessageSchema = z.object({
+        role: z.enum(["user", "model"]),
+        content: z.string().max(8000),
+    });
+    /** Public: landing-page assistant (Gemini text). Unauthenticated; rate-limited per IP. */
+    r.post("/public/marketing/chat", marketingChatBodyLimit, async (c) => {
+        if (!geminiConfigured(env)) {
+            return c.json({ error: "Assistant is temporarily unavailable." }, 503);
+        }
+        const clientIp = c.req.header("cf-connecting-ip")?.trim() ||
+            c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+            c.req.header("x-real-ip")?.trim() ||
+            "unknown";
+        if (marketingChatRateLimited(clientIp)) {
+            return c.json({ error: "Too many requests. Please try again shortly." }, 429);
+        }
+        const raw = await c.req.json().catch(() => null);
+        const parsed = z
+            .object({
+            locale: z.string().max(16).optional(),
+            messages: z.array(marketingChatMessageSchema).min(1).max(24),
+        })
+            .safeParse(raw);
+        if (!parsed.success) {
+            return c.json({ error: parsed.error.flatten() }, 400);
+        }
+        const last = parsed.data.messages[parsed.data.messages.length - 1];
+        if (!last || last.role !== "user") {
+            return c.json({ error: "Last message must be from the visitor." }, 400);
+        }
+        try {
+            const reply = await geminiMarketingLandingChat(env, parsed.data);
+            return c.json({ reply });
+        }
+        catch (e) {
+            const msg = e instanceof Error ? e.message : "Chat failed";
+            return c.json({ error: msg }, 502);
+        }
     });
     /** Public: validate invite token for join page (no auth). */
     r.get("/invites/:token", async (c) => {
@@ -1809,6 +1855,124 @@ export function v1Routes(auth, env, deps) {
             projectId: updated.id,
             settings: parseProjectSettingsJson(updated.settingsJson),
         });
+    });
+    /** Admin/Super Admin: list project integration API keys (metadata only). */
+    r.get("/projects/:projectId/api-keys", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const res = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in res)
+            return c.json({ error: res.error }, res.status);
+        const { ctx } = res;
+        if (ctx.workspaceMember.isExternal ||
+            (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN &&
+                ctx.workspaceMember.role !== WorkspaceRole.ADMIN)) {
+            return c.json({ error: "Admin or Super Admin only" }, 403);
+        }
+        const keys = await prisma.projectApiKey.findMany({
+            where: { projectId },
+            orderBy: [{ revokedAt: "asc" }, { createdAt: "desc" }],
+            select: {
+                id: true,
+                name: true,
+                keyPrefix: true,
+                createdById: true,
+                createdAt: true,
+                lastUsedAt: true,
+                revokedAt: true,
+            },
+        });
+        return c.json({
+            projectId,
+            items: keys.map((k) => ({
+                id: k.id,
+                name: k.name,
+                keyPrefix: k.keyPrefix,
+                createdById: k.createdById,
+                createdAt: k.createdAt.toISOString(),
+                lastUsedAt: k.lastUsedAt?.toISOString() ?? null,
+                revokedAt: k.revokedAt?.toISOString() ?? null,
+            })),
+        });
+    });
+    /** Admin/Super Admin: create project integration API key (plaintext returned once). */
+    r.post("/projects/:projectId/api-keys", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const res = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in res)
+            return c.json({ error: res.error }, res.status);
+        const { ctx } = res;
+        if (ctx.workspaceMember.isExternal ||
+            (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN &&
+                ctx.workspaceMember.role !== WorkspaceRole.ADMIN)) {
+            return c.json({ error: "Admin or Super Admin only" }, 403);
+        }
+        const body = z
+            .object({
+            name: z.string().trim().min(1).max(120).optional(),
+        })
+            .safeParse(await c.req.json().catch(() => ({})));
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const fresh = newProjectApiKey();
+        const created = await prisma.projectApiKey.create({
+            data: {
+                projectId,
+                createdById: c.get("user").id,
+                name: body.data.name ?? "Integration key",
+                keyPrefix: fresh.keyPrefix,
+                keyHash: fresh.keyHash,
+            },
+            select: {
+                id: true,
+                name: true,
+                keyPrefix: true,
+                createdById: true,
+                createdAt: true,
+                lastUsedAt: true,
+                revokedAt: true,
+            },
+        });
+        return c.json({
+            projectId,
+            apiKey: fresh.plainText,
+            key: {
+                id: created.id,
+                name: created.name,
+                keyPrefix: created.keyPrefix,
+                createdById: created.createdById,
+                createdAt: created.createdAt.toISOString(),
+                lastUsedAt: created.lastUsedAt?.toISOString() ?? null,
+                revokedAt: created.revokedAt?.toISOString() ?? null,
+            },
+        });
+    });
+    /** Admin/Super Admin: revoke project API key. */
+    r.post("/projects/:projectId/api-keys/:keyId/revoke", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const keyId = c.req.param("keyId");
+        const res = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in res)
+            return c.json({ error: res.error }, res.status);
+        const { ctx } = res;
+        if (ctx.workspaceMember.isExternal ||
+            (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN &&
+                ctx.workspaceMember.role !== WorkspaceRole.ADMIN)) {
+            return c.json({ error: "Admin or Super Admin only" }, 403);
+        }
+        const existing = await prisma.projectApiKey.findFirst({
+            where: { id: keyId, projectId },
+            select: { id: true, revokedAt: true },
+        });
+        if (!existing)
+            return c.json({ error: "API key not found" }, 404);
+        if (existing.revokedAt) {
+            return c.json({ ok: true, alreadyRevoked: true });
+        }
+        await prisma.projectApiKey.update({
+            where: { id: keyId },
+            data: { revokedAt: new Date() },
+        });
+        return c.json({ ok: true });
     });
     /** Folder tree presets from DB (`FolderStructureTemplate`); list updates when rows change. */
     r.get("/workspaces/:workspaceId/folder-structure-templates", needUser, async (c) => {

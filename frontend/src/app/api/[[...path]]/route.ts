@@ -14,8 +14,16 @@ const HOP_BY_HOP = new Set([
   "upgrade",
 ]);
 
+const DEFAULT_PROXY_TIMEOUT_MS = 15_000;
+
 function backendBase(): string {
   return (process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8787").replace(/\/$/, "");
+}
+
+function proxyTimeoutMs(): number {
+  const raw = Number(process.env.API_PROXY_TIMEOUT_MS);
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_PROXY_TIMEOUT_MS;
+  return Math.max(1_000, Math.min(120_000, Math.trunc(raw)));
 }
 
 function publicAppUrl(): string | undefined {
@@ -106,7 +114,31 @@ async function proxy(req: NextRequest, params: Params): Promise<Response> {
     if (buf.byteLength) init.body = buf;
   }
 
-  const res = await fetch(target, init);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort("proxy-timeout"), proxyTimeoutMs());
+  const cancelOnClientAbort = () => controller.abort("client-abort");
+  req.signal.addEventListener("abort", cancelOnClientAbort, { once: true });
+
+  let res: Response;
+  try {
+    res = await fetch(target, { ...init, signal: controller.signal });
+  } catch (err) {
+    const aborted = err instanceof Error && err.name === "AbortError";
+    const reason = String(controller.signal.reason ?? "");
+    const status = aborted && reason === "proxy-timeout" ? 504 : 502;
+    return NextResponse.json(
+      {
+        error:
+          status === 504
+            ? "Upstream API timed out while handling request"
+            : "Upstream API unavailable",
+      },
+      { status },
+    );
+  } finally {
+    clearTimeout(timeout);
+    req.signal.removeEventListener("abort", cancelOnClientAbort);
+  }
 
   const out = new NextResponse(res.body, {
     status: res.status,
