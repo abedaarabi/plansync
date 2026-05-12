@@ -117,16 +117,6 @@ export type ProjectSessionResponse = {
   uiMode: "internal" | "client" | "contractor" | "sub";
 };
 
-export type ProjectApiKeyRow = {
-  id: string;
-  name: string;
-  keyPrefix: string;
-  createdById: string;
-  createdAt: string;
-  lastUsedAt: string | null;
-  revokedAt: string | null;
-};
-
 export async function fetchProjectSession(projectId: string): Promise<ProjectSessionResponse> {
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/session`), {
     credentials: "include",
@@ -163,68 +153,6 @@ export async function patchProjectSettings(
   }
   if (!j.settings || !j.projectId) throw new Error("Invalid response.");
   return { projectId: j.projectId, settings: j.settings };
-}
-
-export async function listProjectApiKeys(
-  projectId: string,
-): Promise<{ projectId: string; items: ProjectApiKeyRow[] }> {
-  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/api-keys`), {
-    credentials: "include",
-  });
-  const j = (await res.json().catch(() => ({}))) as {
-    error?: string;
-    projectId?: string;
-    items?: ProjectApiKeyRow[];
-  };
-  if (!res.ok) {
-    throw new Error(
-      typeof j.error === "string" ? j.error : `Could not load API keys (HTTP ${res.status}).`,
-    );
-  }
-  return {
-    projectId: j.projectId ?? projectId,
-    items: Array.isArray(j.items) ? j.items : [],
-  };
-}
-
-export async function createProjectApiKey(
-  projectId: string,
-  body: { name?: string },
-): Promise<{ projectId: string; apiKey: string; key: ProjectApiKeyRow }> {
-  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/api-keys`), {
-    method: "POST",
-    credentials: "include",
-    headers: jsonHeaders,
-    body: JSON.stringify(body),
-  });
-  const j = (await res.json().catch(() => ({}))) as {
-    error?: string;
-    projectId?: string;
-    apiKey?: string;
-    key?: ProjectApiKeyRow;
-  };
-  if (!res.ok || typeof j.apiKey !== "string" || !j.key) {
-    throw new Error(
-      typeof j.error === "string" ? j.error : `Could not create API key (HTTP ${res.status}).`,
-    );
-  }
-  return { projectId: j.projectId ?? projectId, apiKey: j.apiKey, key: j.key };
-}
-
-export async function revokeProjectApiKey(projectId: string, keyId: string): Promise<void> {
-  const res = await fetch(
-    apiUrl(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/api-keys/${encodeURIComponent(keyId)}/revoke`,
-    ),
-    {
-      method: "POST",
-      credentials: "include",
-    },
-  );
-  if (!res.ok) {
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(typeof j.error === "string" ? j.error : "Could not revoke API key.");
-  }
 }
 
 export type ScheduleTaskStatus = "not_started" | "in_progress" | "delayed" | "completed";
