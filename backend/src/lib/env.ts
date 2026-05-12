@@ -121,11 +121,12 @@ function originAliases(origin: string): string[] {
       out.add(`${u.protocol}//www.${host}${u.port ? `:${u.port}` : ""}`);
     }
 
-    // app.<domain> <-> <domain> and app.<domain> <-> www.<domain>
-    if (host.startsWith("app.")) {
-      const apex = host.slice(4);
+    // app.<domain> / api.<domain> -> allow apex + www + app variants.
+    if (host.startsWith("app.") || host.startsWith("api.")) {
+      const apex = host.slice(host.indexOf(".") + 1);
       out.add(`${u.protocol}//${apex}${u.port ? `:${u.port}` : ""}`);
       out.add(`${u.protocol}//www.${apex}${u.port ? `:${u.port}` : ""}`);
+      out.add(`${u.protocol}//app.${apex}${u.port ? `:${u.port}` : ""}`);
     }
 
     return [...out];
