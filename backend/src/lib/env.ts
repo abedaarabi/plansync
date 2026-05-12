@@ -108,13 +108,44 @@ const schema = z.object({
 
 export type Env = z.infer<typeof schema>;
 
+function originAliases(origin: string): string[] {
+  try {
+    const u = new URL(origin);
+    const out = new Set<string>([u.origin]);
+    const host = u.hostname.toLowerCase();
+
+    // www <-> apex
+    if (host.startsWith("www.")) {
+      out.add(`${u.protocol}//${host.slice(4)}${u.port ? `:${u.port}` : ""}`);
+    } else {
+      out.add(`${u.protocol}//www.${host}${u.port ? `:${u.port}` : ""}`);
+    }
+
+    // app.<domain> <-> <domain> and app.<domain> <-> www.<domain>
+    if (host.startsWith("app.")) {
+      const apex = host.slice(4);
+      out.add(`${u.protocol}//${apex}${u.port ? `:${u.port}` : ""}`);
+      out.add(`${u.protocol}//www.${apex}${u.port ? `:${u.port}` : ""}`);
+    }
+
+    return [...out];
+  } catch {
+    return [origin];
+  }
+}
+
 export function buildCorsAllowList(env: Env): string[] {
-  const list = [env.CORS_ORIGIN, env.PUBLIC_APP_URL];
-  if (env.PUBLIC_API_URL?.trim()) list.push(env.PUBLIC_API_URL.trim());
+  const base = [env.CORS_ORIGIN, env.PUBLIC_APP_URL];
+  if (env.PUBLIC_API_URL?.trim()) base.push(env.PUBLIC_API_URL.trim());
+  const list: string[] = [];
+  for (const item of base) {
+    if (!item) continue;
+    list.push(...originAliases(item));
+  }
   if (env.CORS_EXTRA_ORIGINS?.trim()) {
     for (const o of env.CORS_EXTRA_ORIGINS.split(",")) {
       const t = o.trim();
-      if (t) list.push(t);
+      if (t) list.push(...originAliases(t));
     }
   }
   return [...new Set(list.filter(Boolean))];
