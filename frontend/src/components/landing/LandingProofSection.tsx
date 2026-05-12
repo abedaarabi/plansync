@@ -98,7 +98,8 @@ export function LandingProofSection() {
               </div>
             </div>
             <p className="mt-3 text-sm text-slate-600">
-              "PlanSync cut RFI follow-up noise for our site and PM team in the first two weeks."
+              &ldquo;PlanSync cut RFI follow-up noise for our site and PM team in the first two
+              weeks.&rdquo;
             </p>
           </div>
         </AnimateIn>
