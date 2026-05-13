@@ -413,7 +413,6 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
     if (
       sidebarTab === "takeoff" ||
       sidebarTab === "issues" ||
-      sidebarTab === "calibrate" ||
       sidebarTab === "sheetAi" ||
       sidebarTab === "collab"
     )
@@ -532,23 +531,27 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
               </button>
             </div>
             {pdfUrl ? (
-              <div className={`mt-1 grid gap-1 ${showCollabTab ? "grid-cols-5" : "grid-cols-4"}`}>
+              <div
+                className={`mt-1 grid gap-1 ${
+                  showProTabs ? (showCollabTab ? "grid-cols-6" : "grid-cols-5") : "grid-cols-1"
+                }`}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sidebarTab === "calibrate"}
+                  onClick={() => {
+                    setSidebarTab("calibrate");
+                    setTool("calibrate");
+                  }}
+                  title="Set drawing scale from a known length"
+                  className={sidebarPanelTabClass(sidebarTab === "calibrate")}
+                >
+                  <Scaling className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Cal
+                </button>
                 {showProTabs ? (
                   <>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={sidebarTab === "calibrate"}
-                      onClick={() => {
-                        setSidebarTab("calibrate");
-                        setTool("calibrate");
-                      }}
-                      title="Set drawing scale from a known length"
-                      className={sidebarPanelTabClass(sidebarTab === "calibrate")}
-                    >
-                      <Scaling className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      Cal
-                    </button>
                     <button
                       type="button"
                       role="tab"
@@ -627,7 +630,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
         {pdfUrl && sidebarTab === "outline" && <SidebarOutlineTab pdfDoc={pdfDoc} />}
         {pdfUrl && sidebarTab === "issues" && showProTabs && <SidebarIssuesTab />}
         {pdfUrl && sidebarTab === "takeoff" && showProTabs && <SidebarTakeoffTab />}
-        {pdfUrl && sidebarTab === "calibrate" && showProTabs && (
+        {pdfUrl && sidebarTab === "calibrate" && (
           <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:thin]">
             <CalibrationGuide />
             <CalibrateTargetRow />

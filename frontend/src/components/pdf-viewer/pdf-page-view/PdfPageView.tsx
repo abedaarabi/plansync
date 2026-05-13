@@ -83,7 +83,11 @@ import {
   forwardRotateHandlePx,
   inverseRotateNorm,
 } from "@/lib/annotationRotation";
-import { computePdfPageRenderScale, getMaxCanvasDpr } from "@/lib/pdfCanvasRenderScale";
+import {
+  computePdfPageRenderScale,
+  getMaxCanvasDpr,
+  getPdfRenderDpr,
+} from "@/lib/pdfCanvasRenderScale";
 import { fetchProjectTeam, formatIssueLockHint, patchIssue } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { normRectFromAnnotationPoints } from "@/lib/issueFocus";
@@ -249,6 +253,7 @@ export function PdfPageView({
   const [calibrateKey, setCalibrateKey] = useState(0);
   const [calibratePreview, setCalibratePreview] = useState<{ x: number; y: number } | null>(null);
   const [textCommentOpen, setTextCommentOpen] = useState(false);
+  const [zoomSettling, setZoomSettling] = useState(false);
   /** When set, {@link TextCommentDialog} updates this text annotation instead of adding one. */
   const [textCommentEditId, setTextCommentEditId] = useState<string | null>(null);
   const [textAnchor, setTextAnchor] = useState<{ x: number; y: number } | null>(null);
@@ -964,6 +969,16 @@ export function PdfPageView({
     if (compareReferenceOnly) setMarkupHoverId(null);
   }, [compareReferenceOnly]);
 
+  /**
+   * Two-pass quality:
+   * render faster while zoom changes, then sharpen when zoom settles.
+   */
+  useEffect(() => {
+    setZoomSettling(true);
+    const t = window.setTimeout(() => setZoomSettling(false), 120);
+    return () => window.clearTimeout(t);
+  }, [scale, pageNumber]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -976,11 +991,16 @@ export function PdfPageView({
       setPageSize({ w: base.width, h: base.height });
       setPageSizePt(pageIdx0, base.width, base.height);
 
-      const dpr = Math.min(
-        typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
-        getMaxCanvasDpr(),
+      const baseDpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+      const qualityMode = zoomSettling ? "interactive" : "final";
+      const dpr = getPdfRenderDpr(baseDpr, qualityMode);
+      const renderScale = computePdfPageRenderScale(
+        base.width,
+        base.height,
+        scale,
+        dpr,
+        qualityMode,
       );
-      const renderScale = computePdfPageRenderScale(base.width, base.height, scale, dpr);
       const viewport = page.getViewport({ scale: renderScale });
       const canvas = canvasRef.current;
       if (!canvas || cancelled) return;
@@ -1022,7 +1042,7 @@ export function PdfPageView({
       screenRenderTaskRef.current?.cancel();
       screenRenderTaskRef.current = null;
     };
-  }, [pdfDoc, pageNumber, scale, pageIdx0, setPageSizePt, onScreenRenderComplete]);
+  }, [pdfDoc, pageNumber, scale, pageIdx0, setPageSizePt, onScreenRenderComplete, zoomSettling]);
 
   const renderPrintPageToCanvas = useCallback(async () => {
     if (compareReferenceOnly) return;

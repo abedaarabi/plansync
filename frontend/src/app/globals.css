@@ -247,10 +247,14 @@ button:active:not(:disabled),
   background-size: 20px 20px;
 }
 
-/* Full-screen loading overlay — dark sheet gutter, not light canvas */
+/* Full-screen loading overlay — keep contrast without black flash. */
 .viewer-loading-canvas {
-  background-color: var(--viewer-surface);
-  background-image: radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.1) 1px, transparent 0);
+  background-color: color-mix(in srgb, var(--viewer-shell) 84%, var(--viewer-surface) 16%);
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(148, 163, 184, 0.16) 1px,
+    transparent 0
+  );
   background-size: 20px 20px;
 }
 

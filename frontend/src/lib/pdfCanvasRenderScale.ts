@@ -66,6 +66,25 @@ export function getMaxCanvasDpr(): number {
   return 4.5;
 }
 
+export type PdfRenderQualityMode = "interactive" | "final";
+
+/**
+ * DPR cap used by the on-screen renderer.
+ * - interactive: favor frame-time while user is actively zooming
+ * - final: maximize fidelity after zoom settles
+ */
+export function getPdfRenderDpr(
+  devicePixelRatio: number,
+  qualityMode: PdfRenderQualityMode,
+): number {
+  const maxDpr = getMaxCanvasDpr();
+  if (qualityMode === "interactive") {
+    const interactiveCap = Math.max(1.5, maxDpr * 0.72);
+    return Math.min(devicePixelRatio, interactiveCap);
+  }
+  return Math.min(devicePixelRatio, maxDpr);
+}
+
 /**
  * Max CSS width/height (px) for the on-screen page box on touch devices. Canvas rasterization is
  * capped separately; without this, the layout still uses `pagePt × scale` and mobile Safari/Chrome
@@ -106,6 +125,7 @@ export function computePdfPageRenderScale(
   baseHeight: number,
   scale: number,
   devicePixelRatio: number,
+  qualityMode: PdfRenderQualityMode = "final",
 ): number {
   if (baseWidth < 1e-6 || baseHeight < 1e-6) return Math.max(scale, 1e-6);
   /**
@@ -114,11 +134,17 @@ export function computePdfPageRenderScale(
    * - stronger boost when users punch in very far
    */
   const detailBoost =
-    scale <= 1
-      ? 1
-      : scale <= 2.5
-        ? Math.min(1.35, 1 + Math.log2(scale) * 0.14)
-        : Math.min(1.8, 1.25 + Math.log2(scale / 2.5) * 0.24);
+    qualityMode === "interactive"
+      ? scale <= 1
+        ? 1
+        : scale <= 2.5
+          ? Math.min(1.16, 1 + Math.log2(scale) * 0.08)
+          : Math.min(1.42, 1.1 + Math.log2(scale / 2.5) * 0.14)
+      : scale <= 1
+        ? 1
+        : scale <= 2.5
+          ? Math.min(1.4, 1 + Math.log2(scale) * 0.16)
+          : Math.min(2.15, 1.28 + Math.log2(scale / 2.5) * 0.3);
   const ideal = scale * devicePixelRatio * detailBoost;
   const maxEdge = getPdfCanvasMaxBitmapEdge();
   const maxByEdge = Math.min(maxEdge / baseWidth, maxEdge / baseHeight);
