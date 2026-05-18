@@ -10,10 +10,7 @@ import {
   CalendarRange,
   ChartGantt,
   ChevronDown,
-  History,
   Inbox,
-  Pin,
-  PinOff,
   ClipboardCheck,
   ClipboardList,
   FileStack,
@@ -53,8 +50,7 @@ type EnterpriseSidebarProps = {
   desktopCollapsed: boolean;
 };
 
-const SIDEBAR_PINNED_KEY = "plansync-enterprise-sidebar-pinned-v1";
-const SIDEBAR_RECENT_KEY = "plansync-enterprise-sidebar-recent-v1";
+const LAST_PROJECT_PATH_KEY = "plansync-enterprise-last-project-path-v1";
 
 type NavItem = {
   href: string;
@@ -77,13 +73,6 @@ type NavSection = {
   items: NavItem[];
 };
 
-type QuickNavItem = {
-  href: string;
-  label: string;
-  icon: typeof House;
-  sectionId: string;
-};
-
 function extractWorkspaceIdFromPathname(pathname: string): string | null {
   const m = pathname.match(/^\/workspaces\/([^/]+)/);
   if (!m) return null;
@@ -102,35 +91,6 @@ function resolveActiveMembership(
     if (hit) return hit;
   }
   return primary;
-}
-
-/** Section whose navigation item best matches the current path (longest href prefix). */
-function pickSectionIdForPathname(sections: NavSection[], pathname: string): string {
-  let best: { id: string; len: number } | null = null;
-  for (const section of sections) {
-    for (const item of section.items) {
-      if ("disabled" in item && item.disabled) continue;
-      if (item.href === "#") continue;
-      const href = item.href;
-      if (pathname === href || pathname.startsWith(href + "/")) {
-        if (!best || href.length > best.len) {
-          best = { id: section.id, len: href.length };
-        }
-      }
-    }
-  }
-  return best?.id ?? sections[0]?.id ?? "";
-}
-
-function pickNavItemForPathname(items: QuickNavItem[], pathname: string): QuickNavItem | null {
-  let best: { item: QuickNavItem; len: number } | null = null;
-  for (const item of items) {
-    const href = item.href;
-    if (pathname === href || pathname.startsWith(href + "/")) {
-      if (!best || href.length > best.len) best = { item, len: href.length };
-    }
-  }
-  return best?.item ?? null;
 }
 
 function extractProjectId(pathname: string): string | null {
@@ -170,6 +130,26 @@ export function EnterpriseSidebar({
   const omBilling = isWorkspaceOmBillingClient(ws);
   const projectId = extractProjectId(pathname);
   const isProjectContext = Boolean(projectId);
+  const [lastProjectPath, setLastProjectPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(LAST_PROJECT_PATH_KEY);
+      if (cached) setLastProjectPath(cached);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isProjectContext) return;
+    setLastProjectPath(pathname);
+    try {
+      localStorage.setItem(LAST_PROJECT_PATH_KEY, pathname);
+    } catch {
+      /* ignore */
+    }
+  }, [isProjectContext, pathname]);
 
   const { data: projectSession } = useQuery({
     queryKey: qk.projectSession(projectId ?? ""),
@@ -491,99 +471,19 @@ export function EnterpriseSidebar({
 
   const sidebarNavMultiSection = SIDEBAR_NAV_SECTIONS.length > 1;
   const useTwoLevelNav = sidebarNavMultiSection && !railCollapsed;
-
-  const derivedSidebarSectionId = useMemo(
-    () => (sidebarNavMultiSection ? pickSectionIdForPathname(SIDEBAR_NAV_SECTIONS, pathname) : ""),
-    [SIDEBAR_NAV_SECTIONS, pathname, sidebarNavMultiSection],
-  );
-
-  const [selectedSidebarSectionId, setSelectedSidebarSectionId] = useState("");
-  const [pinnedHrefs, setPinnedHrefs] = useState<string[]>([]);
-  const [recentHrefs, setRecentHrefs] = useState<string[]>([]);
-  const [quickNavReady, setQuickNavReady] = useState(false);
+  const [collapsedSectionIds, setCollapsedSectionIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (derivedSidebarSectionId) setSelectedSidebarSectionId(derivedSidebarSectionId);
-  }, [derivedSidebarSectionId]);
-
-  const sidebarFlatNavItems = useMemo((): QuickNavItem[] => {
-    const rows: QuickNavItem[] = [];
-    for (const section of SIDEBAR_NAV_SECTIONS) {
-      for (const item of section.items) {
-        if ("disabled" in item && item.disabled) continue;
-        if (item.href === "#") continue;
-        rows.push({ href: item.href, label: item.label, icon: item.icon, sectionId: section.id });
+    setCollapsedSectionIds((prev) => {
+      const filtered = prev.filter((id) =>
+        SIDEBAR_NAV_SECTIONS.some((section) => section.id === id),
+      );
+      if (filtered.length === prev.length && filtered.every((id, idx) => id === prev[idx])) {
+        return prev;
       }
-    }
-    return rows;
-  }, [SIDEBAR_NAV_SECTIONS]);
-
-  const sidebarFlatNavMap = useMemo(
-    () => new Map(sidebarFlatNavItems.map((item) => [item.href, item])),
-    [sidebarFlatNavItems],
-  );
-
-  const currentQuickNavItem = useMemo(
-    () => pickNavItemForPathname(sidebarFlatNavItems, pathname),
-    [sidebarFlatNavItems, pathname],
-  );
-  const currentQuickNavHref = currentQuickNavItem?.href ?? null;
-
-  useEffect(() => {
-    try {
-      const rawPinned = localStorage.getItem(SIDEBAR_PINNED_KEY);
-      const rawRecent = localStorage.getItem(SIDEBAR_RECENT_KEY);
-      const parsedPinned = rawPinned ? (JSON.parse(rawPinned) as string[]) : [];
-      const parsedRecent = rawRecent ? (JSON.parse(rawRecent) as string[]) : [];
-      setPinnedHrefs(Array.isArray(parsedPinned) ? parsedPinned : []);
-      setRecentHrefs(Array.isArray(parsedRecent) ? parsedRecent : []);
-    } catch {
-      setPinnedHrefs([]);
-      setRecentHrefs([]);
-    }
-    setQuickNavReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!quickNavReady) return;
-    try {
-      localStorage.setItem(SIDEBAR_PINNED_KEY, JSON.stringify(pinnedHrefs));
-      localStorage.setItem(SIDEBAR_RECENT_KEY, JSON.stringify(recentHrefs));
-    } catch {
-      /* ignore */
-    }
-  }, [pinnedHrefs, quickNavReady, recentHrefs]);
-
-  useEffect(() => {
-    if (!quickNavReady || !currentQuickNavHref) return;
-    setRecentHrefs((prev) => {
-      if (prev[0] === currentQuickNavHref) return prev;
-      return [currentQuickNavHref, ...prev.filter((h) => h !== currentQuickNavHref)].slice(0, 6);
+      return filtered;
     });
-  }, [currentQuickNavHref, quickNavReady]);
-
-  const pinnedItems = useMemo(
-    () => pinnedHrefs.map((href) => sidebarFlatNavMap.get(href)).filter(Boolean) as QuickNavItem[],
-    [pinnedHrefs, sidebarFlatNavMap],
-  );
-
-  const recentItems = useMemo(
-    () =>
-      recentHrefs
-        .filter((href) => !pinnedHrefs.includes(href))
-        .map((href) => sidebarFlatNavMap.get(href))
-        .filter(Boolean)
-        .slice(0, 4) as QuickNavItem[],
-    [pinnedHrefs, recentHrefs, sidebarFlatNavMap],
-  );
-
-  const canPinCurrent = Boolean(
-    currentQuickNavItem && !pinnedHrefs.includes(currentQuickNavItem.href),
-  );
-
-  const pinHref = (href: string) =>
-    setPinnedHrefs((prev) => (prev.includes(href) ? prev : [href, ...prev].slice(0, 6)));
-  const unpinHref = (href: string) => setPinnedHrefs((prev) => prev.filter((h) => h !== href));
+  }, [SIDEBAR_NAV_SECTIONS]);
 
   function isNavActive(href: string, exact?: boolean): boolean {
     if (exact) return pathname === href;
@@ -627,6 +527,17 @@ export function EnterpriseSidebar({
     section.id === "main"
       ? isGlobalActive(item.href)
       : isNavActive(item.href, "exact" in item && Boolean(item.exact));
+
+  useEffect(() => {
+    const activeSection = SIDEBAR_NAV_SECTIONS.find((section) =>
+      section.items.some((item) => linkActiveInSection(section, item)),
+    );
+    if (!activeSection) return;
+    setCollapsedSectionIds((prev) => {
+      if (!prev.includes(activeSection.id)) return prev;
+      return prev.filter((id) => id !== activeSection.id);
+    });
+  }, [pathname, SIDEBAR_NAV_SECTIONS]);
 
   return (
     <aside
@@ -712,196 +623,61 @@ export function EnterpriseSidebar({
             <span>{t("projects")}</span>
           </Link>
         ) : null}
+        {!isProjectContext && !railCollapsed && lastProjectPath ? (
+          <Link
+            href={lastProjectPath}
+            onClick={afterNav}
+            className="mb-1 flex shrink-0 items-center rounded-md bg-white/8 px-3 py-1.5 text-[11px] font-semibold text-slate-100 transition hover:bg-white/14 hover:text-white"
+          >
+            <span>{t("projectWorkspace")}</span>
+          </Link>
+        ) : null}
 
         {useTwoLevelNav ? (
           <div className="enterprise-scrollbar enterprise-sidebar-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5">
-            {(pinnedItems.length > 0 || recentItems.length > 0 || canPinCurrent) && (
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2 shadow-[0_6px_20px_rgba(2,6,23,0.18)]">
-                <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                    {t("quickAccess")}
-                  </span>
-                  {canPinCurrent && currentQuickNavItem ? (
-                    <button
-                      type="button"
-                      onClick={() => pinHref(currentQuickNavItem.href)}
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
-                      title={t("pinTooltip", { label: currentQuickNavItem.label })}
-                    >
-                      <Pin className="h-3 w-3" strokeWidth={1.75} />
-                      {t("pinCurrent")}
-                    </button>
-                  ) : null}
-                </div>
-                {pinnedItems.length > 0 ? (
-                  <div className="space-y-1">
-                    {pinnedItems.map((item) => {
-                      const Icon = item.icon;
-                      const active = linkActiveInSection(
-                        SIDEBAR_NAV_SECTIONS.find((s) => s.id === item.sectionId) ??
-                          SIDEBAR_NAV_SECTIONS[0],
-                        { href: item.href, label: item.label, icon: item.icon },
-                      );
-                      return (
-                        <div key={`pin-${item.href}`} className="flex items-center gap-1">
-                          <Link
-                            href={item.href}
-                            onClick={afterNav}
-                            className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-[12px] font-medium transition ${
-                              active
-                                ? "bg-white/[0.1] text-white"
-                                : "text-slate-300 hover:bg-white/[0.05] hover:text-white"
-                            }`}
-                          >
-                            <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-                            <span className="truncate">{item.label}</span>
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => unpinHref(item.href)}
-                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-white/[0.06] hover:text-slate-100"
-                            title={t("unpinTooltip", { label: item.label })}
-                            aria-label={t("unpinTooltip", { label: item.label })}
-                          >
-                            <PinOff className="h-3.5 w-3.5" strokeWidth={1.75} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-                {recentItems.length > 0 ? (
+            <div className="enterprise-scrollbar enterprise-sidebar-scrollbar min-h-0 flex-1 space-y-1.5 overflow-y-auto rounded-md bg-slate-800/35 p-1.5">
+              {SIDEBAR_NAV_SECTIONS.map((section, sectionIndex) => {
+                const sectionLabel =
+                  section.title?.trim() || section.description?.trim() || section.railLabel;
+                const isFooterStart = sectionIndex === SIDEBAR_NAV_PRIMARY.length;
+                const collapsed = collapsedSectionIds.includes(section.id);
+                const sectionHasActiveRoute = section.items.some((item) =>
+                  linkActiveInSection(section, item),
+                );
+                return (
                   <div
-                    className={pinnedItems.length > 0 ? "mt-2 border-t border-white/10 pt-2" : ""}
+                    key={`section-${section.id}`}
+                    className={isFooterStart ? "mt-2 border-t border-white/12 pt-2" : ""}
                   >
-                    <div className="mb-1 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">
-                      <History className="h-3 w-3" strokeWidth={1.75} />
-                      {t("recent")}
-                    </div>
-                    <div className="space-y-1">
-                      {recentItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                          <Link
-                            key={`recent-${item.href}`}
-                            href={item.href}
-                            onClick={afterNav}
-                            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] font-medium text-slate-300 transition hover:bg-white/[0.05] hover:text-white"
-                          >
-                            <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-                            <span className="truncate">{item.label}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            )}
-            {SIDEBAR_NAV_SECTIONS.map((section, sectionIndex) => {
-              const selected = selectedSidebarSectionId === section.id;
-              const sectionIsSingle = section.items.length === 1;
-              const sectionLabel =
-                section.title?.trim() || section.description?.trim() || section.railLabel;
-              const sectionHint = section.railLabel;
-              const sectionDescription = section.description?.trim() || null;
-              const Icon = section.railIcon;
-              const isFooterStart = sectionIndex === SIDEBAR_NAV_PRIMARY.length;
-              const singleItem = sectionIsSingle ? section.items[0] : null;
-              const singleActive =
-                sectionIsSingle && singleItem ? linkActiveInSection(section, singleItem) : false;
-              const cardActive = sectionIsSingle ? singleActive : selected;
-              return (
-                <div
-                  key={section.id}
-                  className={`rounded-xl border p-1 shadow-[0_10px_24px_rgba(2,6,23,0.18)] transition-colors ${
-                    cardActive
-                      ? "border-[color-mix(in_srgb,var(--enterprise-primary)_42%,rgba(255,255,255,0.18))] bg-[linear-gradient(180deg,rgba(37,99,235,0.18),rgba(15,23,42,0.45))]"
-                      : "border-white/10 bg-white/[0.02] hover:border-white/18 hover:bg-white/[0.04]"
-                  } ${isFooterStart ? "mt-2" : ""}`}
-                >
-                  {sectionIsSingle && singleItem ? (
-                    <Link
-                      href={"disabled" in singleItem && singleItem.disabled ? "#" : singleItem.href}
-                      onClick={(e) => {
-                        if ("disabled" in singleItem && singleItem.disabled) e.preventDefault();
-                        else afterNav();
-                      }}
-                      title={singleItem.label}
-                      className={`group flex items-center gap-2 rounded-lg px-2.5 py-2.5 transition-colors ${
-                        singleActive
-                          ? "bg-black/15 text-white"
-                          : "text-slate-300/90 hover:bg-white/[0.04] hover:text-slate-100"
-                      }`}
-                    >
-                      <span
-                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${
-                          singleActive
-                            ? "border-white/30 bg-white/12"
-                            : "border-white/15 bg-black/20"
-                        }`}
-                      >
-                        <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[12px] font-semibold tracking-[0.01em]">
-                        {singleItem.label}
-                      </span>
-                    </Link>
-                  ) : (
                     <button
                       type="button"
-                      aria-expanded={selected}
+                      onClick={() =>
+                        setCollapsedSectionIds((prev) =>
+                          prev.includes(section.id)
+                            ? prev.filter((id) => id !== section.id)
+                            : [...prev, section.id],
+                        )
+                      }
+                      aria-expanded={!collapsed}
                       aria-controls={`enterprise-sidebar-group-${section.id}`}
-                      onClick={() => setSelectedSidebarSectionId(section.id)}
-                      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2.5 text-left transition-colors ${
-                        selected
-                          ? "bg-black/15 text-white"
-                          : "text-slate-300/90 hover:bg-white/[0.04] hover:text-slate-100"
+                      className={`mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors ${
+                        sectionHasActiveRoute ? "bg-white/12" : "hover:bg-white/7"
                       }`}
                       title={sectionLabel}
                     >
-                      <span
-                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${
-                          selected ? "border-white/30 bg-white/12" : "border-white/15 bg-black/20"
-                        }`}
-                      >
-                        <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="mb-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400/90">
-                          {sectionHint}
-                        </span>
-                        <span className="block truncate text-[12px] font-semibold tracking-[0.01em]">
-                          {sectionLabel}
-                        </span>
-                        {selected && sectionDescription ? (
-                          <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-300/80">
-                            {sectionDescription}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span
-                        className={`mr-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-                          selected
-                            ? "border-white/30 bg-white/15 text-white"
-                            : "border-white/15 bg-black/25 text-slate-300/90"
-                        }`}
-                        aria-label={t("sectionLinksCount", { count: section.items.length })}
-                      >
-                        {section.items.length}
+                      <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-200">
+                        {sectionLabel}
                       </span>
                       <ChevronDown
-                        className={`h-3.5 w-3.5 shrink-0 transition-transform ${
-                          selected ? "rotate-180 text-slate-100" : "text-slate-500"
+                        className={`h-3.5 w-3.5 shrink-0 text-slate-300 transition-transform ${
+                          collapsed ? "" : "rotate-180"
                         }`}
                         strokeWidth={2}
                       />
                     </button>
-                  )}
-                  {selected && !sectionIsSingle ? (
                     <div
                       id={`enterprise-sidebar-group-${section.id}`}
-                      className="mt-1 space-y-1 border-l border-white/10 pl-2"
+                      className={collapsed ? "hidden" : "space-y-0.5"}
                     >
                       {section.items.map((item) => {
                         const active = linkActiveInSection(section, item);
@@ -924,17 +700,17 @@ export function EnterpriseSidebar({
                                   })
                                 : item.label
                             }
-                            className={`group relative flex items-center gap-2.5 rounded-lg py-2 pl-2.5 pr-2 text-[13px] font-medium tracking-[-0.01em] transition-[color,background-color,border-color,transform] ${
+                            className={`group flex items-center gap-2 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
                               active
-                                ? "border border-[color-mix(in_srgb,var(--enterprise-primary)_35%,rgba(255,255,255,0.22))] bg-[linear-gradient(90deg,rgba(37,99,235,0.22),rgba(37,99,235,0.06))] text-white shadow-[inset_2px_0_0_0_var(--enterprise-primary)]"
+                                ? "bg-[var(--enterprise-primary)]/90 text-white"
                                 : disabled
-                                  ? "cursor-not-allowed border border-transparent text-[var(--enterprise-sidebar-muted)]/45 opacity-55"
-                                  : "border border-transparent text-[var(--enterprise-sidebar-muted)] hover:translate-x-[1px] hover:bg-white/[0.04] hover:text-[var(--enterprise-sidebar-active)]"
+                                  ? "cursor-not-allowed text-[var(--enterprise-sidebar-muted)]/45 opacity-55"
+                                  : "text-slate-100 hover:bg-white/10 hover:text-white"
                             }`}
                           >
                             <ItemIcon
-                              className={`h-[17px] w-[17px] shrink-0 ${
-                                active ? "text-white" : "text-slate-400 group-hover:text-slate-200"
+                              className={`h-3.5 w-3.5 shrink-0 ${
+                                active ? "text-white" : "text-slate-400 group-hover:text-white"
                               }`}
                               strokeWidth={1.75}
                             />
@@ -943,10 +719,10 @@ export function EnterpriseSidebar({
                         );
                       })}
                     </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-0 overflow-y-auto">
