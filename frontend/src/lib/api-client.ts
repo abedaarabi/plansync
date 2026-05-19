@@ -120,11 +120,24 @@ export type ProjectSessionResponse = {
 export type ProjectApiKeyRow = {
   id: string;
   name: string;
+  serviceLabel: string | null;
+  scopes: string[];
   keyPrefix: string;
   createdById: string;
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+};
+
+export type ProjectWebhookRow = {
+  id: string;
+  url: string;
+  events: string[];
+  isActive: boolean;
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
+  lastErrorMessage: string | null;
+  createdAt: string;
 };
 
 export async function fetchProjectSession(projectId: string): Promise<ProjectSessionResponse> {
@@ -189,7 +202,7 @@ export async function listProjectApiKeys(
 
 export async function createProjectApiKey(
   projectId: string,
-  body: { name?: string },
+  body: { name?: string; serviceLabel?: string | null; scopes?: string[] },
 ): Promise<{ projectId: string; apiKey: string; key: ProjectApiKeyRow }> {
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/api-keys`), {
     method: "POST",
@@ -224,6 +237,82 @@ export async function revokeProjectApiKey(projectId: string, keyId: string): Pro
   if (!res.ok) {
     const j = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(typeof j.error === "string" ? j.error : "Could not revoke API key.");
+  }
+}
+
+export async function listProjectWebhooks(
+  projectId: string,
+): Promise<{ projectId: string; items: ProjectWebhookRow[] }> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/webhooks`), {
+    credentials: "include",
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    projectId?: string;
+    items?: ProjectWebhookRow[];
+  };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not load webhooks.");
+  }
+  return {
+    projectId: j.projectId ?? projectId,
+    items: Array.isArray(j.items) ? j.items : [],
+  };
+}
+
+export async function createProjectWebhook(
+  projectId: string,
+  body: { url: string; events?: string[]; isActive?: boolean },
+): Promise<ProjectWebhookRow> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/webhooks`), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  const j = (await res.json().catch(() => ({}))) as { error?: string } & Partial<ProjectWebhookRow>;
+  if (!res.ok || !j.id) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not create webhook.");
+  }
+  return j as ProjectWebhookRow;
+}
+
+export async function patchProjectWebhook(
+  projectId: string,
+  webhookId: string,
+  patch: { events?: string[]; isActive?: boolean },
+): Promise<ProjectWebhookRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/webhooks/${encodeURIComponent(webhookId)}`,
+    ),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(patch),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as { error?: string } & Partial<ProjectWebhookRow>;
+  if (!res.ok || !j.id) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not update webhook.");
+  }
+  return j as ProjectWebhookRow;
+}
+
+export async function deleteProjectWebhook(projectId: string, webhookId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/webhooks/${encodeURIComponent(webhookId)}`,
+    ),
+    {
+      method: "DELETE",
+      credentials: "include",
+    },
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not delete webhook.");
   }
 }
 
@@ -272,6 +361,293 @@ export async function putProjectSchedule(
     throw new Error(typeof j.error === "string" ? j.error : "Could not save schedule.");
   }
   return res.json() as Promise<ScheduleTaskRow[]>;
+}
+
+export async function fetchDatacenterCommissioningTemplate(
+  projectId: string,
+  mode: "append" | "replace" = "append",
+): Promise<{ mode: "append" | "replace"; tasks: ScheduleTaskInput[] }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/schedule/templates/datacenter-commissioning`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify({ mode }),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(
+      typeof j.error === "string" ? j.error : "Could not load datacenter schedule template.",
+    );
+  }
+  const j = (await res.json()) as { mode?: "append" | "replace"; tasks?: ScheduleTaskInput[] };
+  return {
+    mode: j.mode === "replace" ? "replace" : "append",
+    tasks: Array.isArray(j.tasks) ? j.tasks : [],
+  };
+}
+
+export type JobRunRow = {
+  id: string;
+  kind: string;
+  status: string;
+  correlationId: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  payloadJson: unknown;
+  resultJson: unknown;
+  errorJson: unknown;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function fetchProjectJobRuns(projectId: string): Promise<JobRunRow[]> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/job-runs`), {
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not load job runs.");
+  }
+  return res.json() as Promise<JobRunRow[]>;
+}
+
+export async function createProjectJobRun(
+  projectId: string,
+  body: { kind: string; status?: string; correlationId?: string | null; payloadJson?: unknown },
+): Promise<JobRunRow> {
+  const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/job-runs`), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  const j = (await res.json().catch(() => ({}))) as { error?: string } & Partial<JobRunRow>;
+  if (!res.ok || !j.id) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not create job run.");
+  }
+  return j as JobRunRow;
+}
+
+export type OrchestrationEnvironmentRow = {
+  id: string;
+  name: string;
+  region: string;
+  availabilityZone: string | null;
+  isProduction: boolean;
+};
+
+export type OrchestrationWorkflowStepRow = {
+  id: string;
+  name: string;
+  stepType: string;
+  sortOrder: number;
+  timeoutSeconds: number | null;
+};
+
+export type OrchestrationWorkflowRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  environment: { id: string; name: string; region: string } | null;
+  steps: OrchestrationWorkflowStepRow[];
+};
+
+export type OrchestrationRunRow = {
+  id: string;
+  workflow: { id: string; name: string };
+  environment: { id: string; name: string; region: string } | null;
+  status: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  changeWindowStart: string | null;
+  changeWindowEnd: string | null;
+  approvals: {
+    id: string;
+    status: string;
+    note: string | null;
+    requestedAt: string;
+    respondedAt: string | null;
+  }[];
+  createdAt: string;
+};
+
+export async function fetchOrchestrationEnvironments(
+  projectId: string,
+): Promise<OrchestrationEnvironmentRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/orchestration/environments`),
+    { credentials: "include" },
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not load environments.");
+  }
+  return res.json() as Promise<OrchestrationEnvironmentRow[]>;
+}
+
+export async function createOrchestrationEnvironment(
+  projectId: string,
+  body: {
+    name: string;
+    region: string;
+    availabilityZone?: string | null;
+    isProduction?: boolean;
+  },
+): Promise<OrchestrationEnvironmentRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/orchestration/environments`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+  } & Partial<OrchestrationEnvironmentRow>;
+  if (!res.ok || !j.id) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not create environment.");
+  }
+  return j as OrchestrationEnvironmentRow;
+}
+
+export async function fetchOrchestrationWorkflows(
+  projectId: string,
+): Promise<OrchestrationWorkflowRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/orchestration/workflows`),
+    { credentials: "include" },
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not load workflows.");
+  }
+  return res.json() as Promise<OrchestrationWorkflowRow[]>;
+}
+
+export async function createOrchestrationWorkflow(
+  projectId: string,
+  body: {
+    name: string;
+    description?: string | null;
+    environmentId?: string | null;
+    steps: { name: string; stepType: string; sortOrder?: number; timeoutSeconds?: number | null }[];
+  },
+): Promise<OrchestrationWorkflowRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/orchestration/workflows`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+  } & Partial<OrchestrationWorkflowRow>;
+  if (!res.ok || !j.id) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not create workflow.");
+  }
+  return j as OrchestrationWorkflowRow;
+}
+
+export async function fetchOrchestrationRuns(projectId: string): Promise<OrchestrationRunRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/orchestration/runs`),
+    { credentials: "include" },
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not load orchestration runs.");
+  }
+  return res.json() as Promise<OrchestrationRunRow[]>;
+}
+
+export async function createOrchestrationRun(
+  projectId: string,
+  workflowId: string,
+  body?: {
+    environmentId?: string | null;
+    changeWindowStart?: string | null;
+    changeWindowEnd?: string | null;
+  },
+): Promise<{ id: string; status: string; createdAt: string }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/orchestration/workflows/${encodeURIComponent(workflowId)}/runs`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body ?? {}),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    id?: string;
+    status?: string;
+    createdAt?: string;
+  };
+  if (!res.ok || !j.id) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not start orchestration run.");
+  }
+  return {
+    id: j.id,
+    status: j.status ?? "QUEUED",
+    createdAt: j.createdAt ?? new Date().toISOString(),
+  };
+}
+
+export async function createOrchestrationApproval(
+  projectId: string,
+  runId: string,
+  body: { status: "PENDING" | "APPROVED" | "REJECTED"; note?: string | null },
+): Promise<{
+  id: string;
+  status: string;
+  note: string | null;
+  requestedAt: string;
+  respondedAt: string | null;
+}> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/orchestration/runs/${encodeURIComponent(runId)}/approvals`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    id?: string;
+    status?: string;
+    note?: string | null;
+    requestedAt?: string;
+    respondedAt?: string | null;
+  };
+  if (!res.ok || !j.id) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not create approval decision.");
+  }
+  return {
+    id: j.id,
+    status: j.status ?? "PENDING",
+    note: j.note ?? null,
+    requestedAt: j.requestedAt ?? new Date().toISOString(),
+    respondedAt: j.respondedAt ?? null,
+  };
 }
 
 export type MeNotificationRow = {
@@ -4183,6 +4559,10 @@ export type OmAssetRow = {
   model: string | null;
   serialNumber: string | null;
   locationLabel: string | null;
+  hall: string | null;
+  rowLabel: string | null;
+  rack: string | null;
+  positionU: string | null;
   installDate: string | null;
   warrantyExpires: string | null;
   lastServiceAt: string | null;
@@ -4226,6 +4606,10 @@ export type OmAssetCreateBody = {
   model?: string | null;
   serialNumber?: string | null;
   locationLabel?: string | null;
+  hall?: string | null;
+  rowLabel?: string | null;
+  rack?: string | null;
+  positionU?: string | null;
   installDate?: string | null;
   warrantyExpires?: string | null;
   lastServiceAt?: string | null;
@@ -4431,6 +4815,10 @@ export async function patchOmAsset(
     model?: string | null;
     serialNumber?: string | null;
     locationLabel?: string | null;
+    hall?: string | null;
+    rowLabel?: string | null;
+    rack?: string | null;
+    positionU?: string | null;
     installDate?: string | null;
     warrantyExpires?: string | null;
     lastServiceAt?: string | null;

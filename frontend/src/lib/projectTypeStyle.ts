@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Building2,
+  Cpu,
   Factory,
   GraduationCap,
   Heart,
@@ -20,6 +21,7 @@ export const PROJECT_TYPE_PRESETS: readonly string[] = [
   "Commercial",
   "Residential",
   "Industrial",
+  "Data center",
   "Healthcare",
   "Education",
   "Infrastructure",
@@ -51,6 +53,12 @@ export function getProjectTypeVisual(type: string | null | undefined): ProjectTy
     return {
       Icon: Factory,
       chipClass: "bg-amber-50 text-amber-950 ring-amber-200/80",
+    };
+  }
+  if (/(data[\s-]?center|datacenter|colo|colocation)/i.test(lower)) {
+    return {
+      Icon: Cpu,
+      chipClass: "bg-sky-50 text-sky-900 ring-sky-200/80",
     };
   }
   if (/(health|hospital|medical|clinic)/i.test(lower)) {

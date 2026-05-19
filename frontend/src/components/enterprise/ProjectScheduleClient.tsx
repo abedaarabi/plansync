@@ -16,6 +16,7 @@ import {
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
 import {
+  fetchDatacenterCommissioningTemplate,
   fetchProjectSchedule,
   fetchProjectSession,
   fetchTakeoffLinesForProject,
@@ -629,6 +630,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
   const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
   const [pickerTaskId, setPickerTaskId] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [templatePending, setTemplatePending] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const selectAllCheckboxRef = useRef<HTMLInputElement | null>(null);
 
@@ -985,6 +987,33 @@ export function ProjectScheduleClient({ projectId }: Props) {
     window.setTimeout(() => window.print(), 80);
   }, []);
 
+  const applyDatacenterTemplate = useCallback(
+    async (mode: "append" | "replace") => {
+      setTemplatePending(true);
+      try {
+        const template = await fetchDatacenterCommissioningTemplate(projectId, mode);
+        setDirty(true);
+        setDraft((prev) => {
+          const existing = prev ?? [];
+          if (template.mode === "replace") {
+            return template.tasks;
+          }
+          return [...existing, ...template.tasks];
+        });
+        toast.success(
+          mode === "replace"
+            ? "Datacenter commissioning template applied (replace mode)."
+            : "Datacenter commissioning template appended.",
+        );
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not apply template.");
+      } finally {
+        setTemplatePending(false);
+      }
+    },
+    [projectId],
+  );
+
   const {
     createPreview,
     onTrackPointerDown,
@@ -1274,6 +1303,30 @@ export function ProjectScheduleClient({ projectId }: Props) {
               Add top-level task
             </button>
           </EnterpriseAddPulseWrap>
+          <button
+            type="button"
+            onClick={() => void applyDatacenterTemplate("append")}
+            disabled={templatePending}
+            className={SCHEDULE_BTN_SECONDARY}
+          >
+            {templatePending ? "Applying template..." : "Append DC commissioning template"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Replace the current schedule with the datacenter commissioning template?",
+                )
+              ) {
+                void applyDatacenterTemplate("replace");
+              }
+            }}
+            disabled={templatePending}
+            className={SCHEDULE_BTN_SECONDARY}
+          >
+            Replace with template
+          </button>
           <button
             type="button"
             onClick={() => {

@@ -399,6 +399,13 @@ export function OmFmDashboardClient({ projectId }: Props) {
           <Building2 className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
           Occupant hub
         </Link>
+        <Link
+          href={`${pBase}/ops/orchestration`}
+          className="enterprise-card enterprise-card-hover inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-[var(--enterprise-text)]"
+        >
+          <LayoutGrid className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
+          Datacenter orchestration
+        </Link>
       </section>
     </div>
   );

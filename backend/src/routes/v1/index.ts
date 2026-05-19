@@ -113,6 +113,7 @@ import { marketingChatRateLimited } from "../../lib/marketingChatRateLimit.js";
 import { registerCloudRoutes } from "./cloudRoutes.js";
 import { registerPunchRoutes } from "./punchRoutes.js";
 import { registerScheduleRoutes } from "./scheduleRoutes.js";
+import { registerOrchestrationRoutes } from "./orchestrationRoutes.js";
 import {
   auditLogsToRows,
   buildAuditPdfBuffer,
@@ -2107,6 +2108,8 @@ export function v1Routes(
       select: {
         id: true,
         name: true,
+        serviceLabel: true,
+        scopes: true,
         keyPrefix: true,
         createdById: true,
         createdAt: true,
@@ -2119,6 +2122,8 @@ export function v1Routes(
       items: keys.map((k) => ({
         id: k.id,
         name: k.name,
+        serviceLabel: k.serviceLabel ?? null,
+        scopes: k.scopes ?? [],
         keyPrefix: k.keyPrefix,
         createdById: k.createdById,
         createdAt: k.createdAt.toISOString(),
@@ -2144,6 +2149,8 @@ export function v1Routes(
     const body = z
       .object({
         name: z.string().trim().min(1).max(120).optional(),
+        serviceLabel: z.string().trim().max(120).nullable().optional(),
+        scopes: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
       })
       .safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
@@ -2153,12 +2160,19 @@ export function v1Routes(
         projectId,
         createdById: c.get("user").id,
         name: body.data.name ?? "Integration key",
+        serviceLabel:
+          body.data.serviceLabel && body.data.serviceLabel.trim()
+            ? body.data.serviceLabel.trim()
+            : null,
+        scopes: [...new Set((body.data.scopes ?? []).map((s) => s.trim()).filter(Boolean))],
         keyPrefix: fresh.keyPrefix,
         keyHash: fresh.keyHash,
       },
       select: {
         id: true,
         name: true,
+        serviceLabel: true,
+        scopes: true,
         keyPrefix: true,
         createdById: true,
         createdAt: true,
@@ -2172,6 +2186,8 @@ export function v1Routes(
       key: {
         id: created.id,
         name: created.name,
+        serviceLabel: created.serviceLabel ?? null,
+        scopes: created.scopes ?? [],
         keyPrefix: created.keyPrefix,
         createdById: created.createdById,
         createdAt: created.createdAt.toISOString(),
@@ -2207,6 +2223,146 @@ export function v1Routes(
       where: { id: keyId },
       data: { revokedAt: new Date() },
     });
+    return c.json({ ok: true });
+  });
+
+  r.get("/projects/:projectId/webhooks", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const res = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in res) return c.json({ error: res.error }, res.status);
+    const { ctx } = res;
+    if (
+      ctx.workspaceMember.isExternal ||
+      (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN &&
+        ctx.workspaceMember.role !== WorkspaceRole.ADMIN)
+    ) {
+      return c.json({ error: "Admin or Super Admin only" }, 403);
+    }
+    const rows = await prisma.projectWebhook.findMany({
+      where: { projectId },
+      orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
+    });
+    return c.json({
+      projectId,
+      items: rows.map((w) => ({
+        id: w.id,
+        url: w.url,
+        events: w.events,
+        isActive: w.isActive,
+        lastSuccessAt: w.lastSuccessAt?.toISOString() ?? null,
+        lastErrorAt: w.lastErrorAt?.toISOString() ?? null,
+        lastErrorMessage: w.lastErrorMessage ?? null,
+        createdAt: w.createdAt.toISOString(),
+      })),
+    });
+  });
+
+  r.post("/projects/:projectId/webhooks", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const res = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in res) return c.json({ error: res.error }, res.status);
+    const { ctx } = res;
+    if (
+      ctx.workspaceMember.isExternal ||
+      (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN &&
+        ctx.workspaceMember.role !== WorkspaceRole.ADMIN)
+    ) {
+      return c.json({ error: "Admin or Super Admin only" }, 403);
+    }
+    const body = z
+      .object({
+        url: z.string().url(),
+        events: z.array(z.nativeEnum(ActivityType)).max(50).optional(),
+        isActive: z.boolean().optional(),
+      })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+    const secret = randomBytes(32).toString("hex");
+    const created = await prisma.projectWebhook.create({
+      data: {
+        projectId,
+        url: body.data.url.trim(),
+        secret,
+        events: body.data.events ?? [],
+        isActive: body.data.isActive ?? true,
+        createdById: c.get("user").id,
+      },
+    });
+    return c.json({
+      id: created.id,
+      url: created.url,
+      events: created.events,
+      isActive: created.isActive,
+      lastSuccessAt: created.lastSuccessAt?.toISOString() ?? null,
+      lastErrorAt: created.lastErrorAt?.toISOString() ?? null,
+      lastErrorMessage: created.lastErrorMessage ?? null,
+      createdAt: created.createdAt.toISOString(),
+    });
+  });
+
+  r.patch("/projects/:projectId/webhooks/:webhookId", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const webhookId = c.req.param("webhookId")!;
+    const res = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in res) return c.json({ error: res.error }, res.status);
+    const { ctx } = res;
+    if (
+      ctx.workspaceMember.isExternal ||
+      (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN &&
+        ctx.workspaceMember.role !== WorkspaceRole.ADMIN)
+    ) {
+      return c.json({ error: "Admin or Super Admin only" }, 403);
+    }
+    const body = z
+      .object({
+        events: z.array(z.nativeEnum(ActivityType)).max(50).optional(),
+        isActive: z.boolean().optional(),
+      })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+    const existing = await prisma.projectWebhook.findFirst({
+      where: { id: webhookId, projectId },
+      select: { id: true },
+    });
+    if (!existing) return c.json({ error: "Webhook not found" }, 404);
+    const updated = await prisma.projectWebhook.update({
+      where: { id: webhookId },
+      data: {
+        ...(body.data.events !== undefined ? { events: body.data.events } : {}),
+        ...(body.data.isActive !== undefined ? { isActive: body.data.isActive } : {}),
+      },
+    });
+    return c.json({
+      id: updated.id,
+      url: updated.url,
+      events: updated.events,
+      isActive: updated.isActive,
+      lastSuccessAt: updated.lastSuccessAt?.toISOString() ?? null,
+      lastErrorAt: updated.lastErrorAt?.toISOString() ?? null,
+      lastErrorMessage: updated.lastErrorMessage ?? null,
+      createdAt: updated.createdAt.toISOString(),
+    });
+  });
+
+  r.delete("/projects/:projectId/webhooks/:webhookId", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const webhookId = c.req.param("webhookId")!;
+    const res = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in res) return c.json({ error: res.error }, res.status);
+    const { ctx } = res;
+    if (
+      ctx.workspaceMember.isExternal ||
+      (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN &&
+        ctx.workspaceMember.role !== WorkspaceRole.ADMIN)
+    ) {
+      return c.json({ error: "Admin or Super Admin only" }, 403);
+    }
+    const existing = await prisma.projectWebhook.findFirst({
+      where: { id: webhookId, projectId },
+      select: { id: true },
+    });
+    if (!existing) return c.json({ error: "Webhook not found" }, 404);
+    await prisma.projectWebhook.delete({ where: { id: webhookId } });
     return c.json({ ok: true });
   });
 
@@ -4271,6 +4427,7 @@ export function v1Routes(
   registerSheetAiRoutes(r, needUser, env);
   registerMaterialsRoutes(r, needUser);
   registerScheduleRoutes(r, needUser);
+  registerOrchestrationRoutes(r, needUser);
 
   return r;
 }

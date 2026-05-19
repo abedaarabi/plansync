@@ -30,6 +30,7 @@ export function LandingNav({
 }: LandingNavProps) {
   const pathname = usePathname();
   const t = useTranslations("nav");
+  const solutionsMenuT = useTranslations("solutionsMenu");
   const solutionT = useTranslations("solutionCopy");
   const getLocalizedSolutionTitle = (slug: string, fallback: string) =>
     solutionT.has(`${slug}.title`) ? solutionT(`${slug}.title`) : fallback;
@@ -96,34 +97,19 @@ export function LandingNav({
               {t("dashboard")}
             </Link>
           ) : (
-            <div className="flex items-center gap-2">
-              <Link
-                href="/sign-in"
-                onClick={() =>
-                  trackMarketingEvent("marketing_cta_click", {
-                    ctaType: "sign_in",
-                    source: "nav_desktop",
-                    destination: "/sign-in",
-                  })
-                }
-                className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-              >
-                {t("signIn")}
-              </Link>
-              <Link
-                href="/sign-in?mode=sign-up"
-                onClick={() =>
-                  trackMarketingEvent("marketing_cta_click", {
-                    ctaType: "sign_up",
-                    source: "nav_desktop",
-                    destination: "/sign-in?mode=sign-up",
-                  })
-                }
-                className="rounded-lg border border-slate-900/15 bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-              >
-                Sign up
-              </Link>
-            </div>
+            <Link
+              href="/sign-in"
+              onClick={() =>
+                trackMarketingEvent("marketing_cta_click", {
+                  ctaType: "sign_in",
+                  source: "nav_desktop",
+                  destination: "/sign-in",
+                })
+              }
+              className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              {t("signIn")}
+            </Link>
           )}
           <button
             type="button"
@@ -134,20 +120,44 @@ export function LandingNav({
           </button>
         </div>
 
-        <button
-          type="button"
-          className="rounded-xl border border-slate-200/90 bg-white p-2.5 text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 md:hidden"
-          onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label={t("toggleMenu")}
-        >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        <div className="flex items-center gap-2 md:hidden">
+          {!isLoggedIn ? (
+            <Link
+              href="/sign-in"
+              onClick={() =>
+                trackMarketingEvent("marketing_cta_click", {
+                  ctaType: "sign_in",
+                  source: "nav_mobile_header",
+                  destination: "/sign-in",
+                })
+              }
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              {t("signIn")}
+            </Link>
+          ) : null}
+          <button
+            type="button"
+            className="rounded-xl border border-slate-200/90 bg-white p-2.5 text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label={t("toggleMenu")}
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
       {mobileOpen && (
         <div className="mt-2 rounded-2xl border border-slate-200/80 bg-white px-5 pb-6 pt-4 shadow-[0_20px_42px_-24px_rgba(15,23,42,0.25)] md:hidden">
           <div className="flex flex-col gap-4">
             <div className="border-b border-slate-100 pb-4">
+              <Link
+                href="/solutions"
+                className="mb-3 inline-flex text-sm font-semibold text-slate-800"
+                onClick={() => setMobileOpen(false)}
+              >
+                {solutionsMenuT("trigger")}
+              </Link>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-blue-600">
                 {t("construction")}
               </p>
@@ -224,36 +234,28 @@ export function LandingNav({
             <LandingLanguageSwitcher variant="mobile" />
             <hr className="border-slate-100" />
             {isLoggedIn ? (
-              <Link href="/projects" className="text-sm font-medium text-slate-700">
+              <Link
+                href="/projects"
+                className="text-sm font-medium text-slate-700"
+                onClick={() => setMobileOpen(false)}
+              >
                 {t("dashboard")}
               </Link>
             ) : (
               <div className="flex items-center gap-2">
                 <Link
                   href="/sign-in"
-                  onClick={() =>
+                  onClick={() => {
+                    setMobileOpen(false);
                     trackMarketingEvent("marketing_cta_click", {
                       ctaType: "sign_in",
                       source: "nav_mobile",
                       destination: "/sign-in",
-                    })
-                  }
+                    });
+                  }}
                   className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   {t("signIn")}
-                </Link>
-                <Link
-                  href="/sign-in?mode=sign-up"
-                  onClick={() =>
-                    trackMarketingEvent("marketing_cta_click", {
-                      ctaType: "sign_up",
-                      source: "nav_mobile",
-                      destination: "/sign-in?mode=sign-up",
-                    })
-                  }
-                  className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-                >
-                  Sign up
                 </Link>
               </div>
             )}

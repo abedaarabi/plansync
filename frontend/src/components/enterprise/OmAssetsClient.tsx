@@ -48,6 +48,10 @@ type AssetFormDraft = {
   model: string;
   serialNumber: string;
   locationLabel: string;
+  hall: string;
+  rowLabel: string;
+  rack: string;
+  positionU: string;
   installDate: string;
   warrantyExpires: string;
   lastServiceAt: string;
@@ -68,6 +72,14 @@ function dateInputToIsoNullable(s: string): string | null {
   return `${t}T12:00:00.000Z`;
 }
 
+function formatAssetLocation(a: OmAssetRow): string {
+  const parts = [a.hall, a.rowLabel, a.rack, a.positionU].filter(
+    (x): x is string => typeof x === "string" && x.trim().length > 0,
+  );
+  if (parts.length > 0) return parts.join(" / ");
+  return a.locationLabel?.trim() || "—";
+}
+
 function emptyDraft(): AssetFormDraft {
   return {
     tag: "",
@@ -77,6 +89,10 @@ function emptyDraft(): AssetFormDraft {
     model: "",
     serialNumber: "",
     locationLabel: "",
+    hall: "",
+    rowLabel: "",
+    rack: "",
+    positionU: "",
     installDate: "",
     warrantyExpires: "",
     lastServiceAt: "",
@@ -95,6 +111,10 @@ function draftFromAsset(a: OmAssetRow): AssetFormDraft {
     model: a.model ?? "",
     serialNumber: a.serialNumber ?? "",
     locationLabel: a.locationLabel ?? "",
+    hall: a.hall ?? "",
+    rowLabel: a.rowLabel ?? "",
+    rack: a.rack ?? "",
+    positionU: a.positionU ?? "",
     installDate: isoToDateInput(a.installDate),
     warrantyExpires: isoToDateInput(a.warrantyExpires),
     lastServiceAt: isoToDateInput(a.lastServiceAt),
@@ -114,6 +134,10 @@ function draftToCreateBody(d: AssetFormDraft): Parameters<typeof createOmAsset>[
     model: d.model.trim() || null,
     serialNumber: d.serialNumber.trim() || null,
     locationLabel: d.locationLabel.trim() || null,
+    hall: d.hall.trim() || null,
+    rowLabel: d.rowLabel.trim() || null,
+    rack: d.rack.trim() || null,
+    positionU: d.positionU.trim() || null,
     installDate: dateInputToIsoNullable(d.installDate),
     warrantyExpires: dateInputToIsoNullable(d.warrantyExpires),
     lastServiceAt: dateInputToIsoNullable(d.lastServiceAt),
@@ -220,6 +244,42 @@ function AssetFormFields({
           onChange={(e) => onChange({ ...draft, locationLabel: e.target.value })}
           className={field}
           placeholder="e.g. Roof · East plant room"
+        />
+      </label>
+      <label className="block text-sm">
+        <span className={label}>Hall</span>
+        <input
+          value={draft.hall}
+          onChange={(e) => onChange({ ...draft, hall: e.target.value })}
+          className={field}
+          placeholder="e.g. Hall A"
+        />
+      </label>
+      <label className="block text-sm">
+        <span className={label}>Row</span>
+        <input
+          value={draft.rowLabel}
+          onChange={(e) => onChange({ ...draft, rowLabel: e.target.value })}
+          className={field}
+          placeholder="e.g. Row 05"
+        />
+      </label>
+      <label className="block text-sm">
+        <span className={label}>Rack</span>
+        <input
+          value={draft.rack}
+          onChange={(e) => onChange({ ...draft, rack: e.target.value })}
+          className={field}
+          placeholder="e.g. R12"
+        />
+      </label>
+      <label className="block text-sm">
+        <span className={label}>U position</span>
+        <input
+          value={draft.positionU}
+          onChange={(e) => onChange({ ...draft, positionU: e.target.value })}
+          className={field}
+          placeholder="e.g. U42"
         />
       </label>
       <label className="block text-sm">
@@ -448,6 +508,10 @@ export function OmAssetsClient({ projectId }: Props) {
         model: d.model.trim() || null,
         serialNumber: d.serialNumber.trim() || null,
         locationLabel: d.locationLabel.trim() || null,
+        hall: d.hall.trim() || null,
+        rowLabel: d.rowLabel.trim() || null,
+        rack: d.rack.trim() || null,
+        positionU: d.positionU.trim() || null,
         installDate: dateInputToIsoNullable(d.installDate),
         warrantyExpires: dateInputToIsoNullable(d.warrantyExpires),
         lastServiceAt: dateInputToIsoNullable(d.lastServiceAt),
@@ -660,7 +724,7 @@ export function OmAssetsClient({ projectId }: Props) {
             <input
               value={listSearchInput}
               onChange={(e) => setListSearchInput(e.target.value)}
-              placeholder="Tag, name, category, manufacturer, serial, location, notes, drawing name…"
+              placeholder="Tag, name, category, hall, row, rack, U position, location, notes…"
               className="min-h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] py-2 pl-10 pr-3 text-sm text-[var(--enterprise-text)]"
             />
           </div>
@@ -1029,7 +1093,7 @@ export function OmAssetsClient({ projectId }: Props) {
                     {a.manufacturer ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
-                    {a.locationLabel ?? "—"}
+                    {formatAssetLocation(a)}
                   </td>
                   <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
                     {a.file ? `${a.file.name} v${a.fileVersion?.version ?? "?"}` : "—"}

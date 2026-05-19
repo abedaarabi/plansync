@@ -8,7 +8,6 @@ import { LandingChatAssistant } from "./LandingChatAssistant";
 import { LandingHeroSection } from "./LandingHeroSection";
 import { LandingHowItWorksSection } from "./LandingHowItWorksSection";
 import { LandingPwaInstallSection } from "./LandingPwaInstallSection";
-import { LandingPricingSection } from "./LandingPricingSection";
 import { LandingProofSection } from "./LandingProofSection";
 import { LandingSolutionsShowcaseSection } from "./LandingSolutionsShowcaseSection";
 import { MarketingShell, useMarketingGoToFreeViewer } from "./MarketingShell";
@@ -26,7 +25,6 @@ function LandingHomeMain() {
       <LandingProofSection />
       <LandingSolutionsShowcaseSection />
       <LandingHowItWorksSection />
-      <LandingPricingSection onGoToFreeViewer={goToFreeViewer} />
       <LandingPwaInstallSection />
       <LandingFaqSection />
       <LandingFinalCtaSection onGoToFreeViewer={goToFreeViewer} />

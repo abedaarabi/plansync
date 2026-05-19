@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ArrowRight, CheckCircle2, ShieldCheck, Users2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, ServerCog, ShieldCheck, Users2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { trackMarketingEvent } from "@/lib/marketingAnalytics";
 import { getHeroExperimentVariant, type HeroExperimentVariant } from "@/lib/marketingExperiments";
@@ -149,6 +149,10 @@ export function LandingHeroSection({
               </div>
 
               <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5 text-xs text-blue-100/90 lg:justify-start">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300/35 bg-cyan-400/10 px-3 py-1.5 text-cyan-100">
+                  <ServerCog className="h-3.5 w-3.5 text-cyan-300" />
+                  Built for datacenter delivery
+                </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/8 px-3 py-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
                   No signup for viewer

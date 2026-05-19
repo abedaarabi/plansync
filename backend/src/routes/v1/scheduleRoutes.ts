@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
@@ -40,6 +41,104 @@ const taskInSchema = z.object({
 });
 
 type TaskIn = z.infer<typeof taskInSchema>;
+
+function newTemplateTaskId(seed: string): string {
+  return `sched_${seed}_${randomBytes(4).toString("hex")}`;
+}
+
+function buildDatacenterCommissioningTemplate(anchorDate: Date, baseSortOrder: number): TaskIn[] {
+  const d0 = snapToUtcDate(anchorDate);
+  const rootId = newTemplateTaskId("dc_root");
+  const designFreezeId = newTemplateTaskId("dc_design");
+  const readinessId = newTemplateTaskId("dc_readiness");
+  const istId = newTemplateTaskId("dc_ist");
+  const oatId = newTemplateTaskId("dc_oat");
+  const handoverId = newTemplateTaskId("dc_handover");
+  return [
+    {
+      id: rootId,
+      title: "Datacenter commissioning",
+      parentId: null,
+      sortOrder: baseSortOrder,
+      startDate: ymdFromDate(d0),
+      endDate: ymdFromDate(addDays(d0, 35)),
+      isMilestone: false,
+      progressPercent: 0,
+      status: "not_started",
+      takeoffLineIds: [],
+    },
+    {
+      id: designFreezeId,
+      title: "Design and MOP freeze",
+      parentId: rootId,
+      sortOrder: baseSortOrder + 1,
+      startDate: ymdFromDate(d0),
+      endDate: ymdFromDate(addDays(d0, 4)),
+      isMilestone: false,
+      progressPercent: 0,
+      status: "not_started",
+      takeoffLineIds: [],
+    },
+    {
+      id: readinessId,
+      title: "Power and cooling readiness validation",
+      parentId: rootId,
+      sortOrder: baseSortOrder + 2,
+      startDate: ymdFromDate(addDays(d0, 5)),
+      endDate: ymdFromDate(addDays(d0, 13)),
+      isMilestone: false,
+      progressPercent: 0,
+      status: "not_started",
+      takeoffLineIds: [],
+    },
+    {
+      id: istId,
+      title: "Integrated systems testing (IST)",
+      parentId: rootId,
+      sortOrder: baseSortOrder + 3,
+      startDate: ymdFromDate(addDays(d0, 14)),
+      endDate: ymdFromDate(addDays(d0, 22)),
+      isMilestone: false,
+      progressPercent: 0,
+      status: "not_started",
+      takeoffLineIds: [],
+    },
+    {
+      id: oatId,
+      title: "Operational acceptance and failover drill",
+      parentId: rootId,
+      sortOrder: baseSortOrder + 4,
+      startDate: ymdFromDate(addDays(d0, 23)),
+      endDate: ymdFromDate(addDays(d0, 31)),
+      isMilestone: false,
+      progressPercent: 0,
+      status: "not_started",
+      takeoffLineIds: [],
+    },
+    {
+      id: handoverId,
+      title: "Commissioning sign-off and handover",
+      parentId: rootId,
+      sortOrder: baseSortOrder + 5,
+      startDate: ymdFromDate(addDays(d0, 35)),
+      endDate: ymdFromDate(addDays(d0, 35)),
+      isMilestone: true,
+      progressPercent: 0,
+      status: "not_started",
+      takeoffLineIds: [],
+    },
+  ];
+}
+
+function snapToUtcDate(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0));
+}
+
+function addDays(base: Date, days: number): Date {
+  const x = new Date(base);
+  x.setUTCDate(x.getUTCDate() + days);
+  return x;
+}
 
 function normalizeStatus(
   status: string | null | undefined,
@@ -150,6 +249,46 @@ export function registerScheduleRoutes(r: Hono, needUser: MiddlewareHandler) {
     });
     return c.json(rows.map(rowJson));
   });
+
+  r.post(
+    "/projects/:projectId/schedule/templates/datacenter-commissioning",
+    needUser,
+    async (c) => {
+      const projectId = c.req.param("projectId")!;
+      const userId = c.get("user").id;
+      const auth = await loadProjectWithAuth(projectId, userId);
+      if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+      const { ctx } = auth;
+      if (ctx.uiMode !== "internal") {
+        return c.json({ error: "Forbidden" }, 403);
+      }
+      if (!ctx.settings.modules.schedule) {
+        return c.json({ error: "Schedule module is disabled for this project" }, 400);
+      }
+      const gate = requirePro(ctx.project.workspace);
+      if (gate) return c.json({ error: gate.error }, gate.status);
+
+      const body = z
+        .object({
+          mode: z.enum(["replace", "append"]).default("append"),
+        })
+        .safeParse(await c.req.json().catch(() => ({})));
+      if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+      let baseSortOrder = 0;
+      if (body.data.mode === "append") {
+        const tail = await prisma.scheduleTask.findFirst({
+          where: { projectId },
+          orderBy: [{ sortOrder: "desc" }, { id: "desc" }],
+          select: { sortOrder: true },
+        });
+        baseSortOrder = (tail?.sortOrder ?? -1) + 1;
+      }
+
+      const tasks = buildDatacenterCommissioningTemplate(new Date(), baseSortOrder);
+      return c.json({ mode: body.data.mode, tasks });
+    },
+  );
 
   r.put("/projects/:projectId/schedule", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;

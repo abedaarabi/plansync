@@ -4,9 +4,9 @@ import { getHomepageJsonLd } from "@/lib/landingJsonLd";
 import { getSiteOrigin } from "@/lib/siteUrl";
 
 const shareTitle =
-  "PlanSync — Free construction PDF viewer | Measure & mark up plans in your browser";
+  "PlanSync — Construction + datacenter platform | Free PDF viewer and orchestration workflows";
 const shareDescription =
-  "Free PDF viewer for construction plans: calibrate scale, measure distances and areas, annotate drawings, export marked PDFs. No sign-up — files stay in your browser.";
+  "PlanSync connects drawings, issues, RFIs, and datacenter operations workflows. Start with a free PDF viewer: calibrate scale, measure, annotate, and export — no sign-up required.";
 
 export const metadata: Metadata = {
   title: shareTitle,

@@ -5,10 +5,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Settings, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
+  createProjectWebhook,
   createProjectApiKey,
+  deleteProjectWebhook,
   fetchProjectSession,
+  listProjectWebhooks,
   listProjectApiKeys,
   patchProject,
+  patchProjectWebhook,
   patchProjectSettings,
   revokeProjectApiKey,
   type ProjectSessionResponse,
@@ -22,6 +26,21 @@ import { OccupantPortalLinksSettings } from "./OccupantPortalLinksSettings";
 import { AccessRestricted } from "./AccessRestricted";
 
 type Props = { projectId: string };
+
+const API_KEY_SCOPE_OPTIONS = [
+  "issues:read",
+  "issues:write",
+  "om:read",
+  "om:write",
+  "schedule:read",
+  "schedule:write",
+  "orchestration:read",
+  "orchestration:write",
+  "jobs:read",
+  "jobs:write",
+  "integrations:read",
+  "integrations:write",
+] as const;
 
 export function ProjectSettingsClient({ projectId }: Props) {
   const queryClient = useQueryClient();
@@ -49,7 +68,11 @@ export function ProjectSettingsClient({ projectId }: Props) {
 
   const [occupantHeadlineDraft, setOccupantHeadlineDraft] = useState("");
   const [apiKeyNameDraft, setApiKeyNameDraft] = useState("");
+  const [apiKeyServiceDraft, setApiKeyServiceDraft] = useState("");
+  const [apiKeyScopesDraft, setApiKeyScopesDraft] = useState<string[]>([]);
   const [newApiKeyPlainText, setNewApiKeyPlainText] = useState<string | null>(null);
+  const [webhookUrlDraft, setWebhookUrlDraft] = useState("");
+  const [webhookEventsDraft, setWebhookEventsDraft] = useState("");
   const [modulesDraft, setModulesDraft] = useState<
     ProjectSessionResponse["settings"]["modules"] | null
   >(null);
@@ -63,11 +86,27 @@ export function ProjectSettingsClient({ projectId }: Props) {
     enabled: canManageApiKeys,
   });
 
+  const webhooksQuery = useQuery({
+    queryKey: [...qk.projectApiKeys(projectId), "webhooks"],
+    queryFn: () => listProjectWebhooks(projectId),
+    enabled: canManageApiKeys,
+  });
+
   const createApiKeyMutation = useMutation({
-    mutationFn: (name: string) => createProjectApiKey(projectId, { name }),
+    mutationFn: ({
+      name,
+      serviceLabel,
+      scopes,
+    }: {
+      name: string;
+      serviceLabel: string | null;
+      scopes: string[];
+    }) => createProjectApiKey(projectId, { name, serviceLabel, scopes }),
     onSuccess: async (created) => {
       setNewApiKeyPlainText(created.apiKey);
       setApiKeyNameDraft("");
+      setApiKeyServiceDraft("");
+      setApiKeyScopesDraft([]);
       await queryClient.invalidateQueries({ queryKey: qk.projectApiKeys(projectId) });
     },
   });
@@ -76,6 +115,37 @@ export function ProjectSettingsClient({ projectId }: Props) {
     mutationFn: (keyId: string) => revokeProjectApiKey(projectId, keyId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.projectApiKeys(projectId) });
+    },
+  });
+
+  const createWebhookMutation = useMutation({
+    mutationFn: (payload: { url: string; events: string[] }) =>
+      createProjectWebhook(projectId, payload),
+    onSuccess: async () => {
+      setWebhookUrlDraft("");
+      setWebhookEventsDraft("");
+      await queryClient.invalidateQueries({
+        queryKey: [...qk.projectApiKeys(projectId), "webhooks"],
+      });
+    },
+  });
+
+  const toggleWebhookMutation = useMutation({
+    mutationFn: ({ webhookId, isActive }: { webhookId: string; isActive: boolean }) =>
+      patchProjectWebhook(projectId, webhookId, { isActive }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [...qk.projectApiKeys(projectId), "webhooks"],
+      });
+    },
+  });
+
+  const deleteWebhookMutation = useMutation({
+    mutationFn: (webhookId: string) => deleteProjectWebhook(projectId, webhookId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [...qk.projectApiKeys(projectId), "webhooks"],
+      });
     },
   });
 
@@ -88,6 +158,34 @@ export function ProjectSettingsClient({ projectId }: Props) {
 
   const opModeMutation = useMutation({
     mutationFn: (operationsMode: boolean) => patchProject(projectId, { operationsMode }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.projectSession(projectId) });
+      await queryClient.invalidateQueries({ queryKey: qk.project(projectId) });
+    },
+  });
+
+  const datacenterDefaultsMutation = useMutation({
+    mutationFn: async () => {
+      await patchProject(projectId, {
+        operationsMode: true,
+        projectType: "Data center",
+      });
+      await patchProjectSettings(projectId, {
+        modules: {
+          issues: true,
+          rfis: false,
+          takeoff: false,
+          proposals: false,
+          punch: true,
+          fieldReports: true,
+          omAssets: true,
+          omMaintenance: true,
+          omInspections: true,
+          omTenantPortal: true,
+          schedule: true,
+        },
+      });
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.projectSession(projectId) });
       await queryClient.invalidateQueries({ queryKey: qk.project(projectId) });
@@ -196,6 +294,23 @@ export function ProjectSettingsClient({ projectId }: Props) {
             <p className="pb-1 text-xs text-[var(--enterprise-text-muted)]">
               Disabled modules are hidden from the sidebar for everyone on this project.
             </p>
+            <div className="mb-1 rounded-xl border border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/40 p-3">
+              <p className="text-xs text-[var(--enterprise-text-muted)]">
+                Data center profile enables Operations mode and keeps schedule, issues, punch, field
+                reporting, and O&amp;M modules active while turning off RFIs, takeoff, and
+                proposals.
+              </p>
+              <button
+                type="button"
+                disabled={datacenterDefaultsMutation.isPending}
+                onClick={() => datacenterDefaultsMutation.mutate()}
+                className="mt-2 inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
+              >
+                {datacenterDefaultsMutation.isPending
+                  ? "Applying data center defaults..."
+                  : "Apply data center defaults"}
+              </button>
+            </div>
             {row("Issues", m.issues, (v) => toggleModule("issues", v))}
             {row("RFIs", m.rfis, (v) => toggleModule("rfis", v))}
             {row("Quantity Takeoff", m.takeoff, (v) => toggleModule("takeoff", v))}
@@ -258,14 +373,57 @@ export function ProjectSettingsClient({ projectId }: Props) {
             disabled={createApiKeyMutation.isPending}
             maxLength={120}
           />
+          <input
+            type="text"
+            value={apiKeyServiceDraft}
+            onChange={(e) => setApiKeyServiceDraft(e.target.value)}
+            placeholder="Service label (optional)"
+            className="min-h-11 w-full max-w-xs rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]"
+            disabled={createApiKeyMutation.isPending}
+            maxLength={120}
+          />
           <button
             type="button"
             className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white disabled:opacity-50"
             disabled={createApiKeyMutation.isPending}
-            onClick={() => createApiKeyMutation.mutate(apiKeyNameDraft.trim() || "Integration key")}
+            onClick={() =>
+              createApiKeyMutation.mutate({
+                name: apiKeyNameDraft.trim() || "Integration key",
+                serviceLabel: apiKeyServiceDraft.trim() || null,
+                scopes: apiKeyScopesDraft,
+              })
+            }
           >
             {createApiKeyMutation.isPending ? "Creating..." : "Create key"}
           </button>
+        </div>
+        <div className="mb-4 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3">
+          <p className="mb-2 text-xs font-medium text-[var(--enterprise-text-muted)]">
+            API key scopes (leave empty for full project access)
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {API_KEY_SCOPE_OPTIONS.map((scope) => {
+              const checked = apiKeyScopesDraft.includes(scope);
+              return (
+                <label
+                  key={scope}
+                  className="inline-flex items-center gap-2 text-xs text-[var(--enterprise-text)]"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      setApiKeyScopesDraft((prev) =>
+                        checked ? prev.filter((x) => x !== scope) : [...prev, scope],
+                      )
+                    }
+                    className="accent-[var(--enterprise-primary)]"
+                  />
+                  <span>{scope}</span>
+                </label>
+              );
+            })}
+          </div>
         </div>
         <div className="space-y-2">
           {apiKeysQuery.isLoading ? (
@@ -280,6 +438,14 @@ export function ProjectSettingsClient({ projectId }: Props) {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-[var(--enterprise-text)]">
                     {k.name}
+                  </p>
+                  {k.serviceLabel ? (
+                    <p className="text-xs text-[var(--enterprise-text-muted)]">
+                      Service: <span className="font-medium">{k.serviceLabel}</span>
+                    </p>
+                  ) : null}
+                  <p className="text-xs text-[var(--enterprise-text-muted)]">
+                    Scopes: {k.scopes.length > 0 ? k.scopes.join(", ") : "Full access"}
                   </p>
                   <p className="text-xs text-[var(--enterprise-text-muted)]">
                     <span className="rounded bg-[var(--enterprise-bg)] px-1.5 py-0.5 font-mono text-[11px]">
@@ -308,6 +474,93 @@ export function ProjectSettingsClient({ projectId }: Props) {
             ))
           ) : (
             <p className="text-xs text-[var(--enterprise-text-muted)]">No API keys yet.</p>
+          )}
+        </div>
+      </section>
+
+      <section className={sectionClass}>
+        <h2 className="pb-2 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+          Outbound webhooks
+        </h2>
+        <p className="pb-3 text-xs text-[var(--enterprise-text-muted)]">
+          Webhooks receive signed activity events for this project.
+        </p>
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+          <input
+            type="url"
+            value={webhookUrlDraft}
+            onChange={(e) => setWebhookUrlDraft(e.target.value)}
+            placeholder="https://example.com/plansync-events"
+            className="min-h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]"
+          />
+          <input
+            type="text"
+            value={webhookEventsDraft}
+            onChange={(e) => setWebhookEventsDraft(e.target.value)}
+            placeholder="Events (comma separated, optional)"
+            className="min-h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]"
+          />
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white disabled:opacity-50"
+            disabled={createWebhookMutation.isPending || !webhookUrlDraft.trim()}
+            onClick={() =>
+              createWebhookMutation.mutate({
+                url: webhookUrlDraft.trim(),
+                events: webhookEventsDraft
+                  .split(",")
+                  .map((e) => e.trim())
+                  .filter(Boolean),
+              })
+            }
+          >
+            Add webhook
+          </button>
+        </div>
+        <div className="space-y-2">
+          {webhooksQuery.data?.items?.length ? (
+            webhooksQuery.data.items.map((w) => (
+              <div
+                key={w.id}
+                className="flex flex-col gap-2 rounded-lg border border-[var(--enterprise-border)] p-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-[var(--enterprise-text)]">
+                    {w.url}
+                  </p>
+                  <p className="text-xs text-[var(--enterprise-text-muted)]">
+                    Events: {w.events.length > 0 ? w.events.join(", ") : "All activity events"}
+                  </p>
+                  <p className="text-xs text-[var(--enterprise-text-muted)]">
+                    Last success:{" "}
+                    {w.lastSuccessAt ? new Date(w.lastSuccessAt).toLocaleString() : "Never"} | Last
+                    error: {w.lastErrorAt ? new Date(w.lastErrorAt).toLocaleString() : "None"}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)]"
+                    onClick={() =>
+                      toggleWebhookMutation.mutate({ webhookId: w.id, isActive: !w.isActive })
+                    }
+                  >
+                    {w.isActive ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-red-300 bg-white px-3 text-xs font-semibold text-red-700"
+                    onClick={() => deleteWebhookMutation.mutate(w.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-xs text-[var(--enterprise-text-muted)]">
+              No webhooks configured yet.
+            </p>
           )}
         </div>
       </section>
@@ -460,6 +713,13 @@ export function ProjectSettingsClient({ projectId }: Props) {
           {revokeApiKeyMutation.error instanceof Error
             ? revokeApiKeyMutation.error.message
             : "Could not revoke API key."}
+        </p>
+      ) : null}
+      {datacenterDefaultsMutation.isError ? (
+        <p className="text-sm text-red-600">
+          {datacenterDefaultsMutation.error instanceof Error
+            ? datacenterDefaultsMutation.error.message
+            : "Could not apply data center defaults."}
         </p>
       ) : null}
     </div>
