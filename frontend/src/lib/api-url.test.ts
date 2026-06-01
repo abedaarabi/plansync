@@ -4,6 +4,7 @@ import { apiUrl, getPublicApiBaseUrl } from "./api-url";
 describe("api-url", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it("apiUrl returns same-origin path when NEXT_PUBLIC_API_URL is empty", () => {
@@ -11,7 +12,13 @@ describe("api-url", () => {
     expect(apiUrl("/api/v1/health")).toBe("/api/v1/health");
   });
 
-  it("apiUrl prefixes path when NEXT_PUBLIC_API_URL is set", () => {
+  it("apiUrl uses same-origin in the browser when NEXT_PUBLIC_API_URL is set", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+    vi.stubGlobal("window", {} as Window);
+    expect(apiUrl("/api/v1/health")).toBe("/api/v1/health");
+  });
+
+  it("apiUrl prefixes path when NEXT_PUBLIC_API_URL is set (SSR)", () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
     expect(apiUrl("/api/v1/health")).toBe("https://api.example.com/api/v1/health");
   });
