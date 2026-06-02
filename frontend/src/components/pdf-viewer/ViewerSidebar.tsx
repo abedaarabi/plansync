@@ -533,7 +533,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
             {pdfUrl ? (
               <div
                 className={`mt-1 grid gap-1 ${
-                  showProTabs ? (showCollabTab ? "grid-cols-6" : "grid-cols-5") : "grid-cols-1"
+                  showProTabs ? (showCollabTab ? "grid-cols-5" : "grid-cols-4") : "grid-cols-1"
                 }`}
               >
                 <button
@@ -577,21 +577,6 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                     >
                       <Package className="h-3.5 w-3.5" strokeWidth={1.75} />
                       Takeoff
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={sidebarTab === "sheetAi"}
-                      onClick={() => {
-                        setSidebarTab("sheetAi");
-                        setTakeoffMode(false);
-                        setTakeoffInventoryDrawerFromSidebar(false);
-                      }}
-                      title="Assist tools"
-                      className={sidebarPanelTabClass(sidebarTab === "sheetAi")}
-                    >
-                      <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      Assist
                     </button>
                     {showCollabTab ? (
                       <button
