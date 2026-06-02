@@ -151,7 +151,7 @@
   "authErrors": {
     "signUpFailed": "Sign up failed",
     "signInFailed": "Sign in failed",
-    "sessionNotPersisted": "Signed in, but session was not persisted yet. Please try again. If this continues in production, check proxy Set-Cookie forwarding and cookie domain settings.",
+    "sessionNotPersisted": "Signed in, but your session was not saved yet. Please try again.",
     "verifyEmailFirst": "Please verify your email before signing in.",
     "requestFailed": "Request failed"
   },

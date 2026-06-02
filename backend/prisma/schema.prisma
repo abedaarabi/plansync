@@ -53,11 +53,11 @@ model User {
   takeoffSyncRuns         TakeoffSyncRun[]
   takeoffSnapshots        TakeoffSnapshot[]
   pushSubscriptions       PushSubscription[]
-  jobRunsCreated          JobRun[]                  @relation("JobRunCreator")
-  projectWebhooksCreated  ProjectWebhook[]          @relation("ProjectWebhookCreator")
-  orchestrationWorkflows  OrchestrationWorkflow[]   @relation("OrchestrationWorkflowCreator")
-  orchestrationRuns       OrchestrationRun[]        @relation("OrchestrationRunRequester")
-  orchestrationApprovals  OrchestrationApproval[]   @relation("OrchestrationApprovalApprover")
+  jobRunsCreated          JobRun[]                 @relation("JobRunCreator")
+  projectWebhooksCreated  ProjectWebhook[]         @relation("ProjectWebhookCreator")
+  orchestrationWorkflows  OrchestrationWorkflow[]  @relation("OrchestrationWorkflowCreator")
+  orchestrationRuns       OrchestrationRun[]       @relation("OrchestrationRunRequester")
+  orchestrationApprovals  OrchestrationApproval[]  @relation("OrchestrationApprovalApprover")
 
   /// When true, omit this user from PDF viewer presence / collaborator lists (still can edit).
   hideViewerPresence Boolean @default(false)
@@ -435,34 +435,34 @@ model Project {
   /// Operations & Maintenance: enables O&M nav, assets, PPM, inspections, occupant portal (when modules allow).
   operationsMode Boolean @default(false)
 
-  workspace                 Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  projectMembers            ProjectMember[]
-  emailInviteProjects       EmailInviteProject[]
-  folders                   Folder[]
-  files                     File[]
-  issues                    Issue[]
-  takeoffLines              TakeoffLine[]
-  takeoffViewPresets        TakeoffViewPreset[]
-  takeoffSyncRuns           TakeoffSyncRun[]
-  takeoffSnapshots          TakeoffSnapshot[]
-  rfis                      Rfi[]
-  punchItems                PunchItem[]
-  punchTemplates            PunchTemplate[]
-  fieldReports              FieldReport[]
-  auditLogs                 ActivityLog[]
-  userNotifications         UserNotification[]
-  proposals                 Proposal[]
-  assets                    Asset[]
-  inspectionTemplates       InspectionTemplate[]
-  inspectionRuns            InspectionRun[]
-  occupantPortalTokens      OccupantPortalToken[]
-  scheduleTasks             ScheduleTask[]
-  apiKeys                   ProjectApiKey[]
-  webhooks                  ProjectWebhook[]
-  jobRuns                   JobRun[]
-  orchestrationEnvironments OrchestrationEnvironment[]
-  orchestrationWorkflows    OrchestrationWorkflow[]
-  orchestrationRuns         OrchestrationRun[]
+  workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectMembers       ProjectMember[]
+  emailInviteProjects  EmailInviteProject[]
+  folders              Folder[]
+  files                File[]
+  issues               Issue[]
+  takeoffLines         TakeoffLine[]
+  takeoffViewPresets   TakeoffViewPreset[]
+  takeoffSyncRuns      TakeoffSyncRun[]
+  takeoffSnapshots     TakeoffSnapshot[]
+  rfis                 Rfi[]
+  punchItems           PunchItem[]
+  punchTemplates       PunchTemplate[]
+  fieldReports         FieldReport[]
+  auditLogs            ActivityLog[]
+  userNotifications    UserNotification[]
+  proposals            Proposal[]
+  assets               Asset[]
+  inspectionTemplates  InspectionTemplate[]
+  inspectionRuns       InspectionRun[]
+  occupantPortalTokens OccupantPortalToken[]
+  scheduleTasks        ScheduleTask[]
+  apiKeys              ProjectApiKey[]
+  webhooks             ProjectWebhook[]
+  jobRuns              JobRun[]
+  orchestrationEnvironments  OrchestrationEnvironment[]
+  orchestrationWorkflows     OrchestrationWorkflow[]
+  orchestrationRuns          OrchestrationRun[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -472,40 +472,40 @@ model Project {
 
 /// Project-scoped integration API key (plaintext shown only at creation; DB stores hash).
 model ProjectApiKey {
-  id           String    @id @default(cuid())
-  projectId    String
-  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name         String    @default("Integration key")
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String    @default("Integration key")
   serviceLabel String?
-  scopes       String[]  @default([])
-  keyPrefix    String
-  keyHash      String    @unique
-  createdById  String
-  createdBy    User      @relation("ProjectApiKeyCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  lastUsedAt   DateTime?
-  revokedAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  scopes      String[]  @default([])
+  keyPrefix   String
+  keyHash     String    @unique
+  createdById String
+  createdBy   User      @relation("ProjectApiKeyCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([projectId, revokedAt])
   @@index([createdById])
 }
 
 model ProjectWebhook {
-  id               String    @id @default(cuid())
-  projectId        String
-  project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  url              String
-  secret           String
-  events           String[]  @default([])
-  isActive         Boolean   @default(true)
-  lastSuccessAt    DateTime?
-  lastErrorAt      DateTime?
+  id            String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  url            String
+  secret         String
+  events         String[] @default([])
+  isActive       Boolean  @default(true)
+  lastSuccessAt  DateTime?
+  lastErrorAt    DateTime?
   lastErrorMessage String?
-  createdById      String
-  createdBy        User      @relation("ProjectWebhookCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdById    String
+  createdBy      User     @relation("ProjectWebhookCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([projectId, isActive])
   @@index([createdById])
@@ -559,8 +559,8 @@ enum OrchestrationApprovalStatus {
 
 model OrchestrationEnvironment {
   id               String   @id @default(cuid())
-  projectId        String
-  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name             String
   region           String
   availabilityZone String?
@@ -577,18 +577,18 @@ model OrchestrationEnvironment {
 }
 
 model OrchestrationWorkflow {
-  id            String                    @id @default(cuid())
-  projectId     String
-  project       Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name          String
-  description   String?
-  isActive      Boolean                   @default(true)
-  environmentId String?
-  environment   OrchestrationEnvironment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
-  createdById   String?
-  createdBy     User?                     @relation("OrchestrationWorkflowCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt     DateTime                  @default(now())
-  updatedAt     DateTime                  @updatedAt
+  id             String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  isActive       Boolean  @default(true)
+  environmentId   String?
+  environment     OrchestrationEnvironment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
+  createdById     String?
+  createdBy       User?    @relation("OrchestrationWorkflowCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   steps        OrchestrationWorkflowStep[]
   dependencies OrchestrationWorkflowDependency[]
@@ -599,18 +599,18 @@ model OrchestrationWorkflow {
 }
 
 model OrchestrationWorkflowStep {
-  id             String                @id @default(cuid())
-  workflowId     String
-  workflow       OrchestrationWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  workflowId      String
+  workflow        OrchestrationWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   name           String
   stepType       String
-  sortOrder      Int                   @default(0)
+  sortOrder      Int      @default(0)
   timeoutSeconds Int?
   configJson     Json?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  runSteps  OrchestrationRunStep[]            @relation("OrchestrationRunStepWorkflowStep")
+  runSteps  OrchestrationRunStep[] @relation("OrchestrationRunStepWorkflowStep")
   fromLinks OrchestrationWorkflowDependency[] @relation("WorkflowDependencyFrom")
   toLinks   OrchestrationWorkflowDependency[] @relation("WorkflowDependencyTo")
 
@@ -618,15 +618,15 @@ model OrchestrationWorkflowStep {
 }
 
 model OrchestrationWorkflowDependency {
-  id         String                    @id @default(cuid())
-  workflowId String
-  workflow   OrchestrationWorkflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  fromStepId String
-  fromStep   OrchestrationWorkflowStep @relation("WorkflowDependencyFrom", fields: [fromStepId], references: [id], onDelete: Cascade)
-  toStepId   String
-  toStep     OrchestrationWorkflowStep @relation("WorkflowDependencyTo", fields: [toStepId], references: [id], onDelete: Cascade)
-  condition  String                    @default("on_success")
-  createdAt  DateTime                  @default(now())
+  id          String   @id @default(cuid())
+  workflowId   String
+  workflow     OrchestrationWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  fromStepId   String
+  fromStep     OrchestrationWorkflowStep @relation("WorkflowDependencyFrom", fields: [fromStepId], references: [id], onDelete: Cascade)
+  toStepId     String
+  toStep       OrchestrationWorkflowStep @relation("WorkflowDependencyTo", fields: [toStepId], references: [id], onDelete: Cascade)
+  condition   String   @default("on_success")
+  createdAt   DateTime @default(now())
 
   @@unique([workflowId, fromStepId, toStepId])
   @@index([workflowId, fromStepId])
@@ -634,27 +634,27 @@ model OrchestrationWorkflowDependency {
 }
 
 model OrchestrationRun {
-  id                String                    @id @default(cuid())
-  projectId         String
-  project           Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workflowId        String
-  workflow          OrchestrationWorkflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  environmentId     String?
-  environment       OrchestrationEnvironment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
-  requestedById     String?
-  requestedBy       User?                     @relation("OrchestrationRunRequester", fields: [requestedById], references: [id], onDelete: SetNull)
-  status            OrchestrationRunStatus    @default(QUEUED)
-  startedAt         DateTime?
-  finishedAt        DateTime?
-  changeWindowStart DateTime?
-  changeWindowEnd   DateTime?
-  summaryJson       Json?
-  errorJson         Json?
-  createdAt         DateTime                  @default(now())
-  updatedAt         DateTime                  @updatedAt
+  id                 String   @id @default(cuid())
+  projectId           String
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workflowId          String
+  workflow            OrchestrationWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  environmentId       String?
+  environment         OrchestrationEnvironment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
+  requestedById       String?
+  requestedBy         User?    @relation("OrchestrationRunRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  status             OrchestrationRunStatus @default(QUEUED)
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  changeWindowStart  DateTime?
+  changeWindowEnd    DateTime?
+  summaryJson        Json?
+  errorJson          Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  stepRuns  OrchestrationRunStep[]
-  approvals OrchestrationApproval[]
+  stepRuns   OrchestrationRunStep[]
+  approvals  OrchestrationApproval[]
 
   @@index([projectId, createdAt])
   @@index([workflowId, createdAt])
@@ -662,35 +662,35 @@ model OrchestrationRun {
 }
 
 model OrchestrationRunStep {
-  id             String                    @id @default(cuid())
-  runId          String
-  run            OrchestrationRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
-  workflowStepId String
-  workflowStep   OrchestrationWorkflowStep @relation("OrchestrationRunStepWorkflowStep", fields: [workflowStepId], references: [id], onDelete: Cascade)
-  status         OrchestrationRunStatus    @default(QUEUED)
-  attemptCount   Int                       @default(0)
-  startedAt      DateTime?
-  finishedAt     DateTime?
-  logsJson       Json?
-  createdAt      DateTime                  @default(now())
-  updatedAt      DateTime                  @updatedAt
+  id              String   @id @default(cuid())
+  runId            String
+  run              OrchestrationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  workflowStepId   String
+  workflowStep     OrchestrationWorkflowStep @relation("OrchestrationRunStepWorkflowStep", fields: [workflowStepId], references: [id], onDelete: Cascade)
+  status          OrchestrationRunStatus @default(QUEUED)
+  attemptCount    Int      @default(0)
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  logsJson        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([runId, workflowStepId])
   @@index([runId, status])
 }
 
 model OrchestrationApproval {
-  id          String                      @id @default(cuid())
-  runId       String
-  run         OrchestrationRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
-  approverId  String?
-  approver    User?                       @relation("OrchestrationApprovalApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  id          String   @id @default(cuid())
+  runId        String
+  run          OrchestrationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  approverId   String?
+  approver     User?    @relation("OrchestrationApprovalApprover", fields: [approverId], references: [id], onDelete: SetNull)
   status      OrchestrationApprovalStatus @default(PENDING)
   note        String?
-  requestedAt DateTime                    @default(now())
+  requestedAt DateTime @default(now())
   respondedAt DateTime?
-  createdAt   DateTime                    @default(now())
-  updatedAt   DateTime                    @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([runId, status])
   @@index([approverId])

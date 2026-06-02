@@ -90,9 +90,7 @@ export default function SignInPage() {
         else {
           const session = await waitForSessionReady();
           if (!session.ready) {
-            setError(
-              "Signed in, but session was not persisted yet. Please try again. If this continues in production, check proxy Set-Cookie forwarding and cookie domain settings.",
-            );
+            setError("Signed in, but your session was not saved yet. Please try again.");
             return;
           }
           if (session.emailVerified === false) {

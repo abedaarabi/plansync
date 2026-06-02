@@ -6,13 +6,11 @@ export function getPublicApiBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? "").trim().replace(/\/$/, "");
 }
 
-/** Prefix `/api/...` with the public API origin when configured (SSR only). */
+/** Prefix `/api/...` with the public API origin when configured. */
 export function apiUrl(path: string): string {
   if (!path.startsWith("/api/")) {
     throw new Error(`apiUrl: path must start with /api/, got: ${path}`);
   }
-  // Browser: same-origin — Traefik routes `plansync.dev/api/*` → Hono (see docker-compose.deploy.yml).
-  if (typeof window !== "undefined") return path;
   const base = getPublicApiBaseUrl();
   return base ? `${base}${path}` : path;
 }
