@@ -6,11 +6,12 @@ export function getPublicApiBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? "").trim().replace(/\/$/, "");
 }
 
-/** Prefix `/api/...` with the public API origin when configured. */
+/** Prefix `/api/...` with the public API origin when configured (server/SSR). In the browser, use same-origin `/api/*` so the session cookie from sign-in on `plansync.dev` is sent. `NEXT_PUBLIC_API_URL` is still used for WebSockets via `wsApiUrl()`. */
 export function apiUrl(path: string): string {
   if (!path.startsWith("/api/")) {
     throw new Error(`apiUrl: path must start with /api/, got: ${path}`);
   }
+  if (typeof window !== "undefined") return path;
   const base = getPublicApiBaseUrl();
   return base ? `${base}${path}` : path;
 }
