@@ -158,7 +158,35 @@ export function loadEnv(): Env {
     console.error(parsed.error.flatten());
     throw new Error("Invalid environment variables");
   }
-  return parsed.data;
+  const env = parsed.data;
+
+  // Production auth runs on the app origin (`plansync.dev/api/auth/*`), not the API host.
+  // Auto-correct common misconfigurations (`BETTER_AUTH_URL=https://api.<domain>`) that can
+  // otherwise break sign-in callbacks/cookies and produce gateway failures upstream.
+  if ((env.NODE_ENV ?? "").toLowerCase() === "production") {
+    try {
+      const app = new URL(env.PUBLIC_APP_URL.trim());
+      const auth = new URL(env.BETTER_AUTH_URL.trim());
+      const api = env.PUBLIC_API_URL?.trim() ? new URL(env.PUBLIC_API_URL.trim()) : null;
+
+      const sameHost = auth.host.toLowerCase() === app.host.toLowerCase();
+      const pointsAtApiHost =
+        auth.hostname.toLowerCase().startsWith("api.") ||
+        (api ? auth.host.toLowerCase() === api.host.toLowerCase() : false);
+      const originMismatch = auth.origin !== app.origin;
+
+      if (originMismatch && (sameHost || pointsAtApiHost)) {
+        console.warn(
+          `[env] BETTER_AUTH_URL=${auth.origin} mismatches PUBLIC_APP_URL=${app.origin}; using PUBLIC_APP_URL for Better Auth base URL.`,
+        );
+        return { ...env, BETTER_AUTH_URL: app.origin };
+      }
+    } catch {
+      // URL validation is already handled by zod; keep parsed values if normalization fails.
+    }
+  }
+
+  return env;
 }
 
 /** Resolved API key for Gemini (Sheet AI). */
