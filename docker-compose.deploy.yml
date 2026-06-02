@@ -27,6 +27,9 @@ services:
       - dokploy-network
     environment:
       NODE_ENV: ${NODE_ENV:-production}
+      # Raise Node's HTTP header limit (default 16 KB) so large Better Auth cookie
+      # bundles don't trigger 431 Request Header Fields Too Large on /api/auth/*.
+      NODE_OPTIONS: ${NODE_OPTIONS:---max-http-header-size=65536}
       PORT: ${BACKEND_PORT:-8787}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL required}
       CORS_ORIGIN: ${CORS_ORIGIN:-${PUBLIC_APP_URL:?set PUBLIC_APP_URL}}
@@ -101,6 +104,8 @@ services:
     # 3000:3000 conflicts with other stacks / Dokploy’s gateway on the same host.
     environment:
       NODE_ENV: ${NODE_ENV:-production}
+      # Match the backend so the Next standalone server also tolerates large cookie headers.
+      NODE_OPTIONS: ${NODE_OPTIONS:---max-http-header-size=65536}
       HOSTNAME: 0.0.0.0
       PORT: "3000"
       API_PROXY_TARGET: http://backend:${BACKEND_PORT:-8787}

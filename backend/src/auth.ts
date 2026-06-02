@@ -77,7 +77,13 @@ export function createAuth(env: Env) {
       /** Long-lived sessions: stay signed in until explicit sign-out or prolonged inactivity. */
       expiresIn: 60 * 60 * 24 * 90,
       updateAge: 60 * 60 * 24,
-      cookieCache: { enabled: true, maxAge: 3600 },
+      /**
+       * Cookie cache disabled: it stores the full signed session+user payload in a
+       * `better-auth.session_data` cookie, which (stacked with other cookies on the apex
+       * domain) can push the request header past Node's limit → 431. Resolving sessions
+       * from Postgres keeps the cookie small (just the session token).
+       */
+      cookieCache: { enabled: false },
     },
   });
 }
