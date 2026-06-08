@@ -14,12 +14,15 @@ FROM base AS deps
 WORKDIR /app
 ENV HUSKY=0
 # Dokploy/CI may set NODE_ENV=production; include dev + optional for `sharp` platform bindings.
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
+COPY scripts/docker-npm-ci.sh ./scripts/docker-npm-ci.sh
 COPY frontend/package.json ./frontend/package.json
 COPY backend/package.json ./backend/package.json
 # Tailwind v4 pulls native optional deps (`lightningcss`, `@tailwindcss/oxide`) that npm workspaces
 # often omit. npm also rejects wrong CPU (EBADPLATFORM), so install only this image's Linux GNU bindings.
-RUN npm ci --include=dev --include=optional
+RUN --mount=type=cache,target=/root/.npm \
+  chmod +x scripts/docker-npm-ci.sh \
+  && ./scripts/docker-npm-ci.sh --include=dev --include=optional
 # Read versions from the root lockfile (lockfile v3 `packages` keys). Fails fast if Tailwind drops these entries.
 RUN set -eu; \
   LC_VER=$(node -p "require('./package-lock.json').packages['node_modules/lightningcss']?.version ?? ''"); \
@@ -30,13 +33,23 @@ RUN set -eu; \
   fi; \
   ARCH="$(uname -m)"; \
   if [ "$ARCH" = "x86_64" ]; then \
-    npm install --no-save --legacy-peer-deps \
-      "lightningcss-linux-x64-gnu@${LC_VER}" \
-      "@tailwindcss/oxide-linux-x64-gnu@${OX_VER}"; \
+    for attempt in 1 2 3 4 5; do \
+      npm install --no-save --legacy-peer-deps \
+        "lightningcss-linux-x64-gnu@${LC_VER}" \
+        "@tailwindcss/oxide-linux-x64-gnu@${OX_VER}" && break; \
+      if [ "$attempt" -eq 5 ]; then exit 1; fi; \
+      echo "Tailwind native install failed (attempt $attempt), retrying..."; \
+      sleep $((attempt * 10)); \
+    done; \
   elif [ "$ARCH" = "aarch64" ]; then \
-    npm install --no-save --legacy-peer-deps \
-      "lightningcss-linux-arm64-gnu@${LC_VER}" \
-      "@tailwindcss/oxide-linux-arm64-gnu@${OX_VER}"; \
+    for attempt in 1 2 3 4 5; do \
+      npm install --no-save --legacy-peer-deps \
+        "lightningcss-linux-arm64-gnu@${LC_VER}" \
+        "@tailwindcss/oxide-linux-arm64-gnu@${OX_VER}" && break; \
+      if [ "$attempt" -eq 5 ]; then exit 1; fi; \
+      echo "Tailwind native install failed (attempt $attempt), retrying..."; \
+      sleep $((attempt * 10)); \
+    done; \
   else \
     echo "Unsupported arch for Tailwind native deps: $ARCH (need x86_64 or aarch64)"; \
     exit 1; \
