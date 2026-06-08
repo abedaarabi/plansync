@@ -37,6 +37,7 @@ import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadin
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetDetailSlide } from "@/components/enterprise/OmAssetDetailSlide";
 import { OmAssetDocumentsBlock } from "@/components/enterprise/OmAssetDocumentsBlock";
+import { OmMaintenanceScheduleSlideOver } from "@/components/enterprise/OmMaintenanceScheduleSlideOver";
 import {
   MOBILE_FIELD_INPUT,
   MOBILE_FIELD_LABEL,
@@ -412,6 +413,9 @@ export function OmAssetsClient({ projectId }: Props) {
   const [createDraft, setCreateDraft] = useState<AssetFormDraft>(() => emptyDraft());
   const [createDrawingSearch, setCreateDrawingSearch] = useState("");
   const [justCreatedAsset, setJustCreatedAsset] = useState<OmAssetRow | null>(null);
+  const [showCreateMaintenance, setShowCreateMaintenance] = useState(false);
+  const [maintenanceAssetId, setMaintenanceAssetId] = useState<string | null>(null);
+  const [maintenanceFormSession, setMaintenanceFormSession] = useState(0);
 
   const [editingAsset, setEditingAsset] = useState<OmAssetRow | null>(null);
   const [editDraft, setEditDraft] = useState<AssetFormDraft>(() => emptyDraft());
@@ -480,6 +484,12 @@ export function OmAssetsClient({ projectId }: Props) {
     setCreateDraft(emptyDraft());
     setCreateDrawingSearch("");
     setJustCreatedAsset(null);
+  }, []);
+
+  const openMaintenanceForAsset = useCallback((assetId: string) => {
+    setMaintenanceAssetId(assetId);
+    setMaintenanceFormSession((n) => n + 1);
+    setShowCreateMaintenance(true);
   }, []);
 
   const closeEditSlide = useCallback(() => setEditingAsset(null), []);
@@ -786,6 +796,19 @@ export function OmAssetsClient({ projectId }: Props) {
                 >
                   Add another asset
                 </EnterpriseButton>
+                <EnterpriseButton
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  className="sm:w-auto"
+                  onClick={() => {
+                    const assetId = justCreatedAsset.id;
+                    closeAddSlide();
+                    openMaintenanceForAsset(assetId);
+                  }}
+                >
+                  Create maintenance schedule
+                </EnterpriseButton>
                 <EnterpriseButton size="lg" fullWidth className="sm:w-auto" onClick={closeAddSlide}>
                   Done
                 </EnterpriseButton>
@@ -1074,6 +1097,15 @@ export function OmAssetsClient({ projectId }: Props) {
             return;
           deleteMut.mutate(a.id);
         }}
+      />
+
+      <OmMaintenanceScheduleSlideOver
+        projectId={projectId}
+        open={showCreateMaintenance}
+        schedule={null}
+        formSession={maintenanceFormSession}
+        initialAssetId={maintenanceAssetId}
+        onClose={() => setShowCreateMaintenance(false)}
       />
 
       {rows.length === 0 ? (

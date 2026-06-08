@@ -58,6 +58,8 @@ model User {
   orchestrationWorkflows  OrchestrationWorkflow[]   @relation("OrchestrationWorkflowCreator")
   orchestrationRuns       OrchestrationRun[]        @relation("OrchestrationRunRequester")
   orchestrationApprovals  OrchestrationApproval[]   @relation("OrchestrationApprovalApprover")
+  maintenanceSchedulesAssigned MaintenanceSchedule[]  @relation("MaintenanceScheduleAssignee")
+  maintenanceCompletions       MaintenanceCompletion[] @relation("MaintenanceCompletionActor")
 
   /// When true, omit this user from PDF viewer presence / collaborator lists (still can edit).
   hideViewerPresence Boolean @default(false)
@@ -189,6 +191,7 @@ model Workspace {
 
   /// Daily O&M maintenance digest emails — idempotency (one row per workspace per UTC day).
   omMaintenanceReminderDigests OmMaintenanceReminderDigest[]
+  maintenanceCompletions       MaintenanceCompletion[]
   /// Public occupant submit rate-limit buckets (distributed counters).
   occupantSubmitRateLimits     OccupantSubmitRateLimit[]
 }
@@ -453,6 +456,7 @@ model Project {
   userNotifications         UserNotification[]
   proposals                 Proposal[]
   assets                    Asset[]
+  maintenanceCompletions    MaintenanceCompletion[]
   inspectionTemplates       InspectionTemplate[]
   inspectionRuns            InspectionRun[]
   occupantPortalTokens      OccupantPortalToken[]
@@ -896,6 +900,8 @@ model Issue {
   issueKind IssueKind @default(CONSTRUCTION)
   assetId   String?
   asset     Asset?    @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  maintenanceScheduleId String?
+  maintenanceDueAt      DateTime?
 
   /// When assignee is not a workspace user (e.g. external vendor).
   externalAssigneeEmail String?
@@ -918,6 +924,8 @@ model Issue {
   fileVersion FileVersion @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
   assignee    User?       @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   creator     User?       @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  maintenanceSchedule MaintenanceSchedule? @relation(fields: [maintenanceScheduleId], references: [id], onDelete: SetNull)
+  maintenanceCompletion MaintenanceCompletion?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -930,6 +938,8 @@ model Issue {
   @@index([fileVersionId])
   @@index([assetId])
   @@index([issueKind])
+  @@index([maintenanceScheduleId])
+  @@unique([maintenanceScheduleId, maintenanceDueAt])
 }
 
 enum MaintenanceFrequency {
@@ -979,6 +989,7 @@ model Asset {
 
   issues               Issue[]
   maintenanceSchedules MaintenanceSchedule[]
+  maintenanceCompletions MaintenanceCompletion[]
   documents            AssetDocument[]
 
   createdAt DateTime @default(now())
@@ -1016,15 +1027,51 @@ model MaintenanceSchedule {
   nextDueAt           DateTime?
   lastCompletedAt     DateTime?
   assignedVendorLabel String?
+  assignedToUserId    String?
   isActive            Boolean              @default(true)
 
-  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  asset      Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assignedTo User? @relation("MaintenanceScheduleAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  issues     Issue[]
+  completions MaintenanceCompletion[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([assetId])
   @@index([nextDueAt])
+  @@index([assignedToUserId])
+}
+
+model MaintenanceCompletion {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  projectId         String
+  assetId           String
+  scheduleId        String
+  completedAt       DateTime @default(now())
+  completedByUserId String?
+  previousDueAt     DateTime?
+  nextDueAt         DateTime?
+  workOrderId       String?
+  notes             String?
+  vendorLabel       String?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  asset     Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  schedule  MaintenanceSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  completedBy User?   @relation("MaintenanceCompletionActor", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  workOrder Issue?    @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId, completedAt])
+  @@index([projectId, completedAt])
+  @@index([assetId, completedAt])
+  @@index([scheduleId, completedAt])
+  @@index([completedByUserId])
+  @@unique([workOrderId])
 }
 
 model InspectionTemplate {
@@ -1671,6 +1718,10 @@ enum ActivityType {
   PROPOSAL_DELETED
   PROJECT_DELETED
   VIEWER_MARKUP_SAVED
+  MAINTENANCE_SCHEDULE_CREATED
+  MAINTENANCE_SCHEDULE_UPDATED
+  MAINTENANCE_SCHEDULE_COMPLETED
+  MAINTENANCE_WORK_ORDERS_GENERATED
 }
 
 model ActivityLog {

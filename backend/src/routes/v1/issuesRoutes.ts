@@ -7,6 +7,7 @@ import {
   IssueKind,
   IssuePriority,
   IssueStatus,
+  MaintenanceFrequency,
   Prisma,
   RfiStatus,
 } from "@prisma/client";
@@ -87,6 +88,39 @@ function issueKindWhere(kinds: IssueKind[] | undefined): Prisma.IssueWhereInput 
 function dateFromYmd(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12, 0, 0));
+}
+
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setUTCDate(x.getUTCDate() + n);
+  return x;
+}
+
+function frequencyToNextFrom(
+  frequency: MaintenanceFrequency,
+  intervalDays: number | null,
+  from: Date,
+): Date {
+  switch (frequency) {
+    case MaintenanceFrequency.DAILY:
+      return addDays(from, 1);
+    case MaintenanceFrequency.WEEKLY:
+      return addDays(from, 7);
+    case MaintenanceFrequency.BIWEEKLY:
+      return addDays(from, 14);
+    case MaintenanceFrequency.MONTHLY:
+      return addDays(from, 30);
+    case MaintenanceFrequency.QUARTERLY:
+      return addDays(from, 90);
+    case MaintenanceFrequency.SEMI_ANNUAL:
+      return addDays(from, 182);
+    case MaintenanceFrequency.ANNUAL:
+      return addDays(from, 365);
+    case MaintenanceFrequency.CUSTOM:
+      return addDays(from, Math.max(1, intervalDays ?? 30));
+    default:
+      return addDays(from, 30);
+  }
 }
 
 const issueInclude = {
@@ -1278,6 +1312,82 @@ export function registerIssuesRoutes(
 
     const promotedToWo =
       issue.issueKind === IssueKind.OCCUPANT && body.data.issueKind === IssueKind.WORK_ORDER;
+    const nextIssueStatus = updated.status;
+    const transitionedToDone =
+      issue.status !== IssueStatus.RESOLVED &&
+      issue.status !== IssueStatus.CLOSED &&
+      (nextIssueStatus === IssueStatus.RESOLVED || nextIssueStatus === IssueStatus.CLOSED);
+
+    let maintenanceCompletionLogged = false;
+    const maintenanceScheduleId = issue.maintenanceScheduleId;
+    if (transitionedToDone && issue.issueKind === IssueKind.WORK_ORDER && maintenanceScheduleId) {
+      const completedAt = new Date();
+      const completion = await prisma.$transaction(async (tx) => {
+        const already = await tx.maintenanceCompletion.findFirst({
+          where: { workOrderId: issue.id },
+          select: { id: true },
+        });
+        if (already) return null;
+
+        const schedule = await tx.maintenanceSchedule.findFirst({
+          where: { id: maintenanceScheduleId, asset: { projectId: issue.projectId } },
+          include: { asset: { select: { id: true, tag: true, name: true } } },
+        });
+        if (!schedule) return null;
+
+        const previousDueAt = schedule.nextDueAt;
+        const canAdvance =
+          schedule.nextDueAt &&
+          issue.maintenanceDueAt &&
+          schedule.nextDueAt.getTime() === issue.maintenanceDueAt.getTime();
+        const nextDueAt = canAdvance
+          ? frequencyToNextFrom(schedule.frequency, schedule.intervalDays, completedAt)
+          : schedule.nextDueAt;
+
+        if (canAdvance && nextDueAt) {
+          await tx.maintenanceSchedule.update({
+            where: { id: schedule.id },
+            data: {
+              lastCompletedAt: completedAt,
+              nextDueAt,
+            },
+          });
+        }
+
+        return tx.maintenanceCompletion.create({
+          data: {
+            workspaceId: issue.workspaceId,
+            projectId: issue.projectId,
+            assetId: schedule.assetId,
+            scheduleId: schedule.id,
+            completedAt,
+            completedByUserId: c.get("user").id,
+            previousDueAt,
+            nextDueAt,
+            workOrderId: issue.id,
+            vendorLabel: schedule.assignedVendorLabel ?? null,
+          },
+          select: { id: true, nextDueAt: true, previousDueAt: true, scheduleId: true },
+        });
+      });
+
+      if (completion) {
+        maintenanceCompletionLogged = true;
+        await logActivity(issue.workspaceId, ActivityType.MAINTENANCE_SCHEDULE_COMPLETED, {
+          actorUserId: c.get("user").id,
+          entityType: "MaintenanceSchedule",
+          entityId: completion.scheduleId,
+          projectId: issue.projectId,
+          metadata: {
+            completionId: completion.id,
+            workOrderId: issue.id,
+            completedVia: "workOrder",
+            previousDueAt: completion.previousDueAt?.toISOString() ?? null,
+            nextDueAt: completion.nextDueAt?.toISOString() ?? null,
+          },
+        });
+      }
+    }
 
     await logActivity(issue.workspaceId, ActivityType.ISSUE_UPDATED, {
       actorUserId: c.get("user").id,
@@ -1286,6 +1396,7 @@ export function registerIssuesRoutes(
       metadata: {
         title: updated.title,
         ...(promotedToWo ? { occupantPromotedToWorkOrder: true } : {}),
+        ...(maintenanceCompletionLogged ? { maintenanceCompletedViaWorkOrder: true } : {}),
       },
     });
 

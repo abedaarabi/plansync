@@ -7,9 +7,11 @@ import { Calendar, ChevronRight, MapPin, Pencil, Plus, Trash2 } from "lucide-rea
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import {
+  fetchOmMaintenanceCompletions,
   fetchOmMaintenance,
   fetchIssuesForProject,
   type IssueRow,
+  type OmMaintenanceCompletionRow,
   type OmAssetRow,
   type OmMaintenanceRow,
 } from "@/lib/api-client";
@@ -60,6 +62,11 @@ export function OmAssetDetailSlide({
     queryFn: () => fetchOmMaintenance(projectId),
     enabled: open && Boolean(assetId),
   });
+  const { data: completionHistory = [] } = useQuery({
+    queryKey: qk.omMaintenanceCompletions(projectId, assetId),
+    queryFn: () => fetchOmMaintenanceCompletions(projectId, { assetId, limit: 30 }),
+    enabled: open && Boolean(assetId),
+  });
 
   const assetIssuesKey = "WORK_ORDER,OCCUPANT";
   const { data: assetWorkOrders = [] } = useQuery({
@@ -74,18 +81,18 @@ export function OmAssetDetailSlide({
     [maintenance, assetId],
   );
 
-  const serviceHistory = useMemo(() => {
-    const rows = schedulesForAsset
-      .filter((s) => s.lastCompletedAt)
-      .map((s) => ({
-        id: s.id,
-        at: s.lastCompletedAt!,
-        title: s.title.trim() || "Service",
-        vendor: s.assignedVendorLabel?.trim() || "",
-      }))
-      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-    return rows;
-  }, [schedulesForAsset]);
+  const serviceHistory = useMemo(
+    () =>
+      completionHistory.map((c: OmMaintenanceCompletionRow) => ({
+        id: c.id,
+        at: c.completedAt,
+        title: c.schedule.title.trim() || c.schedule.frequency,
+        vendor: c.vendorLabel?.trim() || "",
+        completedBy: c.completedBy?.name || c.completedBy?.email || "",
+        workOrderTitle: c.workOrder?.title || "",
+      })),
+    [completionHistory],
+  );
 
   const nextSchedule = useMemo((): OmMaintenanceRow | null => {
     const active = schedulesForAsset.filter((s) => s.isActive && s.nextDueAt);
@@ -263,6 +270,16 @@ export function OmAssetDetailSlide({
                   <span className="font-medium">{row.title}</span>
                   {row.vendor ? (
                     <span className="text-[var(--enterprise-text-muted)]">{row.vendor}</span>
+                  ) : null}
+                  {row.completedBy ? (
+                    <span className="text-[var(--enterprise-text-muted)]">
+                      by {row.completedBy}
+                    </span>
+                  ) : null}
+                  {row.workOrderTitle ? (
+                    <span className="text-[var(--enterprise-text-muted)]">
+                      · WO {row.workOrderTitle}
+                    </span>
                   ) : null}
                 </li>
               ))}

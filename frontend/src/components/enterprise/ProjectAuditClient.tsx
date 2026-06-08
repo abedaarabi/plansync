@@ -47,7 +47,8 @@ function rowCategory(type: string): Exclude<AuditCategory, "all"> {
     t.startsWith("ISSUE_") ||
     t.startsWith("RFI_") ||
     t.startsWith("PUNCH_") ||
-    t.startsWith("FIELD_REPORT_")
+    t.startsWith("FIELD_REPORT_") ||
+    t.startsWith("MAINTENANCE_")
   ) {
     return "coordination";
   }

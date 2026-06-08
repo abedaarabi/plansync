@@ -3533,7 +3533,7 @@ export function v1Routes(
     return c.json(getCollabMetricsSnapshot());
   });
 
-  /** Daily cron: email workspace admins a digest of PPM items overdue or due within 7 days (UTC). Same auth as RFI overdue reminders. */
+  /** Daily cron: email + in-app notifications for PPM items overdue or due within 7 days (UTC). */
   r.post("/internal/om-maintenance-reminders", async (c) => {
     const secret = env.INTERNAL_CRON_SECRET?.trim();
     if (!secret) return c.json({ error: "Not configured" }, 503);
@@ -3541,19 +3541,15 @@ export function v1Routes(
     if (hdr !== secret) return c.json({ error: "Unauthorized" }, 401);
     try {
       const result = await runOmMaintenanceReminders(env);
-      if (result.skippedNoResend) {
-        return c.json({
-          ok: true,
-          skipped: true,
-          reason: "RESEND not configured",
-          dayKey: result.dayKey,
-        });
-      }
       return c.json({
         ok: true,
         dayKey: result.dayKey,
         workspacesEmailed: result.workspacesEmailed,
+        workspacesNotified: result.workspacesNotified,
+        membersEmailed: result.membersEmailed,
+        membersNotified: result.membersNotified,
         workspacesSkipped: result.workspacesSkipped,
+        skippedNoResend: result.skippedNoResend,
       });
     } catch (e) {
       console.error("[om-maintenance-reminders]", e);

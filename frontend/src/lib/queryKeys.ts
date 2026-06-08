@@ -70,6 +70,8 @@ export const qk = {
   omAssetDocumentReadUrl: (projectId: string, assetId: string, documentId: string) =>
     ["om", "assetDocumentReadUrl", projectId, assetId, documentId] as const,
   omMaintenance: (projectId: string) => ["om", "maintenance", projectId] as const,
+  omMaintenanceCompletions: (projectId: string, assetId?: string) =>
+    ["om", "maintenanceCompletions", projectId, assetId ?? "all"] as const,
   omInspectionTemplates: (projectId: string) => ["om", "inspectionTemplates", projectId] as const,
   omInspectionRuns: (projectId: string) => ["om", "inspectionRuns", projectId] as const,
   occupantTokens: (projectId: string) => ["om", "occupantTokens", projectId] as const,

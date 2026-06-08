@@ -16,10 +16,11 @@ import {
 import { prisma } from "../../lib/prisma.js";
 import { isWorkspaceOmBilling, isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectWithAuth } from "../../lib/permissions.js";
+import { assertUserAssignableToProject } from "../../lib/projectAccess.js";
 import { mergeProjectSettingsPatch, parseProjectSettingsJson } from "../../lib/projectSettings.js";
 import { cloneSettingsJson } from "../../lib/takeoffPricing.js";
 import type { Env } from "../../lib/env.js";
-import { logActivity } from "../../lib/activity.js";
+import { logActivity, logActivitySafe } from "../../lib/activity.js";
 import { Resend } from "resend";
 import { createUserNotifications } from "../../lib/userNotifications.js";
 import {
@@ -131,6 +132,173 @@ export function ppmHealthLabel(
   const soon = addDays(d0, 30);
   if (due <= soon) return "dueSoon";
   return "onTrack";
+}
+
+const maintenanceScheduleInclude = {
+  asset: { select: { id: true, tag: true, name: true } },
+  assignedTo: { select: { id: true, name: true, email: true, image: true } },
+} as const;
+
+type MaintenanceScheduleRow = Prisma.MaintenanceScheduleGetPayload<{
+  include: typeof maintenanceScheduleInclude;
+}>;
+
+function maintenanceScheduleJson(r: MaintenanceScheduleRow, now = new Date()) {
+  return {
+    id: r.id,
+    assetId: r.assetId,
+    title: r.title,
+    frequency: r.frequency,
+    intervalDays: r.intervalDays,
+    nextDueAt: r.nextDueAt?.toISOString() ?? null,
+    lastCompletedAt: r.lastCompletedAt?.toISOString() ?? null,
+    assignedVendorLabel: r.assignedVendorLabel,
+    assignedToUserId: r.assignedToUserId,
+    assignedTo: r.assignedTo
+      ? {
+          id: r.assignedTo.id,
+          name: r.assignedTo.name,
+          email: r.assignedTo.email,
+          image: r.assignedTo.image,
+        }
+      : null,
+    isActive: r.isActive,
+    asset: r.asset,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+    health: ppmHealthLabel(r.nextDueAt, now),
+  };
+}
+
+function notifyMaintenanceAssigned(opts: {
+  workspaceId: string;
+  projectId: string;
+  assigneeUserId: string;
+  actorUserId: string;
+  assetTag: string;
+  title: string;
+}) {
+  const label = opts.title.trim() || "Maintenance schedule";
+  void createUserNotifications({
+    workspaceId: opts.workspaceId,
+    projectId: opts.projectId,
+    recipientUserIds: [opts.assigneeUserId],
+    excludeUserId: opts.actorUserId,
+    kind: "MAINTENANCE_ASSIGNED",
+    title: `Assigned: ${label.length > 120 ? `${label.slice(0, 120)}…` : label}`,
+    body: `Asset ${opts.assetTag}`,
+    href: `/projects/${opts.projectId}/om/maintenance`,
+    actorUserId: opts.actorUserId,
+  }).catch((e) => console.error("[maintenance-assignment-notification]", e));
+}
+
+function maintenanceAuditMetadata(
+  row: Pick<
+    MaintenanceScheduleRow,
+    "id" | "title" | "frequency" | "nextDueAt" | "lastCompletedAt"
+  > & {
+    asset: { tag: string; name: string };
+  },
+) {
+  return {
+    scheduleId: row.id,
+    title: row.title.trim() || row.frequency,
+    assetTag: row.asset.tag,
+    assetName: row.asset.name,
+    frequency: row.frequency,
+    nextDueAt: row.nextDueAt?.toISOString() ?? null,
+    lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
+  };
+}
+
+const maintenanceCompletionInclude = {
+  asset: { select: { id: true, tag: true, name: true } },
+  schedule: { select: { id: true, title: true, frequency: true } },
+  completedBy: { select: { id: true, name: true, email: true, image: true } },
+  workOrder: { select: { id: true, title: true, status: true, issueKind: true } },
+} as const;
+
+type MaintenanceCompletionRow = Prisma.MaintenanceCompletionGetPayload<{
+  include: typeof maintenanceCompletionInclude;
+}>;
+
+function maintenanceCompletionJson(row: MaintenanceCompletionRow) {
+  return {
+    id: row.id,
+    workspaceId: row.workspaceId,
+    projectId: row.projectId,
+    assetId: row.assetId,
+    scheduleId: row.scheduleId,
+    completedAt: row.completedAt.toISOString(),
+    completedByUserId: row.completedByUserId,
+    previousDueAt: row.previousDueAt?.toISOString() ?? null,
+    nextDueAt: row.nextDueAt?.toISOString() ?? null,
+    workOrderId: row.workOrderId,
+    notes: row.notes,
+    vendorLabel: row.vendorLabel,
+    createdAt: row.createdAt.toISOString(),
+    asset: row.asset,
+    schedule: row.schedule,
+    completedBy: row.completedBy,
+    workOrder: row.workOrder,
+  };
+}
+
+async function createWorkOrderForDueSchedule(
+  opts: {
+    schedule: Prisma.MaintenanceScheduleGetPayload<{ include: { asset: true } }>;
+    projectId: string;
+    workspaceId: string;
+    actorUserId: string;
+    defaultFv: {
+      fileId: string;
+      fileVersionId: string;
+      fileVersion: { version: number };
+      file: { name: string };
+    };
+  },
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<{ created: boolean; issueId: string }> {
+  if (!opts.schedule.nextDueAt) {
+    throw new Error("Schedule has no due date.");
+  }
+
+  const existing = await db.issue.findFirst({
+    where: {
+      projectId: opts.projectId,
+      issueKind: IssueKind.WORK_ORDER,
+      maintenanceScheduleId: opts.schedule.id,
+      maintenanceDueAt: opts.schedule.nextDueAt,
+    },
+    select: { id: true },
+  });
+  if (existing) return { created: false, issueId: existing.id };
+
+  const title = opts.schedule.title.trim()
+    ? opts.schedule.title.trim()
+    : `PPM: ${opts.schedule.asset.tag} — ${opts.schedule.frequency}`;
+  const issue = await db.issue.create({
+    data: {
+      workspaceId: opts.workspaceId,
+      projectId: opts.projectId,
+      fileId: opts.defaultFv.fileId,
+      fileVersionId: opts.defaultFv.fileVersionId,
+      title,
+      description: `Preventive maintenance due for asset ${opts.schedule.asset.tag} (${opts.schedule.asset.name}). Schedule: ${opts.schedule.frequency}. Next due: ${opts.schedule.nextDueAt.toISOString()}.`,
+      issueKind: IssueKind.WORK_ORDER,
+      assetId: opts.schedule.assetId,
+      status: IssueStatus.OPEN,
+      priority: IssuePriority.MEDIUM,
+      creatorId: opts.actorUserId,
+      assigneeId: opts.schedule.assignedToUserId ?? null,
+      maintenanceScheduleId: opts.schedule.id,
+      maintenanceDueAt: opts.schedule.nextDueAt,
+      sheetName: opts.defaultFv.file.name,
+      sheetVersion: opts.defaultFv.fileVersion.version,
+    },
+    select: { id: true },
+  });
+  return { created: true, issueId: issue.id };
 }
 
 async function getDefaultFileVersion(
@@ -643,36 +811,50 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       ? randomBytes(24).toString("hex")
       : null;
 
-    const row = await prisma.asset.create({
-      data: {
-        projectId,
-        tag: d.tag.trim(),
-        name: d.name.trim(),
-        category: d.category?.trim() ? d.category.trim() : null,
-        manufacturer: d.manufacturer ?? null,
-        model: d.model ?? null,
-        serialNumber: d.serialNumber ?? null,
-        locationLabel: d.locationLabel ?? null,
-        hall: d.hall ?? null,
-        rowLabel: d.rowLabel ?? null,
-        rack: d.rack ?? null,
-        positionU: d.positionU ?? null,
-        installDate: d.installDate ? new Date(d.installDate) : null,
-        warrantyExpires: d.warrantyExpires ? new Date(d.warrantyExpires) : null,
-        lastServiceAt: d.lastServiceAt ? new Date(d.lastServiceAt) : null,
-        notes: d.notes ?? null,
-        fileId: d.fileId ?? null,
-        fileVersionId: d.fileVersionId ?? null,
-        pageNumber: d.pageNumber ?? null,
-        annotationId: d.annotationId ?? null,
-        pinJson: d.pinJson === undefined ? undefined : (d.pinJson as Prisma.InputJsonValue),
-        ...(occupantScanSecret ? { occupantScanSecret } : {}),
-      },
-      include: {
-        file: { select: { id: true, name: true } },
-        fileVersion: { select: { id: true, version: true } },
-      },
-    });
+    let row: OmAssetRowDb;
+    try {
+      row = await prisma.asset.create({
+        data: {
+          projectId,
+          tag: d.tag.trim(),
+          name: d.name.trim(),
+          category: d.category?.trim() ? d.category.trim() : null,
+          manufacturer: d.manufacturer ?? null,
+          model: d.model ?? null,
+          serialNumber: d.serialNumber ?? null,
+          locationLabel: d.locationLabel ?? null,
+          hall: d.hall ?? null,
+          rowLabel: d.rowLabel ?? null,
+          rack: d.rack ?? null,
+          positionU: d.positionU ?? null,
+          installDate: d.installDate ? new Date(d.installDate) : null,
+          warrantyExpires: d.warrantyExpires ? new Date(d.warrantyExpires) : null,
+          lastServiceAt: d.lastServiceAt ? new Date(d.lastServiceAt) : null,
+          notes: d.notes ?? null,
+          fileId: d.fileId ?? null,
+          fileVersionId: d.fileVersionId ?? null,
+          pageNumber: d.pageNumber ?? null,
+          annotationId: d.annotationId ?? null,
+          pinJson: d.pinJson === undefined ? undefined : (d.pinJson as Prisma.InputJsonValue),
+          ...(occupantScanSecret ? { occupantScanSecret } : {}),
+        },
+        include: {
+          file: { select: { id: true, name: true } },
+          fileVersion: { select: { id: true, version: true } },
+        },
+      });
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === "P2002" &&
+        Array.isArray(e.meta?.target) &&
+        e.meta.target.includes("projectId") &&
+        e.meta.target.includes("tag")
+      ) {
+        return c.json({ error: "Asset tag already exists in this project" }, 409);
+      }
+      throw e;
+    }
 
     await logActivity(ctx.project.workspaceId, ActivityType.PROJECT_UPDATED, {
       actorUserId: c.get("user").id,
@@ -1124,20 +1306,39 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
 
     const rows = await prisma.maintenanceSchedule.findMany({
       where: { asset: { projectId } },
-      include: { asset: { select: { id: true, tag: true, name: true } } },
+      include: maintenanceScheduleInclude,
       orderBy: [{ nextDueAt: "asc" }],
     });
     const now = new Date();
-    return c.json(
-      rows.map((r) => ({
-        ...r,
-        nextDueAt: r.nextDueAt?.toISOString() ?? null,
-        lastCompletedAt: r.lastCompletedAt?.toISOString() ?? null,
-        createdAt: r.createdAt.toISOString(),
-        updatedAt: r.updatedAt.toISOString(),
-        health: ppmHealthLabel(r.nextDueAt, now),
-      })),
-    );
+    return c.json(rows.map((r) => maintenanceScheduleJson(r, now)));
+  });
+
+  r.get("/projects/:projectId/om/maintenance/completions", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (ctx.workspaceMember.isExternal) return c.json({ error: "Forbidden" }, 403);
+    if (!ctx.project.operationsMode || !ctx.settings.modules.omMaintenance) {
+      return c.json({ error: "Maintenance module is not enabled" }, 403);
+    }
+    const gate = requireOmBilling(ctx.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const limit = Math.min(300, Math.max(1, Number(c.req.query("limit")) || 100));
+    const assetId = c.req.query("assetId")?.trim();
+    if (assetId) {
+      const exists = await prisma.asset.count({ where: { id: assetId, projectId } });
+      if (exists === 0) return c.json({ error: "Asset not found" }, 404);
+    }
+
+    const rows = await prisma.maintenanceCompletion.findMany({
+      where: { projectId, ...(assetId ? { assetId } : {}) },
+      include: maintenanceCompletionInclude,
+      orderBy: [{ completedAt: "desc" }],
+      take: limit,
+    });
+    return c.json(rows.map(maintenanceCompletionJson));
   });
 
   r.post("/projects/:projectId/om/maintenance", needUser, async (c) => {
@@ -1160,12 +1361,22 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         intervalDays: z.number().int().min(1).max(3650).nullable().optional(),
         nextDueAt: z.string().datetime().nullable().optional(),
         assignedVendorLabel: z.string().max(200).nullable().optional(),
+        assignedToUserId: z.string().nullable().optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
 
     const asset = await prisma.asset.findFirst({ where: { id: body.data.assetId, projectId } });
     if (!asset) return c.json({ error: "Asset not found" }, 404);
+
+    if (body.data.assignedToUserId) {
+      const assignCheck = await assertUserAssignableToProject(
+        body.data.assignedToUserId,
+        projectId,
+        ctx.project.workspaceId,
+      );
+      if ("error" in assignCheck) return c.json({ error: assignCheck.error }, assignCheck.status);
+    }
 
     let nextDue = body.data.nextDueAt ? new Date(body.data.nextDueAt) : new Date();
     if (!body.data.nextDueAt) {
@@ -1184,18 +1395,31 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         intervalDays: body.data.intervalDays ?? null,
         nextDueAt: nextDue,
         assignedVendorLabel: body.data.assignedVendorLabel ?? null,
+        assignedToUserId: body.data.assignedToUserId ?? null,
       },
-      include: { asset: { select: { id: true, tag: true, name: true } } },
+      include: maintenanceScheduleInclude,
     });
 
-    return c.json({
-      ...row,
-      nextDueAt: row.nextDueAt?.toISOString() ?? null,
-      lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-      health: ppmHealthLabel(row.nextDueAt),
+    if (row.assignedToUserId) {
+      notifyMaintenanceAssigned({
+        workspaceId: ctx.project.workspaceId,
+        projectId,
+        assigneeUserId: row.assignedToUserId,
+        actorUserId: c.get("user").id,
+        assetTag: row.asset.tag,
+        title: row.title,
+      });
+    }
+
+    await logActivitySafe(ctx.project.workspaceId, ActivityType.MAINTENANCE_SCHEDULE_CREATED, {
+      actorUserId: c.get("user").id,
+      entityType: "MaintenanceSchedule",
+      entityId: row.id,
+      projectId,
+      metadata: maintenanceAuditMetadata(row),
     });
+
+    return c.json(maintenanceScheduleJson(row));
   });
 
   r.patch("/projects/:projectId/om/maintenance/:scheduleId", needUser, async (c) => {
@@ -1224,11 +1448,21 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         nextDueAt: z.string().datetime().nullable().optional(),
         lastCompletedAt: z.string().datetime().nullable().optional(),
         assignedVendorLabel: z.string().max(200).nullable().optional(),
+        assignedToUserId: z.string().nullable().optional(),
         isActive: z.boolean().optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
     const d = body.data;
+
+    if (d.assignedToUserId) {
+      const assignCheck = await assertUserAssignableToProject(
+        d.assignedToUserId,
+        projectId,
+        ctx.project.workspaceId,
+      );
+      if ("error" in assignCheck) return c.json({ error: assignCheck.error }, assignCheck.status);
+    }
 
     const row = await prisma.maintenanceSchedule.update({
       where: { id: scheduleId },
@@ -1245,20 +1479,109 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         ...(d.assignedVendorLabel !== undefined
           ? { assignedVendorLabel: d.assignedVendorLabel }
           : {}),
+        ...(d.assignedToUserId !== undefined ? { assignedToUserId: d.assignedToUserId } : {}),
         ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
       },
-      include: { asset: { select: { id: true, tag: true, name: true } } },
+      include: maintenanceScheduleInclude,
     });
 
-    return c.json({
-      ...row,
-      nextDueAt: row.nextDueAt?.toISOString() ?? null,
-      lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-      health: ppmHealthLabel(row.nextDueAt),
+    if (
+      d.assignedToUserId &&
+      d.assignedToUserId !== existing.assignedToUserId &&
+      d.assignedToUserId !== c.get("user").id
+    ) {
+      notifyMaintenanceAssigned({
+        workspaceId: ctx.project.workspaceId,
+        projectId,
+        assigneeUserId: d.assignedToUserId,
+        actorUserId: c.get("user").id,
+        assetTag: row.asset.tag,
+        title: row.title,
+      });
+    }
+
+    await logActivitySafe(ctx.project.workspaceId, ActivityType.MAINTENANCE_SCHEDULE_UPDATED, {
+      actorUserId: c.get("user").id,
+      entityType: "MaintenanceSchedule",
+      entityId: row.id,
+      projectId,
+      metadata: maintenanceAuditMetadata(row),
     });
+
+    return c.json(maintenanceScheduleJson(row));
   });
+
+  /** Create a work order for one due schedule occurrence. */
+  r.post(
+    "/projects/:projectId/om/maintenance/:scheduleId/create-work-order",
+    needUser,
+    async (c) => {
+      const projectId = c.req.param("projectId")!;
+      const scheduleId = c.req.param("scheduleId")!;
+      const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+      if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+      const { ctx } = auth;
+      if (ctx.workspaceMember.isExternal) return c.json({ error: "Forbidden" }, 403);
+      if (!ctx.project.operationsMode || !ctx.settings.modules.omMaintenance) {
+        return c.json({ error: "Maintenance module is not enabled" }, 403);
+      }
+      if (!ctx.settings.modules.issues) {
+        return c.json({ error: "Issues/work orders module is disabled" }, 403);
+      }
+      const gate = requireOmBilling(ctx.project.workspace);
+      if (gate) return c.json({ error: gate.error }, gate.status);
+
+      const defaultFv = await getDefaultFileVersion(projectId);
+      if (!defaultFv) {
+        return c.json({ error: "Upload at least one PDF before generating work orders" }, 400);
+      }
+
+      const endToday = new Date();
+      endToday.setUTCHours(23, 59, 59, 999);
+      const schedule = await prisma.maintenanceSchedule.findFirst({
+        where: {
+          id: scheduleId,
+          isActive: true,
+          asset: { projectId },
+        },
+        include: { asset: true },
+      });
+      if (!schedule) return c.json({ error: "Schedule not found" }, 404);
+      if (!schedule.nextDueAt || schedule.nextDueAt > endToday) {
+        return c.json({ error: "Schedule is not due yet" }, 400);
+      }
+
+      const made = await createWorkOrderForDueSchedule(
+        {
+          schedule,
+          projectId,
+          workspaceId: ctx.project.workspaceId,
+          actorUserId: c.get("user").id,
+          defaultFv,
+        },
+        prisma,
+      );
+
+      await logActivitySafe(
+        ctx.project.workspaceId,
+        ActivityType.MAINTENANCE_WORK_ORDERS_GENERATED,
+        {
+          actorUserId: c.get("user").id,
+          entityType: "MaintenanceSchedule",
+          entityId: schedule.id,
+          projectId,
+          metadata: {
+            workOrderCount: made.created ? 1 : 0,
+            workOrderIds: [made.issueId],
+            scheduleIds: [schedule.id],
+            deduped: !made.created,
+          },
+        },
+      );
+
+      return c.json({ created: made.created, issueId: made.issueId });
+    },
+  );
 
   /** Create work orders (issues) for schedules that are due or overdue. */
   r.post("/projects/:projectId/om/maintenance/generate-work-orders", needUser, async (c) => {
@@ -1293,36 +1616,37 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     });
 
     const created: string[] = [];
+    const existing: string[] = [];
     for (const s of due) {
-      const title = s.title.trim() ? s.title.trim() : `PPM: ${s.asset.tag} — ${s.frequency}`;
-      const iss = await prisma.issue.create({
-        data: {
-          workspaceId: ctx.project.workspaceId,
+      const made = await createWorkOrderForDueSchedule(
+        {
+          schedule: s,
           projectId,
-          fileId: defaultFv.fileId,
-          fileVersionId: defaultFv.fileVersionId,
-          title,
-          description: `Preventive maintenance due for asset ${s.asset.tag} (${s.asset.name}). Schedule: ${s.frequency}. Next due: ${s.nextDueAt?.toISOString() ?? "—"}.`,
-          issueKind: IssueKind.WORK_ORDER,
-          assetId: s.assetId,
-          status: IssueStatus.OPEN,
-          priority: IssuePriority.MEDIUM,
-          creatorId: c.get("user").id,
-          sheetName: defaultFv.file.name,
-          sheetVersion: defaultFv.fileVersion.version,
+          workspaceId: ctx.project.workspaceId,
+          actorUserId: c.get("user").id,
+          defaultFv,
         },
-      });
-      created.push(iss.id);
+        prisma,
+      );
+      if (made.created) created.push(made.issueId);
+      else existing.push(made.issueId);
     }
 
-    await logActivity(ctx.project.workspaceId, ActivityType.ISSUE_CREATED, {
+    await logActivitySafe(ctx.project.workspaceId, ActivityType.MAINTENANCE_WORK_ORDERS_GENERATED, {
       actorUserId: c.get("user").id,
+      entityType: "Project",
       entityId: projectId,
       projectId,
-      metadata: { omGeneratedWorkOrders: created.length },
+      metadata: {
+        workOrderCount: created.length,
+        workOrderIds: created,
+        scheduleIds: due.map((s) => s.id),
+        skippedExistingCount: existing.length,
+        skippedExistingWorkOrderIds: existing,
+      },
     });
 
-    return c.json({ createdIds: created });
+    return c.json({ createdIds: created, existingIds: existing });
   });
 
   r.post("/projects/:projectId/om/maintenance/:scheduleId/complete", needUser, async (c) => {
@@ -1344,25 +1668,80 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     });
     if (!existing) return c.json({ error: "Not found" }, 404);
 
+    const body = z
+      .object({
+        notes: z.string().max(2000).optional(),
+        workOrderId: z.string().optional(),
+      })
+      .safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    let workOrderId: string | null = null;
+    if (body.data.workOrderId?.trim()) {
+      const wo = await prisma.issue.findFirst({
+        where: {
+          id: body.data.workOrderId.trim(),
+          projectId,
+          issueKind: IssueKind.WORK_ORDER,
+        },
+        select: { id: true, maintenanceScheduleId: true },
+      });
+      if (!wo) return c.json({ error: "Work order not found" }, 404);
+      if (wo.maintenanceScheduleId && wo.maintenanceScheduleId !== existing.id) {
+        return c.json({ error: "Work order is linked to another schedule" }, 400);
+      }
+      workOrderId = wo.id;
+    }
+
     const completedAt = new Date();
+    const previousDueAt = existing.nextDueAt;
     const next = frequencyToNextFrom(existing.frequency, existing.intervalDays, completedAt);
 
-    const row = await prisma.maintenanceSchedule.update({
-      where: { id: scheduleId },
-      data: {
-        lastCompletedAt: completedAt,
-        nextDueAt: next,
+    const { row, completion } = await prisma.$transaction(async (tx) => {
+      const row = await tx.maintenanceSchedule.update({
+        where: { id: scheduleId },
+        data: {
+          lastCompletedAt: completedAt,
+          nextDueAt: next,
+        },
+        include: maintenanceScheduleInclude,
+      });
+      const completion = await tx.maintenanceCompletion.create({
+        data: {
+          workspaceId: ctx.project.workspaceId,
+          projectId,
+          assetId: existing.assetId,
+          scheduleId,
+          completedAt,
+          completedByUserId: c.get("user").id,
+          previousDueAt,
+          nextDueAt: next,
+          workOrderId,
+          notes: body.data.notes?.trim() || null,
+          vendorLabel: row.assignedVendorLabel ?? null,
+        },
+        include: maintenanceCompletionInclude,
+      });
+      return { row, completion };
+    });
+
+    await logActivitySafe(ctx.project.workspaceId, ActivityType.MAINTENANCE_SCHEDULE_COMPLETED, {
+      actorUserId: c.get("user").id,
+      entityType: "MaintenanceSchedule",
+      entityId: row.id,
+      projectId,
+      metadata: {
+        ...maintenanceAuditMetadata(row),
+        completionId: completion.id,
+        workOrderId: completion.workOrderId,
+        notes: completion.notes,
+        completedAt: completedAt.toISOString(),
       },
-      include: { asset: { select: { id: true, tag: true, name: true } } },
     });
 
     return c.json({
-      ...row,
-      nextDueAt: row.nextDueAt?.toISOString() ?? null,
-      lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-      health: ppmHealthLabel(row.nextDueAt),
+      ...maintenanceScheduleJson(row),
+      completion: maintenanceCompletionJson(completion),
     });
   });
 

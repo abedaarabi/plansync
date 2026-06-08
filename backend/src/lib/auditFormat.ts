@@ -320,6 +320,68 @@ export function formatAuditPresentation(
               ? `Daily report (${String(m.reportDate)}).`
               : "Field report sent by email.",
       };
+    case "MAINTENANCE_SCHEDULE_CREATED": {
+      const tag = str(m.assetTag);
+      const title = str(m.title) ?? "Maintenance schedule";
+      return {
+        actionLabel: "PPM created",
+        summary: tag ? `${tag} · ${title}` : title,
+        detail: [
+          tag && `Asset: ${tag}`,
+          str(m.assetName) && `Name: ${String(m.assetName)}`,
+          str(m.frequency) && `Frequency: ${String(m.frequency)}`,
+          str(m.nextDueAt) && `Next due: ${String(m.nextDueAt).slice(0, 10)}`,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      };
+    }
+    case "MAINTENANCE_SCHEDULE_UPDATED": {
+      const tag = str(m.assetTag);
+      const title = str(m.title) ?? "Maintenance schedule";
+      return {
+        actionLabel: "PPM updated",
+        summary: tag ? `${tag} · ${title}` : title,
+        detail: [
+          tag && `Asset: ${tag}`,
+          str(m.frequency) && `Frequency: ${String(m.frequency)}`,
+          str(m.nextDueAt) && `Next due: ${String(m.nextDueAt).slice(0, 10)}`,
+          str(m.lastCompletedAt) && `Last completed: ${String(m.lastCompletedAt).slice(0, 10)}`,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      };
+    }
+    case "MAINTENANCE_SCHEDULE_COMPLETED": {
+      const tag = str(m.assetTag);
+      const title = str(m.title) ?? "Maintenance completed";
+      const completed = str(m.completedAt) ?? str(m.lastCompletedAt);
+      return {
+        actionLabel: "PPM completed",
+        summary: tag ? `${tag} · ${title}` : title,
+        detail: [
+          completed && `Completed: ${completed.slice(0, 10)}`,
+          str(m.nextDueAt) && `Next due: ${String(m.nextDueAt).slice(0, 10)}`,
+          tag && `Asset: ${tag}`,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      };
+    }
+    case "MAINTENANCE_WORK_ORDERS_GENERATED": {
+      const count = num(m.workOrderCount);
+      return {
+        actionLabel: "PPM work orders",
+        summary:
+          count != null && count > 0
+            ? `Generated ${count} work order(s) from due PPM`
+            : "Generated work orders from due PPM",
+        detail:
+          count != null
+            ? `Created ${count} work order(s) for overdue or due maintenance schedules.`
+            : "Work orders generated from preventive maintenance schedules.",
+      };
+    }
     default:
       return {
         actionLabel: String(type).replace(/_/g, " "),
