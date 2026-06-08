@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { FileSpreadsheet, Plus } from "lucide-react";
 import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
+import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
@@ -199,7 +200,7 @@ export function ProjectProposalsClient({
     "mt-1 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20";
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 sm:space-y-8">
+    <div className="mobile-app-page w-full min-w-0 max-w-full mx-auto lg:max-w-6xl lg:mx-auto space-y-6 sm:space-y-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -225,7 +226,7 @@ export function ProjectProposalsClient({
           <EnterpriseAddPulseWrap className="w-full sm:w-auto">
             <Link
               href={`${base}/new`}
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] sm:min-h-10 sm:rounded-lg sm:px-3 sm:text-xs"
+              className="hidden min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] lg:inline-flex lg:min-h-10 lg:w-auto lg:rounded-lg lg:px-3 lg:text-xs"
             >
               <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5" strokeWidth={1.75} />
               New proposal
@@ -234,7 +235,7 @@ export function ProjectProposalsClient({
         </div>
       </header>
 
-      <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] lg:mx-0 lg:grid lg:snap-none lg:grid-cols-4 lg:gap-3 lg:overflow-visible lg:pb-0 xl:grid-cols-7">
+      <div className="mobile-chip-scroll -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] lg:mx-0 lg:grid lg:snap-none lg:grid-cols-4 lg:gap-3 lg:overflow-visible lg:pb-0 xl:grid-cols-7">
         <div className="min-w-[10.5rem] shrink-0 snap-start rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)] lg:shrink">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
             Pipeline
@@ -277,7 +278,7 @@ export function ProjectProposalsClient({
         </label>
 
         <div
-          className="-mx-1 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="mobile-chip-scroll -mx-1 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           role="tablist"
           aria-label="Filter by status"
         >
@@ -328,7 +329,7 @@ export function ProjectProposalsClient({
       </ul>
 
       <div className="enterprise-card hidden overflow-hidden p-0 md:block">
-        <div className="overflow-x-auto">
+        <div className="mobile-table-wrap overflow-x-auto">
           <table
             className="w-full min-w-[720px] text-left text-sm text-[var(--enterprise-text)]"
             aria-label="Proposals"
@@ -421,6 +422,13 @@ export function ProjectProposalsClient({
           </table>
         </div>
       </div>
+      <EnterpriseFab
+        label="New proposal"
+        icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
+        onClick={() => {
+          window.location.href = `${base}/new`;
+        }}
+      />
     </div>
   );
 }

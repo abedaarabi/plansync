@@ -32,6 +32,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
 import {
   createFieldReport,
   deleteFieldReport,
@@ -767,13 +768,13 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
 
   return (
     <div
-      className="enterprise-animate-in min-h-0 flex-1 p-4 pb-[env(safe-area-inset-bottom,0px)] sm:p-6 lg:p-8"
+      className="mobile-app-page w-full min-w-0 max-w-full enterprise-animate-in min-h-0 flex-1 p-4 pb-[env(safe-area-inset-bottom,0px)] sm:p-6 lg:p-8"
       style={{
         fontFamily: "var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif",
         backgroundColor: PAGE_BG,
       }}
     >
-      <div className="mx-auto max-w-6xl space-y-5 sm:space-y-6">
+      <div className="w-full max-w-6xl mx-auto lg:mx-auto space-y-5 sm:space-y-6">
         {/* Section 1 — header */}
         <header
           className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-start sm:justify-between"
@@ -813,7 +814,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 setNewAuthor(members[0]?.name ?? "");
                 setNewModalOpen(true);
               }}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-normal text-white shadow-sm transition hover:opacity-95 sm:h-9 sm:px-3 sm:text-xs"
+              className="hidden h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-normal text-white shadow-sm transition hover:opacity-95 lg:inline-flex lg:h-9 lg:px-3 lg:text-xs"
               style={{ backgroundColor: PRIMARY, borderRadius: 8 }}
             >
               <Plus className="h-4 w-4" strokeWidth={1.75} />
@@ -1006,7 +1007,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
           </div>
         ) : (
           <div
-            className="-mx-4 overflow-x-auto sm:mx-0"
+            className="mobile-table-wrap -mx-4 overflow-x-auto sm:mx-0"
             style={{ WebkitOverflowScrolling: "touch" }}
           >
             <div className="inline-block min-w-full align-middle">
@@ -1112,7 +1113,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                           <tr
                             key={r.id}
                             onClick={() => openDaily(r)}
-                            className="cursor-pointer border-b text-sm transition-colors last:border-b-0"
+                            className="cursor-pointer border-b text-sm transition-colors last:border-b-0 mobile-tappable-row min-h-14 active:scale-[0.99]"
                             style={{
                               borderColor: BORDER,
                               height: 44,
@@ -1193,7 +1194,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                         <tr
                           key={w.id}
                           onClick={() => openWeekly(w)}
-                          className="cursor-pointer border-b text-sm transition-colors last:border-b-0"
+                          className="cursor-pointer border-b text-sm transition-colors last:border-b-0 mobile-tappable-row min-h-14 active:scale-[0.99]"
                           style={{
                             borderColor: BORDER,
                             height: 44,
@@ -1660,7 +1661,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
       {/* New report modal — portaled above EnterpriseSlideOver (body-level z-100/101) */}
       {newModalOpen && typeof document !== "undefined"
         ? createPortal(
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div className="mobile-sheet-host fixed inset-0 z-[200] flex items-center justify-center p-4 max-lg:items-end max-lg:p-0">
               <button
                 type="button"
                 className="absolute inset-0 bg-[#0f172a]/50 backdrop-blur-[1px]"
@@ -1754,7 +1755,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
       {/* Send modal — portaled above slide-over shell */}
       {sendModalOpen && typeof document !== "undefined"
         ? createPortal(
-            <div className="fixed inset-0 z-[201] flex items-center justify-center p-4">
+            <div className="mobile-sheet-host fixed inset-0 z-[201] flex items-center justify-center p-4 max-lg:items-end max-lg:p-0">
               <button
                 type="button"
                 className="absolute inset-0 bg-[#0f172a]/50 backdrop-blur-[1px]"
@@ -1864,6 +1865,16 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
             document.body,
           )
         : null}
+      <EnterpriseFab
+        label="New report"
+        icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
+        onClick={() => {
+          setNewMsg(null);
+          setNewReportDate(new Date().toISOString().slice(0, 10));
+          setNewAuthor(members[0]?.name ?? "");
+          setNewModalOpen(true);
+        }}
+      />
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { apiUrl } from "@/lib/api-url";
 import { downloadProjectFileVersion } from "@/lib/downloadProjectFile";
 import { isImageThumbnailFile, isPdfFile } from "@/lib/isPdfFile";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { Upload } from "lucide-react";
 import { X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -28,6 +29,8 @@ import {
   useUploadQueueStore,
 } from "@/store/uploadQueueStore";
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
+import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
+import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { ProjectFileImageLightbox } from "./ProjectFileImageLightbox";
 import { UploadDrawingsWizard } from "./UploadDrawingsWizard";
 import { CloudImportModal } from "./CloudImportModal";
@@ -131,6 +134,20 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   } | null>(null);
   const [cloudImportOpen, setCloudImportOpen] = useState(false);
   const [mobileFolderTreeOpen, setMobileFolderTreeOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const sync = () => {
+      if (mq.matches) setViewMode("list");
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const triggerUpload = useCallback(() => {
+    document.getElementById(UPLOAD_INPUT_ID)?.click();
+  }, []);
 
   const toggleTreeExpand = useCallback((id: string) => {
     setTreeExpanded((prev) => {
@@ -851,6 +868,13 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           }}
         />
       ) : null}
+      <EnterpriseAddPulseWrap variant="fab">
+        <EnterpriseFab
+          label="Upload files"
+          onClick={triggerUpload}
+          icon={<Upload className="h-6 w-6" strokeWidth={2} aria-hidden />}
+        />
+      </EnterpriseAddPulseWrap>
     </div>
   );
 }

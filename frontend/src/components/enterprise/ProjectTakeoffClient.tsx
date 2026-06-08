@@ -744,7 +744,7 @@ export function ProjectTakeoffClient({
                 {lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString() : "Not synced yet"}
               </strong>
             </p>
-            <label className="inline-flex cursor-pointer items-center gap-2 text-[#1E40AF]">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-[#1E40AF] mobile-tappable-row min-h-14 active:scale-[0.99]">
               <input
                 type="checkbox"
                 checked={autoRefresh}
@@ -886,7 +886,7 @@ export function ProjectTakeoffClient({
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
                 By sheet (net of item discount %)
               </p>
-              <div className="-mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+              <div className="mobile-chip-scroll mobile-table-wrap -mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
                 {totalsBySheet.map((s) => (
                   <span
                     key={s.fileId}
@@ -902,7 +902,7 @@ export function ProjectTakeoffClient({
               <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
                 By primary tag (first tag per line, net of item discount %)
               </p>
-              <div className="-mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+              <div className="mobile-chip-scroll mobile-table-wrap -mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
                 {totalsByPrimaryTag.map(([tag, total]) => (
                   <span
                     key={tag}
@@ -917,7 +917,7 @@ export function ProjectTakeoffClient({
                 <span className="mb-1.5 block text-xs font-medium text-[#64748B]">
                   Filter by tag
                 </span>
-                <div className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+                <div className="mobile-chip-scroll mobile-table-wrap -mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
                   <button
                     type="button"
                     onClick={() => setTagFilter(null)}
@@ -949,7 +949,7 @@ export function ProjectTakeoffClient({
                 <span className="mb-1.5 block text-xs font-medium text-[#64748B]">
                   Filter by sheet
                 </span>
-                <div className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+                <div className="mobile-chip-scroll mobile-table-wrap -mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
                   <button
                     type="button"
                     onClick={() => setFileFilter(null)}
@@ -985,7 +985,7 @@ export function ProjectTakeoffClient({
                     value={lineSearch}
                     onChange={(e) => setLineSearch(e.target.value)}
                     placeholder="Search file, item, tags, notes…"
-                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-[#0F172A] outline-none placeholder:text-[#94A3B8]"
+                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-[#0F172A] outline-none placeholder:text-[#94A3B8] min-h-12 text-base"
                     type="search"
                     autoComplete="off"
                     spellCheck={false}
@@ -1138,7 +1138,7 @@ export function ProjectTakeoffClient({
           ) : null}
           {lines.length > 0 && tableLinesForRender.length > 0 ? (
             <div className="flex items-center gap-3 border-b border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2.5 md:hidden">
-              <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-[#334155]">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-[#334155] mobile-tappable-row min-h-14 active:scale-[0.99]">
                 <input
                   type="checkbox"
                   checked={
@@ -1376,7 +1376,7 @@ export function ProjectTakeoffClient({
               })
             )}
           </ul>
-          <div className="hidden overflow-x-auto md:block">
+          <div className="mobile-table-wrap hidden overflow-x-auto md:block">
             <table className="w-full min-w-[1040px] text-left text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-semibold uppercase tracking-wide text-[#64748B] shadow-[0_1px_0_#E2E8F0]">

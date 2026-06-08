@@ -33,6 +33,7 @@ import { fetchProjectSession } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { isSuperAdmin } from "@/lib/workspaceRole";
+import { useMaxLgViewport } from "@/hooks/useMaxLgViewport";
 
 type Cmd = { id: string; label: string; hint?: string; href: string; icon: typeof LayoutDashboard };
 
@@ -54,6 +55,7 @@ type CommandPaletteProps = {
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const isMobile = useMaxLgViewport();
   const { primary } = useEnterpriseWorkspace();
   const ws = primary?.workspace;
   const wid = ws?.id;
@@ -438,6 +440,101 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   if (!open) return null;
 
+  const renderCommandRow = (c: Cmd, i: number, mobile: boolean) => {
+    const Icon = c.icon;
+    const active = i === idx;
+    const dead = c.href === "#";
+    return (
+      <li key={c.id}>
+        <button
+          type="button"
+          disabled={dead}
+          onMouseEnter={() => setIdx(i)}
+          onClick={() => run(c.href)}
+          className={`flex w-full items-center gap-3 text-left transition-colors ${
+            mobile
+              ? `min-h-14 px-4 py-3 text-base active:bg-[var(--enterprise-hover-surface)] ${
+                  dead
+                    ? "cursor-not-allowed opacity-40"
+                    : active
+                      ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-text)]"
+                      : "text-[var(--enterprise-text)]"
+                }`
+              : `rounded-xl px-3 py-2.5 text-sm ${
+                  dead
+                    ? "cursor-not-allowed opacity-40"
+                    : active
+                      ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-text)] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]"
+                      : "text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+                }`
+          }`}
+        >
+          <Icon
+            className={`shrink-0 opacity-90 ${mobile ? "h-5 w-5" : "h-4 w-4"}`}
+            strokeWidth={1.75}
+          />
+          <span className="min-w-0 flex-1">
+            <span className={`block ${mobile ? "font-medium" : "font-medium"}`}>{c.label}</span>
+            {c.hint && (
+              <span
+                className={`block text-[var(--enterprise-text-muted)] ${mobile ? "text-sm" : "text-xs"}`}
+              >
+                {c.hint}
+              </span>
+            )}
+          </span>
+        </button>
+      </li>
+    );
+  };
+
+  if (isMobile) {
+    return (
+      <div
+        className="fixed inset-0 z-[200] flex flex-col bg-[var(--enterprise-surface)] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+        role="dialog"
+        aria-modal
+        aria-label="Search"
+      >
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--enterprise-border)]/90 px-3 py-2">
+          <Search
+            className="ml-1 h-5 w-5 shrink-0 text-[var(--enterprise-text-muted)]"
+            strokeWidth={1.75}
+          />
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setIdx(0);
+            }}
+            placeholder="Search commands…"
+            enterKeyHint="search"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            className="min-h-11 min-w-0 flex-1 bg-transparent text-base text-[var(--enterprise-text)] outline-none placeholder:text-[var(--enterprise-text-muted)]"
+          />
+          <button
+            type="button"
+            onClick={onClose}
+            className="mobile-touch-target shrink-0 rounded-lg px-3 text-base font-medium text-[var(--enterprise-primary)]"
+          >
+            Cancel
+          </button>
+        </div>
+        <ul className="mobile-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          {filtered.length === 0 && (
+            <li className="px-4 py-10 text-center text-base text-[var(--enterprise-text-muted)]">
+              No matches
+            </li>
+          )}
+          {filtered.map((c, i) => renderCommandRow(c, i, true))}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 z-[200] flex items-start justify-center bg-[#0c1222]/55 pt-[min(16vh,140px)] backdrop-blur-md"
@@ -477,38 +574,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               No matches
             </li>
           )}
-          {filtered.map((c, i) => {
-            const Icon = c.icon;
-            const active = i === idx;
-            const dead = c.href === "#";
-            return (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  disabled={dead}
-                  onMouseEnter={() => setIdx(i)}
-                  onClick={() => run(c.href)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
-                    dead
-                      ? "cursor-not-allowed opacity-40"
-                      : active
-                        ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-text)] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]"
-                        : "text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
-                  }`}
-                >
-                  <Icon className="h-4 w-4 shrink-0 opacity-90" strokeWidth={1.75} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium">{c.label}</span>
-                    {c.hint && (
-                      <span className="block text-xs text-[var(--enterprise-text-muted)]">
-                        {c.hint}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
+          {filtered.map((c, i) => renderCommandRow(c, i, false))}
         </ul>
         <div className="border-t border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 px-4 py-2.5 text-[10px] font-medium text-[var(--enterprise-text-muted)]">
           <span className="opacity-90">Navigate with ↑↓ · Enter to run</span>

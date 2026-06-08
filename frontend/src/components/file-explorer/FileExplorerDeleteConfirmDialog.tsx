@@ -1,6 +1,12 @@
 "use client";
 
 import { AlertTriangle, Loader2 } from "lucide-react";
+import {
+  EnterpriseResponsiveDialog,
+  MOBILE_DIALOG_BTN_PRIMARY,
+  MOBILE_DIALOG_BTN_SECONDARY,
+} from "@/components/mobile/EnterpriseResponsiveDialog";
+import { MOBILE_FIELD_INPUT, MOBILE_FIELD_LABEL } from "@/lib/mobileFormStyles";
 
 type FileExplorerDeleteConfirmDialogProps = {
   open: boolean;
@@ -15,6 +21,121 @@ type FileExplorerDeleteConfirmDialogProps = {
   onConfirm: () => void;
 };
 
+function DeleteConfirmBody({
+  targetName,
+  targetType,
+  fileRevisionToDelete,
+  confirmValue,
+  onConfirmValueChange,
+  deleting,
+}: Pick<
+  FileExplorerDeleteConfirmDialogProps,
+  | "targetName"
+  | "targetType"
+  | "fileRevisionToDelete"
+  | "confirmValue"
+  | "onConfirmValueChange"
+  | "deleting"
+>) {
+  return (
+    <>
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-error)]">
+          <AlertTriangle className="h-5 w-5" />
+        </span>
+        <div>
+          <h2
+            id="file-explorer-delete-title"
+            className="text-balance text-lg font-bold leading-tight tracking-tight text-[var(--enterprise-text)]"
+          >
+            Confirm delete {targetType}
+          </h2>
+          <p className="mt-1.5 text-base leading-relaxed text-[var(--enterprise-text-muted)]">
+            You are deleting{" "}
+            <span className="font-semibold text-[var(--enterprise-text)]">
+              &quot;{targetName}&quot;
+            </span>
+            .
+            {targetType === "folder"
+              ? " This removes the folder and everything inside it forever."
+              : fileRevisionToDelete != null
+                ? ` This removes revision ${fileRevisionToDelete} only. Other revisions stay on the project.`
+                : " This removes the file forever."}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-2">
+        <p className="text-base text-[var(--enterprise-text-muted)]">
+          Type <span className="font-semibold text-[var(--enterprise-text)]">delete</span> to
+          continue.
+        </p>
+        <label htmlFor="file-explorer-delete-confirm" className={MOBILE_FIELD_LABEL}>
+          Confirmation
+        </label>
+        <input
+          id="file-explorer-delete-confirm"
+          value={confirmValue}
+          onChange={(e) => onConfirmValueChange(e.target.value)}
+          placeholder="delete"
+          autoFocus
+          disabled={deleting}
+          className={MOBILE_FIELD_INPUT}
+          aria-label="Type delete to confirm deletion"
+        />
+      </div>
+    </>
+  );
+}
+
+function DeleteConfirmFooter({
+  deleting,
+  canDelete,
+  targetType,
+  fileRevisionToDelete,
+  onCancel,
+  onConfirm,
+}: {
+  deleting: boolean;
+  canDelete: boolean;
+  targetType: "file" | "folder";
+  fileRevisionToDelete?: number | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const deleteLabel = deleting ? (
+    <>
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Deleting...
+    </>
+  ) : fileRevisionToDelete != null && targetType === "file" ? (
+    `Delete revision ${fileRevisionToDelete}`
+  ) : (
+    `Delete ${targetType}`
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={!canDelete}
+        onClick={onConfirm}
+        className={`${MOBILE_DIALOG_BTN_PRIMARY} gap-2 bg-[var(--enterprise-error)] text-white shadow-sm hover:bg-[color-mix(in_srgb,var(--enterprise-error)_90%,#000)] disabled:cursor-not-allowed`}
+      >
+        {deleteLabel}
+      </button>
+      <button
+        type="button"
+        disabled={deleting}
+        onClick={onCancel}
+        className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]`}
+      >
+        Cancel
+      </button>
+    </>
+  );
+}
+
 export function FileExplorerDeleteConfirmDialog({
   open,
   targetName,
@@ -26,92 +147,35 @@ export function FileExplorerDeleteConfirmDialog({
   onCancel,
   onConfirm,
 }: FileExplorerDeleteConfirmDialogProps) {
-  if (!open) return null;
-
   const canDelete = confirmValue.trim().toLowerCase() === "delete" && !deleting;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 bg-[#0F172A]/45 backdrop-blur-[2px]"
-        aria-label="Close dialog"
-        onClick={deleting ? undefined : onCancel}
+    <EnterpriseResponsiveDialog
+      open={open}
+      onClose={deleting ? () => {} : onCancel}
+      ariaLabelledBy="file-explorer-delete-title"
+      closeOnBackdrop={!deleting}
+      closeOnEscape={!deleting}
+      panelClassName="max-w-lg"
+      footer={
+        <DeleteConfirmFooter
+          deleting={deleting}
+          canDelete={canDelete}
+          targetType={targetType}
+          fileRevisionToDelete={fileRevisionToDelete}
+          onCancel={onCancel}
+          onConfirm={onConfirm}
+        />
+      }
+    >
+      <DeleteConfirmBody
+        targetName={targetName}
+        targetType={targetType}
+        fileRevisionToDelete={fileRevisionToDelete}
+        confirmValue={confirmValue}
+        onConfirmValueChange={onConfirmValueChange}
+        deleting={deleting}
       />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="file-explorer-delete-title"
-        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-[var(--enterprise-shadow-floating)]"
-      >
-        <div className="border-b border-[#F1F5F9] bg-gradient-to-br from-[#FFF7ED] to-white px-6 py-5">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FEE2E2] text-[#DC2626]">
-              <AlertTriangle className="h-4 w-4" />
-            </span>
-            <div>
-              <h2
-                id="file-explorer-delete-title"
-                className="text-lg font-bold tracking-tight text-[#0F172A]"
-              >
-                Confirm delete {targetType}
-              </h2>
-              <p className="mt-1.5 text-sm leading-relaxed text-[#64748B]">
-                You are deleting{" "}
-                <span className="font-semibold text-[#0F172A]">&quot;{targetName}&quot;</span>.
-                {targetType === "folder"
-                  ? " This removes the folder and everything inside it forever."
-                  : fileRevisionToDelete != null
-                    ? ` This removes revision ${fileRevisionToDelete} only. Other revisions stay on the project.`
-                    : " This removes the file forever."}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-2 px-6 py-5">
-          <p className="text-sm text-[#475569]">
-            Type <span className="font-semibold text-[#0F172A]">delete</span> to continue.
-          </p>
-          <input
-            value={confirmValue}
-            onChange={(e) => onConfirmValueChange(e.target.value)}
-            placeholder="delete"
-            autoFocus
-            disabled={deleting}
-            className="w-full rounded-xl border border-[#CBD5E1] bg-white px-3 py-2.5 text-sm text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/20"
-            aria-label="Type delete to confirm deletion"
-          />
-        </div>
-
-        <div className="flex flex-col-reverse gap-2 border-t border-[#F1F5F9] bg-[#FAFBFC] px-6 py-4 sm:flex-row sm:justify-end sm:gap-3">
-          <button
-            type="button"
-            disabled={deleting}
-            onClick={onCancel}
-            className="rounded-xl px-5 py-2.5 text-sm font-semibold text-[#64748B] transition hover:bg-[#F1F5F9] hover:text-[#0F172A] disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!canDelete}
-            onClick={onConfirm}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#DC2626] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#B91C1C] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {deleting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Deleting...
-              </>
-            ) : fileRevisionToDelete != null && targetType === "file" ? (
-              `Delete revision ${fileRevisionToDelete}`
-            ) : (
-              `Delete ${targetType}`
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
+    </EnterpriseResponsiveDialog>
   );
 }

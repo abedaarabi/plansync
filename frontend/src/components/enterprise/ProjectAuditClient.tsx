@@ -196,7 +196,7 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
   }
 
   return (
-    <div className="enterprise-animate-in mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col overflow-hidden">
+    <div className="mobile-app-page w-full min-w-0 max-w-full enterprise-animate-in mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 flex-col gap-3 border-b border-slate-200/80 pb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2.5 text-lg font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-xl">

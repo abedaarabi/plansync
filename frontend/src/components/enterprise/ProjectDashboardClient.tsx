@@ -574,7 +574,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
                     type="button"
                     onClick={() => openFile(f)}
                     aria-label={`Open ${f.name} in viewer`}
-                    className="flex w-full min-w-0 cursor-pointer items-start gap-2 py-3 text-left transition first:pt-0 last:pb-0 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:items-center sm:gap-3"
+                    className="flex w-full min-w-0 cursor-pointer items-start gap-2 py-3 text-left transition first:pt-0 last:pb-0 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:items-center sm:gap-3 mobile-tappable-row min-h-14 active:scale-[0.99]"
                   >
                     {isPdfFile(f) ? (
                       <PdfFileIcon className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />

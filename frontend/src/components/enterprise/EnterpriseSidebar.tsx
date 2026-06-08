@@ -507,7 +507,7 @@ export function EnterpriseSidebar({
 
   const navLinkClass = (active: boolean, disabled?: boolean, iconOnly?: boolean) => {
     const io = iconOnly === undefined ? railCollapsed : iconOnly;
-    return `enterprise-sidebar-nav-link group flex min-h-11 items-center rounded-md py-2 text-[13px] font-medium tracking-[-0.01em] transition-[color,background-color,box-shadow] duration-150 ${
+    return `enterprise-sidebar-nav-link group flex min-h-11 items-center rounded-md py-2.5 text-sm font-medium tracking-[-0.01em] transition-[color,background-color,box-shadow] duration-150 ${
       io ? "justify-center gap-0 px-2" : "gap-2.5 px-3"
     } ${
       active
@@ -519,7 +519,7 @@ export function EnterpriseSidebar({
   };
 
   const iconClass = (active: boolean) =>
-    `h-[18px] w-[18px] shrink-0 transition-colors duration-150 ${
+    `h-5 w-5 shrink-0 transition-colors duration-150 ${
       active ? "text-[var(--enterprise-sidebar-active)]" : "text-[var(--enterprise-sidebar-muted)]"
     }`;
 
@@ -543,8 +543,8 @@ export function EnterpriseSidebar({
     <aside
       id="enterprise-sidebar-panel"
       data-sidebar-collapsed={railCollapsed ? "true" : "false"}
-      className={`enterprise-sidebar-panel fixed bottom-0 left-0 top-[var(--enterprise-topbar-offset)] z-40 flex min-h-0 w-[min(300px,88vw)] shrink-0 flex-col overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] sm:w-[min(320px,82vw)] lg:static lg:top-auto lg:z-auto lg:h-auto lg:min-h-0 lg:max-h-none lg:translate-x-0 lg:self-stretch lg:border-b-0 lg:shadow-none lg:transition-none ${
-        railCollapsed ? "lg:w-[72px]" : useTwoLevelNav ? "lg:w-[248px]" : "lg:w-[236px]"
+      className={`enterprise-sidebar-panel fixed bottom-[var(--enterprise-bottomnav-offset)] left-0 top-[var(--enterprise-topbar-offset)] z-40 flex min-h-0 w-[min(300px,88vw)] shrink-0 flex-col overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] sm:w-[min(320px,82vw)] lg:bottom-0 lg:static lg:top-auto lg:z-auto lg:h-auto lg:min-h-0 lg:max-h-none lg:translate-x-0 lg:self-stretch lg:border-b-0 lg:shadow-none lg:transition-none ${
+        railCollapsed ? "lg:w-[72px]" : useTwoLevelNav ? "lg:w-[260px]" : "lg:w-[248px]"
       } ${
         mobileOpen ? "translate-x-0" : "-translate-x-full"
       } lg:translate-x-0 ${!mobileOpen ? "pointer-events-none lg:pointer-events-auto" : ""}`}
@@ -586,11 +586,11 @@ export function EnterpriseSidebar({
           </div>
         </div>
         <div className={desktopIconRail ? "sr-only" : "min-w-0 flex-1 leading-tight"}>
-          <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+          <p className="mb-0.5 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
             {t("workspaceSection")}
           </p>
           <p
-            className="truncate text-[15px] font-semibold tracking-[-0.02em] text-[var(--enterprise-sidebar-active)]"
+            className="truncate text-base font-semibold tracking-[-0.02em] text-[var(--enterprise-sidebar-active)]"
             title={ws?.name?.trim() ? ws.name : undefined}
           >
             {workspaceTitle}
@@ -618,7 +618,7 @@ export function EnterpriseSidebar({
             href="/projects"
             onClick={afterNav}
             title={t("jumpToProjects")}
-            className="mb-1 flex shrink-0 items-center rounded-md px-3 py-2 text-[13px] font-medium text-[#94A3B8] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[#F8FAFC]"
+            className="mb-1 flex shrink-0 items-center rounded-md px-3 py-2 text-sm font-medium text-[#94A3B8] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[#F8FAFC]"
           >
             <span>{t("projects")}</span>
           </Link>
@@ -627,7 +627,7 @@ export function EnterpriseSidebar({
           <Link
             href={lastProjectPath}
             onClick={afterNav}
-            className="mb-1 flex shrink-0 items-center rounded-md bg-white/8 px-3 py-1.5 text-[11px] font-semibold text-slate-100 transition hover:bg-white/14 hover:text-white"
+            className="mb-1 flex shrink-0 items-center rounded-md bg-white/8 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/14 hover:text-white"
           >
             <span>{t("projectWorkspace")}</span>
           </Link>
@@ -660,16 +660,16 @@ export function EnterpriseSidebar({
                       }
                       aria-expanded={!collapsed}
                       aria-controls={`enterprise-sidebar-group-${section.id}`}
-                      className={`mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors ${
+                      className={`mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-left transition-colors ${
                         sectionHasActiveRoute ? "bg-white/12" : "hover:bg-white/7"
                       }`}
                       title={sectionLabel}
                     >
-                      <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-200">
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-[0.05em] text-slate-200">
                         {sectionLabel}
                       </span>
                       <ChevronDown
-                        className={`h-3.5 w-3.5 shrink-0 text-slate-300 transition-transform ${
+                        className={`h-4 w-4 shrink-0 text-slate-300 transition-transform ${
                           collapsed ? "" : "rotate-180"
                         }`}
                         strokeWidth={2}
@@ -700,7 +700,7 @@ export function EnterpriseSidebar({
                                   })
                                 : item.label
                             }
-                            className={`group flex items-center gap-2 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                            className={`group flex min-h-10 items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors ${
                               active
                                 ? "bg-[var(--enterprise-primary)]/90 text-white"
                                 : disabled
@@ -709,7 +709,7 @@ export function EnterpriseSidebar({
                             }`}
                           >
                             <ItemIcon
-                              className={`h-3.5 w-3.5 shrink-0 ${
+                              className={`h-4 w-4 shrink-0 ${
                                 active ? "text-white" : "text-slate-400 group-hover:text-white"
                               }`}
                               strokeWidth={1.75}
@@ -750,7 +750,7 @@ export function EnterpriseSidebar({
                     className={`mb-1.5 px-3 ${railCollapsed ? "sr-only" : ""}`}
                     title={section.description}
                   >
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]/60">
+                    <p className="text-xs font-bold uppercase tracking-wider text-[#94A3B8]/70">
                       {section.title}
                     </p>
                   </div>

@@ -341,7 +341,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
           <div className="mb-4 rounded-xl border border-emerald-300/80 bg-emerald-50 px-4 py-3">
             <p className="text-xs font-semibold text-emerald-900">Copy and store this key now</p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <code className="block w-full overflow-x-auto rounded-lg border border-emerald-300/80 bg-white px-3 py-2 text-xs text-emerald-950">
+              <code className="mobile-table-wrap block w-full overflow-x-auto rounded-lg border border-emerald-300/80 bg-white px-3 py-2 text-xs text-emerald-950">
                 {newApiKeyPlainText}
               </code>
               <button

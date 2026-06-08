@@ -373,7 +373,7 @@ export function IssuePhotoSketchModal(props: Props) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[140] flex items-center justify-center p-3 sm:p-5"
+      className="mobile-sheet-host fixed inset-0 z-[140] flex items-center justify-center p-3 max-lg:items-end max-lg:p-0 sm:p-5"
       role="presentation"
     >
       <button

@@ -412,7 +412,7 @@ function TakeoffLinksPicker({ open, onClose, lines, selected, onApply }: Takeoff
     >
       <button
         type="button"
-        className="absolute inset-0 cursor-pointer"
+        className="absolute inset-0 cursor-pointer mobile-tappable-row min-h-14 active:scale-[0.99]"
         aria-label="Close"
         onClick={onClose}
       />
@@ -451,7 +451,7 @@ function TakeoffLinksPicker({ open, onClose, lines, selected, onApply }: Takeoff
                 .join(" · ");
               return (
                 <li key={row.id}>
-                  <label className="flex cursor-pointer gap-3 rounded-lg px-2 py-2 hover:bg-[var(--enterprise-bg)]">
+                  <label className="flex cursor-pointer gap-3 rounded-lg px-2 py-2 hover:bg-[var(--enterprise-bg)] mobile-tappable-row min-h-14 active:scale-[0.99]">
                     <input
                       type="checkbox"
                       className="mt-1 h-4 w-4 accent-[var(--enterprise-primary)]"
@@ -552,7 +552,7 @@ function TaskDetailPanel({ task, onClose, onChange, onAddSubtask }: TaskDetailPa
           <label className="block text-xs font-medium text-[var(--enterprise-text-muted)]">
             Status
             <select
-              className="mt-1 h-9 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 text-sm text-[var(--enterprise-text)]"
+              className="mt-1 h-9 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 text-sm text-[var(--enterprise-text)] min-h-12 text-base"
               value={normalizeStatus(task.status)}
               onChange={(e) => onChange(task.id, { status: normalizeStatus(e.target.value) })}
             >
@@ -1399,7 +1399,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
               className="enterprise-scrollbar flex min-h-0 flex-1 flex-row items-start overflow-x-hidden overflow-y-auto overscroll-contain"
               aria-label="Schedule scroll area"
             >
-              <div className="flex w-[440px] shrink-0 flex-col overflow-x-auto border-r border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
+              <div className="mobile-chip-scroll mobile-table-wrap flex w-[440px] shrink-0 flex-col overflow-x-auto border-r border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
                 <table className="min-w-[680px] text-left text-sm">
                   <thead className="sticky top-0 z-20 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-xs uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                     <tr>
@@ -1458,7 +1458,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                               {(childCountByParent.get(t.id) ?? 0) > 0 ? (
                                 <button
                                   type="button"
-                                  className="cursor-pointer rounded p-0.5 text-[var(--enterprise-text-muted)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] hover:text-[var(--enterprise-text)] active:scale-[0.96]"
+                                  className="cursor-pointer rounded p-0.5 text-[var(--enterprise-text-muted)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] hover:text-[var(--enterprise-text)] active:scale-[0.96] mobile-tappable-row min-h-14 active:scale-[0.99]"
                                   aria-label={
                                     collapsedTaskIds.has(t.id)
                                       ? "Expand subtasks"
@@ -1549,7 +1549,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                           <td className="px-1 py-0.5 align-middle">
                             <button
                               type="button"
-                              className="flex w-full cursor-pointer items-center gap-1.5 rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1.5 py-0.5 text-left transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99]"
+                              className="flex w-full cursor-pointer items-center gap-1.5 rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1.5 py-0.5 text-left transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99] mobile-tappable-row min-h-14 active:scale-[0.99]"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setDetailTaskId(t.id);
@@ -1582,7 +1582,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                               </button>
                               <button
                                 type="button"
-                                className="cursor-pointer rounded p-1 text-[var(--enterprise-text-muted)] transition-all duration-150 hover:bg-red-50 hover:text-red-600 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                                className="cursor-pointer rounded p-1 text-[var(--enterprise-text-muted)] transition-all duration-150 hover:bg-red-50 hover:text-red-600 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 mobile-tappable-row min-h-14 active:scale-[0.99]"
                                 aria-label="Delete task"
                                 onClick={() =>
                                   setConfirmDeleteTaskId((prev) => (prev === t.id ? null : t.id))
@@ -1599,14 +1599,14 @@ export function ProjectScheduleClient({ projectId }: Props) {
                                 <div className="mt-2 flex justify-end gap-2">
                                   <button
                                     type="button"
-                                    className="cursor-pointer rounded-md border border-[var(--enterprise-border)] px-2 py-1 text-xs text-[var(--enterprise-text)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.97]"
+                                    className="cursor-pointer rounded-md border border-[var(--enterprise-border)] px-2 py-1 text-xs text-[var(--enterprise-text)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.97] mobile-tappable-row min-h-14 active:scale-[0.99]"
                                     onClick={() => setConfirmDeleteTaskId(null)}
                                   >
                                     Cancel
                                   </button>
                                   <button
                                     type="button"
-                                    className="cursor-pointer rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white transition-all duration-150 hover:bg-red-700 active:scale-[0.97]"
+                                    className="cursor-pointer rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white transition-all duration-150 hover:bg-red-700 active:scale-[0.97] mobile-tappable-row min-h-14 active:scale-[0.99]"
                                     onClick={() => {
                                       removeRow(t.id);
                                       setConfirmDeleteTaskId(null);
@@ -1624,7 +1624,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                   </tbody>
                 </table>
               </div>
-              <div className="flex min-w-0 flex-1 flex-col overflow-x-auto bg-[var(--enterprise-bg)]/15">
+              <div className="mobile-chip-scroll mobile-table-wrap flex min-w-0 flex-1 flex-col overflow-x-auto bg-[var(--enterprise-bg)]/15">
                 <div className="relative px-2 pb-2" style={{ minWidth: timelineWidthPx }}>
                   <div className="sticky top-0 z-[2] border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
                     <div className="relative h-8 border-b border-[var(--enterprise-border)]/70">
@@ -1817,7 +1817,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                       <button
                         type="button"
                         disabled={takeoffQuery.isPending}
-                        className="mt-1 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2 text-sm text-[var(--enterprise-text)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="mt-1 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2 text-sm text-[var(--enterprise-text)] transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 mobile-tappable-row min-h-14 active:scale-[0.99]"
                         onClick={() => setPickerTaskId(t.id)}
                       >
                         <Link2 className="h-4 w-4 shrink-0" aria-hidden />
@@ -1851,7 +1851,7 @@ export function ProjectScheduleClient({ projectId }: Props) {
                   </div>
                   <button
                     type="button"
-                    className="mt-2 w-full cursor-pointer rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-2 text-left transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99]"
+                    className="mt-2 w-full cursor-pointer rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-2 text-left transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.99] mobile-tappable-row min-h-14 active:scale-[0.99]"
                     onClick={() => setDetailTaskId(t.id)}
                   >
                     <div className="flex items-center justify-between text-xs">
@@ -1874,14 +1874,14 @@ export function ProjectScheduleClient({ projectId }: Props) {
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"
-                      className="cursor-pointer rounded border border-[var(--enterprise-border)] px-2 py-1 text-xs transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.98]"
+                      className="cursor-pointer rounded border border-[var(--enterprise-border)] px-2 py-1 text-xs transition-all duration-150 hover:bg-[var(--enterprise-surface-hover)] active:scale-[0.98] mobile-tappable-row min-h-14 active:scale-[0.99]"
                       onClick={() => addChild(t.id)}
                     >
                       Add subtask
                     </button>
                     <button
                       type="button"
-                      className="cursor-pointer rounded border border-red-200 px-2 py-1 text-xs text-red-700 transition-all duration-150 hover:bg-red-50 active:scale-[0.98]"
+                      className="cursor-pointer rounded border border-red-200 px-2 py-1 text-xs text-red-700 transition-all duration-150 hover:bg-red-50 active:scale-[0.98] mobile-tappable-row min-h-14 active:scale-[0.99]"
                       onClick={() => {
                         if (window.confirm("Delete this task and all subtasks?")) removeRow(t.id);
                       }}

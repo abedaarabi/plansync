@@ -396,7 +396,7 @@ export function ProposalPortalClient({ token }: { token: string }) {
           <h2 className="text-lg font-semibold text-slate-900">Line items & totals</h2>
           <p className="mt-1 text-sm text-slate-600">Scope and pricing as proposed.</p>
           <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 ring-1 ring-slate-100">
-            <div className="overflow-x-auto">
+            <div className="mobile-table-wrap overflow-x-auto">
               <table className="w-full min-w-[520px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/90 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">

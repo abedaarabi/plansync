@@ -71,7 +71,7 @@ type Props = {
 };
 
 const BILLING_MODAL_OVERLAY =
-  "fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[3px] sm:p-6";
+  "mobile-sheet-host fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[3px] max-lg:items-end max-lg:p-0 sm:p-6";
 const BILLING_MODAL_PANEL =
   "relative w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-6 shadow-2xl ring-1 ring-slate-900/[0.06] max-h-[min(92dvh,32rem)]";
 

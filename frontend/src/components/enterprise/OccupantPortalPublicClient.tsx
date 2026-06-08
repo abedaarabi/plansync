@@ -118,7 +118,7 @@ export function OccupantPortalPublicClient({ token, initialAssetSecret }: Props)
 
   if (isPending) {
     return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-4 text-sm text-[var(--enterprise-text-muted)]">
+      <div className="mobile-app-page w-full min-w-0 max-w-full flex min-h-[50vh] flex-col items-center justify-center gap-3 px-4 text-sm text-[var(--enterprise-text-muted)]">
         <Loader2 className="h-8 w-8 animate-spin text-[var(--enterprise-primary)]" aria-hidden />
         Loading…
       </div>

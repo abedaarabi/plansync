@@ -13,6 +13,7 @@ import { QueryProvider } from "@/providers/QueryProvider";
 import { EnterpriseWorkspaceProvider } from "./EnterpriseWorkspaceContext";
 import { ProjectSessionRedirect } from "./ProjectSessionRedirect";
 import { UploadProgressDock } from "./UploadProgressDock";
+import { EnterpriseMobileBottomNav } from "./EnterpriseMobileBottomNav";
 import { DEFAULT_ENTERPRISE_PRIMARY_HEX } from "@/lib/enterpriseTheme";
 
 export function EnterpriseShell({ children }: { children: React.ReactNode }) {
@@ -109,21 +110,39 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
         <ProjectSessionRedirect />
         {isWorkspaceGate ? (
           <div
-            className="flex h-dvh min-h-0 w-full min-w-0 max-w-full flex-col overflow-x-hidden bg-[var(--enterprise-bg)] text-[var(--enterprise-text)]"
+            className="flex h-dvh min-h-0 w-full min-w-0 max-w-full flex-col overflow-x-hidden bg-[var(--enterprise-bg)] text-[var(--enterprise-text)] lg:flex-row"
             style={{ fontFamily: "var(--font-inter), ui-sans-serif, system-ui, sans-serif" }}
           >
-            <header className="flex h-[var(--enterprise-topbar-h)] shrink-0 items-center justify-between gap-3 border-b border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_88%,transparent)] px-4 pt-[env(safe-area-inset-top,0px)] shadow-[0_1px_0_0_rgba(255,255,255,0.72)_inset] backdrop-blur-xl sm:px-6">
-              <Link
-                href="/projects"
-                className="select-none text-[15px] font-bold tracking-tight text-[var(--enterprise-text)]"
-              >
-                Plan<span style={{ color: DEFAULT_ENTERPRISE_PRIMARY_HEX }}>Sync</span>
-              </Link>
-              <UserMenu />
-            </header>
-            <main className="enterprise-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none">
-              <div className="enterprise-main-inner min-h-full min-w-0 max-w-full">{children}</div>
-            </main>
+            {mobileNavOpen && (
+              <button
+                type="button"
+                aria-label="Close menu"
+                className="fixed inset-0 z-30 bg-[#0c1222]/50 backdrop-blur-sm lg:hidden"
+                onClick={closeMobileNav}
+              />
+            )}
+            <EnterpriseSidebar
+              mobileOpen={mobileNavOpen}
+              onCloseMobile={closeMobileNav}
+              desktopCollapsed={false}
+            />
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <header className="flex h-[var(--enterprise-topbar-h)] shrink-0 items-center justify-between gap-3 border-b border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_88%,transparent)] px-4 pt-[env(safe-area-inset-top,0px)] shadow-[0_1px_0_0_rgba(255,255,255,0.72)_inset] backdrop-blur-xl sm:px-6">
+                <Link
+                  href="/projects"
+                  className="select-none text-[15px] font-bold tracking-tight text-[var(--enterprise-text)]"
+                >
+                  Plan<span style={{ color: DEFAULT_ENTERPRISE_PRIMARY_HEX }}>Sync</span>
+                </Link>
+                <UserMenu />
+              </header>
+              <main className="enterprise-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none">
+                <div className="enterprise-main-inner min-h-full min-w-0 max-w-full pb-0 lg:pb-0">
+                  {children}
+                </div>
+              </main>
+            </div>
+            <EnterpriseMobileBottomNav onOpenMore={toggleMobileNav} />
             <CommandPalette open={commandOpen} onClose={closePalette} />
             <UploadProgressDock />
           </div>
@@ -154,11 +173,12 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
                 onToggleDesktopSidebar={toggleDesktopSidebar}
               />
               <main className="enterprise-scrollbar enterprise-main-canvas min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none">
-                <div className="enterprise-main-inner min-h-full min-w-0 max-w-full">
+                <div className="enterprise-main-inner min-h-full min-w-0 max-w-full pb-0 lg:pb-0">
                   {children}
                 </div>
               </main>
             </div>
+            <EnterpriseMobileBottomNav onOpenMore={toggleMobileNav} />
             <CommandPalette open={commandOpen} onClose={closePalette} />
             <UploadProgressDock />
           </div>

@@ -26,6 +26,7 @@ import {
   sortedVersions,
 } from "./fileExplorerUtils";
 import { FileExplorerEmptyState } from "./FileExplorerEmptyState";
+import { SwipeableListRow } from "@/components/mobile/SwipeableListRow";
 import type { MoveDragPayload } from "@/store/uploadQueueStore";
 
 export type FileExplorerContentProps = {
@@ -145,31 +146,31 @@ export function FileExplorerContent({
             type="button"
             title="Grid view"
             onClick={() => onViewModeChange("grid")}
-            className={`rounded-md p-1.5 transition ${
+            className={`hidden min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 transition sm:inline-flex ${
               viewMode === "grid"
                 ? "bg-white text-[var(--enterprise-primary)] shadow-sm"
                 : "text-slate-400 hover:text-slate-600"
             }`}
           >
-            <LayoutGrid className="h-3.5 w-3.5" strokeWidth={2} />
+            <LayoutGrid className="h-4 w-4" strokeWidth={2} />
           </button>
           <button
             type="button"
             title="List view"
             onClick={() => onViewModeChange("list")}
-            className={`rounded-md p-1.5 transition ${
+            className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 transition ${
               viewMode === "list"
                 ? "bg-white text-[var(--enterprise-primary)] shadow-sm"
                 : "text-slate-400 hover:text-slate-600"
             }`}
           >
-            <List className="h-3.5 w-3.5" strokeWidth={2} />
+            <List className="h-4 w-4" strokeWidth={2} />
           </button>
         </div>
       </div>
 
       <div
-        className={`relative min-h-0 flex-1 overflow-auto bg-slate-50 px-2 py-3 sm:px-4 sm:py-3.5 lg:px-6 ${
+        className={`mobile-scroll relative min-h-0 flex-1 overflow-auto bg-slate-50 px-0 py-0 sm:px-4 sm:py-3.5 lg:px-6 ${
           isDragOver
             ? "bg-[var(--enterprise-primary-soft)]/60 ring-2 ring-inset ring-[var(--enterprise-primary)]/30"
             : ""
@@ -446,7 +447,7 @@ export function FileExplorerContent({
           </div>
         ) : (
           <>
-            <div className="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-slate-900/5 lg:hidden">
+            <div className="overflow-hidden rounded-none border-0 bg-white shadow-none ring-0 lg:hidden">
               <ul className="divide-y divide-slate-100">
                 {subfolders.map((fol) => {
                   const inside = countDirectChildren(project, fol.id);
@@ -454,74 +455,58 @@ export function FileExplorerContent({
                   const dropTarget = dropTargetKey === folderDropKey(fol.id);
                   return (
                     <li key={`m-folder-${fol.id}`}>
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        draggable={Boolean(onDragStartMove)}
-                        onDragStart={(e) => {
-                          if ((e.target as HTMLElement).closest('button[aria-label^="Delete"]')) {
-                            e.preventDefault();
-                            return;
-                          }
-                          onDragStartMove?.(e, { kind: "folder", id: fol.id });
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onSelectItem(itemKeyForFolder(fol.id));
-                            onOpenFolder(fol.id);
-                          }
-                        }}
-                        onClick={() => {
+                      <SwipeableListRow
+                        onTap={() => {
                           onSelectItem(itemKeyForFolder(fol.id));
                           onOpenFolder(fol.id);
                         }}
-                        onDragOver={
-                          onDragOverFolder ? (e) => onDragOverFolder(e, fol.id) : undefined
-                        }
-                        onDragLeave={
-                          onDragLeaveFolder ? (e) => onDragLeaveFolder(e, fol.id) : undefined
-                        }
-                        onDrop={onDropOnFolder ? (e) => onDropOnFolder(e, fol.id) : undefined}
-                        className={`flex w-full cursor-pointer items-center gap-3 px-3 py-3 text-left transition-colors ${
-                          selected ? "bg-[var(--enterprise-primary-soft)]/80" : "active:bg-slate-50"
-                        } ${dropTarget ? "bg-blue-50/80" : ""}`}
+                        actions={[
+                          {
+                            id: "delete",
+                            label: "Delete",
+                            icon: <Trash2 className="h-4 w-4" aria-hidden />,
+                            onAction: () => void onDeleteFolder(fol),
+                          },
+                        ]}
                       >
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-50 to-amber-50/50 ring-1 ring-slate-200/60">
-                          <Folder
-                            className="h-6 w-6 text-amber-500"
-                            strokeWidth={1.5}
-                            aria-hidden
-                          />
+                        <div
+                          draggable={Boolean(onDragStartMove)}
+                          onDragStart={(e) => {
+                            if ((e.target as HTMLElement).closest("button")) {
+                              e.preventDefault();
+                              return;
+                            }
+                            onDragStartMove?.(e, { kind: "folder", id: fol.id });
+                          }}
+                          onDragOver={
+                            onDragOverFolder ? (e) => onDragOverFolder(e, fol.id) : undefined
+                          }
+                          onDragLeave={
+                            onDragLeaveFolder ? (e) => onDragLeaveFolder(e, fol.id) : undefined
+                          }
+                          onDrop={onDropOnFolder ? (e) => onDropOnFolder(e, fol.id) : undefined}
+                          className={`mobile-list-row flex w-full items-center gap-3 py-3 text-left transition-colors duration-150 ${
+                            selected ? "bg-[var(--enterprise-primary-soft)]/80" : ""
+                          } ${dropTarget ? "bg-blue-50/80" : ""}`}
+                        >
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-50 to-amber-50/50 ring-1 ring-slate-200/60">
+                            <Folder
+                              className="h-6 w-6 text-amber-500"
+                              strokeWidth={1.5}
+                              aria-hidden
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-base font-semibold text-[var(--enterprise-text)]">
+                              {fol.name}
+                            </p>
+                            <p className="text-sm text-slate-500">
+                              Folder · {inside.total} item{inside.total !== 1 ? "s" : ""}
+                            </p>
+                          </div>
+                          <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" aria-hidden />
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">
-                            {fol.name}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            Folder · {inside.total} item{inside.total !== 1 ? "s" : ""}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-0.5">
-                          <button
-                            type="button"
-                            className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
-                            disabled={deletingKey === `folder:${fol.id}`}
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              void onDeleteFolder(fol);
-                            }}
-                            aria-label={`Delete ${fol.name}`}
-                          >
-                            {deletingKey === `folder:${fol.id}` ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </button>
-                          <ChevronRight className="h-4 w-4 text-slate-300" aria-hidden />
-                        </div>
-                      </div>
+                      </SwipeableListRow>
                     </li>
                   );
                 })}
@@ -533,116 +518,53 @@ export function FileExplorerContent({
                   const selected = selectedItemKey === itemKeyForFile(f.id);
                   return (
                     <li key={`m-file-${f.id}`}>
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        draggable={Boolean(onDragStartMove)}
-                        onDragStart={(e) => {
-                          if (
-                            (e.target as HTMLElement).closest(
-                              'button[aria-label^="Delete"], button[aria-label^="Download"], select',
-                            )
-                          ) {
-                            e.preventDefault();
-                            return;
-                          }
-                          onDragStartMove?.(e, { kind: "file", id: f.id });
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onSelectItem(itemKeyForFile(f.id));
-                            onOpenFile(f);
-                          }
-                        }}
-                        onClick={() => {
+                      <SwipeableListRow
+                        onTap={() => {
                           onSelectItem(itemKeyForFile(f.id));
                           onOpenFile(f);
                         }}
-                        className={`flex w-full cursor-pointer items-center gap-3 px-3 py-3 text-left transition-colors ${
-                          selected ? "bg-[var(--enterprise-primary-soft)]/80" : "active:bg-slate-50"
-                        }`}
+                        actions={[
+                          {
+                            id: "delete",
+                            label: "Delete",
+                            icon: <Trash2 className="h-4 w-4" aria-hidden />,
+                            onAction: () => void onDeleteFile(f),
+                          },
+                        ]}
                       >
-                        <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200/60">
-                          <PdfFileThumbnail
-                            fileId={f.id}
-                            fileName={f.name}
-                            mimeType={f.mimeType}
-                            isPdf={isPdfFile(f)}
-                            className="h-full w-full"
-                          />
-                          {isPdfFile(f) ? (
-                            <div className="pointer-events-none absolute bottom-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded bg-white/95 shadow-sm ring-1 ring-slate-200/70">
-                              <PdfFileIcon className="h-2.5 w-2.5" />
-                            </div>
-                          ) : null}
+                        <div
+                          draggable={Boolean(onDragStartMove)}
+                          onDragStart={(e) => {
+                            if ((e.target as HTMLElement).closest("button, select")) {
+                              e.preventDefault();
+                              return;
+                            }
+                            onDragStartMove?.(e, { kind: "file", id: f.id });
+                          }}
+                          className={`mobile-list-row flex w-full items-center gap-3 py-3 text-left transition-colors duration-150 ${
+                            selected ? "bg-[var(--enterprise-primary-soft)]/80" : ""
+                          }`}
+                        >
+                          <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200/60">
+                            <PdfFileThumbnail
+                              fileId={f.id}
+                              fileName={f.name}
+                              mimeType={f.mimeType}
+                              isPdf={isPdfFile(f)}
+                              className="h-full w-full"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-base font-semibold text-[var(--enterprise-text)]">
+                              {fileExplorerDisplayName(f)}
+                            </p>
+                            <p className="text-sm text-slate-500">
+                              {displayVer ? `Rev v${displayVer.version}` : "—"}
+                            </p>
+                          </div>
+                          <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" aria-hidden />
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">
-                            {fileExplorerDisplayName(f)}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {displayVer
-                              ? `${isPdfFile(f) ? "PDF" : "File"} · v${displayVer.version} · ${formatBytes(displayVer.sizeBytes)}`
-                              : "—"}
-                          </p>
-                          {versionUi && sv.length > 1 && onFileVersionPick ? (
-                            <select
-                              className="mt-1.5 w-full max-w-[12rem] rounded-lg border border-slate-200/90 bg-white py-1 pl-2 pr-6 text-[11px] text-[var(--enterprise-text)]"
-                              value={String(selectedVersionForFile(f))}
-                              onClick={(ev) => ev.stopPropagation()}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                onFileVersionPick(f.id, Number(e.target.value));
-                              }}
-                              aria-label={`Revision for ${f.name}`}
-                            >
-                              {sv.map((ver) => (
-                                <option key={ver.id} value={String(ver.version)}>
-                                  v{ver.version} ({formatBytes(ver.sizeBytes)})
-                                </option>
-                              ))}
-                            </select>
-                          ) : null}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-0.5">
-                          {onDownloadFile ? (
-                            <button
-                              type="button"
-                              className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                              disabled={downloadingKey === `file:${f.id}`}
-                              onClick={(ev) => {
-                                ev.stopPropagation();
-                                void onDownloadFile(f);
-                              }}
-                              aria-label={`Download ${f.name}`}
-                            >
-                              {downloadingKey === `file:${f.id}` ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Download className="h-4 w-4" />
-                              )}
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
-                            disabled={deletingKey === `file:${f.id}`}
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              void onDeleteFile(f);
-                            }}
-                            aria-label={`Delete ${f.name}`}
-                          >
-                            {deletingKey === `file:${f.id}` ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </button>
-                          <ChevronRight className="h-4 w-4 text-slate-300" aria-hidden />
-                        </div>
-                      </div>
+                      </SwipeableListRow>
                     </li>
                   );
                 })}

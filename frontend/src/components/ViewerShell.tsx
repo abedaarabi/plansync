@@ -16,7 +16,7 @@ const PdfViewer = dynamic(
 
 export function ViewerShell() {
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <div className="viewer-shell-bg flex h-[100dvh] min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]">
       <PdfViewer />
     </div>
   );

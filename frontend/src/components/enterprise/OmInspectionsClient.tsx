@@ -4,13 +4,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   ClipboardCheck,
   ClipboardList,
   FileText,
   Loader2,
   PencilLine,
   Plus,
-  Sparkles,
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -27,7 +27,7 @@ import {
   type OmInspectionTemplateRow,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
-import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmInspectionRunSlideOver } from "@/components/enterprise/OmInspectionRunSlideOver";
@@ -78,6 +78,103 @@ function runStatusUi(r: OmInspectionRunRow): {
     label: r.status,
     className: "text-[var(--enterprise-text-muted)]",
   };
+}
+
+function InspectionRunMobileCard({
+  r,
+  num,
+  projectId,
+  onOpen,
+  onDelete,
+  deleting,
+}: {
+  r: OmInspectionRunRow;
+  num: number;
+  projectId: string;
+  onOpen: (run: OmInspectionRunRow) => void;
+  onDelete: (runId: string) => void;
+  deleting: boolean;
+}) {
+  const st = runStatusUi(r);
+  const StIcon = st.Icon;
+  const by = r.createdBy?.name ?? "—";
+  const dateStr = new Date(r.updatedAt).toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  return (
+    <li className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)]">
+      <button
+        type="button"
+        onClick={() => onOpen(r)}
+        className="flex w-full items-start gap-3 text-left active:opacity-90"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
+              #{num}
+            </span>
+            <p className="text-base font-semibold leading-snug text-[var(--enterprise-text)]">
+              {r.template.name}
+            </p>
+          </div>
+          <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+            {by} · {dateStr}
+          </p>
+        </div>
+        <span
+          className={`inline-flex shrink-0 items-center gap-1 text-xs font-semibold ${st.className}`}
+        >
+          <StIcon className="h-4 w-4" strokeWidth={2} aria-hidden />
+          {st.label}
+        </span>
+        <ChevronRight
+          className="h-5 w-5 shrink-0 text-[var(--enterprise-text-muted)]"
+          aria-hidden
+        />
+      </button>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <EnterpriseButton size="sm" onClick={() => onOpen(r)}>
+          {r.status === "DRAFT" ? "Continue" : "View"}
+        </EnterpriseButton>
+        {r.status !== "DRAFT" ? (
+          <a
+            href={omInspectionRunReportPdfUrl(projectId, r.id)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] transition active:scale-[0.98] hover:bg-[var(--enterprise-hover-surface)]"
+          >
+            <FileText className="h-4 w-4" aria-hidden />
+            PDF
+          </a>
+        ) : null}
+        <button
+          type="button"
+          disabled={deleting}
+          title="Delete inspection"
+          aria-label="Delete inspection"
+          onClick={() => {
+            if (
+              !window.confirm(
+                "Delete this inspection? PDF and data will be removed. This cannot be undone.",
+              )
+            )
+              return;
+            onDelete(r.id);
+          }}
+          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-200 px-3 text-sm font-semibold text-red-600 transition active:scale-[0.98] disabled:opacity-40 dark:border-red-900/50"
+        >
+          {deleting ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Trash2 className="h-4 w-4" strokeWidth={2} />
+          )}
+        </button>
+      </div>
+    </li>
+  );
 }
 
 export function OmInspectionsClient({ projectId }: Props) {
@@ -169,68 +266,73 @@ export function OmInspectionsClient({ projectId }: Props) {
   };
 
   return (
-    <div className="space-y-10">
-      {/* Intro + actions — no project / page title breadcrumb */}
-      <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 shadow-[var(--enterprise-shadow-xs)] sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex gap-4">
-            <div
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]"
-              aria-hidden
-            >
-              <ClipboardCheck className="h-7 w-7" strokeWidth={1.5} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-base font-semibold leading-snug text-[var(--enterprise-text)] sm:text-lg">
-                Field checklists & sign-off
-              </p>
-              <p className="mt-1 max-w-xl text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
-                Pick a template to start a round, save drafts, attach photos, then complete for a
-                PDF report and optional owner email.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--enterprise-text-muted)]">
-                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2.5 py-1">
-                  <ClipboardList
-                    className="h-3.5 w-3.5 text-[var(--enterprise-primary)]"
-                    aria-hidden
-                  />
-                  {templates.length} template{templates.length === 1 ? "" : "s"}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2.5 py-1">
-                  <Sparkles className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" aria-hidden />
-                  {runs.length} run{runs.length === 1 ? "" : "s"} total
-                  {draftCount > 0 ? ` · ${draftCount} draft` : ""}
-                </span>
-              </div>
-            </div>
+    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-6 sm:space-y-8">
+      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-5 sm:pb-6">
+        <div className="flex min-w-0 gap-3 sm:gap-4">
+          <div
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
+            aria-hidden
+          >
+            <ClipboardCheck className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.5} />
           </div>
-          <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:w-auto sm:justify-end">
-            <EnterpriseAddPulseWrap disabled={startRun.isPending} className="w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={openNewInspection}
-                disabled={startRun.isPending}
-                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
-              >
-                {startRun.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                ) : (
-                  <Plus className="h-4 w-4" strokeWidth={2.5} />
-                )}
-                New inspection
-              </button>
-            </EnterpriseAddPulseWrap>
-            <button
-              type="button"
-              onClick={() => setTemplateSlideOpen(true)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-5 text-sm font-semibold text-[var(--enterprise-text)]"
-            >
-              <Plus className="h-4 w-4" strokeWidth={2} />
-              New template
-            </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
+              Inspections
+            </h1>
+            <p className="mt-1.5 hidden text-sm leading-relaxed text-[var(--enterprise-text-muted)] sm:block">
+              Field checklists and sign-off — save drafts, attach photos, then complete for a PDF
+              report and optional owner email.
+            </p>
           </div>
         </div>
-      </section>
+
+        <div className="grid grid-cols-3 gap-2 sm:max-w-md">
+          <div className="enterprise-card rounded-2xl p-3 text-center sm:p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] sm:text-[11px]">
+              Templates
+            </p>
+            <p className="mt-0.5 text-xl font-bold tabular-nums text-[var(--enterprise-text)] sm:text-2xl">
+              {templates.length}
+            </p>
+          </div>
+          <div className="enterprise-card rounded-2xl p-3 text-center sm:p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] sm:text-[11px]">
+              Runs
+            </p>
+            <p className="mt-0.5 text-xl font-bold tabular-nums text-[var(--enterprise-text)] sm:text-2xl">
+              {runs.length}
+            </p>
+          </div>
+          <div className="enterprise-card rounded-2xl p-3 text-center sm:p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] sm:text-[11px]">
+              Drafts
+            </p>
+            <p className="mt-0.5 text-xl font-bold tabular-nums text-[var(--enterprise-text)] sm:text-2xl">
+              {draftCount}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <EnterpriseButton
+            size="sm"
+            disabled={startRun.isPending}
+            loading={startRun.isPending}
+            onClick={openNewInspection}
+          >
+            {!startRun.isPending ? <Plus className="h-4 w-4" strokeWidth={2.5} /> : null}
+            New inspection
+          </EnterpriseButton>
+          <EnterpriseButton
+            variant="secondary"
+            size="sm"
+            onClick={() => setTemplateSlideOpen(true)}
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            New template
+          </EnterpriseButton>
+        </div>
+      </header>
 
       {/* Templates */}
       <section>
@@ -266,13 +368,13 @@ export function OmInspectionsClient({ projectId }: Props) {
             </button>
           </div>
         ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className="grid gap-2 sm:grid-cols-2 sm:gap-3">
             {templates.map((t: OmInspectionTemplateRow) => {
               const n = checklistItemCount(t.checklistJson);
               return (
                 <li
                   key={t.id}
-                  className="flex items-start gap-3 rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-4 shadow-[var(--enterprise-shadow-xs)]"
+                  className="flex min-h-[4.5rem] items-start gap-3 rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)] transition active:scale-[0.98]"
                 >
                   <div
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]"
@@ -307,7 +409,7 @@ export function OmInspectionsClient({ projectId }: Props) {
                         return;
                       deleteTemplateMut.mutate(t.id);
                     }}
-                    className="shrink-0 rounded-lg p-2 text-[var(--enterprise-text-muted)] transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                    className="mobile-touch-target shrink-0 rounded-xl p-2 text-[var(--enterprise-text-muted)] transition active:scale-[0.98] hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
                   >
                     <Trash2 className="h-4 w-4" strokeWidth={2} />
                   </button>
@@ -329,103 +431,118 @@ export function OmInspectionsClient({ projectId }: Props) {
         </p>
 
         {runs.length === 0 ? (
-          <p className="text-sm text-[var(--enterprise-text-muted)]">
-            No runs yet — start with “New inspection”.
+          <p className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-10 text-center text-sm text-[var(--enterprise-text-muted)]">
+            No runs yet — start with New inspection.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] shadow-[var(--enterprise-shadow-xs)]">
-            <table className="w-full min-w-[540px] border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]/80 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                  <th className="py-3 pl-4 pr-2">#</th>
-                  <th className="px-3 py-3">Checklist</th>
-                  <th className="px-3 py-3">Updated</th>
-                  <th className="px-3 py-3">Inspector</th>
-                  <th className="px-3 py-3">Outcome</th>
-                  <th className="py-3 pl-3 pr-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentRows.slice(0, 25).map(({ r, num }) => {
-                  const st = runStatusUi(r);
-                  const by = r.createdBy?.name ?? "—";
-                  const dateStr = new Date(r.updatedAt).toLocaleDateString(undefined, {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  });
-                  const StIcon = st.Icon;
-                  return (
-                    <tr
-                      key={r.id}
-                      className="border-b border-[var(--enterprise-border)] last:border-0 hover:bg-[var(--enterprise-surface)]/50"
-                    >
-                      <td className="py-3 pl-4 pr-2 font-mono text-xs text-[var(--enterprise-text-muted)]">
-                        {num}
-                      </td>
-                      <td className="px-3 py-3 font-medium text-[var(--enterprise-text)]">
-                        {r.template.name}
-                      </td>
-                      <td className="px-3 py-3 text-[var(--enterprise-text-muted)]">{dateStr}</td>
-                      <td className="px-3 py-3 text-[var(--enterprise-text)]">{by}</td>
-                      <td className="px-3 py-3">
-                        <span
-                          className={`inline-flex items-center gap-1.5 text-sm ${st.className}`}
-                        >
-                          <StIcon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                          {st.label}
-                        </span>
-                      </td>
-                      <td className="py-3 pl-3 pr-4 text-right">
-                        <div className="flex items-center justify-end gap-2 sm:gap-3">
-                          {r.status !== "DRAFT" && (
-                            <a
-                              href={omInspectionRunReportPdfUrl(projectId, r.id)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--enterprise-text-muted)] hover:text-[var(--enterprise-primary)]"
-                            >
-                              <FileText className="h-3.5 w-3.5" aria-hidden />
-                              View PDF
-                            </a>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => openRun(r)}
-                            className="text-xs font-semibold text-[var(--enterprise-primary)] hover:underline"
+          <>
+            <ul className="space-y-3 lg:hidden" aria-label="Recent inspection runs">
+              {recentRows.slice(0, 25).map(({ r, num }) => (
+                <InspectionRunMobileCard
+                  key={r.id}
+                  r={r}
+                  num={num}
+                  projectId={projectId}
+                  onOpen={openRun}
+                  onDelete={(id) => deleteRunMut.mutate(id)}
+                  deleting={deleteRunMut.isPending && deleteRunMut.variables === r.id}
+                />
+              ))}
+            </ul>
+            <div className="mobile-table-wrap hidden overflow-x-auto rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] shadow-[var(--enterprise-shadow-xs)] lg:block">
+              <table className="w-full min-w-[540px] border-collapse text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]/80 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                    <th className="py-3 pl-4 pr-2">#</th>
+                    <th className="px-3 py-3">Checklist</th>
+                    <th className="px-3 py-3">Updated</th>
+                    <th className="px-3 py-3">Inspector</th>
+                    <th className="px-3 py-3">Outcome</th>
+                    <th className="py-3 pl-3 pr-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentRows.slice(0, 25).map(({ r, num }) => {
+                    const st = runStatusUi(r);
+                    const by = r.createdBy?.name ?? "—";
+                    const dateStr = new Date(r.updatedAt).toLocaleDateString(undefined, {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    });
+                    const StIcon = st.Icon;
+                    return (
+                      <tr
+                        key={r.id}
+                        className="border-b border-[var(--enterprise-border)] last:border-0 hover:bg-[var(--enterprise-surface)]/50"
+                      >
+                        <td className="py-3 pl-4 pr-2 font-mono text-xs text-[var(--enterprise-text-muted)]">
+                          {num}
+                        </td>
+                        <td className="px-3 py-3 font-medium text-[var(--enterprise-text)]">
+                          {r.template.name}
+                        </td>
+                        <td className="px-3 py-3 text-[var(--enterprise-text-muted)]">{dateStr}</td>
+                        <td className="px-3 py-3 text-[var(--enterprise-text)]">{by}</td>
+                        <td className="px-3 py-3">
+                          <span
+                            className={`inline-flex items-center gap-1.5 text-sm ${st.className}`}
                           >
-                            {r.status === "DRAFT" ? "Continue" : "View"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={deleteRunMut.isPending && deleteRunMut.variables === r.id}
-                            title="Delete inspection"
-                            aria-label="Delete inspection"
-                            onClick={() => {
-                              if (
-                                !window.confirm(
-                                  "Delete this inspection? PDF and data will be removed. This cannot be undone.",
-                                )
-                              )
-                                return;
-                              deleteRunMut.mutate(r.id);
-                            }}
-                            className="rounded-md p-1.5 text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-                          >
-                            {deleteRunMut.isPending && deleteRunMut.variables === r.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                            ) : (
-                              <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                            <StIcon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+                            {st.label}
+                          </span>
+                        </td>
+                        <td className="py-3 pl-3 pr-4 text-right">
+                          <div className="flex items-center justify-end gap-2 sm:gap-3">
+                            {r.status !== "DRAFT" && (
+                              <a
+                                href={omInspectionRunReportPdfUrl(projectId, r.id)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--enterprise-text-muted)] hover:text-[var(--enterprise-primary)]"
+                              >
+                                <FileText className="h-3.5 w-3.5" aria-hidden />
+                                View PDF
+                              </a>
                             )}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                            <button
+                              type="button"
+                              onClick={() => openRun(r)}
+                              className="text-xs font-semibold text-[var(--enterprise-primary)] hover:underline"
+                            >
+                              {r.status === "DRAFT" ? "Continue" : "View"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={deleteRunMut.isPending && deleteRunMut.variables === r.id}
+                              title="Delete inspection"
+                              aria-label="Delete inspection"
+                              onClick={() => {
+                                if (
+                                  !window.confirm(
+                                    "Delete this inspection? PDF and data will be removed. This cannot be undone.",
+                                  )
+                                )
+                                  return;
+                                deleteRunMut.mutate(r.id);
+                              }}
+                              className="rounded-md p-1.5 text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                            >
+                              {deleteRunMut.isPending && deleteRunMut.variables === r.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 
@@ -475,23 +592,24 @@ export function OmInspectionsClient({ projectId }: Props) {
         bodyClassName="px-2 py-2"
         footerClassName="border-t border-[var(--enterprise-border)] px-4 py-3"
         footer={
-          <button
-            type="button"
+          <EnterpriseButton
+            variant="secondary"
+            size="lg"
+            fullWidth
             onClick={() => setPickerOpen(false)}
-            className="w-full rounded-lg border border-[var(--enterprise-border)] py-2 text-sm font-medium text-[var(--enterprise-text)]"
           >
             Cancel
-          </button>
+          </EnterpriseButton>
         }
       >
-        <ul className="max-h-[min(60vh,420px)] overflow-y-auto">
+        <ul className="max-h-[min(60vh,420px)] overflow-y-auto mobile-scroll">
           {templates.map((t) => (
             <li key={t.id}>
               <button
                 type="button"
                 disabled={startRun.isPending}
                 onClick={() => startRun.mutate(t.id)}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-surface)] disabled:opacity-50"
+                className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-base font-medium text-[var(--enterprise-text)] transition active:scale-[0.98] active:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
                   <FileText className="h-4 w-4" strokeWidth={1.75} />

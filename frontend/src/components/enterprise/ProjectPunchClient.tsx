@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
+import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
@@ -667,7 +668,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             <button
               type="button"
               onClick={() => setNewModalOpen(true)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] sm:min-h-10 sm:rounded-lg sm:px-3 sm:text-xs"
+              className="hidden min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] sm:inline-flex lg:min-h-10 lg:rounded-lg lg:px-3 lg:text-xs"
             >
               <Plus className="h-4 w-4" />
               New Item
@@ -850,189 +851,228 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             />
           </div>
         ) : (
-          <div
-            className="-mx-4 overflow-x-auto sm:mx-0"
-            style={{ WebkitOverflowScrolling: "touch" }}
-          >
-            <div className="inline-block min-w-full align-middle">
-              <table className="w-full min-w-[760px] border-collapse rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] md:min-w-[920px]">
-                <thead>
-                  <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
-                    <th className="w-10 px-2 py-2 text-left text-[#0f172a]">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-[var(--enterprise-border)]"
-                        checked={allSelected}
-                        onChange={toggleAll}
-                        aria-label="Select all"
-                      />
-                    </th>
-                    <th className="px-3 py-2 text-left">
-                      <SortHeader
-                        label="#"
-                        active={sortCol === "punchNumber"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("punchNumber")}
-                      />
-                    </th>
-                    <th className="min-w-[140px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Title"
-                        active={sortCol === "title"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("title")}
-                      />
-                    </th>
-                    <th className="min-w-[120px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Location"
-                        active={sortCol === "location"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("location")}
-                      />
-                    </th>
-                    <th className="min-w-[140px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Assignee"
-                        active={sortCol === "assignee"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("assignee")}
-                      />
-                    </th>
-                    <th className="min-w-[100px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Due"
-                        active={sortCol === "dueDate"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("dueDate")}
-                      />
-                    </th>
-                    <th className="min-w-[120px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Status"
-                        active={sortCol === "status"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("status")}
-                      />
-                    </th>
-                    <th className="min-w-[100px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Priority"
-                        active={sortCol === "priority"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("priority")}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSorted.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={8}
-                        className="px-4 py-12 text-center text-sm text-[var(--enterprise-text-muted)]"
+          <>
+            <ul className="space-y-2 lg:hidden" aria-label="Punch list">
+              {filteredSorted.length === 0 ? (
+                <li className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-10 text-center text-sm text-[var(--enterprise-text-muted)]">
+                  No items match your filters.
+                </li>
+              ) : (
+                filteredSorted.map((p) => {
+                  const st = p.status as PunchStatus;
+                  const active = activePunchId === p.id && slideOpen;
+                  return (
+                    <li key={`m-${p.id}`}>
+                      <button
+                        type="button"
+                        onClick={() => openRow(p.id)}
+                        className={`flex min-h-14 w-full items-center gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-left shadow-[var(--enterprise-shadow-xs)] transition-all duration-150 active:scale-[0.99] active:bg-[var(--enterprise-hover-surface)]/60 ${
+                          active
+                            ? "border-[var(--enterprise-primary)]/35 ring-2 ring-[var(--enterprise-primary)]/15"
+                            : ""
+                        }`}
                       >
-                        No items match your filters.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredSorted.map((p) => {
-                      const sel = selectedIds.includes(p.id);
-                      const active = activePunchId === p.id && slideOpen;
-                      const rowHi = sel || active;
-                      const st = p.status as PunchStatus;
-                      return (
-                        <tr
-                          key={p.id}
-                          id={`punch-row-${p.id}`}
-                          onClick={() => openRow(p.id)}
-                          className={`h-11 cursor-pointer border-b border-[var(--enterprise-border)] text-sm transition-colors last:border-b-0 ${
-                            rowHi
-                              ? "border-l-4 border-l-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/10"
-                              : "hover:bg-[var(--enterprise-hover-surface)]"
-                          }`}
-                        >
-                          <td className="px-2 py-0" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-[var(--enterprise-border)]"
-                              checked={sel}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                setSelectedIds((ids) =>
-                                  e.target.checked ? [...ids, p.id] : ids.filter((x) => x !== p.id),
-                                );
-                              }}
-                              aria-label={`Select #${p.punchNumber}`}
-                            />
-                          </td>
-                          <td className="px-3 font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
-                            {p.punchNumber}
-                          </td>
-                          <td className="max-w-[220px] truncate px-3 font-medium text-[var(--enterprise-text)]">
+                        <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-[var(--enterprise-primary)]">
+                          #{p.punchNumber}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-base font-semibold text-[var(--enterprise-text)]">
                             {p.title}
-                          </td>
-                          <td className="max-w-[160px] truncate px-3 text-[#0f172a]">
-                            {p.location}
-                          </td>
-                          <td className="px-3">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <AssigneeAvatar member={p.assignee} />
-                              <span className="truncate text-[var(--enterprise-text)]/85">
-                                {assigneeLabel(p)}
+                          </p>
+                          <p className="truncate text-sm text-[var(--enterprise-text-muted)]">
+                            {p.location} · {assigneeLabel(p)}
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE_CLASS[st] ?? "bg-slate-100 text-slate-700"}`}
+                        >
+                          {STATUS_LABEL[st] ?? p.status}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+            <div
+              className="hidden lg:block lg:-mx-0 lg:overflow-x-auto"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              <div className="inline-block min-w-full align-middle">
+                <table className="w-full min-w-[760px] border-collapse rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] md:min-w-[920px]">
+                  <thead>
+                    <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
+                      <th className="w-10 px-2 py-2 text-left text-[#0f172a]">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-[var(--enterprise-border)]"
+                          checked={allSelected}
+                          onChange={toggleAll}
+                          aria-label="Select all"
+                        />
+                      </th>
+                      <th className="px-3 py-2 text-left">
+                        <SortHeader
+                          label="#"
+                          active={sortCol === "punchNumber"}
+                          dir={sortDir}
+                          onToggle={() => toggleSort("punchNumber")}
+                        />
+                      </th>
+                      <th className="min-w-[140px] px-3 py-2 text-left">
+                        <SortHeader
+                          label="Title"
+                          active={sortCol === "title"}
+                          dir={sortDir}
+                          onToggle={() => toggleSort("title")}
+                        />
+                      </th>
+                      <th className="min-w-[120px] px-3 py-2 text-left">
+                        <SortHeader
+                          label="Location"
+                          active={sortCol === "location"}
+                          dir={sortDir}
+                          onToggle={() => toggleSort("location")}
+                        />
+                      </th>
+                      <th className="min-w-[140px] px-3 py-2 text-left">
+                        <SortHeader
+                          label="Assignee"
+                          active={sortCol === "assignee"}
+                          dir={sortDir}
+                          onToggle={() => toggleSort("assignee")}
+                        />
+                      </th>
+                      <th className="min-w-[100px] px-3 py-2 text-left">
+                        <SortHeader
+                          label="Due"
+                          active={sortCol === "dueDate"}
+                          dir={sortDir}
+                          onToggle={() => toggleSort("dueDate")}
+                        />
+                      </th>
+                      <th className="min-w-[120px] px-3 py-2 text-left">
+                        <SortHeader
+                          label="Status"
+                          active={sortCol === "status"}
+                          dir={sortDir}
+                          onToggle={() => toggleSort("status")}
+                        />
+                      </th>
+                      <th className="min-w-[100px] px-3 py-2 text-left">
+                        <SortHeader
+                          label="Priority"
+                          active={sortCol === "priority"}
+                          dir={sortDir}
+                          onToggle={() => toggleSort("priority")}
+                        />
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSorted.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="px-4 py-12 text-center text-sm text-[var(--enterprise-text-muted)]"
+                        >
+                          No items match your filters.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSorted.map((p) => {
+                        const sel = selectedIds.includes(p.id);
+                        const active = activePunchId === p.id && slideOpen;
+                        const rowHi = sel || active;
+                        const st = p.status as PunchStatus;
+                        return (
+                          <tr
+                            key={p.id}
+                            id={`punch-row-${p.id}`}
+                            onClick={() => openRow(p.id)}
+                            className={`h-11 cursor-pointer border-b border-[var(--enterprise-border)] text-sm transition-colors last:border-b-0 ${
+                              rowHi
+                                ? "border-l-4 border-l-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/10"
+                                : "hover:bg-[var(--enterprise-hover-surface)]"
+                            }`}
+                          >
+                            <td className="px-2 py-0" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-[var(--enterprise-border)]"
+                                checked={sel}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedIds((ids) =>
+                                    e.target.checked
+                                      ? [...ids, p.id]
+                                      : ids.filter((x) => x !== p.id),
+                                  );
+                                }}
+                                aria-label={`Select #${p.punchNumber}`}
+                              />
+                            </td>
+                            <td className="px-3 font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
+                              {p.punchNumber}
+                            </td>
+                            <td className="max-w-[220px] truncate px-3 font-medium text-[var(--enterprise-text)]">
+                              {p.title}
+                            </td>
+                            <td className="max-w-[160px] truncate px-3 text-[#0f172a]">
+                              {p.location}
+                            </td>
+                            <td className="px-3">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <AssigneeAvatar member={p.assignee} />
+                                <span className="truncate text-[var(--enterprise-text)]/85">
+                                  {assigneeLabel(p)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="whitespace-nowrap px-3 text-[#0f172a]">
+                              {formatTableDate(p.dueDate)}
+                            </td>
+                            <td className="px-3">
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_BADGE_CLASS[st] ?? "bg-slate-100 text-slate-700"}`}
+                              >
+                                {STATUS_LABEL[st] ?? p.status}
                               </span>
-                            </div>
-                          </td>
-                          <td className="whitespace-nowrap px-3 text-[#0f172a]">
-                            {formatTableDate(p.dueDate)}
-                          </td>
-                          <td className="px-3">
-                            <span
-                              className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_BADGE_CLASS[st] ?? "bg-slate-100 text-slate-700"}`}
-                            >
-                              {STATUS_LABEL[st] ?? p.status}
-                            </span>
-                          </td>
-                          <td className="px-3 text-[#0f172a]">
-                            {PRIORITY_LABEL[p.priority] ?? p.priority}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                            </td>
+                            <td className="px-3 text-[#0f172a]">
+                              {PRIORITY_LABEL[p.priority] ?? p.priority}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
 
-      {/* Mobile FAB — thumb reach + PWA field */}
-      <div
-        className="fixed bottom-4 right-4 z-30 flex flex-col items-end gap-2 sm:hidden"
-        style={{ bottom: "max(1rem, calc(1rem + env(safe-area-inset-bottom, 0px)))" }}
+      <EnterpriseAddPulseWrap variant="fab" className="lg:hidden">
+        <EnterpriseFab
+          label="New punch item"
+          onClick={() => setNewModalOpen(true)}
+          icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
+        />
+      </EnterpriseAddPulseWrap>
+      <button
+        type="button"
+        onClick={() => setChecklistModalOpen(true)}
+        className="fixed z-40 flex h-12 w-12 items-center justify-center rounded-full border border-[var(--enterprise-primary)]/25 bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-lg transition-all duration-150 active:scale-95 lg:hidden"
+        style={{
+          right: "max(1rem, env(safe-area-inset-right, 0px))",
+          bottom: "calc(var(--enterprise-bottomnav-offset, 4.5rem) + 4.25rem)",
+        }}
+        aria-label="Add from checklist"
       >
-        <EnterpriseAddPulseWrap variant="fab">
-          <button
-            type="button"
-            onClick={() => setChecklistModalOpen(true)}
-            className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)] shadow-lg"
-            aria-label="Add from checklist"
-          >
-            <FileText className="h-6 w-6" />
-          </button>
-        </EnterpriseAddPulseWrap>
-        <EnterpriseAddPulseWrap variant="fab">
-          <button
-            type="button"
-            onClick={() => setNewModalOpen(true)}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--enterprise-primary)] text-white shadow-lg"
-            aria-label="New punch item"
-          >
-            <Plus className="h-7 w-7" />
-          </button>
-        </EnterpriseAddPulseWrap>
-      </div>
+        <FileText className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+      </button>
 
       <PunchDetailSlider
         open={slideOpen && !!activePunch}

@@ -110,23 +110,23 @@ export function OmTenantPortalClient({ projectId }: Props) {
   }
 
   return (
-    <div className="min-w-0 space-y-6 sm:space-y-8">
-      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-6 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 gap-4">
+    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-5 sm:space-y-8">
+      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-5 lg:flex-row lg:items-start lg:justify-between lg:pb-6">
+        <div className="flex min-w-0 gap-3 sm:gap-4">
           <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
             aria-hidden
           >
             <LayoutDashboard
-              className="h-7 w-7 text-[var(--enterprise-primary)]"
+              className="h-6 w-6 text-[var(--enterprise-primary)] sm:h-7 sm:w-7"
               strokeWidth={1.5}
             />
           </div>
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
+            <h1 className="text-xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
               Occupant hub
             </h1>
-            <p className="mt-1.5 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
+            <p className="mt-1.5 hidden text-sm leading-relaxed text-[var(--enterprise-text-muted)] sm:block">
               Occupant submissions and building entry links for this project. Triage requests in the
               inbox; full equipment URLs and QR codes stay on{" "}
               <Link
@@ -148,10 +148,10 @@ export function OmTenantPortalClient({ projectId }: Props) {
         </div>
         <Link
           href={inboxHref}
-          className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--enterprise-bg)] lg:w-auto"
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 self-start rounded-xl bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] hover:opacity-95"
         >
           <Inbox className="h-4 w-4" />
-          Open occupant inbox
+          Open inbox
           <ArrowRight className="h-4 w-4" aria-hidden />
         </Link>
       </header>
@@ -172,22 +172,22 @@ export function OmTenantPortalClient({ projectId }: Props) {
           <p className="text-sm text-[var(--enterprise-text-muted)]">Loading requests…</p>
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
               {(
                 [
                   { label: "Open", value: stats.open, tone: "amber" as const },
                   { label: "In progress", value: stats.inProgress, tone: "sky" as const },
-                  { label: "All requests", value: stats.total, tone: "neutral" as const },
+                  { label: "All", value: stats.total, tone: "neutral" as const },
                 ] as const
               ).map((card) => (
                 <div
                   key={card.label}
-                  className="enterprise-card flex min-h-[5.5rem] flex-col justify-center gap-1 rounded-2xl border border-[var(--enterprise-border)] p-4 sm:min-h-0 sm:p-5"
+                  className="enterprise-card flex min-h-[4.5rem] flex-col justify-center gap-0.5 rounded-2xl border border-[var(--enterprise-border)] p-3 transition active:scale-[0.98] sm:min-h-0 sm:p-5"
                 >
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] sm:text-[11px]">
                     {card.label}
                   </p>
-                  <p className="text-2xl font-semibold tabular-nums text-[var(--enterprise-text)]">
+                  <p className="text-xl font-bold tabular-nums text-[var(--enterprise-text)] sm:text-2xl">
                     {card.value}
                   </p>
                 </div>
@@ -200,24 +200,22 @@ export function OmTenantPortalClient({ projectId }: Props) {
                 building or equipment links.
               </div>
             ) : (
-              <div className="overflow-hidden rounded-2xl border border-[var(--enterprise-border)]">
-                <ul className="divide-y divide-[var(--enterprise-border)]">
+              <>
+                <ul className="space-y-2" aria-label="Recent occupant requests">
                   {recentIssues.map((issue) => (
                     <li key={issue.id}>
                       <IssueRowLink issue={issue} inboxHref={inboxHref} />
                     </li>
                   ))}
                 </ul>
-                <div className="border-t border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]/50 px-3 py-3 sm:px-4">
-                  <Link
-                    href={inboxHref}
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-1 text-sm font-semibold text-[var(--enterprise-primary)] hover:underline sm:min-h-0 sm:w-auto sm:justify-start"
-                  >
-                    View all in inbox
-                    <ChevronRight className="h-4 w-4" aria-hidden />
-                  </Link>
-                </div>
-              </div>
+                <Link
+                  href={inboxHref}
+                  className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-[var(--enterprise-primary)] active:scale-[0.98]"
+                >
+                  View all in inbox
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                </Link>
+              </>
             )}
           </>
         )}
@@ -228,24 +226,24 @@ export function OmTenantPortalClient({ projectId }: Props) {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
           Shortcuts
         </h2>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => void onDownloadCsv()}
-            className="inline-flex min-h-11 w-full flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/30 sm:w-auto sm:min-w-[12rem]"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:border-[var(--enterprise-primary)]/30"
           >
             <Download className="h-4 w-4 shrink-0" />
-            Download equipment QR CSV
+            Equipment QR CSV
           </button>
           {primaryOccupantUrl ? (
             <a
               href={primaryOccupantUrl}
               target="_blank"
               rel="noreferrer noopener"
-              className="inline-flex min-h-11 w-full flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/30 sm:w-auto sm:min-w-[12rem]"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:border-[var(--enterprise-primary)]/30"
             >
               <ExternalLink className="h-4 w-4 shrink-0" />
-              Preview occupant page
+              Preview page
             </a>
           ) : null}
         </div>
@@ -276,7 +274,7 @@ export function OmTenantPortalClient({ projectId }: Props) {
               </div>
               <Link
                 href={settingsHref}
-                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] sm:min-h-10"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] transition active:scale-[0.98] hover:bg-[var(--enterprise-hover-surface)]"
               >
                 <Link2 className="h-3.5 w-3.5" />
                 Manage links
@@ -297,10 +295,10 @@ export function OmTenantPortalClient({ projectId }: Props) {
                     toast.error("Could not copy.");
                   }
                 }}
-                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-[var(--enterprise-border)] px-3 text-sm font-semibold text-[var(--enterprise-text)]"
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] transition active:scale-[0.98] hover:bg-[var(--enterprise-hover-surface)] sm:w-auto"
               >
                 <Copy className="h-4 w-4" />
-                Copy building URL
+                Copy URL
               </button>
             </div>
           </div>
@@ -352,11 +350,13 @@ function IssueRowLink({ issue, inboxHref }: { issue: IssueRow; inboxHref: string
   return (
     <Link
       href={href}
-      className="flex flex-col gap-2 px-4 py-4 transition hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--enterprise-primary)] sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+      className="flex min-h-14 items-center gap-3 rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 shadow-[var(--enterprise-shadow-xs)] transition active:scale-[0.98] active:bg-[var(--enterprise-hover-surface)]/60"
     >
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-[var(--enterprise-text)]">{issue.title}</p>
-        <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
+        <p className="truncate text-base font-semibold text-[var(--enterprise-text)]">
+          {issue.title}
+        </p>
+        <p className="mt-0.5 text-sm text-[var(--enterprise-text-muted)]">
           {new Date(issue.createdAt).toLocaleString(undefined, {
             dateStyle: "short",
             timeStyle: "short",
@@ -364,10 +364,11 @@ function IssueRowLink({ issue, inboxHref }: { issue: IssueRow; inboxHref: string
         </p>
       </div>
       <span
-        className={`inline-flex w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${issueStatusBadgeClassLight(issue.status)}`}
+        className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${issueStatusBadgeClassLight(issue.status)}`}
       >
         {stLabel}
       </span>
+      <ChevronRight className="h-5 w-5 shrink-0 text-[var(--enterprise-text-muted)]" aria-hidden />
     </Link>
   );
 }

@@ -141,7 +141,7 @@ export function AccountClient() {
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              <label className="cursor-pointer rounded-lg border border-[var(--enterprise-border)] bg-slate-50 px-3 py-1.5 text-center text-xs font-medium text-[var(--enterprise-text)] transition hover:bg-slate-100">
+              <label className="cursor-pointer rounded-lg border border-[var(--enterprise-border)] bg-slate-50 px-3 py-1.5 text-center text-xs font-medium text-[var(--enterprise-text)] transition hover:bg-slate-100 mobile-tappable-row min-h-14 active:scale-[0.99]">
                 Upload photo
                 <input type="file" accept="image/*" className="sr-only" onChange={onPickFile} />
               </label>

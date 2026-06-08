@@ -147,7 +147,7 @@ export function DatacenterOpsClient({ projectId }: Props) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-6">
       <header className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5">
         <h1 className="text-2xl font-semibold text-[var(--enterprise-text)]">
           Datacenter orchestration

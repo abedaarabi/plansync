@@ -184,7 +184,7 @@ function ProjectAccessDropdown({
                 key={p.id}
                 role="option"
                 aria-selected={checked}
-                className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm transition hover:bg-[#F8FAFC]"
+                className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm transition hover:bg-[#F8FAFC] mobile-tappable-row min-h-14 active:scale-[0.99]"
               >
                 <input
                   type="checkbox"
@@ -1163,7 +1163,7 @@ export function WorkspaceTeamClient({
                   id="team-invite-kind"
                   value={inviteKind}
                   onChange={(e) => setInviteKind(e.target.value as EmailInviteKind)}
-                  className="h-11 w-full cursor-pointer appearance-none rounded-lg border border-[#E2E8F0] bg-white pl-3 pr-10 text-sm font-medium text-[#0F172A] transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                  className="h-11 w-full cursor-pointer appearance-none rounded-lg border border-[#E2E8F0] bg-white pl-3 pr-10 text-sm font-medium text-[#0F172A] transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 mobile-tappable-row min-h-14 active:scale-[0.99]"
                 >
                   <option value="INTERNAL">Internal teammate</option>
                   <option value="CLIENT">Client</option>
@@ -1190,7 +1190,7 @@ export function WorkspaceTeamClient({
                     id="team-invite-role"
                     value={role}
                     onChange={(e) => setRole(e.target.value as "MEMBER" | "ADMIN" | "SUPER_ADMIN")}
-                    className="h-11 w-full cursor-pointer appearance-none rounded-lg border border-[#E2E8F0] bg-white pl-3 pr-10 text-sm font-medium text-[#0F172A] transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                    className="h-11 w-full cursor-pointer appearance-none rounded-lg border border-[#E2E8F0] bg-white pl-3 pr-10 text-sm font-medium text-[#0F172A] transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 mobile-tappable-row min-h-14 active:scale-[0.99]"
                   >
                     <option value="MEMBER">Member</option>
                     <option value="ADMIN">Admin</option>

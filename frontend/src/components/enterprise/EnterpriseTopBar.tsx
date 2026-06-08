@@ -12,13 +12,11 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileStack,
-  Menu,
   MessageSquareQuote,
   Ruler,
   Search,
   Settings,
   Users,
-  X,
 } from "lucide-react";
 import { UserMenu } from "./UserMenu";
 import { EnterpriseIconButton } from "./EnterpriseIconButton";
@@ -212,25 +210,29 @@ export function EnterpriseTopBar({
     <header className="sticky top-0 z-50 flex shrink-0 flex-col border-b border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_88%,transparent)] pt-[env(safe-area-inset-top,0px)] shadow-[0_1px_0_0_rgba(255,255,255,0.72)_inset,0_8px_36px_-22px_rgba(15,23,42,0.04)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--enterprise-surface)_78%,transparent)]">
       <div className="flex h-[var(--enterprise-topbar-h)] min-h-[var(--enterprise-topbar-h)] w-full items-center justify-between gap-1.5 px-2 sm:gap-2.5 sm:px-3 md:gap-3 md:px-4 lg:gap-4 lg:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px] sm:gap-2 sm:text-[13px] md:text-sm">
-          {/* Mobile menu */}
-          <EnterpriseIconButton
-            type="button"
-            onClick={onToggleMobileNav}
-            size="md"
-            className="border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 text-[var(--enterprise-text)] lg:hidden"
-            aria-label={mobileNavOpen ? t("closeMenu") : t("openMenu")}
-            aria-expanded={mobileNavOpen}
-            aria-controls="enterprise-sidebar-panel"
-          >
-            {mobileNavOpen ? (
-              <X className="h-[18px] w-[18px]" strokeWidth={1.75} />
-            ) : (
-              <Menu className="h-[18px] w-[18px]" strokeWidth={1.75} />
-            )}
-          </EnterpriseIconButton>
+          {/* Mobile back — parent screen with chevron */}
+          {isProjectContext && toolLabel ? (
+            <Link
+              href={projectHomeHref}
+              className="flex min-h-11 max-w-[min(42vw,11rem)] shrink-0 items-center gap-0.5 rounded-xl px-1 text-[var(--enterprise-primary)] transition-all duration-150 active:scale-[0.97] active:bg-[var(--enterprise-hover-surface)] lg:hidden"
+            >
+              <ChevronLeft className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
+              <span className="truncate text-sm font-semibold leading-tight">
+                {activeProject?.name ?? t("projects")}
+              </span>
+            </Link>
+          ) : null}
 
-          {/* Breadcrumb */}
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 md:gap-3">
+          {isProjectContext && toolLabel ? (
+            <h1 className="min-w-0 flex-1 truncate text-center text-sm font-semibold text-[var(--enterprise-text)] lg:hidden">
+              {toolLabel}
+            </h1>
+          ) : null}
+
+          {/* Breadcrumb — tablet/desktop */}
+          <div
+            className={`flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 md:gap-3 ${isProjectContext && toolLabel ? "hidden lg:flex" : ""}`}
+          >
             <button
               type="button"
               onClick={onToggleDesktopSidebar}
@@ -256,7 +258,7 @@ export function EnterpriseTopBar({
 
             {isProjectContext ? (
               <nav
-                className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden text-[12px] sm:gap-1 sm:text-[13px]"
+                className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-hidden text-[12px] sm:flex sm:gap-1 sm:text-[13px]"
                 aria-label={t("breadcrumb")}
               >
                 <Link
@@ -293,7 +295,7 @@ export function EnterpriseTopBar({
               </nav>
             ) : (
               <nav
-                className="flex min-w-0 flex-1 items-center gap-1 text-[12px] sm:text-[13px]"
+                className="hidden min-w-0 flex-1 items-center gap-1 text-[12px] sm:flex sm:text-[13px]"
                 aria-label={t("workspaceContext")}
               >
                 {globalPageTitle ? (

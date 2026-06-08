@@ -56,6 +56,7 @@ import { ProjectProgressBar } from "./ProjectProgressBar";
 import { ProjectStageBadge } from "./ProjectStageBadge";
 import { PdfFileThumbnail } from "./PdfFileThumbnail";
 import { ProjectFileImageLightbox } from "./ProjectFileImageLightbox";
+import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
 
 function formatBytes(n: string | number | bigint): string {
   const v = typeof n === "bigint" ? Number(n) : Number(n);
@@ -794,7 +795,7 @@ export function ProjectsClient() {
   }
 
   return (
-    <div className="flex min-h-[calc(100dvh_-_var(--enterprise-topbar-offset))] flex-col gap-6">
+    <div className="mobile-app-page w-full min-w-0 max-w-full flex min-h-[calc(100dvh_-_var(--enterprise-topbar-offset))] flex-col gap-6">
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         <aside className="enterprise-card w-full shrink-0 p-4 lg:w-72">
           <div className="flex items-center justify-between gap-2">
@@ -805,7 +806,7 @@ export function ProjectsClient() {
               <button
                 type="button"
                 onClick={() => setProjectModal(true)}
-                className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary)] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)]"
+                className="hidden items-center gap-1 rounded-full bg-[var(--enterprise-primary)] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] lg:inline-flex"
               >
                 <Plus className="h-3 w-3" />
                 {tp("new")}
@@ -989,7 +990,7 @@ export function ProjectsClient() {
                     </label>
                   </div>
                 ) : viewMode === "list" ? (
-                  <div className="overflow-x-auto">
+                  <div className="mobile-table-wrap overflow-x-auto">
                     <table className="w-full min-w-[640px] text-left text-sm">
                       <thead>
                         <tr className="border-b border-[var(--enterprise-border)] text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
@@ -1004,7 +1005,7 @@ export function ProjectsClient() {
                         {subfolders.map((fol) => (
                           <tr
                             key={fol.id}
-                            className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
+                            className="cursor-pointer border-b border-slate-100 hover:bg-slate-50 mobile-tappable-row min-h-14 active:scale-[0.99]"
                             onClick={() => setSelectedFolderId(fol.id)}
                           >
                             <td className="py-2.5 pl-2">
@@ -1049,7 +1050,7 @@ export function ProjectsClient() {
                           return (
                             <tr
                               key={f.id}
-                              className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
+                              className="cursor-pointer border-b border-slate-100 hover:bg-slate-50 mobile-tappable-row min-h-14 active:scale-[0.99]"
                               onClick={() => openFile(f)}
                             >
                               <td className="py-2.5 pl-2">
@@ -1070,7 +1071,7 @@ export function ProjectsClient() {
                                 {sortedV.length > 1 ? (
                                   <select
                                     aria-label={`Version for ${f.name}`}
-                                    className="max-w-[140px] rounded-md border border-[var(--enterprise-border)] bg-white px-2 py-1.5 text-[12px] text-[var(--enterprise-text)]"
+                                    className="max-w-[140px] rounded-md border border-[var(--enterprise-border)] bg-white px-2 py-1.5 text-[12px] text-[var(--enterprise-text)] min-h-12 text-base"
                                     value={String(sel)}
                                     onChange={(e) => {
                                       const n = Number(e.target.value);
@@ -1225,7 +1226,7 @@ export function ProjectsClient() {
                                 </label>
                                 <select
                                   aria-label={`Version for ${f.name}`}
-                                  className="w-full rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1.5 text-[12px] text-[var(--enterprise-text)]"
+                                  className="w-full rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1.5 text-[12px] text-[var(--enterprise-text)] min-h-12 text-base"
                                   value={String(sel)}
                                   onChange={(e) => {
                                     const n = Number(e.target.value);
@@ -1391,6 +1392,13 @@ export function ProjectsClient() {
           fileName={imageLightbox.fileName}
           version={imageLightbox.version}
           onClose={() => setImageLightbox(null)}
+        />
+      ) : null}
+      {isAdmin ? (
+        <EnterpriseFab
+          label={tp("new")}
+          icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
+          onClick={() => setProjectModal(true)}
         />
       ) : null}
     </div>

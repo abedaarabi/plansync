@@ -4,9 +4,9 @@ export type EnterpriseButtonVariant = "primary" | "secondary" | "ghost" | "dange
 export type EnterpriseButtonSize = "sm" | "md" | "lg";
 
 const sizeStyles: Record<EnterpriseButtonSize, string> = {
-  sm: "min-h-9 px-3 text-xs",
-  md: "min-h-11 px-4 py-2.5 text-sm",
-  lg: "min-h-13 px-6 py-3 text-base",
+  sm: "min-h-9 px-3 text-sm max-lg:min-h-11",
+  md: "min-h-11 px-4 py-2.5 text-base max-lg:min-h-[52px] max-lg:font-bold max-lg:active:scale-[0.97]",
+  lg: "min-h-13 px-6 py-3 text-base max-lg:min-h-[52px] max-lg:w-full max-lg:font-bold max-lg:active:scale-[0.97]",
 };
 
 const variantStyles: Record<EnterpriseButtonVariant, string> = {
@@ -47,7 +47,7 @@ export const EnterpriseButton = forwardRef<HTMLButtonElement, EnterpriseButtonPr
         ref={ref}
         type={type}
         disabled={disabled ?? loading}
-        className={`group inline-flex min-w-0 shrink-0 items-center justify-center gap-2 rounded-xl font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--enterprise-bg)] disabled:cursor-not-allowed disabled:opacity-55 ${variantStyles[variant]} ${sizeStyles[size]} ${fullWidth ? "w-full" : ""} ${className}`.trim()}
+        className={`group inline-flex min-w-0 shrink-0 items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--enterprise-bg)] disabled:cursor-not-allowed disabled:opacity-55 ${variantStyles[variant]} ${sizeStyles[size]} ${fullWidth ? "w-full max-lg:w-full" : "max-lg:[&[data-mobile-full]]:w-full"} ${className}`.trim()}
         {...rest}
       >
         {children}

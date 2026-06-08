@@ -122,7 +122,7 @@ export function LandingVideoModal({
       </button>
 
       <div
-        className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition duration-300 sm:p-6 ${
+        className={`mobile-sheet-host fixed inset-0 z-50 flex items-center justify-center p-4 transition duration-300 max-lg:items-end max-lg:p-0 sm:p-6 ${
           isOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
         aria-hidden={!isOpen}

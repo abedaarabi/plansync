@@ -295,7 +295,7 @@ export function ProposalDetailClient({
                   type="button"
                   disabled={!portalReply.trim() || portalPostMut.isPending}
                   aria-busy={portalPostMut.isPending}
-                  className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white aria-busy:cursor-wait disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white aria-busy:cursor-wait disabled:pointer-events-none disabled:opacity-50 mobile-tappable-row min-h-14 active:scale-[0.99]"
                   onClick={() => {
                     const text = portalReply.trim();
                     if (!text || portalPostMut.isPending || portalReplyLockRef.current) return;
@@ -494,7 +494,7 @@ export function ProposalDetailClient({
                 resendMut.isPending || reviewLoading || pdfLoading || csvLoading || esignLoading
               }
               aria-busy={resendMut.isPending}
-              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium aria-busy:cursor-wait disabled:pointer-events-none disabled:opacity-60"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium aria-busy:cursor-wait disabled:pointer-events-none disabled:opacity-60 mobile-tappable-row min-h-14 active:scale-[0.99]"
               onClick={() => {
                 if (resendLockRef.current || resendMut.isPending) return;
                 resendLockRef.current = true;
@@ -550,7 +550,7 @@ export function ProposalDetailClient({
 
       <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <h2 className="font-semibold text-[#0F172A]">Breakdown</h2>
-        <div className="mt-3 overflow-x-auto">
+        <div className="mobile-table-wrap mt-3 overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
               <tr>

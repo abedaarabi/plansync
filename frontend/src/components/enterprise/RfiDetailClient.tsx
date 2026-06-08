@@ -562,7 +562,7 @@ function RfiTakePhotoButton({
         type="button"
         disabled={disabled}
         onClick={onTakePhotoClick}
-        className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-[var(--enterprise-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-[var(--enterprise-primary)] disabled:cursor-not-allowed disabled:opacity-50 mobile-tappable-row min-h-14 active:scale-[0.99]"
       >
         <Camera className="h-4 w-4 shrink-0" aria-hidden />
         <span>Take photo</span>
@@ -585,7 +585,7 @@ function RfiTakePhotoButton({
       {mounted && webcamOpen && typeof document !== "undefined"
         ? createPortal(
             <div
-              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
+              className="mobile-sheet-host fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 max-lg:items-end max-lg:p-0"
               role="dialog"
               aria-modal
               aria-labelledby="rfi-webcam-title"
@@ -1605,7 +1605,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                     projectIssues.map((i) => (
                       <label
                         key={i.id}
-                        className="flex cursor-pointer items-start gap-2 text-sm text-[var(--enterprise-text)]"
+                        className="flex cursor-pointer items-start gap-2 text-sm text-[var(--enterprise-text)] mobile-tappable-row min-h-14 active:scale-[0.99]"
                       >
                         <input
                           type="checkbox"
@@ -1649,7 +1649,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
               ) : (
                 <div className="flex flex-wrap items-center justify-end gap-3 sm:gap-4">
                   <RfiTakePhotoButton onFile={(f) => void onUploadFile(f)} disabled={uploadBusy} />
-                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-[var(--enterprise-primary)]">
+                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-[var(--enterprise-primary)] mobile-tappable-row min-h-14 active:scale-[0.99]">
                     <Paperclip className="h-4 w-4 shrink-0" aria-hidden />
                     <span>Add file</span>
                     <input

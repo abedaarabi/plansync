@@ -105,7 +105,10 @@ export function IssueReferenceLiveCapture(props: Props) {
   if (!open || !mounted || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4" role="presentation">
+    <div
+      className="mobile-sheet-host fixed inset-0 z-[130] flex items-center justify-center p-4 max-lg:items-end max-lg:p-0"
+      role="presentation"
+    >
       <button
         type="button"
         aria-label="Close camera"

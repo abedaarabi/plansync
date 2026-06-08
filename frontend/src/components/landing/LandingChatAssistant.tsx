@@ -272,12 +272,12 @@ export function LandingChatAssistant() {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="pointer-events-auto inline-flex h-14 items-center gap-2.5 rounded-full border border-[color-mix(in_srgb,var(--landing-cta)_35%,#bfdbfe)] bg-(--landing-cta) px-5 text-sm font-semibold text-white shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] transition hover:bg-(--landing-cta-bright) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta)/40"
+        className="pointer-events-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--landing-cta)_35%,#bfdbfe)] bg-(--landing-cta) text-white shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] transition hover:bg-(--landing-cta-bright) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta)/40"
         aria-expanded={isOpen}
         aria-controls="landing-chat-assistant-panel"
+        aria-label={t("title")}
       >
-        <MessageCircle className="h-4 w-4 shrink-0" aria-hidden />
-        <span>{t("open")}</span>
+        <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
       </button>
     </div>
   );

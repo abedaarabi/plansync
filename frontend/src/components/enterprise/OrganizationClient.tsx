@@ -313,7 +313,7 @@ export function OrganizationClient() {
                         : normalizeWorkspacePrimaryHex(undefined)
                     }
                     onChange={(e) => setPrimaryColor(e.target.value.toUpperCase())}
-                    className="h-11 w-14 cursor-pointer rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-1 shadow-[var(--enterprise-shadow-xs)]"
+                    className="h-11 w-14 cursor-pointer rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-1 shadow-[var(--enterprise-shadow-xs)] mobile-tappable-row min-h-14 active:scale-[0.99]"
                     aria-label="Choose primary brand color"
                   />
                   <input
@@ -578,7 +578,7 @@ export function OrganizationClient() {
 
       {deleteOpen && wid ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="mobile-sheet-host fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 max-lg:items-end max-lg:p-0"
           role="dialog"
           aria-modal="true"
           aria-labelledby="delete-ws-title"

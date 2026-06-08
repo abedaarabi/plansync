@@ -64,6 +64,11 @@ html {
   /** Top chrome + notch / status inset — use for `top:` / `h-[calc(100dvh-…)]` outside flex layouts */
   --enterprise-topbar-h: 3.25rem;
   --enterprise-topbar-offset: calc(var(--enterprise-topbar-h) + env(safe-area-inset-top, 0px));
+  /** Mobile bottom tab bar + home indicator */
+  --enterprise-bottomnav-h: 3.5rem;
+  --enterprise-bottomnav-offset: calc(
+    var(--enterprise-bottomnav-h) + env(safe-area-inset-bottom, 0px)
+  );
   --enterprise-surface: #ffffff;
   --enterprise-border: #e2e8f0;
   --enterprise-primary: #2563eb;
@@ -667,6 +672,175 @@ button:active:not(:disabled),
     animation: none;
     opacity: 1;
     transform: none;
+  }
+}
+
+/* ── Mobile PWA shell utilities ── */
+.mobile-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+.mobile-chip-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.mobile-chip-scroll::-webkit-scrollbar {
+  display: none;
+}
+.mobile-chip-scroll > * {
+  scroll-snap-align: start;
+}
+
+.mobile-list-row {
+  min-height: 3.5rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.mobile-touch-target {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+.mobile-viewport-pane {
+  height: calc(100dvh - var(--enterprise-topbar-offset) - var(--enterprise-bottomnav-offset));
+  min-height: 0;
+}
+
+@media (min-width: 1024px) {
+  .mobile-viewport-pane {
+    height: calc(100dvh - var(--enterprise-topbar-offset));
+  }
+}
+
+@media (max-width: 1023px) {
+  .enterprise-main-inner,
+  .client-portal-main {
+    padding-bottom: var(--enterprise-bottomnav-offset);
+  }
+
+  .enterprise-main-canvas,
+  .enterprise-scrollbar,
+  .client-portal-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Full-bleed mobile pages — drop artificial max-width constraints */
+  .mobile-app-page,
+  .enterprise-animate-in {
+    padding-inline: 1rem;
+    max-width: 100%;
+  }
+
+  .mobile-app-page > .max-w-6xl,
+  .mobile-app-page > .mx-auto,
+  .enterprise-animate-in > .max-w-6xl,
+  .enterprise-animate-in > .mx-auto.max-w-6xl {
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+  }
+
+  /* Page headings */
+  .mobile-app-page h1,
+  .enterprise-animate-in h1 {
+    font-size: clamp(1.375rem, 5vw, 1.875rem);
+    line-height: 1.2;
+    text-wrap: balance;
+  }
+
+  /* Floor for body copy — no tiny field labels on mobile */
+  .mobile-app-page,
+  .enterprise-animate-in,
+  .client-portal-main,
+  .marketing-main-inner {
+    font-size: max(16px, 1rem);
+    line-height: 1.5;
+  }
+
+  .mobile-app-page .text-xs,
+  .enterprise-animate-in .text-xs,
+  .mobile-app-page .text-\[11px\],
+  .enterprise-animate-in .text-\[11px\],
+  .mobile-app-page .text-\[10px\],
+  .enterprise-animate-in .text-\[10px\] {
+    font-size: max(14px, 0.875rem) !important;
+  }
+
+  /* Horizontal table scroll with touch momentum */
+  .mobile-table-wrap,
+  .enterprise-animate-in .overflow-x-auto,
+  .mobile-app-page .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .mobile-table-wrap {
+    margin-inline: -1rem;
+    padding-inline: 1rem;
+  }
+
+  /* Card / row press feedback */
+  .enterprise-card,
+  .enterprise-glass,
+  .mobile-tappable-row {
+    transition:
+      background-color 150ms ease,
+      transform 150ms ease;
+  }
+
+  .enterprise-card:active,
+  .mobile-tappable-row:active {
+    background: color-mix(in srgb, var(--enterprise-hover-surface) 65%, transparent);
+    transform: scale(0.995);
+  }
+
+  /* Sticky mobile form submit bars inside slide-overs / long forms */
+  .mobile-sticky-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    margin-top: 1rem;
+    border-top: 1px solid var(--enterprise-border);
+    background: color-mix(in srgb, var(--enterprise-bg) 92%, transparent);
+    padding: 0.75rem 0 max(0.75rem, env(safe-area-inset-bottom, 0px));
+    backdrop-filter: blur(12px);
+  }
+
+  /* Viewer / marketing modal shells — bottom sheet on mobile without per-file rewrites */
+  .mobile-sheet-host {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+
+  .mobile-sheet-host > .mobile-sheet-panel,
+  .mobile-sheet-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: min(92dvh, 920px) !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 1rem !important;
+    border-top-right-radius: 1rem !important;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-sheet-host::before {
+    content: "";
+    position: absolute;
+    top: 0.625rem;
+    left: 50%;
+    z-index: 2;
+    height: 0.25rem;
+    width: 2.5rem;
+    transform: translateX(-50%);
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--enterprise-border) 100%, transparent);
+    pointer-events: none;
   }
 }
 

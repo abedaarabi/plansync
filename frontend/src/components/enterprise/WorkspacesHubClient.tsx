@@ -51,7 +51,7 @@ export function WorkspacesHubClient() {
   }
 
   return (
-    <div className="enterprise-animate-in flex min-h-[min(560px,70vh)] flex-col items-center justify-center px-4 py-10">
+    <div className="mobile-app-page w-full min-w-0 max-w-full enterprise-animate-in flex min-h-[min(560px,70vh)] flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-md rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-6 shadow-[var(--enterprise-shadow-md)] sm:p-8">
         <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]">
           <Building2 className="h-6 w-6" strokeWidth={1.75} aria-hidden />

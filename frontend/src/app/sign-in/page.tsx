@@ -112,16 +112,16 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="grid h-dvh max-h-dvh min-h-0 grid-rows-1 overflow-hidden font-[family-name:var(--font-inter)] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-      <div className="min-h-0">
+    <div className="flex min-h-[100dvh] w-full flex-1 flex-col overflow-hidden font-[family-name:var(--font-inter)] lg:grid lg:h-[100dvh] lg:max-h-[100dvh] lg:min-h-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:grid-rows-1">
+      <div className="hidden min-h-0 lg:block lg:h-full">
         <BrandStoryPanel backHref="/" backLabel="← Back to site" />
       </div>
 
-      <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--enterprise-auth-bg)]">
+      <div className="relative flex min-h-[100dvh] flex-1 flex-col bg-[var(--enterprise-auth-bg)] lg:h-full lg:min-h-0">
         <MarketingHeroBackdrop showImageOnLarge={false} />
 
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col lg:justify-center">
-          <div className="shrink-0 border-b border-white/10 bg-[#0F172A] px-4 py-2 lg:hidden">
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pt-[env(safe-area-inset-top,0px)]">
+          <div className="shrink-0 border-b border-white/10 bg-[#0F172A]/95 px-4 py-3 backdrop-blur-sm lg:hidden">
             <Link
               href="/"
               className="mx-auto flex w-fit max-w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 ring-1 ring-white/[0.06]"
@@ -139,25 +139,25 @@ export default function SignInPage() {
             </Link>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-3 py-2 sm:px-4 lg:py-3">
-            <div className="flex w-full max-w-[400px] shrink-0 flex-col py-1">
-              <div className="mb-3 flex flex-col items-center text-center">
-                <h1 className="text-xl font-bold text-white sm:text-2xl">
-                  {mode === "sign-in" ? "Welcome back" : "PlanSync"}
+          <div className="flex flex-1 flex-col items-center justify-center px-4 py-6 sm:px-6 sm:py-10">
+            <div className="my-auto w-full max-w-[420px]">
+              <div className="mb-5 flex flex-col items-center text-center sm:mb-6">
+                <h1 className="text-2xl font-bold text-white sm:text-3xl">
+                  {mode === "sign-in" ? "Welcome back" : "Create your account"}
                 </h1>
                 {mode === "sign-up" ? (
-                  <p className="mt-1 text-xs text-slate-400 sm:text-sm">
+                  <p className="mt-2 text-sm text-slate-400 sm:text-base">
                     14-day trial · No credit card
                   </p>
                 ) : (
-                  <p className="mt-1 max-w-sm text-xs leading-snug text-slate-400 sm:text-sm">
+                  <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-400 sm:text-base">
                     Workspace dashboard and cloud projects.
                   </p>
                 )}
               </div>
 
               <div
-                className="border border-slate-200/10 bg-white p-4 shadow-2xl shadow-black/40 sm:p-5"
+                className="border border-slate-200/10 bg-white p-5 shadow-2xl shadow-black/40 sm:p-6"
                 style={{ borderRadius: CARD_RADIUS }}
               >
                 <div className="space-y-3 sm:space-y-4">
@@ -174,10 +174,10 @@ export default function SignInPage() {
                         setError(null);
                         setMode("sign-in");
                       }}
-                      className={`relative flex-1 rounded-lg py-2 text-sm font-medium transition ${
+                      className={`relative min-h-11 flex-1 rounded-lg py-2.5 text-sm font-semibold transition sm:text-base ${
                         mode === "sign-in"
                           ? "bg-white text-[#0F172A] shadow-sm"
-                          : "text-slate-600 hover:text-slate-600"
+                          : "text-slate-600 hover:text-slate-800"
                       }`}
                     >
                       Sign in
@@ -190,10 +190,10 @@ export default function SignInPage() {
                         setError(null);
                         setMode("sign-up");
                       }}
-                      className={`relative flex-1 rounded-lg py-2 text-sm font-medium transition ${
+                      className={`relative min-h-11 flex-1 rounded-lg py-2.5 text-sm font-semibold transition sm:text-base ${
                         mode === "sign-up"
                           ? "bg-white text-[#0F172A] shadow-sm"
-                          : "text-slate-600 hover:text-slate-600"
+                          : "text-slate-600 hover:text-slate-800"
                       }`}
                     >
                       Create account
@@ -205,7 +205,7 @@ export default function SignInPage() {
                       <div>
                         <label
                           htmlFor="auth-name"
-                          className="mb-1.5 block text-[13px] font-medium text-[#64748B]"
+                          className="mb-1.5 block text-sm font-medium text-[#64748B]"
                         >
                           Full name
                         </label>
@@ -216,7 +216,7 @@ export default function SignInPage() {
                           />
                           <input
                             id="auth-name"
-                            className="w-full rounded-xl border border-[#E2E8F0] bg-white py-2 pl-10 pr-3 text-sm text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                            className="w-full min-h-12 rounded-xl border border-[#E2E8F0] bg-white py-3 pl-10 pr-3 text-base text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             autoComplete="name"
@@ -230,7 +230,7 @@ export default function SignInPage() {
                     <div>
                       <label
                         htmlFor="auth-email"
-                        className="mb-1.5 block text-[13px] font-medium text-[#64748B]"
+                        className="mb-1.5 block text-sm font-medium text-[#64748B]"
                       >
                         {mode === "sign-up" ? "Work email" : "Email"}
                       </label>
@@ -243,7 +243,7 @@ export default function SignInPage() {
                           id="auth-email"
                           type="email"
                           required
-                          className="w-full rounded-xl border border-[#E2E8F0] bg-white py-2 pl-10 pr-3 text-sm text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                          className="w-full min-h-12 rounded-xl border border-[#E2E8F0] bg-white py-3 pl-10 pr-3 text-base text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           autoComplete="email"
@@ -255,7 +255,7 @@ export default function SignInPage() {
                     <div>
                       <label
                         htmlFor="auth-password"
-                        className="mb-1.5 block text-[13px] font-medium text-[#64748B]"
+                        className="mb-1.5 block text-sm font-medium text-[#64748B]"
                       >
                         Password
                       </label>
@@ -269,7 +269,7 @@ export default function SignInPage() {
                           type="password"
                           required
                           minLength={8}
-                          className="w-full rounded-xl border border-[#E2E8F0] bg-white py-2 pl-10 pr-3 text-sm text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                          className="w-full min-h-12 rounded-xl border border-[#E2E8F0] bg-white py-3 pl-10 pr-3 text-base text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
@@ -282,7 +282,7 @@ export default function SignInPage() {
                       <div className="-mt-1 text-right">
                         <Link
                           href="/forgot-password"
-                          className="text-[13px] font-medium text-[#2563EB] hover:underline"
+                          className="text-sm font-medium text-[#2563EB] hover:underline"
                         >
                           Forgot password?
                         </Link>
@@ -354,7 +354,7 @@ export default function SignInPage() {
                 </div>
               </div>
 
-              <p className="mt-3 text-center text-xs text-slate-500 sm:text-sm">
+              <p className="mt-4 text-center text-sm text-slate-500">
                 {mode === "sign-up" ? (
                   <>
                     Already have an account?{" "}
@@ -386,7 +386,7 @@ export default function SignInPage() {
                 )}
               </p>
 
-              <nav className="mt-2 flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 pb-1 text-center text-xs text-slate-500 sm:text-sm">
+              <nav className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 pb-[env(safe-area-inset-bottom,0px)] text-center text-sm text-slate-500">
                 <Link href="/" className="transition hover:text-slate-300">
                   ← Home
                 </Link>

@@ -34,8 +34,14 @@ import {
 } from "@/lib/projectStage";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { isSuperAdmin } from "@/lib/workspaceRole";
 import { isWorkspaceOmBillingClient } from "@/lib/workspaceSubscription";
+import {
+  MOBILE_FIELD_INPUT,
+  MOBILE_FIELD_LABEL,
+  MOBILE_FIELD_TEXTAREA,
+} from "@/lib/mobileFormStyles";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { HandoverWizardModal } from "./HandoverWizardModal";
 
@@ -51,7 +57,7 @@ function GateState({
   children: ReactNode;
 }) {
   return (
-    <div className="enterprise-card mx-auto w-full max-w-lg rounded-2xl px-5 py-8 text-center shadow-[var(--enterprise-shadow-card)] sm:px-8 sm:py-10">
+    <div className="mobile-app-page w-full min-w-0 max-w-full enterprise-card mx-auto w-full max-w-lg rounded-2xl px-5 py-8 text-center shadow-[var(--enterprise-shadow-card)] sm:px-8 sm:py-10">
       <div
         className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
         aria-hidden
@@ -85,8 +91,8 @@ function StatCard({
   const accent = ok ? "border-l-emerald-500" : "border-l-amber-500";
   const inner = (
     <div
-      className={`enterprise-card flex h-full min-h-[6.5rem] flex-col justify-between gap-2 border-l-4 p-3.5 sm:min-h-0 sm:p-5 ${accent} ${
-        href ? "enterprise-card-hover group transition duration-200 active:scale-[0.99]" : ""
+      className={`enterprise-card flex h-full min-h-[4.5rem] flex-col justify-between gap-2 rounded-2xl border-l-4 p-4 sm:min-h-0 sm:p-5 ${accent} ${
+        href ? "enterprise-card-hover group transition duration-200 active:scale-[0.98]" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -399,7 +405,7 @@ export function OmHandoverClient({ projectId }: Props) {
   const readinessPct = Math.round((passedCount / totalChecks) * 100);
 
   return (
-    <div className="min-w-0 space-y-6 sm:space-y-10">
+    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-6 sm:space-y-10">
       <header className="overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-gradient-to-b from-[var(--enterprise-surface)] via-[var(--enterprise-surface)] to-[var(--enterprise-bg)]/90 shadow-[var(--enterprise-shadow-card)]">
         <div className="flex flex-col gap-6 p-4 sm:p-6 lg:flex-row lg:items-stretch lg:gap-8 lg:p-8">
           <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:gap-5">
@@ -455,49 +461,50 @@ export function OmHandoverClient({ projectId }: Props) {
               Actions
             </p>
             <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => markCompleteMut.mutate(true)}
+              <EnterpriseButton
+                size="lg"
+                fullWidth
                 disabled={markCompleteMut.isPending || Boolean(summary.handoverCompletedAt)}
-                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 active:scale-[0.99] disabled:opacity-50"
+                loading={markCompleteMut.isPending}
+                onClick={() => markCompleteMut.mutate(true)}
               >
-                {markCompleteMut.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                ) : (
+                {!markCompleteMut.isPending ? (
                   <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
-                )}
+                ) : null}
                 Mark handover complete
-              </button>
-              <button
-                type="button"
+              </EnterpriseButton>
+              <EnterpriseButton
+                variant="secondary"
+                size="lg"
+                fullWidth
                 onClick={() => setWizardOpen(true)}
-                className="inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-medium text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-bg)] active:scale-[0.99]"
               >
                 Hand over to FM wizard
-              </button>
+              </EnterpriseButton>
               {summary.handoverCompletedAt ? (
-                <button
-                  type="button"
-                  onClick={() => markCompleteMut.mutate(false)}
+                <EnterpriseButton
+                  variant="secondary"
+                  size="md"
+                  fullWidth
                   disabled={markCompleteMut.isPending}
-                  className="inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-medium text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-bg)] active:scale-[0.99] disabled:opacity-50"
+                  loading={markCompleteMut.isPending}
+                  onClick={() => markCompleteMut.mutate(false)}
                 >
                   Clear handover date
-                </button>
+                </EnterpriseButton>
               ) : null}
               {superAdmin ? (
-                <div className="rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 p-3 sm:p-3.5">
-                  <button
-                    type="button"
-                    onClick={() => setStageMut.mutate()}
+                <div className="rounded-2xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 p-3 sm:p-3.5">
+                  <EnterpriseButton
+                    variant="secondary"
+                    size="md"
+                    fullWidth
                     disabled={setStageMut.isPending || summary.stage === "HANDOVER"}
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-medium leading-snug text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-bg)] active:scale-[0.99] disabled:opacity-50"
+                    loading={setStageMut.isPending}
+                    onClick={() => setStageMut.mutate()}
                   >
-                    {setStageMut.isPending ? (
-                      <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
-                    ) : null}
                     Set lifecycle stage to Handover &amp; FM
-                  </button>
+                  </EnterpriseButton>
                   <p className="mt-2.5 text-[11px] leading-relaxed text-[var(--enterprise-text-muted)]">
                     Updates the project stage for dashboards and reports. Safe to use when
                     commissioning starts.
@@ -647,21 +654,20 @@ export function OmHandoverClient({ projectId }: Props) {
           value={notesDraft}
           onChange={(e) => setNotesDraft(e.target.value)}
           rows={8}
-          className="mt-4 min-h-[11rem] w-full max-w-full rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-3 text-base leading-relaxed text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)]/70 focus:border-[var(--enterprise-primary)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/25 sm:min-h-44 sm:text-sm"
+          className={`${MOBILE_FIELD_TEXTAREA} mt-4 sm:min-h-44 sm:text-base`}
           placeholder="e.g. Main contractor warranty until … · BMS training booked … · O&M manuals in Files folder …"
         />
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-          <button
-            type="button"
-            onClick={() => saveNotesMut.mutate()}
+          <EnterpriseButton
+            size="lg"
+            fullWidth
+            className="sm:w-auto sm:min-w-[8.5rem]"
             disabled={saveNotesMut.isPending || notesDraft === (summary.handoverNotes ?? "")}
-            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white transition active:scale-[0.99] disabled:opacity-50 sm:w-auto sm:min-w-[8.5rem]"
+            loading={saveNotesMut.isPending}
+            onClick={() => saveNotesMut.mutate()}
           >
-            {saveNotesMut.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            ) : null}
             {saveNotesMut.isPending ? "Saving…" : "Save notes"}
-          </button>
+          </EnterpriseButton>
           {notesDraft !== (summary.handoverNotes ?? "") ? (
             <span className="text-center text-xs text-amber-700 sm:text-left dark:text-amber-300">
               Unsaved changes
@@ -683,33 +689,31 @@ export function OmHandoverClient({ projectId }: Props) {
             <code className="rounded bg-[var(--enterprise-surface)] px-1">RESEND_API_KEY</code> and{" "}
             <code className="rounded bg-[var(--enterprise-surface)] px-1">RESEND_FROM</code>).
           </p>
-          <label className="mt-3 block text-xs font-medium text-[var(--enterprise-text-muted)]">
-            Building owner email
-          </label>
+          <label className={`${MOBILE_FIELD_LABEL} mt-3`}>Building owner email</label>
           <input
             type="email"
             autoComplete="email"
             value={buildingOwnerEmailDraft}
             onChange={(e) => setBuildingOwnerEmailDraft(e.target.value)}
             placeholder="owner@example.com"
-            className="mt-1.5 min-h-11 w-full max-w-md rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2 text-sm text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)]/70 focus:border-[var(--enterprise-primary)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/25"
+            className={`${MOBILE_FIELD_INPUT} mt-1.5 max-w-md`}
           />
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => saveOwnerEmailMut.mutate()}
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <EnterpriseButton
+              variant="secondary"
+              size="md"
+              fullWidth
+              className="sm:w-auto"
               disabled={
                 saveOwnerEmailMut.isPending ||
                 buildingOwnerEmailDraft.trim() ===
                   (session?.settings.omHandover.buildingOwnerEmail ?? "").trim()
               }
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-semibold text-[var(--enterprise-text)] transition active:scale-[0.99] disabled:opacity-50"
+              loading={saveOwnerEmailMut.isPending}
+              onClick={() => saveOwnerEmailMut.mutate()}
             >
-              {saveOwnerEmailMut.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              ) : null}
               Save email
-            </button>
+            </EnterpriseButton>
             {session?.settings.omHandover.buildingOwnerEmail ? (
               <span className="text-xs text-[var(--enterprise-text-muted)]">
                 Active: {session.settings.omHandover.buildingOwnerEmail}
@@ -740,7 +744,7 @@ export function OmHandoverClient({ projectId }: Props) {
             <li key={label} className="min-w-0">
               <Link
                 href={`${pBase}${path}`}
-                className="enterprise-card enterprise-card-hover group flex min-h-[4.5rem] items-center gap-3 p-3 outline-none ring-[var(--enterprise-primary)]/40 transition-transform focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--enterprise-bg)] active:scale-[0.995] sm:min-h-0 sm:p-4"
+                className="enterprise-card enterprise-card-hover group flex min-h-14 items-center gap-3 rounded-2xl p-3 outline-none ring-[var(--enterprise-primary)]/40 transition-transform focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--enterprise-bg)] active:scale-[0.98] sm:min-h-0 sm:p-4"
               >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)] sm:h-11 sm:w-11">
                   <Icon className="h-5 w-5" aria-hidden />

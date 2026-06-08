@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
 import {
   applyFolderStructure,
   fetchFolderStructureTemplates,
@@ -325,7 +326,7 @@ export function ProjectHubClient() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--enterprise-text-muted)]">
@@ -340,7 +341,7 @@ export function ProjectHubClient() {
             <button
               type="button"
               onClick={() => setProjectModal(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] ring-1 ring-[color-mix(in_srgb,var(--enterprise-primary)_30%,transparent)] transition hover:bg-[var(--enterprise-primary-deep)] sm:shrink-0"
+              className="hidden items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] ring-1 ring-[color-mix(in_srgb,var(--enterprise-primary)_30%,transparent)] transition hover:bg-[var(--enterprise-primary-deep)] lg:inline-flex sm:shrink-0"
             >
               <Plus className="h-4 w-4" strokeWidth={2} />
               New project
@@ -527,6 +528,13 @@ export function ProjectHubClient() {
         }}
         submitLabel="Create project"
       />
+      {isAdmin ? (
+        <EnterpriseFab
+          label="New project"
+          icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
+          onClick={() => setProjectModal(true)}
+        />
+      ) : null}
     </div>
   );
 }

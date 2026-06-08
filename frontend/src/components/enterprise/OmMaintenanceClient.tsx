@@ -152,7 +152,7 @@ export function OmMaintenanceClient({ projectId }: Props) {
       )}
 
       {rows.length > 0 ? (
-        <div className="enterprise-card hidden overflow-x-auto lg:block">
+        <div className="mobile-table-wrap enterprise-card hidden overflow-x-auto lg:block">
           <table className="w-full min-w-[720px] border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--enterprise-border)] text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">

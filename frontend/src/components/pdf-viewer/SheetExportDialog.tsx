@@ -236,14 +236,14 @@ export function SheetExportDialog({ open, onClose, pdfDoc, exportCanvasRef }: Pr
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px]"
+      className="mobile-sheet-host fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px] max-lg:items-end max-lg:p-0"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="relative flex max-h-[min(90vh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[#334155] bg-[#1E293B] shadow-2xl ring-1 ring-black/25"
+        className="mobile-sheet-panel relative flex max-h-[min(90vh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[#334155] bg-[#1E293B] shadow-2xl ring-1 ring-black/25 max-lg:max-h-[min(92dvh,920px)] max-lg:rounded-t-2xl max-lg:rounded-b-none"
         role="dialog"
         aria-labelledby="sheet-export-title"
         onMouseDown={(e) => e.stopPropagation()}

@@ -89,7 +89,7 @@ export function ProposalTemplatesClient({
   if (isPending || !data) return <EnterpriseLoadingState label="Loading templates…" />;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mobile-app-page w-full min-w-0 max-w-full mx-auto max-w-3xl space-y-6">
       <Link href={base} className="text-sm font-medium text-[#2563EB] hover:underline">
         ← Proposals
       </Link>

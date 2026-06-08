@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -46,11 +47,56 @@ function Kpi({
           ? "border-l-emerald-500"
           : "border-l-slate-400";
   return (
-    <div className={`enterprise-card border-l-4 p-4 ${border}`}>
-      <p className="text-2xl font-semibold tabular-nums text-[var(--enterprise-text)]">{value}</p>
-      <p className="mt-1 text-xs font-medium text-[var(--enterprise-text-muted)]">{label}</p>
-      {hint ? <p className="mt-1 text-[11px] text-[var(--enterprise-text-muted)]">{hint}</p> : null}
+    <div
+      className={`enterprise-card min-h-[5.5rem] rounded-2xl border-l-4 p-4 transition-transform duration-150 active:scale-[0.98] ${border}`}
+    >
+      <p className="text-2xl font-bold tabular-nums tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
+        {value}
+      </p>
+      <p className="mt-1 text-xs font-semibold leading-snug text-[var(--enterprise-text-muted)]">
+        {label}
+      </p>
+      {hint ? (
+        <p className="mt-1 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">{hint}</p>
+      ) : null}
     </div>
+  );
+}
+
+function ActivityRow({ title, meta, badge }: { title: string; meta: string; badge?: ReactNode }) {
+  return (
+    <li className="mobile-list-row flex min-h-14 flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 shadow-[var(--enterprise-shadow-xs)]">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold leading-snug text-[var(--enterprise-text)]">{title}</p>
+        <p className="mt-0.5 text-xs leading-snug text-[var(--enterprise-text-muted)]">{meta}</p>
+      </div>
+      {badge}
+    </li>
+  );
+}
+
+function QuickNavLink({
+  href,
+  icon: Icon,
+  label,
+}: {
+  href: string;
+  icon: typeof Package;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="enterprise-card enterprise-card-hover flex min-h-14 w-full items-center justify-between gap-2.5 rounded-2xl px-4 py-3.5 text-base font-medium text-[var(--enterprise-text)] transition active:scale-[0.98] lg:text-sm"
+    >
+      <span className="flex items-center gap-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
+          <Icon className="h-4 w-4" aria-hidden />
+        </span>
+        {label}
+      </span>
+      <ArrowRight className="h-5 w-5 shrink-0 text-[var(--enterprise-text-muted)]" />
+    </Link>
   );
 }
 
@@ -93,7 +139,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
 
   if (!session.operationsMode) {
     return (
-      <div className="enterprise-card p-6">
+      <div className="mobile-app-page w-full min-w-0 max-w-full enterprise-card p-6">
         <h1 className="text-lg font-semibold text-[var(--enterprise-text)]">FM dashboard</h1>
         <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
           Turn on{" "}
@@ -125,37 +171,37 @@ export function OmFmDashboardClient({ projectId }: Props) {
       : null);
 
   return (
-    <div className="space-y-8">
-      <header className="overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-gradient-to-b from-[var(--enterprise-surface)] to-[var(--enterprise-bg)]/90 p-5 shadow-[var(--enterprise-shadow-card)] sm:p-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex gap-4">
+    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-6 sm:space-y-8">
+      <header className="overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-gradient-to-b from-[var(--enterprise-surface)] to-[var(--enterprise-bg)]/90 p-4 shadow-[var(--enterprise-shadow-card)] sm:p-7">
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-3 sm:gap-4">
             <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-12 sm:w-12"
               aria-hidden
             >
               <LayoutGrid
-                className="h-6 w-6 text-[var(--enterprise-primary)] sm:h-7 sm:w-7"
+                className="h-5 w-5 text-[var(--enterprise-primary)] sm:h-6 sm:w-6"
                 strokeWidth={1.5}
               />
             </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)] sm:text-xs">
                 Facility management
               </p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
+              <h1 className="mt-1 text-xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
                 {displayName}
               </h1>
               {since ? (
-                <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
+                <p className="mt-2 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
                   Handover reference:{" "}
-                  <span className="font-medium text-[var(--enterprise-text)]">{since}</span>
+                  <span className="font-semibold text-[var(--enterprise-text)]">{since}</span>
                 </p>
               ) : (
-                <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
+                <p className="mt-2 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
                   Complete the{" "}
                   <Link
                     href={`${pBase}/om/handover`}
-                    className="font-medium text-[var(--enterprise-primary)] underline"
+                    className="font-semibold text-[var(--enterprise-primary)] underline"
                   >
                     handover wizard
                   </Link>{" "}
@@ -167,27 +213,27 @@ export function OmFmDashboardClient({ projectId }: Props) {
           <div className="flex flex-wrap gap-2">
             <a
               href={omAssetRegisterCsvUrl(projectId)}
-              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-medium text-[var(--enterprise-text)] shadow-sm hover:bg-[var(--enterprise-bg)]"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:bg-[var(--enterprise-bg)]"
             >
-              Download asset register (CSV)
+              Asset register (CSV)
             </a>
             {session.settings.modules.omTenantPortal &&
             session.settings.modules.omAssets &&
             (session.workspaceRole === "SUPER_ADMIN" || session.workspaceRole === "ADMIN") ? (
               <a
                 href={omOccupantAssetQrCsvUrl(projectId)}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-medium text-[var(--enterprise-text)] shadow-sm hover:bg-[var(--enterprise-bg)]"
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:bg-[var(--enterprise-bg)]"
               >
                 <Download className="h-4 w-4 shrink-0" aria-hidden />
-                Occupant QR URLs (CSV)
+                QR URLs (CSV)
               </a>
             ) : null}
             <Link
               href={`${pBase}/om/handover`}
-              className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] hover:opacity-95"
             >
               Handover hub
-              <ArrowRight className="h-4 w-4" aria-hidden />
+              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
             </Link>
           </div>
         </div>
@@ -231,181 +277,163 @@ export function OmFmDashboardClient({ projectId }: Props) {
             value={dash.kpis.maintenanceDueSoon}
             tone={dash.kpis.maintenanceDueSoon > 0 ? "amber" : "emerald"}
           />
-          <div className="enterprise-card col-span-2 border-l-4 border-l-emerald-600 p-4 lg:col-span-2">
+          <div className="enterprise-card col-span-2 min-h-[5.5rem] rounded-2xl border-l-4 border-l-emerald-600 p-4 lg:col-span-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Building health
             </p>
-            <div className="mt-2 flex items-center gap-3">
-              <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--enterprise-border)]/60">
+            <div className="mt-3 flex items-center gap-3">
+              <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--enterprise-border)]/60">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-500"
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-500 transition-[width] duration-500"
                   style={{ width: `${dash.buildingHealthPct}%` }}
                 />
               </div>
-              <span className="text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
+              <span className="text-base font-bold tabular-nums text-[var(--enterprise-text)]">
                 {dash.buildingHealthPct}%
               </span>
             </div>
-            <p className="mt-2 text-xs text-[var(--enterprise-text-muted)]">
+            <p className="mt-2 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
               Share of assets linked to a drawing (location on sheet).
             </p>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3 lg:gap-6">
         <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-4 sm:p-5">
-          <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="mb-3 flex min-h-11 items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
               <CalendarRange className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
-              Upcoming maintenance (this week)
+              Upcoming maintenance
             </h2>
             <Link
               href={`${pBase}/om/maintenance`}
-              className="text-xs font-semibold text-[var(--enterprise-primary)] underline"
+              className="mobile-touch-target shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-[var(--enterprise-primary)]"
             >
-              All schedules
+              All
             </Link>
           </div>
           {dash.upcomingMaintenanceThisWeek.length === 0 ? (
-            <p className="text-sm text-[var(--enterprise-text-muted)]">
+            <p className="py-4 text-sm text-[var(--enterprise-text-muted)]">
               Nothing due this UTC week.
             </p>
           ) : (
             <ul className="space-y-2">
               {dash.upcomingMaintenanceThisWeek.map((m) => (
-                <li
+                <ActivityRow
                   key={m.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm"
-                >
-                  <span className="min-w-0 font-medium text-[var(--enterprise-text)]">
-                    {m.assetTag} · {m.title || "Maintenance"}
-                  </span>
-                  <span className="text-xs text-[var(--enterprise-text-muted)]">
-                    {new Date(m.nextDueAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
-                    {m.vendor ? ` · ${m.vendor}` : ""}
-                  </span>
-                  {m.health === "overdue" ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600">
-                      <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-                      Overdue
-                    </span>
-                  ) : null}
-                </li>
+                  title={`${m.assetTag} · ${m.title || "Maintenance"}`}
+                  meta={`${new Date(m.nextDueAt).toLocaleDateString(undefined, { dateStyle: "medium" })}${m.vendor ? ` · ${m.vendor}` : ""}`}
+                  badge={
+                    m.health === "overdue" ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 ring-1 ring-red-200/80">
+                        <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+                        Overdue
+                      </span>
+                    ) : null
+                  }
+                />
               ))}
             </ul>
           )}
         </section>
 
         <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-4 sm:p-5">
-          <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="mb-3 flex min-h-11 items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
               <Wrench className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
               Recent work orders
             </h2>
             <Link
               href={`${pBase}/om/work-orders`}
-              className="text-xs font-semibold text-[var(--enterprise-primary)] underline"
+              className="mobile-touch-target shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-[var(--enterprise-primary)]"
             >
-              Open list
+              All
             </Link>
           </div>
           {dash.recentWorkOrders.length === 0 ? (
-            <p className="text-sm text-[var(--enterprise-text-muted)]">No work orders yet.</p>
+            <p className="py-4 text-sm text-[var(--enterprise-text-muted)]">No work orders yet.</p>
           ) : (
             <ul className="space-y-2">
               {dash.recentWorkOrders.map((w) => (
-                <li
+                <ActivityRow
                   key={w.id}
-                  className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2"
-                >
-                  <p className="text-sm font-medium text-[var(--enterprise-text)]">{w.title}</p>
-                  <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
-                    {w.status.replace(/_/g, " ")} · {w.priority} ·{" "}
-                    {new Date(w.updatedAt).toLocaleString(undefined, {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}
-                  </p>
-                </li>
+                  title={w.title}
+                  meta={`${w.status.replace(/_/g, " ")} · ${w.priority} · ${new Date(w.updatedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
+                />
               ))}
             </ul>
           )}
         </section>
 
-        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-4 sm:p-5">
-          <div className="mb-3 flex items-center justify-between gap-2">
+        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-4 sm:p-5 lg:col-span-2 xl:col-span-1">
+          <div className="mb-3 flex min-h-11 items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
               <Inbox className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
               Recent occupant requests
             </h2>
             <Link
               href={`${pBase}/om/tenant-requests`}
-              className="text-xs font-semibold text-[var(--enterprise-primary)] underline"
+              className="mobile-touch-target shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-[var(--enterprise-primary)]"
             >
-              Open list
+              All
             </Link>
           </div>
           {dash.recentTenantRequests.length === 0 ? (
-            <p className="text-sm text-[var(--enterprise-text-muted)]">No occupant requests yet.</p>
+            <p className="py-4 text-sm text-[var(--enterprise-text-muted)]">
+              No occupant requests yet.
+            </p>
           ) : (
             <ul className="space-y-2">
               {dash.recentTenantRequests.map((w) => (
-                <li
+                <ActivityRow
                   key={w.id}
-                  className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2"
-                >
-                  <p className="text-sm font-medium text-[var(--enterprise-text)]">{w.title}</p>
-                  <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
-                    {w.status.replace(/_/g, " ")} · {w.priority} ·{" "}
-                    {new Date(w.updatedAt).toLocaleString(undefined, {
-                      dateStyle: "short",
-                      timeStyle: "short",
-                    })}
-                  </p>
-                </li>
+                  title={w.title}
+                  meta={`${w.status.replace(/_/g, " ")} · ${w.priority} · ${new Date(w.updatedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
+                />
               ))}
             </ul>
           )}
         </section>
       </div>
 
-      <section className="flex flex-wrap gap-3">
-        <Link
-          href={`${pBase}/om/assets`}
-          className="enterprise-card enterprise-card-hover inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-[var(--enterprise-text)]"
-        >
-          <Package className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
-          Assets
-        </Link>
-        <Link
-          href={`${pBase}/om/inspections`}
-          className="enterprise-card enterprise-card-hover inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-[var(--enterprise-text)]"
-        >
-          <ClipboardList className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
-          Inspections
-        </Link>
-        <Link
-          href={`${pBase}/om/tenant-requests`}
-          className="enterprise-card enterprise-card-hover inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-[var(--enterprise-text)]"
-        >
-          <Inbox className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
-          Occupant inbox
-        </Link>
-        <Link
-          href={`${pBase}/om/tenant-portal`}
-          className="enterprise-card enterprise-card-hover inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-[var(--enterprise-text)]"
-        >
-          <Building2 className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
-          Occupant hub
-        </Link>
-        <Link
-          href={`${pBase}/ops/orchestration`}
-          className="enterprise-card enterprise-card-hover inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-[var(--enterprise-text)]"
-        >
-          <LayoutGrid className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
-          Datacenter orchestration
-        </Link>
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+          Quick navigation
+        </h2>
+        <ul className="space-y-2">
+          <li>
+            <QuickNavLink href={`${pBase}/om/assets`} icon={Package} label="Assets" />
+          </li>
+          <li>
+            <QuickNavLink
+              href={`${pBase}/om/inspections`}
+              icon={ClipboardList}
+              label="Inspections"
+            />
+          </li>
+          <li>
+            <QuickNavLink
+              href={`${pBase}/om/tenant-requests`}
+              icon={Inbox}
+              label="Occupant inbox"
+            />
+          </li>
+          <li>
+            <QuickNavLink
+              href={`${pBase}/om/tenant-portal`}
+              icon={Building2}
+              label="Occupant hub"
+            />
+          </li>
+          <li>
+            <QuickNavLink
+              href={`${pBase}/ops/orchestration`}
+              icon={LayoutGrid}
+              label="Datacenter orchestration"
+            />
+          </li>
+        </ul>
       </section>
     </div>
   );

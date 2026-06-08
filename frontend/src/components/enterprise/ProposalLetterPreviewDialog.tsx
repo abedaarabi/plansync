@@ -60,7 +60,7 @@ export function ProposalLetterPreviewDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-220 flex items-center justify-center bg-[#0c1222]/55 p-3 backdrop-blur-[2px] sm:p-4 print:hidden"
+      className="mobile-sheet-host fixed inset-0 z-220 flex items-center justify-center bg-[#0c1222]/55 p-3 backdrop-blur-[2px] max-lg:items-end max-lg:p-0 sm:p-4 print:hidden"
       role="presentation"
       onClick={onClose}
     >

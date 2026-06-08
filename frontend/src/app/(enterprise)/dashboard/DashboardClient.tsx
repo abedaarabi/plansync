@@ -147,7 +147,7 @@ export function DashboardClient() {
 
   if (!hasWorkspace) {
     return (
-      <div className="enterprise-animate-in space-y-6">
+      <div className="mobile-app-page enterprise-animate-in w-full min-w-0 max-w-full space-y-6">
         <section className="enterprise-card max-w-2xl p-6 sm:p-8">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--enterprise-text)]">
             {td("createWorkspaceTitle")}
@@ -292,7 +292,7 @@ export function DashboardClient() {
   ];
 
   return (
-    <div className="enterprise-animate-in space-y-6 md:space-y-8">
+    <div className="mobile-app-page enterprise-animate-in w-full min-w-0 max-w-full space-y-6 md:space-y-8">
       {/* Hero */}
       <section className="relative overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-gradient-to-br from-[var(--enterprise-surface)] via-white to-blue-50/40 p-5 shadow-[var(--enterprise-shadow-card)] sm:p-6 lg:p-8">
         <div

@@ -221,7 +221,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-6">
       <div className="flex items-center gap-2">
         <Users className="h-5 w-5 text-[var(--enterprise-primary)]" />
         <h1 className="text-2xl font-bold text-[var(--enterprise-text)]">Project team</h1>

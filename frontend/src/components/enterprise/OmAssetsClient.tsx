@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
+  ChevronRight,
   ExternalLink,
   Link2,
   MapPin,
@@ -31,11 +32,18 @@ import { sortedVersions } from "@/components/file-explorer/fileExplorerUtils";
 import { isPdfFile } from "@/lib/isPdfFile";
 import { qk } from "@/lib/queryKeys";
 import type { CloudFile, FileVersion } from "@/types/projects";
-import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetDetailSlide } from "@/components/enterprise/OmAssetDetailSlide";
 import { OmAssetDocumentsBlock } from "@/components/enterprise/OmAssetDocumentsBlock";
+import {
+  MOBILE_FIELD_INPUT,
+  MOBILE_FIELD_LABEL,
+  MOBILE_FIELD_SELECT,
+  MOBILE_FIELD_TEXTAREA,
+  MOBILE_FORM_SECTION,
+} from "@/lib/mobileFormStyles";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 
 type Props = { projectId: string };
@@ -179,9 +187,8 @@ function AssetFormFields({
   const selectedFile = pdfFiles.find((f) => f.id === draft.attachFileId);
   const versions = selectedFile ? sortedVersions(selectedFile) : [];
 
-  const field =
-    "min-h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2 text-sm text-[var(--enterprise-text)]";
-  const label = "mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]";
+  const field = MOBILE_FIELD_INPUT;
+  const label = MOBILE_FIELD_LABEL;
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -315,12 +322,12 @@ function AssetFormFields({
           value={draft.notes}
           onChange={(e) => onChange({ ...draft, notes: e.target.value })}
           rows={3}
-          className={`${field} min-h-[5rem] resize-y`}
+          className={MOBILE_FIELD_TEXTAREA}
           placeholder="Specs, supplier contacts, access instructions…"
         />
       </label>
 
-      <div className="sm:col-span-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
+      <div className={`${MOBILE_FORM_SECTION} sm:col-span-2`}>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
           Linked drawing (optional)
         </p>
@@ -362,7 +369,7 @@ function AssetFormFields({
                     attachFileVersionId: v0?.id ?? "",
                   });
                 }}
-                className={field}
+                className={MOBILE_FIELD_SELECT}
               >
                 <option value="">— None —</option>
                 {filteredPdfs.map((f) => (
@@ -378,7 +385,7 @@ function AssetFormFields({
                 <select
                   value={draft.attachFileVersionId}
                   onChange={(e) => onChange({ ...draft, attachFileVersionId: e.target.value })}
-                  className={field}
+                  className={MOBILE_FIELD_SELECT}
                 >
                   {versions.map((v: FileVersion) => (
                     <option key={v.id} value={v.id}>
@@ -660,27 +667,30 @@ export function OmAssetsClient({ projectId }: Props) {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-6 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 gap-4">
+    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-5 sm:space-y-6">
+      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-5 sm:flex-row sm:items-start sm:justify-between sm:pb-6">
+        <div className="flex min-w-0 gap-3 sm:gap-4">
           <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
             aria-hidden
           >
-            <Package className="h-7 w-7 text-[var(--enterprise-primary)]" strokeWidth={1.5} />
+            <Package
+              className="h-6 w-6 text-[var(--enterprise-primary)] sm:h-7 sm:w-7"
+              strokeWidth={1.5}
+            />
           </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
               Assets
             </h1>
-            <p className="mt-1.5 text-sm text-[var(--enterprise-text-muted)]">
+            <p className="mt-1.5 hidden text-sm leading-relaxed text-[var(--enterprise-text-muted)] sm:block">
               Search and maintain the register. Upload manuals, certificates, and other files for a
               specific asset when you create it (after save) or when you edit it. Optionally link a
               project PDF drawing below or use Link on a row for viewer pins.
             </p>
           </div>
         </div>
-        <div className="flex flex-col gap-2 sm:items-end">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {projectSession &&
           projectSession.operationsMode &&
           projectSession.settings.modules.omTenantPortal &&
@@ -689,46 +699,42 @@ export function OmAssetsClient({ projectId }: Props) {
             projectSession.workspaceRole === "ADMIN") ? (
             <a
               href={omOccupantAssetQrCsvUrl(projectId)}
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 self-stretch rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-medium text-[var(--enterprise-text)] shadow-sm hover:bg-[var(--enterprise-bg)] sm:w-auto"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:bg-[var(--enterprise-bg)]"
             >
               <Download className="h-4 w-4 shrink-0" aria-hidden />
-              Occupant QR URLs (CSV)
+              QR URLs (CSV)
             </a>
           ) : null}
-          <EnterpriseAddPulseWrap className="self-stretch sm:self-start">
-            <button
-              type="button"
-              onClick={() => {
-                setJustCreatedAsset(null);
-                setShowAdd(true);
-              }}
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 self-stretch rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-xs)] transition hover:opacity-95 sm:min-h-10 sm:self-start"
-            >
-              <Plus className="h-4 w-4" strokeWidth={2} />
-              Add asset
-            </button>
-          </EnterpriseAddPulseWrap>
+          <EnterpriseButton
+            size="sm"
+            onClick={() => {
+              setJustCreatedAsset(null);
+              setShowAdd(true);
+            }}
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            Add asset
+          </EnterpriseButton>
         </div>
       </header>
 
-      <div className="enterprise-card p-4">
-        <label className="block text-sm">
-          <span className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]">
-            Search assets
-          </span>
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--enterprise-text-muted)]"
-              strokeWidth={2}
-            />
-            <input
-              value={listSearchInput}
-              onChange={(e) => setListSearchInput(e.target.value)}
-              placeholder="Tag, name, category, hall, row, rack, U position, location, notes…"
-              className="min-h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] py-2 pl-10 pr-3 text-sm text-[var(--enterprise-text)]"
-            />
-          </div>
+      <div className="sticky top-0 z-10 -mx-1 rounded-2xl border border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)]/95 p-3 shadow-[var(--enterprise-shadow-xs)] backdrop-blur-md sm:static sm:mx-0 sm:p-4">
+        <label className="sr-only" htmlFor="asset-list-search">
+          Search assets
         </label>
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--enterprise-text-muted)]"
+            strokeWidth={2}
+          />
+          <input
+            id="asset-list-search"
+            value={listSearchInput}
+            onChange={(e) => setListSearchInput(e.target.value)}
+            placeholder="Search tag, name, location…"
+            className={`${MOBILE_FIELD_INPUT} pl-11`}
+          />
+        </div>
       </div>
 
       <EnterpriseSlideOver
@@ -764,47 +770,49 @@ export function OmAssetsClient({ projectId }: Props) {
           </div>
         }
         footer={
-          <div className="flex w-full flex-wrap items-center justify-end gap-2">
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             {justCreatedAsset ? (
               <>
-                <button
-                  type="button"
+                <EnterpriseButton
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  className="sm:w-auto"
                   onClick={() => {
                     setJustCreatedAsset(null);
                     setCreateDraft(emptyDraft());
                     setCreateDrawingSearch("");
                   }}
-                  className="inline-flex min-h-11 items-center rounded-lg border border-[var(--enterprise-border)] px-4 text-sm font-medium text-[var(--enterprise-text)]"
                 >
                   Add another asset
-                </button>
-                <button
-                  type="button"
-                  onClick={closeAddSlide}
-                  className="inline-flex min-h-11 items-center rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white"
-                >
+                </EnterpriseButton>
+                <EnterpriseButton size="lg" fullWidth className="sm:w-auto" onClick={closeAddSlide}>
                   Done
-                </button>
+                </EnterpriseButton>
               </>
             ) : (
               <>
-                <button
-                  type="button"
+                <EnterpriseButton
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  className="sm:w-auto"
                   onClick={closeAddSlide}
-                  className="inline-flex min-h-11 items-center rounded-lg border border-[var(--enterprise-border)] px-4 text-sm font-medium text-[var(--enterprise-text)]"
                 >
                   Cancel
-                </button>
-                <button
-                  type="button"
+                </EnterpriseButton>
+                <EnterpriseButton
+                  size="lg"
+                  fullWidth
+                  className="sm:w-auto"
                   disabled={
                     !createDraft.tag.trim() || !createDraft.name.trim() || createMut.isPending
                   }
+                  loading={createMut.isPending}
                   onClick={() => createMut.mutate()}
-                  className="inline-flex min-h-11 items-center rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   Save
-                </button>
+                </EnterpriseButton>
               </>
             )}
           </div>
@@ -849,9 +857,13 @@ export function OmAssetsClient({ projectId }: Props) {
         footer={
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             {editingAsset ? (
-              <button
-                type="button"
+              <EnterpriseButton
+                variant="danger"
+                size="md"
+                fullWidth
+                className="sm:w-auto sm:justify-start"
                 disabled={deleteMut.isPending}
+                loading={deleteMut.isPending}
                 onClick={() => {
                   if (
                     !confirm(
@@ -861,30 +873,33 @@ export function OmAssetsClient({ projectId }: Props) {
                     return;
                   deleteMut.mutate(editingAsset.id);
                 }}
-                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-red-200 px-4 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:hover:bg-red-950/40 sm:justify-start"
               >
                 <Trash2 className="h-4 w-4" strokeWidth={2} />
                 Delete
-              </button>
+              </EnterpriseButton>
             ) : (
-              <span />
+              <span className="hidden sm:block" />
             )}
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+              <EnterpriseButton
+                variant="secondary"
+                size="lg"
+                fullWidth
+                className="sm:w-auto"
                 onClick={closeEditSlide}
-                className="inline-flex min-h-11 items-center rounded-lg border border-[var(--enterprise-border)] px-4 text-sm font-medium text-[var(--enterprise-text)]"
               >
                 Cancel
-              </button>
-              <button
-                type="button"
+              </EnterpriseButton>
+              <EnterpriseButton
+                size="lg"
+                fullWidth
+                className="sm:w-auto"
                 disabled={!editDraft.tag.trim() || !editDraft.name.trim() || updateMut.isPending}
+                loading={updateMut.isPending}
                 onClick={() => updateMut.mutate()}
-                className="inline-flex min-h-11 items-center rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white disabled:opacity-50"
               >
                 Save changes
-              </button>
+              </EnterpriseButton>
             </div>
           </div>
         }
@@ -949,7 +964,7 @@ export function OmAssetsClient({ projectId }: Props) {
               value={linkDrawingSearch}
               onChange={(e) => setLinkDrawingSearch(e.target.value)}
               placeholder="Search documents…"
-              className="min-h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] py-2 pl-10 pr-3 text-sm text-[var(--enterprise-text)]"
+              className={`${MOBILE_FIELD_INPUT} pl-11`}
             />
           </div>
           {!wid || !project ? (
@@ -1062,106 +1077,146 @@ export function OmAssetsClient({ projectId }: Props) {
       />
 
       {rows.length === 0 ? (
-        <div className="enterprise-card px-4 py-12 text-center text-sm text-[var(--enterprise-text-muted)]">
+        <div className="enterprise-card rounded-2xl px-4 py-12 text-center text-base text-[var(--enterprise-text-muted)]">
           {debouncedListQ
             ? "No assets match your search."
             : "No assets yet. Add equipment with full details, then link a drawing."}
         </div>
       ) : (
-        <div className="enterprise-card overflow-x-auto">
-          <table className="w-full min-w-[880px] border-collapse text-left text-sm">
-            <thead>
-              <tr className="border-b border-[var(--enterprise-border)] text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                <th className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-4 py-3">
-                  Tag
-                </th>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Manufacturer</th>
-                <th className="px-4 py-3">Location</th>
-                <th className="px-4 py-3">Drawing</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((a) => (
-                <tr key={a.id} className="border-b border-[var(--enterprise-border)]/80">
-                  <td className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-4 py-3 font-mono text-xs font-semibold text-[var(--enterprise-text)]">
-                    {a.tag}
-                  </td>
-                  <td className="px-4 py-3 text-[var(--enterprise-text)]">{a.name}</td>
-                  <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
-                    {a.manufacturer ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
-                    {formatAssetLocation(a)}
-                  </td>
-                  <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
-                    {a.file ? `${a.file.name} v${a.fileVersion?.version ?? "?"}` : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setDetailAsset(a)}
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-bg)]"
-                      >
-                        <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={2} />
-                        Details
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingAsset(a);
-                          setEditDrawingSearch("");
-                        }}
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-bg)]"
-                      >
-                        <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
-                        Edit
-                      </button>
-                      {a.fileId ? (
+        <>
+          <ul className="space-y-2 lg:hidden" aria-label="Assets">
+            {rows.map((a) => (
+              <li key={`m-${a.id}`}>
+                <button
+                  type="button"
+                  onClick={() => setDetailAsset(a)}
+                  className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-left shadow-[var(--enterprise-shadow-xs)] transition active:scale-[0.98] active:bg-[var(--enterprise-hover-surface)]/60"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]">
+                    <Package className="h-4 w-4 text-[var(--enterprise-primary)]" strokeWidth={2} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className="font-mono text-sm font-bold text-[var(--enterprise-primary)]">
+                        {a.tag}
+                      </span>
+                      {a.file ? (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200/80">
+                          On drawing
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="mt-0.5 block truncate text-base font-semibold text-[var(--enterprise-text)]">
+                      {a.name}
+                    </span>
+                    <span className="mt-0.5 block truncate text-sm text-[var(--enterprise-text-muted)]">
+                      {formatAssetLocation(a)}
+                      {a.manufacturer ? ` · ${a.manufacturer}` : ""}
+                    </span>
+                  </span>
+                  <ChevronRight
+                    className="h-5 w-5 shrink-0 text-[var(--enterprise-text-muted)]"
+                    aria-hidden
+                  />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="mobile-table-wrap enterprise-card hidden overflow-x-auto rounded-2xl lg:block">
+            <table className="w-full min-w-[880px] border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-[var(--enterprise-border)] text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                  <th className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-4 py-3">
+                    Tag
+                  </th>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Manufacturer</th>
+                  <th className="px-4 py-3">Location</th>
+                  <th className="px-4 py-3">Drawing</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((a) => (
+                  <tr key={a.id} className="border-b border-[var(--enterprise-border)]/80">
+                    <td className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-4 py-3 font-mono text-xs font-semibold text-[var(--enterprise-text)]">
+                      {a.tag}
+                    </td>
+                    <td className="px-4 py-3 text-[var(--enterprise-text)]">{a.name}</td>
+                    <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
+                      {a.manufacturer ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
+                      {formatAssetLocation(a)}
+                    </td>
+                    <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
+                      {a.file ? `${a.file.name} v${a.fileVersion?.version ?? "?"}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
                         <button
                           type="button"
-                          onClick={() => openViewerForLinkedAsset(a)}
+                          onClick={() => setDetailAsset(a)}
                           className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-bg)]"
                         >
-                          <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-                          View
+                          <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={2} />
+                          Details
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLinkAsset(a);
-                          setLinkDrawingSearch("");
-                          setLinkExpandedFileId(null);
-                        }}
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-bg)]"
-                      >
-                        <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
-                        Link
-                      </button>
-                      {a.fileId ? (
                         <button
                           type="button"
-                          disabled={clearLinkMut.isPending}
                           onClick={() => {
-                            if (confirm("Clear the drawing link for this asset?")) {
-                              clearLinkMut.mutate(a.id);
-                            }
+                            setEditingAsset(a);
+                            setEditDrawingSearch("");
                           }}
-                          className="inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
+                          className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-bg)]"
                         >
-                          Clear
+                          <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                          Edit
                         </button>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        {a.fileId ? (
+                          <button
+                            type="button"
+                            onClick={() => openViewerForLinkedAsset(a)}
+                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-bg)]"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
+                            View
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLinkAsset(a);
+                            setLinkDrawingSearch("");
+                            setLinkExpandedFileId(null);
+                          }}
+                          className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-bg)]"
+                        >
+                          <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
+                          Link
+                        </button>
+                        {a.fileId ? (
+                          <button
+                            type="button"
+                            disabled={clearLinkMut.isPending}
+                            onClick={() => {
+                              if (confirm("Clear the drawing link for this asset?")) {
+                                clearLinkMut.mutate(a.id);
+                              }
+                            }}
+                            className="inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
+                          >
+                            Clear
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

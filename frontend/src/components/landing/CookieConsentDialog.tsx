@@ -29,12 +29,12 @@ export function CookieConsentDialog() {
   }
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-4">
+    <div className="fixed inset-x-0 bottom-0 z-50 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:p-4">
       <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200/90 bg-white/95 p-4 shadow-2xl backdrop-blur sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-900">Cookie preferences</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-600 sm:text-sm">
+            <p className="text-base font-semibold text-slate-900">Cookie preferences</p>
+            <p className="mt-1 text-sm leading-relaxed text-slate-600">
               We use essential cookies to keep PlanSync secure and working. With your permission, we
               may also use non-essential cookies to improve product experience. See our{" "}
               <Link
@@ -46,18 +46,18 @@ export function CookieConsentDialog() {
               .
             </p>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={() => saveConsent("rejected")}
-              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:text-sm"
+              className="inline-flex min-h-[52px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-base font-semibold text-slate-700 transition-all duration-150 active:scale-[0.97] hover:bg-slate-50 sm:min-h-11 sm:w-auto sm:text-sm"
             >
               Reject optional
             </button>
             <button
               type="button"
               onClick={() => saveConsent("accepted")}
-              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--landing-cta)] px-4 text-xs font-semibold text-white transition hover:bg-[var(--landing-cta-bright)] sm:text-sm"
+              className="inline-flex min-h-[52px] w-full items-center justify-center rounded-xl bg-[var(--landing-cta)] px-4 text-base font-bold text-white transition-all duration-150 active:scale-[0.97] hover:bg-[var(--landing-cta-bright)] sm:min-h-11 sm:w-auto sm:text-sm"
             >
               Accept all
             </button>

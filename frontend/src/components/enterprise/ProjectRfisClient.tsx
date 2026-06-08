@@ -27,6 +27,14 @@ import {
   Users,
 } from "lucide-react";
 import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
+import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
+import { PullToRefresh } from "@/components/mobile/PullToRefresh";
+import {
+  MOBILE_FIELD_INPUT,
+  MOBILE_FIELD_LABEL,
+  MOBILE_FIELD_TEXTAREA,
+  MOBILE_FORM_SECTION,
+} from "@/lib/mobileFormStyles";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
@@ -353,8 +361,8 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
     });
   }
 
-  const fieldClass =
-    "mt-1 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20";
+  const fieldClass = MOBILE_FIELD_INPUT;
+  const labelClass = MOBILE_FIELD_LABEL;
 
   return (
     <div className="enterprise-animate-in p-4 sm:p-6 lg:p-8">
@@ -390,7 +398,7 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
           </div>
           <EnterpriseAddPulseWrap
             disabled={ctxLoading || !isPro}
-            className="w-full self-stretch sm:w-auto sm:self-start"
+            className="hidden w-full self-stretch sm:w-auto sm:self-start lg:inline-flex"
           >
             <button
               type="button"
@@ -445,7 +453,7 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
                   Status
                 </div>
                 <div
-                  className="-mx-1 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap"
+                  className="mobile-chip-scroll -mx-1 flex gap-2 px-1 pb-1"
                   role="tablist"
                   aria-label="Filter by status"
                 >
@@ -459,7 +467,7 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
                         role="tab"
                         aria-selected={selected}
                         onClick={() => setFilter(f.key)}
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2.5 text-xs font-medium transition sm:py-2 ${
+                        className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.97] ${
                           selected
                             ? "bg-[var(--enterprise-primary)] text-white shadow-sm [&_svg]:text-white"
                             : "border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] [&_svg]:opacity-80"
@@ -617,32 +625,36 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
           }
         >
           <div className="space-y-4">
-            <div>
-              <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
-                Title *
-              </label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className={fieldClass}
-                required
-                placeholder="Wall thickness clarification"
-              />
+            <div className={MOBILE_FORM_SECTION}>
+              <div>
+                <label htmlFor="rfi-title" className={labelClass}>
+                  Title *
+                </label>
+                <input
+                  id="rfi-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className={fieldClass}
+                  required
+                  placeholder="Wall thickness clarification"
+                />
+              </div>
+              <div>
+                <label htmlFor="rfi-question" className={labelClass}>
+                  Question *
+                </label>
+                <textarea
+                  id="rfi-question"
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  rows={4}
+                  required
+                  className={MOBILE_FIELD_TEXTAREA}
+                  placeholder="Describe what needs an official answer…"
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
-                Question *
-              </label>
-              <textarea
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                rows={4}
-                required
-                className={fieldClass}
-                placeholder="Describe what needs an official answer…"
-              />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={`${MOBILE_FORM_SECTION} grid gap-4`}>
               <div>
                 <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
                   From discipline
@@ -815,208 +827,236 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
             />
           </div>
         ) : (
-          <>
-            <ul className="space-y-3 md:hidden" aria-label="RFI list">
-              {filtered.length === 0 ? (
-                <li className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
-                  <RfiEmptyState noRows={rows.length === 0} />
-                </li>
-              ) : (
-                filtered.map((r) => {
-                  const overdue = isOverdueRow(r, nowMs);
-                  const pri = (r.priority || "MEDIUM").toUpperCase();
-                  const stLabel =
-                    RFI_STATUS_LABEL[normStatus(r.status)] ??
-                    normStatus(r.status).replace(/_/g, " ");
-                  return (
-                    <li key={r.id}>
-                      <Link
-                        href={`/projects/${projectId}/rfi/${r.id}`}
-                        className="block touch-manipulation rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/25 hover:shadow-[var(--enterprise-shadow-sm)] active:scale-[0.99]"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <span className="shrink-0 rounded-md bg-[var(--enterprise-bg)] px-2 py-1 font-mono text-xs font-semibold tabular-nums text-[var(--enterprise-text-muted)]">
-                            #{String(r.rfiNumber).padStart(3, "0")}
-                          </span>
-                          <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                            <span
-                              className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold ${rfiStatusBadgeClass(normStatus(r.status))}`}
-                            >
-                              {stLabel}
+          <PullToRefresh
+            onRefresh={async () => {
+              await qc.invalidateQueries({ queryKey: qk.projectRfis(projectId) });
+            }}
+          >
+            <>
+              <ul className="space-y-3 md:hidden" aria-label="RFI list">
+                {filtered.length === 0 ? (
+                  <li className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
+                    <RfiEmptyState noRows={rows.length === 0} />
+                  </li>
+                ) : (
+                  filtered.map((r) => {
+                    const overdue = isOverdueRow(r, nowMs);
+                    const pri = (r.priority || "MEDIUM").toUpperCase();
+                    const stLabel =
+                      RFI_STATUS_LABEL[normStatus(r.status)] ??
+                      normStatus(r.status).replace(/_/g, " ");
+                    return (
+                      <li key={r.id}>
+                        <Link
+                          href={`/projects/${projectId}/rfi/${r.id}`}
+                          className="block touch-manipulation rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/25 hover:shadow-[var(--enterprise-shadow-sm)] active:scale-[0.99]"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="shrink-0 rounded-md bg-[var(--enterprise-bg)] px-2 py-1 font-mono text-xs font-semibold tabular-nums text-[var(--enterprise-text-muted)]">
+                              #{String(r.rfiNumber).padStart(3, "0")}
                             </span>
-                            {overdue ? <span className={OVERDUE_BADGE}>Overdue</span> : null}
-                          </span>
-                        </div>
-                        <div className="mt-2 flex items-start justify-between gap-2">
-                          <p className="min-w-0 flex-1 text-base font-semibold leading-snug text-[var(--enterprise-text)]">
-                            {r.title}
-                          </p>
-                          <ChevronRight
-                            className="mt-0.5 h-5 w-5 shrink-0 text-[var(--enterprise-text-muted)]/45"
-                            strokeWidth={1.75}
-                            aria-hidden
-                          />
-                        </div>
-                        <dl className="mt-3 grid grid-cols-1 gap-2 text-xs text-[var(--enterprise-text-muted)] sm:grid-cols-3">
-                          <div className="flex gap-1.5">
-                            <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">
-                              Assigned
-                            </dt>
-                            <dd className="min-w-0 truncate">{rfiRespondersDisplay(r)}</dd>
-                          </div>
-                          <div className="flex gap-1.5">
-                            <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">
-                              Due
-                            </dt>
-                            <dd className="tabular-nums">{formatDate(r.dueDate)}</dd>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">
-                              Priority
-                            </dt>
-                            <dd>
+                            <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
                               <span
-                                className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold ${priorityBadgeClassLight(pri)}`}
+                                className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold ${rfiStatusBadgeClass(normStatus(r.status))}`}
                               >
-                                {PRI_LABEL[pri] ?? pri}
+                                {stLabel}
                               </span>
-                            </dd>
+                              {overdue ? <span className={OVERDUE_BADGE}>Overdue</span> : null}
+                            </span>
                           </div>
-                        </dl>
-                      </Link>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
-
-            <div className="enterprise-card hidden overflow-hidden p-0 md:block">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-left text-sm text-[var(--enterprise-text)]">
-                  <thead>
-                    <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                      <th className="w-16 px-4 py-3">
-                        <span className="inline-flex items-center gap-1.5">
-                          <Hash className="h-3.5 w-3.5 opacity-70" strokeWidth={1.75} aria-hidden />
-                          #
-                        </span>
-                      </th>
-                      <th className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1.5">
-                          <FileText
-                            className="h-3.5 w-3.5 opacity-70"
-                            strokeWidth={1.75}
-                            aria-hidden
-                          />
-                          Title
-                        </span>
-                      </th>
-                      <th className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1.5">
-                          <Activity
-                            className="h-3.5 w-3.5 opacity-70"
-                            strokeWidth={1.75}
-                            aria-hidden
-                          />
-                          Status
-                        </span>
-                      </th>
-                      <th className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1.5">
-                          <Users
-                            className="h-3.5 w-3.5 opacity-70"
-                            strokeWidth={1.75}
-                            aria-hidden
-                          />
-                          Assigned
-                        </span>
-                      </th>
-                      <th className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1.5">
-                          <Calendar
-                            className="h-3.5 w-3.5 opacity-70"
-                            strokeWidth={1.75}
-                            aria-hidden
-                          />
-                          Due
-                        </span>
-                      </th>
-                      <th className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1.5">
-                          <Flag className="h-3.5 w-3.5 opacity-70" strokeWidth={1.75} aria-hidden />
-                          Priority
-                        </span>
-                      </th>
-                      <th className="w-12 px-2 py-3" aria-hidden>
-                        <span className="sr-only">Open</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="p-0">
-                          <RfiEmptyState noRows={rows.length === 0} />
-                        </td>
-                      </tr>
-                    ) : (
-                      filtered.map((r) => {
-                        const overdue = isOverdueRow(r, nowMs);
-                        const pri = (r.priority || "MEDIUM").toUpperCase();
-                        return (
-                          <tr
-                            key={r.id}
-                            className="cursor-pointer border-b border-[var(--enterprise-border)]/80 transition last:border-0 hover:bg-[var(--enterprise-hover-surface)]"
-                            onClick={() => router.push(`/projects/${projectId}/rfi/${r.id}`)}
-                          >
-                            <td className="px-4 py-3 tabular-nums text-[var(--enterprise-text-muted)]">
-                              {String(r.rfiNumber).padStart(3, "0")}
-                            </td>
-                            <td className="max-w-[min(280px,32vw)] px-4 py-3 font-medium text-[var(--enterprise-text)]">
-                              <span className="line-clamp-2">{r.title}</span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="inline-flex flex-wrap items-center gap-1.5">
+                          <div className="mt-2 flex items-start justify-between gap-2">
+                            <p className="min-w-0 flex-1 text-base font-semibold leading-snug text-[var(--enterprise-text)]">
+                              {r.title}
+                            </p>
+                            <ChevronRight
+                              className="mt-0.5 h-5 w-5 shrink-0 text-[var(--enterprise-text-muted)]/45"
+                              strokeWidth={1.75}
+                              aria-hidden
+                            />
+                          </div>
+                          <dl className="mt-3 grid grid-cols-1 gap-2 text-xs text-[var(--enterprise-text-muted)] sm:grid-cols-3">
+                            <div className="flex gap-1.5">
+                              <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">
+                                Assigned
+                              </dt>
+                              <dd className="min-w-0 truncate">{rfiRespondersDisplay(r)}</dd>
+                            </div>
+                            <div className="flex gap-1.5">
+                              <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">
+                                Due
+                              </dt>
+                              <dd className="tabular-nums">{formatDate(r.dueDate)}</dd>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <dt className="shrink-0 font-medium text-[var(--enterprise-text)]/70">
+                                Priority
+                              </dt>
+                              <dd>
                                 <span
-                                  className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${rfiStatusBadgeClass(normStatus(r.status))}`}
+                                  className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold ${priorityBadgeClassLight(pri)}`}
                                 >
-                                  {RFI_STATUS_LABEL[normStatus(r.status)] ??
-                                    normStatus(r.status).replace(/_/g, " ")}
+                                  {PRI_LABEL[pri] ?? pri}
                                 </span>
-                                {overdue ? <span className={OVERDUE_BADGE}>Overdue</span> : null}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
-                              {rfiRespondersDisplay(r)}
-                            </td>
-                            <td className="px-4 py-3 tabular-nums text-[var(--enterprise-text-muted)]">
-                              {formatDate(r.dueDate)}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold ${priorityBadgeClassLight(pri)}`}
-                              >
-                                {PRI_LABEL[pri] ?? pri}
-                              </span>
-                            </td>
-                            <td className="px-2 py-3 text-[var(--enterprise-text-muted)]/50">
-                              <ChevronRight
-                                className="mx-auto h-4 w-4"
-                                strokeWidth={1.75}
-                                aria-hidden
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+                              </dd>
+                            </div>
+                          </dl>
+                        </Link>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+
+              <div className="enterprise-card hidden overflow-hidden p-0 md:block">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-left text-sm text-[var(--enterprise-text)]">
+                    <thead>
+                      <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                        <th className="w-16 px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Hash
+                              className="h-3.5 w-3.5 opacity-70"
+                              strokeWidth={1.75}
+                              aria-hidden
+                            />
+                            #
+                          </span>
+                        </th>
+                        <th className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <FileText
+                              className="h-3.5 w-3.5 opacity-70"
+                              strokeWidth={1.75}
+                              aria-hidden
+                            />
+                            Title
+                          </span>
+                        </th>
+                        <th className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Activity
+                              className="h-3.5 w-3.5 opacity-70"
+                              strokeWidth={1.75}
+                              aria-hidden
+                            />
+                            Status
+                          </span>
+                        </th>
+                        <th className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Users
+                              className="h-3.5 w-3.5 opacity-70"
+                              strokeWidth={1.75}
+                              aria-hidden
+                            />
+                            Assigned
+                          </span>
+                        </th>
+                        <th className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Calendar
+                              className="h-3.5 w-3.5 opacity-70"
+                              strokeWidth={1.75}
+                              aria-hidden
+                            />
+                            Due
+                          </span>
+                        </th>
+                        <th className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Flag
+                              className="h-3.5 w-3.5 opacity-70"
+                              strokeWidth={1.75}
+                              aria-hidden
+                            />
+                            Priority
+                          </span>
+                        </th>
+                        <th className="w-12 px-2 py-3" aria-hidden>
+                          <span className="sr-only">Open</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-0">
+                            <RfiEmptyState noRows={rows.length === 0} />
+                          </td>
+                        </tr>
+                      ) : (
+                        filtered.map((r) => {
+                          const overdue = isOverdueRow(r, nowMs);
+                          const pri = (r.priority || "MEDIUM").toUpperCase();
+                          return (
+                            <tr
+                              key={r.id}
+                              className="cursor-pointer border-b border-[var(--enterprise-border)]/80 transition last:border-0 hover:bg-[var(--enterprise-hover-surface)]"
+                              onClick={() => router.push(`/projects/${projectId}/rfi/${r.id}`)}
+                            >
+                              <td className="px-4 py-3 tabular-nums text-[var(--enterprise-text-muted)]">
+                                {String(r.rfiNumber).padStart(3, "0")}
+                              </td>
+                              <td className="max-w-[min(280px,32vw)] px-4 py-3 font-medium text-[var(--enterprise-text)]">
+                                <span className="line-clamp-2">{r.title}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="inline-flex flex-wrap items-center gap-1.5">
+                                  <span
+                                    className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${rfiStatusBadgeClass(normStatus(r.status))}`}
+                                  >
+                                    {RFI_STATUS_LABEL[normStatus(r.status)] ??
+                                      normStatus(r.status).replace(/_/g, " ")}
+                                  </span>
+                                  {overdue ? <span className={OVERDUE_BADGE}>Overdue</span> : null}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
+                                {rfiRespondersDisplay(r)}
+                              </td>
+                              <td className="px-4 py-3 tabular-nums text-[var(--enterprise-text-muted)]">
+                                {formatDate(r.dueDate)}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-semibold ${priorityBadgeClassLight(pri)}`}
+                                >
+                                  {PRI_LABEL[pri] ?? pri}
+                                </span>
+                              </td>
+                              <td className="px-2 py-3 text-[var(--enterprise-text-muted)]/50">
+                                <ChevronRight
+                                  className="mx-auto h-4 w-4"
+                                  strokeWidth={1.75}
+                                  aria-hidden
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          </>
+            </>
+          </PullToRefresh>
         )}
       </div>
+
+      {!ctxLoading && isPro ? (
+        <EnterpriseAddPulseWrap variant="fab" disabled={ctxLoading || !isPro}>
+          <EnterpriseFab
+            label="New RFI"
+            disabled={ctxLoading || !isPro}
+            onClick={() => {
+              resetModal();
+              setSlideOpen(true);
+            }}
+            icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
+          />
+        </EnterpriseAddPulseWrap>
+      ) : null}
     </div>
   );
 }

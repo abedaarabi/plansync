@@ -32,6 +32,7 @@ import { VIEWER_LOCAL_PDF_INPUT_ID } from "@/lib/viewerLocalPdfInput";
 import { resetViewerCollabRevision, setViewerCollabRevision } from "@/lib/viewerCollabRevision";
 import { parseServerViewerState } from "@/lib/viewerStateCloud";
 import { computeScaleToFitNormRect, scrollViewportToNorm } from "@/lib/viewScroll";
+import { usePdfPinchZoom } from "@/hooks/usePdfPinchZoom";
 import { useSyncSheetOverlaysToViewerChrome } from "@/hooks/useSyncSheetOverlaysToViewerChrome";
 import { useViewerStore, VIEWER_SCALE_MAX, VIEWER_SCALE_MIN } from "@/store/viewerStore";
 import { CollaborationSync } from "./CollaborationSync";
@@ -187,6 +188,9 @@ export function PdfViewer() {
   /** Compare mode: separate scroll surfaces so each PDF sits in its own column. */
   const compareScrollOriginalRef = useRef<HTMLDivElement>(null);
   const compareScrollMarkupRef = useRef<HTMLDivElement>(null);
+
+  usePdfPinchZoom(pdfScrollRef, Boolean(pdfDoc) && !compareMode);
+  usePdfPinchZoom(compareScrollMarkupRef, Boolean(pdfDoc) && compareMode);
   const pageCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const pageCanvasCompareRef = useRef<HTMLCanvasElement | null>(null);
   const pageWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -1266,7 +1270,7 @@ export function PdfViewer() {
                           </div>
                           <div
                             ref={compareScrollMarkupRef}
-                            className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain"
+                            className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y"
                           >
                             <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
                               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
@@ -1316,7 +1320,7 @@ export function PdfViewer() {
                     ) : (
                       <div
                         ref={compareScrollMarkupRef}
-                        className="relative min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain print:hidden"
+                        className="relative min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y print:hidden"
                       >
                         <div className="mx-auto max-w-[min(100%,1920px)] px-4 py-5 sm:px-6 sm:py-6">
                           {compareLayout === "overlay" ? (
@@ -1410,7 +1414,7 @@ export function PdfViewer() {
                   <>
                     <div
                       ref={pdfScrollRef}
-                      className="min-h-0 flex-1 overflow-auto overscroll-contain print:block print:overflow-visible"
+                      className="min-h-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y print:block print:overflow-visible"
                     >
                       <div className="mx-auto max-w-[min(100%,1920px)] px-4 py-5 sm:px-6 sm:py-6 print:p-0 print:max-w-none">
                         <PdfPageView

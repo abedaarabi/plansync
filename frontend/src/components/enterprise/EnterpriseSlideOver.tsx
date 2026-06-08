@@ -15,6 +15,40 @@ export const ENTERPRISE_SLIDE_OVER_PANEL_CLASS = `w-full ${ENTERPRISE_SLIDE_OVER
 
 const TRANSITION_MS = 300;
 
+const FOOTER_CLASS =
+  "flex shrink-0 flex-col-reverse gap-2 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 py-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] lg:flex-row lg:justify-end lg:gap-3 lg:py-4";
+
+const BODY_CLASS =
+  "mobile-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain overscroll-x-none";
+
+function MobileSheetHandle() {
+  return (
+    <div className="flex shrink-0 justify-center pt-2.5 pb-1 lg:hidden" aria-hidden>
+      <div className="h-1 w-10 rounded-full bg-[var(--enterprise-border)]" />
+    </div>
+  );
+}
+
+function panelMotionClass(
+  panelActive: boolean,
+  panelMaxWidthClass: string,
+  panelChromeClassName: string,
+) {
+  const motion = panelActive
+    ? "max-lg:translate-y-0 lg:translate-x-0"
+    : "max-lg:translate-y-full lg:translate-x-full";
+  return [
+    "w-full min-w-0 max-w-full",
+    panelMaxWidthClass,
+    SLIDE_OVER_PANEL_TRANSITION,
+    "fixed z-[101] flex flex-col overflow-x-hidden",
+    panelChromeClassName,
+    "max-lg:inset-x-0 max-lg:bottom-0 max-lg:top-auto max-lg:max-h-[min(92dvh,920px)] max-lg:rounded-t-2xl max-lg:border-l-0 max-lg:border-t",
+    "lg:inset-y-0 lg:right-0 lg:left-auto lg:h-dvh lg:max-h-dvh lg:rounded-none",
+    motion,
+  ].join(" ");
+}
+
 export type EnterpriseSlideOverProps = {
   open: boolean;
   onClose: () => void;
@@ -137,10 +171,23 @@ export function EnterpriseSlideOver({
     "pointer-events-auto absolute inset-0 bg-[var(--enterprise-text)]/40 backdrop-blur-[2px] transition-opacity duration-300 ease-out " +
     (panelActive ? "opacity-100" : "opacity-0");
 
-  const panelMotion =
-    `w-full min-w-0 max-w-full ${panelMaxWidthClass} ${SLIDE_OVER_PANEL_TRANSITION} ` +
-    `fixed inset-y-0 right-0 z-[101] flex h-dvh max-h-dvh flex-col overflow-x-hidden ${panelChromeClassName} ` +
-    (panelActive ? "translate-x-0" : "translate-x-full");
+  const panelMotion = panelMotionClass(panelActive, panelMaxWidthClass, panelChromeClassName);
+
+  const panelInner = (
+    <>
+      <MobileSheetHandle />
+      <HeaderRow
+        header={header}
+        onClose={onClose}
+        showCloseButton={showHeaderCloseButton}
+        className={headerClassName}
+      />
+      <div className={`${BODY_CLASS} ${bodyClassName ?? "px-4 py-4 lg:px-5 lg:py-5"}`}>
+        {children}
+      </div>
+      <div className={`${FOOTER_CLASS} ${footerClassName ?? "px-4 lg:px-5"}`}>{footer}</div>
+    </>
+  );
 
   const shell = (
     <div
@@ -155,22 +202,7 @@ export function EnterpriseSlideOver({
       />
       {form ? (
         <FormPanel form={form} panelClassName={panelMotion} ariaLabelledBy={ariaLabelledBy}>
-          <HeaderRow
-            header={header}
-            onClose={onClose}
-            showCloseButton={showHeaderCloseButton}
-            className={headerClassName}
-          />
-          <div
-            className={`min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain overscroll-x-none ${bodyClassName ?? "px-5 py-5"}`}
-          >
-            {children}
-          </div>
-          <div
-            className={`flex shrink-0 flex-col-reverse gap-3 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 py-4 sm:flex-row sm:justify-end ${footerClassName ?? "px-5"}`}
-          >
-            {footer}
-          </div>
+          {panelInner}
         </FormPanel>
       ) : (
         <div
@@ -179,22 +211,7 @@ export function EnterpriseSlideOver({
           aria-modal="true"
           {...(ariaLabelledBy ? { "aria-labelledby": ariaLabelledBy } : {})}
         >
-          <HeaderRow
-            header={header}
-            onClose={onClose}
-            showCloseButton={showHeaderCloseButton}
-            className={headerClassName}
-          />
-          <div
-            className={`min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain overscroll-x-none ${bodyClassName ?? "px-5 py-5"}`}
-          >
-            {children}
-          </div>
-          <div
-            className={`flex shrink-0 flex-col-reverse gap-3 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 py-4 sm:flex-row sm:justify-end ${footerClassName ?? "px-5"}`}
-          >
-            {footer}
-          </div>
+          {panelInner}
         </div>
       )}
     </div>
@@ -248,7 +265,7 @@ function HeaderRow({
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 rounded-lg p-2 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl text-[var(--enterprise-text-muted)] transition-all duration-150 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] active:scale-[0.97]"
           aria-label="Close"
         >
           <X className="h-5 w-5" strokeWidth={1.75} />

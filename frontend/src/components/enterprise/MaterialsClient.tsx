@@ -34,6 +34,7 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
 import { MaterialTemplateEditor } from "./MaterialTemplateEditor";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
@@ -373,7 +374,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-6">
+    <div className="mobile-app-page w-full min-w-0 max-w-full flex h-full min-h-0 flex-col gap-6">
       <div className="shrink-0 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -483,7 +484,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                 setForm(emptyForm(sortedTplFields.map((f) => f.key)));
                 setPanelOpen(true);
               }}
-              className="inline-flex items-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--enterprise-primary)]/20 transition hover:bg-[var(--enterprise-primary-deep)]"
+              className="hidden items-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--enterprise-primary)]/20 transition hover:bg-[var(--enterprise-primary-deep)] lg:inline-flex"
             >
               <Plus className="h-4 w-4" strokeWidth={2} />
               Add material
@@ -544,7 +545,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
+        <div className="mobile-table-wrap min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="sticky top-0 z-[1]">
               <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] shadow-sm">
@@ -936,6 +937,15 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
           onClose={() => setTemplatePanelOpen(false)}
         />
       ) : null}
+      <EnterpriseFab
+        label="Add material"
+        icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
+        onClick={() => {
+          setEditing(null);
+          setForm(emptyForm(sortedTplFields.map((f) => f.key)));
+          setPanelOpen(true);
+        }}
+      />
     </div>
   );
 }
