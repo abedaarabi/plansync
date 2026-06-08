@@ -233,13 +233,6 @@ export function EnterpriseSidebar({
         label: t("schedule"),
         icon: ChartGantt,
       });
-    if (!operationsMode && mod.issues) {
-      projectItems.push({
-        href: `/projects/${projectId}/issues`,
-        label: t("issues"),
-        icon: MapPin,
-      });
-    }
 
     const sections: NavSection[] = [
       {
@@ -277,11 +270,6 @@ export function EnterpriseSidebar({
           href: `${omBase}/om/work-orders`,
           label: t("workOrders"),
           icon: Wrench,
-        });
-        omItems.push({
-          href: `${omBase}/issues?issueKind=CONSTRUCTION`,
-          label: t("constructionIssues"),
-          icon: MapPin,
         });
         if (mod.omTenantPortal) {
           omItems.push({
@@ -321,6 +309,13 @@ export function EnterpriseSidebar({
     }
 
     const coordinationItems: NavItem[] = [];
+    if (mod.issues) {
+      coordinationItems.push({
+        href: operationsMode ? `${omBase}/issues?issueKind=CONSTRUCTION` : `${omBase}/issues`,
+        label: t("issues"),
+        icon: MapPin,
+      });
+    }
     if (mod.rfis)
       coordinationItems.push({
         href: `/projects/${projectId}/rfi`,
@@ -422,9 +417,12 @@ export function EnterpriseSidebar({
       items: [
         { href: "/dashboard", label: t("dashboard"), icon: LayoutDashboard },
         { href: "/projects", label: t("projects"), icon: FileStack },
+        ...(workspaceRole && workspaceRole !== "MEMBER"
+          ? [{ href: "/proposals", label: t("proposalsDashboard"), icon: FileSpreadsheet }]
+          : []),
       ],
     }),
-    [t],
+    [t, workspaceRole],
   );
 
   const SIDEBAR_NAV_PRIMARY = useMemo((): NavSection[] => {
@@ -507,7 +505,7 @@ export function EnterpriseSidebar({
 
   const navLinkClass = (active: boolean, disabled?: boolean, iconOnly?: boolean) => {
     const io = iconOnly === undefined ? railCollapsed : iconOnly;
-    return `enterprise-sidebar-nav-link group flex min-h-11 items-center rounded-md py-2.5 text-sm font-medium tracking-[-0.01em] transition-[color,background-color,box-shadow] duration-150 ${
+    return `enterprise-sidebar-nav-link group flex min-h-10 items-center rounded-md py-2 text-[13px] font-medium tracking-[-0.01em] transition-[color,background-color,box-shadow] duration-150 ${
       io ? "justify-center gap-0 px-2" : "gap-2.5 px-3"
     } ${
       active
@@ -551,7 +549,7 @@ export function EnterpriseSidebar({
     >
       {/* Brand row — logo, workspace name, actions (single block; stable DOM for hydration) */}
       <div
-        className={`enterprise-sidebar-header flex min-h-[3.25rem] shrink-0 items-center px-3 py-2.5 ${
+        className={`enterprise-sidebar-header flex min-h-11 shrink-0 items-center px-3 py-1.5 ${
           desktopIconRail ? "justify-center lg:px-2" : "gap-2.5"
         }`}
         aria-label={desktopIconRail ? t("workspaceNamedAria", { name: workspaceTitle }) : undefined}
@@ -586,11 +584,9 @@ export function EnterpriseSidebar({
           </div>
         </div>
         <div className={desktopIconRail ? "sr-only" : "min-w-0 flex-1 leading-tight"}>
-          <p className="mb-0.5 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
-            {t("workspaceSection")}
-          </p>
+          <p className="enterprise-type-label mb-0.5 text-slate-500">{t("workspaceSection")}</p>
           <p
-            className="truncate text-base font-semibold tracking-[-0.02em] text-[var(--enterprise-sidebar-active)]"
+            className="truncate text-sm font-semibold tracking-[-0.02em] text-[var(--enterprise-sidebar-active)]"
             title={ws?.name?.trim() ? ws.name : undefined}
           >
             {workspaceTitle}
@@ -608,7 +604,7 @@ export function EnterpriseSidebar({
 
       {/* Navigation */}
       <nav
-        className={`flex min-h-0 flex-1 flex-col gap-1 px-2.5 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-3 ${
+        className={`flex min-h-0 flex-1 flex-col gap-1 px-2.5 pt-0.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3 ${
           useTwoLevelNav ? "overflow-hidden" : "overflow-y-auto"
         }`}
         aria-label={t("mainNav")}
@@ -618,7 +614,7 @@ export function EnterpriseSidebar({
             href="/projects"
             onClick={afterNav}
             title={t("jumpToProjects")}
-            className="mb-1 flex shrink-0 items-center rounded-md px-3 py-2 text-sm font-medium text-[#94A3B8] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[#F8FAFC]"
+            className="mb-0.5 flex shrink-0 items-center rounded-md px-3 py-1.5 text-[13px] font-medium text-[var(--enterprise-sidebar-muted)] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[var(--enterprise-sidebar-active)]"
           >
             <span>{t("projects")}</span>
           </Link>
@@ -627,7 +623,7 @@ export function EnterpriseSidebar({
           <Link
             href={lastProjectPath}
             onClick={afterNav}
-            className="mb-1 flex shrink-0 items-center rounded-md bg-white/8 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/14 hover:text-white"
+            className="mb-0.5 flex shrink-0 items-center rounded-md bg-white/8 px-3 py-1.5 text-[11px] font-medium text-slate-100 transition hover:bg-white/14 hover:text-white"
           >
             <span>{t("projectWorkspace")}</span>
           </Link>
@@ -665,7 +661,7 @@ export function EnterpriseSidebar({
                       }`}
                       title={sectionLabel}
                     >
-                      <span className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-[0.05em] text-slate-200">
+                      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-200">
                         {sectionLabel}
                       </span>
                       <ChevronDown
@@ -700,7 +696,7 @@ export function EnterpriseSidebar({
                                   })
                                 : item.label
                             }
-                            className={`group flex min-h-10 items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors ${
+                            className={`group flex min-h-9 items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
                               active
                                 ? "bg-[var(--enterprise-primary)]/90 text-white"
                                 : disabled
@@ -750,7 +746,7 @@ export function EnterpriseSidebar({
                     className={`mb-1.5 px-3 ${railCollapsed ? "sr-only" : ""}`}
                     title={section.description}
                   >
-                    <p className="text-xs font-bold uppercase tracking-wider text-[#94A3B8]/70">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-sidebar-muted)]/70">
                       {section.title}
                     </p>
                   </div>

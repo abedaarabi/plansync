@@ -116,12 +116,12 @@ export function ProjectPicker() {
                 placeholder="Search projects..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-9 w-full rounded-lg border-none bg-[var(--enterprise-bg)] pl-9 pr-3 text-[13px] text-[var(--enterprise-text)] outline-none placeholder:text-[var(--enterprise-text-muted)]/60 focus:ring-2 focus:ring-[var(--enterprise-primary)]/25"
+                className="enterprise-type-nav h-9 w-full rounded-lg border-none bg-[var(--enterprise-bg)] pl-9 pr-3 text-[var(--enterprise-text)] outline-none placeholder:text-[var(--enterprise-text-muted)]/60 focus:ring-2 focus:ring-[var(--enterprise-primary)]/25"
               />
             </div>
 
             <div className="max-h-[320px] overflow-y-auto px-1">
-              <div className="mb-1 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--enterprise-text-muted)]/60">
+              <div className="enterprise-type-label mb-1 px-2 py-1.5 text-[var(--enterprise-text-muted)]/60">
                 Projects
               </div>
               {filteredProjects.length > 0 ? (
@@ -130,7 +130,7 @@ export function ProjectPicker() {
                     key={project.id}
                     type="button"
                     onClick={() => handleSelect(project.id)}
-                    className={`group flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-[13px] transition-colors ${
+                    className={`enterprise-type-nav group flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors ${
                       activeProject?.id === project.id
                         ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]"
                         : "text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]"
@@ -148,7 +148,7 @@ export function ProjectPicker() {
                     />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium">{project.name}</div>
-                      <div className="truncate text-[11px] text-[var(--enterprise-text-muted)]">
+                      <div className="enterprise-type-caption truncate text-[var(--enterprise-text-muted)]">
                         {project.projectNumber?.trim()
                           ? `#${project.projectNumber}`
                           : project.projectType?.trim() || "—"}
@@ -158,7 +158,7 @@ export function ProjectPicker() {
                   </button>
                 ))
               ) : (
-                <div className="px-2 py-8 text-center text-[13px] text-[var(--enterprise-text-muted)]">
+                <div className="enterprise-type-nav px-2 py-8 text-center text-[var(--enterprise-text-muted)]">
                   No projects found
                 </div>
               )}
@@ -168,7 +168,7 @@ export function ProjectPicker() {
               <Link
                 href="/projects"
                 onClick={() => setIsOpen(false)}
-                className="flex items-center gap-2 rounded-lg px-2 py-2 text-[12px] font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+                className="enterprise-type-caption flex items-center gap-2 rounded-lg px-2 py-2 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
                 View all projects
@@ -187,7 +187,7 @@ export function ProjectPicker() {
         onClick={() => {
           setIsOpen((o) => !o);
         }}
-        className="flex h-9 w-full min-w-0 max-w-full items-center justify-between gap-1.5 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 px-2.5 text-[13px] font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30 sm:w-[260px] sm:max-w-[260px] sm:gap-2 sm:px-3 sm:text-[13.5px]"
+        className="enterprise-type-nav flex h-9 w-full min-w-0 max-w-full items-center justify-between gap-1.5 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 px-2.5 text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30 sm:w-[260px] sm:max-w-[260px] sm:gap-2 sm:px-3"
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {activeProject ? (

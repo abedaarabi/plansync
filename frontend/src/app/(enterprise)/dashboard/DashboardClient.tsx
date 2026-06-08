@@ -152,14 +152,14 @@ export function DashboardClient() {
           <h1 className="text-2xl font-bold tracking-tight text-[var(--enterprise-text)]">
             {td("createWorkspaceTitle")}
           </h1>
-          <p className="mt-2 text-[14px] text-[var(--enterprise-text-muted)]">
+          <p className="enterprise-type-body mt-2 text-[var(--enterprise-text-muted)]">
             {td("createWorkspaceBody")}
           </p>
           <form onSubmit={onCreateWorkspace} className="mt-6 space-y-4">
             <div>
               <label
                 htmlFor="workspace-name"
-                className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]"
+                className="enterprise-type-label text-[var(--enterprise-text-muted)]"
               >
                 {td("workspaceNameLabel")}
               </label>
@@ -183,7 +183,7 @@ export function DashboardClient() {
               {creatingWorkspace ? td("creating") : td("createWorkspaceCta")}
             </button>
           </form>
-          <p className="mt-4 text-xs text-[var(--enterprise-text-muted)]">
+          <p className="enterprise-type-caption mt-4 text-[var(--enterprise-text-muted)]">
             {td("redirectPrefix")}
             <strong className="text-[var(--enterprise-text)]">{td("redirectEmphasis")}</strong>
             {td("redirectSuffix")}
@@ -301,13 +301,13 @@ export function DashboardClient() {
         />
         <div className="relative flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--enterprise-text-muted)]">
+            <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
               {td("workspaceEyebrow")}
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-[28px]">
               {td("welcomeBack", { name: firstName })}
             </h1>
-            <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--enterprise-subtitle)]">
+            <p className="enterprise-type-body mt-2 max-w-xl text-[var(--enterprise-subtitle)] sm:text-base">
               {dash?.workspace?.name ? (
                 <>
                   <span className="font-medium text-[var(--enterprise-text)]">
@@ -320,19 +320,19 @@ export function DashboardClient() {
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {sub === "active" ? (
-                <span className="enterprise-badge-success px-3 py-1 text-[12px] font-semibold">
+                <span className="enterprise-badge-success enterprise-type-caption px-3 py-1">
                   {td("subActive")}
                 </span>
               ) : sub === "trialing" && isPro ? (
-                <span className="enterprise-badge-warning px-3 py-1 text-[12px] font-semibold">
+                <span className="enterprise-badge-warning enterprise-type-caption px-3 py-1">
                   {td("subTrial")}
                 </span>
               ) : sub === "trialing" && !isPro ? (
-                <span className="enterprise-badge-neutral px-3 py-1 text-[12px] font-semibold">
+                <span className="enterprise-badge-neutral enterprise-type-caption px-3 py-1">
                   {td("subTrialEnded")}
                 </span>
               ) : (
-                <span className="enterprise-badge-neutral px-3 py-1 text-[12px] font-semibold">
+                <span className="enterprise-badge-neutral enterprise-type-caption px-3 py-1">
                   {td("subFree")}
                 </span>
               )}
@@ -340,7 +340,7 @@ export function DashboardClient() {
                 href={
                   isSuperAdmin(membership?.role) ? "/organization?tab=billing" : "/organization"
                 }
-                className="inline-flex items-center rounded-full border border-[var(--enterprise-border)] bg-white/80 px-3 py-1 text-[12px] font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35"
+                className="enterprise-type-caption inline-flex items-center rounded-full border border-[var(--enterprise-border)] bg-white/80 px-3 py-1 text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35"
               >
                 {td("billingAndPlan")}
               </Link>
@@ -359,15 +359,15 @@ export function DashboardClient() {
                 </span>
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
                   {td("healthScore")}
                 </p>
-                <p className="mt-0.5 text-sm text-[var(--enterprise-text-muted)]">
+                <p className="enterprise-type-body mt-0.5 text-[var(--enterprise-text-muted)]">
                   {td("healthScoreHint")}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-[13px] text-emerald-900">
+            <div className="enterprise-type-body flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-emerald-900">
               <TrendingUp className="h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2} />
               <span>
                 <strong className="font-semibold">
@@ -394,13 +394,13 @@ export function DashboardClient() {
               <k.icon className="h-5 w-5" strokeWidth={1.75} />
             </div>
             <div className="min-w-0">
-              <p className="text-[12px] font-medium text-[var(--enterprise-text-muted)]">
+              <p className="enterprise-type-caption text-[var(--enterprise-text-muted)]">
                 {k.label}
               </p>
               <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
                 {k.value}
               </p>
-              <p className="mt-1 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
+              <p className="enterprise-type-caption mt-1 text-[var(--enterprise-text-muted)]">
                 {k.hint}
               </p>
             </div>
@@ -410,10 +410,10 @@ export function DashboardClient() {
 
       {isAdmin && hasWorkspace && wid ? (
         <section className="enterprise-card p-5 sm:p-6">
-          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+          <h2 className="enterprise-type-label text-[var(--enterprise-text-muted)]">
             {td("workspaceUsage")}
           </h2>
-          <p className="mt-1 text-[13px] text-[var(--enterprise-text-muted)]">
+          <p className="enterprise-type-body mt-1 text-[var(--enterprise-text-muted)]">
             {td("workspaceUsageDesc")}
           </p>
           <div className="mt-4 max-w-md">
@@ -462,13 +462,13 @@ export function DashboardClient() {
             <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
               {td("chartTitle")}
             </h2>
-            <p className="mt-1 text-[13px] text-[var(--enterprise-text-muted)]">
+            <p className="enterprise-type-body mt-1 text-[var(--enterprise-text-muted)]">
               {td("chartSubtitle")}
             </p>
           </div>
           <div className="p-5 pt-4 sm:p-6 sm:pt-4">
             <DashboardActivityChart data={activitySeries} />
-            <div className="mt-4 flex flex-wrap gap-6 border-t border-[var(--enterprise-border)]/80 pt-4 text-[13px] text-[var(--enterprise-text-muted)]">
+            <div className="enterprise-type-body mt-4 flex flex-wrap gap-6 border-t border-[var(--enterprise-border)]/80 pt-4 text-[var(--enterprise-text-muted)]">
               <span className="inline-flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden />
                 {td("last7Days")}{" "}
@@ -489,7 +489,7 @@ export function DashboardClient() {
         </section>
 
         <section className="enterprise-card flex flex-col p-5 sm:p-6">
-          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+          <h2 className="enterprise-type-label text-[var(--enterprise-text-muted)]">
             {td("quickActions")}
           </h2>
           <ul className="mt-4 flex flex-1 flex-col gap-2">
@@ -542,10 +542,10 @@ export function DashboardClient() {
       <div className="grid gap-6 md:grid-cols-2">
         <section className="enterprise-card p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+            <h2 className="enterprise-type-label text-[var(--enterprise-text-muted)]">
               {td("gettingStarted")}
             </h2>
-            <span className="text-[13px] font-medium text-[var(--enterprise-text-muted)]">
+            <span className="enterprise-type-nav text-[var(--enterprise-text-muted)]">
               {td("progressCount", { done: doneCount, total: checklist.length })}
             </span>
           </div>
@@ -582,7 +582,7 @@ export function DashboardClient() {
         </section>
 
         <section>
-          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+          <h2 className="enterprise-type-label text-[var(--enterprise-text-muted)]">
             {td("yourProjects")}
           </h2>
           {firstProject ? (
@@ -596,7 +596,7 @@ export function DashboardClient() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-[var(--enterprise-text)]">{firstProject.name}</p>
-                  <p className="mt-0.5 text-[13px] text-[var(--enterprise-text-muted)]">
+                  <p className="enterprise-type-body mt-0.5 text-[var(--enterprise-text-muted)]">
                     {td("projectFilesIssues", {
                       files: firstProject.files.length,
                       issues: issueTotal,
@@ -615,7 +615,7 @@ export function DashboardClient() {
               <p className="mt-3 font-semibold text-[var(--enterprise-text)]">
                 {td("noProjectsYet")}
               </p>
-              <p className="mt-1 text-[14px] text-[var(--enterprise-text-muted)]">
+              <p className="enterprise-type-body mt-1 text-[var(--enterprise-text-muted)]">
                 {td("noProjectsBody")}
               </p>
               <Link
@@ -630,7 +630,7 @@ export function DashboardClient() {
       </div>
 
       <section className="enterprise-card p-5 sm:p-6 lg:max-w-md">
-        <h2 className="text-[13px] font-semibold text-[var(--enterprise-text)]">
+        <h2 className="enterprise-type-nav-strong text-[var(--enterprise-text)]">
           {td("shortcuts")}
         </h2>
         <ul className="mt-4 space-y-2">

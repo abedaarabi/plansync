@@ -266,7 +266,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
     `viewer-focus-ring viewer-toolbar-btn ${active ? "viewer-toolbar-btn-active" : ""}`;
 
   const proProjectsNavClass =
-    "viewer-focus-ring flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-[#334155] bg-[#1E293B] px-2.5 text-[11px] font-medium tracking-tight text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155] active:scale-[0.98] sm:min-h-7";
+    "viewer-focus-ring viewer-type-caption flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-[#334155] bg-[#1E293B] px-2.5 text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155] active:scale-[0.98] sm:min-h-7";
 
   const goBackOrProjects = () => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -296,7 +296,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
       >
         <div className="flex shrink-0 items-center gap-2 border-r border-[#334155] pr-2.5">
           <div
-            className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-lg bg-[var(--viewer-primary)] text-[11px] font-bold text-white shadow-sm"
+            className="viewer-type-caption flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-lg bg-[var(--viewer-primary)] font-bold text-white shadow-sm"
             aria-label="PlanSync"
             title="PlanSync"
           >
@@ -329,7 +329,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               type="button"
               disabled
               title="Loading account"
-              className="flex min-h-8 shrink-0 cursor-wait items-center justify-center gap-1.5 rounded-md border border-[#334155] bg-[#1E293B] px-2.5 text-[11px] font-medium tracking-tight text-[#94A3B8] opacity-80 sm:min-h-7"
+              className="viewer-type-caption flex min-h-8 shrink-0 cursor-wait items-center justify-center gap-1.5 rounded-md border border-[#334155] bg-[#1E293B] px-2.5 text-[#94A3B8] opacity-80 sm:min-h-7"
             >
               <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               <span className="hidden sm:inline">Open</span>
@@ -365,7 +365,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Material library — add or edit materials to assign in takeoff (opens in new tab)"
-                  className="viewer-focus-ring flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-[#334155] bg-[#1E293B] px-2 text-[11px] font-medium tracking-tight text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155] active:scale-[0.98] sm:min-h-7"
+                  className="viewer-focus-ring viewer-type-caption flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-[#334155] bg-[#1E293B] px-2 text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155] active:scale-[0.98] sm:min-h-7"
                 >
                   <Library className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                   <span className="hidden sm:inline">Materials</span>
@@ -377,7 +377,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               title="Open a PDF file from your device"
-              className="viewer-focus-ring flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[var(--viewer-primary)] px-2.5 text-[11px] font-medium tracking-tight text-white shadow-[var(--viewer-primary-glow)] transition hover:bg-[var(--viewer-primary-hover)] active:scale-[0.98] sm:min-h-7"
+              className="viewer-focus-ring viewer-type-caption flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[var(--viewer-primary)] px-2.5 text-white shadow-[var(--viewer-primary-glow)] transition hover:bg-[var(--viewer-primary-hover)] active:scale-[0.98] sm:min-h-7"
             >
               <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               <span className="hidden sm:inline">Open</span>
@@ -426,7 +426,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="min-w-[3.25rem] text-center text-[11px] font-semibold tabular-nums tracking-tight text-[#F8FAFC]">
+            <span className="viewer-type-caption min-w-[3.25rem] text-center font-semibold tabular-nums text-[#F8FAFC]">
               {pdfUrl ? `${currentPage} / ${numPages || "—"}` : "—"}
             </span>
             <button
@@ -471,11 +471,11 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   (e.target as HTMLInputElement).blur();
                 }
               }}
-              className="h-6 w-10 rounded border border-transparent bg-transparent text-center text-[11px] font-semibold tabular-nums tracking-tight text-[#60A5FA] outline-none transition focus:border-[#2563EB]/60 focus:ring-1 focus:ring-[#2563EB]/35 disabled:opacity-40"
+              className="viewer-type-caption h-6 w-10 rounded border border-transparent bg-transparent text-center font-semibold tabular-nums text-[#60A5FA] outline-none transition focus:border-[#2563EB]/60 focus:ring-1 focus:ring-[#2563EB]/35 disabled:opacity-40"
               title="Zoom %"
               aria-label="Zoom percentage"
             />
-            <span className="pr-0.5 text-[10px] font-medium text-[#94A3B8]">%</span>
+            <span className="viewer-type-label pr-0.5 text-[#94A3B8]">%</span>
             <button
               type="button"
               disabled={!pdfUrl}
@@ -613,7 +613,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
+              className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-[#F8FAFC] transition hover:bg-[#334155]"
               onClick={() => {
                 setSheetExportOpen(true);
                 setMoreMenuOpen(false);
@@ -629,7 +629,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
+              className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-[#F8FAFC] transition hover:bg-[#334155]"
               onClick={() => {
                 setDocInfoOpen(true);
                 setHelpOpen(false);
@@ -646,7 +646,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
+              className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-[#F8FAFC] transition hover:bg-[#334155]"
               onClick={() => {
                 setHelpOpen(true);
                 setDocInfoOpen(false);
@@ -664,7 +664,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               <button
                 type="button"
                 role="menuitem"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F8FAFC] transition hover:bg-[#334155]"
+                className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-[#F8FAFC] transition hover:bg-[#334155]"
                 onClick={() => {
                   void (async () => {
                     const hide = !me?.user.hideViewerPresence;
@@ -708,10 +708,8 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             role="dialog"
             aria-label="Document information"
           >
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-blue-400/85">
-              Document
-            </p>
-            <dl className="mb-3 space-y-2 text-[11px] text-slate-300">
+            <p className="viewer-type-label mb-2 text-blue-400/85">Document</p>
+            <dl className="viewer-type-caption mb-3 space-y-2 text-slate-300">
               <div className="rounded-md border border-slate-600/55 bg-slate-800/50 px-2 py-1.5">
                 <dt className="text-[9px] font-medium uppercase tracking-wide text-slate-500">
                   File name

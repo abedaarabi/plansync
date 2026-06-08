@@ -84,11 +84,11 @@ html {
   --enterprise-auth-bg: #0f172a;
   /* Deep rail — design system navy */
   --enterprise-sidebar: #0f172a;
-  --enterprise-sidebar-muted: #94a3b8;
+  --enterprise-sidebar-muted: #a6b4c7;
   --enterprise-sidebar-active: #ffffff;
-  --enterprise-sidebar-active-bg: rgba(255, 255, 255, 0.08);
-  --enterprise-sidebar-hover: rgba(255, 255, 255, 0.04);
-  --enterprise-sidebar-edge: rgba(255, 255, 255, 0.06);
+  --enterprise-sidebar-active-bg: rgba(255, 255, 255, 0.11);
+  --enterprise-sidebar-hover: rgba(255, 255, 255, 0.065);
+  --enterprise-sidebar-edge: rgba(255, 255, 255, 0.09);
   --enterprise-hover-surface: #f1f5f9;
   --enterprise-surface-hover: #f8fafc;
 
@@ -265,6 +265,39 @@ button:active:not(:disabled),
 
 /* Shared viewer UI — sections, cards, keyboard hints (SaaS-style density) */
 @layer components {
+  .enterprise-type-label {
+    @apply text-xs font-semibold uppercase tracking-[0.08em];
+  }
+  .enterprise-type-caption {
+    @apply text-[11px] font-medium;
+  }
+  .enterprise-type-nav {
+    @apply text-sm font-medium tracking-[-0.01em];
+  }
+  .enterprise-type-nav-strong {
+    @apply text-sm font-semibold tracking-[-0.01em];
+  }
+  .enterprise-type-body {
+    @apply text-sm leading-relaxed;
+  }
+  .viewer-type-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.08em];
+  }
+  .viewer-type-caption {
+    @apply text-[11px] font-medium tracking-tight;
+  }
+  .landing-type-label {
+    @apply text-xs font-semibold uppercase tracking-[0.08em];
+  }
+  .landing-type-nav {
+    @apply text-sm font-medium;
+  }
+  .landing-type-body {
+    @apply text-sm leading-relaxed;
+  }
+  .landing-type-caption {
+    @apply text-[11px] font-medium;
+  }
   .viewer-section-title {
     @apply mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#94a3b8];
   }
@@ -556,7 +589,7 @@ button:active:not(:disabled),
 
 .enterprise-nav-active {
   color: var(--enterprise-sidebar-active);
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--enterprise-sidebar-active-bg);
   box-shadow: inset 3px 0 0 0 var(--enterprise-primary);
 }
 
@@ -570,12 +603,12 @@ button:active:not(:disabled),
 }
 
 .enterprise-sidebar-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--enterprise-sidebar-edge);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
 }
 
 .enterprise-sidebar-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--enterprise-sidebar-edge);
   background: linear-gradient(0deg, rgba(0, 0, 0, 0.2) 0%, transparent 100%);
 }
 
@@ -586,7 +619,7 @@ button:active:not(:disabled),
 
   /* Icon-only rail: compact active surface, no side accent */
   [data-sidebar-collapsed="true"] .enterprise-sidebar-nav-link.enterprise-nav-active {
-    background: rgba(255, 255, 255, 0.1);
+    background: color-mix(in srgb, var(--enterprise-sidebar-active-bg) 85%, transparent);
     box-shadow: none;
   }
 }

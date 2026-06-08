@@ -23,7 +23,7 @@ export function EnterpriseLoadingState({
   );
 
   const text = (
-    <p className="mt-5 text-center text-sm font-medium tracking-tight text-[var(--enterprise-text-muted)]">
+    <p className="enterprise-type-body mt-5 text-center text-[var(--enterprise-text-muted)]">
       {message}
     </p>
   );
@@ -39,7 +39,7 @@ export function EnterpriseLoadingState({
         <span className="relative flex h-8 w-8 items-center justify-center" aria-hidden>
           <span className="inline-flex h-7 w-7 animate-spin rounded-full border-2 border-slate-200/90 border-t-[var(--enterprise-primary)] [animation-duration:0.85s]" />
         </span>
-        <span className="text-sm font-medium">{message}</span>
+        <span className="enterprise-type-nav">{message}</span>
       </div>
     );
   }
@@ -68,7 +68,7 @@ export function EnterpriseLoadingState({
       <div className="flex flex-col items-center rounded-2xl border border-slate-200/90 bg-white/95 px-10 py-11 shadow-[var(--enterprise-shadow-card)] ring-1 ring-slate-900/[0.03] backdrop-blur-[2px]">
         {spinner}
         {text}
-        <p className="mt-2 text-center text-[13px] font-bold tracking-tight sm:text-sm">
+        <p className="enterprise-type-nav-strong mt-2 text-center">
           <span className="text-[var(--enterprise-text)]">Plan</span>
           <span className="text-[var(--enterprise-primary)]">Sync</span>
         </p>

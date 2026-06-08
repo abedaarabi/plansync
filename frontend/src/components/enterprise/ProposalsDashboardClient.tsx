@@ -1,0 +1,616 @@
+"use client";
+
+import Link from "next/link";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { BarChart3, FileSpreadsheet, FolderKanban, Inbox, TrendingUp } from "lucide-react";
+import { useMemo } from "react";
+import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
+import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import {
+  fetchProjects,
+  fetchProposalsList,
+  ProRequiredError,
+  type ProposalListRow,
+} from "@/lib/api-client";
+import { qk } from "@/lib/queryKeys";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+
+const STATUS_STYLE: Record<string, string> = {
+  DRAFT: "bg-slate-100 text-slate-700",
+  SENT: "bg-blue-100 text-blue-800",
+  VIEWED: "bg-violet-100 text-violet-800",
+  ACCEPTED: "bg-emerald-100 text-emerald-800",
+  DECLINED: "bg-red-100 text-red-800",
+  EXPIRED: "bg-orange-100 text-orange-800",
+  CHANGE_REQUESTED: "bg-amber-100 text-amber-900",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Draft",
+  SENT: "Sent",
+  VIEWED: "Viewed",
+  ACCEPTED: "Accepted",
+  DECLINED: "Declined",
+  EXPIRED: "Expired",
+  CHANGE_REQUESTED: "Change requested",
+};
+
+const STATUS_ORDER = [
+  "DRAFT",
+  "SENT",
+  "VIEWED",
+  "CHANGE_REQUESTED",
+  "ACCEPTED",
+  "DECLINED",
+  "EXPIRED",
+] as const;
+
+function proposalStatusLabel(status: string): string {
+  return STATUS_LABEL[status] ?? status.replace(/_/g, " ");
+}
+
+function fmtMoney(amount: number, currency: string) {
+  if (!Number.isFinite(amount)) return "—";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: currency.length === 3 ? currency : "USD",
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+type ProposalWithProject = ProposalListRow & { projectId: string; projectName: string };
+
+export function ProposalsDashboardClient() {
+  const { primary, loading } = useEnterpriseWorkspace();
+  const workspace = primary?.workspace;
+  const workspaceId = workspace?.id;
+  const workspaceRole = primary?.role;
+  const isPro = isWorkspaceProClient(workspace);
+  const canView = workspaceRole === "ADMIN" || workspaceRole === "SUPER_ADMIN";
+
+  const projectsQuery = useQuery({
+    queryKey: qk.projects(workspaceId ?? ""),
+    queryFn: () => fetchProjects(workspaceId!),
+    enabled: Boolean(workspaceId && isPro && canView),
+  });
+
+  const proposalQueries = useQueries({
+    queries: (projectsQuery.data ?? []).map((project) => ({
+      queryKey: qk.projectProposals(project.id),
+      queryFn: () => fetchProposalsList(project.id),
+      enabled: Boolean(workspaceId && isPro && canView),
+      staleTime: 60_000,
+    })),
+  });
+
+  const firstProposalError = proposalQueries.find((q) => q.error)?.error;
+  const hasProposalError = Boolean(firstProposalError);
+  const proposalsPending = proposalQueries.some((q) => q.isPending);
+
+  const aggregate = useMemo(() => {
+    const statusCounts = new Map<string, number>();
+    const byCurrency = new Map<string, number>();
+    const byProject: Array<{
+      projectId: string;
+      projectName: string;
+      total: number;
+      accepted: number;
+      pending: number;
+      declined: number;
+    }> = [];
+    const recent: ProposalWithProject[] = [];
+    let total = 0;
+    let projectsWithProposals = 0;
+
+    (projectsQuery.data ?? []).forEach((project, idx) => {
+      const rows = proposalQueries[idx]?.data?.proposals ?? [];
+      if (rows.length > 0) projectsWithProposals += 1;
+      total += rows.length;
+      let accepted = 0;
+      let pending = 0;
+      let declined = 0;
+
+      for (const proposal of rows) {
+        statusCounts.set(proposal.status, (statusCounts.get(proposal.status) ?? 0) + 1);
+        const numericTotal = Number(proposal.total);
+        if (Number.isFinite(numericTotal)) {
+          byCurrency.set(
+            proposal.currency,
+            (byCurrency.get(proposal.currency) ?? 0) + numericTotal,
+          );
+        }
+        if (proposal.status === "ACCEPTED") accepted += 1;
+        if (
+          proposal.status === "SENT" ||
+          proposal.status === "VIEWED" ||
+          proposal.status === "CHANGE_REQUESTED"
+        ) {
+          pending += 1;
+        }
+        if (proposal.status === "DECLINED") declined += 1;
+        recent.push({ ...proposal, projectId: project.id, projectName: project.name });
+      }
+
+      byProject.push({
+        projectId: project.id,
+        projectName: project.name,
+        total: rows.length,
+        accepted,
+        pending,
+        declined,
+      });
+    });
+
+    recent.sort((a, b) => {
+      const aTime = new Date(a.sentAt ?? a.createdAt).getTime();
+      const bTime = new Date(b.sentAt ?? b.createdAt).getTime();
+      return bTime - aTime;
+    });
+
+    byProject.sort((a, b) => b.total - a.total);
+
+    const accepted = statusCounts.get("ACCEPTED") ?? 0;
+    const declined = statusCounts.get("DECLINED") ?? 0;
+    const winRate =
+      accepted + declined > 0 ? Math.round((accepted / (accepted + declined)) * 100) : null;
+
+    return {
+      total,
+      projectsWithProposals,
+      statusCounts,
+      byCurrency,
+      byProject,
+      recent,
+      winRate,
+    };
+  }, [projectsQuery.data, proposalQueries]);
+
+  if (loading) return <EnterpriseLoadingState label="Loading workspace…" />;
+
+  if (!workspaceId) {
+    return <div className="enterprise-alert-warning p-6 text-sm">Select a workspace first.</div>;
+  }
+
+  if (!canView) {
+    return (
+      <div className="enterprise-alert-warning p-6 text-sm">
+        Only workspace admins can view the proposals dashboard.
+      </div>
+    );
+  }
+
+  if (!isPro) {
+    return (
+      <div className="enterprise-alert-warning p-6 text-sm">
+        Proposals dashboard requires a Pro workspace (active or trial).
+      </div>
+    );
+  }
+
+  if (projectsQuery.isPending || proposalsPending) {
+    return <EnterpriseLoadingState label="Loading proposals dashboard…" />;
+  }
+
+  if (projectsQuery.isError || hasProposalError) {
+    const err = projectsQuery.error ?? firstProposalError;
+    if (err instanceof ProRequiredError) {
+      return (
+        <div className="enterprise-alert-warning p-6 text-sm">
+          Proposals dashboard requires a Pro workspace (active or trial).
+        </div>
+      );
+    }
+    return (
+      <div className="enterprise-alert-danger p-6 text-sm">
+        {err instanceof Error ? err.message : "Could not load proposals dashboard."}
+      </div>
+    );
+  }
+
+  const totalProjects = projectsQuery.data?.length ?? 0;
+  const pendingReview =
+    (aggregate.statusCounts.get("SENT") ?? 0) +
+    (aggregate.statusCounts.get("VIEWED") ?? 0) +
+    (aggregate.statusCounts.get("CHANGE_REQUESTED") ?? 0);
+  const topCurrencies = Array.from(aggregate.byCurrency.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+  const weightedPipelineTotal = topCurrencies.reduce((sum, [, amount]) => sum + amount, 0);
+  const topProjects = aggregate.byProject.slice(0, 6);
+  const recentRows = aggregate.recent.slice(0, 10);
+  const statusChartRows = STATUS_ORDER.map((status) => ({
+    status,
+    label: proposalStatusLabel(status),
+    count: aggregate.statusCounts.get(status) ?? 0,
+  })).filter((row) => row.count > 0);
+  const funnelSteps = [
+    { key: "DRAFT", label: "Draft", count: aggregate.statusCounts.get("DRAFT") ?? 0 },
+    { key: "SENT", label: "Sent", count: aggregate.statusCounts.get("SENT") ?? 0 },
+    { key: "VIEWED", label: "Viewed", count: aggregate.statusCounts.get("VIEWED") ?? 0 },
+    { key: "ACCEPTED", label: "Accepted", count: aggregate.statusCounts.get("ACCEPTED") ?? 0 },
+  ];
+
+  return (
+    <div className="mobile-app-page space-y-6">
+      <header className="enterprise-card overflow-hidden p-5 sm:p-6">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
+              <FileSpreadsheet className="h-5 w-5" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)]">
+                Proposals Dashboard
+              </h1>
+              <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+                Workspace-wide proposal visibility across all projects so admins can monitor
+                pipeline, status, and conversion trends.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 md:min-w-[320px]">
+            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                Est. pipeline
+              </p>
+              <p className="mt-0.5 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
+                {weightedPipelineTotal > 0
+                  ? fmtMoney(weightedPipelineTotal, topCurrencies[0]?.[0] ?? "USD")
+                  : "—"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                Active projects
+              </p>
+              <p className="mt-0.5 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
+                {aggregate.projectsWithProposals}
+              </p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard icon={FolderKanban} label="Total proposals" value={String(aggregate.total)} />
+        <MetricCard icon={Inbox} label="Pending review" value={String(pendingReview)} />
+        <MetricCard
+          icon={TrendingUp}
+          label="Win rate"
+          value={aggregate.winRate == null ? "—" : `${aggregate.winRate}%`}
+        />
+        <MetricCard
+          icon={BarChart3}
+          label="Projects with proposals"
+          value={`${aggregate.projectsWithProposals}/${totalProjects}`}
+        />
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-12">
+        <div className="enterprise-card xl:col-span-7 p-5 sm:p-6">
+          <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Status breakdown</h2>
+          <DonutStatusChart
+            rows={statusChartRows}
+            total={aggregate.total}
+            emptyLabel="No proposal activity yet."
+          />
+          <div className="mt-6 grid gap-2 sm:grid-cols-3">
+            {topCurrencies.map(([currency, amount]) => (
+              <div
+                key={currency}
+                className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-3"
+              >
+                <p className="text-xs font-medium text-[var(--enterprise-text-muted)]">
+                  Pipeline ({currency})
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[var(--enterprise-text)]">
+                  {fmtMoney(amount, currency)}
+                </p>
+              </div>
+            ))}
+            {topCurrencies.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-3 text-sm text-[var(--enterprise-text-muted)] sm:col-span-3">
+                Pipeline values will appear once proposals are created.
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div className="space-y-6 xl:col-span-5">
+          <div className="enterprise-card p-5 sm:p-6">
+            <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Top projects</h2>
+            <div className="mt-3 space-y-2">
+              {topProjects.map((project) => {
+                const href = `/projects/${project.projectId}/proposals`;
+                return (
+                  <Link
+                    key={project.projectId}
+                    href={href}
+                    className="flex items-center justify-between rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5 transition hover:border-[var(--enterprise-primary)]/35"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-[var(--enterprise-text)]">
+                        {project.projectName}
+                      </p>
+                      <p className="text-xs text-[var(--enterprise-text-muted)]">
+                        {project.pending} pending · {project.accepted} accepted · {project.declined}{" "}
+                        declined
+                      </p>
+                    </div>
+                    <span className="ml-3 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
+                      {project.total}
+                    </span>
+                  </Link>
+                );
+              })}
+              {topProjects.length === 0 ? (
+                <p className="text-sm text-[var(--enterprise-text-muted)]">
+                  No project proposal data yet.
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className="enterprise-card p-5 sm:p-6">
+            <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Funnel</h2>
+            <ProposalFunnelChart steps={funnelSteps} />
+          </div>
+        </div>
+      </section>
+
+      <section className="enterprise-card overflow-hidden">
+        <div className="border-b border-[var(--enterprise-border)] px-5 py-4 sm:px-6">
+          <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Latest proposals</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-[var(--enterprise-bg)] text-xs uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+              <tr>
+                <th className="px-5 py-3 font-semibold sm:px-6">Proposal</th>
+                <th className="px-5 py-3 font-semibold">Project</th>
+                <th className="px-5 py-3 font-semibold">Client</th>
+                <th className="px-5 py-3 font-semibold">Status</th>
+                <th className="px-5 py-3 font-semibold">Date</th>
+                <th className="px-5 py-3 font-semibold text-right sm:px-6">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--enterprise-border)]">
+              {recentRows.map((proposal) => (
+                <tr key={proposal.id} className="hover:bg-[var(--enterprise-bg)]/60">
+                  <td className="px-5 py-3 sm:px-6">
+                    <Link
+                      href={`/projects/${proposal.projectId}/proposals/${proposal.id}`}
+                      className="font-medium text-[var(--enterprise-text)] hover:text-[var(--enterprise-primary)]"
+                    >
+                      {proposal.reference}
+                    </Link>
+                    <p className="truncate text-xs text-[var(--enterprise-text-muted)]">
+                      {proposal.title}
+                    </p>
+                  </td>
+                  <td className="px-5 py-3 text-[var(--enterprise-text)]">
+                    {proposal.projectName}
+                  </td>
+                  <td className="px-5 py-3 text-[var(--enterprise-text)]">{proposal.clientName}</td>
+                  <td className="px-5 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[proposal.status] ?? "bg-slate-100 text-slate-700"}`}
+                    >
+                      {proposalStatusLabel(proposal.status)}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-[var(--enterprise-text-muted)]">
+                    {formatDate(proposal.sentAt ?? proposal.createdAt)}
+                  </td>
+                  <td className="px-5 py-3 text-right font-medium tabular-nums text-[var(--enterprise-text)] sm:px-6">
+                    {fmtMoney(Number(proposal.total), proposal.currency)}
+                  </td>
+                </tr>
+              ))}
+              {recentRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-5 py-8 text-center text-sm text-[var(--enterprise-text-muted)] sm:px-6"
+                  >
+                    No proposals yet across your projects.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function DonutStatusChart({
+  rows,
+  total,
+  emptyLabel,
+}: {
+  rows: { status: string; label: string; count: number }[];
+  total: number;
+  emptyLabel: string;
+}) {
+  if (rows.length === 0 || total <= 0) {
+    return <p className="mt-4 text-sm text-[var(--enterprise-text-muted)]">{emptyLabel}</p>;
+  }
+
+  const size = 220;
+  const stroke = 22;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const rowsWithPct = rows
+    .map((row) => ({ ...row, pct: Math.round((row.count / total) * 100) }))
+    .sort((a, b) => b.count - a.count);
+  const segments = rowsWithPct.reduce<
+    {
+      status: string;
+      label: string;
+      count: number;
+      pct: number;
+      dasharray: string;
+      dashoffset: number;
+    }[]
+  >((acc, row) => {
+    const usedLength = acc.reduce((sum, item) => sum + Number(item.dasharray.split(" ")[0]), 0);
+    const segmentLength = (row.count / total) * circumference;
+    acc.push({
+      ...row,
+      dasharray: `${segmentLength} ${Math.max(circumference - segmentLength, 0)}`,
+      dashoffset: -usedLength,
+    });
+    return acc;
+  }, []);
+
+  return (
+    <div className="mt-4 grid gap-4 lg:grid-cols-[240px,1fr] lg:items-center">
+      <div className="relative mx-auto flex h-[220px] w-[220px] items-center justify-center">
+        <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full -rotate-90">
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="var(--enterprise-border)"
+            strokeWidth={stroke}
+          />
+          {segments.map((segment) => (
+            <circle
+              key={segment.status}
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              strokeWidth={stroke}
+              strokeDasharray={segment.dasharray}
+              strokeDashoffset={segment.dashoffset}
+              stroke={statusColorVar(segment.status)}
+            />
+          ))}
+        </svg>
+        <div className="pointer-events-none absolute text-center">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+            Total
+          </p>
+          <p className="text-3xl font-semibold tabular-nums text-[var(--enterprise-text)]">
+            {total}
+          </p>
+        </div>
+      </div>
+      <div className="space-y-2.5">
+        {rowsWithPct.map((row) => (
+          <div
+            key={row.status}
+            className="flex items-center justify-between gap-3 rounded-lg bg-[var(--enterprise-bg)] px-3 py-2"
+          >
+            <span className="inline-flex items-center gap-2 text-xs font-medium text-[var(--enterprise-text)]">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: statusColorVar(row.status) }}
+              />
+              {row.label}
+            </span>
+            <span className="text-xs tabular-nums text-[var(--enterprise-text-muted)]">
+              {row.count} ({row.pct}%)
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProposalFunnelChart({
+  steps,
+}: {
+  steps: { key: string; label: string; count: number }[];
+}) {
+  const maxCount = Math.max(...steps.map((step) => step.count), 1);
+
+  return (
+    <div className="mt-3 space-y-2.5">
+      {steps.map((step, idx) => {
+        const width = Math.max(8, Math.round((step.count / maxCount) * 100));
+        const prev = idx > 0 ? steps[idx - 1] : null;
+        const conversion =
+          prev && prev.count > 0 ? Math.round((step.count / prev.count) * 100) : null;
+        return (
+          <div key={step.key} className="space-y-1">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-[var(--enterprise-text)]">{step.label}</span>
+              <span className="tabular-nums text-[var(--enterprise-text-muted)]">
+                {step.count}
+                {conversion != null ? ` · ${conversion}% from ${prev?.label}` : ""}
+              </span>
+            </div>
+            <div className="h-2.5 rounded-full bg-[var(--enterprise-bg)]">
+              <div
+                className="h-full rounded-full bg-[var(--enterprise-primary)]"
+                style={{ width: `${width}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof FolderKanban;
+  label: string;
+  value: string;
+}) {
+  return (
+    <article className="enterprise-card flex items-center gap-4 p-4 sm:p-5">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
+        <Icon className="h-5 w-5" strokeWidth={1.75} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-[var(--enterprise-text-muted)]">{label}</p>
+        <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-[var(--enterprise-text)]">
+          {value}
+        </p>
+      </div>
+    </article>
+  );
+}
+
+function statusColorVar(status: string): string {
+  switch (status) {
+    case "ACCEPTED":
+      return "#10b981";
+    case "SENT":
+      return "#3b82f6";
+    case "VIEWED":
+      return "#8b5cf6";
+    case "CHANGE_REQUESTED":
+      return "#f59e0b";
+    case "DECLINED":
+      return "#ef4444";
+    case "EXPIRED":
+      return "#f97316";
+    case "DRAFT":
+    default:
+      return "#64748b";
+  }
+}

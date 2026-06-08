@@ -22,7 +22,7 @@ export default function OrganizationPage() {
               <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
                 Organization
               </h1>
-              <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+              <p className="enterprise-type-body mt-1 text-[var(--enterprise-text-muted)]">
                 Branding, plan &amp; billing, people, roles, and email invites for your workspace.
               </p>
             </div>

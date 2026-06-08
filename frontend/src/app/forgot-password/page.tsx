@@ -39,13 +39,13 @@ export default function ForgotPasswordPage() {
     >
       {sent ? (
         <div className="space-y-4 text-center">
-          <p className="text-sm leading-relaxed text-[#64748B]">
+          <p className="enterprise-type-body text-[#64748B]">
             If an account exists for <strong className="text-[#0F172A]">{email}</strong>, you’ll get
             an email with a reset link shortly. Check your spam folder if nothing arrives.
           </p>
           <Link
             href="/sign-in"
-            className="inline-flex items-center justify-center gap-2 text-sm font-medium text-[#2563EB] hover:underline"
+            className="enterprise-type-nav inline-flex items-center justify-center gap-2 text-[#2563EB] hover:underline"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden />
             Back to sign in
@@ -56,7 +56,7 @@ export default function ForgotPasswordPage() {
           <div>
             <label
               htmlFor="forgot-email"
-              className="mb-1.5 block text-[13px] font-medium text-[#64748B]"
+              className="enterprise-type-nav mb-1.5 block text-[#64748B]"
             >
               Email
             </label>

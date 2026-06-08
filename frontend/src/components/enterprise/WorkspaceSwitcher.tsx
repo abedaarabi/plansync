@@ -51,7 +51,7 @@ export function WorkspaceSwitcher() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex max-w-[10rem] items-center gap-1 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 px-2 py-1.5 text-left text-[12px] font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:max-w-[14rem] sm:gap-1.5 sm:px-2.5 sm:py-2 sm:text-[13px]"
+        className="enterprise-type-nav flex max-w-[10rem] items-center gap-1 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 px-2 py-1.5 text-left text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:max-w-[14rem] sm:gap-1.5 sm:px-2.5 sm:py-2"
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={`Current workspace: ${label}. Change workspace.`}
@@ -84,12 +84,12 @@ export function WorkspaceSwitcher() {
                 role="option"
                 aria-selected={selected}
                 onClick={() => onPick(id)}
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
+                className="enterprise-type-nav flex w-full items-center gap-2 px-3 py-2.5 text-left text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
               >
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-medium">{mw.workspace.name}</span>
                   {mw.workspace.slug ? (
-                    <span className="truncate text-xs text-[var(--enterprise-text-muted)]">
+                    <span className="enterprise-type-caption truncate text-[var(--enterprise-text-muted)]">
                       {mw.workspace.slug}
                     </span>
                   ) : null}
@@ -108,7 +108,7 @@ export function WorkspaceSwitcher() {
             <Link
               href={workspaceGateUrl("/projects")}
               onClick={() => setOpen(false)}
-              className="block rounded-lg px-2 py-2 text-center text-xs font-medium text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)]"
+              className="enterprise-type-caption block rounded-lg px-2 py-2 text-center text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)]"
             >
               All workspaces…
             </Link>

@@ -611,6 +611,25 @@ export function ProjectSettingsClient({ projectId }: Props) {
         {canEditSettings
           ? row("Operations mode", om, (v) => opModeMutation.mutate(v), opModeMutation.isPending)
           : null}
+        {om ? (
+          <div className="mt-3 rounded-xl border border-[var(--enterprise-border)]/75 bg-[var(--enterprise-bg)]/40 px-3 py-3">
+            <p className="text-xs text-[var(--enterprise-text-muted)]">
+              Heads up: existing issues stay in this project and are now listed under{" "}
+              <strong className="font-semibold text-[var(--enterprise-text)]">
+                Construction issues
+              </strong>
+              .
+            </p>
+            {m.issues ? (
+              <Link
+                href={`/projects/${projectId}/issues?issueKind=CONSTRUCTION`}
+                className="mt-2 inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-[var(--enterprise-text)]"
+              >
+                Open Construction issues
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
         {canEditSettings && om ? (
           <>
             {row("O&M: Assets", m.omAssets ?? true, (v) => toggleModule("omAssets", v))}

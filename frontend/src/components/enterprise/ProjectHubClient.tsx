@@ -11,9 +11,13 @@ import {
   ArrowRight,
   Clock,
   FileText,
+  FolderKanban,
+  LayoutGrid,
+  List,
   MessageSquareQuote,
   Pencil,
   Plus,
+  Search,
   Sparkles,
 } from "lucide-react";
 import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
@@ -111,6 +115,8 @@ export function ProjectHubClient() {
   const [error, setError] = useState<string | null>(null);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState<"card" | "list">("card");
 
   const resetNewProjectForm = useCallback(() => {
     setProjectName("");
@@ -325,23 +331,91 @@ export function ProjectHubClient() {
     );
   }
 
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const visibleProjects = normalizedSearch
+    ? projects.filter((project) => {
+        const haystack = [
+          project.name,
+          project.projectNumber,
+          project.location,
+          project.projectType,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalizedSearch);
+      })
+    : projects;
+
   return (
     <div className="mobile-app-page w-full min-w-0 max-w-full space-y-8">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--enterprise-text-muted)]">
-            Workspace
-          </p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-[1.75rem]">
-            Your projects
+      <header className="enterprise-card flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1 text-xs font-medium text-[var(--enterprise-text-muted)]">
+            <FolderKanban className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" />
+            Project
+          </div>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-[1.75rem]">
+            {visibleProjects.length} Project{visibleProjects.length === 1 ? "" : "s"}
           </h1>
+          <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+            View, search, and manage your workspace projects.
+          </p>
+        </div>
+        <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+          <label className="relative block w-full sm:w-[22rem]" htmlFor="project-search">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--enterprise-text-muted)]"
+              aria-hidden
+            />
+            <input
+              id="project-search"
+              type="search"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search projects by name, type, or location"
+              className="h-11 w-full rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] pl-9 pr-3 text-sm text-[var(--enterprise-text)] outline-none ring-0 transition placeholder:text-[var(--enterprise-text-muted)] focus:border-[var(--enterprise-primary)] focus:bg-[var(--enterprise-surface)] focus:shadow-[var(--enterprise-shadow-sm)]"
+            />
+          </label>
+          <div
+            className="inline-flex h-11 items-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-1"
+            role="tablist"
+            aria-label="Project view mode"
+          >
+            <button
+              type="button"
+              onClick={() => setViewMode("card")}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition ${
+                viewMode === "card"
+                  ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]"
+                  : "text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-bg)]"
+              }`}
+              aria-pressed={viewMode === "card"}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Card
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition ${
+                viewMode === "list"
+                  ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]"
+                  : "text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-bg)]"
+              }`}
+              aria-pressed={viewMode === "list"}
+            >
+              <List className="h-3.5 w-3.5" />
+              List
+            </button>
+          </div>
         </div>
         {isAdmin && (
           <EnterpriseAddPulseWrap>
             <button
               type="button"
               onClick={() => setProjectModal(true)}
-              className="hidden items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] ring-1 ring-[color-mix(in_srgb,var(--enterprise-primary)_30%,transparent)] transition hover:bg-[var(--enterprise-primary-deep)] lg:inline-flex sm:shrink-0"
+              className="hidden h-11 items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] ring-1 ring-[color-mix(in_srgb,var(--enterprise-primary)_30%,transparent)] transition hover:bg-[var(--enterprise-primary-deep)] lg:inline-flex sm:shrink-0"
             >
               <Plus className="h-4 w-4" strokeWidth={2} />
               New project
@@ -375,101 +449,194 @@ export function ProjectHubClient() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-        {projects.map((project) => (
-          <div
-            key={project.id}
-            className="enterprise-card enterprise-card-hover group flex flex-col overflow-hidden rounded-2xl"
-          >
-            <Link
-              href={`/projects/${project.id}`}
-              className="flex flex-1 flex-col p-5 transition-colors hover:bg-[var(--enterprise-hover-surface)]/50"
+      {viewMode === "card" ? (
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {visibleProjects.map((project) => (
+            <div
+              key={project.id}
+              className="enterprise-card enterprise-card-hover group flex flex-col overflow-hidden rounded-2xl"
             >
-              <div className="flex gap-3">
-                <ProjectLogo name={project.name} logoUrl={project.logoUrl} size={48} />
-                <div className="min-w-0 flex-1 space-y-2.5">
-                  <h3 className="truncate text-base font-semibold leading-snug text-[var(--enterprise-text)]">
-                    {project.name}
-                  </h3>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {project.projectType?.trim() ? (
-                      <ProjectTypeChip type={project.projectType} />
-                    ) : null}
-                    <ProjectStageBadge stage={project.stage} />
+              <Link
+                href={`/projects/${project.id}`}
+                className="flex flex-1 flex-col p-5 transition-colors hover:bg-[var(--enterprise-hover-surface)]/50"
+              >
+                <div className="flex gap-3">
+                  <ProjectLogo name={project.name} logoUrl={project.logoUrl} size={48} />
+                  <div className="min-w-0 flex-1 space-y-2.5">
+                    <h3 className="truncate text-base font-semibold leading-snug text-[var(--enterprise-text)]">
+                      {project.name}
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {project.projectType?.trim() ? (
+                        <ProjectTypeChip type={project.projectType} />
+                      ) : null}
+                      <ProjectStageBadge stage={project.stage} />
+                    </div>
+                    {(project.projectNumber?.trim() || project.location?.trim()) && (
+                      <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--enterprise-text-muted)]">
+                        {[
+                          project.projectNumber?.trim() && `#${project.projectNumber.trim()}`,
+                          project.location?.trim(),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
                   </div>
-                  {(project.projectNumber?.trim() || project.location?.trim()) && (
-                    <p className="line-clamp-2 text-[12px] leading-relaxed text-[var(--enterprise-text-muted)]">
-                      {[
-                        project.projectNumber?.trim() && `#${project.projectNumber.trim()}`,
-                        project.location?.trim(),
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  )}
+                </div>
+
+                <div className="mt-4">
+                  <ProjectProgressBar
+                    value={
+                      typeof project.progressPercent === "number" ? project.progressPercent : 0
+                    }
+                    height={9}
+                  />
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-[#E2E8F0] pt-4 text-[12px] text-[#64748B]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />0 Issues
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />0 RFIs
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <FileText
+                      className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]"
+                      strokeWidth={1.75}
+                      aria-hidden
+                    />
+                    {project.files.length} files
+                  </span>
+                </div>
+              </Link>
+
+              <div className="flex items-center justify-between gap-2 border-t border-[#E2E8F0] bg-[#F8FAFC]/60 px-5 py-3">
+                <div className="flex min-w-0 items-center gap-1.5 text-xs text-[#94A3B8]">
+                  <Clock className="h-3 w-3 shrink-0" />
+                  <span className="truncate">Last active {getLatestActivity(project)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditProject(project);
+                    setEditOpen(true);
+                  }}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#2563EB] transition hover:bg-[#2563EB]/10"
+                >
+                  <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                  Edit
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setProjectModal(true)}
+              className="flex flex-col items-center justify-center border-2 border-dashed border-[#E2E8F0] p-8 text-center transition-all duration-200 hover:border-[#2563EB]/40 hover:bg-[#2563EB]/[0.04]"
+              style={{ borderRadius: "12px", minHeight: "220px" }}
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#F8FAFC] text-[#94A3B8]">
+                <Plus className="h-6 w-6" />
+              </div>
+              <p className="mt-3 text-sm font-semibold text-[#0F172A]">New Project</p>
+              <p className="mt-1 text-xs text-[#64748B]">Create a new construction project</p>
+            </button>
+          )}
+        </div>
+      ) : (
+        <section className="enterprise-card overflow-hidden">
+          <div className="hidden grid-cols-[minmax(280px,2.2fr)_120px_140px_140px_130px_92px] gap-3 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)] md:grid">
+            <span>Project</span>
+            <span>Stage</span>
+            <span>Progress</span>
+            <span>Files</span>
+            <span>Last active</span>
+            <span className="text-right">Action</span>
+          </div>
+
+          <div className="divide-y divide-[var(--enterprise-border)]">
+            {visibleProjects.map((project) => (
+              <div
+                key={project.id}
+                className="group grid grid-cols-1 gap-2 px-4 py-3 md:grid-cols-[minmax(280px,2.2fr)_120px_140px_140px_130px_92px] md:items-center md:gap-3"
+              >
+                <Link
+                  href={`/projects/${project.id}`}
+                  className="min-w-0 rounded-lg transition hover:bg-[var(--enterprise-hover-surface)]/50 md:p-1"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <ProjectLogo name={project.name} logoUrl={project.logoUrl} size={34} />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">
+                        {project.name}
+                      </p>
+                      <p className="truncate text-xs text-[var(--enterprise-text-muted)]">
+                        {[
+                          project.projectType?.trim(),
+                          project.projectNumber?.trim() ? `#${project.projectNumber.trim()}` : null,
+                          project.location?.trim(),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "No details"}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+
+                <div className="md:px-1">
+                  <ProjectStageBadge stage={project.stage} />
+                </div>
+
+                <div className="md:px-1">
+                  <ProjectProgressBar
+                    value={
+                      typeof project.progressPercent === "number" ? project.progressPercent : 0
+                    }
+                    height={7}
+                  />
+                </div>
+
+                <p className="text-xs text-[var(--enterprise-text-muted)] md:px-1">
+                  {project.files.length} files
+                </p>
+
+                <p className="text-xs text-[var(--enterprise-text-muted)] md:px-1">
+                  {getLatestActivity(project)}
+                </p>
+
+                <div className="flex justify-start md:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditProject(project);
+                      setEditOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-[#2563EB] transition hover:bg-[#2563EB]/10"
+                  >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                    Edit
+                  </button>
                 </div>
               </div>
-
-              <div className="mt-4">
-                <ProjectProgressBar
-                  value={typeof project.progressPercent === "number" ? project.progressPercent : 0}
-                  height={9}
-                />
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-[#E2E8F0] pt-4 text-[12px] text-[#64748B]">
-                <span className="inline-flex items-center gap-1.5">
-                  <AlertCircle className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />0 Issues
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]" />0 RFIs
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <FileText
-                    className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  {project.files.length} files
-                </span>
-              </div>
-            </Link>
-
-            <div className="flex items-center justify-between gap-2 border-t border-[#E2E8F0] bg-[#F8FAFC]/60 px-5 py-3">
-              <div className="flex min-w-0 items-center gap-1.5 text-xs text-[#94A3B8]">
-                <Clock className="h-3 w-3 shrink-0" />
-                <span className="truncate">Last active {getLatestActivity(project)}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditProject(project);
-                  setEditOpen(true);
-                }}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#2563EB] transition hover:bg-[#2563EB]/10"
-              >
-                <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
-                Edit
-              </button>
-            </div>
+            ))}
           </div>
-        ))}
 
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => setProjectModal(true)}
-            className="flex flex-col items-center justify-center border-2 border-dashed border-[#E2E8F0] p-8 text-center transition-all duration-200 hover:border-[#2563EB]/40 hover:bg-[#2563EB]/[0.04]"
-            style={{ borderRadius: "12px", minHeight: "220px" }}
-          >
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#F8FAFC] text-[#94A3B8]">
-              <Plus className="h-6 w-6" />
-            </div>
-            <p className="mt-3 text-sm font-semibold text-[#0F172A]">New Project</p>
-            <p className="mt-1 text-xs text-[#64748B]">Create a new construction project</p>
-          </button>
-        )}
-      </div>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setProjectModal(true)}
+              className="flex w-full items-center justify-center gap-2 border-t border-dashed border-[#E2E8F0] px-4 py-3 text-sm font-semibold text-[#0F172A] transition hover:bg-[#2563EB]/[0.04]"
+            >
+              <Plus className="h-4 w-4 text-[#2563EB]" />
+              New Project
+            </button>
+          )}
+        </section>
+      )}
 
       {projects.length === 0 && !isAdmin && (
         <div
@@ -481,6 +648,19 @@ export function ProjectHubClient() {
           <p className="mt-1 text-sm text-[#64748B]">Ask your admin to create a project.</p>
         </div>
       )}
+
+      {projects.length > 0 && visibleProjects.length === 0 ? (
+        <div className="enterprise-card border-2 border-dashed border-[var(--enterprise-border-muted)] p-10 text-center">
+          <Search
+            className="mx-auto h-10 w-10 text-[var(--enterprise-primary)] opacity-70"
+            strokeWidth={1.5}
+          />
+          <p className="mt-3 font-semibold text-[var(--enterprise-text)]">No matching projects</p>
+          <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+            Try a different keyword or clear your search.
+          </p>
+        </div>
+      ) : null}
 
       <ProjectEditSlideOver
         open={editOpen}

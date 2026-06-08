@@ -104,7 +104,7 @@ export function LandingHeroSection({
           <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-14 xl:gap-16">
             <div className="text-center lg:text-left">
               {/* Eyebrow badge */}
-              <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] bg-[color-mix(in_srgb,var(--landing-cta)_14%,rgba(15,23,42,0.5))] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-blue-100 shadow-sm backdrop-blur-md lg:inline-flex">
+              <p className="landing-type-label mb-6 inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] bg-[color-mix(in_srgb,var(--landing-cta)_14%,rgba(15,23,42,0.5))] px-4 py-1.5 text-blue-100 shadow-sm backdrop-blur-md lg:inline-flex">
                 <span className="relative flex h-2 w-2" aria-hidden>
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--landing-cta) opacity-60" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-(--landing-cta)" />
@@ -127,7 +127,7 @@ export function LandingHeroSection({
                 <button
                   type="button"
                   onClick={() => onGoToFreeViewer("hero_primary_cta")}
-                  className="btn-shine relative inline-flex min-h-13 flex-1 min-w-0 items-center justify-center gap-2 overflow-hidden rounded-xl bg-(--landing-cta) px-8 py-3.5 text-[0.96rem] font-semibold text-(--landing-cta-text) shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)] transition hover:bg-(--landing-cta-bright) hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta) focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 active:scale-[0.98] sm:flex-none sm:px-9"
+                  className="landing-type-nav btn-shine relative inline-flex min-h-13 flex-1 min-w-0 items-center justify-center gap-2 overflow-hidden rounded-xl bg-(--landing-cta) px-8 py-3.5 font-semibold text-(--landing-cta-text) shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)] transition hover:bg-(--landing-cta-bright) hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta) focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 active:scale-[0.98] sm:flex-none sm:px-9"
                 >
                   {t("openViewer")}
                   <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
@@ -142,13 +142,13 @@ export function LandingHeroSection({
                       variant: heroVariant,
                     })
                   }
-                  className="inline-flex min-h-13 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-white/40 bg-white/5 px-8 py-3.5 text-[0.96rem] font-semibold text-white shadow-sm backdrop-blur-sm transition hover:border-white/65 hover:bg-white/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:flex-none sm:px-9"
+                  className="landing-type-nav inline-flex min-h-13 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-white/40 bg-white/5 px-8 py-3.5 font-semibold text-white shadow-sm backdrop-blur-sm transition hover:border-white/65 hover:bg-white/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:flex-none sm:px-9"
                 >
                   {t("startTrial")}
                 </Link>
               </div>
 
-              <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5 text-xs text-blue-100/90 lg:justify-start">
+              <div className="landing-type-caption mt-5 flex flex-wrap items-center justify-center gap-2.5 text-blue-100/90 lg:justify-start">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300/35 bg-cyan-400/10 px-3 py-1.5 text-cyan-100">
                   <ServerCog className="h-3.5 w-3.5 text-cyan-300" />
                   Built for datacenter delivery
@@ -175,7 +175,7 @@ export function LandingHeroSection({
                     className="flex flex-col items-center rounded-xl border border-white/10 bg-white/[0.07] px-5 py-3 text-center backdrop-blur-sm transition hover:border-white/20 hover:bg-white/10 sm:items-start sm:text-left"
                   >
                     <span className="text-base font-bold text-white">{t(chip.valueKey)}</span>
-                    <span className="text-[11px] font-medium text-blue-200/60">
+                    <span className="landing-type-caption text-blue-200/60">
                       {t(chip.labelKey)}
                     </span>
                   </div>
@@ -196,7 +196,7 @@ export function LandingHeroSection({
                   <LandingHeroDemoVideo />
                 </BrowserMockup>
               </div>
-              <div className="pointer-events-none absolute -bottom-4 -left-3 hidden rounded-lg border border-white/20 bg-slate-950/55 px-3 py-2 text-[11px] font-medium text-blue-100/80 backdrop-blur-md lg:block">
+              <div className="landing-type-caption pointer-events-none absolute -bottom-4 -left-3 hidden rounded-lg border border-white/20 bg-slate-950/55 px-3 py-2 text-blue-100/80 backdrop-blur-md lg:block">
                 Live product walkthrough
               </div>
             </div>

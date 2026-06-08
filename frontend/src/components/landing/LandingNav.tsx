@@ -43,7 +43,7 @@ export function LandingNav({
           : href === "/case-studies"
             ? pathname.startsWith("/case-studies")
             : false;
-    return `rounded-lg px-2.5 py-2 text-sm font-medium transition ${
+    return `landing-type-nav rounded-lg px-2.5 py-2 transition ${
       isActive
         ? "bg-slate-900/[0.04] text-slate-900"
         : "text-slate-600 hover:bg-slate-900/[0.03] hover:text-slate-900"
@@ -92,7 +92,7 @@ export function LandingNav({
           {isLoggedIn ? (
             <Link
               href="/projects"
-              className="rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-900/3 hover:text-slate-900"
+              className="landing-type-nav rounded-lg px-3.5 py-2 text-slate-600 transition hover:bg-slate-900/3 hover:text-slate-900"
             >
               {t("dashboard")}
             </Link>
@@ -106,7 +106,7 @@ export function LandingNav({
                   destination: "/sign-in",
                 })
               }
-              className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              className="landing-type-nav rounded-lg border border-slate-200 bg-white px-3.5 py-2 font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
             >
               {t("signIn")}
             </Link>
@@ -114,7 +114,7 @@ export function LandingNav({
           <button
             type="button"
             onClick={() => onGoToFreeViewer("nav_desktop_start_free")}
-            className="btn-shine relative overflow-hidden rounded-full bg-(--landing-cta) px-5 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_-12px_color-mix(in_srgb,var(--landing-cta)_55%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_35%,transparent)] transition hover:bg-(--landing-cta-bright) hover:ring-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)]"
+            className="landing-type-nav btn-shine relative overflow-hidden rounded-full bg-(--landing-cta) px-5 py-2.5 font-semibold text-white shadow-[0_10px_24px_-12px_color-mix(in_srgb,var(--landing-cta)_55%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_35%,transparent)] transition hover:bg-(--landing-cta-bright) hover:ring-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)]"
           >
             {t("startFree")}
           </button>
@@ -131,7 +131,7 @@ export function LandingNav({
                   destination: "/sign-in",
                 })
               }
-              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="landing-type-nav inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 font-semibold text-slate-700 transition hover:bg-slate-50"
             >
               {t("signIn")}
             </Link>
@@ -153,35 +153,31 @@ export function LandingNav({
             <div className="border-b border-slate-100 pb-4">
               <Link
                 href="/solutions"
-                className="mb-3 inline-flex text-sm font-semibold text-slate-800"
+                className="landing-type-nav mb-3 inline-flex font-semibold text-slate-800"
                 onClick={() => setMobileOpen(false)}
               >
                 {solutionsMenuT("trigger")}
               </Link>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-blue-600">
-                {t("construction")}
-              </p>
+              <p className="landing-type-label mb-2 text-blue-600">{t("construction")}</p>
               <div className="flex flex-col gap-1.5">
                 {mobileConstructionSolutions.map((s) => (
                   <Link
                     key={s.slug}
                     href={`/solutions/${s.slug}`}
-                    className="text-sm font-medium text-slate-700"
+                    className="landing-type-nav text-slate-700"
                     onClick={() => setMobileOpen(false)}
                   >
                     {getLocalizedSolutionTitle(s.slug, s.title)}
                   </Link>
                 ))}
               </div>
-              <p className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wider text-teal-600">
-                {t("operationsFm")}
-              </p>
+              <p className="landing-type-label mb-2 mt-4 text-teal-600">{t("operationsFm")}</p>
               <div className="flex flex-col gap-1.5">
                 {mobileOperationsSolutions.map((s) => (
                   <Link
                     key={s.slug}
                     href={`/solutions/${s.slug}`}
-                    className="text-sm font-medium text-slate-700"
+                    className="landing-type-nav text-slate-700"
                     onClick={() => setMobileOpen(false)}
                   >
                     {getLocalizedSolutionTitle(s.slug, s.title)}
@@ -191,42 +187,42 @@ export function LandingNav({
             </div>
             <Link
               href="/#features"
-              className="text-sm text-slate-600"
+              className="landing-type-nav text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
               {t("features")}
             </Link>
             <Link
               href="/pricing"
-              className="text-sm text-slate-600"
+              className="landing-type-nav text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
               {t("pricing")}
             </Link>
             <Link
               href="/use-cases"
-              className="text-sm text-slate-600"
+              className="landing-type-nav text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
               {t("useCases")}
             </Link>
             <Link
               href="/case-studies"
-              className="text-sm text-slate-600"
+              className="landing-type-nav text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
               {t("caseStudies")}
             </Link>
             <Link
               href="/#faq"
-              className="text-sm text-slate-600"
+              className="landing-type-nav text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
               {t("faq")}
             </Link>
             <Link
               href="/#install"
-              className="text-sm text-slate-600"
+              className="landing-type-nav text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
               {t("install")}
@@ -236,7 +232,7 @@ export function LandingNav({
             {isLoggedIn ? (
               <Link
                 href="/projects"
-                className="text-sm font-medium text-slate-700"
+                className="landing-type-nav text-slate-700"
                 onClick={() => setMobileOpen(false)}
               >
                 {t("dashboard")}
@@ -253,7 +249,7 @@ export function LandingNav({
                       destination: "/sign-in",
                     });
                   }}
-                  className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  className="landing-type-nav inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   {t("signIn")}
                 </Link>
@@ -265,7 +261,7 @@ export function LandingNav({
                 setMobileOpen(false);
                 onGoToFreeViewer("nav_mobile_start_free");
               }}
-              className="btn-shine relative overflow-hidden rounded-xl bg-(--landing-cta) px-5 py-3 text-center text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-(--landing-cta-bright)"
+              className="landing-type-nav btn-shine relative overflow-hidden rounded-xl bg-(--landing-cta) px-5 py-3 text-center font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-(--landing-cta-bright)"
             >
               {t("startFree")}
             </button>

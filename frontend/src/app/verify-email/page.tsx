@@ -88,11 +88,11 @@ function VerifyEmailContent() {
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-3xl">
               📧
             </div>
-            <h1 className="text-2xl font-bold text-white" style={{ fontSize: "24px" }}>
-              Check your inbox
-            </h1>
-            <p className="mt-2 text-sm text-slate-400">We sent a verification link to</p>
-            <p className="mt-1 text-sm font-medium text-white">{email}</p>
+            <h1 className="text-2xl font-bold text-white">Check your inbox</h1>
+            <p className="enterprise-type-body mt-2 text-slate-400">
+              We sent a verification link to
+            </p>
+            <p className="enterprise-type-nav mt-1 text-white">{email}</p>
           </div>
 
           <div
@@ -104,7 +104,7 @@ function VerifyEmailContent() {
                 href="https://mail.google.com"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex flex-1 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-sm font-medium text-[#0F172A] transition hover:bg-[#F1F5F9]"
+                className="enterprise-type-nav inline-flex flex-1 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[#0F172A] transition hover:bg-[#F1F5F9]"
               >
                 Open Gmail →
               </a>
@@ -112,7 +112,7 @@ function VerifyEmailContent() {
                 href="https://outlook.live.com"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex flex-1 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-sm font-medium text-[#0F172A] transition hover:bg-[#F1F5F9]"
+                className="enterprise-type-nav inline-flex flex-1 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 text-[#0F172A] transition hover:bg-[#F1F5F9]"
               >
                 Open Outlook →
               </a>

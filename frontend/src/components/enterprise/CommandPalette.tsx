@@ -115,6 +115,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         icon: FileStack,
       },
     ];
+    if (workspaceRole && workspaceRole !== "MEMBER") {
+      out.push({
+        id: "proposals-dashboard",
+        label: "Proposals dashboard",
+        hint: "Workspace-wide proposal status",
+        href: "/proposals",
+        icon: FileSpreadsheet,
+      });
+    }
 
     if (wid) {
       out.push({
@@ -247,13 +256,6 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           href: `${projectBase}/om/work-orders`,
           icon: Wrench,
         });
-        out.push({
-          id: "om-construction-issues",
-          label: "Construction issues",
-          hint: "Filtered list",
-          href: `${projectBase}/issues?issueKind=CONSTRUCTION`,
-          icon: MapPin,
-        });
         if (mod.omTenantPortal) {
           out.push({
             id: "om-tenant-hub",
@@ -289,12 +291,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           icon: ClipboardList,
         });
       }
-    } else if (mod.issues) {
+    }
+    if (mod.issues) {
       out.push({
         id: "issues",
         label: "Open Issues",
         hint: "Issues",
-        href: `${projectBase}/issues`,
+        href: operationsMode
+          ? `${projectBase}/issues?issueKind=CONSTRUCTION`
+          : `${projectBase}/issues`,
         icon: MapPin,
       });
     }

@@ -28,18 +28,16 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               />
               <span className="text-base font-bold tracking-tight">PlanSync</span>
             </div>
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-400">{t("tagline")}</p>
+            <p className="landing-type-body mt-4 max-w-xs text-slate-400">{t("tagline")}</p>
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              {t("product")}
-            </h4>
+            <h4 className="landing-type-label text-slate-400">{t("product")}</h4>
             <ul className="mt-4 flex flex-col gap-3">
               <li>
                 <Link
                   href="/#how-it-works"
-                  className="text-sm text-slate-300 transition hover:text-white"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   {t("howItWorks")}
                 </Link>
@@ -47,7 +45,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               <li>
                 <Link
                   href="/solutions"
-                  className="text-sm text-slate-300 transition hover:text-white"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   {t("allSolutions")}
                 </Link>
@@ -55,7 +53,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               <li>
                 <Link
                   href="/#features"
-                  className="text-sm text-slate-300 transition hover:text-white"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   {t("features")}
                 </Link>
@@ -63,7 +61,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               <li>
                 <Link
                   href="/pricing"
-                  className="text-sm text-slate-300 transition hover:text-white"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   {t("pricing")}
                 </Link>
@@ -72,24 +70,22 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                 <button
                   type="button"
                   onClick={() => onGoToFreeViewer("footer_free_viewer")}
-                  className="text-sm text-slate-300 transition hover:text-white"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   {t("freeViewer")}
                 </button>
               </li>
               <li>
-                <span className="text-sm text-slate-500">{t("changelog")}</span>
+                <span className="landing-type-nav text-slate-500">{t("changelog")}</span>
               </li>
             </ul>
-            <p className="mt-6 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              {t("solutionsHeading")}
-            </p>
+            <p className="landing-type-label mt-6 text-slate-500">{t("solutionsHeading")}</p>
             <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {LANDING_SOLUTIONS.map((s) => (
                 <li key={s.slug}>
                   <Link
                     href={`/solutions/${s.slug}`}
-                    className="text-sm text-slate-300 transition hover:text-(--landing-cta)"
+                    className="landing-type-nav text-slate-300 transition hover:text-(--landing-cta)"
                   >
                     {s.title}
                   </Link>
@@ -99,14 +95,12 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              {t("company")}
-            </h4>
+            <h4 className="landing-type-label text-slate-400">{t("company")}</h4>
             <ul className="mt-4 flex flex-col gap-3">
               <li>
                 <Link
                   href="/use-cases"
-                  className="text-sm text-slate-300 transition hover:text-white"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   {t("about")}
                 </Link>
@@ -114,7 +108,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               <li>
                 <Link
                   href="/case-studies"
-                  className="text-sm text-slate-300 transition hover:text-white"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   {t("blog")}
                 </Link>
@@ -122,7 +116,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               <li>
                 <a
                   href="mailto:support@plansync.dev"
-                  className="text-sm text-slate-300 transition hover:text-white"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   support@plansync.dev
                 </a>
@@ -132,7 +126,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                   href="https://www.linkedin.com/company/plansyncdev/?viewAsMember=true"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-slate-300 transition hover:text-white"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   LinkedIn
                 </a>
@@ -141,7 +135,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
             <div className="mt-5 flex items-center gap-2">
               <a
                 href="mailto:support@plansync.dev"
-                className="inline-flex items-center gap-2 rounded-full border border-slate-700/90 bg-slate-900/40 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:text-white"
+                className="landing-type-caption inline-flex items-center gap-2 rounded-full border border-slate-700/90 bg-slate-900/40 px-3 py-1.5 text-slate-200 transition hover:border-slate-500 hover:text-white"
               >
                 <Mail className="h-3.5 w-3.5" />
                 Support
@@ -150,7 +144,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                 href="https://www.linkedin.com/company/plansyncdev/?viewAsMember=true"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-slate-700/90 bg-slate-900/40 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500 hover:text-white"
+                className="landing-type-caption inline-flex items-center gap-2 rounded-full border border-slate-700/90 bg-slate-900/40 px-3 py-1.5 text-slate-200 transition hover:border-slate-500 hover:text-white"
               >
                 <Link2 className="h-3.5 w-3.5" />
                 LinkedIn
@@ -159,27 +153,28 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
           </div>
 
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              {t("legal")}
-            </h4>
+            <h4 className="landing-type-label text-slate-400">{t("legal")}</h4>
             <ul className="mt-4 flex flex-col gap-3">
               <li>
                 <Link
                   href="/privacy"
-                  className="text-sm text-slate-300 transition hover:text-white"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   {t("privacy")}
                 </Link>
               </li>
               <li>
-                <Link href="/terms" className="text-sm text-slate-300 transition hover:text-white">
+                <Link
+                  href="/terms"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
+                >
                   {t("terms")}
                 </Link>
               </li>
               <li>
                 <Link
                   href="/cookies"
-                  className="text-sm text-slate-300 transition hover:text-white"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   {t("cookies")}
                 </Link>
@@ -189,13 +184,13 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
         </div>
 
         <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-slate-800 pt-8 sm:flex-row">
-          <p className="text-xs text-slate-500" suppressHydrationWarning>
+          <p className="landing-type-caption text-slate-500" suppressHydrationWarning>
             &copy; {new Date().getFullYear()} PlanSync. {t("rights")}
           </p>
           <button
             type="button"
             onClick={() => onGoToFreeViewer("footer_bottom_open_viewer")}
-            className="inline-flex items-center gap-2 text-xs font-medium text-sky-400 transition hover:text-sky-300"
+            className="landing-type-caption inline-flex items-center gap-2 text-sky-400 transition hover:text-sky-300"
           >
             {t("openViewerCta")} <ArrowRight className="h-3 w-3" />
           </button>

@@ -32,6 +32,7 @@
     "rfis": "RFIs",
     "quantityTakeoff": "Quantity Takeoff",
     "proposals": "Proposals",
+    "proposalsDashboard": "Proposals Dashboard",
     "fieldReports": "Field Reports",
     "collaboration": "Collaboration",
     "collaborationDesc": "RFIs, takeoff, proposals, punch, field reports",
@@ -109,6 +110,7 @@
       "account": "Account",
       "organization": "Organization",
       "projects": "Projects",
+      "proposalsDashboard": "Proposals Dashboard",
       "materials": "Materials"
     }
   },

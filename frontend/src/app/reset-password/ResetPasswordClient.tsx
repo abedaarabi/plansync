@@ -63,13 +63,13 @@ export function ResetPasswordClient() {
         <div className="space-y-4 text-center">
           <Link
             href="/forgot-password"
-            className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--enterprise-primary)] py-3 text-sm font-semibold text-white shadow-md transition hover:bg-[var(--enterprise-primary-deep)]"
+            className="enterprise-type-nav-strong inline-flex w-full items-center justify-center rounded-xl bg-[var(--enterprise-primary)] py-3 text-white shadow-md transition hover:bg-[var(--enterprise-primary-deep)]"
           >
             Request a new link
           </Link>
           <Link
             href="/sign-in"
-            className="block text-sm font-medium text-[#2563EB] hover:underline"
+            className="enterprise-type-nav block text-[#2563EB] hover:underline"
           >
             Back to sign in
           </Link>
@@ -87,13 +87,13 @@ export function ResetPasswordClient() {
         <div className="space-y-4 text-center">
           <Link
             href="/forgot-password"
-            className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--enterprise-primary)] py-3 text-sm font-semibold text-white shadow-md transition hover:bg-[var(--enterprise-primary-deep)]"
+            className="enterprise-type-nav-strong inline-flex w-full items-center justify-center rounded-xl bg-[var(--enterprise-primary)] py-3 text-white shadow-md transition hover:bg-[var(--enterprise-primary-deep)]"
           >
             Request a new link
           </Link>
           <Link
             href="/sign-in"
-            className="block text-sm font-medium text-[#2563EB] hover:underline"
+            className="enterprise-type-nav block text-[#2563EB] hover:underline"
           >
             Back to sign in
           </Link>
@@ -108,8 +108,8 @@ export function ResetPasswordClient() {
         title="Password updated"
         description="You can sign in with your new password. Redirecting to sign in…"
       >
-        <p className="text-center text-sm text-[#64748B]">
-          <Link href="/sign-in" className="font-medium text-[#2563EB] hover:underline">
+        <p className="enterprise-type-body text-center text-[#64748B]">
+          <Link href="/sign-in" className="enterprise-type-nav text-[#2563EB] hover:underline">
             Go to sign in now
           </Link>
         </p>
@@ -126,7 +126,7 @@ export function ResetPasswordClient() {
         <div>
           <label
             htmlFor="reset-password"
-            className="mb-1.5 block text-[13px] font-medium text-[#64748B]"
+            className="enterprise-type-nav mb-1.5 block text-[#64748B]"
           >
             New password
           </label>
@@ -152,7 +152,7 @@ export function ResetPasswordClient() {
         <div>
           <label
             htmlFor="reset-password-confirm"
-            className="mb-1.5 block text-[13px] font-medium text-[#64748B]"
+            className="enterprise-type-nav mb-1.5 block text-[#64748B]"
           >
             Confirm password
           </label>

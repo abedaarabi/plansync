@@ -16,7 +16,7 @@ export default async function ProjectIssuesPage({ params, searchParams }: Props)
     raw === "CONSTRUCTION" || raw === "WORK_ORDER" || raw === "OCCUPANT" ? raw : undefined;
   const listTitle =
     issueKind === "CONSTRUCTION"
-      ? "Construction issues"
+      ? "Issues"
       : issueKind === "OCCUPANT"
         ? "Occupant inbox"
         : "Issues";

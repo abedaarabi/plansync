@@ -27,7 +27,6 @@ export function EnterpriseMobileBottomNav({ onOpenMore }: EnterpriseMobileBottom
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = isTabActive(tab);
-          const showLabel = active || tab.isMore;
 
           if (tab.isMore) {
             return (
@@ -78,15 +77,11 @@ export function EnterpriseMobileBottomNav({ onOpenMore }: EnterpriseMobileBottom
                   strokeWidth={active ? 2.25 : 1.75}
                   aria-hidden
                 />
-                {showLabel ? (
-                  <span
-                    className={`max-w-full truncate text-[11px] leading-tight ${active ? "font-semibold" : "font-medium opacity-80"}`}
-                  >
-                    {tab.label}
-                  </span>
-                ) : (
-                  <span className="sr-only">{tab.label}</span>
-                )}
+                <span
+                  className={`max-w-full truncate text-[11px] leading-tight ${active ? "font-semibold" : "font-medium opacity-80"}`}
+                >
+                  {tab.label}
+                </span>
               </Link>
             </li>
           );
