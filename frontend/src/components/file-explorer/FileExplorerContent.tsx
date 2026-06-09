@@ -550,11 +550,11 @@ export function FileExplorerContent({
                             onDragLeaveFolder ? (e) => onDragLeaveFolder(e, fol.id) : undefined
                           }
                           onDrop={onDropOnFolder ? (e) => onDropOnFolder(e, fol.id) : undefined}
-                          className={`mobile-list-row flex w-full items-center gap-3 py-3 text-left transition-colors duration-150 ${
+                          className={`mobile-list-row flex w-full items-center gap-2.5 py-2.5 text-left transition-colors duration-150 ${
                             selected ? "bg-[var(--enterprise-primary-soft)]/80" : ""
                           } ${dropTarget ? "bg-blue-50/80" : ""}`}
                         >
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--enterprise-primary-soft)]/80 to-sky-50/70 ring-1 ring-[var(--enterprise-primary)]/20">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--enterprise-primary-soft)]/80 to-sky-50/70 ring-1 ring-[var(--enterprise-primary)]/20">
                             <Folder
                               className="h-7 w-7 fill-current text-[var(--enterprise-primary)]"
                               strokeWidth={1.4}
@@ -562,18 +562,18 @@ export function FileExplorerContent({
                             />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="inline-flex items-center gap-1 truncate text-sm font-semibold text-[var(--enterprise-text)] sm:text-base">
+                            <p className="inline-flex items-center gap-1 truncate text-[13px] font-semibold text-[var(--enterprise-text)] sm:text-base">
                               <span className="truncate">{fol.name}</span>
                               {fol.canAccess === false ? (
                                 <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
                               ) : null}
                             </p>
-                            <p className="truncate text-xs text-slate-500 sm:text-sm">
+                            <p className="truncate text-[11px] text-slate-500 sm:text-sm">
                               {fol.canAccess === false
                                 ? "Restricted folder · request access"
                                 : `Folder · ${inside.total} item${inside.total !== 1 ? "s" : ""}`}
                             </p>
-                            <p className="mt-1 inline-flex max-w-full items-center gap-2 overflow-hidden text-[11px] text-slate-500 sm:text-xs">
+                            <p className="mt-0.5 inline-flex max-w-full items-center gap-1.5 overflow-hidden text-[10px] text-slate-500 sm:mt-1 sm:text-xs">
                               <span className="inline-flex min-w-0 items-center gap-1 truncate">
                                 <Clock3 className="h-3.5 w-3.5" aria-hidden />
                                 Last open{" "}
@@ -648,11 +648,11 @@ export function FileExplorerContent({
                             }
                             onDragStartMove?.(e, { kind: "file", id: f.id });
                           }}
-                          className={`mobile-list-row flex w-full items-center gap-3 py-3 text-left transition-colors duration-150 ${
+                          className={`mobile-list-row flex w-full items-center gap-2.5 py-2.5 text-left transition-colors duration-150 ${
                             selected ? "bg-[var(--enterprise-primary-soft)]/80" : ""
                           }`}
                         >
-                          <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200/60">
+                          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200/60">
                             <PdfFileThumbnail
                               fileId={f.id}
                               fileName={f.name}
@@ -662,10 +662,10 @@ export function FileExplorerContent({
                             />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-[var(--enterprise-text)] sm:text-base">
+                            <p className="truncate text-[13px] font-semibold text-[var(--enterprise-text)] sm:text-base">
                               {fileExplorerDisplayName(f)}
                             </p>
-                            <p className="inline-flex max-w-full items-center gap-1.5 truncate text-xs text-slate-500 sm:text-sm">
+                            <p className="inline-flex max-w-full items-center gap-1 truncate text-[11px] text-slate-500 sm:text-sm">
                               {displayVer ? `Rev ${displayVer.version}` : "—"}
                               {(f.commentCount ?? 0) > 0 ? (
                                 <>
@@ -677,7 +677,7 @@ export function FileExplorerContent({
                                 </>
                               ) : null}
                             </p>
-                            <div className="mt-1.5 flex gap-1.5">
+                            <div className="mt-1 flex gap-1">
                               <button
                                 type="button"
                                 onClick={(ev) => {
@@ -685,7 +685,7 @@ export function FileExplorerContent({
                                   if (!onOpenViewer) return;
                                   onOpenViewer(f);
                                 }}
-                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-[var(--enterprise-text)]"
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-semibold text-[var(--enterprise-text)]"
                                 disabled={!onOpenViewer}
                               >
                                 <Eye className="h-3.5 w-3.5" aria-hidden />
@@ -697,7 +697,7 @@ export function FileExplorerContent({
                                   ev.stopPropagation();
                                   onOpenFile(f);
                                 }}
-                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-[var(--enterprise-text)]"
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-semibold text-[var(--enterprise-text)]"
                               >
                                 <FileText className="h-3.5 w-3.5" aria-hidden />
                                 Details
