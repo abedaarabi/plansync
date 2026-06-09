@@ -5,7 +5,7 @@ import { downloadProjectFileVersion } from "@/lib/downloadProjectFile";
 import { isImageThumbnailFile, isPdfFile } from "@/lib/isPdfFile";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { FolderPlus, Globe2, ShieldCheck, Upload, Users } from "lucide-react";
+import { FolderPlus, Globe2, ShieldCheck, Users } from "lucide-react";
 import { X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
@@ -35,9 +35,7 @@ import {
   type MoveDragPayload,
   useUploadQueueStore,
 } from "@/store/uploadQueueStore";
-import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
 import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
-import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { ProjectFileImageLightbox } from "./ProjectFileImageLightbox";
 import { UploadDrawingsWizard } from "./UploadDrawingsWizard";
 import { CloudImportModal } from "./CloudImportModal";
@@ -221,10 +219,6 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     return () => mq.removeEventListener("change", sync);
   }, []);
 
-  const triggerUpload = useCallback(() => {
-    document.getElementById(UPLOAD_INPUT_ID)?.click();
-  }, []);
-
   const toggleTreeExpand = useCallback((id: string) => {
     setTreeExpanded((prev) => {
       const next = new Set(prev);
@@ -356,7 +350,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
       await queryClient.invalidateQueries({ queryKey: qk.projects(wid) });
       await queryClient.invalidateQueries({ queryKey: qk.dashboard(wid) });
     }
-    await queryClient.invalidateQueries({ queryKey: qk.projectAudit(projectId) });
+    await queryClient.invalidateQueries({ queryKey: qk.projectAuditRoot(projectId) });
     await queryClient.invalidateQueries({ queryKey: qk.me() });
   }, [queryClient, wid, projectId]);
 
@@ -1377,15 +1371,6 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             void invalidate();
           }}
         />
-      ) : null}
-      {canUpload ? (
-        <EnterpriseAddPulseWrap variant="fab">
-          <EnterpriseFab
-            label="Upload files"
-            onClick={triggerUpload}
-            icon={<Upload className="h-6 w-6" strokeWidth={2} aria-hidden />}
-          />
-        </EnterpriseAddPulseWrap>
       ) : null}
     </div>
   );

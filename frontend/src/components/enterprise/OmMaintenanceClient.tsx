@@ -91,7 +91,7 @@ async function refreshMaintenanceViews(qc: ReturnType<typeof useQueryClient>, pr
   await Promise.all([
     qc.invalidateQueries({ queryKey: qk.omMaintenance(projectId) }),
     qc.invalidateQueries({ queryKey: qk.omMaintenanceCompletions(projectId) }),
-    qc.invalidateQueries({ queryKey: qk.projectAudit(projectId) }),
+    qc.invalidateQueries({ queryKey: qk.projectAuditRoot(projectId) }),
   ]);
 }
 

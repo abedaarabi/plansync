@@ -133,7 +133,7 @@ function MaintenanceScheduleFormFields({
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: qk.omMaintenance(projectId) }),
-        qc.invalidateQueries({ queryKey: qk.projectAudit(projectId) }),
+        qc.invalidateQueries({ queryKey: qk.projectAuditRoot(projectId) }),
       ]);
       toast.success(isEdit ? "Schedule updated." : "Maintenance schedule created.");
       onClose();

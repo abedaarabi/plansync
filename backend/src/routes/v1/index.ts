@@ -132,7 +132,11 @@ import {
   buildAuditXlsxBuffer,
 } from "../../lib/projectAuditExport.js";
 import { formatAuditPresentation } from "../../lib/auditFormat.js";
-import { fetchProjectAuditLogs } from "../../lib/projectAuditQuery.js";
+import {
+  countProjectAuditLogs,
+  fetchProjectAuditActors,
+  fetchProjectAuditLogs,
+} from "../../lib/projectAuditQuery.js";
 import { createNodeWebSocket } from "@hono/node-ws";
 import {
   allowSseConnect,
@@ -2531,12 +2535,27 @@ export function v1Routes(
     const gate = requirePro(project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
-    const limit = Math.min(200, Math.max(1, Number(c.req.query("limit")) || 80));
-    const logs = await fetchProjectAuditLogs({
+    const page = Math.max(1, Number(c.req.query("page")) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(c.req.query("pageSize")) || 50));
+    const total = await countProjectAuditLogs({
       workspaceId: project.workspaceId,
       projectId,
-      limit,
     });
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * pageSize;
+    const [logs, actorMeta] = await Promise.all([
+      fetchProjectAuditLogs({
+        workspaceId: project.workspaceId,
+        projectId,
+        limit: pageSize,
+        offset,
+      }),
+      fetchProjectAuditActors({
+        workspaceId: project.workspaceId,
+        projectId,
+      }),
+    ]);
     return c.json({
       projectId,
       projectName: project.name,
@@ -2560,6 +2579,12 @@ export function v1Routes(
           detail: fmt.detail,
         };
       }),
+      total,
+      page: safePage,
+      pageSize,
+      totalPages,
+      actors: actorMeta.actors,
+      hasNoActor: actorMeta.hasNoActor,
     });
   });
 

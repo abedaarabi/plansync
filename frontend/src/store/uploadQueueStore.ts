@@ -145,7 +145,7 @@ export const useUploadQueueStore = create<UploadQueueState>((set) => ({
           );
           await queryClient.invalidateQueries({ queryKey: qk.projects(workspaceId) });
           await queryClient.invalidateQueries({ queryKey: qk.dashboard(workspaceId) });
-          await queryClient.invalidateQueries({ queryKey: qk.projectAudit(projectId) });
+          await queryClient.invalidateQueries({ queryKey: qk.projectAuditRoot(projectId) });
           await queryClient.invalidateQueries({ queryKey: qk.me() });
           set((s) => ({
             jobs: s.jobs.map((j) =>

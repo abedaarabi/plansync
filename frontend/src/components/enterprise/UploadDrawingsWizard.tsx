@@ -236,7 +236,7 @@ export function UploadDrawingsWizard(props: {
 
       await queryClient.invalidateQueries({ queryKey: qk.projects(props.workspaceId) });
       await queryClient.invalidateQueries({ queryKey: qk.dashboard(props.workspaceId) });
-      await queryClient.invalidateQueries({ queryKey: qk.projectAudit(props.projectId) });
+      await queryClient.invalidateQueries({ queryKey: qk.projectAuditRoot(props.projectId) });
       await queryClient.invalidateQueries({ queryKey: qk.me() });
 
       toast.success(

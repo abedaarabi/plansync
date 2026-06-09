@@ -265,7 +265,7 @@ export function FileExplorerContent({
                       </span>
                     </div>
                     <div className="border-t border-slate-100/80 bg-transparent p-1.5 sm:p-2">
-                      <p className="line-clamp-2 text-[11px] font-semibold leading-snug text-[var(--enterprise-text)] sm:truncate sm:text-[13px] sm:leading-tight">
+                      <p className="truncate text-[10px] font-semibold leading-tight text-[var(--enterprise-text)] sm:text-[13px] sm:leading-tight">
                         {fol.name}
                         {fol.canAccess === false ? (
                           <Lock className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
@@ -390,10 +390,10 @@ export function FileExplorerContent({
                       ) : null}
                     </div>
                     <div className="border-t border-slate-100 bg-slate-50/50 p-1.5 sm:p-2.5">
-                      <p className="line-clamp-2 text-[11px] font-semibold leading-snug text-[var(--enterprise-text)] sm:truncate sm:text-[13px] sm:leading-tight">
+                      <p className="truncate text-[10px] font-semibold leading-tight text-[var(--enterprise-text)] sm:text-[13px] sm:leading-tight">
                         {fileExplorerDisplayName(f)}
                       </p>
-                      <p className="mt-0.5 text-[9px] text-slate-500 sm:mt-1 sm:text-[10px]">
+                      <p className="mt-0.5 truncate text-[8px] text-slate-500 sm:mt-1 sm:text-[10px]">
                         {displayVer ? (
                           <>
                             <span className="font-medium text-slate-600">
@@ -562,24 +562,24 @@ export function FileExplorerContent({
                             />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="inline-flex items-center gap-1 truncate text-base font-semibold text-[var(--enterprise-text)]">
+                            <p className="inline-flex items-center gap-1 truncate text-sm font-semibold text-[var(--enterprise-text)] sm:text-base">
                               <span className="truncate">{fol.name}</span>
                               {fol.canAccess === false ? (
                                 <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
                               ) : null}
                             </p>
-                            <p className="text-sm text-slate-500">
+                            <p className="truncate text-xs text-slate-500 sm:text-sm">
                               {fol.canAccess === false
                                 ? "Restricted folder · request access"
                                 : `Folder · ${inside.total} item${inside.total !== 1 ? "s" : ""}`}
                             </p>
-                            <p className="mt-1 inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                              <span className="inline-flex items-center gap-1">
+                            <p className="mt-1 inline-flex max-w-full items-center gap-2 overflow-hidden text-[11px] text-slate-500 sm:text-xs">
+                              <span className="inline-flex min-w-0 items-center gap-1 truncate">
                                 <Clock3 className="h-3.5 w-3.5" aria-hidden />
                                 Last open{" "}
                                 {formatItemDateOrDash(fol.lastOpenedAt ?? folderLastOpenedIso)}
                               </span>
-                              <span className="inline-flex items-center gap-1">
+                              <span className="inline-flex min-w-0 items-center gap-1 truncate">
                                 <UserRound className="h-3.5 w-3.5" aria-hidden />
                                 Who {fol.lastOpenedBy || "—"}
                               </span>
@@ -662,10 +662,10 @@ export function FileExplorerContent({
                             />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-base font-semibold text-[var(--enterprise-text)]">
+                            <p className="truncate text-sm font-semibold text-[var(--enterprise-text)] sm:text-base">
                               {fileExplorerDisplayName(f)}
                             </p>
-                            <p className="inline-flex items-center gap-1.5 text-sm text-slate-500">
+                            <p className="inline-flex max-w-full items-center gap-1.5 truncate text-xs text-slate-500 sm:text-sm">
                               {displayVer ? `Rev ${displayVer.version}` : "—"}
                               {(f.commentCount ?? 0) > 0 ? (
                                 <>

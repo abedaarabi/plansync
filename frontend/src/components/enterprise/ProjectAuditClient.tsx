@@ -1,7 +1,7 @@
 "use client";
 
 import { apiUrl } from "@/lib/api-url";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Filter, ScrollText, Search, UserRound, X } from "lucide-react";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
@@ -108,27 +108,7 @@ function filterRows(
   });
 }
 
-function buildActorOptions(items: AuditRow[]) {
-  const map = new Map<string, { id: string; name: string; email: string }>();
-  let hasNoActor = false;
-  for (const row of items) {
-    if (!row.actor) {
-      hasNoActor = true;
-      continue;
-    }
-    if (!map.has(row.actor.id)) {
-      map.set(row.actor.id, {
-        id: row.actor.id,
-        name: row.actor.name,
-        email: row.actor.email,
-      });
-    }
-  }
-  const actors = [...map.values()].sort((a, b) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
-  );
-  return { actors, hasNoActor };
-}
+const AUDIT_PAGE_SIZE = 50;
 
 export function ProjectAuditClient({ projectId, subhead }: { projectId: string; subhead: string }) {
   const { primary } = useEnterpriseWorkspace();
@@ -138,19 +118,35 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
   const [category, setCategory] = useState<AuditCategory>("all");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
   const [userFilter, setUserFilter] = useState<UserFilter>("all");
+  const [page, setPage] = useState(1);
 
-  const { data, isPending, error } = useQuery({
-    queryKey: qk.projectAudit(projectId),
+  useEffect(() => {
+    setPage(1);
+  }, [search, category, datePreset, userFilter]);
+
+  const { data, isPending, isFetching, error } = useQuery({
+    queryKey: qk.projectAudit(projectId, page, AUDIT_PAGE_SIZE),
     staleTime: 0,
     refetchOnMount: "always",
+    placeholderData: (prev) => prev,
     queryFn: async () => {
-      const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/audit-logs?limit=200`), {
+      const sp = new URLSearchParams({
+        page: String(page),
+        pageSize: String(AUDIT_PAGE_SIZE),
+      });
+      const res = await fetch(apiUrl(`/api/v1/projects/${projectId}/audit-logs?${sp}`), {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Could not load audit log");
       return res.json() as Promise<{
         projectName: string;
         items: AuditRow[];
+        total: number;
+        page: number;
+        pageSize: number;
+        totalPages: number;
+        actors: { id: string; name: string; email: string }[];
+        hasNoActor: boolean;
       }>;
     },
   });
@@ -178,13 +174,21 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
   }
 
   const items = data?.items;
-  const actorOptions = useMemo(() => buildActorOptions(items ?? []), [items]);
+  const actorOptions = useMemo(
+    () => ({
+      actors: data?.actors ?? [],
+      hasNoActor: data?.hasNoActor ?? false,
+    }),
+    [data?.actors, data?.hasNoActor],
+  );
 
   const filtered = useMemo(
     () => filterRows(items ?? [], search, category, datePreset, userFilter),
     [items, search, category, datePreset, userFilter],
   );
-  const totalLoaded = items?.length ?? 0;
+  const totalEvents = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const currentPage = data?.page ?? page;
 
   const hasActiveFilters =
     search.trim() !== "" || category !== "all" || datePreset !== "all" || userFilter !== "all";
@@ -251,7 +255,7 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
           </div>
         ) : error ? (
           <p className="p-6 text-center text-sm text-red-600">{(error as Error).message}</p>
-        ) : totalLoaded === 0 ? (
+        ) : totalEvents === 0 ? (
           <p className="flex flex-1 items-center justify-center p-6 text-center text-sm text-slate-500">
             No project-scoped events yet. Opens from the viewer, uploads, moves, and deletes will
             appear here.
@@ -346,161 +350,227 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
                 </label>
               </div>
               <p className="mt-3 text-xs text-slate-500" role="status" aria-live="polite">
-                Showing{" "}
-                <span className="font-semibold tabular-nums text-slate-700">{filtered.length}</span>{" "}
-                of {totalLoaded} loaded events
-                {hasActiveFilters && filtered.length === 0 ? " — try adjusting filters." : null}
+                {hasActiveFilters ? (
+                  <>
+                    Showing{" "}
+                    <span className="font-semibold tabular-nums text-slate-700">
+                      {filtered.length}
+                    </span>{" "}
+                    matching on this page
+                    {filtered.length === 0 ? " — try adjusting filters." : null}
+                  </>
+                ) : (
+                  <>
+                    Showing{" "}
+                    <span className="font-semibold tabular-nums text-slate-700">
+                      {totalEvents > 0 ? (currentPage - 1) * AUDIT_PAGE_SIZE + 1 : 0}–
+                      {Math.min(currentPage * AUDIT_PAGE_SIZE, totalEvents)}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-semibold tabular-nums text-slate-700">{totalEvents}</span>{" "}
+                    events
+                  </>
+                )}
               </p>
             </div>
 
-            {filtered.length === 0 ? (
-              <p className="flex flex-1 items-center justify-center p-6 text-center text-sm text-slate-500">
-                No events match your filters.
-                {hasActiveFilters ? (
-                  <>
-                    {" "}
-                    <button
-                      type="button"
-                      onClick={clearFilters}
-                      className="font-medium text-[var(--enterprise-primary)] hover:underline"
-                    >
-                      Clear filters
-                    </button>
-                  </>
-                ) : null}
-              </p>
-            ) : (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                {/* Desktop / tablet */}
-                <div className="hidden min-h-0 flex-1 overflow-auto md:block">
-                  <table className="w-full min-w-[600px] table-fixed text-left text-[13px]">
-                    <colgroup>
-                      <col className="w-[10.5rem]" />
-                      <col className="w-[7rem]" />
-                      <col />
-                      <col className="w-[min(13rem,20%)]" />
-                      <col className="w-[min(17rem,26%)]" />
-                    </colgroup>
-                    <thead className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 text-[10px] font-semibold uppercase tracking-wide text-slate-500 backdrop-blur-sm">
-                      <tr>
-                        <th className="py-2.5 pl-4 pr-2">When</th>
-                        <th className="py-2.5 pr-2">Action</th>
-                        <th className="py-2.5 pr-2">Summary</th>
-                        <th className="py-2.5 pr-2">User</th>
-                        <th className="py-2.5 pr-4">Details</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filtered.map((row) => {
-                        const label = row.actionLabel || row.type.replace(/_/g, " ").toLowerCase();
-                        const summary = row.summary ?? "—";
-                        const detail = row.detail ?? "—";
-                        return (
-                          <tr
-                            key={row.id}
-                            className="align-top transition-colors hover:bg-slate-50/90"
-                          >
-                            <td className="whitespace-nowrap py-2.5 pl-4 text-xs text-slate-600">
-                              {formatAuditWhen(row.createdAt)}
-                            </td>
-                            <td className="py-2.5 pr-2">
-                              <span className="inline-flex max-w-full rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium leading-tight text-slate-800">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {filtered.length === 0 ? (
+                <p className="flex flex-1 items-center justify-center p-6 text-center text-sm text-slate-500">
+                  No events match your filters on this page.
+                  {hasActiveFilters ? (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        onClick={clearFilters}
+                        className="font-medium text-[var(--enterprise-primary)] hover:underline"
+                      >
+                        Clear filters
+                      </button>
+                      {totalPages > 1 ? <> or try another page.</> : null}
+                    </>
+                  ) : null}
+                </p>
+              ) : (
+                <>
+                  {/* Desktop / tablet */}
+                  <div className="hidden min-h-0 flex-1 overflow-auto md:block">
+                    <table className="w-full min-w-[600px] table-fixed text-left text-[13px]">
+                      <colgroup>
+                        <col className="w-[10.5rem]" />
+                        <col className="w-[7rem]" />
+                        <col />
+                        <col className="w-[min(13rem,20%)]" />
+                        <col className="w-[min(17rem,26%)]" />
+                      </colgroup>
+                      <thead className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 text-[10px] font-semibold uppercase tracking-wide text-slate-500 backdrop-blur-sm">
+                        <tr>
+                          <th className="py-2.5 pl-4 pr-2">When</th>
+                          <th className="py-2.5 pr-2">Action</th>
+                          <th className="py-2.5 pr-2">Summary</th>
+                          <th className="py-2.5 pr-2">User</th>
+                          <th className="py-2.5 pr-4">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filtered.map((row) => {
+                          const label =
+                            row.actionLabel || row.type.replace(/_/g, " ").toLowerCase();
+                          const summary = row.summary ?? "—";
+                          const detail = row.detail ?? "—";
+                          return (
+                            <tr
+                              key={row.id}
+                              className="align-top transition-colors hover:bg-slate-50/90"
+                            >
+                              <td className="whitespace-nowrap py-2.5 pl-4 text-xs text-slate-600">
+                                {formatAuditWhen(row.createdAt)}
+                              </td>
+                              <td className="py-2.5 pr-2">
+                                <span className="inline-flex max-w-full rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium leading-tight text-slate-800">
+                                  {label}
+                                </span>
+                              </td>
+                              <td className="py-2.5 pr-3 text-[13px] text-slate-800">
+                                <span className="line-clamp-2">{summary}</span>
+                              </td>
+                              <td className="py-2.5 pr-2 text-slate-600">
+                                {row.actor ? (
+                                  <div className="flex items-start gap-2">
+                                    <span className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-gradient-to-br from-blue-100 to-slate-100 text-[10px] font-semibold text-slate-800">
+                                      {row.actor.image ? (
+                                        // eslint-disable-next-line @next/next/no-img-element -- profile URL from API
+                                        <img
+                                          src={row.actor.image}
+                                          alt=""
+                                          className="h-full w-full object-cover"
+                                        />
+                                      ) : (
+                                        userInitials(row.actor.name, row.actor.email)
+                                      )}
+                                    </span>
+                                    <span className="min-w-0">
+                                      <span className="block truncate text-xs font-medium text-slate-800">
+                                        {row.actor.name}
+                                      </span>
+                                      <span className="block truncate text-[11px] text-slate-500">
+                                        {row.actor.email}
+                                      </span>
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 pr-4 text-xs leading-snug text-slate-600">
+                                <span className="line-clamp-3">{detail}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <ul className="min-h-0 flex-1 space-y-3 overflow-auto p-3 md:hidden">
+                    {filtered.map((row) => {
+                      const label = row.actionLabel || row.type.replace(/_/g, " ").toLowerCase();
+                      const summary = row.summary ?? "—";
+                      const detail = row.detail ?? "—";
+                      return (
+                        <li key={row.id}>
+                          <article className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <span className="inline-flex max-w-[85%] rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-800">
                                 {label}
                               </span>
-                            </td>
-                            <td className="py-2.5 pr-3 text-[13px] text-slate-800">
-                              <span className="line-clamp-2">{summary}</span>
-                            </td>
-                            <td className="py-2.5 pr-2 text-slate-600">
-                              {row.actor ? (
-                                <div className="flex items-start gap-2">
-                                  <span className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-gradient-to-br from-blue-100 to-slate-100 text-[10px] font-semibold text-slate-800">
-                                    {row.actor.image ? (
-                                      // eslint-disable-next-line @next/next/no-img-element -- profile URL from API
-                                      <img
-                                        src={row.actor.image}
-                                        alt=""
-                                        className="h-full w-full object-cover"
-                                      />
-                                    ) : (
-                                      userInitials(row.actor.name, row.actor.email)
-                                    )}
-                                  </span>
-                                  <span className="min-w-0">
-                                    <span className="block truncate text-xs font-medium text-slate-800">
-                                      {row.actor.name}
-                                    </span>
-                                    <span className="block truncate text-[11px] text-slate-500">
-                                      {row.actor.email}
-                                    </span>
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-slate-400">—</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 pr-4 text-xs leading-snug text-slate-600">
-                              <span className="line-clamp-3">{detail}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                <ul className="min-h-0 flex-1 space-y-3 overflow-auto p-3 md:hidden">
-                  {filtered.map((row) => {
-                    const label = row.actionLabel || row.type.replace(/_/g, " ").toLowerCase();
-                    const summary = row.summary ?? "—";
-                    const detail = row.detail ?? "—";
-                    return (
-                      <li key={row.id}>
-                        <article className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <span className="inline-flex max-w-[85%] rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-800">
-                              {label}
-                            </span>
-                            <time
-                              className="shrink-0 text-xs tabular-nums text-slate-500"
-                              dateTime={row.createdAt}
-                            >
-                              {formatAuditWhen(row.createdAt)}
-                            </time>
-                          </div>
-                          <p className="mt-2 text-sm font-medium leading-snug text-slate-900">
-                            {summary}
-                          </p>
-                          <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{detail}</p>
-                          {row.actor ? (
-                            <div className="mt-3 flex items-center gap-2.5 border-t border-slate-100 pt-3">
-                              <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-gradient-to-br from-blue-100 to-slate-100 text-[11px] font-semibold text-slate-800">
-                                {row.actor.image ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={row.actor.image}
-                                    alt=""
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  userInitials(row.actor.name, row.actor.email)
-                                )}
-                              </span>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-slate-800">
-                                  {row.actor.name}
-                                </p>
-                                <p className="truncate text-xs text-slate-500">{row.actor.email}</p>
-                              </div>
+                              <time
+                                className="shrink-0 text-xs tabular-nums text-slate-500"
+                                dateTime={row.createdAt}
+                              >
+                                {formatAuditWhen(row.createdAt)}
+                              </time>
                             </div>
-                          ) : null}
-                        </article>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
+                            <p className="mt-2 text-sm font-medium leading-snug text-slate-900">
+                              {summary}
+                            </p>
+                            <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+                              {detail}
+                            </p>
+                            {row.actor ? (
+                              <div className="mt-3 flex items-center gap-2.5 border-t border-slate-100 pt-3">
+                                <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-gradient-to-br from-blue-100 to-slate-100 text-[11px] font-semibold text-slate-800">
+                                  {row.actor.image ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={row.actor.image}
+                                      alt=""
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    userInitials(row.actor.name, row.actor.email)
+                                  )}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium text-slate-800">
+                                    {row.actor.name}
+                                  </p>
+                                  <p className="truncate text-xs text-slate-500">
+                                    {row.actor.email}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : null}
+                          </article>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              )}
+
+              {totalPages > 1 ? (
+                <div className="shrink-0 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/35 px-3 py-3 text-xs text-[var(--enterprise-text-muted)] sm:px-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="font-medium">
+                      Page{" "}
+                      <span className="tabular-nums text-[var(--enterprise-text)]">
+                        {currentPage}
+                      </span>{" "}
+                      of{" "}
+                      <span className="tabular-nums text-[var(--enterprise-text)]">
+                        {totalPages}
+                      </span>
+                      {isFetching && !isPending ? (
+                        <span className="ml-2 text-[var(--enterprise-text-muted)]">Loading…</span>
+                      ) : null}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={currentPage <= 1 || isFetching}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Previous
+                      </button>
+                      <span className="min-w-[5.5rem] text-center text-[11px] font-semibold tabular-nums text-[var(--enterprise-text)]">
+                        {currentPage} / {totalPages}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={currentPage >= totalPages || isFetching}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </>
         )}
       </section>

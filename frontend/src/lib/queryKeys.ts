@@ -22,7 +22,10 @@ export const qk = {
   projectPunchTemplates: (projectId: string) => ["projectPunchTemplates", projectId] as const,
   projectFieldReports: (projectId: string) => ["projectFieldReports", projectId] as const,
   /** Project audit log (opens, uploads, deletes, …) */
-  projectAudit: (projectId: string) => ["project-audit", projectId] as const,
+  projectAudit: (projectId: string, page: number, pageSize: number) =>
+    ["project-audit", projectId, page, pageSize] as const,
+  /** Invalidate all paginated audit-log queries for a project. */
+  projectAuditRoot: (projectId: string) => ["project-audit", projectId] as const,
   projectFileComments: (projectId: string, fileId: string, fileVersionId?: string | null) =>
     ["project-file-comments", projectId, fileId, fileVersionId ?? "all"] as const,
   projectDashboard: (projectId: string) => ["projectDashboard", projectId] as const,
