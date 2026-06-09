@@ -348,7 +348,25 @@ export function AssetLocationPin({
             strokeWidth={1.15}
             strokeLinejoin="round"
           />
-          <circle cx="12" cy="9.2" r="2.85" fill="rgba(255,255,255,0.92)" />
+          <g transform="translate(12 9.2)">
+            <rect
+              x="-2.4"
+              y="-1.6"
+              width="4.8"
+              height="3.6"
+              rx="0.45"
+              fill="rgba(255,255,255,0.95)"
+              stroke="#0f766e"
+              strokeWidth="0.45"
+            />
+            <path
+              d="M-2.4 -1.1 L0 -2.35 L2.4 -1.1"
+              fill="none"
+              stroke="#0f766e"
+              strokeWidth="0.45"
+              strokeLinejoin="round"
+            />
+          </g>
         </g>
       </g>
       <text

@@ -6,7 +6,6 @@ import {
   ChevronRight,
   ExternalLink,
   Link2,
-  MapPin,
   Package,
   PanelRightOpen,
   Pencil,
@@ -29,7 +28,9 @@ import {
   ProRequiredError,
 } from "@/lib/api-client";
 import { sortedVersions } from "@/components/file-explorer/fileExplorerUtils";
+import { assetHasSheetPin } from "@/lib/assetPinFocus";
 import { isPdfFile } from "@/lib/isPdfFile";
+import { buildOmAssetViewerQuery, omAssetViewerMode } from "@/lib/omAssetViewerNavigation";
 import { qk } from "@/lib/queryKeys";
 import type { CloudFile, FileVersion } from "@/types/projects";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
@@ -333,8 +334,9 @@ function AssetFormFields({
           Linked drawing (optional)
         </p>
         <p className="mb-3 text-xs text-[var(--enterprise-text-muted)]">
-          Pick a PDF and revision to attach without a sheet pin, or leave empty and use{" "}
-          <strong className="text-[var(--enterprise-text)]">Link on sheet</strong> after saving.
+          Optionally attach a drawing revision now, or leave empty and use{" "}
+          <strong className="text-[var(--enterprise-text)]">Place on drawing</strong> after saving
+          to drop a teal equipment pin (distinct from issue pins).
         </p>
         <div className="relative mb-3">
           <Search
@@ -611,24 +613,22 @@ export function OmAssetsClient({ projectId }: Props) {
     },
   });
 
-  function openViewerForAsset(f: CloudFile, asset: OmAssetRow, preferredVersionId?: string) {
+  function openViewerForAsset(
+    f: CloudFile,
+    asset: OmAssetRow,
+    preferredVersionId?: string,
+    mode: "place" | "focus" = "place",
+  ) {
     const sorted = sortedVersions(f);
     const verRow =
       (preferredVersionId ? sorted.find((v) => v.id === preferredVersionId) : undefined) ??
       sorted[0];
-    const q = new URLSearchParams({
-      fileId: f.id,
-      name: f.name,
-      projectId,
-      omAssetLink: "1",
-      omAssetId: asset.id,
-      omAssetTag: encodeURIComponent(asset.tag),
-      omAssetName: encodeURIComponent(asset.name),
-    });
-    if (verRow) {
-      q.set("version", String(verRow.version));
-      q.set("fileVersionId", verRow.id);
+    if (!verRow) {
+      toast.error("No revision available for this drawing.");
+      return;
     }
+    const resolvedMode = mode === "focus" ? "focus" : omAssetViewerMode(asset);
+    const q = buildOmAssetViewerQuery(projectId, f, asset, verRow, resolvedMode);
     router.push(`/viewer?${q.toString()}`);
     setLinkAsset(null);
     setLinkDrawingSearch("");
@@ -638,23 +638,31 @@ export function OmAssetsClient({ projectId }: Props) {
   function openViewerForLinkedAsset(asset: OmAssetRow) {
     if (!asset.fileId || !project) return;
     const f = project.files.find((x) => x.id === asset.fileId);
-    if (!f) return;
+    if (!f) {
+      toast.error("Drawing file not found in project.");
+      return;
+    }
     const sorted = sortedVersions(f);
     const verRow = sorted.find((v) => v.id === asset.fileVersionId) ?? sorted[0];
-    const q = new URLSearchParams({
-      fileId: f.id,
-      name: f.name,
-      projectId,
-      omAssetLink: "1",
-      omAssetId: asset.id,
-      omAssetTag: encodeURIComponent(asset.tag),
-      omAssetName: encodeURIComponent(asset.name),
-    });
-    if (verRow) {
-      q.set("version", String(verRow.version));
-      q.set("fileVersionId", verRow.id);
+    if (!verRow) return;
+    openViewerForAsset(f, asset, verRow.id, assetHasSheetPin(asset) ? "focus" : "place");
+  }
+
+  function startPlacePinForAsset(asset: OmAssetRow) {
+    if (!project) return;
+    if (asset.fileId) {
+      const f = project.files.find((x) => x.id === asset.fileId);
+      if (f) {
+        closeAddSlide();
+        openViewerForAsset(f, asset, asset.fileVersionId ?? undefined, "place");
+        return;
+      }
     }
-    router.push(`/viewer?${q.toString()}`);
+    setLinkAsset(asset);
+    setJustCreatedAsset(null);
+    setShowAdd(false);
+    setCreateDraft(emptyDraft());
+    setCreateDrawingSearch("");
   }
 
   function versionIdForLinkFile(f: CloudFile): string {
@@ -783,6 +791,16 @@ export function OmAssetsClient({ projectId }: Props) {
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             {justCreatedAsset ? (
               <>
+                <EnterpriseButton
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  className="sm:w-auto"
+                  onClick={() => startPlacePinForAsset(justCreatedAsset)}
+                >
+                  <Package className="h-4 w-4 text-teal-600" strokeWidth={2} />
+                  Place on drawing
+                </EnterpriseButton>
                 <EnterpriseButton
                   variant="secondary"
                   size="lg"
@@ -1062,8 +1080,8 @@ export function OmAssetsClient({ projectId }: Props) {
                             }
                             className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50"
                           >
-                            <MapPin className="h-3.5 w-3.5" strokeWidth={2} />
-                            Open viewer · place pin
+                            <Package className="h-3.5 w-3.5 text-teal-600" strokeWidth={2} />
+                            Place equipment pin
                           </button>
                         </div>
                       </div>
@@ -1132,9 +1150,13 @@ export function OmAssetsClient({ projectId }: Props) {
                       <span className="font-mono text-sm font-bold text-[var(--enterprise-primary)]">
                         {a.tag}
                       </span>
-                      {a.file ? (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200/80">
+                      {assetHasSheetPin(a) ? (
+                        <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-800 ring-1 ring-teal-200/80 dark:bg-teal-950/40 dark:text-teal-200">
                           On drawing
+                        </span>
+                      ) : a.file ? (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200/80 dark:bg-slate-800 dark:text-slate-300">
+                          Drawing only
                         </span>
                       ) : null}
                     </span>
@@ -1209,10 +1231,10 @@ export function OmAssetsClient({ projectId }: Props) {
                           <button
                             type="button"
                             onClick={() => openViewerForLinkedAsset(a)}
-                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-bg)]"
+                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-teal-200/80 px-3 text-xs font-medium text-teal-800 hover:bg-teal-50 dark:border-teal-900/50 dark:text-teal-200 dark:hover:bg-teal-950/40"
                           >
-                            <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-                            View
+                            <Package className="h-3.5 w-3.5" strokeWidth={2} />
+                            {assetHasSheetPin(a) ? "View pin" : "Open drawing"}
                           </button>
                         ) : null}
                         <button

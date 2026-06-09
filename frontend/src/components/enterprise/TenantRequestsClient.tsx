@@ -872,12 +872,18 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
               </button>
             ) : null}
             <Link
-              href={detailIssue ? viewerHrefForIssue(detailIssue) : "#"}
+              href={
+                detailIssue && viewerHrefForIssue(detailIssue)
+                  ? viewerHrefForIssue(detailIssue)!
+                  : "#"
+              }
               onClick={(e) => {
-                if (!detailIssue) e.preventDefault();
+                if (!detailIssue || !viewerHrefForIssue(detailIssue)) e.preventDefault();
               }}
               className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-medium text-[var(--enterprise-text)] shadow-sm hover:bg-[var(--enterprise-bg)] sm:w-auto ${
-                !detailIssue ? "pointer-events-none opacity-50" : ""
+                !detailIssue || !viewerHrefForIssue(detailIssue)
+                  ? "pointer-events-none opacity-50"
+                  : ""
               }`}
             >
               <MapPin className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />

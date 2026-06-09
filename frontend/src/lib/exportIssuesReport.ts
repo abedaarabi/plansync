@@ -37,7 +37,7 @@ export function openIssuesPrintReport(issues: IssueRow[], fileLabel: string): vo
     const status = ISSUE_STATUS_LABEL[issue.status] ?? issue.status;
     const priority = ISSUE_PRIORITY_LABEL[pri] ?? pri;
     const page = issue.pageNumber != null ? `p.${issue.pageNumber}` : "—";
-    const sheet = issue.sheetName ?? issue.file.name;
+    const sheet = issue.sheetName ?? issue.file?.name ?? "No sheet";
     return `<tr>
       <td>${escHtml(issue.title)}</td>
       <td>${escHtml(status)}</td>

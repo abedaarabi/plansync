@@ -41,8 +41,8 @@ export type IssueRow = {
   id: string;
   workspaceId: string;
   projectId: string;
-  fileId: string;
-  fileVersionId: string;
+  fileId: string | null;
+  fileVersionId: string | null;
   title: string;
   description: string | null;
   status: string;
@@ -64,8 +64,8 @@ export type IssueRow = {
   updatedAt: string;
   assignee: IssueUserRef | null;
   creator: IssueUserRef | null;
-  file: { name: string };
-  fileVersion: { version: number };
+  file: { name: string } | null;
+  fileVersion: { version: number } | null;
   /** RFIs linked to this issue (many-to-many). */
   linkedRfis: { id: string; rfiNumber: number; title: string; status: string }[];
   issueKind?: string;
@@ -130,6 +130,52 @@ export async function fetchIssue(issueId: string): Promise<IssueRow> {
   if (res.status === 402) throw new ProRequiredError();
   if (!res.ok) throw new Error("Could not load issue.");
   return res.json() as Promise<IssueRow>;
+}
+
+/** MIME for S3 PUT + API validation (mobile cameras often omit type or use HEIC). */
+export function issueReferencePhotoContentType(file: File): string {
+  const raw = file.type?.trim().toLowerCase() || "";
+  const allowed = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/heic",
+    "image/heif",
+  ]);
+  if (allowed.has(raw)) return raw;
+  const n = file.name.toLowerCase();
+  if (n.endsWith(".heic")) return "image/heic";
+  if (n.endsWith(".heif")) return "image/heif";
+  if (n.endsWith(".png")) return "image/png";
+  if (n.endsWith(".webp")) return "image/webp";
+  if (n.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+}
+
+/** Presign PUT, upload to S3, then complete — returns the updated issue row. */
+export async function uploadIssueReferencePhotoFile(
+  issueId: string,
+  file: File,
+): Promise<IssueRow> {
+  const contentType = issueReferencePhotoContentType(file);
+  const { uploadUrl, key } = await presignIssueReferencePhotoUpload(issueId, {
+    fileName: file.name,
+    contentType,
+    sizeBytes: file.size,
+  });
+  const put = await fetch(uploadUrl, {
+    method: "PUT",
+    body: file,
+    headers: { "Content-Type": contentType },
+  });
+  if (!put.ok) throw new Error("Could not upload image to storage.");
+  return completeIssueReferencePhotoUpload(issueId, {
+    key,
+    fileName: file.name,
+    contentType,
+    sizeBytes: file.size,
+  });
 }
 
 export async function presignIssueReferencePhotoUpload(
@@ -232,8 +278,9 @@ export async function presignReadIssueReferencePhoto(
 
 export async function createIssue(body: {
   workspaceId: string;
-  fileId: string;
-  fileVersionId: string;
+  projectId?: string;
+  fileId?: string;
+  fileVersionId?: string;
   title: string;
   description?: string;
   annotationId?: string;
@@ -248,6 +295,9 @@ export async function createIssue(body: {
   rfiId?: string;
   rfiIds?: string[];
   issueKind?: "WORK_ORDER" | "CONSTRUCTION";
+  assetId?: string;
+  externalAssigneeEmail?: string;
+  externalAssigneeName?: string;
 }): Promise<IssueRow> {
   const res = await fetch(apiUrl("/api/v1/issues"), {
     method: "POST",
@@ -283,6 +333,9 @@ export async function patchIssue(
     /** Replace linked RFIs for this issue. */
     rfiIds?: string[];
     issueKind?: IssueKindApi;
+    assetId?: string | null;
+    externalAssigneeEmail?: string | null;
+    externalAssigneeName?: string | null;
   },
 ): Promise<IssueRow> {
   const res = await fetch(apiUrl(`/api/v1/issues/${encodeURIComponent(issueId)}`), {
@@ -343,8 +396,9 @@ export function viewerHrefForTakeoffLine(row: TakeoffLineRow): string {
   return `/viewer?${q.toString()}`;
 }
 
-/** Relative URL to open the viewer on this issue (same sheet revision). */
-export function viewerHrefForIssue(row: IssueRow): string {
+/** Relative URL to open the viewer on this issue (same sheet revision), or null when no sheet is linked. */
+export function viewerHrefForIssue(row: IssueRow): string | null {
+  if (!row.fileId || !row.fileVersionId || !row.file || !row.fileVersion) return null;
   const q = new URLSearchParams();
   q.set("fileId", row.fileId);
   q.set("name", row.file.name);

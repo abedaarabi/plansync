@@ -1293,7 +1293,7 @@ export function PdfPageView({
           ],
           linkedIssueTitle: "New issue",
           issueStatus: "OPEN",
-          linkedIssueKind: st0.viewerOperationsMode ? "WORK_ORDER" : "CONSTRUCTION",
+          linkedIssueKind: "CONSTRUCTION",
           issueDraft: true,
           author: displayName,
         });

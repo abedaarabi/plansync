@@ -9,12 +9,14 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import {
   fetchIssue,
   fetchMe,
+  fetchOmAssets,
   fetchProject,
   fetchProjectSession,
   fetchViewerState,
   putViewerState,
   ViewerStateConflictError,
 } from "@/lib/api-client";
+import { rectNormFromAssetPinJson } from "@/lib/assetPinFocus";
 import { findAnnotationById, normRectFromAnnotationPoints } from "@/lib/issueFocus";
 import { takeoffFocusRectForZone, TAKEOFF_FOCUS_FIT_MARGIN } from "@/lib/takeoffFocus";
 import { meHasProWorkspace } from "@/lib/proWorkspace";
@@ -212,8 +214,11 @@ export function PdfViewer() {
     firstRenderLogged: boolean;
   } | null>(null);
   const issueFocusConsumedRef = useRef<string | null>(null);
+  const omAssetFocusConsumedRef = useRef<string | null>(null);
   const takeoffFocusConsumedRef = useRef<string | null>(null);
   const issueIdParam = searchParams.get("issueId");
+  const omAssetFocusParam = searchParams.get("omAssetFocus");
+  const omAssetIdParam = searchParams.get("omAssetId");
   const takeoffZoneIdParam = searchParams.get("takeoffZoneId");
   /** One-time fit width per PDF load; skip when deep-linking to an issue (issue focus zooms). */
   const initialFitWidthAppliedRef = useRef(false);
@@ -250,8 +255,9 @@ export function PdfViewer() {
   /** Deep link from Assets → “Link on sheet”: start placement once the PDF is open. */
   useEffect(() => {
     const om = searchParams.get("omAssetLink");
+    const focus = searchParams.get("omAssetFocus");
     const aid = searchParams.get("omAssetId");
-    if (!pdfUrl || om !== "1" || !aid?.trim()) return;
+    if (!pdfUrl || om !== "1" || focus === "1" || !aid?.trim()) return;
     setOmAssetPlacementActive(true);
   }, [pdfUrl, searchParams, setOmAssetPlacementActive]);
 
@@ -419,7 +425,7 @@ export function PdfViewer() {
 
   useEffect(() => {
     if (!pdfDoc || numPages < 1) return;
-    if (issueIdParam?.trim() || takeoffZoneIdParam?.trim()) return;
+    if (issueIdParam?.trim() || omAssetFocusParam === "1" || takeoffZoneIdParam?.trim()) return;
     const cfv = useViewerStore.getState().cloudFileVersionId;
     if (cfv && !cloudHydrated) return;
     if (initialFitWidthAppliedRef.current) return;
@@ -437,6 +443,7 @@ export function PdfViewer() {
     pageSizePtByPage,
     cloudHydrated,
     issueIdParam,
+    omAssetFocusParam,
     takeoffZoneIdParam,
     requestFit,
   ]);
@@ -444,6 +451,10 @@ export function PdfViewer() {
   useEffect(() => {
     issueFocusConsumedRef.current = null;
   }, [issueIdParam]);
+
+  useEffect(() => {
+    omAssetFocusConsumedRef.current = null;
+  }, [omAssetIdParam, omAssetFocusParam]);
 
   useEffect(() => {
     takeoffFocusConsumedRef.current = null;
@@ -548,6 +559,85 @@ export function PdfViewer() {
       cancelled = true;
     };
   }, [issueIdParam, cloudHydrated, pdfDoc, cloudFileVersionId, setPendingProSidebarTab]);
+
+  /** Deep link: `/viewer?...&omAssetFocus=1` zooms to equipment pin after cloud state hydrates. */
+  useEffect(() => {
+    if (omAssetFocusParam !== "1") return;
+    const assetId = omAssetIdParam?.trim();
+    const projectId = searchParams.get("projectId")?.trim();
+    if (!assetId || !cloudHydrated || !pdfDoc || !cloudFileVersionId) return;
+    if (omAssetFocusConsumedRef.current === assetId) return;
+
+    let cancelled = false;
+    const annotIdHint = searchParams.get("omAssetAnnotationId")?.trim();
+
+    void (async () => {
+      const focusPin = (
+        pageNumber: number,
+        rectNorm: { x: number; y: number; w: number; h: number },
+        selectId?: string,
+      ) => {
+        useViewerStore.getState().requestSearchFocus({
+          pageNumber,
+          rectNorm,
+          ...(selectId ? { selectAnnotationId: selectId } : {}),
+        });
+        omAssetFocusConsumedRef.current = assetId;
+      };
+
+      const deadline = Date.now() + 3000;
+      let ann =
+        (annotIdHint
+          ? findAnnotationById(useViewerStore.getState().annotations, annotIdHint)
+          : undefined) ??
+        useViewerStore.getState().annotations.find((a) => a.linkedOmAssetId === assetId);
+
+      while (!ann && Date.now() < deadline && !cancelled) {
+        await new Promise<void>((r) => requestAnimationFrame(() => r()));
+        ann =
+          (annotIdHint
+            ? findAnnotationById(useViewerStore.getState().annotations, annotIdHint)
+            : undefined) ??
+          useViewerStore.getState().annotations.find((a) => a.linkedOmAssetId === assetId);
+      }
+
+      if (cancelled) return;
+
+      if (ann) {
+        focusPin(ann.pageIndex + 1, normRectFromAnnotationPoints(ann.points), ann.id);
+        return;
+      }
+
+      if (projectId) {
+        try {
+          const assets = await fetchOmAssets(projectId);
+          if (cancelled) return;
+          const asset = assets.find((a) => a.id === assetId);
+          if (asset?.fileVersionId && asset.fileVersionId !== cloudFileVersionId) {
+            toast.error("This equipment is linked to a different sheet revision.");
+            omAssetFocusConsumedRef.current = assetId;
+            return;
+          }
+          const fromPin = rectNormFromAssetPinJson(asset?.pinJson, asset?.pageNumber);
+          if (fromPin) {
+            focusPin(fromPin.pageNumber, fromPin.rectNorm, asset?.annotationId ?? undefined);
+            return;
+          }
+        } catch (e) {
+          if (!cancelled) {
+            toast.error(e instanceof Error ? e.message : "Could not load equipment.");
+          }
+        }
+      }
+
+      toast.error("Equipment pin not found on this sheet.");
+      omAssetFocusConsumedRef.current = assetId;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [omAssetFocusParam, omAssetIdParam, cloudHydrated, pdfDoc, cloudFileVersionId, searchParams]);
 
   useEffect(() => {
     if (!fileName || numPages < 1) return;

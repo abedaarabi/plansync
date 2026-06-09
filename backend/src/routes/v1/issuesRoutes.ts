@@ -161,8 +161,8 @@ function issueRowJson(row: IssueRow, opts?: { maskPortalReporter?: boolean }) {
     annotationId: row.annotationId,
     attachedMarkupAnnotationIds: parseAttachedMarkupAnnotationIds(row.attachedMarkupAnnotationIds),
     referencePhotos: parseReferencePhotos(row.referencePhotos),
-    sheetName: row.sheetName ?? row.file.name,
-    sheetVersion: row.sheetVersion ?? row.fileVersion.version,
+    sheetName: row.sheetName ?? row.file?.name ?? null,
+    sheetVersion: row.sheetVersion ?? row.fileVersion?.version ?? null,
     pageNumber: row.pageNumber,
     assigneeId: row.assigneeId,
     creatorId: row.creatorId,
@@ -184,8 +184,8 @@ function issueRowJson(row: IssueRow, opts?: { maskPortalReporter?: boolean }) {
           image: row.creator.image,
         }
       : null,
-    file: { name: row.file.name },
-    fileVersion: { version: row.fileVersion.version },
+    file: row.file ? { name: row.file.name } : null,
+    fileVersion: row.fileVersion ? { version: row.fileVersion.version } : null,
     linkedRfis: row.rfiLinks.map((l) => ({
       id: l.rfi.id,
       rfiNumber: l.rfi.rfiNumber,
@@ -414,7 +414,10 @@ export function registerIssuesRoutes(
     }
     const gate = requirePro(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
-    if (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id)) {
+    if (
+      issue.fileVersionId &&
+      (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id))
+    ) {
       return c.json({ error: "File is locked by another user" }, 409);
     }
 
@@ -505,7 +508,10 @@ export function registerIssuesRoutes(
     }
     const gate = requirePro(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
-    if (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id)) {
+    if (
+      issue.fileVersionId &&
+      (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id))
+    ) {
       return c.json({ error: "File is locked by another user" }, 409);
     }
 
@@ -577,7 +583,7 @@ export function registerIssuesRoutes(
       });
     });
 
-    notifyIssues(updated.fileVersionId);
+    if (updated.fileVersionId) notifyIssues(updated.fileVersionId);
     return c.json(issueRowJson(updated, { maskPortalReporter: ctx.workspaceMember.isExternal }));
   });
 
@@ -624,8 +630,10 @@ export function registerIssuesRoutes(
     const body = z
       .object({
         workspaceId: z.string(),
-        fileId: z.string(),
-        fileVersionId: z.string(),
+        /** Required when creating without a linked sheet. */
+        projectId: z.string().optional(),
+        fileId: z.string().optional(),
+        fileVersionId: z.string().optional(),
         title: z.string().min(1),
         description: z.string().optional(),
         annotationId: z.string().optional(),
@@ -651,34 +659,68 @@ export function registerIssuesRoutes(
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
 
-    const file = await prisma.file.findFirst({
-      where: { id: body.data.fileId, project: { workspaceId: body.data.workspaceId } },
-      include: { project: { include: { workspace: true } } },
-    });
-    if (!file) return c.json({ error: "File not found" }, 404);
-    const auth = await loadProjectWithAuth(file.projectId, c.get("user").id);
+    const hasSheet = Boolean(body.data.fileId?.trim() || body.data.fileVersionId?.trim());
+    if (hasSheet && (!body.data.fileId?.trim() || !body.data.fileVersionId?.trim())) {
+      return c.json(
+        { error: "fileId and fileVersionId must both be set when linking a sheet" },
+        400,
+      );
+    }
+    if (!hasSheet && !body.data.projectId?.trim()) {
+      return c.json({ error: "projectId is required when no sheet is linked" }, 400);
+    }
+
+    let projectId: string;
+    let file: { id: string; name: string; projectId: string } | null = null;
+    let fv: { id: string; version: number } | null = null;
+
+    if (hasSheet) {
+      const fileRow = await prisma.file.findFirst({
+        where: { id: body.data.fileId!, project: { workspaceId: body.data.workspaceId } },
+        include: { project: { include: { workspace: true } } },
+      });
+      if (!fileRow) return c.json({ error: "File not found" }, 404);
+      const fvRow = await prisma.fileVersion.findFirst({
+        where: { id: body.data.fileVersionId!, fileId: fileRow.id },
+      });
+      if (!fvRow) return c.json({ error: "File version not found" }, 404);
+      if (await fileVersionWriteBlocked(fvRow.id, c.get("user").id)) {
+        return c.json({ error: "File is locked by another user" }, 409);
+      }
+      projectId = fileRow.projectId;
+      file = { id: fileRow.id, name: fileRow.name, projectId: fileRow.projectId };
+      fv = { id: fvRow.id, version: fvRow.version };
+    } else {
+      projectId = body.data.projectId!.trim();
+    }
+
+    const auth = await loadProjectWithAuth(projectId, c.get("user").id);
     if ("error" in auth) return c.json({ error: auth.error }, auth.status);
     const { ctx } = auth;
+    if (ctx.project.workspaceId !== body.data.workspaceId) {
+      return c.json({ error: "Project not found in workspace" }, 400);
+    }
     if (!ctx.settings.modules.issues) {
       return c.json({ error: "Issues are disabled for this project" }, 403);
     }
     if (!canCreateIssues(ctx)) {
       return c.json({ error: "Forbidden" }, 403);
     }
-    const gate = requirePro(file.project.workspace);
+    const gate = requirePro(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     if (body.data.issueKind === IssueKind.OCCUPANT) {
       return c.json({ error: "Tenant requests are created only through the occupant portal" }, 400);
     }
 
-    const fv = await prisma.fileVersion.findFirst({
-      where: { id: body.data.fileVersionId, fileId: file.id },
-    });
-    if (!fv) return c.json({ error: "File version not found" }, 404);
-
-    if (await fileVersionWriteBlocked(fv.id, c.get("user").id)) {
-      return c.json({ error: "File is locked by another user" }, 409);
+    if (body.data.pageNumber !== undefined && !hasSheet) {
+      return c.json({ error: "pageNumber requires a linked sheet" }, 400);
+    }
+    if (body.data.annotationId?.trim() && !hasSheet) {
+      return c.json({ error: "annotationId requires a linked sheet" }, 400);
+    }
+    if ((body.data.attachedMarkupAnnotationIds?.length ?? 0) > 0 && !hasSheet) {
+      return c.json({ error: "attachedMarkupAnnotationIds requires a linked sheet" }, 400);
     }
 
     const rfiIdsToLink = [
@@ -686,7 +728,7 @@ export function registerIssuesRoutes(
     ];
     if (rfiIdsToLink.length > 0) {
       const linkRfis = await prisma.rfi.findMany({
-        where: { id: { in: rfiIdsToLink }, projectId: file.projectId },
+        where: { id: { in: rfiIdsToLink }, projectId },
       });
       if (linkRfis.length !== rfiIdsToLink.length) {
         return c.json({ error: "One or more RFIs were not found in this project" }, 400);
@@ -699,7 +741,7 @@ export function registerIssuesRoutes(
     if (body.data.assigneeId) {
       const a = await assertUserAssignableToProject(
         body.data.assigneeId,
-        file.projectId,
+        projectId,
         body.data.workspaceId,
       );
       if ("error" in a) return c.json({ error: a.error }, a.status);
@@ -707,7 +749,7 @@ export function registerIssuesRoutes(
 
     if (body.data.assetId) {
       const ast = await prisma.asset.findFirst({
-        where: { id: body.data.assetId, projectId: file.projectId },
+        where: { id: body.data.assetId, projectId },
       });
       if (!ast) return c.json({ error: "Asset not found on this project" }, 400);
     }
@@ -737,9 +779,15 @@ export function registerIssuesRoutes(
       const iss = await tx.issue.create({
         data: {
           workspaceId: body.data.workspaceId,
-          projectId: file.projectId,
-          fileId: body.data.fileId,
-          fileVersionId: body.data.fileVersionId,
+          projectId,
+          ...(file && fv
+            ? {
+                fileId: file.id,
+                fileVersionId: fv.id,
+                sheetName: file.name,
+                sheetVersion: fv.version,
+              }
+            : { fileId: null, fileVersionId: null }),
           title: body.data.title,
           description: body.data.description,
           annotationId: primaryAnnId,
@@ -753,8 +801,6 @@ export function registerIssuesRoutes(
           ...(startDate !== undefined ? { startDate } : {}),
           ...(dueDate !== undefined ? { dueDate } : {}),
           ...(body.data.location !== undefined ? { location: body.data.location } : {}),
-          sheetName: file.name,
-          sheetVersion: fv.version,
           ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
           ...(body.data.issueKind !== undefined ? { issueKind: body.data.issueKind } : {}),
           ...(body.data.assetId !== undefined ? { assetId: body.data.assetId } : {}),
@@ -813,7 +859,14 @@ export function registerIssuesRoutes(
     });
     const assignerName = actor?.name?.trim() || "Someone";
 
-    if (issue.assigneeId && issue.assignee?.email) {
+    if (
+      issue.assigneeId &&
+      issue.assignee?.email &&
+      issue.fileId &&
+      issue.fileVersionId &&
+      issue.file &&
+      issue.fileVersion
+    ) {
       const viewerParams = {
         issueId: issue.id,
         fileId: issue.fileId,
@@ -842,7 +895,7 @@ export function registerIssuesRoutes(
       }).catch((e) => console.error("[issue-notification]", e));
     }
 
-    if (extEmail) {
+    if (extEmail && issue.fileId && issue.fileVersionId && issue.file && issue.fileVersion) {
       const viewerParams = {
         issueId: issue.id,
         fileId: issue.fileId,
@@ -861,7 +914,7 @@ export function registerIssuesRoutes(
       }).catch((e) => console.error("[issue-email-external]", e));
     }
 
-    notifyIssues(issue.fileVersionId);
+    if (issue.fileVersionId) notifyIssues(issue.fileVersionId);
     return c.json(issueRowJson(issue, { maskPortalReporter: ctx.workspaceMember.isExternal }));
   });
 
@@ -1046,7 +1099,10 @@ export function registerIssuesRoutes(
     });
     if (issuePatchAllowed === 0) return c.json({ error: "Not found" }, 404);
 
-    if (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id)) {
+    if (
+      issue.fileVersionId &&
+      (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id))
+    ) {
       return c.json({ error: "File is locked by another user" }, 409);
     }
 
@@ -1212,13 +1268,16 @@ export function registerIssuesRoutes(
           ? null
           : dateFromYmd(body.data.dueDate);
 
-    const [fileFresh, fvFresh] = await Promise.all([
-      prisma.file.findUnique({ where: { id: issue.fileId }, select: { name: true } }),
-      prisma.fileVersion.findUnique({
-        where: { id: issue.fileVersionId },
-        select: { version: true },
-      }),
-    ]);
+    const [fileFresh, fvFresh] =
+      issue.fileId && issue.fileVersionId
+        ? await Promise.all([
+            prisma.file.findUnique({ where: { id: issue.fileId }, select: { name: true } }),
+            prisma.fileVersion.findUnique({
+              where: { id: issue.fileVersionId },
+              select: { version: true },
+            }),
+          ])
+        : [null, null];
 
     const patchRfiIds = body.data.rfiIds !== undefined ? [...new Set(body.data.rfiIds)] : undefined;
     if (patchRfiIds !== undefined && patchRfiIds.length > 0) {
@@ -1244,8 +1303,8 @@ export function registerIssuesRoutes(
       const u = await tx.issue.update({
         where: { id: issue.id },
         data: {
-          sheetName: fileFresh?.name ?? issue.file.name,
-          sheetVersion: fvFresh?.version ?? issue.fileVersion.version,
+          sheetName: fileFresh?.name ?? issue.file?.name ?? issue.sheetName,
+          sheetVersion: fvFresh?.version ?? issue.fileVersion?.version ?? issue.sheetVersion,
           ...(body.data.status !== undefined ? { status: body.data.status } : {}),
           ...(body.data.title !== undefined ? { title: body.data.title } : {}),
           ...(body.data.description !== undefined ? { description: body.data.description } : {}),
@@ -1403,7 +1462,15 @@ export function registerIssuesRoutes(
     const shouldNotifyAssignee =
       nextAssigneeId !== undefined && nextAssigneeId !== null && nextAssigneeId !== prevAssigneeId;
 
-    if (shouldNotifyAssignee && updated.assigneeId && updated.assignee?.email) {
+    if (
+      shouldNotifyAssignee &&
+      updated.assigneeId &&
+      updated.assignee?.email &&
+      updated.fileId &&
+      updated.fileVersionId &&
+      updated.file &&
+      updated.fileVersion
+    ) {
       const actor = await prisma.user.findUnique({
         where: { id: c.get("user").id },
         select: { name: true },
@@ -1439,7 +1506,14 @@ export function registerIssuesRoutes(
 
     const prevExt = issue.externalAssigneeEmail?.trim() ?? "";
     const nextExt = updated.externalAssigneeEmail?.trim() ?? "";
-    if (nextExt && nextExt !== prevExt) {
+    if (
+      nextExt &&
+      nextExt !== prevExt &&
+      updated.fileId &&
+      updated.fileVersionId &&
+      updated.file &&
+      updated.fileVersion
+    ) {
       const actor = await prisma.user.findUnique({
         where: { id: c.get("user").id },
         select: { name: true },
@@ -1469,7 +1543,7 @@ export function registerIssuesRoutes(
       );
     }
 
-    notifyIssues(issue.fileVersionId);
+    if (issue.fileVersionId) notifyIssues(issue.fileVersionId);
     return c.json(
       issueRowJson(updated, {
         maskPortalReporter: issuePatchAuth.ctx.workspaceMember.isExternal,
@@ -1497,7 +1571,10 @@ export function registerIssuesRoutes(
     });
     if (delAllowed === 0) return c.json({ error: "Not found" }, 404);
 
-    if (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id)) {
+    if (
+      issue.fileVersionId &&
+      (await fileVersionWriteBlocked(issue.fileVersionId, c.get("user").id))
+    ) {
       return c.json({ error: "File is locked by another user" }, 409);
     }
 
@@ -1506,27 +1583,29 @@ export function registerIssuesRoutes(
     const photoBytes = issuePhotosStorageBytes(photos);
 
     const viewerRevision = await prisma.$transaction(async (tx) => {
-      const fv = await tx.fileVersion.findUnique({
-        where: { id: issue.fileVersionId },
-        select: { annotationBlob: true },
-      });
-      const nextBlob = stripIssueLinkedAnnotationsFromViewerBlob(
-        fv?.annotationBlob,
-        issueId,
-        issue.annotationId,
-        issue.attachedMarkupAnnotationIds,
-      );
       let rev: number | undefined;
-      if (nextBlob !== null) {
-        const fvUp = await tx.fileVersion.update({
+      if (issue.fileVersionId) {
+        const fv = await tx.fileVersion.findUnique({
           where: { id: issue.fileVersionId },
-          data: {
-            annotationBlob: nextBlob,
-            annotationBlobRevision: { increment: 1 },
-          },
-          select: { annotationBlobRevision: true },
+          select: { annotationBlob: true },
         });
-        rev = fvUp.annotationBlobRevision;
+        const nextBlob = stripIssueLinkedAnnotationsFromViewerBlob(
+          fv?.annotationBlob,
+          issueId,
+          issue.annotationId,
+          issue.attachedMarkupAnnotationIds,
+        );
+        if (nextBlob !== null) {
+          const fvUp = await tx.fileVersion.update({
+            where: { id: issue.fileVersionId },
+            data: {
+              annotationBlob: nextBlob,
+              annotationBlobRevision: { increment: 1 },
+            },
+            select: { annotationBlobRevision: true },
+          });
+          rev = fvUp.annotationBlobRevision;
+        }
       }
       await tx.issue.delete({ where: { id: issueId } });
       if (photoBytes > 0n) {
@@ -1538,7 +1617,7 @@ export function registerIssuesRoutes(
       return rev;
     });
 
-    if (viewerRevision !== undefined && collaborationGloballyEnabled(env)) {
+    if (issue.fileVersionId && viewerRevision !== undefined && collaborationGloballyEnabled(env)) {
       broadcastViewerState(issue.fileVersionId, viewerRevision, c.get("user").id);
     }
 
@@ -1555,7 +1634,7 @@ export function registerIssuesRoutes(
       metadata: { title },
     });
 
-    notifyIssues(issue.fileVersionId);
+    if (issue.fileVersionId) notifyIssues(issue.fileVersionId);
     return c.json({ ok: true as const });
   });
 }

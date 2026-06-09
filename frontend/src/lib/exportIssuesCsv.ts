@@ -59,8 +59,12 @@ export function buildIssuesCsv(issues: IssueRow[], fileLabel: string): string {
         (issue.description ?? "").replace(/\n/g, " "),
         issue.location ?? "",
         issue.pageNumber != null ? String(issue.pageNumber) : "",
-        issue.sheetName ?? issue.file.name,
-        issue.sheetVersion != null ? String(issue.sheetVersion) : String(issue.fileVersion.version),
+        issue.sheetName ?? issue.file?.name ?? "No sheet",
+        issue.sheetVersion != null
+          ? String(issue.sheetVersion)
+          : issue.fileVersion?.version != null
+            ? String(issue.fileVersion.version)
+            : "",
         formatUser(issue.assignee),
         isoDate(issue.dueDate),
         isoDate(issue.startDate),

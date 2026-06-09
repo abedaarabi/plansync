@@ -454,7 +454,7 @@ export function ProjectTakeoffClient({
   const totalsBySheet = useMemo(() => {
     const m = new Map<string, { label: string; total: number }>();
     for (const r of tableLines) {
-      const key = r.fileId;
+      const key = r.fileId ?? r.fileName;
       const prev = m.get(key);
       const net = lineNetAfterItemDisc(r, itemDiscountPctByKey);
       if (prev) prev.total += net;

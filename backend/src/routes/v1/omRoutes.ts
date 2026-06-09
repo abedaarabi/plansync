@@ -3149,15 +3149,17 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
     for (const a of admins) notifyUserIds.add(a.userId);
     for (const p of projectInternals) notifyUserIds.add(p.userId);
 
-    const viewerParams = {
-      issueId: issue.id,
-      fileId: issue.fileId,
-      fileVersionId: issue.fileVersionId,
-      projectId: issue.projectId,
-      fileName: sheetName?.trim() ? sheetName.trim() : "Drawing",
-      version: sheetVersion ?? 1,
-    };
-    const viewerPath = buildViewerIssuePath(viewerParams);
+    const viewerPath =
+      issue.fileId && issue.fileVersionId
+        ? buildViewerIssuePath({
+            issueId: issue.id,
+            fileId: issue.fileId,
+            fileVersionId: issue.fileVersionId,
+            projectId: issue.projectId,
+            fileName: sheetName?.trim() ? sheetName.trim() : "Drawing",
+            version: sheetVersion ?? 1,
+          })
+        : `/projects/${link.projectId}/om/tenant-requests/${issue.id}`;
     const baseUrl = env.PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
     const viewerAbs = baseUrl ? `${baseUrl}${viewerPath}` : viewerPath;
     const tenantListAbs = baseUrl
@@ -3437,7 +3439,7 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
       });
     });
 
-    if (collaborationGloballyEnabled(env)) {
+    if (updated.fileVersionId && collaborationGloballyEnabled(env)) {
       broadcastIssuesChanged(updated.fileVersionId);
     }
 

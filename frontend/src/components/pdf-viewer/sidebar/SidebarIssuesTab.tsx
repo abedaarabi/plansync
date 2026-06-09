@@ -127,8 +127,8 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
   const attachments = issueHasAttachments(issue);
   const canFocus =
     Boolean(issue.annotationId) || (issue.attachedMarkupAnnotationIds?.length ?? 0) > 0;
-  const sheetLabel = (issue.sheetName ?? issue.file.name).trim() || "Sheet";
-  const rev = issue.sheetVersion ?? issue.fileVersion.version;
+  const sheetLabel = (issue.sheetName ?? issue.file?.name ?? "").trim() || "Sheet";
+  const rev = issue.sheetVersion ?? issue.fileVersion?.version;
   const statusBorderHex = issueStatusMarkerStrokeHex(issue.status);
 
   const actionBtn =
@@ -348,14 +348,14 @@ export function SidebarIssuesTab() {
   const [collapsedIssueIds, setCollapsedIssueIds] = useState<string[]>([]);
 
   const viewerOperationsMode = useViewerStore((s) => s.viewerOperationsMode);
-  const omIssueKindKey = viewerOperationsMode ? "WORK_ORDER,OCCUPANT" : null;
+  const omIssueKindKey = viewerOperationsMode ? "CONSTRUCTION,WORK_ORDER,OCCUPANT" : null;
   const issuesQueryKey = qk.issuesForFileVersion(cloudFileVersionId ?? "", omIssueKindKey);
 
   const { data: issues = [], isPending: issuesPending } = useQuery({
     queryKey: issuesQueryKey,
     queryFn: () =>
       fetchIssuesForFileVersion(cloudFileVersionId!, {
-        issueKinds: viewerOperationsMode ? ["WORK_ORDER", "OCCUPANT"] : undefined,
+        issueKinds: viewerOperationsMode ? ["CONSTRUCTION", "WORK_ORDER", "OCCUPANT"] : undefined,
       }),
     enabled: Boolean(cloudFileVersionId),
   });

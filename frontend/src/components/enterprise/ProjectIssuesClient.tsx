@@ -18,15 +18,29 @@ import {
   Flag,
   FolderOpen,
   LayoutGrid,
+  Lock,
   MapPin,
+  Pencil,
+  Plus,
   RotateCcw,
   SortAsc,
+  Trash2,
   UserRound,
   Users,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
+import { DeleteProjectIssueConfirmDialog } from "@/components/enterprise/DeleteProjectIssueConfirmDialog";
+import { IssueCreateSlideOver } from "@/components/enterprise/IssueCreateSlideOver";
+import { IssueEditSlideOver } from "@/components/enterprise/IssueEditSlideOver";
+import { WorkOrderCreateSlideOver } from "@/components/enterprise/WorkOrderCreateSlideOver";
+import { WorkOrderEditSlideOver } from "@/components/enterprise/WorkOrderEditSlideOver";
+import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
+import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
 import {
+  deleteIssue,
   fetchIssuesForProject,
   fetchProject,
   fetchProjectSession,
@@ -39,14 +53,16 @@ import {
 } from "@/lib/api-client";
 import {
   ISSUE_PRIORITY_LABEL,
+  ISSUE_PRIORITY_ORDER,
   ISSUE_STATUS_LABEL,
   ISSUE_STATUS_ORDER,
   issueDateToInputValue,
   issueStatusBadgeClassLight,
   priorityBadgeClassLight,
 } from "@/lib/issueStatusStyle";
-import { qk } from "@/lib/queryKeys";
 import { MOBILE_FIELD_SELECT } from "@/lib/mobileFormStyles";
+import { qk } from "@/lib/queryKeys";
+import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 
 type StatusFilter = "ALL" | "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
 type SortKey = "newest" | "file" | "status";
@@ -60,11 +76,34 @@ const ISSUE_FILTER_DEFS: { key: StatusFilter; label: string; Icon: LucideIcon }[
   { key: "CLOSED", label: "Closed", Icon: Archive },
 ];
 
-function IssueEmptyState({ noRows, projectId }: { noRows: boolean; projectId: string }) {
+function issueSheetLabel(issue: IssueRow): string {
+  const name = issue.sheetName?.trim() || issue.file?.name?.trim();
+  if (!name) return "No sheet";
+  const ver = issue.sheetVersion ?? issue.fileVersion?.version;
+  return ver != null ? `${name} · v${ver}` : name;
+}
+
+function IssueEmptyState({
+  noRows,
+  projectId,
+  entityLabel,
+  canCreate,
+  onCreateClick,
+  emptyIcon: EmptyIcon = MapPin,
+  emptyHint,
+}: {
+  noRows: boolean;
+  projectId: string;
+  entityLabel: string;
+  canCreate: boolean;
+  onCreateClick?: () => void;
+  emptyIcon?: LucideIcon;
+  emptyHint?: string;
+}) {
   return (
     <div className="flex flex-col items-center justify-center gap-4 px-4 py-10 text-center sm:py-12">
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
-        <MapPin
+        <EmptyIcon
           className="h-7 w-7 text-[var(--enterprise-primary)]"
           strokeWidth={1.5}
           aria-hidden
@@ -72,15 +111,27 @@ function IssueEmptyState({ noRows, projectId }: { noRows: boolean; projectId: st
       </div>
       <div>
         <p className="text-sm font-semibold text-[var(--enterprise-text)]">
-          {noRows ? "No issues yet" : "No matches"}
+          {noRows ? `No ${entityLabel}s yet` : "No matches"}
         </p>
         <p className="mt-1 max-w-md text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
           {noRows
-            ? "Open a PDF from this project’s Files, then use the Issues tab in the viewer to create issues and place pins on the sheet."
-            : "Try another status filter or assignee, or reset filters to see all issues."}
+            ? canCreate
+              ? (emptyHint ??
+                `Create a ${entityLabel} here, or open a PDF from Files to place a pin on the sheet.`)
+              : `No ${entityLabel}s in this project yet.`
+            : "Try another status filter or assignee, or reset filters to see all items."}
         </p>
       </div>
-      {noRows ? (
+      {noRows && canCreate && onCreateClick ? (
+        <button
+          type="button"
+          onClick={onCreateClick}
+          className="inline-flex items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] transition hover:bg-[var(--enterprise-primary-deep)]"
+        >
+          <Plus className="h-4 w-4" strokeWidth={1.75} />
+          New {entityLabel}
+        </button>
+      ) : noRows ? (
         <Link
           href={`/projects/${projectId}/files`}
           className="inline-flex items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/30 hover:bg-[var(--enterprise-hover-surface)]"
@@ -96,7 +147,10 @@ function IssueEmptyState({ noRows, projectId }: { noRows: boolean; projectId: st
 type IssueRowProps = {
   issue: IssueRow;
   isPatching: boolean;
+  isDeleting: boolean;
   onStatusChange: (issueId: string, status: string) => void;
+  onDeleteClick: (issue: IssueRow) => void;
+  onEditClick: (issue: IssueRow) => void;
   showPromoteOccupant?: boolean;
   onPromoteToWorkOrder?: (issueId: string) => void;
   promoteBusy?: boolean;
@@ -105,13 +159,19 @@ type IssueRowProps = {
 const ProjectIssueTableRow = memo(function ProjectIssueTableRow({
   issue,
   isPatching,
+  isDeleting,
   onStatusChange,
+  onDeleteClick,
+  onEditClick,
   showPromoteOccupant,
   onPromoteToWorkOrder,
   promoteBusy,
 }: IssueRowProps) {
   const pri = issue.priority ?? "MEDIUM";
   const priClass = priorityBadgeClassLight(pri);
+  const viewerHref = viewerHrefForIssue(issue);
+  const sheetLabel = issueSheetLabel(issue);
+  const photoCount = issue.referencePhotos?.length ?? 0;
 
   return (
     <tr className="border-b border-[var(--enterprise-border)]/80 transition-colors last:border-0 hover:bg-[var(--enterprise-hover-surface)]/80">
@@ -123,11 +183,11 @@ const ProjectIssueTableRow = memo(function ProjectIssueTableRow({
             aria-hidden
           />
           <div className="min-w-0">
-            <span className="line-clamp-2 text-sm leading-snug" title={issue.file.name}>
-              {issue.file.name}
-            </span>
-            <span className="mt-1 inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-slate-600">
-              v{issue.fileVersion.version}
+            <span
+              className={`line-clamp-2 text-sm leading-snug ${issue.file ? "" : "text-[var(--enterprise-text-muted)]"}`}
+              title={sheetLabel}
+            >
+              {sheetLabel}
             </span>
           </div>
         </div>
@@ -143,6 +203,11 @@ const ProjectIssueTableRow = memo(function ProjectIssueTableRow({
             <span className="line-clamp-2 text-sm font-medium leading-snug text-[var(--enterprise-text)]">
               {issue.title}
             </span>
+            {photoCount > 0 ? (
+              <span className="mt-1 inline-flex items-center rounded-md bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--enterprise-primary)]">
+                {photoCount} photo{photoCount === 1 ? "" : "s"}
+              </span>
+            ) : null}
             {showPromoteOccupant && issue.issueKind === "OCCUPANT" && onPromoteToWorkOrder ? (
               <button
                 type="button"
@@ -154,13 +219,11 @@ const ProjectIssueTableRow = memo(function ProjectIssueTableRow({
                 Promote to work order
               </button>
             ) : null}
-            <p className="mt-1 flex items-center gap-1 text-[11px] tabular-nums text-[var(--enterprise-text-muted)]">
-              <span className="line-clamp-1">
-                {issue.sheetName ?? issue.file.name} · v
-                {issue.sheetVersion ?? issue.fileVersion.version}
-                {issue.pageNumber != null ? ` · p.${issue.pageNumber}` : ""}
-              </span>
-            </p>
+            {issue.pageNumber != null ? (
+              <p className="mt-1 text-[11px] tabular-nums text-[var(--enterprise-text-muted)]">
+                Page {issue.pageNumber}
+              </p>
+            ) : null}
           </div>
         </div>
       </td>
@@ -220,14 +283,41 @@ const ProjectIssueTableRow = memo(function ProjectIssueTableRow({
         )}
       </td>
       <td className="px-4 py-3 align-top">
-        <Link
-          href={viewerHrefForIssue(issue)}
-          title={`Open “${issue.title}” in the viewer`}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/30 hover:bg-[var(--enterprise-primary-soft)]"
-        >
-          Open
-          <ExternalLink className="h-3.5 w-3.5 opacity-70" strokeWidth={2} />
-        </Link>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            title="Edit issue"
+            onClick={() => onEditClick(issue)}
+            className="inline-flex items-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)]"
+          >
+            <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            Edit
+          </button>
+          {viewerHref ? (
+            <Link
+              href={viewerHref}
+              title={`Open “${issue.title}” in the viewer`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/30 hover:bg-[var(--enterprise-primary-soft)]"
+            >
+              Open
+              <ExternalLink className="h-3.5 w-3.5 opacity-70" strokeWidth={2} />
+            </Link>
+          ) : (
+            <span className="inline-flex items-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2.5 py-1.5 text-xs font-medium text-[var(--enterprise-text-muted)]">
+              No sheet
+            </span>
+          )}
+          <button
+            type="button"
+            title="Delete"
+            disabled={isDeleting}
+            onClick={() => onDeleteClick(issue)}
+            className="inline-flex items-center gap-1 rounded-lg border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-semantic-danger-text)] transition hover:bg-red-100 disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            Delete
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -236,13 +326,19 @@ const ProjectIssueTableRow = memo(function ProjectIssueTableRow({
 const ProjectIssueMobileCard = memo(function ProjectIssueMobileCard({
   issue,
   isPatching,
+  isDeleting,
   onStatusChange,
+  onDeleteClick,
+  onEditClick,
   showPromoteOccupant,
   onPromoteToWorkOrder,
   promoteBusy,
 }: IssueRowProps) {
   const pri = issue.priority ?? "MEDIUM";
   const priClass = priorityBadgeClassLight(pri);
+  const viewerHref = viewerHrefForIssue(issue);
+  const sheetLabel = issueSheetLabel(issue);
+  const photoCount = issue.referencePhotos?.length ?? 0;
 
   return (
     <li className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)]">
@@ -252,8 +348,7 @@ const ProjectIssueMobileCard = memo(function ProjectIssueMobileCard({
             {issue.title}
           </p>
           <p className="mt-1 line-clamp-1 text-sm text-[var(--enterprise-text-muted)]">
-            {issue.file.name}
-            <span className="ml-1 tabular-nums">· v{issue.fileVersion.version}</span>
+            {sheetLabel}
           </p>
         </div>
         <span
@@ -264,10 +359,11 @@ const ProjectIssueMobileCard = memo(function ProjectIssueMobileCard({
         </span>
       </div>
 
-      <p className="mt-2 text-xs tabular-nums text-[var(--enterprise-text-muted)]">
-        {issue.sheetName ?? issue.file.name} · v{issue.sheetVersion ?? issue.fileVersion.version}
-        {issue.pageNumber != null ? ` · p.${issue.pageNumber}` : ""}
-      </p>
+      {issue.pageNumber != null ? (
+        <p className="mt-2 text-xs tabular-nums text-[var(--enterprise-text-muted)]">
+          Page {issue.pageNumber}
+        </p>
+      ) : null}
 
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="block min-w-0">
@@ -312,15 +408,39 @@ const ProjectIssueMobileCard = memo(function ProjectIssueMobileCard({
           Due {issueDateToInputValue(issue.dueDate)}
         </p>
       ) : null}
+      {photoCount > 0 ? (
+        <p className="mt-2 text-xs font-medium text-[var(--enterprise-primary)]">
+          {photoCount} attached photo{photoCount === 1 ? "" : "s"}
+        </p>
+      ) : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <Link
-          href={viewerHrefForIssue(issue)}
-          className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white transition active:scale-[0.98]"
+        <button
+          type="button"
+          onClick={() => onEditClick(issue)}
+          className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-semibold text-[var(--enterprise-text)] transition active:scale-[0.98]"
         >
-          Open in viewer
-          <ExternalLink className="h-4 w-4 opacity-90" strokeWidth={2} />
-        </Link>
+          <Pencil className="h-4 w-4" aria-hidden />
+          Edit
+        </button>
+        {viewerHref ? (
+          <Link
+            href={viewerHref}
+            className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white transition active:scale-[0.98]"
+          >
+            Open in viewer
+            <ExternalLink className="h-4 w-4 opacity-90" strokeWidth={2} />
+          </Link>
+        ) : null}
+        <button
+          type="button"
+          disabled={isDeleting}
+          onClick={() => onDeleteClick(issue)}
+          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] transition active:scale-[0.98] disabled:opacity-50"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden />
+          Delete
+        </button>
         {showPromoteOccupant && issue.issueKind === "OCCUPANT" && onPromoteToWorkOrder ? (
           <button
             type="button"
@@ -350,7 +470,21 @@ export function ProjectIssuesClient({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
+  const wid = primary?.workspace.id;
+  const isPro = isWorkspaceProClient(primary?.workspace);
   const filterAssetId = searchParams.get("assetId")?.trim() || undefined;
+
+  const entitySingular =
+    issueKindFilter === "WORK_ORDER"
+      ? "work order"
+      : issueKindFilter === "OCCUPANT"
+        ? "tenant request"
+        : "issue";
+  const isWorkOrders = issueKindFilter === "WORK_ORDER";
+  const canCreate = issueKindFilter !== "OCCUPANT";
+  const createLabel = isWorkOrders ? "New work order" : "New issue";
+  const ListIcon = isWorkOrders ? Wrench : MapPin;
 
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [sort, setSort] = useState<SortKey>("newest");
@@ -358,6 +492,11 @@ export function ProjectIssuesClient({
   const [msg, setMsg] = useState<string | null>(null);
   const [patchingIssueId, setPatchingIssueId] = useState<string | null>(null);
   const [promotingIssueId, setPromotingIssueId] = useState<string | null>(null);
+  const [deletingIssueId, setDeletingIssueId] = useState<string | null>(null);
+  const [deleteConfirmIssue, setDeleteConfirmIssue] = useState<IssueRow | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingIssue, setEditingIssue] = useState<IssueRow | null>(null);
   const clearAssetFilterHref = useMemo(() => {
     if (!filterAssetId || !pathname) return null;
     const p = new URLSearchParams(searchParams.toString());
@@ -412,7 +551,7 @@ export function ProjectIssuesClient({
       );
     else if (sort === "file")
       list = [...list].sort((a, b) =>
-        a.file.name.localeCompare(b.file.name, undefined, { sensitivity: "base" }),
+        issueSheetLabel(a).localeCompare(issueSheetLabel(b), undefined, { sensitivity: "base" }),
       );
     else if (sort === "status") list = [...list].sort((a, b) => a.status.localeCompare(b.status));
     return list;
@@ -483,6 +622,65 @@ export function ProjectIssuesClient({
     [patchMut],
   );
 
+  const openCreateForm = useCallback(() => {
+    setCreateOpen(true);
+  }, []);
+
+  const handleIssueCreated = useCallback(async () => {
+    await qc.invalidateQueries({ queryKey: issuesKey });
+    await qc.invalidateQueries({ queryKey: ["issues", "fileVersion"], exact: false });
+    setCreateOpen(false);
+    setMsg(null);
+  }, [qc, issuesKey]);
+
+  const openEditForm = useCallback((issue: IssueRow) => {
+    setEditingIssue(issue);
+    setEditOpen(true);
+  }, []);
+
+  const closeEditForm = useCallback(() => {
+    setEditOpen(false);
+    setEditingIssue(null);
+  }, []);
+
+  const handleIssueSaved = useCallback(
+    (row: IssueRow) => {
+      mergeIssueIntoLists(row);
+      setEditingIssue(row);
+      setMsg(null);
+    },
+    [mergeIssueIntoLists],
+  );
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteIssue(id),
+    onMutate: (id) => setDeletingIssueId(id),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: issuesKey });
+      await qc.invalidateQueries({ queryKey: ["issues", "fileVersion"], exact: false });
+      setDeleteConfirmIssue(null);
+      toast.success(`${entitySingular.charAt(0).toUpperCase()}${entitySingular.slice(1)} deleted.`);
+      setMsg(null);
+    },
+    onError: (e: Error) => {
+      toast.error(
+        e instanceof ProRequiredError ? "Pro subscription required." : formatIssueLockHint(e),
+      );
+    },
+    onSettled: () => setDeletingIssueId(null),
+  });
+
+  const onDeleteClick = useCallback((issue: IssueRow) => {
+    setDeleteConfirmIssue(issue);
+  }, []);
+
+  const onEditClick = useCallback(
+    (issue: IssueRow) => {
+      openEditForm(issue);
+    },
+    [openEditForm],
+  );
+
   const listItemNoun =
     issueKindFilter === "WORK_ORDER"
       ? "work orders"
@@ -539,8 +737,8 @@ export function ProjectIssuesClient({
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
             aria-hidden
           >
-            <MapPin
-              className="h-6 w-6 text-[var(--enterprise-primary)] sm:h-7 sm:w-7"
+            <ListIcon
+              className={`h-6 w-6 sm:h-7 sm:w-7 ${isWorkOrders ? "text-sky-600 dark:text-sky-400" : "text-[var(--enterprise-primary)]"}`}
               strokeWidth={1.5}
             />
           </div>
@@ -557,14 +755,52 @@ export function ProjectIssuesClient({
             ) : null}
           </div>
         </div>
-        <Link
-          href={`/projects/${projectId}/files`}
-          className="inline-flex min-h-11 items-center justify-center gap-1.5 self-start rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:bg-[var(--enterprise-hover-surface)]"
-        >
-          <FolderOpen className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-          Project files
-        </Link>
+        <div className="flex flex-wrap items-center gap-2 self-start">
+          {canCreate ? (
+            <EnterpriseAddPulseWrap
+              disabled={ctxLoading || !isPro}
+              className="hidden sm:inline-flex"
+            >
+              <button
+                type="button"
+                onClick={openCreateForm}
+                disabled={ctxLoading || !isPro}
+                className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] transition disabled:opacity-50 ${isWorkOrders ? "bg-sky-600 hover:bg-sky-700" : "bg-[var(--enterprise-primary)] hover:bg-[var(--enterprise-primary-deep)]"}`}
+              >
+                <Plus className="h-4 w-4" strokeWidth={1.75} />
+                {createLabel}
+              </button>
+            </EnterpriseAddPulseWrap>
+          ) : null}
+          <Link
+            href={
+              isWorkOrders ? `/projects/${projectId}/om/assets` : `/projects/${projectId}/files`
+            }
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:bg-[var(--enterprise-hover-surface)]"
+          >
+            {isWorkOrders ? (
+              <Wrench className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+            ) : (
+              <FolderOpen className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+            )}
+            {isWorkOrders ? "Assets" : "Project files"}
+          </Link>
+        </div>
       </header>
+
+      {canCreate && !isPro ? (
+        <div className="enterprise-alert-info flex items-start gap-3 px-4 py-3 shadow-[var(--enterprise-shadow-xs)]">
+          <div
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]"
+            aria-hidden
+          >
+            <Lock className="h-4 w-4" strokeWidth={1.75} />
+          </div>
+          <p className="text-sm leading-relaxed">
+            Pro subscription required to create and manage {listItemNoun}.
+          </p>
+        </div>
+      ) : null}
 
       {filterAssetId ? (
         <div className="enterprise-card flex flex-wrap items-center justify-between gap-3 border border-[var(--enterprise-primary)]/30 bg-[var(--enterprise-primary-soft)] px-4 py-3 text-sm">
@@ -727,7 +963,19 @@ export function ProjectIssuesClient({
           <ul className="space-y-3 lg:hidden" aria-label={listTitle}>
             {filtered.length === 0 ? (
               <li className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
-                <IssueEmptyState noRows={items.length === 0} projectId={projectId} />
+                <IssueEmptyState
+                  noRows={items.length === 0}
+                  projectId={projectId}
+                  entityLabel={entitySingular}
+                  canCreate={canCreate && isPro}
+                  onCreateClick={openCreateForm}
+                  emptyIcon={ListIcon}
+                  emptyHint={
+                    isWorkOrders
+                      ? "Create a work order tied to project equipment, or generate one from maintenance schedules."
+                      : undefined
+                  }
+                />
               </li>
             ) : (
               filtered.map((issue) => (
@@ -735,7 +983,10 @@ export function ProjectIssuesClient({
                   key={issue.id}
                   issue={issue}
                   isPatching={patchingIssueId === issue.id}
+                  isDeleting={deletingIssueId === issue.id}
                   onStatusChange={onIssueStatusChange}
+                  onDeleteClick={onDeleteClick}
+                  onEditClick={onEditClick}
                   showPromoteOccupant={canPromoteOccupant}
                   onPromoteToWorkOrder={(id) => promoteMut.mutate(id)}
                   promoteBusy={promotingIssueId === issue.id}
@@ -791,7 +1042,7 @@ export function ProjectIssuesClient({
                           strokeWidth={2}
                           aria-hidden
                         />
-                        Viewer
+                        Actions
                       </span>
                     </th>
                   </tr>
@@ -800,7 +1051,19 @@ export function ProjectIssuesClient({
                   {filtered.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="p-0">
-                        <IssueEmptyState noRows={items.length === 0} projectId={projectId} />
+                        <IssueEmptyState
+                          noRows={items.length === 0}
+                          projectId={projectId}
+                          entityLabel={entitySingular}
+                          canCreate={canCreate && isPro}
+                          onCreateClick={openCreateForm}
+                          emptyIcon={ListIcon}
+                          emptyHint={
+                            isWorkOrders
+                              ? "Create a work order tied to project equipment, or generate one from maintenance schedules."
+                              : undefined
+                          }
+                        />
                       </td>
                     </tr>
                   ) : (
@@ -809,7 +1072,10 @@ export function ProjectIssuesClient({
                         key={issue.id}
                         issue={issue}
                         isPatching={patchingIssueId === issue.id}
+                        isDeleting={deletingIssueId === issue.id}
                         onStatusChange={onIssueStatusChange}
+                        onDeleteClick={onDeleteClick}
+                        onEditClick={onEditClick}
                         showPromoteOccupant={canPromoteOccupant}
                         onPromoteToWorkOrder={(id) => promoteMut.mutate(id)}
                         promoteBusy={promotingIssueId === issue.id}
@@ -822,6 +1088,70 @@ export function ProjectIssuesClient({
           </div>
         </>
       )}
+
+      {isWorkOrders ? (
+        <WorkOrderCreateSlideOver
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          projectId={projectId}
+          workspaceId={workspaceId}
+          members={members}
+          initialAssetId={filterAssetId}
+          onCreated={handleIssueCreated}
+        />
+      ) : (
+        <IssueCreateSlideOver
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          projectId={projectId}
+          workspaceId={workspaceId}
+          wid={wid}
+          isPro={isPro}
+          members={members}
+          onCreated={handleIssueCreated}
+        />
+      )}
+
+      {isWorkOrders ? (
+        <WorkOrderEditSlideOver
+          open={editOpen}
+          issue={editingIssue}
+          projectId={projectId}
+          onClose={closeEditForm}
+          members={members}
+          onSaved={handleIssueSaved}
+        />
+      ) : (
+        <IssueEditSlideOver
+          open={editOpen}
+          issue={editingIssue}
+          onClose={closeEditForm}
+          members={members}
+          onSaved={handleIssueSaved}
+        />
+      )}
+
+      <DeleteProjectIssueConfirmDialog
+        open={Boolean(deleteConfirmIssue)}
+        title={deleteConfirmIssue?.title ?? ""}
+        entityLabel={entitySingular}
+        isDeleting={deleteMut.isPending}
+        onCancel={() => setDeleteConfirmIssue(null)}
+        onConfirm={() => {
+          if (deleteConfirmIssue) deleteMut.mutate(deleteConfirmIssue.id);
+        }}
+      />
+
+      {canCreate ? (
+        <EnterpriseAddPulseWrap disabled={ctxLoading || !isPro} className="sm:hidden">
+          <EnterpriseFab
+            label={createLabel}
+            disabled={ctxLoading || !isPro}
+            onClick={openCreateForm}
+            icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
+          />
+        </EnterpriseAddPulseWrap>
+      ) : null}
     </div>
   );
 }

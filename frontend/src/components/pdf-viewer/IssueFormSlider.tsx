@@ -10,6 +10,7 @@ import {
   FileStack,
   Hash,
   ImagePlus,
+  Wrench,
   Link2,
   Pencil,
   Search,
@@ -175,8 +176,8 @@ export function IssueFormSlider(props: Props) {
         if (byIssue) pageNum = byIssue.pageIndex + 1;
       }
       return {
-        sheetName: i.sheetName ?? i.file.name,
-        sheetVersion: i.sheetVersion ?? i.fileVersion.version,
+        sheetName: i.sheetName ?? i.file?.name ?? null,
+        sheetVersion: i.sheetVersion ?? i.fileVersion?.version ?? null,
         pageNumber: pageNum,
       };
     }
@@ -206,7 +207,7 @@ export function IssueFormSlider(props: Props) {
   });
 
   const viewerOperationsMode = useViewerStore((s) => s.viewerOperationsMode);
-  const omIssueKindKey = viewerOperationsMode ? "WORK_ORDER,OCCUPANT" : null;
+  const omIssueKindKey = viewerOperationsMode ? "CONSTRUCTION,WORK_ORDER,OCCUPANT" : null;
   const issuesQueryKey = qk.issuesForFileVersion(cloudFileVersionId ?? "", omIssueKindKey);
 
   const [title, setTitle] = useState("");
@@ -429,7 +430,6 @@ export function IssueFormSlider(props: Props) {
         pageNumber: page,
         ...(linkedMarkupIds.length > 0 ? { attachedMarkupAnnotationIds: linkedMarkupIds } : {}),
         ...(rfiLinkIds.length > 0 && !viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
-        ...(viewerOperationsMode ? { issueKind: "WORK_ORDER" as const } : {}),
       });
     },
     onSuccess: (row) => {
@@ -784,7 +784,16 @@ export function IssueFormSlider(props: Props) {
   /** Calendar glyph → solid white (WebKit); `color-scheme: dark` helps Firefox/native chrome. */
   const dateFieldClass = `${fieldClass} tabular-nums text-slate-100 [color-scheme:dark] [&::-webkit-datetime-edit]:text-slate-100 [&::-webkit-datetime-edit-fields-wrapper]:text-slate-100 [&::-webkit-datetime-edit-month-field]:text-slate-100 [&::-webkit-datetime-edit-day-field]:text-slate-100 [&::-webkit-datetime-edit-year-field]:text-slate-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:[filter:brightness(0)_invert(1)]`;
   const labelClass = "mb-1 block text-[10px] font-medium text-slate-400";
-  const sectionTitleClass = "text-[10px] font-semibold uppercase tracking-wider text-slate-500";
+  const sectionTitleClass = viewerOperationsMode
+    ? "text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-300/80"
+    : "text-[10px] font-semibold uppercase tracking-wider text-slate-500";
+  const sectionBlockClass = viewerOperationsMode
+    ? "space-y-2.5 rounded-xl border border-slate-800/80 bg-slate-900/35 p-2.5 ring-1 ring-white/[0.025]"
+    : "space-y-3";
+  const sectionCompactCardClass = viewerOperationsMode
+    ? "space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/25 p-2.5"
+    : "space-y-2";
+  const entityLabel = viewerOperationsMode ? "work order" : "issue";
 
   const refPhotoPickDisabled = uploadRefPhotoMut.isPending || saveEditMut.isPending;
   const refPhotoLabelClass =
@@ -798,7 +807,7 @@ export function IssueFormSlider(props: Props) {
       >
         <button
           type="button"
-          aria-label="Close issue form"
+          aria-label={`Close ${entityLabel} form`}
           className="absolute inset-0 bg-slate-950/60 backdrop-blur-[3px] transition hover:bg-slate-950/70"
           onClick={onCancel}
           onMouseDown={(e) => e.preventDefault()}
@@ -816,12 +825,16 @@ export function IssueFormSlider(props: Props) {
                 id="issue-form-title"
                 className="text-[15px] font-semibold tracking-tight text-white"
               >
-                {variant === "create" ? "New issue" : "Edit issue"}
+                {variant === "create" ? `New ${entityLabel}` : `Edit ${entityLabel}`}
               </h2>
               <p className="text-[11px] leading-relaxed text-slate-500">
-                {variant === "create"
-                  ? "Add a title and any details below. A sheet pin and linked markups are optional."
-                  : "Update this issue and save your changes."}
+                {viewerOperationsMode
+                  ? variant === "create"
+                    ? "Capture the task scope, assignment, and schedule for field execution."
+                    : "Update execution details, assignment, and dates before saving."
+                  : variant === "create"
+                    ? "Add a title and any details below. A sheet pin and linked markups are optional."
+                    : "Update this issue and save your changes."}
               </p>
             </div>
             <button
@@ -841,7 +854,11 @@ export function IssueFormSlider(props: Props) {
             </button>
           </header>
 
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-x-none px-5 py-4 [scrollbar-color:rgba(71,85,105,0.5)_transparent] [scrollbar-width:thin]">
+          <div
+            className={`min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-x-none [scrollbar-color:rgba(71,85,105,0.5)_transparent] [scrollbar-width:thin] ${
+              viewerOperationsMode ? "px-4 py-3" : "px-5 py-4"
+            }`}
+          >
             <div
               className="mb-4 flex flex-col gap-1.5 rounded-lg border border-slate-800/90 bg-slate-900/50 px-3 py-2 ring-1 ring-white/[0.03] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3 sm:gap-y-1"
               role="group"
@@ -868,26 +885,59 @@ export function IssueFormSlider(props: Props) {
               </div>
             </div>
 
-            <div className="space-y-6 pb-2">
-              <section className="space-y-3" aria-labelledby="issue-section-details">
+            <div className={`${viewerOperationsMode ? "space-y-4 pb-1" : "space-y-6 pb-2"}`}>
+              {viewerOperationsMode ? (
+                <section
+                  className="rounded-xl border border-sky-400/20 bg-sky-500/10 p-2.5 ring-1 ring-sky-300/10"
+                  aria-label="Work order quick context"
+                >
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-700/80 bg-slate-900/70 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-300">
+                      <Wrench className="h-3 w-3 text-sky-300/90" strokeWidth={2} aria-hidden />
+                      Operations
+                    </span>
+                    <span className="inline-flex items-center rounded-md border border-slate-700/80 bg-slate-900/70 px-2 py-1 text-[10px] font-medium text-slate-300">
+                      Status: {ISSUE_STATUS_LABEL[status as keyof typeof ISSUE_STATUS_LABEL]}
+                    </span>
+                    <span className="inline-flex items-center rounded-md border border-slate-700/80 bg-slate-900/70 px-2 py-1 text-[10px] font-medium text-slate-300">
+                      Priority:{" "}
+                      {ISSUE_PRIORITY_LABEL[priority as keyof typeof ISSUE_PRIORITY_LABEL]}
+                    </span>
+                  </div>
+                </section>
+              ) : null}
+
+              <section className={sectionBlockClass} aria-labelledby="issue-section-details">
                 <h3 id="issue-section-details" className={sectionTitleClass}>
-                  Details
+                  {viewerOperationsMode ? "Work scope" : "Details"}
                 </h3>
                 <label className="block">
-                  <span className={labelClass}>Title</span>
+                  <span className={labelClass}>
+                    {viewerOperationsMode ? "Work order title" : "Title"}
+                  </span>
                   <input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Short summary of the issue"
+                    placeholder={
+                      viewerOperationsMode
+                        ? "Short summary of the work to be completed"
+                        : "Short summary of the issue"
+                    }
                     className={fieldClass}
                   />
                 </label>
                 <label className="block">
-                  <span className={labelClass}>Description</span>
+                  <span className={labelClass}>
+                    {viewerOperationsMode ? "Scope / execution notes" : "Description"}
+                  </span>
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Context, scope, or steps to reproduce…"
+                    placeholder={
+                      viewerOperationsMode
+                        ? "What needs to be done, constraints, and handoff details…"
+                        : "Context, scope, or steps to reproduce…"
+                    }
                     rows={3}
                     className={`${fieldClass} min-h-[4.75rem] resize-y`}
                   />
@@ -966,13 +1016,17 @@ export function IssueFormSlider(props: Props) {
                 </section>
               ) : null}
 
-              <section className="space-y-2" aria-labelledby="issue-section-linked-markups">
+              <section
+                className={sectionCompactCardClass}
+                aria-labelledby="issue-section-linked-markups"
+              >
                 <h3 id="issue-section-linked-markups" className={sectionTitleClass}>
-                  Linked markups
+                  {viewerOperationsMode ? "Related markups" : "Linked markups"}
                 </h3>
                 <p className="text-[11px] leading-relaxed text-slate-500">
-                  Optional: add shapes or text on this page to the issue. They stay as markups (not
-                  a second pin) and update when the issue changes.
+                  {viewerOperationsMode
+                    ? "Optional: connect markups that explain the field task or required repair location."
+                    : "Optional: add shapes or text on this page to the issue. They stay as markups (not a second pin) and update when the issue changes."}
                 </p>
                 {attachableMarkups.length === 0 ? (
                   <p className="text-[11px] text-slate-500">
@@ -1008,9 +1062,12 @@ export function IssueFormSlider(props: Props) {
               </section>
 
               {variant === "edit" ? (
-                <section className="space-y-2" aria-labelledby="issue-section-ref-photos">
+                <section
+                  className={sectionCompactCardClass}
+                  aria-labelledby="issue-section-ref-photos"
+                >
                   <h3 id="issue-section-ref-photos" className={sectionTitleClass}>
-                    Reference photos
+                    {viewerOperationsMode ? "Site photos" : "Reference photos"}
                   </h3>
                   <p className="text-[11px] leading-relaxed text-slate-500">
                     Tap <span className="font-medium text-slate-400">Take photo</span> so the
@@ -1167,9 +1224,9 @@ export function IssueFormSlider(props: Props) {
                 </section>
               ) : null}
 
-              <section className="space-y-3" aria-labelledby="issue-section-workflow">
+              <section className={sectionBlockClass} aria-labelledby="issue-section-workflow">
                 <h3 id="issue-section-workflow" className={sectionTitleClass}>
-                  Status & assignment
+                  {viewerOperationsMode ? "Execution" : "Status & assignment"}
                 </h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className="block">
@@ -1203,7 +1260,7 @@ export function IssueFormSlider(props: Props) {
                 </div>
                 <div ref={assigneePickerRef} className="relative block">
                   <span className={labelClass} id="issue-form-assignee-label">
-                    Assignee
+                    {viewerOperationsMode ? "Assigned technician" : "Assignee"}
                   </span>
                   <button
                     type="button"
@@ -1334,22 +1391,35 @@ export function IssueFormSlider(props: Props) {
                 </div>
               </section>
 
-              <section className="space-y-3" aria-labelledby="issue-section-schedule">
+              <section
+                className={viewerOperationsMode ? sectionBlockClass : "space-y-3"}
+                aria-labelledby="issue-section-schedule"
+              >
                 <h3 id="issue-section-schedule" className={sectionTitleClass}>
-                  Location & dates
+                  {viewerOperationsMode ? "Location & schedule" : "Location & dates"}
                 </h3>
                 <label className="block">
-                  <span className={labelClass}>Location / grid reference</span>
+                  <span className={labelClass}>
+                    {viewerOperationsMode
+                      ? "Work location / asset reference"
+                      : "Location / grid reference"}
+                  </span>
                   <input
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    placeholder="e.g. Grid B-2, Level 3"
+                    placeholder={
+                      viewerOperationsMode
+                        ? "e.g. Mechanical room AHU-2, Level 3"
+                        : "e.g. Grid B-2, Level 3"
+                    }
                     className={fieldClass}
                   />
                 </label>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className="block">
-                    <span className={labelClass}>Start date</span>
+                    <span className={labelClass}>
+                      {viewerOperationsMode ? "Planned start" : "Start date"}
+                    </span>
                     <input
                       type="date"
                       value={startDate}
@@ -1358,7 +1428,9 @@ export function IssueFormSlider(props: Props) {
                     />
                   </label>
                   <label className="block">
-                    <span className={labelClass}>Due date</span>
+                    <span className={labelClass}>
+                      {viewerOperationsMode ? "Target completion" : "Due date"}
+                    </span>
                     <input
                       type="date"
                       value={dueDate}
@@ -1419,7 +1491,7 @@ export function IssueFormSlider(props: Props) {
                 {createMut.isPending || saveEditMut.isPending
                   ? "Saving…"
                   : variant === "create"
-                    ? "Create issue"
+                    ? `Create ${entityLabel}`
                     : "Save changes"}
               </button>
             </div>

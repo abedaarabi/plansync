@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, ChevronRight, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
+import { Calendar, ChevronRight, Package, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import {
@@ -16,6 +16,8 @@ import {
   type OmMaintenanceRow,
 } from "@/lib/api-client";
 import { sortedVersions } from "@/components/file-explorer/fileExplorerUtils";
+import { assetHasSheetPin } from "@/lib/assetPinFocus";
+import { omAssetViewerHref } from "@/lib/omAssetViewerNavigation";
 import { qk } from "@/lib/queryKeys";
 import type { CloudFile } from "@/types/projects";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
@@ -115,20 +117,11 @@ export function OmAssetDetailSlide({
     }
     const sorted = sortedVersions(f);
     const verRow = sorted.find((v) => v.id === asset.fileVersionId) ?? sorted[0];
-    const q = new URLSearchParams({
-      fileId: f.id,
-      name: f.name,
-      projectId,
-      omAssetLink: "1",
-      omAssetId: asset.id,
-      omAssetTag: encodeURIComponent(asset.tag),
-      omAssetName: encodeURIComponent(asset.name),
-    });
-    if (verRow) {
-      q.set("version", String(verRow.version));
-      q.set("fileVersionId", verRow.id);
+    if (!verRow) {
+      toast.error("No revision available for this drawing.");
+      return;
     }
-    router.push(`/viewer?${q.toString()}`);
+    router.push(omAssetViewerHref(projectId, f, asset, verRow));
     onClose();
   }, [asset, pdfFiles, projectId, router, onClose]);
 
@@ -190,8 +183,8 @@ export function OmAssetDetailSlide({
       <div className="space-y-6 text-sm text-[var(--enterprise-text)]">
         <section>
           <div className="flex items-start gap-2 text-[var(--enterprise-text-muted)]">
-            <MapPin
-              className="mt-0.5 h-4 w-4 shrink-0 text-[var(--enterprise-primary)]"
+            <Package
+              className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400"
               strokeWidth={2}
             />
             <div>
@@ -202,14 +195,14 @@ export function OmAssetDetailSlide({
                 <button
                   type="button"
                   onClick={openViewerForAsset}
-                  className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-[var(--enterprise-primary)] hover:underline"
+                  className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:underline dark:text-teal-300"
                 >
-                  View on drawing
+                  {assetHasSheetPin(asset) ? "Zoom to equipment pin" : "Open drawing"}
                   <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
                 </button>
               ) : (
                 <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-                  No drawing linked.
+                  No drawing linked. Use Link on the assets list to place a pin.
                 </p>
               )}
             </div>
