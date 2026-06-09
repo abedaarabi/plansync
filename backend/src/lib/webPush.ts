@@ -21,6 +21,7 @@ export function pushKindCategoryLabel(kind: string): string {
     PROPOSAL_ACCEPTED: "Proposal",
     PROPOSAL_DECLINED: "Proposal",
     PROPOSAL_CHANGE_REQUESTED: "Proposal",
+    PROPOSAL_PORTAL_MESSAGE: "Proposal",
   };
   return labels[kind] ?? "PlanSync";
 }

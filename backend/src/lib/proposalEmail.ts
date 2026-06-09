@@ -297,6 +297,34 @@ export async function sendProposalDeclinedToSender(opts: {
   });
 }
 
+export async function sendProposalPortalMessageToSender(opts: {
+  env: Env;
+  toEmail: string;
+  senderName: string;
+  clientName: string;
+  reference: string;
+  title: string;
+  messagePreview: string;
+  appUrl: string;
+}): Promise<void> {
+  const preview = portalMessageEmailPreview(opts.messagePreview);
+  await sendMail({
+    env: opts.env,
+    to: [opts.toEmail],
+    subject: `New message on proposal ${opts.reference}`,
+    heading: "Your client left a comment",
+    lines: [
+      `Hi ${opts.senderName},`,
+      `${opts.clientName} sent a message on your proposal.`,
+      `${opts.reference}: ${opts.title}`,
+      preview ? `“${preview}”` : "",
+      "Open PlanSync to read the full thread and reply.",
+    ].filter(Boolean),
+    actionUrl: opts.appUrl,
+    actionLabel: "Open in PlanSync",
+  });
+}
+
 export async function sendProposalChangeRequestedToSender(opts: {
   env: Env;
   toEmail: string;

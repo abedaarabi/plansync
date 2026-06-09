@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { DeleteProposalConfirmDialog } from "@/components/enterprise/DeleteProposalConfirmDialog";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
@@ -81,7 +81,41 @@ export function ProposalDetailClient({
     queryKey: qk.projectProposalPortalMessages(projectId, proposalId),
     queryFn: () => fetchProposalPortalMessages(projectId, proposalId),
     enabled: Boolean(wid && isPro && p?.publicToken),
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
   });
+
+  const clientMsgBaselineRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    clientMsgBaselineRef.current = null;
+  }, [projectId, proposalId]);
+
+  useEffect(() => {
+    if (!portalMsgData?.messages) return;
+    const clientCount = portalMsgData.messages.filter((m) => m.isFromClient).length;
+    if (clientMsgBaselineRef.current === null) {
+      clientMsgBaselineRef.current = clientCount;
+      return;
+    }
+    if (clientCount > clientMsgBaselineRef.current) {
+      const clientName = p?.clientName?.trim() || "Your client";
+      toast.info(`${clientName} sent a new message`, {
+        description: "See it in Client portal messages below.",
+        action: {
+          label: "View",
+          onClick: () => {
+            document.getElementById("proposal-portal-messages")?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          },
+        },
+      });
+      void qc.invalidateQueries({ queryKey: qk.meNotifications() });
+    }
+    clientMsgBaselineRef.current = clientCount;
+  }, [portalMsgData, p?.clientName, qc]);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -247,7 +281,10 @@ export function ProposalDetailClient({
         ) : null}
 
         {p.publicToken ? (
-          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/90 p-4">
+          <div
+            id="proposal-portal-messages"
+            className="mt-6 rounded-xl border border-slate-200 bg-slate-50/90 p-4"
+          >
             <h2 className="text-sm font-semibold text-[#0F172A]">Client portal messages</h2>
             <p className="mt-1 text-xs text-slate-600">
               Same thread as on the client&apos;s proposal link. When they write in

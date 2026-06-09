@@ -40,6 +40,7 @@ import {
   sendProposalDeclinedToSender,
   sendProposalExpiringReminderToSender,
   assertProposalEmailReady,
+  sendProposalPortalMessageToSender,
   sendProposalPortalReplyToClient,
   sendProposalSentToClient,
   sendProposalViewedToSender,
@@ -1793,15 +1794,52 @@ Rules: Do not invent quantities or prices. No legal guarantees. Keep under 400 w
     const body = z.object({ body: z.string().min(1).max(8000) }).safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
 
-    const p = await prisma.proposal.findUnique({ where: { publicToken: token } });
+    const trimmedBody = body.data.body.trim();
+    if (!trimmedBody) return c.json({ error: "Message is required" }, 400);
+
+    const p = await prisma.proposal.findUnique({
+      where: { publicToken: token },
+      include: { createdBy: { select: { id: true, email: true, name: true } } },
+    });
     if (!p?.publicToken || !safeEqualToken(token, p.publicToken)) {
       return c.json({ error: "Not found" }, 404);
     }
     if (p.validUntil < new Date()) return c.json({ error: "Expired" }, 410);
 
     const msg = await prisma.proposalPortalMessage.create({
-      data: { proposalId: p.id, body: body.data.body, isFromClient: true },
+      data: { proposalId: p.id, body: trimmedBody, isFromClient: true },
     });
+
+    const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
+    const appUrl = `${base}${proposalAppHref(p.projectId, p.id)}`;
+
+    if (p.createdBy.email) {
+      try {
+        await sendProposalPortalMessageToSender({
+          env,
+          toEmail: p.createdBy.email,
+          senderName: p.createdBy.name,
+          clientName: p.clientName,
+          reference: p.reference,
+          title: p.title,
+          messagePreview: trimmedBody,
+          appUrl,
+        });
+      } catch (e) {
+        console.error("[proposal-portal-message-email]", e);
+      }
+    }
+
+    await createUserNotifications({
+      workspaceId: p.workspaceId,
+      projectId: p.projectId,
+      recipientUserIds: [p.createdById],
+      kind: "PROPOSAL_PORTAL_MESSAGE",
+      title: `${p.clientName} commented on ${p.reference}`,
+      body: trimmedBody.slice(0, 200),
+      href: proposalAppHref(p.projectId, p.id),
+    });
+
     return c.json({ id: msg.id, createdAt: msg.createdAt.toISOString() });
   });
 
