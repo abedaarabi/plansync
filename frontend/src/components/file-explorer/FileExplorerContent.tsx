@@ -265,7 +265,7 @@ export function FileExplorerContent({
                       </span>
                     </div>
                     <div className="border-t border-slate-100/80 bg-transparent p-1.5 sm:p-2">
-                      <p className="truncate text-[10px] font-semibold leading-tight text-[var(--enterprise-text)] sm:text-[13px] sm:leading-tight">
+                      <p className="truncate text-[10px] font-normal leading-tight text-[var(--enterprise-text)] sm:text-[13px] sm:leading-tight">
                         {fol.name}
                         {fol.canAccess === false ? (
                           <Lock className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
@@ -390,7 +390,7 @@ export function FileExplorerContent({
                       ) : null}
                     </div>
                     <div className="border-t border-slate-100 bg-slate-50/50 p-1.5 sm:p-2.5">
-                      <p className="truncate text-[10px] font-semibold leading-tight text-[var(--enterprise-text)] sm:text-[13px] sm:leading-tight">
+                      <p className="truncate text-[10px] font-normal leading-tight text-[var(--enterprise-text)] sm:text-[13px] sm:leading-tight">
                         {fileExplorerDisplayName(f)}
                       </p>
                       <p className="mt-0.5 truncate text-[8px] text-slate-500 sm:mt-1 sm:text-[10px]">
@@ -426,7 +426,7 @@ export function FileExplorerContent({
                             if (!onOpenViewer) return;
                             onOpenViewer(f);
                           }}
-                          className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-semibold text-[var(--enterprise-text)] transition hover:bg-slate-50 disabled:opacity-50 sm:text-[11px]"
+                          className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-normal text-[var(--enterprise-text)] transition hover:bg-slate-50 disabled:opacity-50 sm:text-[11px]"
                           disabled={!onOpenViewer}
                         >
                           <Eye className="h-3.5 w-3.5" aria-hidden />
@@ -438,7 +438,7 @@ export function FileExplorerContent({
                             e.stopPropagation();
                             onOpenFile(f);
                           }}
-                          className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-semibold text-[var(--enterprise-text)] transition hover:bg-slate-50 sm:text-[11px]"
+                          className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-normal text-[var(--enterprise-text)] transition hover:bg-slate-50 sm:text-[11px]"
                         >
                           <FileText className="h-3.5 w-3.5" aria-hidden />
                           Details
@@ -562,7 +562,7 @@ export function FileExplorerContent({
                             />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="inline-flex items-center gap-1 truncate text-[13px] font-semibold text-[var(--enterprise-text)] sm:text-base">
+                            <p className="inline-flex items-center gap-1 truncate text-[13px] font-normal text-[var(--enterprise-text)] sm:text-base">
                               <span className="truncate">{fol.name}</span>
                               {fol.canAccess === false ? (
                                 <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
@@ -662,7 +662,7 @@ export function FileExplorerContent({
                             />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[13px] font-semibold text-[var(--enterprise-text)] sm:text-base">
+                            <p className="truncate text-[13px] font-normal text-[var(--enterprise-text)] sm:text-base">
                               {fileExplorerDisplayName(f)}
                             </p>
                             <p className="inline-flex max-w-full items-center gap-1 truncate text-[11px] text-slate-500 sm:text-sm">
@@ -685,7 +685,7 @@ export function FileExplorerContent({
                                   if (!onOpenViewer) return;
                                   onOpenViewer(f);
                                 }}
-                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-semibold text-[var(--enterprise-text)]"
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-normal text-[var(--enterprise-text)]"
                                 disabled={!onOpenViewer}
                               >
                                 <Eye className="h-3.5 w-3.5" aria-hidden />
@@ -697,7 +697,7 @@ export function FileExplorerContent({
                                   ev.stopPropagation();
                                   onOpenFile(f);
                                 }}
-                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-semibold text-[var(--enterprise-text)]"
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-normal text-[var(--enterprise-text)]"
                               >
                                 <FileText className="h-3.5 w-3.5" aria-hidden />
                                 Details
@@ -796,7 +796,7 @@ export function FileExplorerContent({
                         onDrop={onDropOnFolder ? (e) => onDropOnFolder(e, fol.id) : undefined}
                       >
                         <td className="py-2.5 pl-4">
-                          <span className="inline-flex items-center gap-1.5 font-medium text-[var(--enterprise-text)]">
+                          <span className="inline-flex items-center gap-1.5 font-normal text-[var(--enterprise-text)]">
                             <Folder
                               className="h-4 w-4 shrink-0 fill-current text-[var(--enterprise-primary)]"
                               strokeWidth={1.5}
@@ -898,7 +898,7 @@ export function FileExplorerContent({
                         }}
                       >
                         <td className="py-2.5 pl-4">
-                          <span className="inline-flex items-center gap-1.5 font-medium text-[var(--enterprise-text)]">
+                          <span className="inline-flex items-center gap-1.5 font-normal text-[var(--enterprise-text)]">
                             {isPdfFile(f) ? (
                               <PdfFileIcon className="h-3.5 w-3.5 shrink-0" />
                             ) : (
@@ -955,7 +955,7 @@ export function FileExplorerContent({
                           <div className="flex items-center justify-end gap-1">
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-[var(--enterprise-text)] hover:bg-slate-50 disabled:opacity-50"
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-normal text-[var(--enterprise-text)] hover:bg-slate-50 disabled:opacity-50"
                               onClick={(ev) => {
                                 ev.stopPropagation();
                                 if (!onOpenViewer) return;
@@ -969,7 +969,7 @@ export function FileExplorerContent({
                             </button>
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-[var(--enterprise-text)] hover:bg-slate-50"
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-normal text-[var(--enterprise-text)] hover:bg-slate-50"
                               onClick={(ev) => {
                                 ev.stopPropagation();
                                 onOpenFile(f);

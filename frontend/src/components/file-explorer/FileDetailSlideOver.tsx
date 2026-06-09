@@ -65,7 +65,7 @@ export function FileDetailSlideOver({
         <div className="min-w-0">
           <h2
             id="file-detail-title"
-            className="truncate text-base font-semibold text-[var(--enterprise-text)]"
+            className="truncate text-base font-normal text-[var(--enterprise-text)]"
           >
             {file?.name ?? "File details"}
           </h2>
@@ -79,7 +79,7 @@ export function FileDetailSlideOver({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-[var(--enterprise-border)] px-4 py-2 text-sm font-medium text-[var(--enterprise-text-muted)]"
+            className="rounded-lg border border-[var(--enterprise-border)] px-4 py-2 text-sm font-normal text-[var(--enterprise-text-muted)]"
           >
             Close
           </button>
@@ -87,7 +87,7 @@ export function FileDetailSlideOver({
             type="button"
             onClick={() => file && onDownloadFile(file)}
             disabled={!file}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-4 py-2 text-sm font-medium text-[var(--enterprise-text)] disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-4 py-2 text-sm font-normal text-[var(--enterprise-text)] disabled:opacity-50"
           >
             <Download className="h-4 w-4" aria-hidden />
             Download
@@ -96,7 +96,7 @@ export function FileDetailSlideOver({
             type="button"
             onClick={() => file && onOpenFile(file)}
             disabled={!file}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-normal text-white disabled:opacity-50"
           >
             <Eye className="h-4 w-4" aria-hidden />
             Open viewer
@@ -113,7 +113,7 @@ export function FileDetailSlideOver({
                   key={id}
                   type="button"
                   onClick={() => setTab(id)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-normal ${
                     tab === id
                       ? "bg-[var(--enterprise-primary)] text-white"
                       : "border border-[var(--enterprise-border)] text-[var(--enterprise-text-muted)] hover:bg-slate-50"
@@ -131,7 +131,7 @@ export function FileDetailSlideOver({
               <button
                 type="button"
                 onClick={() => file && onOpenFile(file)}
-                className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--enterprise-text-muted)] hover:bg-slate-50"
+                className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-white px-3 py-1.5 text-xs font-normal text-[var(--enterprise-text-muted)] hover:bg-slate-50"
               >
                 <Eye className="h-3.5 w-3.5" aria-hidden />
                 Preview in viewer
@@ -141,44 +141,44 @@ export function FileDetailSlideOver({
               <div className="space-y-3">
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="rounded-xl border border-[var(--enterprise-border)] bg-white p-3">
-                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
+                    <p className="inline-flex items-center gap-1.5 text-xs font-normal uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
                       <FileText className="h-3.5 w-3.5" aria-hidden />
                       Type
                     </p>
-                    <p className="mt-1 text-sm font-medium text-[var(--enterprise-text)]">
+                    <p className="mt-1 text-sm font-normal text-[var(--enterprise-text)]">
                       {file.mimeType}
                     </p>
                   </div>
                   <div className="rounded-xl border border-[var(--enterprise-border)] bg-white p-3">
-                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
+                    <p className="inline-flex items-center gap-1.5 text-xs font-normal uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
                       <Layers3 className="h-3.5 w-3.5" aria-hidden />
                       Latest revision
                     </p>
-                    <p className="mt-1 text-sm font-medium text-[var(--enterprise-text)]">
+                    <p className="mt-1 text-sm font-normal text-[var(--enterprise-text)]">
                       {activeVersion ? `Rev ${activeVersion.version}` : "No versions"}
                     </p>
                   </div>
                   <div className="rounded-xl border border-[var(--enterprise-border)] bg-white p-3">
-                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
+                    <p className="inline-flex items-center gap-1.5 text-xs font-normal uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
                       <CalendarDays className="h-3.5 w-3.5" aria-hidden />
                       Uploaded
                     </p>
-                    <p className="mt-1 text-sm font-medium text-[var(--enterprise-text)]">
+                    <p className="mt-1 text-sm font-normal text-[var(--enterprise-text)]">
                       {formatItemDateOrDash(activeVersion?.createdAt ?? file.updatedAt)}
                     </p>
                   </div>
                   <div className="rounded-xl border border-[var(--enterprise-border)] bg-white p-3">
-                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
+                    <p className="inline-flex items-center gap-1.5 text-xs font-normal uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
                       <Clock3 className="h-3.5 w-3.5" aria-hidden />
                       Last opened
                     </p>
-                    <p className="mt-1 text-sm font-medium text-[var(--enterprise-text)]">
+                    <p className="mt-1 text-sm font-normal text-[var(--enterprise-text)]">
                       {formatItemDateOrDash(file.lastOpenedAt)}
                     </p>
                   </div>
                 </div>
                 <div className="rounded-xl border border-[var(--enterprise-border)] bg-white p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
+                  <p className="text-xs font-normal uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
                     Disciplines
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -216,7 +216,7 @@ export function FileDetailSlideOver({
                               : "border-[var(--enterprise-border)]"
                           }`}
                         >
-                          <p className="text-sm font-semibold text-[var(--enterprise-text)]">
+                          <p className="text-sm font-normal text-[var(--enterprise-text)]">
                             Rev {item.version}
                           </p>
                           <p className="text-xs text-[var(--enterprise-text-muted)]">
