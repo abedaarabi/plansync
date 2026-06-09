@@ -21,6 +21,11 @@ export type SwipeAction = {
   onAction: () => void;
 };
 
+function isDestructiveAction(action: SwipeAction): boolean {
+  const token = `${action.id} ${action.label}`.toLowerCase();
+  return token.includes("delete") || token.includes("remove");
+}
+
 type SwipeableListRowProps = {
   children: ReactNode;
   actions: SwipeAction[];
@@ -104,7 +109,11 @@ export function SwipeableListRow({
 
   return (
     <div className={`relative overflow-hidden ${className}`} style={{ touchAction: "pan-y" }}>
-      <div className="absolute inset-y-0 right-0 flex" aria-hidden style={{ width: maxReveal }}>
+      <div
+        className="absolute inset-y-0 right-0 flex bg-slate-100/80"
+        aria-hidden
+        style={{ width: maxReveal }}
+      >
         {actions.map((action) => (
           <button
             key={action.id}
@@ -113,7 +122,12 @@ export function SwipeableListRow({
               action.onAction();
               reset();
             }}
-            className={`flex min-h-[3.5rem] w-[88px] flex-col items-center justify-center gap-1 px-2 text-center text-xs font-semibold transition-all duration-150 active:scale-[0.97] ${action.className ?? "bg-[var(--enterprise-error)] text-white"}`}
+            className={`flex min-h-[3.5rem] w-[88px] flex-col items-center justify-center gap-1 border-l border-slate-200/80 px-2 text-center text-xs font-normal transition-all duration-150 active:scale-[0.97] ${
+              action.className ??
+              (isDestructiveAction(action)
+                ? "bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-error)]"
+                : "bg-white text-[var(--enterprise-text)]")
+            }`}
           >
             {action.icon}
             <span>{action.label}</span>

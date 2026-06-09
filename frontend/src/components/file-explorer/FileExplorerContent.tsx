@@ -605,32 +605,6 @@ export function FileExplorerContent({
                           onOpenFile(f);
                         }}
                         actions={[
-                          ...(onOpenViewer
-                            ? [
-                                {
-                                  id: "open",
-                                  label: "Open",
-                                  icon: <Eye className="h-4 w-4" aria-hidden />,
-                                  onAction: () => onOpenViewer(f),
-                                },
-                              ]
-                            : []),
-                          {
-                            id: "details",
-                            label: "Details",
-                            icon: <FileText className="h-4 w-4" aria-hidden />,
-                            onAction: () => onOpenFile(f),
-                          },
-                          ...(onDownloadFile
-                            ? [
-                                {
-                                  id: "download",
-                                  label: "Download",
-                                  icon: <Download className="h-4 w-4" aria-hidden />,
-                                  onAction: () => void onDownloadFile(f),
-                                },
-                              ]
-                            : []),
                           {
                             id: "delete",
                             label: "Delete",

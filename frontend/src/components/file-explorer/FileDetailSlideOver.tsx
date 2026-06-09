@@ -60,7 +60,7 @@ export function FileDetailSlideOver({
       panelMaxWidthClass="max-w-full lg:max-w-[50vw]"
       panelChromeClassName="border-l border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
       bodyClassName="p-0"
-      footerClassName="border-t border-[var(--enterprise-border)] px-4 py-3 lg:px-5"
+      footerClassName="border-t border-[var(--enterprise-border)] bg-white/90 px-3 py-3 max-lg:backdrop-blur lg:bg-transparent lg:px-5"
       header={
         <div className="min-w-0">
           <h2
@@ -69,7 +69,7 @@ export function FileDetailSlideOver({
           >
             {file?.name ?? "File details"}
           </h2>
-          <p className="text-sm text-[var(--enterprise-text-muted)]">
+          <p className="text-xs text-[var(--enterprise-text-muted)] sm:text-sm">
             Manage file details, versions, and comments.
           </p>
         </div>
@@ -79,7 +79,7 @@ export function FileDetailSlideOver({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-[var(--enterprise-border)] px-4 py-2 text-sm font-normal text-[var(--enterprise-text-muted)]"
+            className="inline-flex h-11 w-full items-center justify-center rounded-full border border-slate-200 bg-slate-100/85 px-4 text-sm font-normal text-[var(--enterprise-text-muted)] transition hover:bg-slate-200/70 active:scale-[0.99] lg:h-10 lg:w-auto lg:rounded-lg lg:border-[var(--enterprise-border)] lg:bg-transparent"
           >
             Close
           </button>
@@ -87,7 +87,7 @@ export function FileDetailSlideOver({
             type="button"
             onClick={() => file && onDownloadFile(file)}
             disabled={!file}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-4 py-2 text-sm font-normal text-[var(--enterprise-text)] disabled:opacity-50"
+            className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 text-sm font-normal text-[var(--enterprise-text)] shadow-sm transition hover:bg-slate-50 active:scale-[0.99] disabled:opacity-50 lg:h-10 lg:w-auto lg:rounded-lg lg:border-[var(--enterprise-border)] lg:shadow-none"
           >
             <Download className="h-4 w-4" aria-hidden />
             Download
@@ -96,7 +96,7 @@ export function FileDetailSlideOver({
             type="button"
             onClick={() => file && onOpenFile(file)}
             disabled={!file}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-normal text-white disabled:opacity-50"
+            className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[var(--enterprise-primary)] px-4 text-sm font-normal text-white shadow-md shadow-blue-500/20 transition hover:bg-[var(--enterprise-primary-deep)] active:scale-[0.99] disabled:opacity-50 lg:h-10 lg:w-auto lg:rounded-lg lg:shadow-none"
           >
             <Eye className="h-4 w-4" aria-hidden />
             Open viewer
@@ -107,16 +107,16 @@ export function FileDetailSlideOver({
       {file ? (
         <div className="flex h-full min-h-0 flex-col">
           <div className="border-b border-[var(--enterprise-border)] px-4 py-3 lg:px-5">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex w-full rounded-2xl bg-slate-100 p-1 lg:w-auto lg:flex-wrap lg:gap-2 lg:rounded-none lg:bg-transparent lg:p-0">
               {tabs.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => setTab(id)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-normal ${
+                  className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-normal transition lg:flex-none lg:rounded-full lg:px-3 lg:py-1.5 ${
                     tab === id
-                      ? "bg-[var(--enterprise-primary)] text-white"
-                      : "border border-[var(--enterprise-border)] text-[var(--enterprise-text-muted)] hover:bg-slate-50"
+                      ? "bg-white text-[var(--enterprise-text)] shadow-sm ring-1 ring-slate-200/80 lg:bg-[var(--enterprise-primary)] lg:text-white lg:ring-0"
+                      : "text-[var(--enterprise-text-muted)] hover:bg-white/60 lg:border lg:border-[var(--enterprise-border)] lg:hover:bg-slate-50"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" aria-hidden />
