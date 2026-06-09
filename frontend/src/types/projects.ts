@@ -12,6 +12,8 @@ export type CloudFile = {
   name: string;
   mimeType: string;
   folderId: string | null;
+  disciplines?: string[];
+  commentCount?: number;
   /** When the file record was first created */
   createdAt?: string;
   updatedAt?: string;
@@ -25,6 +27,11 @@ export type Folder = {
   name: string;
   parentId: string | null;
   projectId: string;
+  accessMode?: "ALL" | "SELECTED_USERS";
+  allowedUserIds?: string[];
+  canAccess?: boolean;
+  lastOpenedAt?: string | null;
+  lastOpenedBy?: string | null;
   /** When the folder was created */
   createdAt?: string;
   updatedAt?: string;

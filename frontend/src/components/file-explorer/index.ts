@@ -6,5 +6,7 @@ export { FileExplorerContent } from "./FileExplorerContent";
 export { FileExplorerEmptyState } from "./FileExplorerEmptyState";
 export { FileExplorerPageSkeleton } from "./FileExplorerSkeleton";
 export { FileExplorerDeleteConfirmDialog } from "./FileExplorerDeleteConfirmDialog";
+export { FileDetailSlideOver } from "./FileDetailSlideOver";
+export { FileCommentsPanel } from "./FileCommentsPanel";
 export * from "./fileExplorerUtils";
 export { exampleFolderFileTree } from "./exampleData";

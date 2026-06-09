@@ -510,6 +510,52 @@ export async function fetchProjectTeam(projectId: string): Promise<ProjectTeamRe
   return res.json() as Promise<ProjectTeamResponse>;
 }
 
+export type FolderAccessMode = "all" | "selected";
+
+export async function patchFolderAccess(
+  projectId: string,
+  folderId: string,
+  payload: { mode: FolderAccessMode; userIds?: string[] },
+): Promise<{ id: string; accessMode: "ALL" | "SELECTED_USERS"; allowedUserIds: string[] }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/folders/${encodeURIComponent(folderId)}/access`,
+    ),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    id?: string;
+    accessMode?: "ALL" | "SELECTED_USERS";
+    allowedUserIds?: string[];
+  };
+  if (!res.ok || !j.id || !j.accessMode) {
+    const msg = typeof j.error === "string" ? j.error : "Could not update folder access.";
+    throw new Error(msg);
+  }
+  return { id: j.id, accessMode: j.accessMode, allowedUserIds: j.allowedUserIds ?? [] };
+}
+
+export async function requestFolderAccess(projectId: string, folderId: string): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/folders/${encodeURIComponent(folderId)}/access-request`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+    },
+  );
+  if (res.ok) return;
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  throw new Error(typeof j.error === "string" ? j.error : "Could not request folder access.");
+}
+
 export type RfiUserRef = { id: string; name: string; email: string };
 
 export type RfiAttachmentRow = {

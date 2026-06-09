@@ -9,7 +9,12 @@ import {
   geminiSheetSummary,
   geminiTakeoffAssistDetect,
 } from "../../lib/geminiSheetAi.js";
-import { loadProjectForMember } from "../../lib/projectAccess.js";
+import {
+  canManageFiles,
+  canViewFile,
+  canViewFolderForUser,
+  loadProjectWithAuth,
+} from "../../lib/permissions.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import {
   getSheetAiPageFromDb,
@@ -37,10 +42,21 @@ async function authorizeSheetAi(fileVersionId: string, userId: string) {
     include: { file: { include: { project: { include: { workspace: true } } } } },
   });
   if (!fv) return { error: "Not found" as const, status: 404 as const };
-  const access = await loadProjectForMember(fv.file.projectId, userId);
+  const access = await loadProjectWithAuth(fv.file.projectId, userId);
   if ("error" in access) return { error: access.error, status: access.status };
-  const gate = requirePro(access.project.workspace);
+  const gate = requirePro(access.ctx.project.workspace);
   if (gate) return { error: gate.error, status: gate.status };
+  if (!canViewFile(access.ctx, fv.file.disciplines)) return { error: "Forbidden", status: 403 };
+  if (fv.file.folderId) {
+    const folder = await prisma.folder.findFirst({
+      where: { id: fv.file.folderId, projectId: fv.file.projectId },
+      select: { accessMode: true, allowedUserIds: true },
+    });
+    if (!folder) return { error: "Forbidden", status: 403 };
+    if (!canManageFiles(access.ctx) && !canViewFolderForUser(access.ctx, folder, userId)) {
+      return { error: "Forbidden", status: 403 };
+    }
+  }
   return { fv };
 }
 
@@ -54,7 +70,7 @@ export function registerSheetAiRoutes(r: Hono, needUser: MiddlewareHandler, env:
     const fileVersionId = c.req.param("fileVersionId")!;
     const authz = await authorizeSheetAi(fileVersionId, c.get("user").id);
     if ("error" in authz && authz.status === 404) return c.json({ error: authz.error }, 404);
-    if ("error" in authz) return c.json({ error: authz.error }, authz.status);
+    if ("error" in authz) return c.json({ error: authz.error }, authz.status as 402 | 403);
 
     const pageRaw = c.req.query("pageIndex");
     const pageIndex0 = pageRaw === undefined ? NaN : Number(pageRaw);
@@ -91,7 +107,7 @@ export function registerSheetAiRoutes(r: Hono, needUser: MiddlewareHandler, env:
     const fileVersionId = c.req.param("fileVersionId")!;
     const authz = await authorizeSheetAi(fileVersionId, c.get("user").id);
     if ("error" in authz && authz.status === 404) return c.json({ error: authz.error }, 404);
-    if ("error" in authz) return c.json({ error: authz.error }, authz.status);
+    if ("error" in authz) return c.json({ error: authz.error }, authz.status as 402 | 403);
 
     const raw = await c.req.json().catch(() => null);
     const parsed = sheetSummaryBodySchema.safeParse(raw);
@@ -123,7 +139,7 @@ export function registerSheetAiRoutes(r: Hono, needUser: MiddlewareHandler, env:
     const fileVersionId = c.req.param("fileVersionId")!;
     const authz = await authorizeSheetAi(fileVersionId, c.get("user").id);
     if ("error" in authz && authz.status === 404) return c.json({ error: authz.error }, 404);
-    if ("error" in authz) return c.json({ error: authz.error }, authz.status);
+    if ("error" in authz) return c.json({ error: authz.error }, authz.status as 402 | 403);
 
     const raw = await c.req.json().catch(() => null);
     const parsed = sheetChatBodySchema.safeParse(raw);
@@ -150,7 +166,7 @@ export function registerSheetAiRoutes(r: Hono, needUser: MiddlewareHandler, env:
     const fileVersionId = c.req.param("fileVersionId")!;
     const authz = await authorizeSheetAi(fileVersionId, c.get("user").id);
     if ("error" in authz && authz.status === 404) return c.json({ error: authz.error }, 404);
-    if ("error" in authz) return c.json({ error: authz.error }, authz.status);
+    if ("error" in authz) return c.json({ error: authz.error }, authz.status as 402 | 403);
 
     const raw = await c.req.json().catch(() => null);
     const parsed = sheetTakeoffDetectBodySchema.safeParse(raw);

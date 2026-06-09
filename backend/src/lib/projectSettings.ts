@@ -90,6 +90,7 @@ export type ClientVisibility = {
   showRfis: boolean;
   showFieldReports: boolean;
   showPunchList: boolean;
+  showDrawings: boolean;
   allowClientComment: boolean;
 };
 
@@ -124,6 +125,7 @@ const DEFAULT_CLIENT_VISIBILITY: ClientVisibility = {
   showRfis: true,
   showFieldReports: true,
   showPunchList: true,
+  showDrawings: true,
   allowClientComment: false,
 };
 
@@ -242,6 +244,10 @@ export function parseProjectSettingsJson(raw: unknown): ProjectSettingsResolved 
         typeof c.showPunchList === "boolean"
           ? c.showPunchList
           : DEFAULT_CLIENT_VISIBILITY.showPunchList,
+      showDrawings:
+        typeof c.showDrawings === "boolean"
+          ? c.showDrawings
+          : DEFAULT_CLIENT_VISIBILITY.showDrawings,
       allowClientComment:
         typeof c.allowClientComment === "boolean"
           ? c.allowClientComment

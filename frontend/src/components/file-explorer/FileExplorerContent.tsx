@@ -1,18 +1,20 @@
 "use client";
 
 import {
-  CalendarClock,
+  CalendarDays,
   ChevronRight,
-  Clock,
+  Clock3,
   Download,
   Eye,
   FileText,
   Folder,
   LayoutGrid,
   List,
+  Lock,
   Loader2,
+  MessageSquare,
   Trash2,
-  Upload,
+  UserRound,
 } from "lucide-react";
 import type { CloudFile, Folder as ProjectFolder, Project } from "@/types/projects";
 import { PdfFileIcon } from "@/components/icons/PdfFileIcon";
@@ -41,8 +43,10 @@ export type FileExplorerContentProps = {
   onSelectItem: (key: string | null) => void;
   onOpenFolder: (id: string) => void;
   onOpenFile: (f: CloudFile) => void;
+  onOpenViewer?: (f: CloudFile) => void;
   onDeleteFolder: (f: ProjectFolder) => void;
   onDeleteFile: (f: CloudFile) => void;
+  onDownloadFolder?: (f: ProjectFolder) => void;
   /** When set, grid/list show a download control for the selected revision. */
   onDownloadFile?: (f: CloudFile) => void;
   downloadingKey?: string | null;
@@ -86,8 +90,10 @@ export function FileExplorerContent({
   onSelectItem,
   onOpenFolder,
   onOpenFile,
+  onOpenViewer,
   onDeleteFolder,
   onDeleteFile,
+  onDownloadFolder,
   onDownloadFile,
   downloadingKey,
   deletingKey,
@@ -119,24 +125,35 @@ export function FileExplorerContent({
   const hasNoItems = subfolders.length === 0 && files.length === 0;
   const searchActive = searchQuery.trim().length > 0;
   const visibleCount = subfolders.length + files.length;
+  const visibleFolderCount = subfolders.length;
+  const visibleFileCount = files.length;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-white/90 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 lg:px-6">
-        <p className="min-w-0 flex-1 text-xs text-[var(--enterprise-text-muted)] sm:text-sm">
-          {searchActive ? (
-            <>
+      <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-200/80 bg-white/90 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 lg:px-7">
+        <div className="min-w-0 flex flex-1 flex-wrap items-center gap-1.5 sm:gap-2">
+          <p className="min-w-0 text-xs text-[var(--enterprise-text-muted)] sm:text-sm">
+            {searchActive ? (
+              <>
+                <span className="font-medium text-[var(--enterprise-text)]">
+                  {visibleCount} match{visibleCount === 1 ? "" : "es"}
+                </span>
+                <span className="text-slate-400"> · {direct.total} total</span>
+              </>
+            ) : (
               <span className="font-medium text-[var(--enterprise-text)]">
-                {visibleCount} match{visibleCount === 1 ? "" : "es"}
+                {direct.total} item{direct.total === 1 ? "" : "s"}
               </span>
-              <span className="text-slate-400"> · {direct.total} total</span>
-            </>
-          ) : (
-            <span className="font-medium text-[var(--enterprise-text)]">
-              {direct.total} item{direct.total === 1 ? "" : "s"}
-            </span>
-          )}
-        </p>
+            )}
+          </p>
+          <span className="hidden h-4 w-px bg-slate-200 sm:inline" aria-hidden />
+          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 sm:text-xs">
+            {visibleFolderCount} folder{visibleFolderCount === 1 ? "" : "s"}
+          </span>
+          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 sm:text-xs">
+            {visibleFileCount} file{visibleFileCount === 1 ? "" : "s"}
+          </span>
+        </div>
         <div
           className="inline-flex shrink-0 rounded-lg border border-slate-200/80 bg-slate-50/80 p-0.5 shadow-inner shadow-slate-200/20"
           role="group"
@@ -170,7 +187,7 @@ export function FileExplorerContent({
       </div>
 
       <div
-        className={`mobile-scroll relative min-h-0 flex-1 overflow-auto bg-slate-50 px-0 py-0 sm:px-4 sm:py-3.5 lg:px-6 ${
+        className={`mobile-scroll relative min-h-0 flex-1 overflow-auto bg-slate-50/90 px-0 py-0 sm:px-4 sm:py-4 lg:px-7 ${
           isDragOver
             ? "bg-[var(--enterprise-primary-soft)]/60 ring-2 ring-inset ring-[var(--enterprise-primary)]/30"
             : ""
@@ -206,21 +223,25 @@ export function FileExplorerContent({
             />
           )
         ) : viewMode === "grid" ? (
-          <div className="grid grid-cols-3 gap-2 pb-3 sm:grid-cols-[repeat(auto-fill,minmax(168px,1fr))] sm:gap-3.5">
+          <div className="grid grid-cols-1 gap-2.5 pb-4 min-[420px]:grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] sm:gap-4 lg:grid-cols-[repeat(auto-fill,minmax(210px,1fr))]">
             {subfolders.map((fol) => {
               const inside = countDirectChildren(project, fol.id);
               const selected = selectedItemKey === itemKeyForFolder(fol.id);
               const dropTarget = dropTargetKey === folderDropKey(fol.id);
+              const folderLastOpenedIso = project.files
+                .filter((file) => file.folderId === fol.id && file.lastOpenedAt)
+                .map((file) => file.lastOpenedAt as string)
+                .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
               return (
                 <div
                   key={`folder-${fol.id}`}
                   onDragOver={onDragOverFolder ? (e) => onDragOverFolder(e, fol.id) : undefined}
                   onDragLeave={onDragLeaveFolder ? (e) => onDragLeaveFolder(e, fol.id) : undefined}
                   onDrop={onDropOnFolder ? (e) => onDropOnFolder(e, fol.id) : undefined}
-                  className={`group relative flex flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all duration-200 sm:rounded-xl sm:hover:-translate-y-0.5 sm:hover:shadow-md ${
+                  className={`group relative flex flex-col overflow-hidden rounded-lg border bg-slate-50/75 shadow-sm transition-all duration-200 sm:rounded-xl sm:hover:-translate-y-0.5 sm:hover:shadow-md ${
                     selected
                       ? "border-[var(--enterprise-primary)]/40 ring-2 ring-[var(--enterprise-primary)]/25"
-                      : "border-slate-200/90 hover:border-slate-300/90"
+                      : "border-slate-200/90 hover:border-[var(--enterprise-primary)]/35"
                   } ${dropTarget ? "border-[var(--enterprise-primary)]/45 ring-2 ring-[var(--enterprise-primary)]/35" : ""}`}
                 >
                   <button
@@ -233,41 +254,39 @@ export function FileExplorerContent({
                     }}
                     className="flex cursor-pointer flex-col text-left"
                   >
-                    <div className="relative flex aspect-square w-full flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-amber-50/35 sm:aspect-[5/3]">
+                    <div className="relative flex aspect-square w-full flex-col items-center justify-center bg-gradient-to-br from-[var(--enterprise-primary-soft)]/80 to-sky-50/80 sm:aspect-[5/3]">
                       <Folder
-                        className="h-8 w-8 text-amber-500/95 sm:h-9 sm:w-9"
-                        strokeWidth={1.25}
+                        className="h-10 w-10 fill-current text-[var(--enterprise-primary)] sm:h-11 sm:w-11"
+                        strokeWidth={1.35}
                         aria-hidden
                       />
                       <span className="mt-1 rounded-full bg-white/95 px-1.5 py-px text-[9px] font-medium text-slate-500 shadow-sm ring-1 ring-slate-200/80 sm:mt-1.5 sm:px-2 sm:text-[10px]">
                         {inside.total} item{inside.total !== 1 ? "s" : ""}
                       </span>
                     </div>
-                    <div className="border-t border-slate-100 bg-slate-50/50 p-1.5 sm:p-2.5">
+                    <div className="border-t border-slate-100/80 bg-transparent p-1.5 sm:p-2">
                       <p className="line-clamp-2 text-[11px] font-semibold leading-snug text-[var(--enterprise-text)] sm:truncate sm:text-[13px] sm:leading-tight">
                         {fol.name}
+                        {fol.canAccess === false ? (
+                          <Lock className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
+                        ) : null}
                       </p>
-                      <p className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-400 sm:mt-1 sm:text-[10px]">
+                      <p className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--enterprise-primary)]/80 sm:mt-1 sm:text-[10px]">
                         Folder
                       </p>
-                      <div className="mt-2 hidden space-y-1.5 border-t border-slate-100/90 pt-2 sm:block">
-                        <div className="flex items-start gap-1.5 text-[10px] leading-snug text-slate-600">
-                          <CalendarClock
-                            className="mt-0.5 h-3 w-3 shrink-0 text-slate-400"
-                            aria-hidden
-                          />
-                          <span>
-                            <span className="text-slate-400">Created</span>{" "}
-                            {formatItemDateOrDash(fol.createdAt ?? fol.updatedAt)}
-                          </span>
-                        </div>
-                        <div className="flex items-start gap-1.5 text-[10px] leading-snug text-slate-600">
-                          <Clock className="mt-0.5 h-3 w-3 shrink-0 text-slate-400" aria-hidden />
-                          <span>
-                            <span className="text-slate-400">Updated</span>{" "}
-                            {formatItemDateOrDash(fol.updatedAt)}
-                          </span>
-                        </div>
+                      <div className="mt-1.5 space-y-1 rounded-md border border-slate-200/80 bg-white/80 px-2 py-1.5">
+                        <p className="inline-flex items-center gap-1 text-[9px] text-slate-500 sm:text-[10px]">
+                          <CalendarDays className="h-3 w-3" aria-hidden />
+                          Created {formatItemDateOrDash(fol.createdAt)}
+                        </p>
+                        <p className="inline-flex items-center gap-1 text-[9px] text-slate-500 sm:text-[10px]">
+                          <Clock3 className="h-3 w-3" aria-hidden />
+                          Last open {formatItemDateOrDash(fol.lastOpenedAt ?? folderLastOpenedIso)}
+                        </p>
+                        <p className="inline-flex items-center gap-1 text-[9px] text-slate-500 sm:text-[10px]">
+                          <UserRound className="h-3 w-3" aria-hidden />
+                          Who: {fol.lastOpenedBy || "—"}
+                        </p>
                       </div>
                     </div>
                   </button>
@@ -278,22 +297,42 @@ export function FileExplorerContent({
                       </span>
                     </div>
                   ) : null}
-                  <button
-                    type="button"
-                    className="pointer-events-none absolute right-1 top-1 z-20 rounded-md bg-white/95 p-1 text-slate-400 opacity-0 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-red-50 hover:text-red-600 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 sm:right-1.5 sm:top-1.5"
-                    disabled={deletingKey === `folder:${fol.id}`}
-                    onClick={(ev) => {
-                      ev.stopPropagation();
-                      void onDeleteFolder(fol);
-                    }}
-                    aria-label={`Delete ${fol.name}`}
-                  >
-                    {deletingKey === `folder:${fol.id}` ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </button>
+                  <div className="pointer-events-none absolute right-1 top-1 z-20 flex gap-0.5 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 sm:right-1.5 sm:top-1.5">
+                    {onDownloadFolder ? (
+                      <button
+                        type="button"
+                        className="pointer-events-auto rounded-md bg-white/95 p-1 text-slate-400 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-slate-100 hover:text-slate-700"
+                        disabled={downloadingKey === `folder-download:${fol.id}`}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          onDownloadFolder(fol);
+                        }}
+                        aria-label={`Download ${fol.name}`}
+                      >
+                        {downloadingKey === `folder-download:${fol.id}` ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4" />
+                        )}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="pointer-events-auto rounded-md bg-white/95 p-1 text-slate-400 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-red-50 hover:text-red-600"
+                      disabled={deletingKey === `folder:${fol.id}`}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        void onDeleteFolder(fol);
+                      }}
+                      aria-label={`Delete ${fol.name}`}
+                    >
+                      {deletingKey === `folder:${fol.id}` ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -312,13 +351,19 @@ export function FileExplorerContent({
                       : "border-slate-200/90 hover:border-slate-300/90"
                   }`}
                 >
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     draggable={Boolean(onDragStartMove)}
                     onDragStart={(e) => onDragStartMove?.(e, { kind: "file", id: f.id })}
                     onClick={() => {
                       onSelectItem(itemKeyForFile(f.id));
-                      onOpenFile(f);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelectItem(itemKeyForFile(f.id));
+                      }
                     }}
                     className="flex cursor-pointer flex-col text-left"
                   >
@@ -330,17 +375,19 @@ export function FileExplorerContent({
                         isPdf={isPdfFile(f)}
                         className="h-full w-full"
                       />
+                      {(f.commentCount ?? 0) > 0 ? (
+                        <div className="pointer-events-none absolute left-1 top-1 z-10 sm:left-1.5 sm:top-1.5">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary)] px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-sm ring-1 ring-white/85 sm:text-[10px]">
+                            <MessageSquare className="h-3 w-3" aria-hidden />
+                            {f.commentCount}
+                          </span>
+                        </div>
+                      ) : null}
                       {isPdfFile(f) ? (
                         <div className="pointer-events-none absolute bottom-1 left-1 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/95 shadow-md ring-1 ring-slate-200/80 sm:bottom-1.5 sm:left-1.5 sm:h-7 sm:w-7">
                           <PdfFileIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </div>
                       ) : null}
-                      <div className="pointer-events-none absolute inset-0 z-20 hidden items-center justify-center bg-slate-900/45 opacity-0 transition-opacity duration-200 sm:flex sm:opacity-0 sm:group-hover:opacity-100">
-                        <span className="flex items-center gap-1 rounded-md bg-white px-2 py-1.5 text-[11px] font-semibold text-[var(--enterprise-text)] shadow-lg">
-                          <Eye className="h-3 w-3" strokeWidth={2} />
-                          Open
-                        </span>
-                      </div>
                     </div>
                     <div className="border-t border-slate-100 bg-slate-50/50 p-1.5 sm:p-2.5">
                       <p className="line-clamp-2 text-[11px] font-semibold leading-snug text-[var(--enterprise-text)] sm:truncate sm:text-[13px] sm:leading-tight">
@@ -350,7 +397,7 @@ export function FileExplorerContent({
                         {displayVer ? (
                           <>
                             <span className="font-medium text-slate-600">
-                              {`Rev ${String.fromCharCode(64 + displayVer.version)} · v${displayVer.version}`}
+                              {`Rev ${displayVer.version} · v${displayVer.version}`}
                             </span>
                             <span className="text-slate-300"> · </span>
                             <span>{size}</span>
@@ -359,24 +406,46 @@ export function FileExplorerContent({
                           "—"
                         )}
                       </p>
-                      <div className="mt-2 hidden space-y-1.5 border-t border-slate-100/90 pt-2 sm:block">
-                        <div className="flex items-start gap-1.5 text-[10px] leading-snug text-slate-600">
-                          <Upload className="mt-0.5 h-3 w-3 shrink-0 text-slate-400" aria-hidden />
-                          <span>
-                            <span className="text-slate-400">Uploaded</span>{" "}
-                            {formatItemDateOrDash(displayVer?.createdAt ?? f.updatedAt)}
-                          </span>
+                      {(f.disciplines ?? []).length > 0 ? (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {(f.disciplines ?? []).slice(0, 2).map((discipline) => (
+                            <span
+                              key={`${f.id}-${discipline}`}
+                              className="enterprise-badge-info rounded-md px-1.5 py-0.5 text-[9px]"
+                            >
+                              {discipline}
+                            </span>
+                          ))}
                         </div>
-                        <div className="flex items-start gap-1.5 text-[10px] leading-snug text-slate-600">
-                          <Eye className="mt-0.5 h-3 w-3 shrink-0 text-slate-400" aria-hidden />
-                          <span>
-                            <span className="text-slate-400">Last opened</span>{" "}
-                            {formatItemDateOrDash(f.lastOpenedAt)}
-                          </span>
-                        </div>
+                      ) : null}
+                      <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-slate-100/90 pt-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!onOpenViewer) return;
+                            onOpenViewer(f);
+                          }}
+                          className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-semibold text-[var(--enterprise-text)] transition hover:bg-slate-50 disabled:opacity-50 sm:text-[11px]"
+                          disabled={!onOpenViewer}
+                        >
+                          <Eye className="h-3.5 w-3.5" aria-hidden />
+                          Open file
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenFile(f);
+                          }}
+                          className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-semibold text-[var(--enterprise-text)] transition hover:bg-slate-50 sm:text-[11px]"
+                        >
+                          <FileText className="h-3.5 w-3.5" aria-hidden />
+                          Details
+                        </button>
                       </div>
                     </div>
-                  </button>
+                  </div>
                   {versionUi && sv.length > 1 && onFileVersionPick ? (
                     <div
                       className="border-t border-slate-100 px-1.5 pb-1.5 pt-1 sm:px-2 sm:pb-2"
@@ -405,28 +474,10 @@ export function FileExplorerContent({
                       </select>
                     </div>
                   ) : null}
-                  <div className="pointer-events-none absolute right-1 top-1 z-20 flex gap-0.5 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 sm:right-1.5 sm:top-1.5">
-                    {onDownloadFile ? (
-                      <button
-                        type="button"
-                        className="pointer-events-auto rounded-md bg-white/95 p-1 text-slate-400 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-slate-100 hover:text-slate-700"
-                        disabled={downloadingKey === `file:${f.id}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void onDownloadFile(f);
-                        }}
-                        aria-label={`Download ${f.name}`}
-                      >
-                        {downloadingKey === `file:${f.id}` ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Download className="h-4 w-4" />
-                        )}
-                      </button>
-                    ) : null}
+                  <div className="absolute right-1 top-1 z-20 sm:right-1.5 sm:top-1.5">
                     <button
                       type="button"
-                      className="pointer-events-auto rounded-md bg-white/95 p-1 text-slate-400 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-red-50 hover:text-red-600"
+                      className="rounded-md bg-white/95 p-1 text-slate-500 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-red-50 hover:text-red-600"
                       disabled={deletingKey === `file:${f.id}`}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -447,12 +498,16 @@ export function FileExplorerContent({
           </div>
         ) : (
           <>
-            <div className="overflow-hidden rounded-none border-0 bg-white shadow-none ring-0 lg:hidden">
+            <div className="overflow-hidden rounded-none border-0 bg-white shadow-none ring-0 xl:hidden">
               <ul className="divide-y divide-slate-100">
                 {subfolders.map((fol) => {
                   const inside = countDirectChildren(project, fol.id);
                   const selected = selectedItemKey === itemKeyForFolder(fol.id);
                   const dropTarget = dropTargetKey === folderDropKey(fol.id);
+                  const folderLastOpenedIso = project.files
+                    .filter((file) => file.folderId === fol.id && file.lastOpenedAt)
+                    .map((file) => file.lastOpenedAt as string)
+                    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
                   return (
                     <li key={`m-folder-${fol.id}`}>
                       <SwipeableListRow
@@ -461,6 +516,16 @@ export function FileExplorerContent({
                           onOpenFolder(fol.id);
                         }}
                         actions={[
+                          ...(onDownloadFolder
+                            ? [
+                                {
+                                  id: "download",
+                                  label: "Download",
+                                  icon: <Download className="h-4 w-4" aria-hidden />,
+                                  onAction: () => onDownloadFolder(fol),
+                                },
+                              ]
+                            : []),
                           {
                             id: "delete",
                             label: "Delete",
@@ -489,19 +554,35 @@ export function FileExplorerContent({
                             selected ? "bg-[var(--enterprise-primary-soft)]/80" : ""
                           } ${dropTarget ? "bg-blue-50/80" : ""}`}
                         >
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-50 to-amber-50/50 ring-1 ring-slate-200/60">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--enterprise-primary-soft)]/80 to-sky-50/70 ring-1 ring-[var(--enterprise-primary)]/20">
                             <Folder
-                              className="h-6 w-6 text-amber-500"
-                              strokeWidth={1.5}
+                              className="h-7 w-7 fill-current text-[var(--enterprise-primary)]"
+                              strokeWidth={1.4}
                               aria-hidden
                             />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-base font-semibold text-[var(--enterprise-text)]">
-                              {fol.name}
+                            <p className="inline-flex items-center gap-1 truncate text-base font-semibold text-[var(--enterprise-text)]">
+                              <span className="truncate">{fol.name}</span>
+                              {fol.canAccess === false ? (
+                                <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                              ) : null}
                             </p>
                             <p className="text-sm text-slate-500">
-                              Folder · {inside.total} item{inside.total !== 1 ? "s" : ""}
+                              {fol.canAccess === false
+                                ? "Restricted folder · request access"
+                                : `Folder · ${inside.total} item${inside.total !== 1 ? "s" : ""}`}
+                            </p>
+                            <p className="mt-1 inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                              <span className="inline-flex items-center gap-1">
+                                <Clock3 className="h-3.5 w-3.5" aria-hidden />
+                                Last open{" "}
+                                {formatItemDateOrDash(fol.lastOpenedAt ?? folderLastOpenedIso)}
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <UserRound className="h-3.5 w-3.5" aria-hidden />
+                                Who {fol.lastOpenedBy || "—"}
+                              </span>
                             </p>
                           </div>
                           <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" aria-hidden />
@@ -524,6 +605,32 @@ export function FileExplorerContent({
                           onOpenFile(f);
                         }}
                         actions={[
+                          ...(onOpenViewer
+                            ? [
+                                {
+                                  id: "open",
+                                  label: "Open",
+                                  icon: <Eye className="h-4 w-4" aria-hidden />,
+                                  onAction: () => onOpenViewer(f),
+                                },
+                              ]
+                            : []),
+                          {
+                            id: "details",
+                            label: "Details",
+                            icon: <FileText className="h-4 w-4" aria-hidden />,
+                            onAction: () => onOpenFile(f),
+                          },
+                          ...(onDownloadFile
+                            ? [
+                                {
+                                  id: "download",
+                                  label: "Download",
+                                  icon: <Download className="h-4 w-4" aria-hidden />,
+                                  onAction: () => void onDownloadFile(f),
+                                },
+                              ]
+                            : []),
                           {
                             id: "delete",
                             label: "Delete",
@@ -558,9 +665,62 @@ export function FileExplorerContent({
                             <p className="truncate text-base font-semibold text-[var(--enterprise-text)]">
                               {fileExplorerDisplayName(f)}
                             </p>
-                            <p className="text-sm text-slate-500">
-                              {displayVer ? `Rev v${displayVer.version}` : "—"}
+                            <p className="inline-flex items-center gap-1.5 text-sm text-slate-500">
+                              {displayVer ? `Rev ${displayVer.version}` : "—"}
+                              {(f.commentCount ?? 0) > 0 ? (
+                                <>
+                                  <span className="text-slate-300">•</span>
+                                  <span className="inline-flex items-center gap-1 font-medium text-[var(--enterprise-primary)]">
+                                    <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                                    {f.commentCount}
+                                  </span>
+                                </>
+                              ) : null}
                             </p>
+                            <div className="mt-1.5 flex gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  if (!onOpenViewer) return;
+                                  onOpenViewer(f);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-[var(--enterprise-text)]"
+                                disabled={!onOpenViewer}
+                              >
+                                <Eye className="h-3.5 w-3.5" aria-hidden />
+                                Open
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  onOpenFile(f);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-[var(--enterprise-text)]"
+                              >
+                                <FileText className="h-3.5 w-3.5" aria-hidden />
+                                Details
+                              </button>
+                            </div>
+                            {versionUi && sv.length > 1 && onFileVersionPick ? (
+                              <select
+                                className="mt-1 h-8 rounded-md border border-slate-200/90 bg-white px-2 text-xs text-[var(--enterprise-text)]"
+                                value={String(selectedVersionForFile(f))}
+                                onClick={(ev) => ev.stopPropagation()}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  onFileVersionPick(f.id, Number(e.target.value));
+                                }}
+                                aria-label={`Revision for ${f.name}`}
+                              >
+                                {sv.map((ver) => (
+                                  <option key={ver.id} value={String(ver.version)}>
+                                    Rev {ver.version}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : null}
                           </div>
                           <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" aria-hidden />
                         </div>
@@ -571,7 +731,7 @@ export function FileExplorerContent({
               </ul>
             </div>
 
-            <div className="hidden overflow-x-auto rounded-xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-slate-900/5 lg:block">
+            <div className="hidden overflow-x-auto rounded-xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-slate-900/5 xl:block">
               <table className="w-full min-w-[880px] text-left text-[13px]">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
@@ -603,6 +763,10 @@ export function FileExplorerContent({
                     const inside = countDirectChildren(project, fol.id);
                     const selected = selectedItemKey === itemKeyForFolder(fol.id);
                     const dropTarget = dropTargetKey === folderDropKey(fol.id);
+                    const folderLastOpenedIso = project.files
+                      .filter((file) => file.folderId === fol.id && file.lastOpenedAt)
+                      .map((file) => file.lastOpenedAt as string)
+                      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
                     return (
                       <tr
                         key={`folder-row-${fol.id}`}
@@ -634,16 +798,26 @@ export function FileExplorerContent({
                         <td className="py-2.5 pl-4">
                           <span className="inline-flex items-center gap-1.5 font-medium text-[var(--enterprise-text)]">
                             <Folder
-                              className="h-3.5 w-3.5 shrink-0 text-amber-500"
-                              strokeWidth={1.75}
+                              className="h-4 w-4 shrink-0 fill-current text-[var(--enterprise-primary)]"
+                              strokeWidth={1.5}
                               aria-hidden
                             />
-                            <span className="truncate">{fol.name}</span>
+                            <span className="inline-flex items-center gap-1 truncate">
+                              <span className="truncate">{fol.name}</span>
+                              {fol.canAccess === false ? (
+                                <Lock className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
+                              ) : null}
+                            </span>
                             <ChevronRight className="h-3 w-3 shrink-0 text-slate-300" aria-hidden />
                           </span>
                         </td>
                         <td className="py-2.5 text-slate-500">Folder</td>
-                        <td className="py-2.5 text-slate-400">—</td>
+                        <td className="py-2.5 text-slate-600">
+                          <div className="space-y-0.5">
+                            <p>{formatItemDateOrDash(fol.lastOpenedAt ?? folderLastOpenedIso)}</p>
+                            <p className="text-xs text-slate-500">Who: {fol.lastOpenedBy || "—"}</p>
+                          </div>
+                        </td>
                         <td className="py-2.5 text-slate-600">
                           {formatItemDateOrDash(fol.createdAt ?? fol.updatedAt)}
                         </td>
@@ -652,22 +826,42 @@ export function FileExplorerContent({
                           {inside.total} item{inside.total !== 1 ? "s" : ""}
                         </td>
                         <td className="py-2">
-                          <button
-                            type="button"
-                            className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                            disabled={deletingKey === `folder:${fol.id}`}
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              void onDeleteFolder(fol);
-                            }}
-                            aria-label={`Delete ${fol.name}`}
-                          >
-                            {deletingKey === `folder:${fol.id}` ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </button>
+                          <div className="flex items-center gap-0.5">
+                            {onDownloadFolder ? (
+                              <button
+                                type="button"
+                                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                disabled={downloadingKey === `folder-download:${fol.id}`}
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  onDownloadFolder(fol);
+                                }}
+                                aria-label={`Download ${fol.name}`}
+                              >
+                                {downloadingKey === `folder-download:${fol.id}` ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Download className="h-4 w-4" />
+                                )}
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              disabled={deletingKey === `folder:${fol.id}`}
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                void onDeleteFolder(fol);
+                              }}
+                              aria-label={`Delete ${fol.name}`}
+                            >
+                              {deletingKey === `folder:${fol.id}` ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -714,7 +908,13 @@ export function FileExplorerContent({
                                 aria-hidden
                               />
                             )}
-                            {f.name}
+                            <span className="truncate">{f.name}</span>
+                            {(f.commentCount ?? 0) > 0 ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)]">
+                                <MessageSquare className="h-3 w-3" aria-hidden />
+                                {f.commentCount}
+                              </span>
+                            ) : null}
                           </span>
                         </td>
                         <td className="py-2.5 text-slate-500">{isPdfFile(f) ? "PDF" : "File"}</td>
@@ -752,7 +952,33 @@ export function FileExplorerContent({
                           {displayVer ? formatBytes(displayVer.sizeBytes) : "—"}
                         </td>
                         <td className="py-2">
-                          <div className="flex items-center justify-end gap-0.5">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-[var(--enterprise-text)] hover:bg-slate-50 disabled:opacity-50"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                if (!onOpenViewer) return;
+                                onOpenViewer(f);
+                              }}
+                              disabled={!onOpenViewer}
+                              aria-label={`Open ${f.name}`}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              Open
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-[var(--enterprise-text)] hover:bg-slate-50"
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                onOpenFile(f);
+                              }}
+                              aria-label={`Open details for ${f.name}`}
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                              Details
+                            </button>
                             {onDownloadFile ? (
                               <button
                                 type="button"

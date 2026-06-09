@@ -22,7 +22,7 @@ export function FileExplorerEmptyState({
 }: FileExplorerEmptyStateProps) {
   return (
     <div
-      className={`flex flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-16 text-center transition-colors ${
+      className={`mx-auto flex w-full max-w-3xl flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-14 text-center transition-colors sm:px-8 ${
         variant === "no-search-results"
           ? "border-slate-200/90 bg-slate-50/50"
           : "border-slate-200/90 bg-gradient-to-b from-slate-50/90 to-white"
@@ -33,8 +33,10 @@ export function FileExplorerEmptyState({
       ) : (
         <FileText className="h-12 w-12 text-slate-400" strokeWidth={1.25} aria-hidden />
       )}
-      <p className="mt-4 text-base font-semibold text-[var(--enterprise-text)]">{title}</p>
-      <p className="mt-1 max-w-sm text-sm text-[var(--enterprise-text-muted)]">{description}</p>
+      <p className="mt-4 text-base font-semibold text-[var(--enterprise-text)] sm:text-lg">
+        {title}
+      </p>
+      <p className="mt-1 max-w-md text-sm text-[var(--enterprise-text-muted)]">{description}</p>
       {variant === "no-items" && uploadInputId ? (
         <label
           htmlFor={uploadInputId}

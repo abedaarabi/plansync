@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
-import { ChevronRight, Folder as FolderIcon, Home } from "lucide-react";
+import { ChevronRight, Folder as FolderIcon, Home, Lock } from "lucide-react";
 import type { Folder as ProjectFolder } from "@/types/projects";
 
 /** One horizontal step per depth (chevron column matches this so guides line up) */
@@ -27,6 +27,7 @@ function TreeRow({
   onToggleExpand,
   onSelect,
   icon,
+  isLocked,
   onDragOverTarget,
   onDragLeaveTarget,
   onDropTarget,
@@ -41,6 +42,7 @@ function TreeRow({
   onToggleExpand: () => void;
   onSelect: () => void;
   icon: "home" | "folder";
+  isLocked?: boolean;
   onDragOverTarget?: (e: React.DragEvent<HTMLButtonElement>) => void;
   onDragLeaveTarget?: (e: React.DragEvent<HTMLButtonElement>) => void;
   onDropTarget?: (e: React.DragEvent<HTMLButtonElement>) => void;
@@ -75,9 +77,9 @@ function TreeRow({
       </div>
       <button
         type="button"
-        draggable={icon === "folder" && Boolean(folderId) && Boolean(onDragStartMove)}
+        draggable={icon === "folder" && !isLocked && Boolean(folderId) && Boolean(onDragStartMove)}
         onDragStart={
-          icon === "folder" && folderId && onDragStartMove
+          icon === "folder" && !isLocked && folderId && onDragStartMove
             ? (e) => onDragStartMove(e, folderId)
             : undefined
         }
@@ -98,7 +100,9 @@ function TreeRow({
         className={`group flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-[13px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--enterprise-primary)] ${
           isSelected
             ? "bg-[var(--enterprise-primary-soft)] font-medium text-[var(--enterprise-primary-deep)] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]"
-            : "text-[var(--enterprise-text)] hover:bg-slate-100/90"
+            : isLocked
+              ? "text-[var(--enterprise-text-muted)] hover:bg-slate-100/90"
+              : "text-[var(--enterprise-text)] hover:bg-slate-100/90"
         } ${isDropTarget ? "ring-2 ring-[var(--enterprise-primary)]/35 ring-inset bg-[var(--enterprise-primary-soft)]/60" : ""}`}
         aria-current={isSelected ? "true" : undefined}
       >
@@ -115,15 +119,20 @@ function TreeRow({
             />
           ) : (
             <FolderIcon
-              className={`h-4 w-4 ${
-                isSelected ? "text-[var(--enterprise-primary)]" : "text-amber-500/90"
-              }`}
-              strokeWidth={1.75}
+              className={`h-5 w-5 ${
+                isSelected
+                  ? "text-[var(--enterprise-primary-deep)]"
+                  : isLocked
+                    ? "text-slate-400"
+                    : "text-[var(--enterprise-primary)]"
+              } fill-current`}
+              strokeWidth={1.5}
               aria-hidden
             />
           )}
         </span>
         <span className="truncate">{label}</span>
+        {isLocked ? <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
       </button>
     </div>
   );
@@ -202,6 +211,7 @@ function TreeBranch({
               onToggleExpand={() => onToggleExpand(fol.id)}
               onSelect={() => onSelect(fol.id)}
               icon="folder"
+              isLocked={fol.canAccess === false}
               onDragOverTarget={onDragOverFolder ? (e) => onDragOverFolder(e, fol.id) : undefined}
               onDragLeaveTarget={
                 onDragLeaveFolder ? (e) => onDragLeaveFolder(e, fol.id) : undefined

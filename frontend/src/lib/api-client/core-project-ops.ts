@@ -70,6 +70,7 @@ export type ProjectSessionClientVisibility = {
   showRfis: boolean;
   showFieldReports: boolean;
   showPunchList: boolean;
+  showDrawings: boolean;
   allowClientComment: boolean;
 };
 

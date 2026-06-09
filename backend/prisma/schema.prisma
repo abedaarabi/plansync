@@ -41,6 +41,7 @@ model User {
   proposalsCreated             Proposal[]                @relation("ProposalCreator")
   proposalDocVersions          ProposalDocumentVersion[] @relation("ProposalDocVersionCreator")
   proposalComments             ProposalComment[]         @relation("ProposalCommentAuthor")
+  fileComments                 FileComment[]             @relation("FileCommentAuthor")
   cloudStorageConnections      CloudStorageConnection[]
   punchItemsAssigned           PunchItem[]               @relation("PunchAssignee")
   punchAssigneeLinks           PunchAssigneeLink[]
@@ -455,6 +456,7 @@ model Project {
   auditLogs                 ActivityLog[]
   userNotifications         UserNotification[]
   proposals                 Proposal[]
+  fileComments              FileComment[]
   assets                    Asset[]
   maintenanceCompletions    MaintenanceCompletion[]
   inspectionTemplates       InspectionTemplate[]
@@ -747,6 +749,8 @@ model Folder {
   projectId String
   name      String
   parentId  String?
+  accessMode FolderAccessMode @default(ALL)
+  allowedUserIds String[] @default([])
 
   project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: SetNull)
@@ -757,6 +761,11 @@ model Folder {
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
+}
+
+enum FolderAccessMode {
+  ALL
+  SELECTED_USERS
 }
 
 /// Folder tree presets (empty folders only). Listed and applied from DB so edits take effect without redeploy.
@@ -788,6 +797,7 @@ model File {
   folder  Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   versions       FileVersion[]
+  comments       FileComment[]
   issues         Issue[]
   takeoffLines   TakeoffLine[]
   rfisDrawing    Rfi[]           @relation("RfiDrawingFile")
@@ -833,11 +843,33 @@ model FileVersion {
   punchDrawing           PunchItem[]             @relation("PunchDrawingVersion")
   proposalTakeoffSources ProposalTakeoffSource[]
   proposalAttachments    ProposalAttachment[]
+  comments               FileComment[]
   assets                 Asset[]
   inspectionRuns         InspectionRun[]
 
   @@unique([fileId, version])
   @@index([fileId])
+}
+
+model FileComment {
+  id            String   @id @default(cuid())
+  projectId     String
+  fileId        String
+  fileVersionId String?
+  authorId      String
+  body          String   @db.Text
+  resolvedAt    DateTime?
+  editedAt      DateTime?
+  createdAt     DateTime @default(now())
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  file        File         @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  fileVersion FileVersion? @relation(fields: [fileVersionId], references: [id], onDelete: SetNull)
+  author      User         @relation("FileCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([fileId, createdAt])
+  @@index([fileVersionId, createdAt])
+  @@index([projectId, createdAt])
 }
 
 enum IssueKind {

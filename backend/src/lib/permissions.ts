@@ -1,5 +1,5 @@
 import type { Prisma, Project, Workspace } from "@prisma/client";
-import { ProjectMemberRole, WorkspaceRole } from "@prisma/client";
+import { FolderAccessMode, ProjectMemberRole, WorkspaceRole } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { parseProjectSettingsJson, type ProjectSettingsResolved } from "./projectSettings.js";
 
@@ -91,6 +91,14 @@ export function canUploadDrawings(ctx: ProjectAuthContext): boolean {
   return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN;
 }
 
+export function canManageFiles(ctx: ProjectAuthContext): boolean {
+  return canUploadDrawings(ctx);
+}
+
+export function canViewDrawingsForClient(ctx: ProjectAuthContext): boolean {
+  return ctx.settings.clientVisibility.showDrawings;
+}
+
 export function canCreateIssues(ctx: ProjectAuthContext): boolean {
   if (ctx.uiMode === "client") return false;
   if (ctx.uiMode === "sub") return false;
@@ -165,10 +173,45 @@ export function canViewFileForExternal(
   ctx: ProjectAuthContext,
   fileDisciplines: string[],
 ): boolean {
-  if (ctx.uiMode === "client") return true;
+  if (ctx.uiMode === "client") return canViewDrawingsForClient(ctx);
   const tr = normalizeTrade(ctx.projectMember?.trade ?? null);
   if (!tr) return false;
   return tradeMatches(tr, fileDisciplines);
+}
+
+export function canViewFile(ctx: ProjectAuthContext, fileDisciplines: string[]): boolean {
+  if (ctx.uiMode === "internal") return true;
+  return canViewFileForExternal(ctx, fileDisciplines);
+}
+
+export function canCommentOnFiles(ctx: ProjectAuthContext): boolean {
+  if (ctx.uiMode === "internal") return true;
+  if (ctx.uiMode === "client") return canViewDrawingsForClient(ctx);
+  return false;
+}
+
+export function canViewFolderForUser(
+  ctx: ProjectAuthContext,
+  folder: { accessMode: FolderAccessMode; allowedUserIds: string[] },
+  userId: string,
+): boolean {
+  if (canManageFiles(ctx)) return true;
+  if (folder.accessMode === FolderAccessMode.ALL) return true;
+  return folder.allowedUserIds.includes(userId);
+}
+
+export function filesWhereForAuth(ctx: ProjectAuthContext): Prisma.FileWhereInput {
+  if (ctx.uiMode === "internal") return {};
+  if (ctx.uiMode === "client") {
+    return canViewDrawingsForClient(ctx) ? {} : { id: { in: [] } };
+  }
+  const tr = normalizeTrade(ctx.projectMember?.trade ?? null);
+  if (!tr) return { id: { in: [] } };
+  return {
+    disciplines: {
+      hasSome: [tr, tr.toLowerCase(), tr.toUpperCase()],
+    },
+  };
 }
 
 /**

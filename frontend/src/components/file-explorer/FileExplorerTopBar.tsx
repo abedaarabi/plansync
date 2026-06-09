@@ -11,6 +11,7 @@ import {
   PanelLeft,
   Search,
   Upload,
+  Users,
 } from "lucide-react";
 
 export type BreadcrumbItem = {
@@ -33,6 +34,8 @@ export type FileExplorerTopBarProps = {
   onImportFromCloud?: () => void;
   /** Below `lg`, opens the full folder tree (sidebar is hidden on small screens). */
   onOpenFolderTree?: () => void;
+  /** Optional compact folder-access action for the selected folder. */
+  folderAccess?: { summary: string; onClick: () => void };
 };
 
 /**
@@ -50,13 +53,14 @@ export function FileExplorerTopBar({
   uploadInputId,
   onImportFromCloud,
   onOpenFolderTree,
+  folderAccess,
 }: FileExplorerTopBarProps) {
   const current = breadcrumbs[breadcrumbs.length - 1];
   const parent = breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2] : null;
 
   return (
-    <header className="flex flex-col gap-3 border-b border-slate-200/75 bg-white/95 px-4 py-3 backdrop-blur-sm lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:px-7 lg:py-4">
-      <div className="flex min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
+    <header className="flex flex-col gap-3 border-b border-slate-200/75 bg-white/95 px-4 py-3.5 backdrop-blur-sm lg:flex-row lg:items-center lg:justify-between lg:gap-5 lg:px-7 lg:py-4.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:gap-5">
         <div className="flex min-w-0 items-center gap-1.5 lg:hidden">
           {parent ? (
             <button
@@ -124,8 +128,8 @@ export function FileExplorerTopBar({
         </nav>
       </div>
 
-      <div className="flex w-full flex-col gap-2.5 lg:w-auto lg:flex-row lg:items-center lg:justify-end lg:gap-3">
-        <div className="relative w-full min-w-0 lg:max-w-xs lg:min-w-[200px]">
+      <div className="flex w-full flex-col gap-2.5 xl:w-auto xl:min-w-[620px] xl:flex-row xl:items-center xl:justify-end xl:gap-3">
+        <div className="relative w-full min-w-0 xl:max-w-sm xl:min-w-[280px]">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
             strokeWidth={2}
@@ -140,25 +144,39 @@ export function FileExplorerTopBar({
             aria-label="Search files and folders in current location"
           />
         </div>
-        <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+          {folderAccess ? (
+            <button
+              type="button"
+              onClick={folderAccess.onClick}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200/90 bg-slate-50/90 px-3 text-sm font-medium text-[var(--enterprise-text)] shadow-sm transition hover:border-slate-300 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--enterprise-primary)]"
+              aria-label={`Folder access: ${folderAccess.summary}`}
+              title={`Folder access: ${folderAccess.summary}`}
+            >
+              <Users className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
+              <span className="hidden max-w-[180px] truncate xl:inline">
+                {folderAccess.summary}
+              </span>
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onNewFolder}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200/90 bg-white px-3 text-sm font-medium text-[var(--enterprise-text)] shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--enterprise-primary)] max-lg:w-10 max-lg:px-0"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200/90 bg-white px-3 text-sm font-medium text-[var(--enterprise-text)] shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--enterprise-primary)] max-xl:w-10 max-xl:px-0"
             aria-label="New folder"
           >
             <FolderPlus className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} />
-            <span className="hidden lg:inline">New folder</span>
+            <span className="hidden xl:inline">New folder</span>
           </button>
           {onImportFromCloud ? (
             <button
               type="button"
               onClick={onImportFromCloud}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200/90 bg-white px-3 text-sm font-medium text-[var(--enterprise-text)] shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--enterprise-primary)] max-lg:w-10 max-lg:px-0 max-sm:hidden"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200/90 bg-white px-3 text-sm font-medium text-[var(--enterprise-text)] shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--enterprise-primary)] max-xl:w-10 max-xl:px-0 max-sm:hidden"
               aria-label="Import from cloud"
             >
               <Cloud className="h-4 w-4 shrink-0 text-slate-500" strokeWidth={2} aria-hidden />
-              <span className="hidden lg:inline">Import from cloud</span>
+              <span className="hidden xl:inline">Import from cloud</span>
             </button>
           ) : null}
           <label
@@ -173,7 +191,7 @@ export function FileExplorerTopBar({
             ) : (
               <Upload className="h-4 w-4" strokeWidth={2} aria-hidden />
             )}
-            <span className="hidden lg:inline">{uploadLabel}</span>
+            <span className="hidden xl:inline">{uploadLabel}</span>
           </label>
         </div>
       </div>

@@ -23,6 +23,8 @@ export const qk = {
   projectFieldReports: (projectId: string) => ["projectFieldReports", projectId] as const,
   /** Project audit log (opens, uploads, deletes, …) */
   projectAudit: (projectId: string) => ["project-audit", projectId] as const,
+  projectFileComments: (projectId: string, fileId: string, fileVersionId?: string | null) =>
+    ["project-file-comments", projectId, fileId, fileVersionId ?? "all"] as const,
   projectDashboard: (projectId: string) => ["projectDashboard", projectId] as const,
   dashboard: (workspaceId: string) => ["dashboard", workspaceId] as const,
   invites: (workspaceId: string) => ["invites", workspaceId] as const,

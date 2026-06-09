@@ -709,6 +709,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
             toggleClient("showFieldReports", v),
           )}
           {row("Show punch list", c.showPunchList, (v) => toggleClient("showPunchList", v))}
+          {row("Show drawings to client", c.showDrawings, (v) => toggleClient("showDrawings", v))}
           {row("Allow client to comment", c.allowClientComment, (v) =>
             toggleClient("allowClientComment", v),
           )}

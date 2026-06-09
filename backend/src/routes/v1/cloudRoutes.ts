@@ -32,7 +32,7 @@ import {
 } from "../../lib/cloudProviders.js";
 import { ensureFreshCloudAccessToken } from "../../lib/cloudTokens.js";
 import { commitProjectFileImportFromBuffer } from "../../lib/projectFileImport.js";
-import { loadProjectForMember } from "../../lib/projectAccess.js";
+import { canUploadDrawings, loadProjectWithAuth } from "../../lib/permissions.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { resolvedMimeType } from "../../lib/mime.js";
 
@@ -388,11 +388,12 @@ export function registerCloudRoutes(r: Hono, needUser: MiddlewareHandler, env: E
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
     const { workspaceId, projectId, folderId, fileName, mimeType, externalRef } = parsed.data;
 
-    const access = await loadProjectForMember(projectId, c.get("user").id);
+    const access = await loadProjectWithAuth(projectId, c.get("user").id);
     if ("error" in access) return c.json({ error: access.error }, access.status);
-    if (access.project.workspaceId !== workspaceId) return c.json({ error: "Forbidden" }, 403);
-    const gate = requirePro(access.project.workspace);
+    if (access.ctx.project.workspaceId !== workspaceId) return c.json({ error: "Forbidden" }, 403);
+    const gate = requirePro(access.ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
+    if (!canUploadDrawings(access.ctx)) return c.json({ error: "Forbidden" }, 403);
 
     const tok = await ensureFreshCloudAccessToken(
       env,
@@ -423,11 +424,12 @@ export function registerCloudRoutes(r: Hono, needUser: MiddlewareHandler, env: E
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
     const { workspaceId, projectId, folderId, fileName, mimeType, externalRef } = parsed.data;
 
-    const access = await loadProjectForMember(projectId, c.get("user").id);
+    const access = await loadProjectWithAuth(projectId, c.get("user").id);
     if ("error" in access) return c.json({ error: access.error }, access.status);
-    if (access.project.workspaceId !== workspaceId) return c.json({ error: "Forbidden" }, 403);
-    const gate = requirePro(access.project.workspace);
+    if (access.ctx.project.workspaceId !== workspaceId) return c.json({ error: "Forbidden" }, 403);
+    const gate = requirePro(access.ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
+    if (!canUploadDrawings(access.ctx)) return c.json({ error: "Forbidden" }, 403);
 
     const tok = await ensureFreshCloudAccessToken(
       env,
@@ -458,11 +460,12 @@ export function registerCloudRoutes(r: Hono, needUser: MiddlewareHandler, env: E
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
     const { workspaceId, projectId, folderId, fileName, mimeType, externalRef } = parsed.data;
 
-    const access = await loadProjectForMember(projectId, c.get("user").id);
+    const access = await loadProjectWithAuth(projectId, c.get("user").id);
     if ("error" in access) return c.json({ error: access.error }, access.status);
-    if (access.project.workspaceId !== workspaceId) return c.json({ error: "Forbidden" }, 403);
-    const gate = requirePro(access.project.workspace);
+    if (access.ctx.project.workspaceId !== workspaceId) return c.json({ error: "Forbidden" }, 403);
+    const gate = requirePro(access.ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
+    if (!canUploadDrawings(access.ctx)) return c.json({ error: "Forbidden" }, 403);
 
     const tok = await ensureFreshCloudAccessToken(
       env,
