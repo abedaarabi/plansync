@@ -5,8 +5,10 @@ import { X } from "lucide-react";
 import { useViewerStore } from "@/store/viewerStore";
 import { DEFAULT_SHEET_OVERLAY_VISIBILITY } from "@/lib/viewerSheetOverlay";
 import { MapSnapPanelBody } from "./ViewerRightPanel";
+import { IssuePanelHost } from "./IssuePanelHost";
 
-const FLYOUT_W = 300;
+const SETTINGS_FLYOUT_W = 300;
+const ISSUE_FLYOUT_W = 340;
 
 function FlyoutChrome({
   title,
@@ -32,9 +34,7 @@ function FlyoutChrome({
           <X className="h-4 w-4" strokeWidth={2} />
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:thin]">
-        {children}
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
     </div>
   );
 }
@@ -45,7 +45,7 @@ function SettingsFlyoutBody() {
   const setSheetOverlayVisibilityAll = useViewerStore((s) => s.setSheetOverlayVisibilityAll);
 
   return (
-    <div className="space-y-4 px-3 py-3 text-[11px] text-[#CBD5E1]">
+    <div className="space-y-4 overflow-y-auto px-3 py-3 text-[11px] text-[#CBD5E1] [scrollbar-width:thin]">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B]">
         Sheet overlays
       </p>
@@ -105,16 +105,24 @@ function SettingsFlyoutBody() {
 }
 
 /**
- * Slides in from the right: navy sheet settings (map, snap, saved views, overlays).
+ * Slides in from the right: sheet settings, or docked issue panel.
  */
 export function ViewerFlyoutStack() {
   const pdfUrl = useViewerStore((s) => s.pdfUrl);
   const rightFlyout = useViewerStore((s) => s.rightFlyout);
   const setRightFlyout = useViewerStore((s) => s.setRightFlyout);
+  const closeIssueFlyout = useViewerStore((s) => s.closeIssueFlyout);
 
   if (!pdfUrl) return null;
 
   const open = rightFlyout != null;
+  const flyoutW = rightFlyout === "issue" ? ISSUE_FLYOUT_W : SETTINGS_FLYOUT_W;
+  const lightBackdrop = rightFlyout === "issue";
+
+  const onClose = () => {
+    if (rightFlyout === "issue") closeIssueFlyout();
+    else setRightFlyout(null);
+  };
 
   return (
     <>
@@ -122,25 +130,32 @@ export function ViewerFlyoutStack() {
         <button
           type="button"
           aria-label="Close side panel"
-          className="no-print absolute inset-0 z-[35] bg-slate-950/50 backdrop-blur-[1px] transition-opacity duration-200"
-          onClick={() => setRightFlyout(null)}
+          className={`no-print absolute inset-0 z-[35] transition-opacity duration-200 ${
+            lightBackdrop ? "bg-transparent" : "bg-slate-950/50 backdrop-blur-[1px]"
+          }`}
+          onClick={onClose}
         />
       ) : null}
       <div
-        className={`no-print pointer-events-none absolute inset-y-0 right-0 z-[36] flex w-[min(100%,${FLYOUT_W}px)] max-w-full flex-col shadow-none transition-transform duration-300 ease-out print:hidden ${
+        className={`no-print pointer-events-none absolute inset-y-0 right-0 z-[36] flex max-w-full flex-col shadow-none transition-transform duration-300 ease-out print:hidden ${
           open ? "translate-x-0" : "translate-x-full pointer-events-none"
         }`}
-        style={{ width: FLYOUT_W }}
+        style={{ width: flyoutW }}
         aria-hidden={!open}
       >
         <div className="pointer-events-auto flex h-full min-h-0 flex-col border-l border-[#334155] bg-[#0F172A]">
           {rightFlyout === "settings" ? (
-            <FlyoutChrome title="Sheet settings" onClose={() => setRightFlyout(null)}>
-              <div className="flex flex-col">
+            <FlyoutChrome title="Sheet settings" onClose={onClose}>
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <MapSnapPanelBody />
                 <hr className="mx-3 border-0 border-t border-[#334155]" />
                 <SettingsFlyoutBody />
               </div>
+            </FlyoutChrome>
+          ) : null}
+          {rightFlyout === "issue" ? (
+            <FlyoutChrome title="Issue details" onClose={onClose}>
+              <IssuePanelHost />
             </FlyoutChrome>
           ) : null}
         </div>

@@ -3,12 +3,18 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
+import { useViewerStore } from "@/store/viewerStore";
 
-const STORAGE_KEY = "plansync-onboarding-dismissed-v1";
-const LEGACY_STORAGE_KEY = "cv-onboarding-dismissed-v1";
+const STORAGE_KEY = "plansync-onboarding-dismissed-v2";
+const LEGACY_STORAGE_KEY = "plansync-onboarding-dismissed-v1";
+const LEGACY_CV_KEY = "cv-onboarding-dismissed-v1";
 
 export function ViewerOnboarding() {
+  const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
+  const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
   const [visible, setVisible] = useState(false);
+
+  const isProjectSheet = Boolean(viewerProjectId && cloudFileVersionId);
 
   useEffect(() => {
     try {
@@ -19,7 +25,8 @@ export function ViewerOnboarding() {
       }
       const dismissed =
         localStorage.getItem(STORAGE_KEY) === "1" ||
-        localStorage.getItem(LEGACY_STORAGE_KEY) === "1";
+        localStorage.getItem(LEGACY_STORAGE_KEY) === "1" ||
+        localStorage.getItem(LEGACY_CV_KEY) === "1";
       setVisible(!dismissed);
     } catch {
       setVisible(false);
@@ -30,6 +37,7 @@ export function ViewerOnboarding() {
     try {
       localStorage.setItem(STORAGE_KEY, "1");
       localStorage.removeItem(LEGACY_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_CV_KEY);
     } catch {
       /* ignore */
     }
@@ -48,23 +56,40 @@ export function ViewerOnboarding() {
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <p id="onboarding-title" className="text-sm font-semibold text-slate-100">
-              Quick start
+              {isProjectSheet ? "Issues on this sheet" : "Quick start"}
             </p>
-            <ol className="mt-2 list-inside list-decimal space-y-1 text-[11px] leading-relaxed text-slate-400">
-              <li>
-                <strong className="font-medium text-slate-300">Calibrate</strong> scale from a known
-                length on the sheet.
-              </li>
-              <li>
-                <strong className="font-medium text-slate-300">Measure</strong> lines, areas, and
-                angles.
-              </li>
-              <li>
-                <strong className="font-medium text-slate-300">Markup</strong> with pen, shapes, and
-                text—saved in this browser&apos;s local storage. Clear from{" "}
-                <strong className="text-slate-300">Document</strong> (info) → Clear saved markups.
-              </li>
-            </ol>
+            {isProjectSheet ? (
+              <ol className="mt-2 list-inside list-decimal space-y-1 text-[11px] leading-relaxed text-slate-400">
+                <li>
+                  Switch to <strong className="font-medium text-slate-300">Issues</strong> mode in
+                  the left sidebar.
+                </li>
+                <li>
+                  Click <strong className="font-medium text-slate-300">New</strong> to drop an issue
+                  pin on the drawing.
+                </li>
+                <li>
+                  Fill in details in the{" "}
+                  <strong className="font-medium text-slate-300">panel on the right</strong> — the
+                  sheet stays visible while you work.
+                </li>
+              </ol>
+            ) : (
+              <ol className="mt-2 list-inside list-decimal space-y-1 text-[11px] leading-relaxed text-slate-400">
+                <li>
+                  <strong className="font-medium text-slate-300">Calibrate</strong> scale from a
+                  known length on the sheet.
+                </li>
+                <li>
+                  <strong className="font-medium text-slate-300">Measure</strong> lines, areas, and
+                  angles.
+                </li>
+                <li>
+                  <strong className="font-medium text-slate-300">Markup</strong> with pen, shapes,
+                  and text—saved in this browser&apos;s local storage.
+                </li>
+              </ol>
+            )}
             <p className="mt-2 text-[10px] text-slate-500">
               <Link href="/settings" className="text-blue-400 underline hover:text-blue-300">
                 Settings

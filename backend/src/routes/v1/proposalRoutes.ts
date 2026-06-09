@@ -22,6 +22,7 @@ import {
   sumLineTotals,
   toDec,
 } from "../../lib/proposalMath.js";
+import { proposalCoverTextToHtml } from "../../lib/proposalCoverHtml.js";
 import { sanitizeProposalCoverHtml } from "../../lib/proposalSanitize.js";
 import {
   applyProposalTemplate,
@@ -1350,7 +1351,14 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
       )
       .join("\n");
 
-    const prompt = `You are helping write a professional construction proposal cover letter (plain text or very simple markdown, no HTML).
+    const prompt = `You are helping write a professional construction proposal cover letter.
+
+Use Markdown only (no HTML tags):
+- Put a blank line between paragraphs (greeting, body paragraphs, closing).
+- Use **bold** sparingly for emphasis.
+- Use bullet lists (- item) when summarizing scope or line items.
+- End with a professional sign-off and sender name placeholder.
+
 Project: ${p.project.name}
 Client: ${p.clientName}
 Proposal ref: ${p.reference}
@@ -1371,7 +1379,8 @@ Rules: Do not invent quantities or prices. No legal guarantees. Keep under 400 w
     const text = result.response.text()?.trim() ?? "";
     if (!text) return c.json({ error: "Empty AI response" }, 502);
 
-    return c.json({ text });
+    const html = proposalCoverTextToHtml(text);
+    return c.json({ text: html });
   });
 
   // --- Public (no auth) ---

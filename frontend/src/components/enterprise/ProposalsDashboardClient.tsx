@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { BarChart3, FileSpreadsheet, FolderKanban, Inbox, TrendingUp } from "lucide-react";
+import {
+  BarChart3,
+  ChevronRight,
+  FileSpreadsheet,
+  FolderKanban,
+  Inbox,
+  TrendingUp,
+} from "lucide-react";
 import { useMemo } from "react";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
@@ -12,28 +19,13 @@ import {
   ProRequiredError,
   type ProposalListRow,
 } from "@/lib/api-client";
+import {
+  proposalStatusBadgeClass,
+  proposalStatusColor,
+  proposalStatusLabel,
+} from "@/lib/proposalStatus";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
-
-const STATUS_STYLE: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-700",
-  SENT: "bg-blue-100 text-blue-800",
-  VIEWED: "bg-violet-100 text-violet-800",
-  ACCEPTED: "bg-emerald-100 text-emerald-800",
-  DECLINED: "bg-red-100 text-red-800",
-  EXPIRED: "bg-orange-100 text-orange-800",
-  CHANGE_REQUESTED: "bg-amber-100 text-amber-900",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Draft",
-  SENT: "Sent",
-  VIEWED: "Viewed",
-  ACCEPTED: "Accepted",
-  DECLINED: "Declined",
-  EXPIRED: "Expired",
-  CHANGE_REQUESTED: "Change requested",
-};
 
 const STATUS_ORDER = [
   "DRAFT",
@@ -44,10 +36,6 @@ const STATUS_ORDER = [
   "DECLINED",
   "EXPIRED",
 ] as const;
-
-function proposalStatusLabel(status: string): string {
-  return STATUS_LABEL[status] ?? status.replace(/_/g, " ");
-}
 
 function fmtMoney(amount: number, currency: string) {
   if (!Number.isFinite(amount)) return "—";
@@ -245,40 +233,39 @@ export function ProposalsDashboardClient() {
   ];
 
   return (
-    <div className="mobile-app-page space-y-6">
+    <div className="mobile-app-page space-y-6 sm:space-y-8">
       <header className="enterprise-card overflow-hidden p-5 sm:p-6">
-        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
-              <FileSpreadsheet className="h-5 w-5" strokeWidth={1.75} />
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-1 text-xs font-medium text-[var(--enterprise-text-muted)]">
+              <FileSpreadsheet className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" />
+              Workspace overview
             </div>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)]">
-                Proposals Dashboard
-              </h1>
-              <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
-                Workspace-wide proposal visibility across all projects so admins can monitor
-                pipeline, status, and conversion trends.
-              </p>
-            </div>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-[1.75rem]">
+              Proposals Dashboard
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm text-[var(--enterprise-text-muted)]">
+              Monitor pipeline, status, and conversion trends across all projects in your workspace.
+            </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 md:min-w-[320px]">
-            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+          <div className="grid grid-cols-2 gap-3 sm:max-w-sm">
+            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-3">
+              <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
                 Est. pipeline
               </p>
-              <p className="mt-0.5 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
+              <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
                 {weightedPipelineTotal > 0
                   ? fmtMoney(weightedPipelineTotal, topCurrencies[0]?.[0] ?? "USD")
                   : "—"}
               </p>
             </div>
-            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-3">
+              <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
                 Active projects
               </p>
-              <p className="mt-0.5 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
+              <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
                 {aggregate.projectsWithProposals}
+                <span className="text-[var(--enterprise-text-muted)]"> / {totalProjects}</span>
               </p>
             </div>
           </div>
@@ -301,8 +288,11 @@ export function ProposalsDashboardClient() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-12">
-        <div className="enterprise-card xl:col-span-7 p-5 sm:p-6">
+        <div className="enterprise-card p-5 sm:p-6 xl:col-span-7">
           <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Status breakdown</h2>
+          <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
+            Distribution of proposals by current status
+          </p>
           <DonutStatusChart
             rows={statusChartRows}
             total={aggregate.total}
@@ -314,10 +304,10 @@ export function ProposalsDashboardClient() {
                 key={currency}
                 className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-3"
               >
-                <p className="text-xs font-medium text-[var(--enterprise-text-muted)]">
+                <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
                   Pipeline ({currency})
                 </p>
-                <p className="mt-1 text-sm font-semibold text-[var(--enterprise-text)]">
+                <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
                   {fmtMoney(amount, currency)}
                 </p>
               </div>
@@ -329,29 +319,34 @@ export function ProposalsDashboardClient() {
             ) : null}
           </div>
         </div>
+
         <div className="space-y-6 xl:col-span-5">
           <div className="enterprise-card p-5 sm:p-6">
             <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Top projects</h2>
-            <div className="mt-3 space-y-2">
+            <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
+              Projects with the most proposal activity
+            </p>
+            <div className="mt-4 space-y-2">
               {topProjects.map((project) => {
                 const href = `/projects/${project.projectId}/proposals`;
                 return (
                   <Link
                     key={project.projectId}
                     href={href}
-                    className="flex items-center justify-between rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5 transition hover:border-[var(--enterprise-primary)]/35"
+                    className="group flex items-center justify-between gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-3 transition hover:border-[color-mix(in_srgb,var(--enterprise-primary)_30%,var(--enterprise-border))] hover:bg-[var(--enterprise-hover-surface)]"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-[var(--enterprise-text)]">
                         {project.projectName}
                       </p>
-                      <p className="text-xs text-[var(--enterprise-text-muted)]">
+                      <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
                         {project.pending} pending · {project.accepted} accepted · {project.declined}{" "}
                         declined
                       </p>
                     </div>
-                    <span className="ml-3 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
+                    <span className="flex shrink-0 items-center gap-1 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
                       {project.total}
+                      <ChevronRight className="h-3.5 w-3.5 text-[var(--enterprise-text-muted)] opacity-0 transition group-hover:opacity-100" />
                     </span>
                   </Link>
                 );
@@ -363,8 +358,14 @@ export function ProposalsDashboardClient() {
               ) : null}
             </div>
           </div>
+
           <div className="enterprise-card p-5 sm:p-6">
-            <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Funnel</h2>
+            <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
+              Conversion funnel
+            </h2>
+            <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
+              Draft through accepted progression
+            </p>
             <ProposalFunnelChart steps={funnelSteps} />
           </div>
         </div>
@@ -373,26 +374,70 @@ export function ProposalsDashboardClient() {
       <section className="enterprise-card overflow-hidden">
         <div className="border-b border-[var(--enterprise-border)] px-5 py-4 sm:px-6">
           <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Latest proposals</h2>
+          <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
+            Most recently sent or created across your workspace
+          </p>
         </div>
-        <div className="overflow-x-auto">
+
+        <ul className="divide-y divide-[var(--enterprise-border)] md:hidden">
+          {recentRows.length === 0 ? (
+            <li className="px-5 py-8 text-center text-sm text-[var(--enterprise-text-muted)]">
+              No proposals yet across your projects.
+            </li>
+          ) : (
+            recentRows.map((proposal) => (
+              <li key={proposal.id}>
+                <Link
+                  href={`/projects/${proposal.projectId}/proposals/${proposal.id}`}
+                  className="flex items-start justify-between gap-3 px-5 py-4 transition hover:bg-[var(--enterprise-hover-surface)]/60"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">
+                      {proposal.title}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-[var(--enterprise-text-muted)]">
+                      {proposal.reference} · {proposal.projectName}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className={proposalStatusBadgeClass(proposal.status)}>
+                        {proposalStatusLabel(proposal.status)}
+                      </span>
+                      <span className="text-xs text-[var(--enterprise-text-muted)]">
+                        {formatDate(proposal.sentAt ?? proposal.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
+                    {fmtMoney(Number(proposal.total), proposal.currency)}
+                  </span>
+                </Link>
+              </li>
+            ))
+          )}
+        </ul>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full text-left text-sm">
-            <thead className="bg-[var(--enterprise-bg)] text-xs uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+            <thead className="bg-[var(--enterprise-bg)]/80 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
               <tr>
-                <th className="px-5 py-3 font-semibold sm:px-6">Proposal</th>
-                <th className="px-5 py-3 font-semibold">Project</th>
-                <th className="px-5 py-3 font-semibold">Client</th>
-                <th className="px-5 py-3 font-semibold">Status</th>
-                <th className="px-5 py-3 font-semibold">Date</th>
-                <th className="px-5 py-3 font-semibold text-right sm:px-6">Total</th>
+                <th className="px-5 py-3 sm:px-6">Proposal</th>
+                <th className="px-5 py-3">Project</th>
+                <th className="px-5 py-3">Client</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3">Date</th>
+                <th className="px-5 py-3 text-right sm:px-6">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--enterprise-border)]">
               {recentRows.map((proposal) => (
-                <tr key={proposal.id} className="hover:bg-[var(--enterprise-bg)]/60">
+                <tr
+                  key={proposal.id}
+                  className="transition hover:bg-[var(--enterprise-hover-surface)]/60"
+                >
                   <td className="px-5 py-3 sm:px-6">
                     <Link
                       href={`/projects/${proposal.projectId}/proposals/${proposal.id}`}
-                      className="font-medium text-[var(--enterprise-text)] hover:text-[var(--enterprise-primary)]"
+                      className="font-medium text-[var(--enterprise-text)] transition hover:text-[var(--enterprise-primary)]"
                     >
                       {proposal.reference}
                     </Link>
@@ -405,16 +450,14 @@ export function ProposalsDashboardClient() {
                   </td>
                   <td className="px-5 py-3 text-[var(--enterprise-text)]">{proposal.clientName}</td>
                   <td className="px-5 py-3">
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[proposal.status] ?? "bg-slate-100 text-slate-700"}`}
-                    >
+                    <span className={proposalStatusBadgeClass(proposal.status)}>
                       {proposalStatusLabel(proposal.status)}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-[var(--enterprise-text-muted)]">
+                  <td className="px-5 py-3 tabular-nums text-[var(--enterprise-text-muted)]">
                     {formatDate(proposal.sentAt ?? proposal.createdAt)}
                   </td>
-                  <td className="px-5 py-3 text-right font-medium tabular-nums text-[var(--enterprise-text)] sm:px-6">
+                  <td className="px-5 py-3 text-right font-semibold tabular-nums text-[var(--enterprise-text)] sm:px-6">
                     {fmtMoney(Number(proposal.total), proposal.currency)}
                   </td>
                 </tr>
@@ -478,7 +521,7 @@ function DonutStatusChart({
   }, []);
 
   return (
-    <div className="mt-4 grid gap-4 lg:grid-cols-[240px,1fr] lg:items-center">
+    <div className="mt-5 grid gap-5 lg:grid-cols-[240px,1fr] lg:items-center">
       <div className="relative mx-auto flex h-[220px] w-[220px] items-center justify-center">
         <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full -rotate-90">
           <circle
@@ -499,29 +542,27 @@ function DonutStatusChart({
               strokeWidth={stroke}
               strokeDasharray={segment.dasharray}
               strokeDashoffset={segment.dashoffset}
-              stroke={statusColorVar(segment.status)}
+              stroke={proposalStatusColor(segment.status)}
             />
           ))}
         </svg>
         <div className="pointer-events-none absolute text-center">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-            Total
-          </p>
+          <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Total</p>
           <p className="text-3xl font-semibold tabular-nums text-[var(--enterprise-text)]">
             {total}
           </p>
         </div>
       </div>
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         {rowsWithPct.map((row) => (
           <div
             key={row.status}
-            className="flex items-center justify-between gap-3 rounded-lg bg-[var(--enterprise-bg)] px-3 py-2"
+            className="flex items-center justify-between gap-3 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2"
           >
             <span className="inline-flex items-center gap-2 text-xs font-medium text-[var(--enterprise-text)]">
               <span
                 className="h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: statusColorVar(row.status) }}
+                style={{ backgroundColor: proposalStatusColor(row.status) }}
               />
               {row.label}
             </span>
@@ -543,14 +584,14 @@ function ProposalFunnelChart({
   const maxCount = Math.max(...steps.map((step) => step.count), 1);
 
   return (
-    <div className="mt-3 space-y-2.5">
+    <div className="mt-4 space-y-3">
       {steps.map((step, idx) => {
         const width = Math.max(8, Math.round((step.count / maxCount) * 100));
         const prev = idx > 0 ? steps[idx - 1] : null;
         const conversion =
           prev && prev.count > 0 ? Math.round((step.count / prev.count) * 100) : null;
         return (
-          <div key={step.key} className="space-y-1">
+          <div key={step.key} className="space-y-1.5">
             <div className="flex items-center justify-between gap-3 text-xs">
               <span className="font-medium text-[var(--enterprise-text)]">{step.label}</span>
               <span className="tabular-nums text-[var(--enterprise-text-muted)]">
@@ -558,9 +599,9 @@ function ProposalFunnelChart({
                 {conversion != null ? ` · ${conversion}% from ${prev?.label}` : ""}
               </span>
             </div>
-            <div className="h-2.5 rounded-full bg-[var(--enterprise-bg)]">
+            <div className="h-2.5 overflow-hidden rounded-full bg-[var(--enterprise-bg)]">
               <div
-                className="h-full rounded-full bg-[var(--enterprise-primary)]"
+                className="h-full rounded-full bg-[var(--enterprise-primary)] transition-[width] duration-200"
                 style={{ width: `${width}%` }}
               />
             </div>
@@ -593,24 +634,4 @@ function MetricCard({
       </div>
     </article>
   );
-}
-
-function statusColorVar(status: string): string {
-  switch (status) {
-    case "ACCEPTED":
-      return "#10b981";
-    case "SENT":
-      return "#3b82f6";
-    case "VIEWED":
-      return "#8b5cf6";
-    case "CHANGE_REQUESTED":
-      return "#f59e0b";
-    case "DECLINED":
-      return "#ef4444";
-    case "EXPIRED":
-      return "#f97316";
-    case "DRAFT":
-    default:
-      return "#64748b";
-  }
 }

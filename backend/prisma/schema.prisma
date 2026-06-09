@@ -861,7 +861,7 @@ enum IssuePriority {
 }
 
 model Issue {
-  id            String @id @default(cuid())
+  id            String  @id @default(cuid())
   workspaceId   String
   projectId     String
   fileId        String?

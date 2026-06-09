@@ -26,6 +26,12 @@ type PinchSession = {
   hapticFired: boolean;
 };
 
+type PendingPinchFrame = {
+  scale: number;
+  scrollLeft: number;
+  scrollTop: number;
+};
+
 /**
  * Two-finger pinch-to-zoom on the PDF scroll container — works in every tool mode
  * (select, measure, markup) without starting a stroke first.
@@ -39,6 +45,26 @@ export function usePdfPinchZoom(
     if (!el || !enabled) return;
 
     let session: PinchSession | null = null;
+    let rafId: number | null = null;
+    let pending: PendingPinchFrame | null = null;
+
+    const flushPending = () => {
+      rafId = null;
+      if (!pending) return;
+      const frame = pending;
+      pending = null;
+
+      useViewerStore.getState().setScale(frame.scale);
+      el.scrollLeft = frame.scrollLeft;
+      el.scrollTop = frame.scrollTop;
+    };
+
+    const scheduleFrame = (frame: PendingPinchFrame) => {
+      pending = frame;
+      if (rafId === null) {
+        rafId = requestAnimationFrame(flushPending);
+      }
+    };
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 2) return;
@@ -50,6 +76,7 @@ export function usePdfPinchZoom(
         startScrollTop: el.scrollTop,
         hapticFired: false,
       };
+      st.setZoomPinchActive(true);
       e.preventDefault();
     };
 
@@ -69,22 +96,27 @@ export function usePdfPinchZoom(
         hapticTap(8);
       }
 
-      useViewerStore.getState().setScale(nextScale);
-
       const rect = el.getBoundingClientRect();
       const { x: cx, y: cy } = touchCenterInElement(e.touches, rect);
       const maxL = Math.max(0, el.scrollWidth - el.clientWidth);
       const maxT = Math.max(0, el.scrollHeight - el.clientHeight);
-      el.scrollLeft = Math.min(
-        maxL,
-        Math.max(0, session.startScrollLeft * ratio + cx * (ratio - 1)),
-      );
-      el.scrollTop = Math.min(maxT, Math.max(0, session.startScrollTop * ratio + cy * (ratio - 1)));
+      scheduleFrame({
+        scale: nextScale,
+        scrollLeft: Math.min(maxL, Math.max(0, session.startScrollLeft * ratio + cx * (ratio - 1))),
+        scrollTop: Math.min(maxT, Math.max(0, session.startScrollTop * ratio + cy * (ratio - 1))),
+      });
     };
 
     const endPinch = (e: TouchEvent) => {
       if (e.touches.length >= 2) return;
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+        flushPending();
+      }
       session = null;
+      pending = null;
+      useViewerStore.getState().setZoomPinchActive(false);
     };
 
     el.addEventListener("touchstart", onTouchStart, { passive: false });
@@ -93,10 +125,12 @@ export function usePdfPinchZoom(
     el.addEventListener("touchcancel", endPinch);
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("touchend", endPinch);
       el.removeEventListener("touchcancel", endPinch);
+      useViewerStore.getState().setZoomPinchActive(false);
     };
   }, [scrollRef, enabled]);
 }

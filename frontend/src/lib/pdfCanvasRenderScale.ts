@@ -28,7 +28,8 @@ function isCoarsePointer(): boolean {
  */
 export function getPdfCanvasMaxBitmapEdge(): number {
   const mem = readDeviceMemoryGb();
-  if (isCoarsePointer() && (mem === undefined || mem <= 4)) {
+  if (isCoarsePointer()) {
+    if (mem === undefined || mem <= 4) return 6144;
     return 8192;
   }
   if (mem !== undefined && mem <= 2) {
@@ -45,10 +46,16 @@ export function getPdfCanvasMaxBitmapPixelBudget(): number {
   if (mem !== undefined && mem >= 16) return 420_000_000;
   if (mem !== undefined && mem >= 8) return 340_000_000;
   if (mem !== undefined && mem >= 4) return 240_000_000;
-  if (isCoarsePointer() && (mem === undefined || mem <= 4)) {
-    return 160_000_000;
+  if (isCoarsePointer()) {
+    if (mem === undefined || mem <= 4) return 96_000_000;
+    return 128_000_000;
   }
   return 210_000_000;
+}
+
+/** Delay before re-rasterizing PDF after zoom stops (longer on touch to avoid tab kills). */
+export function getPdfZoomSettleDelayMs(): number {
+  return isCoarsePointer() ? 320 : 180;
 }
 
 /**
@@ -79,7 +86,8 @@ export function getPdfRenderDpr(
 ): number {
   const maxDpr = getMaxCanvasDpr();
   if (qualityMode === "interactive") {
-    const interactiveCap = Math.max(1.5, maxDpr * 0.72);
+    const coarse = isCoarsePointer();
+    const interactiveCap = coarse ? Math.max(1.25, maxDpr * 0.55) : Math.max(1.5, maxDpr * 0.72);
     return Math.min(devicePixelRatio, interactiveCap);
   }
   return Math.min(devicePixelRatio, maxDpr);
@@ -93,7 +101,9 @@ export function getPdfRenderDpr(
 export function getViewerMaxLayoutCssEdge(): number {
   if (typeof window === "undefined") return Number.POSITIVE_INFINITY;
   if (!isCoarsePointer()) return Number.POSITIVE_INFINITY;
+  const mem = readDeviceMemoryGb();
   /* Keep in line with touch bitmap edge cap — huge scrollWidth/scrollHeight is what hurts layout. */
+  if (mem === undefined || mem <= 4) return 6144;
   return 8192;
 }
 
@@ -133,13 +143,18 @@ export function computePdfPageRenderScale(
    * - gentle boost at normal zoom
    * - stronger boost when users punch in very far
    */
+  const coarse = isCoarsePointer();
   const detailBoost =
     qualityMode === "interactive"
-      ? scale <= 1
-        ? 1
-        : scale <= 2.5
-          ? Math.min(1.16, 1 + Math.log2(scale) * 0.08)
-          : Math.min(1.42, 1.1 + Math.log2(scale / 2.5) * 0.14)
+      ? coarse
+        ? scale <= 1
+          ? 1
+          : Math.min(1.1, 1 + Math.log2(scale) * 0.05)
+        : scale <= 1
+          ? 1
+          : scale <= 2.5
+            ? Math.min(1.16, 1 + Math.log2(scale) * 0.08)
+            : Math.min(1.42, 1.1 + Math.log2(scale / 2.5) * 0.14)
       : scale <= 1
         ? 1
         : scale <= 2.5

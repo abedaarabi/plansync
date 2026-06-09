@@ -2,16 +2,11 @@ import PDFDocument from "pdfkit";
 import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
 import { getEmailBrandIconPngBytes } from "./emailBrandIcon.js";
+import { looksLikeProposalCoverHtml } from "./proposalCoverHtml.js";
 
 type PdfDoc = InstanceType<typeof PDFDocument>;
 
 marked.use({ gfm: true, breaks: true });
-
-/** Same heuristic as the app preview / client portal (proposalRoutes preview, ProposalLetterPreviewBlock). */
-function looksLikeProposalCoverHtml(raw: string): boolean {
-  const t = raw.trim();
-  return /^\s*</.test(t) && /<[a-z]/i.test(t);
-}
 
 /**
  * Turn stored cover (Markdown or sanitized HTML) into plain text with real newlines for PDFKit.

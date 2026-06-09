@@ -49,6 +49,8 @@ import { SidebarTakeoffTab } from "./sidebar/SidebarTakeoffTab";
 import { SidebarSheetAiTab } from "./sidebar/SidebarSheetAiTab";
 import { SidebarCollabTab } from "./sidebar/SidebarCollabTab";
 import { useViewerCollab } from "./viewerCollabContext";
+import { ViewerModeNav } from "./ViewerModeNav";
+import type { ViewerWorkspaceMode } from "@/store/viewerStore";
 
 const markupShapes: {
   id: MarkupShape;
@@ -84,11 +86,37 @@ function SectionTitle({ children }: { children: ReactNode }) {
 
 /** Same filled blue active state as viewer-toolbar-btn-active (top bar icons). */
 function sidebarPanelTabClass(selected: boolean): string {
-  return `viewer-focus-ring flex h-14 flex-col items-center justify-center gap-0.5 rounded-md border px-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] transition duration-150 ${
+  return `viewer-focus-ring flex min-h-[40px] flex-col items-center justify-center gap-0.5 rounded-md border px-1 py-1.5 text-[9px] font-semibold uppercase tracking-[0.06em] transition duration-150 ${
     selected
       ? "border-[rgba(37,99,235,0.55)] bg-[#2563EB] text-white shadow-[0_1px_3px_rgba(0,0,0,0.25)]"
       : "border-[#334155] bg-[#1E293B] text-[#94A3B8] hover:border-[#475569] hover:bg-[#334155] hover:text-[#F8FAFC]"
   }`;
+}
+
+type SidebarTabId =
+  | "draw"
+  | "measure"
+  | "calibrate"
+  | "pages"
+  | "outline"
+  | "issues"
+  | "takeoff"
+  | "sheetAi"
+  | "collab";
+
+function subTabForMode(mode: ViewerWorkspaceMode): SidebarTabId {
+  switch (mode) {
+    case "view":
+      return "pages";
+    case "markup":
+      return "draw";
+    case "issues":
+      return "issues";
+    case "takeoff":
+      return "takeoff";
+    default:
+      return "draw";
+  }
 }
 
 function formatAnnotationCreatedTooltip(ts: number): string {
@@ -246,17 +274,12 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
     clientY: number;
     id: string;
   } | null>(null);
-  const [sidebarTab, setSidebarTab] = useState<
-    | "draw"
-    | "measure"
-    | "calibrate"
-    | "pages"
-    | "outline"
-    | "issues"
-    | "takeoff"
-    | "sheetAi"
-    | "collab"
-  >("draw");
+  const viewerWorkspaceMode = useViewerStore((s) => s.viewerWorkspaceMode);
+  const setViewerWorkspaceMode = useViewerStore((s) => s.setViewerWorkspaceMode);
+  const viewerSidebarWidth = useViewerStore((s) => s.viewerSidebarWidth);
+  const setViewerSidebarWidth = useViewerStore((s) => s.setViewerSidebarWidth);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTabId>("draw");
+  const [resizingSidebar, setResizingSidebar] = useState(false);
   const collabCtx = useViewerCollab();
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
   const pendingProSidebarTab = useViewerStore((s) => s.pendingProSidebarTab);
@@ -401,8 +424,10 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
     }
     const tab = pendingProSidebarTab;
     setSidebarTab(tab);
+    if (tab === "issues") setViewerWorkspaceMode("issues");
+    else if (tab === "takeoff") setViewerWorkspaceMode("takeoff");
     setPendingProSidebarTab(null);
-  }, [pendingProSidebarTab, showProTabs, setPendingProSidebarTab]);
+  }, [pendingProSidebarTab, showProTabs, setPendingProSidebarTab, setViewerWorkspaceMode]);
 
   useEffect(() => {
     setLeftSidebarTab(sidebarTab);
@@ -468,74 +493,108 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
     return annotations.find((x) => x.id === listMenu.id);
   }, [listMenu, annotations]);
 
+  const onWorkspaceModeChange = (mode: ViewerWorkspaceMode) => {
+    const tab = subTabForMode(mode);
+    setSidebarTab(tab);
+    if (mode === "markup") setTool("annotate");
+    else if (mode === "issues") setTool("select");
+    else if (mode === "takeoff") {
+      setTakeoffMode(true);
+      setTakeoffInventoryDrawerFromSidebar(true);
+      setTool("takeoff");
+    } else setTool("pan");
+  };
+
+  useEffect(() => {
+    if (!resizingSidebar) return;
+    const onMove = (e: MouseEvent) => {
+      setViewerSidebarWidth(e.clientX);
+    };
+    const onUp = () => setResizingSidebar(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [resizingSidebar, setViewerSidebarWidth]);
+
+  const sidebarWidth = pdfUrl ? viewerSidebarWidth : 180;
+
   return (
     <aside
-      className={`no-print flex h-full shrink-0 flex-col border-r border-[#334155] bg-[#0F172A] text-[#F8FAFC] shadow-none transition-[width] duration-150 ${
-        pdfUrl ? "w-[260px] max-w-[260px]" : "w-[168px] sm:w-[180px]"
-      }`}
+      className="no-print relative flex h-full shrink-0 flex-col border-r border-[#334155] bg-[#0F172A] text-[#F8FAFC] shadow-none"
+      style={{ width: sidebarWidth, maxWidth: sidebarWidth }}
       aria-label="Markup tools and pages"
     >
+      {pdfUrl ? (
+        <button
+          type="button"
+          aria-label="Resize sidebar"
+          className="absolute -right-1 top-0 z-10 hidden h-full w-2 cursor-col-resize lg:block"
+          onMouseDown={() => setResizingSidebar(true)}
+        />
+      ) : null}
       {pdfUrl && (
         <div className="border-b border-[#334155] px-2 pb-2 pt-2">
-          <div className="p-0.5" role="tablist" aria-label="Sidebar panels">
-            <div className="grid grid-cols-4 gap-1">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={sidebarTab === "draw"}
-                onClick={() => {
-                  setSidebarTab("draw");
-                  setTool("annotate");
-                }}
-                title="Draw markups — list shows markups only"
-                className={sidebarPanelTabClass(sidebarTab === "draw")}
-              >
-                <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Draw
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={sidebarTab === "measure"}
-                onClick={() => {
-                  setSidebarTab("measure");
-                  setTool("measure");
-                }}
-                title="Measure & scale — list shows measures only"
-                className={sidebarPanelTabClass(sidebarTab === "measure")}
-              >
-                <Ruler className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Measure
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={sidebarTab === "pages"}
-                onClick={() => setSidebarTab("pages")}
-                title="Page thumbnails — jump to a page"
-                className={sidebarPanelTabClass(sidebarTab === "pages")}
-              >
-                <PanelLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Pages
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={sidebarTab === "outline"}
-                onClick={() => setSidebarTab("outline")}
-                title="Table of contents — PDF bookmarks"
-                className={sidebarPanelTabClass(sidebarTab === "outline")}
-              >
-                <ListTree className="h-3.5 w-3.5" strokeWidth={1.75} />
-                TOC
-              </button>
-            </div>
-            {pdfUrl ? (
-              <div
-                className={`mt-1 grid gap-1 ${
-                  showProTabs ? (showCollabTab ? "grid-cols-5" : "grid-cols-4") : "grid-cols-1"
-                }`}
-              >
+          <ViewerModeNav showProModes={showProTabs} onModeChange={onWorkspaceModeChange} />
+          <div className="mt-1.5 grid gap-1" role="tablist" aria-label="Sidebar panels">
+            {viewerWorkspaceMode === "view" ? (
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sidebarTab === "pages"}
+                  onClick={() => setSidebarTab("pages")}
+                  title="Page thumbnails"
+                  className={sidebarPanelTabClass(sidebarTab === "pages")}
+                >
+                  <PanelLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Pages
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sidebarTab === "outline"}
+                  onClick={() => setSidebarTab("outline")}
+                  title="PDF bookmarks"
+                  className={sidebarPanelTabClass(sidebarTab === "outline")}
+                >
+                  <ListTree className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  TOC
+                </button>
+              </div>
+            ) : null}
+            {viewerWorkspaceMode === "markup" ? (
+              <div className="grid grid-cols-3 gap-1">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sidebarTab === "draw"}
+                  onClick={() => {
+                    setSidebarTab("draw");
+                    setTool("annotate");
+                  }}
+                  title="Draw markups"
+                  className={sidebarPanelTabClass(sidebarTab === "draw")}
+                >
+                  <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Draw
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sidebarTab === "measure"}
+                  onClick={() => {
+                    setSidebarTab("measure");
+                    setTool("measure");
+                  }}
+                  title="Measure"
+                  className={sidebarPanelTabClass(sidebarTab === "measure")}
+                >
+                  <Ruler className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Measure
+                </button>
                 <button
                   type="button"
                   role="tab"
@@ -544,59 +603,63 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                     setSidebarTab("calibrate");
                     setTool("calibrate");
                   }}
-                  title="Set drawing scale from a known length"
+                  title="Calibrate scale"
                   className={sidebarPanelTabClass(sidebarTab === "calibrate")}
                 >
                   <Scaling className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  Cal
+                  Scale
                 </button>
-                {showProTabs ? (
-                  <>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={sidebarTab === "issues"}
-                      onClick={() => setSidebarTab("issues")}
-                      title="Issues for this sheet"
-                      className={sidebarPanelTabClass(sidebarTab === "issues")}
-                    >
-                      <ListChecks className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      Issues
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={sidebarTab === "takeoff"}
-                      onClick={() => {
-                        setSidebarTab("takeoff");
-                        setTakeoffMode(true);
-                        setTakeoffInventoryDrawerFromSidebar(true);
-                      }}
-                      title="Quantity takeoff"
-                      className={sidebarPanelTabClass(sidebarTab === "takeoff")}
-                    >
-                      <Package className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      Takeoff
-                    </button>
-                    {showCollabTab ? (
-                      <button
-                        type="button"
-                        role="tab"
-                        aria-selected={sidebarTab === "collab"}
-                        onClick={() => {
-                          setSidebarTab("collab");
-                          setTakeoffMode(false);
-                          setTakeoffInventoryDrawerFromSidebar(false);
-                        }}
-                        title="Live collaboration — who is on this sheet"
-                        className={sidebarPanelTabClass(sidebarTab === "collab")}
-                      >
-                        <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
-                        Live
-                      </button>
-                    ) : null}
-                  </>
+              </div>
+            ) : null}
+            {viewerWorkspaceMode === "issues" && showProTabs ? (
+              <div className={`grid gap-1 ${showCollabTab ? "grid-cols-2" : "grid-cols-1"}`}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sidebarTab === "issues"}
+                  onClick={() => {
+                    setSidebarTab("issues");
+                    setTool("select");
+                  }}
+                  title="Sheet issues"
+                  className={sidebarPanelTabClass(sidebarTab === "issues")}
+                >
+                  <ListChecks className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Issues
+                </button>
+                {showCollabTab ? (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sidebarTab === "collab"}
+                    onClick={() => setSidebarTab("collab")}
+                    title="Live collaboration"
+                    className={sidebarPanelTabClass(sidebarTab === "collab")}
+                  >
+                    <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Live
+                  </button>
                 ) : null}
+              </div>
+            ) : null}
+            {viewerWorkspaceMode === "takeoff" && showProTabs ? (
+              <div className="grid grid-cols-1 gap-1">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sidebarTab === "takeoff"}
+                  onClick={() => {
+                    setSidebarTab("takeoff");
+                    setTakeoffMode(true);
+                    setTakeoffInventoryDrawerFromSidebar(true);
+                    setTool("takeoff");
+                  }}
+                  title="Quantity takeoff"
+                  className={sidebarPanelTabClass(sidebarTab === "takeoff")}
+                >
+                  <Package className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Takeoff
+                </button>
               </div>
             ) : null}
           </div>

@@ -66,6 +66,9 @@ export type Tool =
   /** ACC-style quantity takeoff drawing on calibrated sheets */
   | "takeoff";
 
+/** High-level viewer intent — drives sidebar layout and tool visibility. */
+export type ViewerWorkspaceMode = "view" | "markup" | "issues" | "takeoff";
+
 /** Active measurement geometry when Measure tool is on */
 export type MeasureKind = "line" | "area" | "angle" | "perimeter";
 
@@ -225,6 +228,8 @@ interface ViewerState {
   numPages: number;
   currentPage: number;
   scale: number;
+  /** True during pinch-to-zoom — PDF rasterization is deferred until the gesture ends. */
+  zoomPinchActive: boolean;
   /** Baseline scale used for zoom % display (fit action sets this to current scale = 100%). */
   zoomDisplayBaseScale: number;
   tool: Tool;
@@ -317,12 +322,25 @@ interface ViewerState {
   showMinimap: boolean;
   minimapOnlyWhenZoomed: boolean;
   /**
-   * Right flyout — sheet settings (overlays) plus map & snap in one navy panel.
+   * Right flyout — sheet settings (overlays) plus map & snap, or docked issue panel.
    */
-  rightFlyout: null | "settings";
-  setRightFlyout: (id: null | "settings") => void;
+  rightFlyout: null | "settings" | "issue";
+  setRightFlyout: (id: null | "settings" | "issue") => void;
   /** Opens or closes the settings flyout (includes map, snap, saved views, overlays). */
   toggleRightFlyout: () => void;
+  /** Primary workspace mode (View / Markup / Issues / Takeoff). */
+  viewerWorkspaceMode: ViewerWorkspaceMode;
+  setViewerWorkspaceMode: (mode: ViewerWorkspaceMode) => void;
+  /** Left sidebar width in px (260–360). */
+  viewerSidebarWidth: number;
+  setViewerSidebarWidth: (w: number) => void;
+  /** Server issue id when the docked issue panel is in edit mode. */
+  issueEditId: string | null;
+  setIssueEditId: (id: string | null) => void;
+  /** Close issue panel and clear create/edit draft state. */
+  closeIssueFlyout: () => void;
+  /** Open docked issue panel for create or edit. */
+  openIssueFlyout: (opts?: { editIssueId?: string }) => void;
   /** Mirrors the left sidebar tab for canvas hints (e.g. issues). Updated from ViewerSidebar. */
   leftSidebarTab:
     | "draw"
@@ -412,6 +430,7 @@ interface ViewerState {
   setNumPages: (n: number) => void;
   setCurrentPage: (n: number) => void;
   setScale: (s: number) => void;
+  setZoomPinchActive: (active: boolean) => void;
   setZoomDisplayBaseScale: (s: number) => void;
   setTool: (t: Tool) => void;
   setStrokeColor: (c: string) => void;
@@ -545,6 +564,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   numPages: 0,
   currentPage: 1,
   scale: 1,
+  zoomPinchActive: false,
   zoomDisplayBaseScale: 1,
   tool: "pan",
   markupShape: "freehand",
@@ -587,6 +607,9 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   showMinimap: true,
   minimapOnlyWhenZoomed: false,
   rightFlyout: null,
+  viewerWorkspaceMode: "markup",
+  viewerSidebarWidth: 280,
+  issueEditId: null,
   leftSidebarTab: "draw",
   mobileLeftToolsOpen: false,
   compareMode: false,
@@ -889,9 +912,36 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       };
     }),
 
-  setRightFlyout: (rightFlyout) => set({ rightFlyout }),
+  setRightFlyout: (rightFlyout) =>
+    set((s) => ({
+      rightFlyout,
+      ...(rightFlyout === "issue"
+        ? { issueFormSliderOpen: true }
+        : rightFlyout === null && s.rightFlyout === "issue"
+          ? { issueFormSliderOpen: false, issueEditId: null }
+          : {}),
+    })),
   toggleRightFlyout: () =>
     set((s) => ({ rightFlyout: s.rightFlyout === "settings" ? null : "settings" })),
+  setViewerWorkspaceMode: (viewerWorkspaceMode) => set({ viewerWorkspaceMode }),
+  setViewerSidebarWidth: (viewerSidebarWidth) =>
+    set({ viewerSidebarWidth: Math.min(360, Math.max(240, viewerSidebarWidth)) }),
+  setIssueEditId: (issueEditId) => set({ issueEditId }),
+  closeIssueFlyout: () =>
+    set({
+      rightFlyout: null,
+      issueCreateDraft: null,
+      issueEditId: null,
+      issueFormSliderOpen: false,
+      newIssuePlacementActive: false,
+    }),
+  openIssueFlyout: (opts) =>
+    set({
+      rightFlyout: "issue",
+      issueFormSliderOpen: true,
+      viewerWorkspaceMode: "issues",
+      ...(opts?.editIssueId ? { issueEditId: opts.editIssueId } : {}),
+    }),
   setLeftSidebarTab: (leftSidebarTab) => set({ leftSidebarTab }),
   setCompareMode: (compareMode) =>
     set({
@@ -973,11 +1023,32 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     set({
       newIssuePlacementActive,
       ...(newIssuePlacementActive
-        ? { issuePlacement: null, omAssetPlacementActive: false, omAssetCreateDraft: null }
+        ? {
+            issuePlacement: null,
+            omAssetPlacementActive: false,
+            omAssetCreateDraft: null,
+            viewerWorkspaceMode: "issues",
+            leftSidebarTab: "issues",
+          }
         : {}),
     }),
-  setIssueCreateDraft: (issueCreateDraft) => set({ issueCreateDraft }),
-  setIssueFormSliderOpen: (issueFormSliderOpen) => set({ issueFormSliderOpen }),
+  setIssueCreateDraft: (issueCreateDraft) =>
+    set({
+      issueCreateDraft,
+      ...(issueCreateDraft
+        ? {
+            rightFlyout: "issue",
+            issueFormSliderOpen: true,
+            viewerWorkspaceMode: "issues",
+            newIssuePlacementActive: false,
+          }
+        : {}),
+    }),
+  setIssueFormSliderOpen: (issueFormSliderOpen) =>
+    set({
+      issueFormSliderOpen,
+      ...(issueFormSliderOpen ? { rightFlyout: "issue" } : {}),
+    }),
   setOmAssetPlacementActive: (omAssetPlacementActive) =>
     set({
       omAssetPlacementActive,
@@ -1007,6 +1078,9 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       newIssuePlacementActive: false,
       issueCreateDraft: null,
       issueFormSliderOpen: false,
+      issueEditId: null,
+      rightFlyout: null,
+      viewerWorkspaceMode: "markup",
       omAssetPlacementActive: false,
       omAssetCreateDraft: null,
       issuesSidebarFocusIssueId: null,
@@ -1038,7 +1112,6 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       compareLayout: "sideBySide",
       compareOverlayAfter: true,
       compareSwipeRatio: 0.5,
-      rightFlyout: null,
       leftSidebarTab: "draw",
       tool: "pan",
       takeoffMode: false,
@@ -1122,6 +1195,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       const { w, h } = pageSizePts(state.pageSizePtByPage, state.currentPage - 1);
       return { scale: clampViewerScaleForLayout(raw, w, h) };
     }),
+  setZoomPinchActive: (active) => set({ zoomPinchActive: active }),
   setZoomDisplayBaseScale: (s) =>
     set({
       zoomDisplayBaseScale: Math.min(VIEWER_SCALE_MAX, Math.max(VIEWER_SCALE_MIN, s)),
@@ -1403,6 +1477,9 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       newIssuePlacementActive: false,
       issueCreateDraft: null,
       issueFormSliderOpen: false,
+      issueEditId: null,
+      rightFlyout: null,
+      viewerWorkspaceMode: "markup",
       omAssetPlacementActive: false,
       omAssetCreateDraft: null,
       issuesSidebarFocusIssueId: null,
@@ -1453,7 +1530,6 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       compareLayout: "sideBySide",
       compareOverlayAfter: true,
       compareSwipeRatio: 0.5,
-      rightFlyout: null,
       leftSidebarTab: "draw",
     }),
 

@@ -48,6 +48,7 @@ import {
   type ProposalDocumentVersionRow,
   type ProposalItemRow,
 } from "@/lib/api-client";
+import { proposalCoverTextToHtml } from "@/lib/proposalCoverHtml";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 
@@ -1234,8 +1235,9 @@ export function ProposalEditorWorkspace({
                             setAiLoading(true);
                             try {
                               const { text } = await proposalAiDraft(projectId, proposalId!, {});
-                              setCoverHtml(text);
-                              await patchProposal(projectId, proposalId!, { coverNote: text });
+                              const html = proposalCoverTextToHtml(text);
+                              setCoverHtml(html);
+                              await patchProposal(projectId, proposalId!, { coverNote: html });
                               qc.invalidateQueries({
                                 queryKey: qk.projectProposal(projectId, proposalId!),
                               });

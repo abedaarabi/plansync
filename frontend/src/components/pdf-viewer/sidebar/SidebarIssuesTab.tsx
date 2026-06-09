@@ -12,6 +12,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Search,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,7 +26,6 @@ import {
 } from "@/lib/api-client";
 import { setViewerCollabRevision } from "@/lib/viewerCollabRevision";
 import { DeleteIssueConfirmDialog } from "@/components/pdf-viewer/DeleteIssueConfirmDialog";
-import { IssueFormSlider } from "@/components/pdf-viewer/IssueFormSlider";
 import { ViewerUserThumb } from "@/components/pdf-viewer/ViewerUserThumb";
 import { findAnnotationById, normRectFromAnnotationPoints } from "@/lib/issueFocus";
 import {
@@ -176,21 +176,28 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
               ) : null}
             </div>
             <div className="flex items-center gap-1">
-              <label className="min-w-0 shrink">
-                <span className="sr-only">Issue status</span>
-                <select
-                  value={issue.status}
-                  onChange={(e) => onStatusChange(issue.id, e.target.value)}
-                  disabled={isPatching}
-                  className={`viewer-focus-ring max-w-40 cursor-pointer rounded-md border-0 px-2 py-1 text-[9px] font-semibold shadow-sm disabled:opacity-50 sm:max-w-48 ${issueStatusBadgeClass(issue.status)}`}
-                >
-                  {ISSUE_STATUS_ORDER.map((s) => (
-                    <option key={s} value={s}>
-                      {ISSUE_STATUS_LABEL[s]}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div
+                className="flex max-w-[11rem] flex-wrap justify-end gap-0.5"
+                role="group"
+                aria-label="Issue status"
+              >
+                {ISSUE_STATUS_ORDER.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    disabled={isPatching}
+                    title={ISSUE_STATUS_LABEL[s]}
+                    onClick={() => onStatusChange(issue.id, s)}
+                    className={`viewer-focus-ring rounded-md px-1.5 py-0.5 text-[9px] font-semibold transition disabled:opacity-50 ${
+                      issue.status === s
+                        ? issueStatusBadgeClass(s)
+                        : "border border-slate-700/60 bg-slate-950/50 text-slate-500 hover:text-slate-300"
+                    }`}
+                  >
+                    {ISSUE_STATUS_LABEL[s]}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 onClick={() => onToggleCollapse(issue.id)}
@@ -328,7 +335,10 @@ export function SidebarIssuesTab() {
   const setIssuePlacement = useViewerStore((s) => s.setIssuePlacement);
   const newIssuePlacementActive = useViewerStore((s) => s.newIssuePlacementActive);
   const setNewIssuePlacementActive = useViewerStore((s) => s.setNewIssuePlacementActive);
-  const setIssueFormSliderOpen = useViewerStore((s) => s.setIssueFormSliderOpen);
+  const openIssueFlyout = useViewerStore((s) => s.openIssueFlyout);
+  const closeIssueFlyout = useViewerStore((s) => s.closeIssueFlyout);
+  const setRightFlyout = useViewerStore((s) => s.setRightFlyout);
+  const setViewerWorkspaceMode = useViewerStore((s) => s.setViewerWorkspaceMode);
   const issueCreateDraft = useViewerStore((s) => s.issueCreateDraft);
   const setIssueCreateDraft = useViewerStore((s) => s.setIssueCreateDraft);
   const setAnnotations = useViewerStore((s) => s.setAnnotations);
@@ -341,7 +351,8 @@ export function SidebarIssuesTab() {
   const setSelectedAnnotationIds = useViewerStore((s) => s.setSelectedAnnotationIds);
 
   const qc = useQueryClient();
-  const [editingIssue, setEditingIssue] = useState<IssueRow | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
   const [patchingIssueId, setPatchingIssueId] = useState<string | null>(null);
   const [deletingIssueId, setDeletingIssueId] = useState<string | null>(null);
   const [deleteConfirmIssue, setDeleteConfirmIssue] = useState<IssueRow | null>(null);
@@ -364,6 +375,24 @@ export function SidebarIssuesTab() {
     () => issues.find((i) => i.id === issuesSidebarFocusIssueId) ?? null,
     [issues, issuesSidebarFocusIssueId],
   );
+
+  const filteredIssues = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return issues.filter((issue) => {
+      if (statusFilter !== "ALL" && issue.status !== statusFilter) return false;
+      if (!q) return true;
+      const hay = [
+        issue.title,
+        issue.description ?? "",
+        issue.location ?? "",
+        issue.assignee?.name ?? "",
+        issue.assignee?.email ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [issues, searchQuery, statusFilter]);
 
   const eligibleLinkIds = useMemo(() => {
     if (!focusedIssue || tool !== "select" || selectedAnnotationIds.length === 0) return [];
@@ -680,13 +709,14 @@ export function SidebarIssuesTab() {
   const startNewIssuePlacement = useCallback(() => {
     setIssuePlacement(null);
     setNewIssuePlacementActive(true);
+    setViewerWorkspaceMode("issues");
     setPendingProSidebarTab("issues");
-  }, [setIssuePlacement, setNewIssuePlacementActive, setPendingProSidebarTab]);
-
-  const closeEditDialog = useCallback(() => {
-    setIssueFormSliderOpen(false);
-    setEditingIssue(null);
-  }, [setIssueFormSliderOpen]);
+  }, [
+    setIssuePlacement,
+    setNewIssuePlacementActive,
+    setPendingProSidebarTab,
+    setViewerWorkspaceMode,
+  ]);
 
   const toggleIssueCollapse = useCallback((issueId: string) => {
     setCollapsedIssueIds((prev) =>
@@ -698,10 +728,9 @@ export function SidebarIssuesTab() {
     (issue: IssueRow) => {
       setIssuePlacement(null);
       setNewIssuePlacementActive(false);
-      setIssueFormSliderOpen(true);
-      setEditingIssue(issue);
+      openIssueFlyout({ editIssueId: issue.id });
     },
-    [setIssuePlacement, setNewIssuePlacementActive, setIssueFormSliderOpen],
+    [setIssuePlacement, setNewIssuePlacementActive, openIssueFlyout],
   );
 
   if (!cloudFileVersionId || !viewerProjectId) {
@@ -720,58 +749,74 @@ export function SidebarIssuesTab() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-      {editingIssue ? (
-        <IssueFormSlider variant="edit" open issue={editingIssue} onClose={closeEditDialog} />
-      ) : null}
-
-      <div className="flex shrink-0 items-center justify-between gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-1">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
           Sheet issues
+          {filteredIssues.length !== issues.length ? (
+            <span className="ml-1 font-normal normal-case text-[#64748B]">
+              ({filteredIssues.length}/{issues.length})
+            </span>
+          ) : null}
         </span>
         <button
           type="button"
           onClick={startNewIssuePlacement}
-          className="viewer-focus-ring flex items-center gap-1 rounded-md border border-[#334155] bg-[#1E293B] px-2 py-1 text-[10px] font-medium text-[#E2E8F0] hover:bg-[#334155]"
+          className="viewer-focus-ring flex items-center gap-1 rounded-md border border-[var(--viewer-primary)]/50 bg-[var(--viewer-primary)] px-2 py-1.5 text-[10px] font-semibold text-white shadow-sm hover:bg-[var(--viewer-primary-hover)]"
         >
           <Plus className="h-3 w-3" strokeWidth={2} />
-          New issue
+          New
         </button>
       </div>
 
+      <div className="shrink-0 space-y-1.5">
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[#64748B]"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search issues…"
+            className="viewer-focus-ring w-full rounded-md border border-[#334155] bg-[#1E293B] py-1.5 pl-7 pr-2 text-[11px] text-[#F8FAFC] placeholder:text-[#64748B]"
+            aria-label="Search issues"
+          />
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {(["ALL", ...ISSUE_STATUS_ORDER] as const).map((st) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setStatusFilter(st)}
+              className={`viewer-focus-ring rounded-md px-2 py-0.5 text-[9px] font-semibold transition ${
+                statusFilter === st
+                  ? st === "ALL"
+                    ? "bg-[#2563EB] text-white"
+                    : issueStatusBadgeClass(st)
+                  : "border border-[#334155] bg-[#1E293B] text-[#94A3B8] hover:bg-[#334155]"
+              }`}
+            >
+              {st === "ALL" ? "All" : ISSUE_STATUS_LABEL[st]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {newIssuePlacementActive ? (
-        <div className="shrink-0 rounded-md border border-sky-500/40 bg-sky-950/50 px-2 py-1.5 text-[10px] leading-snug text-sky-100">
-          <span className="font-semibold">Place the pin:</span> click on the drawing. A form will
-          open to add title, dates, and assignee.{" "}
+        <div className="shrink-0 rounded-md border border-sky-500/35 bg-sky-950/40 px-2 py-1.5 text-[10px] leading-snug text-sky-100">
+          Click the drawing to place a pin, or{" "}
           <button
             type="button"
             onClick={() => {
               setNewIssuePlacementActive(false);
               setIssueCreateDraft({ annotationId: null });
-              setIssueFormSliderOpen(true);
             }}
-            className="font-medium text-sky-200 underline decoration-sky-400/60 underline-offset-2 hover:text-white"
+            className="font-semibold text-sky-200 underline decoration-sky-400/60 underline-offset-2 hover:text-white"
           >
-            Skip pin
+            skip pin
           </button>
-          <span className="text-[#94A3B8]"> · </span>
-          <button
-            type="button"
-            onClick={() => setNewIssuePlacementActive(false)}
-            className="font-medium text-sky-200 underline decoration-sky-400/60 underline-offset-2 hover:text-white"
-          >
-            Cancel
-          </button>
-          <span className="text-[#94A3B8]"> · Esc</span>
-        </div>
-      ) : null}
-
-      {issueCreateDraft ? (
-        <div className="shrink-0 rounded-md border border-sky-500/35 bg-sky-950/45 px-2 py-1.5 text-[10px] leading-snug text-sky-100">
-          <span className="font-semibold">New issue (draft):</span> use the form on the canvas to
-          add title and details.{" "}
-          <span className="text-[#94A3B8]">
-            A sheet pin is optional, and linked markups can be added later.
-          </span>
         </div>
       ) : null}
 
@@ -822,14 +867,29 @@ export function SidebarIssuesTab() {
         {!issueCreateDraft && issuesPending ? (
           <p className="py-6 text-center text-[11px] text-[#64748B]">Loading…</p>
         ) : issues.length === 0 && !issueCreateDraft ? (
-          <div className="flex flex-col items-center gap-2 py-8 px-2 text-center">
-            <AlertCircle className="h-8 w-8 text-[#475569]" strokeWidth={1.5} />
-            <p className="text-[11px] leading-snug text-[#94A3B8]">
-              No issues on this sheet yet. Use{" "}
-              <span className="font-medium text-[#CBD5E1]">New issue</span>, click the plan to drop
-              a pin, then fill in the details.
-            </p>
+          <div className="flex flex-col items-center gap-3 py-10 px-3 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#334155] bg-[#1E293B]">
+              <AlertCircle className="h-6 w-6 text-[#64748B]" strokeWidth={1.5} aria-hidden />
+            </div>
+            <div>
+              <p className="text-[12px] font-semibold text-[#E2E8F0]">No issues on this sheet</p>
+              <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
+                Drop your first pin on the drawing, then add title and assignee in the panel on the
+                right.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={startNewIssuePlacement}
+              className="viewer-focus-ring rounded-lg bg-[var(--viewer-primary)] px-3 py-2 text-[11px] font-semibold text-white hover:bg-[var(--viewer-primary-hover)]"
+            >
+              Create first issue
+            </button>
           </div>
+        ) : filteredIssues.length === 0 && !issueCreateDraft ? (
+          <p className="py-8 text-center text-[11px] text-[#64748B]">
+            No issues match your filters.
+          </p>
         ) : (
           <ul className="space-y-2 px-0.5 pb-1">
             {issueCreateDraft ? (
@@ -859,7 +919,7 @@ export function SidebarIssuesTab() {
                     <div className="mt-1 flex flex-wrap items-center justify-end gap-1 border-t border-sky-700/30 pt-1.5">
                       <button
                         type="button"
-                        onClick={() => setIssueFormSliderOpen(true)}
+                        onClick={() => setRightFlyout("issue")}
                         className="viewer-focus-ring rounded-md border border-slate-600/60 bg-slate-900/70 px-2 py-1 text-[9px] font-semibold text-slate-100 transition hover:bg-slate-700/80"
                       >
                         Open form
@@ -870,8 +930,7 @@ export function SidebarIssuesTab() {
                           if (issueCreateDraft.annotationId) {
                             removeAnnotation(issueCreateDraft.annotationId);
                           }
-                          setIssueCreateDraft(null);
-                          setIssueFormSliderOpen(false);
+                          closeIssueFlyout();
                         }}
                         className="viewer-focus-ring rounded-md border border-red-500/30 bg-red-950/35 px-2 py-1 text-[9px] font-semibold text-red-100 transition hover:bg-red-950/55"
                       >
@@ -882,7 +941,7 @@ export function SidebarIssuesTab() {
                 </article>
               </li>
             ) : null}
-            {issues.map((issue) => (
+            {filteredIssues.map((issue) => (
               <SidebarIssueCard
                 key={issue.id}
                 issue={issue}

@@ -25,6 +25,7 @@ import {
   syncProposalFromTakeoff,
   type ProposalItemRow,
 } from "@/lib/api-client";
+import { proposalCoverTextToHtml } from "@/lib/proposalCoverHtml";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 
@@ -736,8 +737,9 @@ export function ProposalNewWizard({
                   setAiLoading(true);
                   try {
                     const { text } = await proposalAiDraft(projectId, proposalId!, {});
-                    setCoverNote(text);
-                    await patchProposal(projectId, proposalId!, { coverNote: text });
+                    const html = proposalCoverTextToHtml(text);
+                    setCoverNote(html);
+                    await patchProposal(projectId, proposalId!, { coverNote: html });
                     qc.invalidateQueries({ queryKey: qk.projectProposal(projectId, proposalId!) });
                     toast.success("AI draft ready — review and edit before sending.");
                   } catch (e) {
