@@ -22,7 +22,7 @@ const EXT_MIME: Record<string, string> = {
 };
 
 /** Browser `File.type` is often empty; fall back from the extension for uploads. */
-export function guessFileMimeType(file: File): string {
+function guessFileMimeType(file: File): string {
   if (file.type) return file.type;
   const ext = file.name.toLowerCase().match(/\.([^.]+)$/)?.[1] ?? "";
   return EXT_MIME[ext] ?? "application/octet-stream";

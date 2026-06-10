@@ -3,7 +3,7 @@ import type { CloudProviderUi } from "@/lib/cloudImportApi";
 type IconProps = { className?: string; "aria-hidden"?: boolean };
 
 /** Google “G” (used for Google Drive tab) — brand colors. */
-export function GoogleDriveBrandIcon({ className, ...rest }: IconProps) {
+function GoogleDriveBrandIcon({ className, ...rest }: IconProps) {
   return (
     <svg
       className={className}
@@ -32,7 +32,7 @@ export function GoogleDriveBrandIcon({ className, ...rest }: IconProps) {
 }
 
 /** Microsoft logo (four squares) — brand colors. */
-export function MicrosoftBrandIcon({ className, ...rest }: IconProps) {
+function MicrosoftBrandIcon({ className, ...rest }: IconProps) {
   return (
     <svg
       className={className}
@@ -49,7 +49,7 @@ export function MicrosoftBrandIcon({ className, ...rest }: IconProps) {
 }
 
 /** Dropbox mark — brand blue. */
-export function DropboxBrandIcon({ className, ...rest }: IconProps) {
+function DropboxBrandIcon({ className, ...rest }: IconProps) {
   return (
     <svg
       className={className}

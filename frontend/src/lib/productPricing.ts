@@ -14,7 +14,7 @@ export const PRO_INCLUDED_SEATS = 5;
  * USD per additional internal seat / month after included seats. Keep in sync with
  * `backend/src/config/product.ts` (`EXTRA_SEAT_MONTHLY_USD`).
  */
-export const EXTRA_SEAT_MONTHLY_USD = 9;
+const EXTRA_SEAT_MONTHLY_USD = 9;
 
 /**
  * Enterprise plan (USD / month) — includes Operations & Maintenance. Keep in sync with

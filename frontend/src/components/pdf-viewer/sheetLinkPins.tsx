@@ -186,7 +186,7 @@ function PinStemAndTip({
 }
 
 /** Construction / coordination issue — Fieldwire-style card + stem + status tip. */
-export function ConstructionIssuePin({
+function ConstructionIssuePin({
   cx,
   cy,
   status,
@@ -257,7 +257,7 @@ function flatTopHexPath(cx: number, cy: number, R: number): string {
 }
 
 /** Operations work order — same card treatment with WO hint; flat hex behind tip optional — keep stem. */
-export function WorkOrderIssuePin({
+function WorkOrderIssuePin({
   cx,
   cy,
   status,
@@ -322,7 +322,7 @@ function truncatePinLabel(raw: string, maxLen: number): string {
 }
 
 /** O&M asset location — map-marker silhouette + asset title under the tip. */
-export function AssetLocationPin({
+function AssetLocationPin({
   cx,
   cy,
   cssW,

@@ -1,5 +1,5 @@
 import type { Annotation } from "@/store/viewerStore";
-import { boundsNormFromPoints, textBoxLayoutPx } from "@/lib/annotationResize";
+import { boundsNormFromPoints, textBoxLayoutPx } from "@/lib/annotationLayout";
 
 /**
  * Pivot for SVG rotate() — midpoint for lines, bbox center otherwise (in pixel space).

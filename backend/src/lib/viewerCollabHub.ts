@@ -10,9 +10,9 @@ import { randomUUID } from "node:crypto";
 import type { WSEvents, WSContext } from "hono/ws";
 import type { WebSocket as WsSocket } from "ws";
 
-export type ViewerCollabPresenceMember = { userId: string; pageIndex?: number };
+type ViewerCollabPresenceMember = { userId: string; pageIndex?: number };
 
-export type ViewerCollabSsePayload =
+type ViewerCollabSsePayload =
   | { type: "hello"; connectionId: string; sessionHostUserId: string | null }
   | {
       type: "presence";
@@ -173,7 +173,7 @@ function ensureSessionHost(fvId: string) {
   collabSessionHostByFv.set(fvId, userIds[0]!);
 }
 
-export function broadcastPresence(fvId: string, force = false) {
+function broadcastPresence(fvId: string, force = false) {
   const room = rooms.get(fvId);
   if (!room) return;
   const members = presenceMembers(fvId);
@@ -187,7 +187,7 @@ export function broadcastPresence(fvId: string, force = false) {
   }
 }
 
-export function broadcastViewerCollabSessionEnded(fvId: string) {
+function broadcastViewerCollabSessionEnded(fvId: string) {
   const room = rooms.get(fvId);
   if (!room) return;
   const ev: ViewerCollabSsePayload = { type: "session_ended" };
@@ -305,7 +305,7 @@ export function disconnectViewerCollabSse(
   return true;
 }
 
-export function setUserPageFromWs(fileVersionId: string, userId: string, pageIndex: number) {
+function setUserPageFromWs(fileVersionId: string, userId: string, pageIndex: number) {
   let m = lastPageByFv.get(fileVersionId);
   if (!m) {
     m = new Map();
@@ -361,7 +361,7 @@ function clearWsFanoutDedupe(fileVersionId: string, connectionId: string) {
   lastWsFanoutPayload.delete(`${fileVersionId}:${connectionId}:sel`);
 }
 
-export function registerViewerCollabWs(
+function registerViewerCollabWs(
   fileVersionId: string,
   connectionId: string,
   ws: WSContext<WsSocket>,
@@ -376,7 +376,7 @@ export function registerViewerCollabWs(
   collabMetrics.wsConnectTotal++;
 }
 
-export function unregisterViewerCollabWs(fileVersionId: string, connectionId: string) {
+function unregisterViewerCollabWs(fileVersionId: string, connectionId: string) {
   const m = wsByFv.get(fileVersionId);
   if (!m?.delete(connectionId)) return;
   clearWsFanoutDedupe(fileVersionId, connectionId);
@@ -384,7 +384,7 @@ export function unregisterViewerCollabWs(fileVersionId: string, connectionId: st
   if (m.size === 0) wsByFv.delete(fileVersionId);
 }
 
-export function broadcastCursor(
+function broadcastCursor(
   fileVersionId: string,
   fromConnectionId: string,
   fromUserId: string,
@@ -412,7 +412,7 @@ export function broadcastCursor(
   }
 }
 
-export function broadcastSelection(
+function broadcastSelection(
   fileVersionId: string,
   fromConnectionId: string,
   fromUserId: string,

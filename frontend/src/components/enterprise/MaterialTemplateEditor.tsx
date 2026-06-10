@@ -14,7 +14,7 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
 
-export const MAX_CUSTOM_MATERIAL_FIELDS = 20;
+const MAX_CUSTOM_MATERIAL_FIELDS = 20;
 
 function slugFromLabel(label: string): string {
   const s = label

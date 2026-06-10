@@ -65,16 +65,16 @@ hoc hex values.
 
 ## Patterns to reuse, not rebuild
 
-| Need                        | Use                                                              |
-| --------------------------- | ---------------------------------------------------------------- |
-| Modal / dialog (responsive) | `mobile/EnterpriseResponsiveDialog.tsx`                          |
-| Side panel / detail editor  | `enterprise/EnterpriseSlideOver.tsx`                             |
-| Bottom sheet (mobile)       | `mobile/EnterpriseBottomSheet.tsx`                               |
-| Floating action button      | `mobile/EnterpriseFab.tsx`                                       |
-| Loading state               | `enterprise/EnterpriseLoadingState.tsx` / `.enterprise-skeleton` |
-| Form field                  | `mobile/MobileFormField.tsx`                                     |
-| Toast                       | `sonner` (`toast.success(...)`, `toast.error(...)`)              |
-| Icons                       | `lucide-react`                                                   |
+| Need                        | Use                                                                                      |
+| --------------------------- | ---------------------------------------------------------------------------------------- |
+| Modal / dialog (responsive) | `mobile/EnterpriseResponsiveDialog.tsx`                                                  |
+| Side panel / detail editor  | `enterprise/EnterpriseSlideOver.tsx`                                                     |
+| Bottom sheet (mobile)       | `mobile/EnterpriseBottomSheet.tsx`                                                       |
+| Floating action button      | `mobile/EnterpriseFab.tsx`                                                               |
+| Loading state               | `enterprise/EnterpriseLoadingState.tsx` / `.enterprise-skeleton`                         |
+| Form field                  | `lib/mobileFormStyles.ts` (`MOBILE_FIELD_*`) — see `enterprise/IssueCreateSlideOver.tsx` |
+| Toast                       | `sonner` (`toast.success(...)`, `toast.error(...)`)                                      |
+| Icons                       | `lucide-react`                                                                           |
 
 ## Responsive & PWA
 

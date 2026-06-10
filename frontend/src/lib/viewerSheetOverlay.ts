@@ -36,7 +36,7 @@ function asBool(v: unknown, fallback: boolean): boolean {
 }
 
 /** Coerce parsed JSON / partial state into valid booleans. */
-export function normalizeSheetOverlayVisibility(
+function normalizeSheetOverlayVisibility(
   partial: Partial<Record<keyof SheetOverlayVisibility, unknown>> | null | undefined,
 ): SheetOverlayVisibility {
   const d = DEFAULT_SHEET_OVERLAY_VISIBILITY;

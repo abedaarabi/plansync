@@ -8,10 +8,10 @@ const SLIDE_OVER_PANEL_TRANSITION =
   "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]";
 
 /** Default width; use `panelMaxWidthClass` on `EnterpriseSlideOver` to override. */
-export const ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W = "max-w-[520px]";
+const ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W = "max-w-[520px]";
 
 /** All enterprise slide-overs use this width for a consistent layout. */
-export const ENTERPRISE_SLIDE_OVER_PANEL_CLASS = `w-full ${ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W} ${SLIDE_OVER_PANEL_TRANSITION}`;
+const ENTERPRISE_SLIDE_OVER_PANEL_CLASS = `w-full ${ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W} ${SLIDE_OVER_PANEL_TRANSITION}`;
 
 const TRANSITION_MS = 300;
 

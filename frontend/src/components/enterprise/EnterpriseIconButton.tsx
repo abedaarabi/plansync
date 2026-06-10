@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 
-export type EnterpriseIconButtonVariant = "toolbar" | "ghost";
+type EnterpriseIconButtonVariant = "toolbar" | "ghost";
 
 const variantStyles: Record<EnterpriseIconButtonVariant, string> = {
   toolbar:
@@ -16,7 +16,7 @@ const sizeStyles = {
   md: "h-11 min-h-[44px] w-11 min-w-[44px] rounded-xl [&_svg]:h-4 [&_svg]:w-4",
 } as const;
 
-export type EnterpriseIconButtonProps = {
+type EnterpriseIconButtonProps = {
   variant?: EnterpriseIconButtonVariant;
   size?: keyof typeof sizeStyles;
   children: ReactNode;

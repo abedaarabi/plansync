@@ -548,7 +548,7 @@ export async function postPublicProposalMessage(token: string, body: string): Pr
   if (!res.ok) throw new Error("Could not send message.");
 }
 
-export async function downloadProposalPdf(projectId: string, proposalId: string): Promise<void> {
+async function downloadProposalPdf(projectId: string, proposalId: string): Promise<void> {
   const res = await fetch(
     apiUrl(
       `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/pdf`,

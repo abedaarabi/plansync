@@ -12,9 +12,9 @@ export type RfiMentionItem = {
   image?: string | null;
 };
 
-export type RfiMentionListProps = SuggestionProps<RfiMentionItem>;
+type RfiMentionListProps = SuggestionProps<RfiMentionItem>;
 
-export type RfiMentionListHandle = {
+type RfiMentionListHandle = {
   onKeyDown: (props: SuggestionKeyDownProps) => boolean;
 };
 

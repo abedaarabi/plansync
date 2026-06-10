@@ -2,7 +2,7 @@ import type { TakeoffMeasurementType } from "@/lib/takeoffTypes";
 import { pdfDistanceUnits } from "@/lib/coords";
 
 /** Point in polygon (norm coords). Ray casting. */
-export function pointInPolygonNorm(
+function pointInPolygonNorm(
   p: { x: number; y: number },
   poly: { x: number; y: number }[],
   pageW: number,

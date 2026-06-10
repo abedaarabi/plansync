@@ -29,7 +29,7 @@ export function measurementDerivedFields(
 }
 
 /** Shoelace area in PDF user units² (viewport scale 1). */
-export function polygonAreaPdfUnits(
+function polygonAreaPdfUnits(
   points: { x: number; y: number }[],
   pageW: number,
   pageH: number,

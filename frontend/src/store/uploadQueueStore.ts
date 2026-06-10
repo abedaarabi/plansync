@@ -11,7 +11,7 @@ export const MOVE_DRAG_MIME = "application/x-plansync-move";
 
 export type MoveDragPayload = { kind: "file" | "folder"; id: string };
 
-export type UploadJob = {
+type UploadJob = {
   id: string;
   fileName: string;
   status: "queued" | "uploading" | "done" | "error";

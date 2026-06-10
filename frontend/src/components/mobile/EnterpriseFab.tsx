@@ -3,7 +3,7 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { hapticTap } from "@/lib/haptic";
 
-export type EnterpriseFabProps = {
+type EnterpriseFabProps = {
   /** Accessible label (required for icon-only FAB) */
   label: string;
   icon: ReactNode;

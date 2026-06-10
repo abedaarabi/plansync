@@ -24,20 +24,20 @@ const C = {
   pageBg: "#f3f6fb",
 } as const;
 
-export const MARKETING_DEMO_VIDEO = {
+const MARKETING_DEMO_VIDEO = {
   id: "7g1qpgmHNg0",
   watchUrl: "https://www.youtube.com/watch?v=7g1qpgmHNg0&t=92s",
   title: "Watch the full workflow",
   subtitle: "PDF upload → takeoff → proposal — on one screen",
 } as const;
 
-export const MARKETING_FOUNDER = {
+const MARKETING_FOUNDER = {
   name: "Abed",
   title: "Founder, PlanSync",
 } as const;
 
 /** Core value story: one platform from drawing to bid. */
-export const MARKETING_WORKFLOW = [
+const MARKETING_WORKFLOW = [
   {
     step: "1",
     title: "Open the PDF",
@@ -55,7 +55,7 @@ export const MARKETING_WORKFLOW = [
   },
 ] as const;
 
-export const MARKETING_LINKS = {
+const MARKETING_LINKS = {
   appUrl: "https://plansync.dev",
   signupUrl: "https://plansync.dev/sign-in",
   linkedIn: "https://www.linkedin.com/company/plansyncdev/?viewAsMember=true",
@@ -64,12 +64,12 @@ export const MARKETING_LINKS = {
 } as const;
 
 /** Paths under `frontend/public` — resolved against the marketing app URL (production by default). */
-export const MARKETING_IMAGES = {
+const MARKETING_IMAGES = {
   measure: "/images/measure.png",
   markup: "/images/markup.png",
 } as const;
 
-export const MARKETING_PREVIEW_IMAGES = [
+const MARKETING_PREVIEW_IMAGES = [
   {
     path: MARKETING_IMAGES.measure,
     alt: "PlanSync PDF viewer with measurement tools",
@@ -82,7 +82,7 @@ export const MARKETING_PREVIEW_IMAGES = [
   },
 ] as const;
 
-export const MARKETING_FEATURES = [
+const MARKETING_FEATURES = [
   {
     title: "One platform, not five tools",
     body: "Stop exporting measurements to spreadsheets and copying numbers into separate proposal apps.",
@@ -102,7 +102,7 @@ export const MARKETING_FEATURES = [
 ] as const;
 
 /** Shown in the dark “Your invite” offer banner. */
-export const MARKETING_OFFER_PERKS = [
+const MARKETING_OFFER_PERKS = [
   "Full takeoff & proposals",
   "Unlimited projects",
   "O&M handover & FM",
@@ -110,7 +110,7 @@ export const MARKETING_OFFER_PERKS = [
 ] as const;
 
 /** O&M / facilities — expanded copy for plain-text email. */
-export const MARKETING_OM = {
+const MARKETING_OM = {
   lead: "PlanSync doesn't stop when construction ends. The same project workspace carries forward into operations — O&M manuals, asset registers, inspections, work orders, and tenant requests stay in one place.",
 } as const;
 
@@ -122,7 +122,7 @@ export type MarketingRecipient = {
   rowIndex: number;
 };
 
-export function marketingPublicAssetUrl(appBase: string, assetPath: string): string {
+function marketingPublicAssetUrl(appBase: string, assetPath: string): string {
   return `${appBase.replace(/\/$/, "")}${assetPath.startsWith("/") ? assetPath : `/${assetPath}`}`;
 }
 
@@ -147,7 +147,7 @@ export function resolveMarketingAppUrl(publicAppUrl?: string): string {
   return MARKETING_LINKS.appUrl.replace(/\/$/, "");
 }
 
-export function marketingAppDisplayHost(appBase: string): string {
+function marketingAppDisplayHost(appBase: string): string {
   try {
     const normalized = appBase.startsWith("http") ? appBase : `https://${appBase}`;
     return new URL(normalized).host.replace(/^www\./, "");
@@ -233,7 +233,7 @@ function smallPreviewImagesHtml(appBase: string, signInUrl: string): string {
   return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:460px;margin:0 auto"><tr>${cells}</tr></table>`;
 }
 
-export function marketingDemoEmbedUrl(startSeconds = 92, origin?: string): string {
+function marketingDemoEmbedUrl(startSeconds = 92, origin?: string): string {
   const params = new URLSearchParams({
     start: String(startSeconds),
     rel: "0",

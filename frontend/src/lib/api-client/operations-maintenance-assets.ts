@@ -145,7 +145,7 @@ export async function deleteOmAsset(projectId: string, assetId: string): Promise
 
 const MAX_ASSET_IMAGE_BYTES = 15 * 1024 * 1024;
 
-export async function presignOmAssetImageUpload(
+async function presignOmAssetImageUpload(
   projectId: string,
   assetId: string,
   body: { fileName: string; contentType: string; sizeBytes: number },
@@ -174,7 +174,7 @@ export async function presignOmAssetImageUpload(
   return { uploadUrl: j.uploadUrl, key: j.key };
 }
 
-export async function completeOmAssetImageUpload(
+async function completeOmAssetImageUpload(
   projectId: string,
   assetId: string,
   body: {

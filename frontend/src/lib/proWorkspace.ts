@@ -2,7 +2,7 @@ import type { MeResponse } from "@/types/enterprise";
 import { isWorkspaceProClient, type WorkspaceProFields } from "@/lib/workspaceSubscription";
 
 /** Matches backend `isWorkspacePro` for a workspace row from `/me`. */
-export function isProSubscriptionStatus(workspace: WorkspaceProFields | null | undefined): boolean {
+function isProSubscriptionStatus(workspace: WorkspaceProFields | null | undefined): boolean {
   return isWorkspaceProClient(workspace);
 }
 

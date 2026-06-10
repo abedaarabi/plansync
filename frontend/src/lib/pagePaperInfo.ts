@@ -18,7 +18,7 @@ const SHEETS: { name: string; shortMm: number; longMm: number }[] = [
 ];
 
 /** If dimensions match a common sheet within tolerance, return its name. */
-export function guessPaperName(wMm: number, hMm: number, tolMm = 3): string | null {
+function guessPaperName(wMm: number, hMm: number, tolMm = 3): string | null {
   const s = Math.min(wMm, hMm);
   const l = Math.max(wMm, hMm);
   for (const p of SHEETS) {
@@ -28,7 +28,7 @@ export function guessPaperName(wMm: number, hMm: number, tolMm = 3): string | nu
 }
 
 /** Short label for toolbar (full detail in title). */
-export function formatPageSizeShort(wPt: number, hPt: number): string {
+function formatPageSizeShort(wPt: number, hPt: number): string {
   const wMm = pdfUnitsToMm(wPt);
   const hMm = pdfUnitsToMm(hPt);
   const guess = guessPaperName(wMm, hMm);

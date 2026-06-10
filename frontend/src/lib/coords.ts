@@ -17,7 +17,7 @@ export function pdfDistanceUnits(
 }
 
 /** PDF default user space: 72 points per inch (PDF 32000-2). */
-export const PDF_POINTS_PER_INCH = 72;
+const PDF_POINTS_PER_INCH = 72;
 
 /** Convert a length in PDF user units (points) to millimeters for display formatting. */
 export function pdfLengthPdfUnitsToMm(pdfLength: number): number {

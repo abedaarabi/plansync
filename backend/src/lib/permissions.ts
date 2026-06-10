@@ -29,7 +29,7 @@ function tradeMatches(userTrade: string | null, fileDisciplines: string[]): bool
   return fileDisciplines.some((d) => d.toLowerCase() === u);
 }
 
-export function resolveUiMode(isExternal: boolean, projectRole: ProjectMemberRole): UiMode {
+function resolveUiMode(isExternal: boolean, projectRole: ProjectMemberRole): UiMode {
   if (!isExternal) return "internal";
   switch (projectRole) {
     case ProjectMemberRole.CLIENT:
@@ -43,7 +43,7 @@ export function resolveUiMode(isExternal: boolean, projectRole: ProjectMemberRol
   }
 }
 
-export function isInternalWorkspaceRole(role: WorkspaceRole): boolean {
+function isInternalWorkspaceRole(role: WorkspaceRole): boolean {
   return (
     role === WorkspaceRole.SUPER_ADMIN ||
     role === WorkspaceRole.ADMIN ||
@@ -51,35 +51,35 @@ export function isInternalWorkspaceRole(role: WorkspaceRole): boolean {
   );
 }
 
-export function canManageBilling(role: WorkspaceRole): boolean {
+function canManageBilling(role: WorkspaceRole): boolean {
   return role === WorkspaceRole.SUPER_ADMIN;
 }
 
-export function canEditWorkspaceOrg(role: WorkspaceRole): boolean {
+function canEditWorkspaceOrg(role: WorkspaceRole): boolean {
   return role === WorkspaceRole.SUPER_ADMIN;
 }
 
-export function canEditProjectFeatureToggles(role: WorkspaceRole): boolean {
+function canEditProjectFeatureToggles(role: WorkspaceRole): boolean {
   return role === WorkspaceRole.SUPER_ADMIN;
 }
 
 /** Internal users who may invite others (Admin or Super Admin). */
-export function canInviteInternal(role: WorkspaceRole): boolean {
+function canInviteInternal(role: WorkspaceRole): boolean {
   return role === WorkspaceRole.SUPER_ADMIN || role === WorkspaceRole.ADMIN;
 }
 
-export function canManageWorkspaceMembers(role: WorkspaceRole): boolean {
+function canManageWorkspaceMembers(role: WorkspaceRole): boolean {
   return role === WorkspaceRole.SUPER_ADMIN || role === WorkspaceRole.ADMIN;
 }
 
 /** Proposals: create/send — Members cannot. */
-export function canCreateProposals(ctx: ProjectAuthContext): boolean {
+function canCreateProposals(ctx: ProjectAuthContext): boolean {
   if (ctx.workspaceMember.isExternal) return false;
   const r = ctx.workspaceMember.role;
   return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN;
 }
 
-export function canViewProposalsInternal(ctx: ProjectAuthContext): boolean {
+function canViewProposalsInternal(ctx: ProjectAuthContext): boolean {
   if (ctx.workspaceMember.isExternal) return false;
   const r = ctx.workspaceMember.role;
   return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN;
@@ -95,7 +95,7 @@ export function canManageFiles(ctx: ProjectAuthContext): boolean {
   return canUploadDrawings(ctx);
 }
 
-export function canViewDrawingsForClient(ctx: ProjectAuthContext): boolean {
+function canViewDrawingsForClient(ctx: ProjectAuthContext): boolean {
   return ctx.settings.clientVisibility.showDrawings;
 }
 
@@ -111,7 +111,7 @@ export function canCreateIssues(ctx: ProjectAuthContext): boolean {
   );
 }
 
-export function canCloseIssues(ctx: ProjectAuthContext): boolean {
+function canCloseIssues(ctx: ProjectAuthContext): boolean {
   if (ctx.uiMode === "client") return false;
   if (ctx.uiMode === "sub") {
     return true; /* assigned-only list; closing own assigned handled in route */
@@ -128,35 +128,35 @@ export function canCreateRfis(ctx: ProjectAuthContext): boolean {
   return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN || r === WorkspaceRole.MEMBER;
 }
 
-export function canEditTakeoff(ctx: ProjectAuthContext): boolean {
+function canEditTakeoff(ctx: ProjectAuthContext): boolean {
   if (ctx.uiMode !== "internal") return false;
   const r = ctx.workspaceMember.role;
   return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN;
 }
 
-export function canViewTakeoff(ctx: ProjectAuthContext): boolean {
+function canViewTakeoff(ctx: ProjectAuthContext): boolean {
   if (!ctx.settings.modules.takeoff) return false;
   return ctx.uiMode === "internal";
 }
 
-export function canViewFieldReports(ctx: ProjectAuthContext): boolean {
+function canViewFieldReports(ctx: ProjectAuthContext): boolean {
   if (!ctx.settings.modules.fieldReports) return false;
   if (ctx.uiMode === "client") return ctx.settings.clientVisibility.showFieldReports;
   if (ctx.uiMode === "contractor" || ctx.uiMode === "sub") return false;
   return ctx.uiMode === "internal";
 }
 
-export function canViewPunch(ctx: ProjectAuthContext): boolean {
+function canViewPunch(ctx: ProjectAuthContext): boolean {
   if (!ctx.settings.modules.punch) return false;
   if (ctx.uiMode === "client") return ctx.settings.clientVisibility.showPunchList;
   return true;
 }
 
-export function canViewIssuesForClient(ctx: ProjectAuthContext): boolean {
+function canViewIssuesForClient(ctx: ProjectAuthContext): boolean {
   return ctx.settings.clientVisibility.showIssues;
 }
 
-export function canViewRfisForClient(ctx: ProjectAuthContext): boolean {
+function canViewRfisForClient(ctx: ProjectAuthContext): boolean {
   return ctx.settings.clientVisibility.showRfis;
 }
 
@@ -169,10 +169,7 @@ export function canAccessRfisList(ctx: ProjectAuthContext): boolean {
 }
 
 /** Contractor/sub: file visible if disciplines match user trade (strict). */
-export function canViewFileForExternal(
-  ctx: ProjectAuthContext,
-  fileDisciplines: string[],
-): boolean {
+function canViewFileForExternal(ctx: ProjectAuthContext, fileDisciplines: string[]): boolean {
   if (ctx.uiMode === "client") return canViewDrawingsForClient(ctx);
   const tr = normalizeTrade(ctx.projectMember?.trade ?? null);
   if (!tr) return false;
@@ -200,7 +197,7 @@ export function canViewFolderForUser(
   return folder.allowedUserIds.includes(userId);
 }
 
-export function filesWhereForAuth(ctx: ProjectAuthContext): Prisma.FileWhereInput {
+function filesWhereForAuth(ctx: ProjectAuthContext): Prisma.FileWhereInput {
   if (ctx.uiMode === "internal") return {};
   if (ctx.uiMode === "client") {
     return canViewDrawingsForClient(ctx) ? {} : { id: { in: [] } };
@@ -296,7 +293,7 @@ export async function loadProjectForMember(
   return { project: r.ctx.project };
 }
 
-export async function isWorkspaceSuperAdmin(workspaceId: string, userId: string): Promise<boolean> {
+async function isWorkspaceSuperAdmin(workspaceId: string, userId: string): Promise<boolean> {
   const m = await prisma.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId, userId } },
     select: { role: true },
@@ -305,10 +302,7 @@ export async function isWorkspaceSuperAdmin(workspaceId: string, userId: string)
 }
 
 /** Admin or Super Admin (internal management). */
-export async function isWorkspaceAdminOrSuper(
-  workspaceId: string,
-  userId: string,
-): Promise<boolean> {
+async function isWorkspaceAdminOrSuper(workspaceId: string, userId: string): Promise<boolean> {
   const m = await prisma.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId, userId } },
     select: { role: true, isExternal: true },

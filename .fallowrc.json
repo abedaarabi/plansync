@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/fallow/schema.json",
+  "entry": ["docs/docs.json", "docs/**/*.mdx", "frontend/worker/index.js"],
+  "ignorePatterns": ["frontend/public/**"],
+  "ignoreDependencies": ["happy-dom"],
+  "audit": {
+    "gate": "new-only"
+  },
+  "health": {
+    "maxCyclomatic": 20,
+    "maxCognitive": 15,
+    "maxCrap": 30
+  },
+  "duplicates": {
+    "threshold": 0
+  }
+}

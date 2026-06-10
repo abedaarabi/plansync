@@ -4,12 +4,12 @@ import type Stripe from "stripe";
  * PlanSync Pro — monthly USD. Keep amounts aligned with the marketing site
  * (`frontend/src/lib/productPricing.ts`).
  */
-export const PRO_PLAN_PRODUCT_NAME = "PlanSync Pro";
-export const PRO_PLAN_LOOKUP_KEY = "plansync_pro_monthly_usd";
-export const PRO_PLAN_CURRENCY = "usd";
+const PRO_PLAN_PRODUCT_NAME = "PlanSync Pro";
+const PRO_PLAN_LOOKUP_KEY = "plansync_pro_monthly_usd";
+const PRO_PLAN_CURRENCY = "usd";
 /** Whole USD (display); Stripe uses cents via PRO_PLAN_MONTHLY_UNIT_AMOUNT. */
-export const PRO_PLAN_MONTHLY_USD = 49;
-export const PRO_PLAN_MONTHLY_UNIT_AMOUNT = PRO_PLAN_MONTHLY_USD * 100;
+const PRO_PLAN_MONTHLY_USD = 49;
+const PRO_PLAN_MONTHLY_UNIT_AMOUNT = PRO_PLAN_MONTHLY_USD * 100;
 
 function assertLooksLikeStripePriceId(id: string): void {
   const lower = id.slice(0, 3).toLowerCase();

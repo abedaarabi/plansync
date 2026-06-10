@@ -56,7 +56,7 @@ function centroid(pts: { x: number; y: number }[]) {
 }
 
 /** Calibration line length in mm — longer baseline = higher confidence heuristic. */
-export function calibrationConfidenceLabel(mmLength: number): "good" | "ok" | "low" {
+function calibrationConfidenceLabel(mmLength: number): "good" | "ok" | "low" {
   if (mmLength >= 500) return "good";
   if (mmLength >= 150) return "ok";
   return "low";

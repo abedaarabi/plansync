@@ -4,7 +4,7 @@ import { calibrationFromPersisted } from "@/lib/sessionPersistence";
 import { VIEWER_SCALE_MAX, VIEWER_SCALE_MIN } from "@/store/viewerStore";
 
 /** Merge server annotations with local: server wins on id clash; keep local-only ids not on server. */
-export function mergeAnnotationsRemote(remote: Annotation[], local: Annotation[]): Annotation[] {
+function mergeAnnotationsRemote(remote: Annotation[], local: Annotation[]): Annotation[] {
   const rmap = new Map(remote.map((a) => [a.id, a]));
   const seen = new Set<string>();
   const out: Annotation[] = [];

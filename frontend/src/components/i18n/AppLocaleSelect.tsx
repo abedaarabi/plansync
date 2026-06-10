@@ -5,7 +5,7 @@ import { memo, useCallback } from "react";
 import { APP_LOCALES, LOCALE_LABELS, type AppLocale } from "@/lib/i18n/config";
 import { persistAppLocale } from "@/lib/i18n/persistLocale";
 
-export type AppLocaleSelectVariant = "nav" | "mobile" | "enterprise";
+type AppLocaleSelectVariant = "nav" | "mobile" | "enterprise";
 
 type Props = {
   className?: string;

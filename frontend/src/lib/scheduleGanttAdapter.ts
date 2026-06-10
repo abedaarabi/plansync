@@ -6,7 +6,7 @@ import type {
   ScheduleTaskStatus,
 } from "@/lib/api-client";
 
-export const GANTT_ROOT_PARENT = 0;
+const GANTT_ROOT_PARENT = 0;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function toYmd(d: Date): string {

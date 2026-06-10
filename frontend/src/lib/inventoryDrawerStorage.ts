@@ -8,7 +8,7 @@ export type PersistedInventoryDrawerState = {
   inventoryFullscreen: boolean;
 };
 
-export function inventoryDrawerStorageKey(fileFingerprint: string): string {
+function inventoryDrawerStorageKey(fileFingerprint: string): string {
   return `plansync-inventory-drawer-v${STORAGE_V}:${fileFingerprint}`;
 }
 

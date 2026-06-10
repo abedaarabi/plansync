@@ -153,7 +153,7 @@ export async function fetchIssue(issueId: string): Promise<IssueRow> {
 }
 
 /** MIME for S3 PUT + API validation (mobile cameras often omit type or use HEIC). */
-export function issueReferencePhotoContentType(file: File): string {
+function issueReferencePhotoContentType(file: File): string {
   const raw = file.type?.trim().toLowerCase() || "";
   const allowed = new Set([
     "image/jpeg",
@@ -401,7 +401,7 @@ export async function deleteIssue(issueId: string): Promise<void> {
 }
 
 /** Relative URL to open the viewer on a cloud file revision. */
-export function viewerHrefForCloudRevision(input: {
+function viewerHrefForCloudRevision(input: {
   fileId: string;
   fileName: string;
   projectId: string;
@@ -591,7 +591,7 @@ export async function fetchSheetAiSheetCache(
   return j as SheetAiSheetCacheResponse;
 }
 
-export async function fetchSheetAiSummary(
+async function fetchSheetAiSummary(
   fileVersionId: string,
   body: SheetAiContextPayload,
 ): Promise<{
@@ -606,7 +606,7 @@ export async function fetchSheetAiSummary(
   }>(fileVersionId, "ai/sheet-summary", body);
 }
 
-export async function fetchSheetAiChat(
+async function fetchSheetAiChat(
   fileVersionId: string,
   body: SheetAiContextPayload & { messages: SheetAiChatMessage[] },
 ): Promise<{ reply: string }> {
@@ -686,7 +686,7 @@ export type TakeoffSyncHistoryRow = {
   actor: { id: string; name: string; email: string };
 };
 
-export type TakeoffSnapshotRow = {
+type TakeoffSnapshotRow = {
   id: string;
   reason: string;
   createdAt: string;
@@ -704,9 +704,7 @@ export type TakeoffViewPresetRow = {
   updatedAt: string;
 };
 
-export async function fetchTakeoffLinesForFileVersion(
-  fileVersionId: string,
-): Promise<TakeoffLineRow[]> {
+async function fetchTakeoffLinesForFileVersion(fileVersionId: string): Promise<TakeoffLineRow[]> {
   const res = await fetch(
     apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/takeoff-lines`),
     { credentials: "include" },
@@ -786,7 +784,7 @@ export async function restoreTakeoffSnapshot(projectId: string, snapshotId: stri
     throw new Error(typeof j.error === "string" ? j.error : "Could not restore snapshot.");
 }
 
-export async function fetchTakeoffSnapshots(projectId: string): Promise<TakeoffSnapshotRow[]> {
+async function fetchTakeoffSnapshots(projectId: string): Promise<TakeoffSnapshotRow[]> {
   const res = await fetch(
     apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/takeoff/snapshots`),
     { credentials: "include" },

@@ -5,7 +5,7 @@ export type FolderTemplateNode = {
   children?: FolderTemplateNode[];
 };
 
-export type FolderStructureTemplateMeta = {
+type FolderStructureTemplateMeta = {
   id: string;
   name: string;
   description: string;

@@ -25,7 +25,7 @@ function requirePro(workspace: { subscriptionStatus: string | null }) {
   return null;
 }
 
-export function normalizeMaterialKey(s: string): string {
+function normalizeMaterialKey(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 

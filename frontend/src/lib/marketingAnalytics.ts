@@ -1,13 +1,13 @@
 "use client";
 
-export type MarketingKpiKey =
+type MarketingKpiKey =
   | "landingTrialClickRate"
   | "landingFreeViewerClickRate"
   | "pricingToTrialClickRate"
   | "caseStudyToTrialClickRate"
   | "marketingBounceRate";
 
-export type MarketingKpiTarget = {
+type MarketingKpiTarget = {
   key: MarketingKpiKey;
   label: string;
   baseline: number;
@@ -19,7 +19,7 @@ export type MarketingKpiTarget = {
  * Baselines/targets for redesign rollout.
  * Update baselines after first post-release analytics export.
  */
-export const MARKETING_KPI_TARGETS: MarketingKpiTarget[] = [
+const MARKETING_KPI_TARGETS: MarketingKpiTarget[] = [
   {
     key: "landingTrialClickRate",
     label: "Homepage to trial CTA click-through",

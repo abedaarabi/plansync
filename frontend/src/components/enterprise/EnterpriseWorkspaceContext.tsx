@@ -12,8 +12,6 @@ import {
   setPreferredWorkspaceId,
 } from "@/lib/workspacePreference";
 
-export type { MeWorkspace, MeResponse } from "@/types/enterprise";
-
 type EnterpriseWorkspaceContextValue = {
   loading: boolean;
   isError: boolean;

@@ -5,7 +5,7 @@ import {
   loadProjectForMember as loadProjectForMemberFromPermissions,
 } from "./permissions.js";
 
-export type ProjectForMemberLegacy =
+type ProjectForMemberLegacy =
   | { project: Project & { workspace: Workspace } }
   | { error: string; status: 403 | 404 };
 

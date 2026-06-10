@@ -6,7 +6,7 @@ export type SheetPickRow = {
   group: string;
 };
 
-export function folderPathLabel(folders: Folder[], folderId: string | null): string {
+function folderPathLabel(folders: Folder[], folderId: string | null): string {
   const byId = new Map(folders.map((f) => [f.id, f]));
   const segments: string[] = [];
   let cur: string | null = folderId;

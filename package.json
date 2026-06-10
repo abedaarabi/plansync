@@ -17,6 +17,11 @@
     "format:check": "prettier --check .",
     "test": "npm run test -w backend && npm run test -w @plansync/web",
     "check": "npm run lint && npm run typecheck && npm run format:check && npm run test && npm run db:precommit && npm run build",
+    "fallow:precommit": "node scripts/fallow-precommit.mjs",
+    "fallow:dead-code": "fallow dead-code",
+    "fallow:audit": "fallow audit",
+    "fallow:dupes": "fallow dupes",
+    "fallow:health": "fallow health --score",
     "db:precommit": "npm run db:precommit -w backend",
     "db:generate": "npm run db:generate -w backend",
     "db:migrate": "npm run db:migrate -w backend",
@@ -45,9 +50,10 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3",
     "concurrently": "^9.2.0",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
+    "fallow": "^2.92.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "prettier": "^3.5.0"

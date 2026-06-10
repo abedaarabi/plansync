@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 
-export type MemberPickRow = {
+type MemberPickRow = {
   userId: string;
   name: string;
   email: string;

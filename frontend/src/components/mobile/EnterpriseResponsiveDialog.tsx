@@ -192,7 +192,7 @@ export function EnterpriseResponsiveDialog({
 }
 
 /** Stacked mobile-first dialog footer buttons (primary first on mobile). */
-export function MobileDialogFooter({
+function MobileDialogFooter({
   primary,
   secondary,
   className = "",

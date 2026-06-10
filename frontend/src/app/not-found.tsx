@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { FileQuestion, Home, Ruler } from "lucide-react";
 
-export const metadata: Metadata = {
+const metadata: Metadata = {
   title: "Page not found",
   robots: { index: false, follow: true },
 };

@@ -122,7 +122,7 @@ function frequencyToNextFrom(
 }
 
 /** PPM health: overdue | dueSoon | onTrack */
-export function ppmHealthLabel(
+function ppmHealthLabel(
   nextDueAt: Date | null,
   now = new Date(),
 ): "overdue" | "dueSoon" | "onTrack" {

@@ -23,5 +23,3 @@ export function ProjectLocationMap(props: ProjectLocationMapInnerProps) {
     </div>
   );
 }
-
-export type { ProjectLocationMapInnerProps as ProjectLocationMapProps };

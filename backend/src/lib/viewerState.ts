@@ -22,7 +22,7 @@ export const viewerStatePutSchema = z.object({
   takeoffPackageStatus: z.enum(["draft", "checked", "approved"]).optional(),
 });
 
-export type ViewerStatePayload = z.infer<typeof viewerStatePutSchema>;
+type ViewerStatePayload = z.infer<typeof viewerStatePutSchema>;
 
 /** Prisma select: keep PDF bytes / listing responses small (omit large JSON). */
 export const fileVersionPublicSelect = {

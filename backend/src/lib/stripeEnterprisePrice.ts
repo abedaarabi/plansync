@@ -4,11 +4,11 @@ import type Stripe from "stripe";
  * PlanSync Enterprise — monthly USD (includes O&M). Keep amounts aligned with
  * `frontend/src/lib/productPricing.ts`.
  */
-export const ENTERPRISE_PLAN_PRODUCT_NAME = "PlanSync Enterprise";
-export const ENTERPRISE_PLAN_LOOKUP_KEY = "plansync_enterprise_monthly_usd";
-export const ENTERPRISE_PLAN_CURRENCY = "usd";
-export const ENTERPRISE_PLAN_MONTHLY_USD = 99;
-export const ENTERPRISE_PLAN_MONTHLY_UNIT_AMOUNT = ENTERPRISE_PLAN_MONTHLY_USD * 100;
+const ENTERPRISE_PLAN_PRODUCT_NAME = "PlanSync Enterprise";
+const ENTERPRISE_PLAN_LOOKUP_KEY = "plansync_enterprise_monthly_usd";
+const ENTERPRISE_PLAN_CURRENCY = "usd";
+const ENTERPRISE_PLAN_MONTHLY_USD = 99;
+const ENTERPRISE_PLAN_MONTHLY_UNIT_AMOUNT = ENTERPRISE_PLAN_MONTHLY_USD * 100;
 
 function assertLooksLikeStripePriceId(id: string): void {
   const lower = id.slice(0, 3).toLowerCase();

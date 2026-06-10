@@ -164,7 +164,7 @@ export interface Calibration {
   mmPerPdfUnit: number;
 }
 
-export type SessionSnapshot = {
+type SessionSnapshot = {
   annotations: Annotation[];
   calibrationByPage: Record<number, Calibration>;
   takeoffItems: TakeoffItem[];

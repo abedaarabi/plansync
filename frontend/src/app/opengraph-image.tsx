@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const runtime = "edge";
+const runtime = "edge";
 
 export const alt =
   "PlanSync — Open construction plans, set scale, measure and mark up. Free, no sign-up, files stay local.";

@@ -4,7 +4,7 @@ import type { Env } from "./env.js";
 import { prisma } from "./prisma.js";
 
 /** Short line for push body (shown under the title in the service worker). */
-export function pushKindCategoryLabel(kind: string): string {
+function pushKindCategoryLabel(kind: string): string {
   const labels: Record<string, string> = {
     RFI_MESSAGE: "RFI",
     RFI_ASSIGNED: "RFI",
@@ -59,7 +59,7 @@ function ensureVapid(env: Env): boolean {
   return true;
 }
 
-export function absoluteAppUrl(env: Env, href: string): string {
+function absoluteAppUrl(env: Env, href: string): string {
   const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
   const path = href.startsWith("/") ? href : `/${href}`;
   return `${base}${path}`;

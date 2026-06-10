@@ -27,7 +27,7 @@ function wrapSvgRotation(
   return `<g transform="rotate(${deg} ${c.cx} ${c.cy})">${inner}</g>`;
 }
 
-export function escapeXml(s: string): string {
+function escapeXml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

@@ -1,5 +1,5 @@
 /** Same heuristic as backend proposalCoverHtml.ts / ProposalLetterPreviewBlock. */
-export function looksLikeProposalCoverHtml(raw: string): boolean {
+function looksLikeProposalCoverHtml(raw: string): boolean {
   const t = raw.trim();
   return /^\s*</.test(t) && /<[a-z]/i.test(t);
 }

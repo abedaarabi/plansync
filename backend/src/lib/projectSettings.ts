@@ -1,5 +1,5 @@
 /** ISO 4217 codes accepted for `Project.currency` (common construction / international). */
-export const PROJECT_CURRENCY_CODES = [
+const PROJECT_CURRENCY_CODES = [
   "USD",
   "EUR",
   "GBP",
@@ -348,7 +348,7 @@ export function mergeProjectSettingsPatch(
 }
 
 /** When enabling `operationsMode`, optionally turn off construction-heavy modules (Super Admin choice). */
-export const OM_DEFAULT_MODULES_WHEN_ENABLING: Partial<ProjectModules> = {
+const OM_DEFAULT_MODULES_WHEN_ENABLING: Partial<ProjectModules> = {
   rfis: false,
   takeoff: false,
   proposals: false,

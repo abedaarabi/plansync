@@ -25,12 +25,7 @@ export type WorkOrderPartUsed = {
   inventoryItemId?: string;
 };
 
-export type WorkOrderTypeApi =
-  | "CORRECTIVE"
-  | "PREVENTIVE"
-  | "INSPECTION_FOLLOWUP"
-  | "TENANT"
-  | "OCCUPANT";
+type WorkOrderTypeApi = "CORRECTIVE" | "PREVENTIVE" | "INSPECTION_FOLLOWUP" | "TENANT" | "OCCUPANT";
 
 export type OmVendorRow = {
   id: string;
@@ -372,7 +367,7 @@ export async function postOmPartsInventoryItem(
   return j as OmPartsInventoryRow;
 }
 
-export async function patchOmPartsInventoryItem(
+async function patchOmPartsInventoryItem(
   projectId: string,
   itemId: string,
   body: Partial<{

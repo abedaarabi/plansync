@@ -12,7 +12,7 @@ import {
 const SWIPE_THRESHOLD = 72;
 const ACTION_WIDTH = 88;
 
-export type SwipeAction = {
+type SwipeAction = {
   id: string;
   label: string;
   icon?: ReactNode;

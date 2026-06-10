@@ -55,7 +55,7 @@ export function newUploadId(): string {
 
 const SAFE_NAME_RE = /[^a-zA-Z0-9._-]/g;
 
-export function sanitizeAttachmentFileName(name: string): string {
+function sanitizeAttachmentFileName(name: string): string {
   const t = name.trim().replace(SAFE_NAME_RE, "_");
   return t.length > 0 ? t.slice(0, 200) : "file";
 }

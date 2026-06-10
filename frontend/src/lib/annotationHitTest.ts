@@ -50,7 +50,7 @@ function hitPolyline(
   return false;
 }
 
-export function hitTestAnnotation(
+function hitTestAnnotation(
   a: Annotation,
   nx: number,
   ny: number,

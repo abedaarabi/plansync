@@ -5,14 +5,12 @@ import { ChevronDown, ChevronUp, GripHorizontal } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { BottomDrawerSnap } from "@/lib/bottomDrawerSnap";
 
-export type { BottomDrawerSnap };
-
 type Snap = BottomDrawerSnap;
 
 const RESIZE_DEBOUNCE_MS = 120;
 const MAGNET_PX = 14;
 
-export type BottomDrawerProps = {
+type BottomDrawerProps = {
   /** Collapsed total height in CSS px (chrome only). Ignored when `snapHeightsPx` is set (uses its first value). */
   collapsedPx?: number;
   /**

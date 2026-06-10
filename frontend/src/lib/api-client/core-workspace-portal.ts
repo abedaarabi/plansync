@@ -210,7 +210,7 @@ export async function fetchProjectDashboard(projectId: string): Promise<ProjectD
   return res.json() as Promise<ProjectDashboardResponse>;
 }
 
-export type InviteRow = {
+type InviteRow = {
   id: string;
   token: string;
   inviteUrl: string;
@@ -218,7 +218,7 @@ export type InviteRow = {
   createdAt: string;
 };
 
-export async function fetchInvites(workspaceId: string): Promise<InviteRow[]> {
+async function fetchInvites(workspaceId: string): Promise<InviteRow[]> {
   const res = await fetch(apiUrl(`/api/v1/workspaces/${workspaceId}/invites`), {
     credentials: "include",
   });
@@ -470,14 +470,14 @@ export async function uploadWorkspaceLogo(
   return j as WorkspaceBrandingJson;
 }
 
-export type CreateInviteResponse = {
+type CreateInviteResponse = {
   id: string;
   token: string;
   inviteUrl: string;
   expiresAt: string;
 };
 
-export async function createInvite(
+async function createInvite(
   workspaceId: string,
   expiresInDays: number,
 ): Promise<CreateInviteResponse> {
@@ -495,7 +495,7 @@ export async function createInvite(
   return j as CreateInviteResponse;
 }
 
-export async function revokeInvite(workspaceId: string, inviteId: string): Promise<void> {
+async function revokeInvite(workspaceId: string, inviteId: string): Promise<void> {
   const res = await fetch(apiUrl(`/api/v1/workspaces/${workspaceId}/invites/${inviteId}`), {
     method: "DELETE",
     credentials: "include",

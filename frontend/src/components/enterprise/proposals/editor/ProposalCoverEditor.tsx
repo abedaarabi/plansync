@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type TemplateVariable = {
+type TemplateVariable = {
   key: string; // e.g. "client.name"
   label: string; // e.g. "Client name"
   value: string; // current resolved value for preview

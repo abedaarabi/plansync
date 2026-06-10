@@ -13,7 +13,7 @@ function addDays(d: Date, n: number): Date {
   return x;
 }
 
-export type OmMaintenanceReminderRow = {
+type OmMaintenanceReminderRow = {
   scheduleId: string;
   projectId: string;
   projectName: string;

@@ -26,7 +26,7 @@ function isCoarsePointer(): boolean {
 /**
  * Max canvas edge length (px). Lower on touch-first / low-memory devices to avoid GPU failures.
  */
-export function getPdfCanvasMaxBitmapEdge(): number {
+function getPdfCanvasMaxBitmapEdge(): number {
   const mem = readDeviceMemoryGb();
   if (isCoarsePointer()) {
     if (mem === undefined || mem <= 4) return 6144;
@@ -41,7 +41,7 @@ export function getPdfCanvasMaxBitmapEdge(): number {
 /**
  * Max total backing-store pixels (width × height). Higher on desktop-class memory for sharper zoom.
  */
-export function getPdfCanvasMaxBitmapPixelBudget(): number {
+function getPdfCanvasMaxBitmapPixelBudget(): number {
   const mem = readDeviceMemoryGb();
   if (mem !== undefined && mem >= 16) return 420_000_000;
   if (mem !== undefined && mem >= 8) return 340_000_000;
@@ -98,7 +98,7 @@ export function getPdfRenderDpr(
  * capped separately; without this, the layout still uses `pagePt × scale` and mobile Safari/Chrome
  * can freeze or kill the tab when zoom approaches VIEWER_SCALE_MAX on large sheets.
  */
-export function getViewerMaxLayoutCssEdge(): number {
+function getViewerMaxLayoutCssEdge(): number {
   if (typeof window === "undefined") return Number.POSITIVE_INFINITY;
   if (!isCoarsePointer()) return Number.POSITIVE_INFINITY;
   const mem = readDeviceMemoryGb();

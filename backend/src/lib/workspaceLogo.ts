@@ -10,7 +10,7 @@ export function apiPublicOrigin(env: Env): string {
 }
 
 /** Absolute URL (emails, server-side fetch). Prefer `workspaceLogoUrlForClients` for browser JSON. */
-export function workspaceHostedLogoAbsoluteUrl(env: Env, workspaceId: string): string {
+function workspaceHostedLogoAbsoluteUrl(env: Env, workspaceId: string): string {
   return `${apiPublicOrigin(env)}/api/v1/public/workspaces/${encodeURIComponent(workspaceId)}/logo`;
 }
 

@@ -28,7 +28,7 @@ export function sortedVersions(f: CloudFile): FileVersion[] {
   return [...f.versions].sort((a, b) => b.version - a.version);
 }
 
-export function formatItemDate(iso?: string): string {
+function formatItemDate(iso?: string): string {
   if (!iso) return "—";
   try {
     const d = new Date(iso);

@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 
-export type ProposalItemInput = {
+type ProposalItemInput = {
   quantity: Prisma.Decimal | string | number;
   rate: Prisma.Decimal | string | number;
 };

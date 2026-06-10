@@ -43,7 +43,7 @@ export const LANDING_CASE_STUDIES = [
 
 export type LandingCaseStudySlug = (typeof LANDING_CASE_STUDIES)[number]["slug"];
 
-export function getLandingUseCase(slug: string) {
+function getLandingUseCase(slug: string) {
   return LANDING_USE_CASES.find((item) => item.slug === slug);
 }
 

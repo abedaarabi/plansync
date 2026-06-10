@@ -173,7 +173,7 @@ async function runGemini(
   return text;
 }
 
-export class EmptyModelResponseError extends Error {
+class EmptyModelResponseError extends Error {
   constructor() {
     super("Empty model response");
     this.name = "EmptyModelResponseError";

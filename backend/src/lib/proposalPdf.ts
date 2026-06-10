@@ -67,7 +67,7 @@ function truncateLine(s: string, max: number): string {
 }
 
 /** Human-friendly UTC line for signed proposal PDFs (avoids raw ISO). */
-export function formatProposalAcceptanceTimestamp(iso: string): string {
+function formatProposalAcceptanceTimestamp(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   try {

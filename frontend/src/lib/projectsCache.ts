@@ -3,7 +3,7 @@ import type { CloudFile, FileVersion, Folder, Project } from "@/types/projects";
 import { qk } from "@/lib/queryKeys";
 
 /** Collect folder id and all descendant folder ids (same project tree). */
-export function collectFolderSubtreeIds(rootId: string, folders: Folder[]): Set<string> {
+function collectFolderSubtreeIds(rootId: string, folders: Folder[]): Set<string> {
   const ids = new Set<string>();
   const walk = (id: string) => {
     ids.add(id);
@@ -132,7 +132,7 @@ export function removeFolderSubtreeFromProjectCache(
   });
 }
 
-export function addProjectOptimistic(
+function addProjectOptimistic(
   queryClient: QueryClient,
   workspaceId: string,
   project: Project,
@@ -140,7 +140,7 @@ export function addProjectOptimistic(
   queryClient.setQueryData<Project[]>(qk.projects(workspaceId), (old) => [...(old ?? []), project]);
 }
 
-export function replaceProjectInCache(
+function replaceProjectInCache(
   queryClient: QueryClient,
   workspaceId: string,
   tempId: string,

@@ -162,7 +162,7 @@ export function sumZonesForItem(zones: TakeoffZone[], itemId: string): number {
 }
 
 /** Sum geometry-derived raw quantities (mm², mm, or mark count) for all zones of an item. */
-export function sumRawQuantityForItem(zones: TakeoffZone[], itemId: string): number {
+function sumRawQuantityForItem(zones: TakeoffZone[], itemId: string): number {
   return zones.filter((z) => z.itemId === itemId).reduce((s, z) => s + z.rawQuantity, 0);
 }
 
@@ -190,7 +190,7 @@ export function rectPolygonFromTwoCornersNorm(
   ];
 }
 
-export function segmentLengthMm(
+function segmentLengthMm(
   a: { x: number; y: number },
   b: { x: number; y: number },
   pageW: number,

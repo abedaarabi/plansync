@@ -3,7 +3,7 @@ import type { TakeoffItem, TakeoffPackageStatus, TakeoffZone } from "@/lib/takeo
 import type { Annotation, Calibration } from "@/store/viewerStore";
 
 /** Current session key (PlanSync). */
-export const VIEWER_SESSION_STORAGE_KEY = "plansync-session-v1";
+const VIEWER_SESSION_STORAGE_KEY = "plansync-session-v1";
 
 const LEGACY_SESSION_KEY = "cv-viewer-session-v1";
 
@@ -13,7 +13,7 @@ export function fileFingerprint(fileName: string | null, numPages: number): stri
 
 const CAL_LAST_MM_PREFIX = "plansync-cal-last-known-mm";
 
-export function calibrateLastKnownMmStorageKey(
+function calibrateLastKnownMmStorageKey(
   fileName: string | null,
   numPages: number,
   pageIndex0: number,

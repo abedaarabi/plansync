@@ -1,7 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 
-export type EnterpriseButtonVariant = "primary" | "secondary" | "ghost" | "danger";
-export type EnterpriseButtonSize = "sm" | "md" | "lg";
+type EnterpriseButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+type EnterpriseButtonSize = "sm" | "md" | "lg";
 
 const sizeStyles: Record<EnterpriseButtonSize, string> = {
   sm: "min-h-9 px-3 text-sm max-lg:min-h-11",
@@ -20,7 +20,7 @@ const variantStyles: Record<EnterpriseButtonVariant, string> = {
     "border border-transparent bg-[var(--enterprise-error)] text-white hover:bg-[color-mix(in_srgb,var(--enterprise-error)_90%,#000)] focus-visible:ring-[var(--enterprise-error)]/45",
 };
 
-export type EnterpriseButtonProps = {
+type EnterpriseButtonProps = {
   variant?: EnterpriseButtonVariant;
   size?: EnterpriseButtonSize;
   fullWidth?: boolean;

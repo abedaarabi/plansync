@@ -4,13 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 
 /** Marketing hero still — same asset as the landing hero poster. */
-export const CTA_HERO_IMAGE = "/images/cta/CTA-constraction-hero.webp";
+const CTA_HERO_IMAGE = "/images/cta/CTA-constraction-hero.webp";
 
 /** Same tagline as the marketing footer brand column. */
-export const BRAND_TAGLINE =
+const BRAND_TAGLINE =
   "The construction drawing workspace for teams who can't afford to work off the wrong information.";
 
-export type CtaHeroAtmosphereProps = {
+type CtaHeroAtmosphereProps = {
   className?: string;
   /** Passed to `next/image` `sizes` (viewport coverage of the photo). */
   sizes?: string;
@@ -21,7 +21,7 @@ export type CtaHeroAtmosphereProps = {
  * Construction CTA photo with the same scrims, blue radials, and dot grid as the auth brand column.
  * Parent should be `position: relative` with bounded height.
  */
-export function CtaHeroAtmosphere({
+function CtaHeroAtmosphere({
   className = "",
   sizes = "100vw",
   priority = false,

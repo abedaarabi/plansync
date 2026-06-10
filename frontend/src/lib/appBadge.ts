@@ -46,7 +46,7 @@ export function clearAppBadgeSafe(): void {
   });
 }
 
-export function isAppBadgeSupported(): boolean {
+function isAppBadgeSupported(): boolean {
   return (
     typeof navigator !== "undefined" &&
     typeof window !== "undefined" &&

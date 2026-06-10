@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
-export const MATERIAL_TEMPLATE_VERSION = 1;
-export const MAX_CUSTOM_MATERIAL_FIELDS = 20;
+const MATERIAL_TEMPLATE_VERSION = 1;
+const MAX_CUSTOM_MATERIAL_FIELDS = 20;
 
 export type MaterialCustomFieldType = "text" | "number" | "currency";
 
@@ -23,7 +23,7 @@ export type MaterialTemplate = {
 
 const KEY_RE = /^[a-z][a-z0-9_]{0,62}$/;
 
-export function slugifyMaterialFieldKey(label: string): string {
+function slugifyMaterialFieldKey(label: string): string {
   const s = label
     .trim()
     .toLowerCase()

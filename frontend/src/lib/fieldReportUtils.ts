@@ -1,7 +1,7 @@
 import type { FieldReportRow } from "@/lib/api-client";
 
-export type ReportKind = "DAILY" | "WEEKLY";
-export type ReportStatus = "DRAFT" | "SUBMITTED";
+type ReportKind = "DAILY" | "WEEKLY";
+type ReportStatus = "DRAFT" | "SUBMITTED";
 
 export type FieldReportCrew = { id: string; name: string; workers: number };
 export type FieldReportLineItem = { id: string; text: string; percent?: number };
@@ -184,7 +184,7 @@ export function primaryWeatherLabel(
 }
 
 /** Monday-based week; returns UTC YYYY-MM-DD of that week's Friday. */
-export function workWeekFridayKey(reportDateIso: string): string {
+function workWeekFridayKey(reportDateIso: string): string {
   const d = new Date(reportDateIso);
   if (Number.isNaN(d.getTime())) return reportDateIso.slice(0, 10);
   const dow = d.getUTCDay();
@@ -194,7 +194,7 @@ export function workWeekFridayKey(reportDateIso: string): string {
   return fri.toISOString().slice(0, 10);
 }
 
-export function isoWeekNumberUtc(isoYmd: string): number {
+function isoWeekNumberUtc(isoYmd: string): number {
   const target = new Date(isoYmd + "T12:00:00.000Z");
   if (Number.isNaN(target.getTime())) return 1;
   const dayNr = (target.getUTCDay() + 6) % 7;

@@ -1,5 +1,5 @@
 /** Keep in sync with `backend/src/lib/projectSettings.ts` — accepted API values. */
-export const PROJECT_CURRENCY_CODES = [
+const PROJECT_CURRENCY_CODES = [
   "USD",
   "EUR",
   "GBP",

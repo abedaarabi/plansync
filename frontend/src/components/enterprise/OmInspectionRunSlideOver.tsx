@@ -22,7 +22,7 @@ import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver
 
 /* ── Types ─────────────────────────────────────────── */
 
-export type ItemResult = {
+type ItemResult = {
   outcome: "pass" | "fail" | "na" | null;
   note: string;
   photoDataUrl?: string;

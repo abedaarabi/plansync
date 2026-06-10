@@ -21,7 +21,7 @@ function parseRoot(raw: unknown): SheetAiCacheRoot {
   return { v: CACHE_V, byPage: { ...(byPage as Record<string, unknown>) } };
 }
 
-export function parseSheetAiPageCacheEntry(raw: unknown): SheetAiPageCacheEntry | null {
+function parseSheetAiPageCacheEntry(raw: unknown): SheetAiPageCacheEntry | null {
   const parsed = sheetAiPageCacheEntrySchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
 }
@@ -49,7 +49,7 @@ export async function getSheetAiPageFromDb(
   return parseSheetAiPageCacheEntry(root.byPage[key]);
 }
 
-export async function mergeSheetAiPageInDb(
+async function mergeSheetAiPageInDb(
   fileVersionId: string,
   pageIndex0: number,
   patch: Partial<SheetAiPageCacheEntry>,

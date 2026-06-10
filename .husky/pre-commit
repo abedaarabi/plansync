@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 set -e
 npx lint-staged
+npm run fallow:precommit
 npm run typecheck --workspaces --if-present
 npm run test
 # Prisma: validate schema, ensure formatted, regenerate client (no DB required).

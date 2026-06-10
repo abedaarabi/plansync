@@ -199,5 +199,3 @@ export function useEnterpriseMobileNav(): {
 
   return { tabs, isProjectContext, isTabActive };
 }
-
-export { isNavActive, isGlobalActive };

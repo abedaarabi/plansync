@@ -3,7 +3,6 @@
  */
 
 export class ProRequiredError extends Error {
-  readonly code = "PRO" as const;
   constructor() {
     super("Pro subscription required");
     this.name = "ProRequiredError";

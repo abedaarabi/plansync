@@ -168,7 +168,7 @@ export function LandingVideoModal({
   );
 }
 
-export function HeroYouTubeEmbed() {
+function HeroYouTubeEmbed() {
   return (
     <LandingVideoModal
       videoId={YOUTUBE_WALKTHROUGH_ID}

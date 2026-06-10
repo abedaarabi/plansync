@@ -1,7 +1,7 @@
 /** Shared issue status labels and chip styles (viewer + enterprise). */
 
 export const ISSUE_STATUS_ORDER = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] as const;
-export type IssueStatusKey = (typeof ISSUE_STATUS_ORDER)[number];
+type IssueStatusKey = (typeof ISSUE_STATUS_ORDER)[number];
 
 export const ISSUE_STATUS_LABEL: Record<string, string> = {
   OPEN: "Open",
@@ -11,7 +11,7 @@ export const ISSUE_STATUS_LABEL: Record<string, string> = {
 };
 
 export const ISSUE_PRIORITY_ORDER = ["LOW", "MEDIUM", "HIGH"] as const;
-export type IssuePriorityKey = (typeof ISSUE_PRIORITY_ORDER)[number];
+type IssuePriorityKey = (typeof ISSUE_PRIORITY_ORDER)[number];
 
 export const ISSUE_PRIORITY_LABEL: Record<string, string> = {
   LOW: "Low",
@@ -23,7 +23,7 @@ export const ISSUE_PRIORITY_LABEL: Record<string, string> = {
  * Priority on light enterprise surfaces (issues table, RFI list/detail).
  * Low = neutral, Medium = info (on-brand blue, not amber “warning”), High = danger.
  */
-export const PRIORITY_BADGE_CLASS_LIGHT: Record<string, string> = {
+const PRIORITY_BADGE_CLASS_LIGHT: Record<string, string> = {
   LOW: "border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]",
   MEDIUM:
     "border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] text-[var(--enterprise-semantic-info-text)]",
@@ -43,7 +43,7 @@ export const RFI_STATUS_LABEL: Record<string, string> = {
   CLOSED: "Closed",
 };
 
-export const RFI_STATUS_BADGE_CLASS: Record<string, string> = {
+const RFI_STATUS_BADGE_CLASS: Record<string, string> = {
   OPEN: "border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] text-[var(--enterprise-semantic-info-text)]",
   IN_REVIEW:
     "border border-[var(--enterprise-primary)]/30 bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]",
@@ -90,7 +90,7 @@ export function issueDateToInputValue(iso: string | null | undefined): string {
 }
 
 /** Compact labels for segmented controls and narrow sidebars. */
-export const ISSUE_STATUS_SHORT: Record<string, string> = {
+const ISSUE_STATUS_SHORT: Record<string, string> = {
   OPEN: "Open",
   IN_PROGRESS: "Active",
   RESOLVED: "Done",
@@ -98,7 +98,7 @@ export const ISSUE_STATUS_SHORT: Record<string, string> = {
 };
 
 /** Tailwind class strings for compact badges. */
-export const ISSUE_STATUS_BADGE_CLASS: Record<string, string> = {
+const ISSUE_STATUS_BADGE_CLASS: Record<string, string> = {
   OPEN: "bg-red-500/20 text-red-200 ring-1 ring-red-500/35",
   IN_PROGRESS: "bg-amber-500/20 text-amber-100 ring-1 ring-amber-400/35",
   RESOLVED: "bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-500/35",
@@ -110,7 +110,7 @@ export function issueStatusBadgeClass(status: string): string {
 }
 
 /** Badges on light backgrounds (e.g. enterprise tables). */
-export const ISSUE_STATUS_BADGE_CLASS_LIGHT: Record<string, string> = {
+const ISSUE_STATUS_BADGE_CLASS_LIGHT: Record<string, string> = {
   OPEN: "bg-red-50 text-red-800 ring-1 ring-red-200/80",
   IN_PROGRESS: "bg-amber-50 text-amber-900 ring-1 ring-amber-200/80",
   RESOLVED: "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200/80",
@@ -141,7 +141,7 @@ export function issueStatusDotSolidFill(status: string): string {
 }
 
 /** Dot + halo radii in SVG/CSS pixels — scale slightly with zoom so pins track the sheet. */
-export function issueStatusDotRadii(cssW: number, cssH: number): { core: number; halo: number } {
+function issueStatusDotRadii(cssW: number, cssH: number): { core: number; halo: number } {
   const m = Math.min(cssW, cssH);
   const core = Math.max(5.75, Math.min(12, m * 0.0052));
   const halo = core + Math.max(2, core * 0.38);

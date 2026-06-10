@@ -10,7 +10,7 @@ export function hashProjectApiKey(raw: string): string {
   return toHash(raw.trim());
 }
 
-export function buildProjectApiKeyPrefix(raw: string): string {
+function buildProjectApiKeyPrefix(raw: string): string {
   const t = raw.trim();
   return t.slice(0, Math.min(18, t.length));
 }

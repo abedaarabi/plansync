@@ -243,7 +243,7 @@ export const LANDING_SOLUTIONS_SECTION = {
 } as const;
 
 /** Section heading for the “How it works” band. */
-export const LANDING_HOW_IT_WORKS_SECTION = {
+const LANDING_HOW_IT_WORKS_SECTION = {
   eyebrow: "How it works",
   title: "From PDF to project clarity",
   description:
@@ -251,7 +251,7 @@ export const LANDING_HOW_IT_WORKS_SECTION = {
 } as const;
 
 /** Short steps for the “How it works” band on the homepage. */
-export const LANDING_HOW_IT_WORKS = [
+const LANDING_HOW_IT_WORKS = [
   {
     title: "Bring your plans",
     body: "Open PDFs in the free viewer instantly, or upload to Pro when your whole team needs one shared set of sheets.",
