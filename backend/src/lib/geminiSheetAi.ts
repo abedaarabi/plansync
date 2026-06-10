@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { Env } from "./env.js";
 import { resolveGeminiApiKey } from "./env.js";
+import { buildMarketingLandingSystemPrompt } from "./marketingLandingKnowledge.js";
 import {
   assertImageSizeOk,
   parseTakeoffAssistResultLoose,
@@ -361,7 +362,7 @@ ${historyText ? `Prior turns:\n${historyText}\n\n` : ""}**user**: ${last.content
 }
 
 /** Low-cost text model for public website assistant (shorter answers than sheet AI). */
-const MARKETING_LANDING_GEMINI_MODEL = "gemini-2.0-flash";
+const MARKETING_LANDING_GEMINI_MODEL = "gemini-2.5-flash";
 
 export async function geminiMarketingLandingChat(
   env: Env,
@@ -373,18 +374,10 @@ export async function geminiMarketingLandingChat(
   const genAI = new GoogleGenerativeAI(key);
   const model = genAI.getGenerativeModel({
     model: MARKETING_LANDING_GEMINI_MODEL,
-    generationConfig: { maxOutputTokens: 1024, temperature: 0.35 },
+    generationConfig: { maxOutputTokens: 1280, temperature: 0.3 },
   });
 
-  const langHint = input.locale?.toLowerCase().startsWith("ar")
-    ? "Prefer Arabic unless the visitor wrote mostly in English."
-    : "Match the visitor's language (English or Arabic) based on their latest message.";
-
-  const system = `You are the PlanSync website assistant. PlanSync is construction software: a free in-browser PDF viewer for plans (measure, markup, scale calibration, export) and optional Pro cloud for teams (issues on drawings, RFIs, takeoff, revisions, schedule). Enterprise adds operations and maintenance (handover, assets, work orders, maintenance, inspections, tenant portal).
-
-${langHint}
-
-Rules: Be concise (a few short paragraphs or bullets max). Professional and friendly. No legal, medical, or financial advice. Do not invent features, prices, or integrations—if unsure, say so and suggest they sign in for account-specific help or open the free PDF viewer from the site. No markdown headings that use # symbols unless helpful; light markdown (bold, lists) is OK.`;
+  const system = buildMarketingLandingSystemPrompt(input.locale);
 
   if (!input.messages.length) throw new Error("No messages");
 

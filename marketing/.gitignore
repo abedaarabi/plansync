@@ -1,0 +1,5 @@
+# Your actual outreach lists — keep them local
+recipients.xlsx
+recipients.csv
+*.local.xlsx
+*.local.csv

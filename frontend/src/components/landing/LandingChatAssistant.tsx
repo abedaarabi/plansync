@@ -1,11 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { Bot, MessageCircle, Send, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { fetchLandingMarketingChat } from "@/lib/api-client";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { useMarketingGoToFreeViewer } from "./MarketingShell";
 
 type Cta = "openViewer" | "startTrial";
@@ -33,10 +35,67 @@ function stripBotCtas(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((m) => (m.sender === "bot" ? { ...m, ctas: undefined } : m));
 }
 
+function TypingIndicator() {
+  return (
+    <div className="flex items-center gap-1 px-1" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="h-1.5 w-1.5 rounded-full bg-slate-400 motion-safe:animate-bounce"
+          style={{ animationDelay: `${i * 140}ms`, animationDuration: "0.9s" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+const assistantMarkdownClass =
+  "prose prose-sm max-w-none " +
+  "prose-p:my-0 prose-p:leading-relaxed prose-p:text-slate-700 " +
+  "prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-li:text-slate-700 " +
+  "prose-strong:text-slate-900 prose-a:text-(--landing-cta) prose-a:underline-offset-2 hover:prose-a:underline " +
+  "prose-code:rounded prose-code:bg-slate-200/70 prose-code:px-1 prose-code:py-px prose-code:text-[0.9em] prose-code:font-medium prose-code:text-slate-800 " +
+  "prose-code:before:content-none prose-code:after:content-none";
+
+const userMarkdownClass =
+  "prose prose-sm max-w-none prose-invert " +
+  "prose-p:my-0 prose-p:leading-relaxed prose-p:text-white " +
+  "prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-li:text-white " +
+  "prose-strong:text-white prose-a:text-white prose-a:underline prose-a:underline-offset-2 " +
+  "prose-code:rounded prose-code:bg-white/20 prose-code:px-1 prose-code:py-px prose-code:text-[0.9em] prose-code:font-medium prose-code:text-white " +
+  "prose-code:before:content-none prose-code:after:content-none";
+
+function ChatMarkdown({ content, sender }: { content: string; sender: ChatMessage["sender"] }) {
+  return (
+    <div
+      className={`px-3.5 py-2.5 text-sm leading-relaxed ${
+        sender === "user"
+          ? "rounded-2xl rounded-br-md bg-(--landing-cta) text-white shadow-sm"
+          : "rounded-2xl rounded-bl-md border border-slate-200/75 bg-slate-50 text-slate-700"
+      }`}
+    >
+      <div className={sender === "user" ? userMarkdownClass : assistantMarkdownClass}>
+        <ReactMarkdown
+          components={{
+            a: ({ children, href }) => (
+              <a href={href} target="_blank" rel="noreferrer">
+                {children}
+              </a>
+            ),
+          }}
+        >
+          {content.trim()}
+        </ReactMarkdown>
+      </div>
+    </div>
+  );
+}
+
 export function LandingChatAssistant() {
   const t = useTranslations("chatbot");
   const locale = useLocale();
   const isRtl = locale === "ar";
+  const prefersReducedMotion = usePrefersReducedMotion();
   const inputRef = useRef<HTMLInputElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -156,12 +215,16 @@ export function LandingChatAssistant() {
       {isOpen ? (
         <section
           id="landing-chat-assistant-panel"
-          className="pointer-events-auto w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-slate-200/80 bg-white/95 shadow-(--enterprise-shadow-floating) backdrop-blur-xl"
+          className={`pointer-events-auto mb-3 w-[min(26rem,calc(100vw-2rem))] rounded-2xl border border-slate-200/80 bg-white/95 shadow-(--enterprise-shadow-floating) backdrop-blur-xl ${prefersReducedMotion ? "" : "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-200"}`}
         >
-          <header className="flex items-center justify-between border-b border-slate-200/80 px-4 py-3">
+          <header className="flex items-center justify-between border-b border-slate-200/80 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--landing-cta)_6%,white)_0%,transparent_100%)] px-4 py-3.5">
             <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--landing-cta)_14%,white)] text-(--landing-cta) ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_20%,transparent)]">
-                <Sparkles className="h-4 w-4" aria-hidden />
+              <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--landing-cta)_14%,white)] text-(--landing-cta) ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_20%,transparent)]">
+                <Bot className="h-4 w-4" aria-hidden />
+                <span
+                  className="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500"
+                  aria-hidden
+                />
               </span>
               <div>
                 <p className="text-sm font-semibold text-slate-900">{t("title")}</p>
@@ -185,18 +248,15 @@ export function LandingChatAssistant() {
             {messages.map((message) => (
               <article
                 key={message.id}
-                className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex gap-2 ${message.sender === "user" ? "justify-end" : "justify-start"}`}
               >
-                <div className="max-w-[88%] space-y-2">
-                  <p
-                    className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                      message.sender === "user"
-                        ? "bg-(--landing-cta) text-white"
-                        : "border border-slate-200/75 bg-slate-50 text-slate-700"
-                    }`}
-                  >
-                    {message.text}
-                  </p>
+                {message.sender === "bot" ? (
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-(--landing-cta) ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_15%,transparent)]">
+                    <Bot className="h-3.5 w-3.5" aria-hidden />
+                  </span>
+                ) : null}
+                <div className="max-w-[82%] space-y-2">
+                  <ChatMarkdown content={message.text} sender={message.sender} />
                   {message.sender === "bot" && message.ctas?.length ? (
                     <div className="flex flex-wrap gap-2">
                       {message.ctas.map((cta) => (
@@ -215,9 +275,15 @@ export function LandingChatAssistant() {
               </article>
             ))}
             {sending ? (
-              <p className="text-xs text-slate-500" aria-live="polite">
-                {t("thinking")}
-              </p>
+              <div className="flex items-center gap-2" aria-live="polite">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-(--landing-cta) ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_15%,transparent)]">
+                  <Bot className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                <div className="rounded-2xl rounded-bl-md border border-slate-200/75 bg-slate-50 px-3.5 py-3">
+                  <TypingIndicator />
+                  <span className="sr-only">{t("thinking")}</span>
+                </div>
+              </div>
             ) : null}
           </div>
 
@@ -269,16 +335,18 @@ export function LandingChatAssistant() {
         </section>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="pointer-events-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--landing-cta)_35%,#bfdbfe)] bg-(--landing-cta) text-white shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] transition hover:bg-(--landing-cta-bright) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta)/40"
-        aria-expanded={isOpen}
-        aria-controls="landing-chat-assistant-panel"
-        aria-label={t("title")}
-      >
-        <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
-      </button>
+      {!isOpen ? (
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="pointer-events-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-[color-mix(in_srgb,var(--landing-cta)_35%,#bfdbfe)] bg-(--landing-cta) text-white shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] transition hover:bg-(--landing-cta-bright) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta)/40"
+          aria-expanded={false}
+          aria-controls="landing-chat-assistant-panel"
+          aria-label={t("open")}
+        >
+          <MessageCircle className="h-5 w-5 shrink-0" aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }
