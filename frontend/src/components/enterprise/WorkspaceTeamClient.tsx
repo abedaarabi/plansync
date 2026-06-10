@@ -535,10 +535,12 @@ export function WorkspaceTeamClient({
       style={{ fontFamily: "var(--font-inter), ui-sans-serif, system-ui, sans-serif" }}
     >
       {!embedded ? (
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-[#0F172A]">Team</h1>
-            <p className="mt-1 text-sm text-[#64748B]">
+            <h1 className="text-xl font-semibold tracking-tight text-[#0F172A] sm:text-2xl">
+              Team
+            </h1>
+            <p className="mt-1 text-xs text-[#64748B]">
               Manage workspace members, seats, and invites
             </p>
           </div>
@@ -562,7 +564,7 @@ export function WorkspaceTeamClient({
 
       {showRoster ? (
         <div
-          className="mb-8 rounded-xl border border-[#E2E8F0] bg-white p-6"
+          className="mb-3 rounded-xl border border-[#E2E8F0] bg-white p-3 sm:p-4"
           style={{ boxShadow: CARD_SHADOW }}
         >
           <div className="flex items-center gap-2 text-sm font-semibold text-[#0F172A]">
@@ -601,7 +603,7 @@ export function WorkspaceTeamClient({
 
       {showRoster ? (
         <div
-          className="mb-8 overflow-visible rounded-xl border border-[#E2E8F0] bg-white"
+          className="mb-3 overflow-visible rounded-xl border border-[#E2E8F0] bg-white"
           style={{ boxShadow: CARD_SHADOW }}
         >
           <div className="overflow-hidden rounded-t-xl border-b border-[#E2E8F0] px-6 py-4">
@@ -837,7 +839,7 @@ export function WorkspaceTeamClient({
 
       {showPendingSection ? (
         <div
-          className="mb-8 overflow-visible rounded-2xl border border-[#E2E8F0] bg-white"
+          className="mb-3 overflow-visible rounded-xl border border-[#E2E8F0] bg-white"
           style={{ boxShadow: CARD_SHADOW }}
         >
           <div className="rounded-t-2xl border-b border-[#E2E8F0] bg-gradient-to-b from-[#F8FAFC] to-white px-5 py-5 sm:px-6">
@@ -1121,7 +1123,7 @@ export function WorkspaceTeamClient({
       {isAdmin && variant === "inviteOnly" ? (
         <div
           id="invite-section"
-          className="rounded-xl border border-[#E2E8F0] bg-white p-6 sm:p-8"
+          className="rounded-xl border border-[#E2E8F0] bg-white p-3 sm:p-4"
           style={{ boxShadow: CARD_SHADOW }}
         >
           <h2 className="text-lg font-semibold text-[#0F172A]">Invite by email</h2>

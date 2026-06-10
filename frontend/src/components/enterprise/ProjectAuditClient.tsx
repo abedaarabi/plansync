@@ -9,6 +9,13 @@ import { toast } from "sonner";
 import { userInitials } from "@/lib/user-initials";
 import { qk } from "@/lib/queryKeys";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
+import {
+  OM_COMPACT_INPUT,
+  OM_COMPACT_LABEL,
+  OM_COMPACT_SELECT,
+  OM_PAGE_CLASS,
+} from "@/lib/omCompactStyles";
 
 /** Stable across Node SSR and browser so audit “When” cells don’t hydration-mismatch. */
 const AUDIT_WHEN_FMT = new Intl.DateTimeFormat("en-US", {
@@ -201,48 +208,41 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
   }
 
   return (
-    <div className="mobile-app-page w-full min-w-0 max-w-full enterprise-animate-in mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col overflow-hidden">
-      <header className="flex shrink-0 flex-col gap-3 border-b border-slate-200/80 pb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <div className="min-w-0">
-          <h1 className="flex items-center gap-2.5 text-lg font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-xl">
-            <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600"
-              aria-hidden
-            >
-              <ScrollText className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
-            </span>
-            <span>Project audit log</span>
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
-            {subhead}
-          </p>
-        </div>
-        {isAdmin ? (
-          <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-            <button
-              type="button"
-              onClick={() =>
-                void downloadFormat("xlsx").catch((e: Error) => toast.error(e.message))
-              }
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-            >
-              <Download className="h-4 w-4 shrink-0" />
-              Excel
-            </button>
-            <button
-              type="button"
-              onClick={() => void downloadFormat("pdf").catch((e: Error) => toast.error(e.message))}
-              className="inline-flex items-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
-            >
-              <Download className="h-4 w-4 shrink-0" />
-              PDF
-            </button>
-          </div>
-        ) : null}
-      </header>
+    <div className={`flex min-h-0 w-full flex-1 flex-col overflow-hidden ${OM_PAGE_CLASS}`}>
+      <OmSubPageHeader
+        icon={ScrollText}
+        title="Audit log"
+        description={subhead}
+        action={
+          isAdmin ? (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  void downloadFormat("xlsx").catch((e: Error) => toast.error(e.message))
+                }
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm hover:bg-[var(--enterprise-hover-surface)]"
+              >
+                <Download className="h-3.5 w-3.5 shrink-0" />
+                Excel
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void downloadFormat("pdf").catch((e: Error) => toast.error(e.message))
+                }
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-95"
+              >
+                <Download className="h-3.5 w-3.5 shrink-0" />
+                PDF
+              </button>
+            </>
+          ) : null
+        }
+      />
 
       <section
-        className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-white shadow-[var(--enterprise-shadow-xs)]"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]"
         aria-label="Audit events"
       >
         {isPending ? (
@@ -262,47 +262,43 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
           </p>
         ) : (
           <>
-            <div className="shrink-0 border-b border-slate-100 bg-slate-50/50 px-3 py-3 sm:px-4">
+            <div className="shrink-0 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-3 py-2.5 sm:px-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <Filter className="h-4 w-4 text-slate-500" aria-hidden />
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--enterprise-text-muted)]">
+                  <Filter className="h-3.5 w-3.5 opacity-80" aria-hidden />
                   Filters
                 </div>
                 {hasActiveFilters ? (
                   <button
                     type="button"
                     onClick={clearFilters}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--enterprise-primary)] hover:underline"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--enterprise-primary)] hover:underline"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="h-3 w-3" />
                     Clear all
                   </button>
                 ) : null}
               </div>
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Search
-                  </span>
-                  <span className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <label>
+                  <span className={OM_COMPACT_LABEL}>Search</span>
+                  <span className="relative block">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--enterprise-text-muted)]" />
                     <input
                       type="search"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Summary, details, user…"
-                      className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[var(--enterprise-primary)]/40 focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+                      className={`${OM_COMPACT_INPUT} pl-8`}
                     />
                   </span>
                 </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Category
-                  </span>
+                <label>
+                  <span className={OM_COMPACT_LABEL}>Category</span>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value as AuditCategory)}
-                    className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm text-slate-900 shadow-sm outline-none focus:border-[var(--enterprise-primary)]/40 focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+                    className={OM_COMPACT_SELECT}
                   >
                     <option value="all">All categories</option>
                     <option value="files">Files &amp; folders</option>
@@ -310,15 +306,15 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
                     <option value="project">Project</option>
                   </select>
                 </label>
-                <label className="flex flex-col gap-1">
-                  <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <label>
+                  <span className={`${OM_COMPACT_LABEL} flex items-center gap-1`}>
                     <UserRound className="h-3.5 w-3.5" aria-hidden />
                     User
                   </span>
                   <select
                     value={userFilter}
                     onChange={(e) => setUserFilter(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm text-slate-900 shadow-sm outline-none focus:border-[var(--enterprise-primary)]/40 focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+                    className={OM_COMPACT_SELECT}
                   >
                     <option value="all">All users</option>
                     {actorOptions.hasNoActor ? (
@@ -332,14 +328,12 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
                     ))}
                   </select>
                 </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Time range
-                  </span>
+                <label>
+                  <span className={OM_COMPACT_LABEL}>Time range</span>
                   <select
                     value={datePreset}
                     onChange={(e) => setDatePreset(e.target.value as DatePreset)}
-                    className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm text-slate-900 shadow-sm outline-none focus:border-[var(--enterprise-primary)]/40 focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+                    className={OM_COMPACT_SELECT}
                   >
                     <option value="all">All time</option>
                     <option value="24h">Last 24 hours</option>
@@ -349,7 +343,11 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
                   </select>
                 </label>
               </div>
-              <p className="mt-3 text-xs text-slate-500" role="status" aria-live="polite">
+              <p
+                className="mt-2 text-xs text-[var(--enterprise-text-muted)]"
+                role="status"
+                aria-live="polite"
+              >
                 {hasActiveFilters ? (
                   <>
                     Showing{" "}
@@ -473,7 +471,7 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
                     </table>
                   </div>
 
-                  <ul className="min-h-0 flex-1 space-y-3 overflow-auto p-3 md:hidden">
+                  <ul className="min-h-0 flex-1 space-y-2 overflow-auto p-2 md:hidden">
                     {filtered.map((row) => {
                       const label = row.actionLabel || row.type.replace(/_/g, " ").toLowerCase();
                       const summary = row.summary ?? "—";

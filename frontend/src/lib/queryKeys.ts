@@ -67,13 +67,23 @@ export const qk = {
     ["issues", "refPhotoReadUrl", issueId, photoId] as const,
   omHandover: (projectId: string) => ["om", "handover", projectId] as const,
   omFmDashboard: (projectId: string) => ["om", "fmDashboard", projectId] as const,
+  omVendors: (projectId: string) => ["om", "vendors", projectId] as const,
+  omPartsInventory: (projectId: string) => ["om", "partsInventory", projectId] as const,
+  omMaintenanceReport: (projectId: string) => ["om", "maintenanceReport", projectId] as const,
+  workOrders: (projectId: string, filter?: string) =>
+    ["workOrders", projectId, filter ?? "all"] as const,
   omAssets: (projectId: string, searchQ?: string) =>
     ["om", "assets", projectId, searchQ ?? ""] as const,
   omAssetDocuments: (projectId: string, assetId: string) =>
     ["om", "assetDocuments", projectId, assetId] as const,
+  omAssetMeterReadings: (projectId: string, assetId: string) =>
+    ["om", "assetMeterReadings", projectId, assetId] as const,
   /** Short-lived S3 GET URL for asset document preview / open. */
   omAssetDocumentReadUrl: (projectId: string, assetId: string, documentId: string) =>
     ["om", "assetDocumentReadUrl", projectId, assetId, documentId] as const,
+  /** Short-lived S3 GET URL for asset primary photo. */
+  omAssetImageReadUrl: (projectId: string, assetId: string) =>
+    ["om", "assetImageReadUrl", projectId, assetId] as const,
   omMaintenance: (projectId: string) => ["om", "maintenance", projectId] as const,
   omMaintenanceCompletions: (projectId: string, assetId?: string) =>
     ["om", "maintenanceCompletions", projectId, assetId ?? "all"] as const,

@@ -18,3 +18,15 @@ export function projectScopedBaseFromPathname(pathname: string): string | null {
   }
   return null;
 }
+
+/** Build a project-scoped href with optional workspace prefix. */
+export function projectScopedHref(
+  projectId: string,
+  subpath: string,
+  workspaceId?: string | null,
+): string {
+  const base = workspaceId
+    ? `/workspaces/${workspaceId}/projects/${projectId}`
+    : `/projects/${projectId}`;
+  return `${base}${subpath.startsWith("/") ? subpath : `/${subpath}`}`;
+}

@@ -61,6 +61,8 @@ model User {
   orchestrationApprovals       OrchestrationApproval[]   @relation("OrchestrationApprovalApprover")
   maintenanceSchedulesAssigned MaintenanceSchedule[]     @relation("MaintenanceScheduleAssignee")
   maintenanceCompletions       MaintenanceCompletion[]   @relation("MaintenanceCompletionActor")
+  workOrdersCompleted          Issue[]                   @relation("WorkOrderCompleter")
+  assetMeterReadings           AssetMeterReading[]       @relation("AssetMeterReadingActor")
 
   /// When true, omit this user from PDF viewer presence / collaborator lists (still can edit).
   hideViewerPresence Boolean @default(false)
@@ -463,12 +465,15 @@ model Project {
   inspectionRuns            InspectionRun[]
   occupantPortalTokens      OccupantPortalToken[]
   scheduleTasks             ScheduleTask[]
+  scheduleTaskLinks         ScheduleTaskLink[]
   apiKeys                   ProjectApiKey[]
   webhooks                  ProjectWebhook[]
   jobRuns                   JobRun[]
   orchestrationEnvironments OrchestrationEnvironment[]
   orchestrationWorkflows    OrchestrationWorkflow[]
   orchestrationRuns         OrchestrationRun[]
+  vendors                   Vendor[]
+  partsInventory            PartsInventoryItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -724,12 +729,35 @@ model ScheduleTask {
   status          String  @default("not_started")
 
   takeoffLinks ScheduleTaskTakeoffLine[]
+  sourceLinks  ScheduleTaskLink[]        @relation("ScheduleLinkSource")
+  targetLinks  ScheduleTaskLink[]        @relation("ScheduleLinkTarget")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
   @@index([parentId])
+}
+
+/// Predecessor → successor dependency between schedule tasks (FS/SS/FF/SF).
+model ScheduleTaskLink {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  sourceId String
+  source   ScheduleTask @relation("ScheduleLinkSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  targetId String
+  target   ScheduleTask @relation("ScheduleLinkTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  /// SVAR link type: e2s (finish-to-start), s2s, e2e, s2e
+  type    String @default("e2s")
+  lagDays Int    @default(0)
+
+  @@unique([sourceId, targetId])
+  @@index([projectId])
+  @@index([sourceId])
+  @@index([targetId])
 }
 
 /// Many-to-many: schedule task ↔ quantity takeoff lines (materials / measured lines).
@@ -892,6 +920,14 @@ enum IssuePriority {
   HIGH
 }
 
+enum WorkOrderType {
+  CORRECTIVE
+  PREVENTIVE
+  INSPECTION_FOLLOWUP
+  TENANT
+  OCCUPANT
+}
+
 model Issue {
   id            String  @id @default(cuid())
   workspaceId   String
@@ -950,6 +986,23 @@ model Issue {
   occupantPhotoToken          String?
   occupantPhotoTokenExpiresAt DateTime?
 
+  /// Work-order execution fields (issueKind = WORK_ORDER).
+  workOrderType               WorkOrderType?
+  procedureJson               Json?
+  procedureResultJson         Json?
+  laborMinutes                Int?
+  partsUsedJson               Json?
+  completedById               String?
+  completedBy                 User?          @relation("WorkOrderCompleter", fields: [completedById], references: [id], onDelete: SetNull)
+  vendorId                    String?
+  vendor                      Vendor?        @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  sourceOccupantIssueId       String?
+  sourceOccupantIssue         Issue?         @relation("OccupantToWorkOrder", fields: [sourceOccupantIssueId], references: [id], onDelete: SetNull)
+  derivedWorkOrders           Issue[]        @relation("OccupantToWorkOrder")
+  vendorAccessToken           String?        @unique
+  vendorAccessTokenExpiresAt  DateTime?
+  completionEvidenceRequired  Boolean        @default(false)
+
   workspace             Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   file                  File?                  @relation(fields: [fileId], references: [id], onDelete: SetNull)
@@ -972,6 +1025,9 @@ model Issue {
   @@index([assetId])
   @@index([issueKind])
   @@index([maintenanceScheduleId])
+  @@index([vendorId])
+  @@index([sourceOccupantIssueId])
+  @@index([completedById])
 }
 
 enum MaintenanceFrequency {
@@ -1006,6 +1062,12 @@ model Asset {
   lastServiceAt   DateTime?
   notes           String?
 
+  /// Primary equipment photo (S3), distinct from linked drawings and document attachments.
+  imageS3Key     String? @unique
+  imageMimeType  String?
+  imageFileName  String?
+  imageSizeBytes BigInt?
+
   fileId        String?
   fileVersionId String?
   pageNumber    Int?
@@ -1023,6 +1085,7 @@ model Asset {
   maintenanceSchedules   MaintenanceSchedule[]
   maintenanceCompletions MaintenanceCompletion[]
   documents              AssetDocument[]
+  meterReadings          AssetMeterReading[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1049,6 +1112,69 @@ model AssetDocument {
   @@index([assetId])
 }
 
+/// External contractor / vendor directory for O&M work orders.
+model Vendor {
+  id        String  @id @default(cuid())
+  projectId String
+  name      String
+  email     String?
+  phone     String?
+  trade     String?
+  notes     String?
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workOrders Issue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+enum AssetMeterType {
+  RUN_HOURS
+  CYCLES
+  PRESSURE
+  TEMPERATURE
+  CUSTOM
+}
+
+model AssetMeterReading {
+  id                 String         @id @default(cuid())
+  assetId            String
+  meterType          AssetMeterType
+  label              String?
+  value              Decimal        @db.Decimal(19, 4)
+  unit               String?
+  recordedAt         DateTime       @default(now())
+  recordedByUserId   String?
+
+  asset      Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  recordedBy User? @relation("AssetMeterReadingActor", fields: [recordedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([assetId, meterType, recordedAt])
+}
+
+/// Lightweight parts stock for maintenance work orders.
+model PartsInventoryItem {
+  id           String   @id @default(cuid())
+  projectId    String
+  name         String
+  sku          String?
+  quantity     Int      @default(0)
+  reorderLevel Int      @default(0)
+  unitCost     Decimal? @db.Decimal(19, 2)
+  location     String?
+  notes        String?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
 model MaintenanceSchedule {
   id                  String               @id @default(cuid())
   assetId             String
@@ -1061,6 +1187,9 @@ model MaintenanceSchedule {
   assignedVendorLabel String?
   assignedToUserId    String?
   isActive            Boolean              @default(true)
+  /// Trigger PM when a meter reading exceeds this value (optional).
+  meterType           AssetMeterType?
+  meterThreshold      Decimal?              @db.Decimal(19, 4)
 
   asset       Asset                   @relation(fields: [assetId], references: [id], onDelete: Cascade)
   assignedTo  User?                   @relation("MaintenanceScheduleAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)

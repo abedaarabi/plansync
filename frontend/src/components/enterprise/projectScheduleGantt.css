@@ -1,0 +1,68 @@
+/* SVAR Gantt — PlanSync enterprise shell (demo-style layout) */
+.plansync-schedule-gantt {
+  --wx-gantt-font-family: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+  --wx-gantt-border: var(--enterprise-border);
+  --wx-gantt-grid-border: var(--enterprise-border);
+  --wx-color-primary: var(--enterprise-primary);
+  --wx-color-font: var(--enterprise-text);
+  --wx-color-secondary-font: var(--enterprise-text-muted);
+  --wx-gantt-task-color: color-mix(in srgb, var(--enterprise-primary) 82%, white);
+  --wx-gantt-summary-color: color-mix(in srgb, var(--enterprise-primary) 48%, white);
+  --wx-gantt-milestone-color: var(--enterprise-primary);
+  --wx-gantt-link-color: color-mix(in srgb, var(--enterprise-primary) 65%, #64748b);
+  --wx-gantt-holiday-background: color-mix(in srgb, var(--enterprise-bg) 88%, white);
+  --wx-gantt-holiday-color: var(--enterprise-text-muted);
+}
+
+.plansync-schedule-gantt-shell {
+  background: var(--enterprise-surface);
+}
+
+.plansync-schedule-gantt .wx-toolbar {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--enterprise-border);
+  background: var(--enterprise-surface);
+  padding: 0.35rem 0.5rem;
+}
+
+.plansync-schedule-gantt .wx-gantt {
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--enterprise-surface);
+}
+
+.plansync-schedule-gantt .wx-table .wx-grid-header,
+.plansync-schedule-gantt .wx-table .wx-grid-body {
+  background: var(--enterprise-surface);
+}
+
+.plansync-schedule-gantt .wx-weekend {
+  background: color-mix(in srgb, var(--enterprise-bg) 92%, white);
+}
+
+.plansync-schedule-gantt .wx-marker-today {
+  background: color-mix(in srgb, var(--enterprise-primary) 18%, transparent);
+  color: var(--enterprise-primary);
+  font-weight: 600;
+}
+
+.plansync-schedule-gantt .wx-bar.wx-task.schedule-status-delayed,
+.plansync-schedule-gantt .wx-bar.wx-task.delayed {
+  --wx-gantt-task-color: #e11d48;
+}
+
+.plansync-schedule-gantt .wx-bar.wx-task.schedule-status-completed,
+.plansync-schedule-gantt .wx-bar.wx-task.completed {
+  --wx-gantt-task-color: #059669;
+}
+
+.plansync-schedule-gantt .wx-bar.wx-task.schedule-status-in_progress,
+.plansync-schedule-gantt .wx-bar.wx-task.in_progress {
+  --wx-gantt-task-color: var(--enterprise-primary);
+}
+
+.plansync-schedule-gantt .wx-bar.wx-task.schedule-status-not_started {
+  --wx-gantt-task-color: #94a3b8;
+}

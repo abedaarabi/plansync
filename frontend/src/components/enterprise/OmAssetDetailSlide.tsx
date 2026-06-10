@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, ChevronRight, Package, Pencil, Plus, Trash2 } from "lucide-react";
+import { Calendar, ChevronRight, MapPin, Package, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import {
+  ASSET_METER_TYPE_LABEL,
   fetchOmMaintenanceCompletions,
   fetchOmMaintenance,
   fetchIssuesForProject,
@@ -18,10 +19,14 @@ import {
 import { sortedVersions } from "@/components/file-explorer/fileExplorerUtils";
 import { assetHasSheetPin } from "@/lib/assetPinFocus";
 import { omAssetViewerHref } from "@/lib/omAssetViewerNavigation";
+import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
 import type { CloudFile } from "@/types/projects";
+import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetDocumentsBlock } from "@/components/enterprise/OmAssetDocumentsBlock";
+import { OmAssetImageThumb } from "@/components/enterprise/OmAssetImageThumb";
+import { OmAssetMeterReadingsBlock } from "@/components/enterprise/OmAssetMeterReadingsBlock";
 import { OmAssetTenantQrBlock } from "@/components/enterprise/OmAssetTenantQrBlock";
 
 function formatDetailDate(iso: string | null | undefined): string {
@@ -57,6 +62,8 @@ export function OmAssetDetailSlide({
   onDelete,
 }: Props) {
   const router = useRouter();
+  const { primary } = useEnterpriseWorkspace();
+  const workspaceId = primary?.workspace.id;
   const assetId = asset?.id ?? "";
 
   const { data: maintenance = [] } = useQuery({
@@ -125,8 +132,12 @@ export function OmAssetDetailSlide({
     onClose();
   }, [asset, pdfFiles, projectId, router, onClose]);
 
-  const maintenanceHref = `/projects/${projectId}/om/maintenance`;
-  const workOrdersHref = `/projects/${projectId}/om/work-orders?assetId=${encodeURIComponent(assetId)}`;
+  const maintenanceHref = projectScopedHref(projectId, "/om/maintenance", workspaceId);
+  const workOrdersHref = projectScopedHref(
+    projectId,
+    `/om/work-orders?assetId=${encodeURIComponent(assetId)}`,
+    workspaceId,
+  );
 
   if (!asset) return null;
 
@@ -141,12 +152,14 @@ export function OmAssetDetailSlide({
         <div>
           <h2
             id="asset-detail-title"
-            className="text-lg font-semibold text-[var(--enterprise-text)]"
+            className="text-lg font-semibold leading-snug text-[var(--enterprise-text)]"
           >
-            <span className="font-mono">{asset.tag}</span>
-            <span className="font-normal text-[var(--enterprise-text-muted)]"> — </span>
-            <span>{asset.name}</span>
+            <span className="font-mono text-[var(--enterprise-primary)]">{asset.tag}</span>
           </h2>
+          <p className="mt-1 text-sm font-medium text-[var(--enterprise-text)]">{asset.name}</p>
+          {asset.category?.trim() ? (
+            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">{asset.category}</p>
+          ) : null}
         </div>
       }
       footer={
@@ -180,51 +193,75 @@ export function OmAssetDetailSlide({
         </div>
       }
     >
-      <div className="space-y-6 text-sm text-[var(--enterprise-text)]">
-        <section>
-          <div className="flex items-start gap-2 text-[var(--enterprise-text-muted)]">
-            <Package
-              className="mt-0.5 h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400"
-              strokeWidth={2}
+      <div className="space-y-5 text-sm text-[var(--enterprise-text)]">
+        <div className="overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]">
+          {asset.hasImage ? (
+            <OmAssetImageThumb
+              projectId={projectId}
+              assetId={asset.id}
+              hasImage={asset.hasImage}
+              alt={asset.name}
+              className="max-h-52 w-full object-cover object-center"
+              fallbackClassName="flex h-36 w-full items-center justify-center bg-[var(--enterprise-bg)]"
             />
-            <div>
-              <p className="font-medium text-[var(--enterprise-text)]">
-                {asset.locationLabel?.trim() || "No location label"}
-              </p>
-              {asset.fileId ? (
-                <button
-                  type="button"
-                  onClick={openViewerForAsset}
-                  className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:underline dark:text-teal-300"
-                >
-                  {assetHasSheetPin(asset) ? "Zoom to equipment pin" : "Open drawing"}
-                  <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
-                </button>
+          ) : (
+            <div className="flex h-28 items-center justify-center bg-[var(--enterprise-hover-surface)]/40">
+              <Package className="h-8 w-8 text-[var(--enterprise-primary)]/40" strokeWidth={1.5} />
+            </div>
+          )}
+          <div className="space-y-2 border-t border-[var(--enterprise-border)] p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {assetHasSheetPin(asset) ? (
+                <span className="inline-flex items-center rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-200">
+                  Pin on drawing
+                </span>
+              ) : asset.file ? (
+                <span className="enterprise-badge-neutral inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold">
+                  Sheet linked
+                </span>
               ) : (
-                <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-                  No drawing linked. Use Link on the assets list to place a pin.
-                </p>
+                <span className="text-xs text-[var(--enterprise-text-muted)]">
+                  No drawing linked
+                </span>
               )}
             </div>
+            <p className="flex items-start gap-2 text-[var(--enterprise-text-muted)]">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+              <span className="font-medium text-[var(--enterprise-text)]">
+                {asset.locationLabel?.trim() ||
+                  [asset.hall, asset.rowLabel, asset.rack, asset.positionU]
+                    .filter(Boolean)
+                    .join(" / ") ||
+                  "No location set"}
+              </span>
+            </p>
+            {asset.fileId ? (
+              <button
+                type="button"
+                onClick={openViewerForAsset}
+                className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-teal-700 hover:underline dark:text-teal-300"
+              >
+                {assetHasSheetPin(asset) ? "Zoom to equipment pin" : "Open linked drawing"}
+                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
+              </button>
+            ) : null}
           </div>
-        </section>
+        </div>
 
-        <section>
-          <h3 className="mb-2 border-b border-[var(--enterprise-border)] pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
             Details
           </h3>
-          <dl className="grid grid-cols-[7.5rem_1fr] gap-x-2 gap-y-1.5 text-[13px]">
-            <dt className="text-[var(--enterprise-text-muted)]">Category</dt>
-            <dd>{asset.category?.trim() || "—"}</dd>
+          <dl className="grid grid-cols-[6.5rem_1fr] gap-x-3 gap-y-2 text-[13px]">
             <dt className="text-[var(--enterprise-text-muted)]">Manufacturer</dt>
             <dd>{asset.manufacturer?.trim() || "—"}</dd>
             <dt className="text-[var(--enterprise-text-muted)]">Model</dt>
             <dd>{asset.model?.trim() || "—"}</dd>
             <dt className="text-[var(--enterprise-text-muted)]">Serial</dt>
             <dd className="font-mono text-xs">{asset.serialNumber?.trim() || "—"}</dd>
-            <dt className="text-[var(--enterprise-text-muted)]">Install date</dt>
+            <dt className="text-[var(--enterprise-text-muted)]">Installed</dt>
             <dd>{formatDetailDate(asset.installDate)}</dd>
-            <dt className="text-[var(--enterprise-text-muted)]">Warranty exp</dt>
+            <dt className="text-[var(--enterprise-text-muted)]">Warranty</dt>
             <dd>{formatDetailDate(asset.warrantyExpires)}</dd>
           </dl>
         </section>
@@ -241,6 +278,13 @@ export function OmAssetDetailSlide({
 
         <section>
           <h3 className="mb-2 border-b border-[var(--enterprise-border)] pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+            Meter readings
+          </h3>
+          <OmAssetMeterReadingsBlock projectId={projectId} assetId={asset.id} enabled={open} />
+        </section>
+
+        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
             Service history
           </h3>
           {serviceHistory.length === 0 ? (
@@ -280,8 +324,8 @@ export function OmAssetDetailSlide({
           )}
         </section>
 
-        <section>
-          <h3 className="mb-2 border-b border-[var(--enterprise-border)] pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
             Next scheduled
           </h3>
           {!nextSchedule ? (
@@ -302,6 +346,15 @@ export function OmAssetDetailSlide({
                       Assigned: {nextSchedule.assignedVendorLabel.trim()}
                     </p>
                   ) : null}
+                  {nextSchedule.meterType && nextSchedule.meterThreshold != null ? (
+                    <p className="mt-1 text-xs text-violet-700 dark:text-violet-300">
+                      Meter trigger:{" "}
+                      {ASSET_METER_TYPE_LABEL[
+                        nextSchedule.meterType as keyof typeof ASSET_METER_TYPE_LABEL
+                      ] ?? nextSchedule.meterType}{" "}
+                      ≥ {nextSchedule.meterThreshold}
+                    </p>
+                  ) : null}
                   <Link
                     href={maintenanceHref}
                     onClick={onClose}
@@ -316,8 +369,8 @@ export function OmAssetDetailSlide({
           )}
         </section>
 
-        <section>
-          <h3 className="mb-2 border-b border-[var(--enterprise-border)] pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
             Open work orders &amp; tenant requests
           </h3>
           {openWorkOrders.length === 0 ? (

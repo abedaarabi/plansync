@@ -45,6 +45,7 @@ import { ProjectWeatherAtLocation } from "./ProjectWeatherAtLocation";
 import { ProjectEditSlideOver } from "./ProjectEditSlideOver";
 import { useTickNowMs } from "@/lib/useTickNowMs";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 
 function sortedFileVersions(f: CloudFile) {
   return [...f.versions].sort((a, b) => b.version - a.version);
@@ -262,24 +263,16 @@ export function ProjectDashboardClient({ projectId }: Props) {
     .slice(0, 5);
 
   return (
-    <div className="enterprise-animate-in min-w-0 max-w-full space-y-6 sm:space-y-8">
-      <div className="enterprise-card relative min-w-0 overflow-hidden bg-gradient-to-br from-[var(--enterprise-surface)] via-[var(--enterprise-surface)] to-[var(--enterprise-bg)]/80 p-4 sm:p-6">
-        <div
-          className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[var(--enterprise-primary)]/[0.06]"
-          aria-hidden
-        />
-        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+    <div className={`min-w-0 max-w-full ${OM_PAGE_CLASS}`}>
+      <div className="enterprise-card relative min-w-0 overflow-hidden p-3 sm:p-4">
+        <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
           <div className="relative shrink-0">
-            <div
-              className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-[var(--enterprise-primary)]/20 via-transparent to-violet-500/15 opacity-80"
-              aria-hidden
-            />
-            <div className="relative rounded-xl bg-[var(--enterprise-surface)] p-0.5 shadow-sm ring-1 ring-[var(--enterprise-border)]/80">
-              <ProjectLogo name={project.name} logoUrl={project.logoUrl} size={48} />
+            <div className="relative rounded-lg bg-[var(--enterprise-surface)] p-0.5 shadow-sm ring-1 ring-[var(--enterprise-border)]/80">
+              <ProjectLogo name={project.name} logoUrl={project.logoUrl} size={40} />
             </div>
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="break-words text-xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
+            <h1 className="break-words text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
               {project.name}
             </h1>
             {(project.projectNumber?.trim() || project.location?.trim()) && (
@@ -304,10 +297,10 @@ export function ProjectDashboardClient({ projectId }: Props) {
           </div>
         </div>
 
-        <div className="relative mt-4 grid min-w-0 gap-2.5 sm:mt-5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
-          <div className="flex gap-3 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-3.5 ring-1 ring-inset ring-white/40 dark:ring-white/[0.04]">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/12 text-violet-600 ring-1 ring-violet-500/15 dark:text-violet-400">
-              <Layers className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+        <div className="relative mt-3 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="flex gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/12 text-violet-600 ring-1 ring-violet-500/15 dark:text-violet-400">
+              <Layers className="h-4 w-4" strokeWidth={1.75} aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
@@ -318,9 +311,9 @@ export function ProjectDashboardClient({ projectId }: Props) {
               </p>
             </div>
           </div>
-          <div className="flex gap-3 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-3.5 ring-1 ring-inset ring-white/40 dark:ring-white/[0.04]">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/12 text-blue-600 ring-1 ring-blue-500/15 dark:text-blue-400">
-              <CalendarDays className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+          <div className="flex gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/12 text-blue-600 ring-1 ring-blue-500/15 dark:text-blue-400">
+              <CalendarDays className="h-4 w-4" strokeWidth={1.75} aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
@@ -331,9 +324,9 @@ export function ProjectDashboardClient({ projectId }: Props) {
               </p>
             </div>
           </div>
-          <div className="flex gap-3 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-3.5 ring-1 ring-inset ring-white/40 dark:ring-white/[0.04]">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-600 ring-1 ring-emerald-500/15 dark:text-emerald-400">
-              <CalendarClock className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+          <div className="flex gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-600 ring-1 ring-emerald-500/15 dark:text-emerald-400">
+              <CalendarClock className="h-4 w-4" strokeWidth={1.75} aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
@@ -344,9 +337,9 @@ export function ProjectDashboardClient({ projectId }: Props) {
               </p>
             </div>
           </div>
-          <div className="flex gap-3 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-3.5 ring-1 ring-inset ring-white/40 dark:ring-white/[0.04]">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-500/12 text-sky-600 ring-1 ring-sky-500/15 dark:text-sky-400">
-              <MapPin className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+          <div className="flex gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/12 text-sky-600 ring-1 ring-sky-500/15 dark:text-sky-400">
+              <MapPin className="h-4 w-4" strokeWidth={1.75} aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
@@ -361,21 +354,21 @@ export function ProjectDashboardClient({ projectId }: Props) {
 
         <nav
           aria-label="Project summary"
-          className="relative mt-4 grid min-w-0 grid-cols-2 gap-2 border-t border-[var(--enterprise-border)]/80 pt-4 sm:mt-5 sm:flex sm:flex-wrap sm:gap-2 sm:pt-5"
+          className="relative mt-3 grid min-w-0 grid-cols-2 gap-2 border-t border-[var(--enterprise-border)]/80 pt-3 sm:flex sm:flex-wrap sm:gap-2"
         >
           {quickStats.map((s) => (
             <Link
               key={s.label}
               href={s.href}
-              className="group inline-flex min-w-0 items-center gap-2 rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/90 px-2.5 py-2.5 shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--enterprise-primary)]/28 hover:shadow-[var(--enterprise-shadow-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 sm:min-w-[7.5rem] sm:flex-1 sm:gap-2.5 sm:px-3 md:min-w-0 md:flex-none lg:min-w-[7rem] lg:flex-1"
+              className="group inline-flex min-w-0 items-center gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/90 px-2 py-2 shadow-sm transition hover:border-[var(--enterprise-primary)]/28 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 sm:min-w-[7rem] sm:flex-1 sm:px-2.5 md:min-w-0 md:flex-none lg:min-w-[6.5rem] lg:flex-1"
             >
               <span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${s.iconWrap}`}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${s.iconWrap}`}
               >
-                <s.icon className={`h-4 w-4 ${s.iconColor}`} strokeWidth={2} aria-hidden />
+                <s.icon className={`h-3.5 w-3.5 ${s.iconColor}`} strokeWidth={2} aria-hidden />
               </span>
               <span className="min-w-0 text-left">
-                <span className="block text-base font-bold tabular-nums leading-none text-[var(--enterprise-text)] group-hover:text-[var(--enterprise-primary)] sm:text-lg">
+                <span className="block text-sm font-bold tabular-nums leading-none text-[var(--enterprise-text)] group-hover:text-[var(--enterprise-primary)]">
                   {s.value}
                 </span>
                 <span className="mt-0.5 block text-[10px] font-medium leading-snug text-[var(--enterprise-text-muted)] sm:mt-1 sm:text-[11px] sm:leading-tight">
@@ -387,7 +380,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
         </nav>
       </div>
 
-      <section className="enterprise-card min-w-0 overflow-hidden p-4 sm:p-6">
+      <section className="enterprise-card min-w-0 overflow-hidden p-3 sm:p-4">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
@@ -523,7 +516,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
       </div>
 
       <div className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-2">
-        <section className="enterprise-card min-w-0 p-4 sm:p-6">
+        <section className="enterprise-card min-w-0 p-3 sm:p-4">
           <div className="flex min-w-0 items-start justify-between gap-2 sm:gap-3">
             <div className="min-w-0 pr-1">
               <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
@@ -574,7 +567,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
                     type="button"
                     onClick={() => openFile(f)}
                     aria-label={`Open ${f.name} in viewer`}
-                    className="flex w-full min-w-0 cursor-pointer items-start gap-2 py-3 text-left transition first:pt-0 last:pb-0 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:items-center sm:gap-3 mobile-tappable-row min-h-14 active:scale-[0.99]"
+                    className="flex w-full min-w-0 cursor-pointer items-start gap-2 py-2 text-left transition first:pt-0 last:pb-0 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:items-center sm:gap-3 mobile-tappable-row min-h-10 active:scale-[0.99]"
                   >
                     {isPdfFile(f) ? (
                       <PdfFileIcon className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
@@ -614,7 +607,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
           )}
         </section>
 
-        <section className="enterprise-card min-w-0 p-4 sm:p-6">
+        <section className="enterprise-card min-w-0 p-3 sm:p-4">
           <div className="flex min-w-0 items-start justify-between gap-2 sm:gap-3">
             <div className="min-w-0 pr-1">
               <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
@@ -692,13 +685,13 @@ export function ProjectDashboardClient({ projectId }: Props) {
         </section>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 lg:gap-6">
-        <section className="enterprise-card min-w-0 p-4 sm:p-5">
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="enterprise-card min-w-0 p-3 sm:p-4">
           <div className="flex items-center gap-2">
             <Gauge className="h-4 w-4 text-[var(--enterprise-primary)]" />
             <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">Progress</h3>
           </div>
-          <p className="mt-3 text-3xl font-bold tabular-nums text-[var(--enterprise-text)]">
+          <p className="mt-2 text-2xl font-bold tabular-nums text-[var(--enterprise-text)]">
             {progress}%
           </p>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--enterprise-border)]">
@@ -708,24 +701,24 @@ export function ProjectDashboardClient({ projectId }: Props) {
             />
           </div>
         </section>
-        <section className="enterprise-card min-w-0 p-4 sm:p-5">
+        <section className="enterprise-card min-w-0 p-3 sm:p-4">
           <div className="flex items-center gap-2">
             <Target className="h-4 w-4 text-[var(--enterprise-error)]" />
             <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">Issue risk</h3>
           </div>
-          <p className="mt-3 text-3xl font-bold tabular-nums text-[var(--enterprise-text)]">
+          <p className="mt-2 text-2xl font-bold tabular-nums text-[var(--enterprise-text)]">
             {highPriorityIssues}
           </p>
           <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
             High-priority issues need attention.
           </p>
         </section>
-        <section className="enterprise-card min-w-0 p-4 sm:p-5">
+        <section className="enterprise-card min-w-0 p-3 sm:p-4">
           <div className="flex items-center gap-2">
             <FolderOpen className="h-4 w-4 text-violet-500" />
             <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">Project assets</h3>
           </div>
-          <p className="mt-3 text-3xl font-bold tabular-nums text-[var(--enterprise-text)]">
+          <p className="mt-2 text-2xl font-bold tabular-nums text-[var(--enterprise-text)]">
             {folderCount}
           </p>
           <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">

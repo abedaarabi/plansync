@@ -12,9 +12,9 @@ import {
   Search,
   TrendingUp,
 } from "lucide-react";
-import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
-import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   fetchProposalAnalyticsSummary,
@@ -23,6 +23,12 @@ import {
   type ProposalListRow,
 } from "@/lib/api-client";
 import { proposalStatusBadgeClass, proposalStatusLabel } from "@/lib/proposalStatus";
+import {
+  OM_COMPACT_CHIP_ACTIVE,
+  OM_COMPACT_CHIP_IDLE,
+  OM_COMPACT_INPUT,
+  OM_PAGE_CLASS,
+} from "@/lib/omCompactStyles";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 
@@ -186,41 +192,34 @@ export function ProjectProposalsClient({
     (statusCounts.get("CHANGE_REQUESTED") ?? 0);
 
   return (
-    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-6 sm:space-y-8 lg:mx-auto lg:max-w-6xl">
-      <header className="enterprise-card flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-1 text-xs font-medium text-[var(--enterprise-text-muted)]">
-            <FileSpreadsheet className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" />
-            Proposals
-          </div>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-[1.75rem]">
-            {totalCount} Proposal{totalCount === 1 ? "" : "s"}
-          </h1>
-          <p className="mt-1 max-w-xl text-sm text-[var(--enterprise-text-muted)]">
-            Build priced offers, send a client portal link, and track when they view or respond.
-          </p>
-        </div>
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
-          <Link
-            href={`${base}/templates`}
-            className="inline-flex h-11 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-4 text-sm font-semibold text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-primary)]/30 hover:bg-[var(--enterprise-hover-surface)] sm:min-h-10"
-          >
-            Templates
-          </Link>
-          <EnterpriseAddPulseWrap className="w-full sm:w-auto">
+    <div className={`${OM_PAGE_CLASS} w-full min-w-0 max-w-full`}>
+      <OmSubPageHeader
+        icon={FileSpreadsheet}
+        title={`${totalCount} Proposal${totalCount === 1 ? "" : "s"}`}
+        description="Build priced offers, send a client portal link, and track when they view or respond."
+        action={
+          <>
             <Link
-              href={`${base}/new`}
-              className="hidden h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] ring-1 ring-[color-mix(in_srgb,var(--enterprise-primary)_30%,transparent)] transition hover:bg-[var(--enterprise-primary-deep)] lg:inline-flex lg:w-auto"
+              href={`${base}/templates`}
+              className="inline-flex min-h-9 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
+            >
+              Templates
+            </Link>
+            <EnterpriseButton
+              size="sm"
+              onClick={() => {
+                window.location.href = `${base}/new`;
+              }}
             >
               <Plus className="h-4 w-4" strokeWidth={2} />
               New proposal
-            </Link>
-          </EnterpriseAddPulseWrap>
-        </div>
-      </header>
+            </EnterpriseButton>
+          </>
+        }
+      />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="enterprise-card relative overflow-hidden p-5 sm:col-span-2 xl:col-span-2">
+      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <article className="enterprise-card relative overflow-hidden p-3 sm:col-span-2 xl:col-span-2">
           <div
             className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[var(--enterprise-primary-soft)] via-transparent to-transparent opacity-80"
             aria-hidden
@@ -229,7 +228,7 @@ export function ProjectProposalsClient({
             <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
               Pipeline value
             </p>
-            <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
+            <p className="mt-1 text-xl font-bold tabular-nums tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
               {fmtMoney(data.stats.pipelineTotal, defaultCurrency)}
             </p>
             <p className="mt-2 text-xs text-[var(--enterprise-text-muted)]">
@@ -267,7 +266,7 @@ export function ProjectProposalsClient({
         />
       </section>
 
-      <section className="enterprise-card space-y-4 p-4 sm:p-5">
+      <section className="enterprise-card space-y-3 p-3 sm:p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <label className="relative block w-full sm:max-w-md" htmlFor="proposal-search">
             <Search
@@ -280,7 +279,7 @@ export function ProjectProposalsClient({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by title, reference, or client"
-              className="h-11 w-full rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] pl-9 pr-3 text-sm text-[var(--enterprise-text)] outline-none transition placeholder:text-[var(--enterprise-text-muted)] focus:border-[var(--enterprise-primary)] focus:bg-[var(--enterprise-surface)] focus:shadow-[var(--enterprise-shadow-sm)]"
+              className={`${OM_COMPACT_INPUT} pl-9`}
               autoComplete="off"
             />
           </label>
@@ -308,11 +307,12 @@ export function ProjectProposalsClient({
                 role="tab"
                 aria-selected={filter === key}
                 onClick={() => setFilter(key)}
-                className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                  filter === key
-                    ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)] ring-1 ring-[color-mix(in_srgb,var(--enterprise-primary)_25%,transparent)]"
-                    : "border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+                className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  filter === key ? OM_COMPACT_CHIP_ACTIVE : OM_COMPACT_CHIP_IDLE
                 }`}
+                style={
+                  filter === key ? { backgroundColor: "var(--enterprise-primary)" } : undefined
+                }
               >
                 {FILTER_LABEL[key]}
                 {showCount ? ` (${count})` : ""}
@@ -361,14 +361,6 @@ export function ProjectProposalsClient({
           </>
         )}
       </section>
-
-      <EnterpriseFab
-        label="New proposal"
-        icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
-        onClick={() => {
-          window.location.href = `${base}/new`;
-        }}
-      />
     </div>
   );
 }
@@ -385,13 +377,13 @@ function MetricCard({
   hint?: string;
 }) {
   return (
-    <article className="enterprise-card flex items-start gap-3 p-4 sm:p-5">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
-        <Icon className="h-4 w-4" strokeWidth={1.75} />
+    <article className="enterprise-card flex items-start gap-2 p-3 sm:p-4">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
+        <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
       </div>
       <div className="min-w-0">
         <p className="text-xs font-medium text-[var(--enterprise-text-muted)]">{label}</p>
-        <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight text-[var(--enterprise-text)]">
+        <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight text-[var(--enterprise-text)]">
           {value}
         </p>
         {hint ? (
@@ -404,7 +396,7 @@ function MetricCard({
 
 function CompactStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2.5 shadow-[var(--enterprise-shadow-xs)]">
+    <div className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-xs)]">
       <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
         {label}
       </p>
@@ -494,7 +486,7 @@ function ProposalCard({ p, base }: { p: ProposalListRow; base: string }) {
       <div className="enterprise-card enterprise-card-hover overflow-hidden">
         <Link
           href={`${base}/${p.id}`}
-          className="block touch-manipulation p-4 transition active:scale-[0.99]"
+          className="block touch-manipulation p-3 transition active:scale-[0.99]"
         >
           <div className="flex items-start justify-between gap-3">
             <span className="shrink-0 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1 font-mono text-xs font-semibold tabular-nums text-[var(--enterprise-text-muted)]">
@@ -504,7 +496,7 @@ function ProposalCard({ p, base }: { p: ProposalListRow; base: string }) {
               {proposalStatusLabel(p.status)}
             </span>
           </div>
-          <p className="mt-3 text-base font-semibold leading-snug text-[var(--enterprise-text)]">
+          <p className="mt-2 text-sm font-semibold leading-snug text-[var(--enterprise-text)]">
             {p.title}
           </p>
           <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">{p.reference}</p>

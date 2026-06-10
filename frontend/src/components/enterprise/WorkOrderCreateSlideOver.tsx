@@ -9,16 +9,23 @@ import {
   IssueReferencePhotosField,
   type IssuePendingPhoto,
 } from "@/components/enterprise/IssueReferencePhotosField";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { WorkOrderAssetDocsPanel } from "@/components/enterprise/WorkOrderAssetDocsPanel";
+import { WorkOrderProcedureField } from "@/components/enterprise/WorkOrderProcedureField";
 import {
   createIssue,
   fetchOmAssets,
+  fetchOmVendors,
   formatIssueLockHint,
   ProRequiredError,
   uploadIssueReferencePhotoFile,
   type IssueRow,
   type OmAssetRow,
+  type WorkOrderChecklistItem,
 } from "@/lib/api-client";
+import { projectScopedHref } from "@/lib/projectScopedPath";
+import { qk } from "@/lib/queryKeys";
 import {
   ISSUE_PRIORITY_LABEL,
   ISSUE_PRIORITY_ORDER,
@@ -32,9 +39,14 @@ import {
   MOBILE_FIELD_TEXTAREA,
   MOBILE_FORM_SECTION,
 } from "@/lib/mobileFormStyles";
-import { qk } from "@/lib/queryKeys";
-
 type WorkspaceMember = { userId: string; name: string | null; email: string | null };
+
+const WO_TYPES = [
+  { value: "CORRECTIVE", label: "Corrective" },
+  { value: "PREVENTIVE", label: "Preventive" },
+  { value: "INSPECTION_FOLLOWUP", label: "Inspection follow-up" },
+  { value: "TENANT", label: "Tenant" },
+] as const;
 
 function revokePendingPhotos(list: IssuePendingPhoto[]) {
   for (const p of list) URL.revokeObjectURL(p.previewUrl);
@@ -55,6 +67,15 @@ type Props = {
   workspaceId: string | undefined;
   members: WorkspaceMember[];
   initialAssetId?: string;
+  /** Prefill from tenant request */
+  prefill?: {
+    title?: string;
+    description?: string;
+    location?: string;
+    assetId?: string;
+    sourceOccupantIssueId?: string;
+    workOrderType?: string;
+  };
   onCreated: (row: IssueRow) => void | Promise<void>;
 };
 
@@ -65,9 +86,14 @@ export function WorkOrderCreateSlideOver({
   workspaceId,
   members,
   initialAssetId,
+  prefill,
   onCreated,
 }: Props) {
   const [assetId, setAssetId] = useState("");
+  const [workOrderType, setWorkOrderType] = useState("CORRECTIVE");
+  const [vendorId, setVendorId] = useState("");
+  const [procedure, setProcedure] = useState<WorkOrderChecklistItem[]>([]);
+  const [completionEvidenceRequired, setCompletionEvidenceRequired] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -88,10 +114,14 @@ export function WorkOrderCreateSlideOver({
       revokePendingPhotos(prev);
       return [];
     });
-    setAssetId(initialAssetId ?? "");
+    setAssetId(prefill?.assetId ?? initialAssetId ?? "");
     setAssetSearch("");
-    setTitle("");
-    setDescription("");
+    setTitle(prefill?.title ?? "");
+    setDescription(prefill?.description ?? "");
+    setWorkOrderType(prefill?.workOrderType ?? "CORRECTIVE");
+    setVendorId("");
+    setProcedure([]);
+    setCompletionEvidenceRequired(false);
     setAssigneeId("");
     setVendorName("");
     setVendorEmail("");
@@ -99,10 +129,10 @@ export function WorkOrderCreateSlideOver({
     setPriority("MEDIUM");
     setStartDate("");
     setDueDate("");
-    setLocation("");
-    setLocationTouched(false);
+    setLocation(prefill?.location ?? "");
+    setLocationTouched(Boolean(prefill?.location));
     setMsg(null);
-  }, [initialAssetId]);
+  }, [initialAssetId, prefill]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -111,10 +141,20 @@ export function WorkOrderCreateSlideOver({
 
   useEffect(() => {
     if (open) {
-      setAssetId(initialAssetId ?? "");
-      setLocationTouched(false);
+      setAssetId(prefill?.assetId ?? initialAssetId ?? "");
+      setTitle(prefill?.title ?? "");
+      setDescription(prefill?.description ?? "");
+      setLocation(prefill?.location ?? "");
+      setWorkOrderType(prefill?.workOrderType ?? "CORRECTIVE");
+      setLocationTouched(Boolean(prefill?.location));
     }
-  }, [open, initialAssetId]);
+  }, [open, initialAssetId, prefill]);
+
+  const { data: vendors = [] } = useQuery({
+    queryKey: qk.omVendors(projectId),
+    queryFn: () => fetchOmVendors(projectId),
+    enabled: open,
+  });
 
   const { data: assets = [], isPending: assetsPending } = useQuery({
     queryKey: qk.omAssets(projectId, assetSearch),
@@ -161,6 +201,11 @@ export function WorkOrderCreateSlideOver({
         dueDate: dueDate.trim() || undefined,
         location: location.trim() || undefined,
         issueKind: "WORK_ORDER",
+        workOrderType,
+        procedureJson: procedure.length > 0 ? procedure : undefined,
+        vendorId: vendorId || undefined,
+        sourceOccupantIssueId: prefill?.sourceOccupantIssueId,
+        completionEvidenceRequired,
       });
     },
     onSuccess: async (row) => {
@@ -189,7 +234,7 @@ export function WorkOrderCreateSlideOver({
     },
   });
 
-  const assetsHref = `/projects/${projectId}/om/assets`;
+  const assetsHref = projectScopedHref(projectId, "/om/assets", workspaceId);
 
   return (
     <EnterpriseSlideOver
@@ -207,11 +252,11 @@ export function WorkOrderCreateSlideOver({
       bodyClassName="px-5 py-5"
       header={
         <div className="flex items-start gap-3 pr-1">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-sky-500/25 bg-sky-500/10 shadow-[var(--enterprise-shadow-xs)]">
-            <Wrench className="h-5 w-5 text-sky-600 dark:text-sky-400" strokeWidth={1.75} />
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
+            <Wrench className="h-5 w-5 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
           </div>
           <div className="min-w-0">
-            <p className="enterprise-type-label text-sky-600 dark:text-sky-400">O&amp;M</p>
+            <p className="enterprise-type-label text-[var(--enterprise-primary)]">O&amp;M</p>
             <h2
               id="wo-create-title"
               className="text-lg font-bold tracking-tight text-[var(--enterprise-text)]"
@@ -226,20 +271,16 @@ export function WorkOrderCreateSlideOver({
       }
       footer={
         <>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="rounded-lg px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
-          >
+          <EnterpriseButton type="button" variant="ghost" onClick={handleClose}>
             Cancel
-          </button>
-          <button
+          </EnterpriseButton>
+          <EnterpriseButton
             type="submit"
-            disabled={createMut.isPending || !title.trim() || !assetId}
-            className="rounded-lg bg-sky-600 px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-sky-700 disabled:opacity-60"
+            loading={createMut.isPending}
+            disabled={!title.trim() || !assetId}
           >
             {createMut.isPending ? "Creating…" : "Create work order"}
-          </button>
+          </EnterpriseButton>
         </>
       }
     >
@@ -254,9 +295,11 @@ export function WorkOrderCreateSlideOver({
         ) : null}
 
         <div
-          className={`${MOBILE_FORM_SECTION} rounded-xl border border-sky-500/20 bg-sky-500/[0.04] p-3`}
+          className={`${MOBILE_FORM_SECTION} rounded-xl border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] p-3`}
         >
-          <p className="enterprise-type-label text-sky-700 dark:text-sky-300">Equipment</p>
+          <p className="enterprise-type-label text-[var(--enterprise-semantic-info-text)]">
+            Equipment
+          </p>
           <div>
             <label htmlFor="wo-asset-search" className={MOBILE_FIELD_LABEL}>
               Search assets
@@ -297,7 +340,7 @@ export function WorkOrderCreateSlideOver({
                 {assets.length === 0 ? (
                   <Link
                     href={assetsHref}
-                    className="mt-2 inline-block text-sm font-semibold text-sky-600 hover:underline dark:text-sky-400"
+                    className="mt-2 inline-block text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
                   >
                     Add assets in O&amp;M
                   </Link>
@@ -345,10 +388,39 @@ export function WorkOrderCreateSlideOver({
               ) : null}
             </div>
           ) : null}
+          {selectedAsset ? (
+            <div className="mt-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                Asset manuals
+              </p>
+              <WorkOrderAssetDocsPanel
+                projectId={projectId}
+                assetId={selectedAsset.id}
+                enabled={open}
+              />
+            </div>
+          ) : null}
         </div>
 
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Work scope</p>
+          <div>
+            <label htmlFor="wo-type" className={MOBILE_FIELD_LABEL}>
+              Work order type
+            </label>
+            <select
+              id="wo-type"
+              value={workOrderType}
+              onChange={(e) => setWorkOrderType(e.target.value)}
+              className={MOBILE_FIELD_SELECT}
+            >
+              {WO_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label htmlFor="wo-title" className={MOBILE_FIELD_LABEL}>
               Work order title *
@@ -461,15 +533,34 @@ export function WorkOrderCreateSlideOver({
             </select>
           </div>
           <div>
+            <label htmlFor="wo-vendor-pick" className={MOBILE_FIELD_LABEL}>
+              Vendor directory
+            </label>
+            <select
+              id="wo-vendor-pick"
+              value={vendorId}
+              onChange={(e) => setVendorId(e.target.value)}
+              className={MOBILE_FIELD_SELECT}
+            >
+              <option value="">None</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                  {v.trade ? ` (${v.trade})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label htmlFor="wo-vendor-name" className={MOBILE_FIELD_LABEL}>
-              External vendor
+              External vendor (manual)
             </label>
             <input
               id="wo-vendor-name"
               value={vendorName}
               onChange={(e) => setVendorName(e.target.value)}
               className={MOBILE_FIELD_INPUT}
-              placeholder="Company or contact name"
+              placeholder="If not in directory"
             />
           </div>
           <div className="sm:col-span-2">
@@ -485,6 +576,21 @@ export function WorkOrderCreateSlideOver({
               placeholder="Optional — for external assignee"
             />
           </div>
+        </div>
+
+        <div className={MOBILE_FORM_SECTION}>
+          <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
+            Completion checklist
+          </p>
+          <WorkOrderProcedureField items={procedure} onChange={setProcedure} />
+          <label className="mt-3 flex items-center gap-2 text-sm text-[var(--enterprise-text)]">
+            <input
+              type="checkbox"
+              checked={completionEvidenceRequired}
+              onChange={(e) => setCompletionEvidenceRequired(e.target.checked)}
+            />
+            Require completion photo before closing
+          </label>
         </div>
 
         <div className={`${MOBILE_FORM_SECTION} grid gap-4 sm:grid-cols-2`}>

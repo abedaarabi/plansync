@@ -29,6 +29,8 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
+import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmInspectionRunSlideOver } from "@/components/enterprise/OmInspectionRunSlideOver";
 import { OmInspectionTemplateSlideOver } from "@/components/enterprise/OmInspectionTemplateSlideOver";
@@ -266,73 +268,55 @@ export function OmInspectionsClient({ projectId }: Props) {
   };
 
   return (
-    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-6 sm:space-y-8">
-      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-5 sm:pb-6">
-        <div className="flex min-w-0 gap-3 sm:gap-4">
-          <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
-            aria-hidden
-          >
-            <ClipboardCheck className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.5} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
-              Inspections
-            </h1>
-            <p className="mt-1.5 hidden text-sm leading-relaxed text-[var(--enterprise-text-muted)] sm:block">
-              Field checklists and sign-off — save drafts, attach photos, then complete for a PDF
-              report and optional owner email.
-            </p>
-          </div>
+    <div className={OM_PAGE_CLASS}>
+      <OmSubPageHeader
+        icon={ClipboardCheck}
+        title="Inspections"
+        description="Field checklists and sign-off — drafts, photos, PDF reports."
+        action={
+          <>
+            <EnterpriseButton
+              size="sm"
+              disabled={startRun.isPending}
+              loading={startRun.isPending}
+              onClick={openNewInspection}
+            >
+              {!startRun.isPending ? <Plus className="h-4 w-4" strokeWidth={2.5} /> : null}
+              New inspection
+            </EnterpriseButton>
+            <EnterpriseButton
+              variant="secondary"
+              size="sm"
+              onClick={() => setTemplateSlideOpen(true)}
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              Template
+            </EnterpriseButton>
+          </>
+        }
+      >
+        <div className="grid grid-cols-3 gap-2 sm:max-w-sm">
+          {(
+            [
+              { label: "Templates", value: templates.length },
+              { label: "Runs", value: runs.length },
+              { label: "Drafts", value: draftCount },
+            ] as const
+          ).map((s) => (
+            <div
+              key={s.label}
+              className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1.5 text-center"
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                {s.label}
+              </p>
+              <p className="text-sm font-bold tabular-nums text-[var(--enterprise-text)]">
+                {s.value}
+              </p>
+            </div>
+          ))}
         </div>
-
-        <div className="grid grid-cols-3 gap-2 sm:max-w-md">
-          <div className="enterprise-card rounded-2xl p-3 text-center sm:p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] sm:text-[11px]">
-              Templates
-            </p>
-            <p className="mt-0.5 text-xl font-bold tabular-nums text-[var(--enterprise-text)] sm:text-2xl">
-              {templates.length}
-            </p>
-          </div>
-          <div className="enterprise-card rounded-2xl p-3 text-center sm:p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] sm:text-[11px]">
-              Runs
-            </p>
-            <p className="mt-0.5 text-xl font-bold tabular-nums text-[var(--enterprise-text)] sm:text-2xl">
-              {runs.length}
-            </p>
-          </div>
-          <div className="enterprise-card rounded-2xl p-3 text-center sm:p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] sm:text-[11px]">
-              Drafts
-            </p>
-            <p className="mt-0.5 text-xl font-bold tabular-nums text-[var(--enterprise-text)] sm:text-2xl">
-              {draftCount}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <EnterpriseButton
-            size="sm"
-            disabled={startRun.isPending}
-            loading={startRun.isPending}
-            onClick={openNewInspection}
-          >
-            {!startRun.isPending ? <Plus className="h-4 w-4" strokeWidth={2.5} /> : null}
-            New inspection
-          </EnterpriseButton>
-          <EnterpriseButton
-            variant="secondary"
-            size="sm"
-            onClick={() => setTemplateSlideOpen(true)}
-          >
-            <Plus className="h-4 w-4" strokeWidth={2} />
-            New template
-          </EnterpriseButton>
-        </div>
-      </header>
+      </OmSubPageHeader>
 
       {/* Templates */}
       <section>

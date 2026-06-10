@@ -1,4 +1,9 @@
-import { escapeHtml, planSyncEmailIconPublicUrl } from "./transactionalEmailLayout.js";
+import {
+  EMAIL_RESPONSIVE_CSS,
+  escapeHtml,
+  planSyncBrandHeaderHtml,
+  planSyncEmailIconPublicUrl,
+} from "./transactionalEmailLayout.js";
 
 const FF = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
 
@@ -113,6 +118,8 @@ export type MarketingRecipient = {
   email: string;
   company?: string;
   name?: string;
+  /** 0-based index in the source spreadsheet rows (for updating `sent`). */
+  rowIndex: number;
 };
 
 export function marketingPublicAssetUrl(appBase: string, assetPath: string): string {
@@ -206,7 +213,7 @@ export function buildMarketingEmailText(recipient: MarketingRecipient): string {
 function smallPreviewImagesHtml(appBase: string, signInUrl: string): string {
   const cells = MARKETING_PREVIEW_IMAGES.map((img) => {
     const url = marketingPublicAssetUrl(appBase, img.path);
-    return `<td width="50%" align="center" style="padding:0 8px;vertical-align:top">
+    return `<td width="50%" align="center" class="mkt-stack-col" style="padding:0 8px;vertical-align:top">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${C.white};border:1px solid ${C.borderSoft};border-radius:14px;overflow:hidden">
         <tr>
           <td style="padding:8px 8px 0;line-height:0">
@@ -303,7 +310,7 @@ function demoVideoHtml(embedInline = false, embedOrigin?: string): string {
 
 function workflowStepsHtml(): string {
   const stepCell = (s: (typeof MARKETING_WORKFLOW)[number], showArrow: boolean) =>
-    `<td style="padding:6px;vertical-align:top;width:33%">
+    `<td class="mkt-stack-col" style="padding:6px;vertical-align:top;width:33%">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${C.white};border:1px solid ${C.borderSoft};border-radius:14px;height:100%">
         <tr>
           <td style="padding:16px 14px">
@@ -317,7 +324,7 @@ function workflowStepsHtml(): string {
           </td>
         </tr>
       </table>
-    </td>${showArrow ? `<td style="width:20px;padding:0 2px;vertical-align:middle;text-align:center;font-size:16px;color:${C.faint};font-family:${FF}">→</td>` : ""}`;
+    </td>${showArrow ? `<td class="mkt-stack-hide" style="width:20px;padding:0 2px;vertical-align:middle;text-align:center;font-size:16px;color:${C.faint};font-family:${FF}">→</td>` : ""}`;
 
   const cells = MARKETING_WORKFLOW.map((s, i) =>
     stepCell(s, i < MARKETING_WORKFLOW.length - 1),
@@ -338,7 +345,7 @@ function founderNoteHtml(greet: string): string {
 }
 function featureCardsHtml(): string {
   const featureCell = (f: (typeof MARKETING_FEATURES)[number]) =>
-    `<td style="padding:6px;width:50%;vertical-align:top">
+    `<td class="mkt-stack-col" style="padding:6px;width:50%;vertical-align:top">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${C.surface};border:1px solid ${C.borderSoft};border-radius:14px">
           <tr>
             <td style="padding:16px">
@@ -354,7 +361,7 @@ function featureCardsHtml(): string {
     const left = MARKETING_FEATURES[i]!;
     const right = MARKETING_FEATURES[i + 1];
     rows.push(
-      `<tr>${featureCell(left)}${right ? featureCell(right) : `<td style="padding:6px;width:50%"></td>`}</tr>`,
+      `<tr>${featureCell(left)}${right ? featureCell(right) : `<td class="mkt-stack-col" style="padding:6px;width:50%"></td>`}</tr>`,
     );
   }
   return rows.join("");
@@ -363,14 +370,14 @@ function featureCardsHtml(): string {
 function offerBannerHtml(): string {
   const perkCells = MARKETING_OFFER_PERKS.map(
     (label, i) =>
-      `<td style="padding:${i < MARKETING_OFFER_PERKS.length - 1 ? "0 12px 0 0" : "0"};font-size:12px;line-height:1.5;color:#cbd5e1;font-family:${FF}">✓ ${escapeHtml(label)}</td>`,
+      `<td class="mkt-perk" style="padding:${i < MARKETING_OFFER_PERKS.length - 1 ? "0 12px 0 0" : "0"};font-size:12px;line-height:1.5;color:#cbd5e1;font-family:${FF}">✓ ${escapeHtml(label)}</td>`,
   ).join("");
 
   return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:linear-gradient(135deg,${C.ink} 0%,#1e293b 100%);border-radius:18px">
     <tr>
       <td style="padding:22px 24px;text-align:left">
         <p style="margin:0 0 6px;font-size:10px;font-weight:700;color:#93c5fd;text-transform:uppercase;letter-spacing:0.12em;font-family:${FF}">Your invite</p>
-        <p style="margin:0;font-size:26px;font-weight:800;color:${C.white};line-height:1.12;letter-spacing:-0.03em;font-family:${FF}">6 months of Pro — free</p>
+        <p class="mkt-offer-title" style="margin:0;font-size:26px;font-weight:800;color:${C.white};line-height:1.12;letter-spacing:-0.03em;font-family:${FF}">6 months of Pro — free</p>
         <p style="margin:8px 0 0;font-size:14px;font-weight:500;color:#dbeafe;line-height:1.5;font-family:${FF}">Run real projects with your team. No credit card required.</p>
         <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:16px">
           <tr>${perkCells}</tr>
@@ -380,40 +387,14 @@ function offerBannerHtml(): string {
   </table>`;
 }
 
-function headerHtml(iconUrl: string): string {
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-    <tr>
-      <td style="padding:24px 30px;background:${C.white};border-bottom:1px solid ${C.borderSoft}">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-          <tr>
-            <td style="vertical-align:middle">
-              <table role="presentation" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td style="padding-right:12px;vertical-align:middle">
-                    <img src="${escapeHtml(iconUrl)}" alt="" width="38" height="38" style="display:block;width:38px;height:38px;border:0;border-radius:10px" />
-                  </td>
-                  <td style="vertical-align:middle">
-                    <p style="margin:0;font-size:21px;font-weight:800;letter-spacing:-0.03em;line-height:1.1;font-family:${FF}">
-                      <span style="color:${C.ink}">Plan</span><span style="color:${C.primary}">Sync</span>
-                    </p>
-                    <p style="margin:4px 0 0;font-size:10px;font-weight:650;color:${C.muted};letter-spacing:0.08em;text-transform:uppercase;font-family:${FF}">From drawing to proposal</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-            <td align="right" style="vertical-align:middle">
-              <p style="margin:0;font-size:11px;font-weight:700;color:${C.primary};background:${C.blueTint};border:1px solid ${C.blueBorder};border-radius:999px;padding:7px 11px;display:inline-block;font-family:${FF}">Personal invite</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>`;
+function headerHtml(iconUrl: string, appUrl: string): string {
+  const badge = `<p style="margin:0;font-size:11px;font-weight:700;color:${C.primary};background:${C.blueTint};border:1px solid ${C.blueBorder};border-radius:999px;padding:7px 11px;display:inline-block;font-family:${FF}">Personal invite</p>`;
+  return planSyncBrandHeaderHtml(iconUrl, "From drawing to proposal", badge, appUrl);
 }
 
 function socialLinksHtml(): string {
   const pill = (href: string, label: string, accent = false) =>
-    `<td style="padding:4px">
+    `<td class="mkt-social-pill" style="padding:4px">
       <a href="${escapeHtml(href)}" style="display:inline-block;padding:9px 14px;font-size:12px;font-weight:600;color:${accent ? C.primary : C.ink};text-decoration:none;border:1px solid ${accent ? C.blueBorder : C.border};border-radius:999px;background:${accent ? C.blueTint : C.white};font-family:${FF}">${escapeHtml(label)}</a>
     </td>`;
   return `<table role="presentation" cellspacing="0" cellpadding="0" align="center">
@@ -439,7 +420,7 @@ export function buildMarketingEmailHtml(
   const demoVideo = demoVideoHtml(embedVideo, embedVideo ? opts?.previewOrigin : undefined);
   const featureCards = featureCardsHtml();
   const offerBanner = offerBannerHtml();
-  const header = headerHtml(iconUrl);
+  const header = headerHtml(iconUrl, appBase);
   const founderNote = founderNoteHtml(greet);
   const workflowSteps = workflowStepsHtml();
   const social = socialLinksHtml();
@@ -455,33 +436,34 @@ export function buildMarketingEmailHtml(
   <meta name="viewport" content="width=device-width" />
   <meta http-equiv="x-ua-compatible" content="ie=edge" />${previewReferrerMeta}
   <title>From PDF drawing to sent proposal — PlanSync</title>
+  <style type="text/css">${EMAIL_RESPONSIVE_CSS}</style>
 </head>
-<body style="margin:0;padding:0;background:${C.pageBg};font-family:${FF};color:${C.ink}">
+<body style="margin:0;padding:0;background:${C.pageBg};font-family:${FF};color:${C.ink};-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%">
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;opacity:0;color:transparent">
     A personal note from PlanSync founder Abed — 6 months of Pro free. PDF takeoff, proposals, and O&amp;M handover in one platform.
   </div>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${C.pageBg};padding:36px 16px">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="mkt-shell" style="background:${C.pageBg};padding:36px 16px">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;border-collapse:separate;border-radius:22px;overflow:hidden;background:${C.white};box-shadow:0 24px 60px -24px rgba(15,23,42,0.22),0 0 0 1px rgba(15,23,42,0.04)">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="mkt-card" style="max-width:620px;border-collapse:separate;border-radius:22px;overflow:hidden;background:${C.white};box-shadow:0 24px 60px -24px rgba(15,23,42,0.22),0 0 0 1px rgba(15,23,42,0.04)">
           <tr>
             <td style="padding:0">${header}</td>
           </tr>
           <tr>
-            <td style="padding:28px 30px 8px;background:${C.white}">
+            <td class="mkt-section" style="padding:28px 30px 8px;background:${C.white}">
               ${founderNote}
-              <h1 style="margin:0 0 14px;font-size:27px;font-weight:800;color:${C.ink};line-height:1.18;letter-spacing:-0.04em;font-family:${FF}">From PDF drawing to sent proposal — in one app.</h1>
+              <h1 class="mkt-title" style="margin:0 0 14px;font-size:27px;font-weight:800;color:${C.ink};line-height:1.18;letter-spacing:-0.04em;font-family:${FF}">From PDF drawing to sent proposal — in one app.</h1>
               <p style="margin:0 0 14px;font-size:15px;line-height:1.75;color:${C.body};font-family:${FF}">Most construction teams still bounce between PDF viewers, spreadsheets, email threads, and separate proposal tools just to turn a drawing set into a bid. That handoff costs hours on every project — and mistakes when numbers get copied twice.</p>
               <p style="margin:0;font-size:15px;line-height:1.75;color:${C.body};font-family:${FF}"><strong style="color:${C.ink}">PlanSync is the value:</strong> one workspace where you open the PDF, calibrate scale, run takeoff, mark up issues, and send a professional proposal — without switching apps or retyping quantities. And when the project hands over, the same platform supports O&amp;M — asset registers, inspections, work orders, and facilities management.</p>
             </td>
           </tr>
           <tr>
-            <td style="padding:8px 30px 24px;background:${C.white}">
+            <td class="mkt-section" style="padding:8px 30px 24px;background:${C.white}">
               ${offerBanner}
             </td>
           </tr>
           <tr>
-            <td style="padding:0 24px 24px;background:${C.white}">
+            <td class="mkt-section" style="padding:0 24px 24px;background:${C.white}">
               <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:0.1em;font-family:${FF}">How it works</p>
               ${workflowSteps}
             </td>
@@ -515,9 +497,9 @@ export function buildMarketingEmailHtml(
             <td style="padding:14px 30px 0;background:${C.white};text-align:center">
               <table role="presentation" cellspacing="0" cellpadding="0" align="center">
                 <tr>
-                  <td style="padding:0 10px;font-size:12px;color:${C.muted};font-family:${FF}">No credit card required</td>
-                  <td style="padding:0 10px;font-size:12px;color:${C.muted};font-family:${FF}">Use real project data</td>
-                  <td style="padding:0 10px;font-size:12px;color:${C.muted};font-family:${FF}">Guided walkthrough available</td>
+                  <td class="mkt-trust" style="padding:0 10px;font-size:12px;color:${C.muted};font-family:${FF}">No credit card required</td>
+                  <td class="mkt-trust" style="padding:0 10px;font-size:12px;color:${C.muted};font-family:${FF}">Use real project data</td>
+                  <td class="mkt-trust" style="padding:0 10px;font-size:12px;color:${C.muted};font-family:${FF}">Guided walkthrough available</td>
                 </tr>
               </table>
             </td>
@@ -531,7 +513,7 @@ export function buildMarketingEmailHtml(
                     <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:0 auto">
                       <tr>
                         <td style="border-radius:12px;background:${C.primary}">
-                          <a href="${escapeHtml(signInUrl)}" style="display:inline-block;padding:14px 34px;font-size:15px;font-weight:700;color:${C.white};text-decoration:none;border-radius:12px;font-family:${FF}">Start your free 6-month trial</a>
+                          <a href="${escapeHtml(signInUrl)}" class="mkt-cta-link" style="display:inline-block;padding:14px 34px;font-size:15px;font-weight:700;color:${C.white};text-decoration:none;border-radius:12px;font-family:${FF}">Start your free 6-month trial</a>
                         </td>
                       </tr>
                     </table>
@@ -588,17 +570,57 @@ function pickField(row: Record<string, unknown>, keys: string[]): string | undef
   return undefined;
 }
 
+function pickFieldRaw(row: Record<string, unknown>, keys: string[]): unknown {
+  for (const [rawKey, value] of Object.entries(row)) {
+    const key = normalizeHeader(rawKey);
+    if (keys.includes(key)) return value;
+  }
+  return undefined;
+}
+
+/** True when the sheet marks this row as already emailed. */
+export function parseMarketingSentFlag(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  const s = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!s) return false;
+  return s === "true" || s === "yes" || s === "y" || s === "1" || s === "x" || s === "sent";
+}
+
+/** Set `sent` to true on the given row indices (mutates copies). */
+export function markMarketingRowsSent(
+  rows: Record<string, unknown>[],
+  rowIndices: number[],
+): Record<string, unknown>[] {
+  const updated = rows.map((row) => ({ ...row }));
+  for (const idx of rowIndices) {
+    const row = updated[idx];
+    if (row) updated[idx] = { ...row, sent: true };
+  }
+  return updated;
+}
+
 /** Parse rows from Excel/CSV sheet objects (header row keys). */
 export function parseMarketingRecipients(rows: Record<string, unknown>[]): {
   recipients: MarketingRecipient[];
   skipped: { row: number; reason: string }[];
+  alreadySent: number;
 } {
   const recipients: MarketingRecipient[] = [];
   const skipped: { row: number; reason: string }[] = [];
   const seen = new Set<string>();
+  let alreadySent = 0;
 
   rows.forEach((row, index) => {
     const rowNum = index + 2;
+    const sentRaw = pickFieldRaw(row, ["sent", "sent?", "emailed", "mail sent"]);
+    if (parseMarketingSentFlag(sentRaw)) {
+      alreadySent++;
+      skipped.push({ row: rowNum, reason: "already sent" });
+      return;
+    }
+
     const email =
       pickField(row, ["email", "e-mail", "email address", "work email", "contact email"]) ??
       Object.values(row)
@@ -625,8 +647,9 @@ export function parseMarketingRecipients(rows: Record<string, unknown>[]): {
       email: normalized,
       company: pickField(row, ["company", "company name", "organization", "org"]),
       name: pickField(row, ["name", "contact name", "first name", "contact", "full name"]),
+      rowIndex: index,
     });
   });
 
-  return { recipients, skipped };
+  return { recipients, skipped, alreadySent };
 }

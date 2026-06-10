@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
+  ASSET_METER_TYPE_LABEL,
   createOmMaintenance,
   fetchOmAssets,
   fetchProjectTeam,
   patchOmMaintenance,
+  type AssetMeterTypeApi,
   type OmAssetRow,
   type OmMaintenanceFrequency,
   type OmMaintenanceRow,
@@ -43,7 +45,18 @@ type FormState = {
   assignedVendorLabel: string;
   assignedToUserId: string;
   isActive: boolean;
+  meterEnabled: boolean;
+  meterType: AssetMeterTypeApi;
+  meterThreshold: string;
 };
+
+const METER_TYPES: AssetMeterTypeApi[] = [
+  "RUN_HOURS",
+  "CYCLES",
+  "PRESSURE",
+  "TEMPERATURE",
+  "CUSTOM",
+];
 
 function emptyForm(defaultAssetId = ""): FormState {
   return {
@@ -55,10 +68,14 @@ function emptyForm(defaultAssetId = ""): FormState {
     assignedVendorLabel: "",
     assignedToUserId: "",
     isActive: true,
+    meterEnabled: false,
+    meterType: "RUN_HOURS",
+    meterThreshold: "",
   };
 }
 
 function formFromSchedule(s: OmMaintenanceRow): FormState {
+  const hasMeter = Boolean(s.meterType && s.meterThreshold != null);
   return {
     assetId: s.assetId,
     title: s.title,
@@ -68,6 +85,9 @@ function formFromSchedule(s: OmMaintenanceRow): FormState {
     assignedVendorLabel: s.assignedVendorLabel ?? "",
     assignedToUserId: s.assignedToUserId ?? "",
     isActive: s.isActive,
+    meterEnabled: hasMeter,
+    meterType: (s.meterType as AssetMeterTypeApi) ?? "RUN_HOURS",
+    meterThreshold: s.meterThreshold != null ? String(s.meterThreshold) : "",
   };
 }
 
@@ -108,6 +128,17 @@ function MaintenanceScheduleFormFields({
       const assignedToUserId = form.assignedToUserId.trim() || null;
       const assignedVendorLabel = form.assignedVendorLabel.trim() || null;
 
+      let meterType: AssetMeterTypeApi | null = null;
+      let meterThreshold: number | null = null;
+      if (form.meterEnabled) {
+        const th = parseFloat(form.meterThreshold);
+        if (!Number.isFinite(th) || th < 0) {
+          throw new Error("Meter threshold must be a non-negative number.");
+        }
+        meterType = form.meterType;
+        meterThreshold = th;
+      }
+
       if (isEdit && schedule) {
         return patchOmMaintenance(projectId, schedule.id, {
           title: form.title.trim(),
@@ -117,6 +148,8 @@ function MaintenanceScheduleFormFields({
           assignedVendorLabel,
           assignedToUserId,
           isActive: form.isActive,
+          meterType,
+          meterThreshold,
         });
       }
 
@@ -128,6 +161,8 @@ function MaintenanceScheduleFormFields({
         nextDueAt,
         assignedVendorLabel,
         assignedToUserId,
+        meterType,
+        meterThreshold,
       });
     },
     onSuccess: async () => {
@@ -274,6 +309,61 @@ function MaintenanceScheduleFormFields({
             maxLength={200}
             className={MOBILE_FIELD_INPUT}
           />
+        </div>
+
+        <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.04] p-4 space-y-3">
+          <label className="flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              checked={form.meterEnabled}
+              onChange={(e) => set("meterEnabled", e.target.checked)}
+              className="h-4 w-4 rounded border-[var(--enterprise-border)]"
+            />
+            <span className="text-sm font-semibold text-[var(--enterprise-text)]">
+              Meter-based trigger
+            </span>
+          </label>
+          <p className="text-xs leading-snug text-[var(--enterprise-text-muted)]">
+            Also create a work order when a meter reading on this asset reaches the threshold (in
+            addition to calendar due dates).
+          </p>
+          {form.meterEnabled ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="ppm-meter-type" className={MOBILE_FIELD_LABEL}>
+                  Meter type
+                </label>
+                <select
+                  id="ppm-meter-type"
+                  value={form.meterType}
+                  onChange={(e) => set("meterType", e.target.value as AssetMeterTypeApi)}
+                  className={MOBILE_FIELD_SELECT}
+                >
+                  {METER_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {ASSET_METER_TYPE_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="ppm-meter-threshold" className={MOBILE_FIELD_LABEL}>
+                  Threshold value *
+                </label>
+                <input
+                  id="ppm-meter-threshold"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={form.meterThreshold}
+                  onChange={(e) => set("meterThreshold", e.target.value)}
+                  placeholder="e.g. 5000"
+                  className={MOBILE_FIELD_INPUT}
+                  required={form.meterEnabled}
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {isEdit ? (

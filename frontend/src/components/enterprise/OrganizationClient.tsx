@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { Building2 } from "lucide-react";
 import { toast } from "sonner";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { deleteWorkspacePermanently, patchWorkspace, uploadWorkspaceLogo } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import type { MeResponse, MeWorkspace } from "@/types/enterprise";
@@ -27,6 +29,7 @@ import {
 import { WorkspaceTeamClient } from "@/components/enterprise/WorkspaceTeamClient";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { isSuperAdmin, isWorkspaceManager } from "@/lib/workspaceRole";
+import { OM_COMPACT_INPUT, OM_COMPACT_LABEL, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { trialDaysLeft } from "@/lib/workspaceSubscription";
 
 type OrgTab = "organization" | "billing" | "people" | "invite-member";
@@ -202,7 +205,7 @@ export function OrganizationClient() {
       key={id}
       type="button"
       onClick={() => setTab(id)}
-      className={`border-b-2 px-3 py-2 text-sm font-medium transition ${
+      className={`border-b-2 px-3 py-1.5 text-xs font-medium transition ${
         tab === id
           ? "border-[var(--enterprise-primary)] text-[var(--enterprise-text)]"
           : "border-transparent text-[var(--enterprise-text-muted)] hover:text-[var(--enterprise-text)]"
@@ -213,7 +216,12 @@ export function OrganizationClient() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className={OM_PAGE_CLASS}>
+      <OmSubPageHeader
+        icon={Building2}
+        title="Organization"
+        description="Branding, billing, and people settings for your workspace."
+      />
       <div className="flex flex-wrap gap-1 border-b border-[var(--enterprise-border)]">
         {tabBtn("organization", "Branding")}
         {superAdmin ? tabBtn("billing", "Plan & billing") : null}
@@ -222,7 +230,7 @@ export function OrganizationClient() {
       </div>
 
       {tab === "organization" ? (
-        <section className="enterprise-card p-6 sm:p-8">
+        <section className="enterprise-card p-3 sm:p-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-[var(--enterprise-text)]">Organization</h2>
@@ -263,43 +271,35 @@ export function OrganizationClient() {
             >
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
-                    Workspace name
-                  </label>
+                  <label className={OM_COMPACT_LABEL}>Workspace name</label>
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] px-3 py-2 text-sm"
+                    className={OM_COMPACT_INPUT}
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
-                    URL slug
-                  </label>
+                  <label className={OM_COMPACT_LABEL}>URL slug</label>
                   <input
                     value={slug}
                     onChange={(e) => setSlug(e.target.value)}
-                    className="mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] px-3 py-2 font-mono text-sm"
+                    className={`${OM_COMPACT_INPUT} font-mono`}
                     required
                   />
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
-                  Description
-                </label>
+                <label className={OM_COMPACT_LABEL}>Description</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
-                  className="mt-1.5 w-full resize-y rounded-lg border border-[var(--enterprise-border)] px-3 py-2 text-sm"
+                  className={`${OM_COMPACT_INPUT} resize-y`}
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
-                  Primary color
-                </label>
+                <label className={OM_COMPACT_LABEL}>Primary color</label>
                 <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
                   Buttons, links, and focus accents across the app. Pick a color or paste{" "}
                   <span className="font-mono">#RRGGBB</span>.
@@ -331,15 +331,13 @@ export function OrganizationClient() {
                     }}
                     placeholder="#2563EB"
                     spellCheck={false}
-                    className="w-full min-w-[9rem] max-w-[11rem] rounded-lg border border-[var(--enterprise-border)] px-3 py-2 font-mono text-sm"
+                    className={`${OM_COMPACT_INPUT} min-w-[9rem] max-w-[11rem] font-mono`}
                     autoComplete="off"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
-                  Website
-                </label>
+                <label className={OM_COMPACT_LABEL}>Website</label>
                 <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
                   We resolve your site&apos;s favicon (Google) as the logo when you don&apos;t
                   upload an image. The same branding appears on client proposal pages and emails.
@@ -371,10 +369,8 @@ export function OrganizationClient() {
                     }
                   }}
                   placeholder="example.com or https://…"
-                  className={`mt-1.5 w-full rounded-lg border px-3 py-2 text-sm ${
-                    websiteFieldError
-                      ? "border-red-300 ring-1 ring-red-200"
-                      : "border-[var(--enterprise-border)]"
+                  className={`${OM_COMPACT_INPUT} ${
+                    websiteFieldError ? "border-red-300 ring-1 ring-red-200" : ""
                   }`}
                   inputMode="url"
                   autoComplete="url"
@@ -400,9 +396,7 @@ export function OrganizationClient() {
                 ) : null}
               </div>
               <div>
-                <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
-                  Upload logo
-                </label>
+                <label className={OM_COMPACT_LABEL}>Upload logo</label>
                 <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
                   PNG, JPEG, WebP, or GIF — max 2 MB. Replaces the favicon until you clear it via
                   URL field or save website-only branding.
@@ -454,9 +448,7 @@ export function OrganizationClient() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
-                  Logo URL (optional)
-                </label>
+                <label className={OM_COMPACT_LABEL}>Logo URL (optional)</label>
                 <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
                   Override with any public image URL (replaces an uploaded file when you save).
                 </p>
@@ -464,7 +456,7 @@ export function OrganizationClient() {
                   value={logoUrl}
                   onChange={(e) => setLogoUrl(e.target.value)}
                   placeholder="https://…"
-                  className="mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] px-3 py-2 text-sm"
+                  className={OM_COMPACT_INPUT}
                 />
               </div>
               {msg ? (

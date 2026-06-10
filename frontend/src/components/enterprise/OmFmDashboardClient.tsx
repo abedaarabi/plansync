@@ -23,6 +23,8 @@ import {
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
+import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 
 type Props = { projectId: string };
@@ -48,12 +50,12 @@ function Kpi({
           : "border-l-slate-400";
   return (
     <div
-      className={`enterprise-card min-h-[5.5rem] rounded-2xl border-l-4 p-4 transition-transform duration-150 active:scale-[0.98] ${border}`}
+      className={`enterprise-card rounded-xl border-l-4 p-2.5 transition-transform duration-150 active:scale-[0.98] ${border}`}
     >
-      <p className="text-2xl font-bold tabular-nums tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
+      <p className="text-lg font-bold tabular-nums tracking-tight text-[var(--enterprise-text)]">
         {value}
       </p>
-      <p className="mt-1 text-xs font-semibold leading-snug text-[var(--enterprise-text-muted)]">
+      <p className="mt-0.5 text-[11px] font-semibold leading-snug text-[var(--enterprise-text-muted)]">
         {label}
       </p>
       {hint ? (
@@ -65,10 +67,12 @@ function Kpi({
 
 function ActivityRow({ title, meta, badge }: { title: string; meta: string; badge?: ReactNode }) {
   return (
-    <li className="mobile-list-row flex min-h-14 flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 shadow-[var(--enterprise-shadow-xs)]">
+    <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-xs)]">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold leading-snug text-[var(--enterprise-text)]">{title}</p>
-        <p className="mt-0.5 text-xs leading-snug text-[var(--enterprise-text-muted)]">{meta}</p>
+        <p className="text-xs font-semibold leading-snug text-[var(--enterprise-text)]">{title}</p>
+        <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
+          {meta}
+        </p>
       </div>
       {badge}
     </li>
@@ -87,15 +91,15 @@ function QuickNavLink({
   return (
     <Link
       href={href}
-      className="enterprise-card enterprise-card-hover flex min-h-14 w-full items-center justify-between gap-2.5 rounded-2xl px-4 py-3.5 text-base font-medium text-[var(--enterprise-text)] transition active:scale-[0.98] lg:text-sm"
+      className="enterprise-card enterprise-card-hover flex min-h-10 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--enterprise-text)] transition active:scale-[0.98]"
     >
-      <span className="flex items-center gap-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
-          <Icon className="h-4 w-4" aria-hidden />
+      <span className="flex items-center gap-2">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
+          <Icon className="h-3.5 w-3.5" aria-hidden />
         </span>
         {label}
       </span>
-      <ArrowRight className="h-5 w-5 shrink-0 text-[var(--enterprise-text-muted)]" />
+      <ArrowRight className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]" />
     </Link>
   );
 }
@@ -139,9 +143,9 @@ export function OmFmDashboardClient({ projectId }: Props) {
 
   if (!session.operationsMode) {
     return (
-      <div className="mobile-app-page w-full min-w-0 max-w-full enterprise-card p-6">
-        <h1 className="text-lg font-semibold text-[var(--enterprise-text)]">FM dashboard</h1>
-        <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
+      <div className={`${OM_PAGE_CLASS} enterprise-card p-4`}>
+        <h1 className="text-base font-semibold text-[var(--enterprise-text)]">FM dashboard</h1>
+        <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
           Turn on{" "}
           <Link href={`${pBase}/settings`} className="text-[var(--enterprise-primary)] underline">
             Operations mode
@@ -171,79 +175,64 @@ export function OmFmDashboardClient({ projectId }: Props) {
       : null);
 
   return (
-    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-6 sm:space-y-8">
-      <header className="overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-gradient-to-b from-[var(--enterprise-surface)] to-[var(--enterprise-bg)]/90 p-4 shadow-[var(--enterprise-shadow-card)] sm:p-7">
-        <div className="flex flex-col gap-4">
-          <div className="flex gap-3 sm:gap-4">
-            <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-12 sm:w-12"
-              aria-hidden
-            >
-              <LayoutGrid
-                className="h-5 w-5 text-[var(--enterprise-primary)] sm:h-6 sm:w-6"
-                strokeWidth={1.5}
-              />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)] sm:text-xs">
-                Facility management
-              </p>
-              <h1 className="mt-1 text-xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
-                {displayName}
-              </h1>
-              {since ? (
-                <p className="mt-2 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
-                  Handover reference:{" "}
-                  <span className="font-semibold text-[var(--enterprise-text)]">{since}</span>
-                </p>
-              ) : (
-                <p className="mt-2 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
-                  Complete the{" "}
-                  <Link
-                    href={`${pBase}/om/handover`}
-                    className="font-semibold text-[var(--enterprise-primary)] underline"
-                  >
-                    handover wizard
-                  </Link>{" "}
-                  to record dates and FM contact.
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
+    <div className={OM_PAGE_CLASS}>
+      <OmSubPageHeader
+        icon={LayoutGrid}
+        title={displayName}
+        description={
+          since ? (
+            <>
+              Handover reference:{" "}
+              <span className="font-semibold text-[var(--enterprise-text)]">{since}</span>
+            </>
+          ) : (
+            <>
+              Complete the{" "}
+              <Link
+                href={`${pBase}/om/handover`}
+                className="font-semibold text-[var(--enterprise-primary)] underline"
+              >
+                handover wizard
+              </Link>{" "}
+              to record dates and FM contact.
+            </>
+          )
+        }
+        action={
+          <>
             <a
               href={omAssetRegisterCsvUrl(projectId)}
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:bg-[var(--enterprise-bg)]"
+              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-bg)]"
             >
-              Asset register (CSV)
+              Asset CSV
             </a>
             {session.settings.modules.omTenantPortal &&
             session.settings.modules.omAssets &&
             (session.workspaceRole === "SUPER_ADMIN" || session.workspaceRole === "ADMIN") ? (
               <a
                 href={omOccupantAssetQrCsvUrl(projectId)}
-                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:bg-[var(--enterprise-bg)]"
+                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-bg)]"
               >
-                <Download className="h-4 w-4 shrink-0" aria-hidden />
-                QR URLs (CSV)
+                <Download className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                QR CSV
               </a>
             ) : null}
             <Link
               href={`${pBase}/om/handover`}
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] hover:opacity-95"
+              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-95"
             >
-              Handover hub
-              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+              Handover
+              <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
             </Link>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
           Overview
         </h2>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           <Kpi
             label="Open work orders"
             value={dash.kpis.openWorkOrders}
@@ -277,31 +266,47 @@ export function OmFmDashboardClient({ projectId }: Props) {
             value={dash.kpis.maintenanceDueSoon}
             tone={dash.kpis.maintenanceDueSoon > 0 ? "amber" : "emerald"}
           />
-          <div className="enterprise-card col-span-2 min-h-[5.5rem] rounded-2xl border-l-4 border-l-emerald-600 p-4 lg:col-span-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+          <Kpi
+            label="WO backlog >7d"
+            value={dash.kpis.workOrderBacklogOver7Days}
+            tone={dash.kpis.workOrderBacklogOver7Days > 0 ? "amber" : "emerald"}
+          />
+          <Kpi
+            label="WO backlog >30d"
+            value={dash.kpis.workOrderBacklogOver30Days}
+            tone={dash.kpis.workOrderBacklogOver30Days > 0 ? "red" : "emerald"}
+          />
+          <Kpi
+            label="PM compliance"
+            value={`${dash.kpis.pmCompliancePct}%`}
+            hint="Completed on or before due"
+            tone={dash.kpis.pmCompliancePct >= 80 ? "emerald" : "amber"}
+          />
+          <div className="enterprise-card col-span-2 rounded-xl border-l-4 border-l-emerald-600 p-3 lg:col-span-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Building health
             </p>
-            <div className="mt-3 flex items-center gap-3">
-              <div className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--enterprise-border)]/60">
+            <div className="mt-2 flex items-center gap-2">
+              <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--enterprise-border)]/60">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-500 transition-[width] duration-500"
                   style={{ width: `${dash.buildingHealthPct}%` }}
                 />
               </div>
-              <span className="text-base font-bold tabular-nums text-[var(--enterprise-text)]">
+              <span className="text-sm font-bold tabular-nums text-[var(--enterprise-text)]">
                 {dash.buildingHealthPct}%
               </span>
             </div>
-            <p className="mt-2 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
+            <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--enterprise-text-muted)]">
               Share of assets linked to a drawing (location on sheet).
             </p>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3 lg:gap-6">
-        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-4 sm:p-5">
-          <div className="mb-3 flex min-h-11 items-center justify-between gap-2">
+      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+        <section className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3">
+          <div className="mb-2 flex min-h-9 items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
               <CalendarRange className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
               Upcoming maintenance
@@ -366,8 +371,8 @@ export function OmFmDashboardClient({ projectId }: Props) {
           )}
         </section>
 
-        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-4 sm:p-5 lg:col-span-2 xl:col-span-1">
-          <div className="mb-3 flex min-h-11 items-center justify-between gap-2">
+        <section className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3 lg:col-span-2 xl:col-span-1">
+          <div className="mb-2 flex min-h-9 items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
               <Inbox className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
               Recent occupant requests
@@ -398,10 +403,10 @@ export function OmFmDashboardClient({ projectId }: Props) {
       </div>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
           Quick navigation
         </h2>
-        <ul className="space-y-2">
+        <ul className="space-y-1.5">
           <li>
             <QuickNavLink href={`${pBase}/om/assets`} icon={Package} label="Assets" />
           </li>

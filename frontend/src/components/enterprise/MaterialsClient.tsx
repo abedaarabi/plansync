@@ -32,16 +32,19 @@ import {
   type MaterialTemplateField,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
-import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
 import { MaterialTemplateEditor } from "./MaterialTemplateEditor";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
+import {
+  OM_COMPACT_INPUT,
+  OM_COMPACT_LABEL,
+  OM_COMPACT_SELECT,
+  OM_PAGE_CLASS,
+} from "@/lib/omCompactStyles";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
-
-const materialInputClass =
-  "mt-1 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition placeholder:text-[var(--enterprise-text-muted)]/50 focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/15";
 
 const MATERIALS_CATALOG_HELP =
   'Company-wide catalog: one list for the whole workspace — every project (quantity takeoff, estimates, procurement) draws from the same materials. Types are unique per company (e.g. one "Concrete"); add multiple line items under each type. Use Excel template + import to bulk update. After a super admin changes catalog fields, download a fresh template so columns stay in sync.';
@@ -374,124 +377,105 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
   }
 
   return (
-    <div className="mobile-app-page w-full min-w-0 max-w-full flex h-full min-h-0 flex-col gap-6">
-      <div className="shrink-0 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)] ring-1 ring-[var(--enterprise-primary)]/12">
-              <Package className="h-5 w-5" strokeWidth={1.75} />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-[var(--enterprise-text)]">
-                Materials database
-              </h1>
-              <div ref={catalogHelpRef} className="relative inline-flex">
-                <button
-                  type="button"
-                  className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 ${catalogHelpOpen ? "bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-primary)]" : ""}`}
-                  aria-label="How the materials catalog works"
-                  aria-expanded={catalogHelpOpen}
-                  aria-controls={catalogHelpOpen ? catalogHelpDescriptionId : undefined}
-                  onClick={() => setCatalogHelpOpen((o) => !o)}
-                >
-                  <HelpCircle className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-                </button>
-                {catalogHelpOpen ? (
-                  <div
-                    id={catalogHelpDescriptionId}
-                    role="region"
-                    aria-label="Materials catalog help"
-                    className="absolute left-0 top-full z-50 mt-2 w-[min(calc(100vw-2rem),22rem)] rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 text-sm leading-relaxed text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-floating)] ring-1 ring-black/5 dark:ring-white/10"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="min-w-0 flex-1 text-[var(--enterprise-text)]">
-                        {MATERIALS_CATALOG_HELP}
-                      </p>
-                      <button
-                        type="button"
-                        aria-label="Close help"
-                        onClick={() => setCatalogHelpOpen(false)}
-                        className="shrink-0 rounded-lg p-1 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
-                      >
-                        <X className="h-4 w-4" strokeWidth={2} />
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-          {memberships.length > 1 && !forcedWorkspaceId ? (
-            <div className="mt-3 flex items-center gap-2">
-              <label className="text-xs font-medium text-[var(--enterprise-text-muted)]">
-                Workspace
-              </label>
-              <select
-                value={wid}
-                onChange={(e) => setWorkspaceId(e.target.value)}
-                className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
-              >
-                {memberships.map((m) => (
-                  <option key={m.workspace.id} value={m.workspace.id}>
-                    {m.workspace.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap gap-1.5 rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 p-1.5 shadow-[var(--enterprise-shadow-xs)]">
-            {isSuperAdmin ? (
+    <div className={`${OM_PAGE_CLASS} flex h-full min-h-0 w-full min-w-0 max-w-full flex-col`}>
+      <OmSubPageHeader
+        icon={Package}
+        title="Materials database"
+        description={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            Company-wide catalog shared across projects.
+            <span ref={catalogHelpRef} className="relative inline-flex">
               <button
                 type="button"
+                className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-primary)] ${catalogHelpOpen ? "bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-primary)]" : ""}`}
+                aria-label="How the materials catalog works"
+                aria-expanded={catalogHelpOpen}
+                aria-controls={catalogHelpOpen ? catalogHelpDescriptionId : undefined}
+                onClick={() => setCatalogHelpOpen((o) => !o)}
+              >
+                <HelpCircle className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+              </button>
+              {catalogHelpOpen ? (
+                <div
+                  id={catalogHelpDescriptionId}
+                  role="region"
+                  aria-label="Materials catalog help"
+                  className="absolute left-0 top-full z-50 mt-2 w-[min(calc(100vw-2rem),22rem)] rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 text-xs leading-relaxed text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-floating)]"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 flex-1">{MATERIALS_CATALOG_HELP}</p>
+                    <button
+                      type="button"
+                      aria-label="Close help"
+                      onClick={() => setCatalogHelpOpen(false)}
+                      className="shrink-0 rounded-lg p-1 text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
+                    >
+                      <X className="h-3.5 w-3.5" strokeWidth={2} />
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </span>
+          </span>
+        }
+        action={
+          <>
+            {isSuperAdmin ? (
+              <EnterpriseButton
+                size="sm"
+                variant="secondary"
                 onClick={() => setTemplatePanelOpen(true)}
-                className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary-soft)]/80"
               >
                 <LayoutList className="h-4 w-4" strokeWidth={1.75} />
                 Catalog fields
-              </button>
+              </EnterpriseButton>
             ) : null}
-            <button
-              type="button"
-              onClick={onDownloadTemplate}
-              className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
-            >
+            <EnterpriseButton size="sm" variant="secondary" onClick={onDownloadTemplate}>
               <Download className="h-4 w-4" strokeWidth={1.75} />
               Template
-            </button>
-            <button
-              type="button"
-              onClick={onPickImport}
-              className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
-            >
+            </EnterpriseButton>
+            <EnterpriseButton size="sm" variant="secondary" onClick={onPickImport}>
               <Upload className="h-4 w-4" strokeWidth={1.75} />
               Import
-            </button>
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            className="sr-only"
-            onChange={onImportFile}
-          />
-          <EnterpriseAddPulseWrap>
-            <button
-              type="button"
+            </EnterpriseButton>
+            <EnterpriseButton
+              size="sm"
               onClick={() => {
                 setEditing(null);
                 setForm(emptyForm(sortedTplFields.map((f) => f.key)));
                 setPanelOpen(true);
               }}
-              className="hidden items-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--enterprise-primary)]/20 transition hover:bg-[var(--enterprise-primary-deep)] lg:inline-flex"
             >
               <Plus className="h-4 w-4" strokeWidth={2} />
               Add material
-            </button>
-          </EnterpriseAddPulseWrap>
-        </div>
-      </div>
+            </EnterpriseButton>
+          </>
+        }
+      >
+        {memberships.length > 1 && !forcedWorkspaceId ? (
+          <div className="flex items-center gap-2">
+            <label className={OM_COMPACT_LABEL}>Workspace</label>
+            <select
+              value={wid}
+              onChange={(e) => setWorkspaceId(e.target.value)}
+              className={OM_COMPACT_SELECT}
+            >
+              {memberships.map((m) => (
+                <option key={m.workspace.id} value={m.workspace.id}>
+                  {m.workspace.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+      </OmSubPageHeader>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        className="sr-only"
+        onChange={onImportFile}
+      />
 
       {loadError && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -500,7 +484,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
       )}
 
       <div className="enterprise-card flex min-h-0 flex-1 flex-col overflow-hidden p-0 shadow-[var(--enterprise-shadow-xs)]">
-        <div className="shrink-0 flex flex-col gap-3 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+        <div className="shrink-0 flex flex-col gap-2 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-3 sm:flex-row sm:items-end sm:justify-between sm:px-4">
           <div className="relative max-w-lg flex-1">
             <label className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Search catalog
@@ -511,7 +495,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Name, SKU, supplier, specification…"
-                className="w-full rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 py-2.5 pl-10 pr-3 text-sm text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)]/55 focus:border-[var(--enterprise-primary)] focus:bg-[var(--enterprise-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/15"
+                className={`${OM_COMPACT_INPUT} pl-9`}
               />
             </div>
             {sortedTplFields.length > 0 ? (
@@ -533,7 +517,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2.5 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/15"
+              className={OM_COMPACT_SELECT}
             >
               <option value="all">All types</option>
               {types.map((t) => (
@@ -549,22 +533,22 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="sticky top-0 z-[1]">
               <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] shadow-sm">
-                <th className="whitespace-nowrap px-4 py-3.5">Type</th>
-                <th className="min-w-[8rem] px-4 py-3.5">Material</th>
-                <th className="px-4 py-3.5">SKU</th>
-                <th className="px-4 py-3.5">Unit</th>
-                <th className="px-4 py-3.5">Price</th>
-                <th className="min-w-[6rem] px-4 py-3.5">Supplier</th>
+                <th className="whitespace-nowrap px-3 py-2">Type</th>
+                <th className="min-w-[8rem] px-3 py-2">Material</th>
+                <th className="px-3 py-2">SKU</th>
+                <th className="px-3 py-2">Unit</th>
+                <th className="px-3 py-2">Price</th>
+                <th className="min-w-[6rem] px-3 py-2">Supplier</th>
                 {sortedTplFields.map((f) => (
                   <th
                     key={f.id}
-                    className={`max-w-40 truncate bg-[var(--enterprise-primary-soft)]/30 px-4 py-3.5 text-[var(--enterprise-text)] ring-1 ring-inset ring-[var(--enterprise-primary)]/10 first:pl-4 ${f.type === "number" || f.type === "currency" ? "text-right" : ""}`}
+                    className={`max-w-40 truncate bg-[var(--enterprise-primary-soft)]/30 px-3 py-2 text-[var(--enterprise-text)] ring-1 ring-inset ring-[var(--enterprise-primary)]/10 first:pl-3 ${f.type === "number" || f.type === "currency" ? "text-right" : ""}`}
                     title={f.label}
                   >
                     {f.label}
                   </th>
                 ))}
-                <th className="w-28 whitespace-nowrap px-4 py-3.5 text-right">Actions</th>
+                <th className="w-28 whitespace-nowrap px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -572,7 +556,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                 <tr>
                   <td
                     colSpan={7 + sortedTplFields.length}
-                    className="px-4 py-16 text-center text-[var(--enterprise-text-muted)]"
+                    className="px-3 py-10 text-center text-[var(--enterprise-text-muted)]"
                   >
                     <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--enterprise-primary-soft)]/80 text-[var(--enterprise-primary)]">
                       <FileSpreadsheet className="h-7 w-7 opacity-90" strokeWidth={1.5} />
@@ -595,12 +579,12 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                     key={m.id}
                     className="border-b border-[var(--enterprise-border)]/50 transition-colors hover:bg-[var(--enterprise-hover-surface)]/60"
                   >
-                    <td className="px-4 py-3.5 align-middle">
+                    <td className="px-3 py-2 align-middle">
                       <span className="inline-flex max-w-full truncate rounded-lg bg-[var(--enterprise-primary-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--enterprise-primary)] ring-1 ring-[var(--enterprise-primary)]/10">
                         {m.category.name}
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 align-middle">
+                    <td className="px-3 py-2 align-middle">
                       <div className="flex items-center gap-1.5">
                         <div className="truncate font-medium text-[var(--enterprise-text)]">
                           {m.name}
@@ -639,13 +623,13 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                     {sortedTplFields.map((f) => (
                       <td
                         key={f.id}
-                        className={`max-w-40 truncate bg-[var(--enterprise-primary-soft)]/[0.12] px-4 py-3.5 align-middle text-[var(--enterprise-text)] ${f.type === "number" || f.type === "currency" ? "text-right tabular-nums" : ""}`}
+                        className={`max-w-40 truncate bg-[var(--enterprise-primary-soft)]/[0.12] px-3 py-2 align-middle text-[var(--enterprise-text)] ${f.type === "number" || f.type === "currency" ? "text-right tabular-nums" : ""}`}
                         title={formatCustomCell(m, f)}
                       >
                         {formatCustomCell(m, f)}
                       </td>
                     ))}
-                    <td className="whitespace-nowrap px-4 py-3.5 text-right align-middle">
+                    <td className="whitespace-nowrap px-3 py-2 text-right align-middle">
                       <button
                         type="button"
                         onClick={() => {
@@ -768,7 +752,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
           </>
         }
       >
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Core details
@@ -782,7 +766,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
               required
               value={form.materialType}
               onChange={(e) => setForm((f) => ({ ...f, materialType: e.target.value }))}
-              className={materialInputClass}
+              className={`mt-1 ${OM_COMPACT_INPUT}`}
               placeholder="e.g. Concrete, Structural Steel, Finishes"
             />
           </div>
@@ -794,7 +778,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
               required
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className={materialInputClass}
+              className={`mt-1 ${OM_COMPACT_INPUT}`}
               placeholder="e.g. Ready-mix 25 MPa"
             />
           </div>
@@ -803,7 +787,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
             <input
               value={form.sku}
               onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
-              className={materialInputClass}
+              className={`mt-1 ${OM_COMPACT_INPUT}`}
             />
           </div>
           <div>
@@ -811,7 +795,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
             <input
               value={form.unit}
               onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
-              className={materialInputClass}
+              className={`mt-1 ${OM_COMPACT_INPUT}`}
               placeholder="m³, kg, sf, ea…"
             />
           </div>
@@ -823,7 +807,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
               value={form.unitPrice}
               onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))}
               inputMode="decimal"
-              className={materialInputClass}
+              className={`mt-1 ${OM_COMPACT_INPUT}`}
             />
           </div>
           <div>
@@ -833,7 +817,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
             <input
               value={form.currency}
               onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-              className={materialInputClass}
+              className={`mt-1 ${OM_COMPACT_INPUT}`}
               placeholder="USD"
             />
           </div>
@@ -844,7 +828,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
             <input
               value={form.supplier}
               onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))}
-              className={materialInputClass}
+              className={`mt-1 ${OM_COMPACT_INPUT}`}
             />
           </div>
           <div className="sm:col-span-2">
@@ -854,7 +838,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
             <input
               value={form.manufacturer}
               onChange={(e) => setForm((f) => ({ ...f, manufacturer: e.target.value }))}
-              className={materialInputClass}
+              className={`mt-1 ${OM_COMPACT_INPUT}`}
             />
           </div>
           <div className="sm:col-span-2">
@@ -864,7 +848,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
             <input
               value={form.specification}
               onChange={(e) => setForm((f) => ({ ...f, specification: e.target.value }))}
-              className={materialInputClass}
+              className={`mt-1 ${OM_COMPACT_INPUT}`}
               placeholder="ASTM, grade, mix design…"
             />
           </div>
@@ -874,7 +858,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
               value={form.notes}
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               rows={2}
-              className={materialInputClass}
+              className={`mt-1 ${OM_COMPACT_INPUT}`}
             />
           </div>
           {sortedTplFields.length > 0 ? (
@@ -907,7 +891,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                             custom: { ...prev.custom, [f.key]: e.target.value },
                           }))
                         }
-                        className={materialInputClass}
+                        className={`mt-1 ${OM_COMPACT_INPUT}`}
                       />
                     ) : (
                       <input
@@ -919,7 +903,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                           }))
                         }
                         inputMode="decimal"
-                        className={`${materialInputClass} tabular-nums`}
+                        className={`mt-1 ${OM_COMPACT_INPUT} tabular-nums`}
                       />
                     )}
                   </div>
@@ -937,15 +921,6 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
           onClose={() => setTemplatePanelOpen(false)}
         />
       ) : null}
-      <EnterpriseFab
-        label="Add material"
-        icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
-        onClick={() => {
-          setEditing(null);
-          setForm(emptyForm(sortedTplFields.map((f) => f.key)));
-          setPanelOpen(true);
-        }}
-      />
     </div>
   );
 }

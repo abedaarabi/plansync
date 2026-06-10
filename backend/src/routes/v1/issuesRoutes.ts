@@ -10,6 +10,7 @@ import {
   MaintenanceFrequency,
   Prisma,
   RfiStatus,
+  WorkOrderType,
 } from "@prisma/client";
 import { Resend } from "resend";
 import { prisma } from "../../lib/prisma.js";
@@ -46,6 +47,17 @@ import {
   sketchJsonByteSize,
   type IssueReferencePhotoParsed,
 } from "../../lib/issueReferencePhotos.js";
+import {
+  parsePartsUsedJson,
+  parseWorkOrderProcedure,
+  parseWorkOrderProcedureResults,
+  partsUsedToJsonValue,
+  procedureResultsToJsonValue,
+  procedureToJsonValue,
+  type WorkOrderChecklistItem,
+  type WorkOrderChecklistResult,
+  type WorkOrderPartUsed,
+} from "../../lib/workOrderChecklist.js";
 
 function requirePro(workspace: { subscriptionStatus: string | null }) {
   if (!isWorkspacePro(workspace)) {
@@ -126,7 +138,9 @@ function frequencyToNextFrom(
 const issueInclude = {
   assignee: { select: { id: true, name: true, email: true, image: true } },
   creator: { select: { id: true, name: true, email: true, image: true } },
+  completedBy: { select: { id: true, name: true, email: true, image: true } },
   asset: { select: { id: true, tag: true, name: true } },
+  vendor: { select: { id: true, name: true, email: true, trade: true } },
   file: { select: { name: true } },
   fileVersion: { select: { version: true } },
   rfiLinks: {
@@ -201,6 +215,34 @@ function issueRowJson(row: IssueRow, opts?: { maskPortalReporter?: boolean }) {
     resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
     reporterName: mask ? null : row.reporterName,
     reporterEmail: mask ? null : row.reporterEmail,
+    maintenanceScheduleId: row.maintenanceScheduleId,
+    maintenanceDueAt: row.maintenanceDueAt ? row.maintenanceDueAt.toISOString() : null,
+    workOrderType: row.workOrderType,
+    procedureJson: parseWorkOrderProcedure(row.procedureJson),
+    procedureResultJson: parseWorkOrderProcedureResults(row.procedureResultJson),
+    laborMinutes: row.laborMinutes,
+    partsUsedJson: parsePartsUsedJson(row.partsUsedJson),
+    completedById: row.completedById,
+    completedBy: row.completedBy
+      ? {
+          id: row.completedBy.id,
+          name: row.completedBy.name,
+          email: row.completedBy.email,
+          image: row.completedBy.image,
+        }
+      : null,
+    vendorId: row.vendorId,
+    vendor: row.vendor
+      ? {
+          id: row.vendor.id,
+          name: row.vendor.name,
+          email: row.vendor.email,
+          trade: row.vendor.trade,
+        }
+      : null,
+    sourceOccupantIssueId: row.sourceOccupantIssueId,
+    completionEvidenceRequired: row.completionEvidenceRequired,
+    hasVendorAccessLink: Boolean(row.vendorAccessToken),
   };
 }
 
@@ -350,11 +392,34 @@ export function registerIssuesRoutes(
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const scope = issuesWhereForAuth(ctx, userId);
+    const assigneeFilter = c.req.query("assignee")?.trim();
+    const dueToday = c.req.query("dueToday") === "true";
+    const overdueOnly = c.req.query("overdueOnly") === "true";
+    const now = new Date();
+    const todayStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+    const todayEnd = new Date(todayStart);
+    todayEnd.setUTCDate(todayEnd.getUTCDate() + 1);
+
     const rows = await prisma.issue.findMany({
       where: {
         projectId,
         ...(fileVersionId ? { fileVersionId } : {}),
         ...(assetIdFilter ? { assetId: assetIdFilter } : {}),
+        ...(assigneeFilter === "me" ? { assigneeId: userId } : {}),
+        ...(dueToday
+          ? {
+              dueDate: { gte: todayStart, lt: todayEnd },
+              status: { in: [IssueStatus.OPEN, IssueStatus.IN_PROGRESS] },
+            }
+          : {}),
+        ...(overdueOnly
+          ? {
+              dueDate: { lt: todayStart },
+              status: { in: [IssueStatus.OPEN, IssueStatus.IN_PROGRESS] },
+            }
+          : {}),
         ...kindClause,
         ...scope,
       },
@@ -655,6 +720,11 @@ export function registerIssuesRoutes(
         externalAssigneeName: z.string().max(200).optional(),
         reporterName: z.string().max(200).optional(),
         reporterEmail: z.string().email().optional(),
+        workOrderType: z.nativeEnum(WorkOrderType).optional(),
+        procedureJson: z.array(z.unknown()).max(50).optional(),
+        vendorId: z.string().optional(),
+        sourceOccupantIssueId: z.string().optional(),
+        completionEvidenceRequired: z.boolean().optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
@@ -754,6 +824,28 @@ export function registerIssuesRoutes(
       if (!ast) return c.json({ error: "Asset not found on this project" }, 400);
     }
 
+    if (body.data.vendorId?.trim()) {
+      const v = await prisma.vendor.findFirst({
+        where: { id: body.data.vendorId.trim(), projectId },
+      });
+      if (!v) return c.json({ error: "Vendor not found on this project" }, 400);
+    }
+
+    if (body.data.sourceOccupantIssueId?.trim()) {
+      const occ = await prisma.issue.findFirst({
+        where: {
+          id: body.data.sourceOccupantIssueId.trim(),
+          projectId,
+          issueKind: IssueKind.OCCUPANT,
+        },
+      });
+      if (!occ) return c.json({ error: "Tenant request not found" }, 400);
+    }
+
+    const procedureItems: WorkOrderChecklistItem[] = body.data.procedureJson
+      ? parseWorkOrderProcedure(body.data.procedureJson)
+      : [];
+
     const extEmail = body.data.externalAssigneeEmail?.trim();
     const extName = body.data.externalAssigneeName?.trim();
 
@@ -813,6 +905,19 @@ export function registerIssuesRoutes(
           ...(body.data.reporterName !== undefined ? { reporterName: body.data.reporterName } : {}),
           ...(body.data.reporterEmail !== undefined
             ? { reporterEmail: body.data.reporterEmail }
+            : {}),
+          ...(body.data.workOrderType !== undefined
+            ? { workOrderType: body.data.workOrderType }
+            : {}),
+          ...(procedureItems.length > 0
+            ? { procedureJson: procedureToJsonValue(procedureItems) }
+            : {}),
+          ...(body.data.vendorId?.trim() ? { vendorId: body.data.vendorId.trim() } : {}),
+          ...(body.data.sourceOccupantIssueId?.trim()
+            ? { sourceOccupantIssueId: body.data.sourceOccupantIssueId.trim() }
+            : {}),
+          ...(body.data.completionEvidenceRequired !== undefined
+            ? { completionEvidenceRequired: body.data.completionEvidenceRequired }
             : {}),
         },
       });
@@ -1152,6 +1257,13 @@ export function registerIssuesRoutes(
           .max(MAX_ISSUE_REFERENCE_PHOTOS)
           .nullable()
           .optional(),
+        workOrderType: z.nativeEnum(WorkOrderType).nullable().optional(),
+        procedureJson: z.array(z.unknown()).max(50).nullable().optional(),
+        procedureResultJson: z.array(z.unknown()).max(50).nullable().optional(),
+        laborMinutes: z.number().int().min(0).max(100_000).nullable().optional(),
+        partsUsedJson: z.array(z.unknown()).max(30).nullable().optional(),
+        vendorId: z.string().nullable().optional(),
+        completionEvidenceRequired: z.boolean().optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
@@ -1255,6 +1367,32 @@ export function registerIssuesRoutes(
       if (!ast) return c.json({ error: "Asset not found on this project" }, 400);
     }
 
+    if (body.data.vendorId) {
+      const v = await prisma.vendor.findFirst({
+        where: { id: body.data.vendorId, projectId: issue.projectId },
+      });
+      if (!v) return c.json({ error: "Vendor not found on this project" }, 400);
+    }
+
+    const nextProcedure =
+      body.data.procedureJson === undefined
+        ? undefined
+        : body.data.procedureJson === null
+          ? null
+          : parseWorkOrderProcedure(body.data.procedureJson);
+    const nextProcedureResults =
+      body.data.procedureResultJson === undefined
+        ? undefined
+        : body.data.procedureResultJson === null
+          ? null
+          : parseWorkOrderProcedureResults(body.data.procedureResultJson);
+    const nextPartsUsed =
+      body.data.partsUsedJson === undefined
+        ? undefined
+        : body.data.partsUsedJson === null
+          ? null
+          : parsePartsUsedJson(body.data.partsUsedJson);
+
     const patchStart =
       body.data.startDate === undefined
         ? undefined
@@ -1355,6 +1493,41 @@ export function registerIssuesRoutes(
             : {}),
           ...(shouldStampResolved && body.data.resolvedAt === undefined
             ? { resolvedAt: new Date() }
+            : {}),
+          ...(body.data.workOrderType !== undefined
+            ? { workOrderType: body.data.workOrderType }
+            : {}),
+          ...(nextProcedure !== undefined
+            ? {
+                procedureJson:
+                  nextProcedure === null || nextProcedure.length === 0
+                    ? null
+                    : procedureToJsonValue(nextProcedure),
+              }
+            : {}),
+          ...(nextProcedureResults !== undefined
+            ? {
+                procedureResultJson:
+                  nextProcedureResults === null || nextProcedureResults.length === 0
+                    ? null
+                    : procedureResultsToJsonValue(nextProcedureResults),
+              }
+            : {}),
+          ...(body.data.laborMinutes !== undefined ? { laborMinutes: body.data.laborMinutes } : {}),
+          ...(nextPartsUsed !== undefined
+            ? {
+                partsUsedJson:
+                  nextPartsUsed === null || nextPartsUsed.length === 0
+                    ? null
+                    : partsUsedToJsonValue(nextPartsUsed),
+              }
+            : {}),
+          ...(body.data.vendorId !== undefined ? { vendorId: body.data.vendorId } : {}),
+          ...(body.data.completionEvidenceRequired !== undefined
+            ? { completionEvidenceRequired: body.data.completionEvidenceRequired }
+            : {}),
+          ...(shouldStampResolved && issue.issueKind === IssueKind.WORK_ORDER
+            ? { completedById: c.get("user").id }
             : {}),
         } as Prisma.IssueUncheckedUpdateInput,
       });

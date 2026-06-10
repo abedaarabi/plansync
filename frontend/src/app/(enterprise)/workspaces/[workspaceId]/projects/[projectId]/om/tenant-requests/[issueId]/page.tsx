@@ -7,11 +7,5 @@ type Props = { params: Promise<{ projectId: string; issueId: string }> };
 
 export default async function WorkspaceOmTenantRequestDetailPage({ params }: Props) {
   const { projectId, issueId } = await params;
-  return (
-    <div className="enterprise-animate-in p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-6xl">
-        <TenantRequestsClient projectId={projectId} selectedIssueId={issueId} />
-      </div>
-    </div>
-  );
+  return <TenantRequestsClient projectId={projectId} selectedIssueId={issueId} />;
 }

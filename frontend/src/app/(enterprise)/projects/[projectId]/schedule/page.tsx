@@ -1,17 +1,16 @@
 import type { Metadata } from "next";
 import { ProjectScheduleClient } from "@/components/enterprise/ProjectScheduleClient";
+import { EnterpriseCompactPageShell } from "@/components/enterprise/EnterpriseCompactPageShell";
 
-export const metadata: Metadata = { title: "Schedule" };
+export const metadata: Metadata = { title: "Schedule Beta" };
 
 type Props = { params: Promise<{ projectId: string }> };
 
 export default async function ProjectSchedulePage({ params }: Props) {
   const { projectId } = await params;
   return (
-    <div className="enterprise-animate-in p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-[1600px]">
-        <ProjectScheduleClient projectId={projectId} />
-      </div>
-    </div>
+    <EnterpriseCompactPageShell maxWidth="1600">
+      <ProjectScheduleClient projectId={projectId} />
+    </EnterpriseCompactPageShell>
   );
 }

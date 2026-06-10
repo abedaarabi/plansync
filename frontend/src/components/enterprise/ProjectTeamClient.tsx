@@ -19,6 +19,8 @@ import {
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "./EnterpriseLoadingState";
+import { OmSubPageHeader } from "./OmSubPageHeader";
+import { OM_COMPACT_INPUT, OM_COMPACT_SELECT, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import {
   filterEmailInvites,
   formatInviteSentAgo,
@@ -32,8 +34,6 @@ import {
 import { userInitials } from "@/lib/user-initials";
 import { isWorkspaceManager } from "@/lib/workspaceRole";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
-
-const CARD_SHADOW = "0 1px 3px rgba(0,0,0,0.1)";
 
 export function ProjectTeamClient({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
@@ -221,13 +221,14 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-6">
-      <div className="flex items-center gap-2">
-        <Users className="h-5 w-5 text-[var(--enterprise-primary)]" />
-        <h1 className="text-2xl font-bold text-[var(--enterprise-text)]">Project team</h1>
-      </div>
+    <div className={`${OM_PAGE_CLASS} w-full min-w-0 max-w-full`}>
+      <OmSubPageHeader
+        icon={Users}
+        title="Project team"
+        description="Invite collaborators, manage roles, and track who is active on this project."
+      />
 
-      <div className="enterprise-card border-[var(--enterprise-border)] bg-white p-5">
+      <div className="enterprise-card border-[var(--enterprise-border)] bg-white p-3 sm:p-4">
         <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
           Invite to this project
         </h2>
@@ -243,7 +244,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                   onChange={(e) => setEmail(e.target.value)}
                   type="email"
                   required
-                  className="h-10 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm"
+                  className={OM_COMPACT_INPUT}
                   placeholder="name@company.com"
                 />
               </div>
@@ -254,7 +255,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                 <select
                   value={inviteKind}
                   onChange={(e) => setInviteKind(e.target.value as EmailInviteKind)}
-                  className="h-10 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm"
+                  className={OM_COMPACT_SELECT}
                 >
                   <option value="INTERNAL">Internal teammate</option>
                   <option value="CLIENT">Client</option>
@@ -270,7 +271,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value as "ADMIN" | "MEMBER" | "SUPER_ADMIN")}
-                    className="h-10 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm"
+                    className={OM_COMPACT_SELECT}
                   >
                     <option value="MEMBER">Member</option>
                     <option value="ADMIN">Admin</option>
@@ -288,7 +289,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                     onChange={(e) => setTrade(e.target.value)}
                     type="text"
                     maxLength={120}
-                    className="h-10 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm"
+                    className={OM_COMPACT_INPUT}
                     placeholder="e.g. Electrical"
                   />
                 </div>
@@ -304,7 +305,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                       onChange={(e) => setInviteeName(e.target.value)}
                       type="text"
                       maxLength={200}
-                      className="h-10 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm"
+                      className={OM_COMPACT_INPUT}
                     />
                   </div>
                   <div>
@@ -316,7 +317,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                       onChange={(e) => setInviteeCompany(e.target.value)}
                       type="text"
                       maxLength={200}
-                      className="h-10 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm"
+                      className={OM_COMPACT_INPUT}
                     />
                   </div>
                 </>
@@ -328,7 +329,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
             <button
               type="submit"
               disabled={sending}
-              className="inline-flex h-10 items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white disabled:opacity-60"
+              className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-3 text-xs font-semibold text-white disabled:opacity-60"
             >
               {sending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -347,20 +348,20 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
       </div>
 
       <div className="enterprise-card overflow-hidden p-0">
-        <div className="border-b border-[var(--enterprise-border)] px-5 py-3 text-sm font-semibold text-[var(--enterprise-text)]">
+        <div className="border-b border-[var(--enterprise-border)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)]">
           <span className="inline-flex items-center gap-2">
             <Activity className="h-4 w-4 text-emerald-600" />
             Currently working (last 15 min)
           </span>
         </div>
         {liveActors.length === 0 ? (
-          <div className="px-5 py-4 text-sm text-[var(--enterprise-text-muted)]">
+          <div className="px-3 py-3 text-xs text-[var(--enterprise-text-muted)]">
             No active collaborators in the last 15 minutes.
           </div>
         ) : (
           <ul className="divide-y divide-[var(--enterprise-border)]">
             {liveActors.map((u) => (
-              <li key={u.id} className="flex items-center justify-between gap-3 px-5 py-3">
+              <li key={u.id} className="flex items-center justify-between gap-2 px-3 py-2">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--enterprise-primary-soft)] text-xs font-semibold text-[var(--enterprise-primary)]">
                     {userInitials(u.name, u.email)}
@@ -384,12 +385,12 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
       </div>
 
       <div className="enterprise-card overflow-hidden p-0">
-        <div className="border-b border-[var(--enterprise-border)] px-5 py-3 text-sm font-semibold text-[var(--enterprise-text)]">
+        <div className="border-b border-[var(--enterprise-border)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)]">
           Members ({team?.members.length ?? 0})
         </div>
         <ul className="divide-y divide-[var(--enterprise-border)]">
           {(team?.members ?? []).map((m) => (
-            <li key={m.userId} className="flex items-center justify-between gap-3 px-5 py-3">
+            <li key={m.userId} className="flex items-center justify-between gap-2 px-3 py-2">
               <div className="min-w-0 flex items-center gap-3">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--enterprise-primary-soft)] text-xs font-semibold text-[var(--enterprise-primary)]">
                   {userInitials(m.name, m.email)}
@@ -483,15 +484,14 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
       </div>
 
       {isAdmin ? (
-        <div
-          className="overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white"
-          style={{ boxShadow: CARD_SHADOW }}
-        >
-          <div className="rounded-t-2xl border-b border-[#E2E8F0] bg-gradient-to-b from-[#F8FAFC] to-white px-5 py-5 sm:px-6">
+        <div className="enterprise-card overflow-hidden p-0">
+          <div className="border-b border-[var(--enterprise-border)] px-3 py-2.5 sm:px-4">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-[#0F172A]">Email invites</h2>
-                <p className="mt-0.5 text-xs text-[#64748B]">
+                <h2 className="text-xs font-semibold text-[var(--enterprise-text)]">
+                  Email invites
+                </h2>
+                <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
                   {pendingInviteCount > 0 ? (
                     <span>
                       <span className="font-medium text-[#0F172A]">{pendingInviteCount}</span>{" "}
@@ -514,15 +514,15 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
               </div>
             </div>
             {!invitesPending && invites.length > 0 ? (
-              <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div className="mt-2 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
                 <div className="relative min-w-0 max-w-md flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94A3B8]" />
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--enterprise-text-muted)]" />
                   <input
                     type="search"
                     value={inviteListSearch}
                     onChange={(e) => setInviteListSearch(e.target.value)}
                     placeholder="Search email, name, company, trade, project…"
-                    className="h-10 w-full rounded-xl border border-[#E2E8F0] bg-white py-2 pl-9 pr-3 text-sm text-[#0F172A] placeholder:text-[#94A3B8] shadow-sm focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                    className={`${OM_COMPACT_INPUT} pl-8`}
                     aria-label="Filter invites by keyword"
                   />
                 </div>
@@ -530,7 +530,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                   <select
                     value={inviteListKindFilter}
                     onChange={(e) => setInviteListKindFilter(e.target.value as InviteKindFilter)}
-                    className="h-10 rounded-xl border border-[#E2E8F0] bg-white px-3 text-sm font-medium text-[#0F172A] shadow-sm focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                    className={OM_COMPACT_SELECT}
                     aria-label="Filter by invite type"
                   >
                     <option value="all">All types</option>
@@ -544,7 +544,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                     onChange={(e) =>
                       setInviteListStatusFilter(e.target.value as InviteStatusFilter)
                     }
-                    className="h-10 rounded-xl border border-[#E2E8F0] bg-white px-3 text-sm font-medium text-[#0F172A] shadow-sm focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                    className={OM_COMPACT_SELECT}
                     aria-label="Filter by status"
                   >
                     <option value="all">All statuses</option>
@@ -560,7 +560,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                         setInviteListStatusFilter("all");
                         setInviteListSearch("");
                       }}
-                      className="h-10 rounded-xl border border-transparent px-3 text-sm font-medium text-[#2563EB] hover:bg-[#EFF6FF]"
+                      className="inline-flex min-h-9 items-center rounded-lg px-2.5 text-xs font-semibold text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-primary-soft)]"
                     >
                       Clear filters
                     </button>
@@ -572,7 +572,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
           {invitesPending ? (
             <div className="space-y-0 divide-y divide-[#E2E8F0]">
               {[0, 1].map((i) => (
-                <div key={i} className="flex animate-pulse gap-4 px-5 py-5 sm:px-6">
+                <div key={i} className="flex animate-pulse gap-3 px-3 py-3 sm:px-4">
                   <div className="h-12 w-12 shrink-0 rounded-xl bg-[#E2E8F0]" />
                   <div className="min-w-0 flex-1 space-y-2 pt-1">
                     <div className="h-4 w-48 max-w-full rounded bg-[#E2E8F0]" />
@@ -582,18 +582,22 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
               ))}
             </div>
           ) : invites.length === 0 ? (
-            <div className="px-6 py-14 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F1F5F9] text-[#64748B]">
-                <Mail className="h-5 w-5" />
+            <div className="px-4 py-8 text-center">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)]">
+                <Mail className="h-4 w-4" />
               </div>
-              <p className="mt-4 text-sm font-medium text-[#0F172A]">No email invites yet</p>
-              <p className="mt-1 text-sm text-[#64748B]">
+              <p className="mt-3 text-sm font-medium text-[var(--enterprise-text)]">
+                No email invites yet
+              </p>
+              <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
                 Send one using the form above to add people to this project.
               </p>
             </div>
           ) : filteredInvites.length === 0 ? (
-            <div className="px-6 py-12 text-center">
-              <p className="text-sm font-medium text-[#0F172A]">No invites match your filters</p>
+            <div className="px-4 py-8 text-center">
+              <p className="text-sm font-medium text-[var(--enterprise-text)]">
+                No invites match your filters
+              </p>
               <p className="mt-1 text-sm text-[#64748B]">Try another type, status, or search.</p>
               <button
                 type="button"
@@ -616,7 +620,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                 return (
                   <li
                     key={inv.id}
-                    className="flex flex-col gap-3 px-5 py-5 transition-colors hover:bg-[#FAFBFC] sm:px-6"
+                    className="flex flex-col gap-2 px-3 py-2.5 transition-colors hover:bg-[var(--enterprise-hover-surface)]/60 sm:px-4"
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="flex min-w-0 gap-4">

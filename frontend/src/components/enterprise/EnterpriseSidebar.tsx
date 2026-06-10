@@ -58,7 +58,22 @@ type NavItem = {
   icon: typeof House;
   disabled?: boolean;
   exact?: boolean;
+  badge?: string;
 };
+
+function sidebarNavBadgeClass(active: boolean): string {
+  return active ? "bg-white/20 text-white" : "border border-white/20 bg-white/10 text-slate-300";
+}
+
+function navItemTitle(
+  item: NavItem,
+  sectionHeading?: string,
+  t?: (key: string, values?: Record<string, string>) => string,
+): string {
+  const label = item.badge ? `${item.label} ${item.badge}` : item.label;
+  if (sectionHeading && t) return t("sectionItemTitle", { section: sectionHeading, label });
+  return label;
+}
 
 type NavSection = {
   id: string;
@@ -232,6 +247,7 @@ export function EnterpriseSidebar({
         href: `/projects/${projectId}/schedule`,
         label: t("schedule"),
         icon: ChartGantt,
+        badge: "Beta",
       });
 
     const sections: NavSection[] = [
@@ -688,14 +704,7 @@ export function EnterpriseSidebar({
                               if (disabled) e.preventDefault();
                               else afterNav();
                             }}
-                            title={
-                              sectionHeading
-                                ? t("sectionItemTitle", {
-                                    section: sectionHeading,
-                                    label: item.label,
-                                  })
-                                : item.label
-                            }
+                            title={navItemTitle(item, sectionHeading, t)}
                             className={`group flex min-h-9 items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
                               active
                                 ? "bg-[var(--enterprise-primary)]/90 text-white"
@@ -711,6 +720,13 @@ export function EnterpriseSidebar({
                               strokeWidth={1.75}
                             />
                             <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                            {item.badge ? (
+                              <span
+                                className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
+                              >
+                                {item.badge}
+                              </span>
+                            ) : null}
                           </Link>
                         );
                       })}
@@ -767,16 +783,22 @@ export function EnterpriseSidebar({
                         }}
                         title={
                           railCollapsed && sectionHeading
-                            ? t("sectionItemTitle", {
-                                section: sectionHeading,
-                                label: item.label,
-                              })
-                            : item.label
+                            ? navItemTitle(item, sectionHeading, t)
+                            : navItemTitle(item)
                         }
                         className={navLinkClass(active, disabled)}
                       >
                         <Icon className={iconClass(active)} strokeWidth={1.75} />
-                        <span className={railCollapsed ? "sr-only" : "truncate"}>{item.label}</span>
+                        <span className={railCollapsed ? "sr-only" : "min-w-0 flex-1 truncate"}>
+                          {item.badge ? `${item.label} ${item.badge}` : item.label}
+                        </span>
+                        {!railCollapsed && item.badge ? (
+                          <span
+                            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
+                          >
+                            {item.badge}
+                          </span>
+                        ) : null}
                       </Link>
                     );
                   })}
@@ -813,13 +835,20 @@ export function EnterpriseSidebar({
                             if (disabled) e.preventDefault();
                             else afterNav();
                           }}
-                          title={item.label}
+                          title={navItemTitle(item)}
                           className={navLinkClass(active, disabled)}
                         >
                           <Icon className={iconClass(active)} strokeWidth={1.75} />
-                          <span className={railCollapsed ? "sr-only" : "truncate"}>
+                          <span className={railCollapsed ? "sr-only" : "min-w-0 flex-1 truncate"}>
                             {item.label}
                           </span>
+                          {!railCollapsed && item.badge ? (
+                            <span
+                              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
+                            >
+                              {item.badge}
+                            </span>
+                          ) : null}
                         </Link>
                       );
                     }),

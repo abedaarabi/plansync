@@ -806,7 +806,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
 
   if (!project) {
     return (
-      <div className="rounded-2xl border border-[var(--enterprise-border)] bg-white p-10 text-center text-sm text-[var(--enterprise-text-muted)] shadow-sm">
+      <div className="rounded-xl border border-[var(--enterprise-border)] bg-white p-6 text-center text-sm text-[var(--enterprise-text-muted)] shadow-sm">
         {isPro
           ? "Project not found."
           : "Files & drawings require a Pro plan. Upgrade this workspace to access documents."}
@@ -816,7 +816,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
 
   if (!canViewDrawings) {
     return (
-      <div className="rounded-2xl border border-[var(--enterprise-border)] bg-white p-10 text-center text-sm text-[var(--enterprise-text-muted)] shadow-sm">
+      <div className="rounded-xl border border-[var(--enterprise-border)] bg-white p-6 text-center text-sm text-[var(--enterprise-text-muted)] shadow-sm">
         Drawings are hidden for clients in this project.
       </div>
     );
@@ -834,7 +834,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         aria-label="Upload files"
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[var(--enterprise-shadow-card)]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-[var(--enterprise-shadow-card)]">
         <FileExplorerTopBar
           breadcrumbs={breadcrumbItems}
           onNavigate={openFolderOrRequest}

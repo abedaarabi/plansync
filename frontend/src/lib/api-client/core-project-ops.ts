@@ -309,6 +309,23 @@ export async function deleteProjectWebhook(projectId: string, webhookId: string)
 
 export type ScheduleTaskStatus = "not_started" | "in_progress" | "delayed" | "completed";
 
+export type ScheduleLinkType = "e2s" | "s2s" | "e2e" | "s2e";
+
+export type ScheduleTaskLinkRow = {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  type: ScheduleLinkType;
+  lagDays: number;
+};
+
+export type ScheduleTaskLinkInput = ScheduleTaskLinkRow;
+
+export type ProjectSchedulePayload = {
+  tasks: ScheduleTaskRow[];
+  links: ScheduleTaskLinkRow[];
+};
+
 export type ScheduleTaskRow = {
   id: string;
   title: string;
@@ -326,20 +343,25 @@ export type ScheduleTaskRow = {
 
 export type ScheduleTaskInput = Omit<ScheduleTaskRow, "updatedAt">;
 
-export async function fetchProjectSchedule(projectId: string): Promise<ScheduleTaskRow[]> {
+export async function fetchProjectSchedule(projectId: string): Promise<ProjectSchedulePayload> {
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/schedule`), {
     credentials: "include",
   });
   if (res.status === 402) throw new ProRequiredError();
   if (res.status === 403) throw new Error("You don’t have access to the schedule.");
   if (!res.ok) throw new Error("Could not load schedule.");
-  return res.json() as Promise<ScheduleTaskRow[]>;
+  const j = (await res.json()) as ProjectSchedulePayload | ScheduleTaskRow[];
+  if (Array.isArray(j)) return { tasks: j, links: [] };
+  return {
+    tasks: j.tasks ?? [],
+    links: j.links ?? [],
+  };
 }
 
 export async function putProjectSchedule(
   projectId: string,
-  body: { tasks: ScheduleTaskInput[] },
-): Promise<ScheduleTaskRow[]> {
+  body: { tasks: ScheduleTaskInput[]; links?: ScheduleTaskLinkInput[] },
+): Promise<ProjectSchedulePayload> {
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/schedule`), {
     method: "PUT",
     credentials: "include",
@@ -351,13 +373,22 @@ export async function putProjectSchedule(
     const j = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(typeof j.error === "string" ? j.error : "Could not save schedule.");
   }
-  return res.json() as Promise<ScheduleTaskRow[]>;
+  const j = (await res.json()) as ProjectSchedulePayload | ScheduleTaskRow[];
+  if (Array.isArray(j)) return { tasks: j, links: [] };
+  return {
+    tasks: j.tasks ?? [],
+    links: j.links ?? [],
+  };
 }
 
 export async function fetchDatacenterCommissioningTemplate(
   projectId: string,
   mode: "append" | "replace" = "append",
-): Promise<{ mode: "append" | "replace"; tasks: ScheduleTaskInput[] }> {
+): Promise<{
+  mode: "append" | "replace";
+  tasks: ScheduleTaskInput[];
+  links: ScheduleTaskLinkInput[];
+}> {
   const res = await fetch(
     apiUrl(
       `/api/v1/projects/${encodeURIComponent(projectId)}/schedule/templates/datacenter-commissioning`,
@@ -376,10 +407,15 @@ export async function fetchDatacenterCommissioningTemplate(
       typeof j.error === "string" ? j.error : "Could not load datacenter schedule template.",
     );
   }
-  const j = (await res.json()) as { mode?: "append" | "replace"; tasks?: ScheduleTaskInput[] };
+  const j = (await res.json()) as {
+    mode?: "append" | "replace";
+    tasks?: ScheduleTaskInput[];
+    links?: ScheduleTaskLinkInput[];
+  };
   return {
     mode: j.mode === "replace" ? "replace" : "append",
     tasks: Array.isArray(j.tasks) ? j.tasks : [],
+    links: Array.isArray(j.links) ? j.links : [],
   };
 }
 

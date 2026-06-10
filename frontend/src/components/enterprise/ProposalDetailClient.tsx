@@ -211,7 +211,7 @@ export function ProposalDetailClient({
     p.status === "VIEWED";
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-3">
       <DeleteProposalConfirmDialog
         open={deleteOpen}
         reference={p.reference}
@@ -235,9 +235,9 @@ export function ProposalDetailClient({
         ) : null}
       </div>
 
-      <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
         {p.workspaceLogoUrl ? (
-          <div className="mb-4">
+          <div className="mb-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={p.workspaceLogoUrl}
@@ -247,7 +247,7 @@ export function ProposalDetailClient({
           </div>
         ) : null}
         <div className="text-sm font-medium text-slate-500">{p.reference}</div>
-        <h1 className="mt-1 text-2xl font-semibold text-[#0F172A]">{p.title}</h1>
+        <h1 className="mt-1 text-xl font-semibold text-[#0F172A] sm:text-2xl">{p.title}</h1>
         <div className="mt-2 flex flex-wrap gap-2 text-sm">
           <span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-700">
             {p.status.replace(/_/g, " ")}

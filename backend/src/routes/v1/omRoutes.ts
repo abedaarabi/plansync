@@ -5,6 +5,7 @@ import PDFDocument from "pdfkit";
 import { z } from "zod";
 import {
   ActivityType,
+  AssetMeterType,
   InspectionRunStatus,
   IssueKind,
   IssuePriority,
@@ -25,9 +26,11 @@ import { Resend } from "resend";
 import { createUserNotifications } from "../../lib/userNotifications.js";
 import {
   buildAssetDocumentKey,
+  buildAssetImageKey,
   buildIssueReferencePhotoKey,
   newUploadId,
   s3KeyMatchesAssetDocument,
+  s3KeyMatchesAssetImage,
   s3KeyMatchesIssueReferencePhoto,
 } from "../../lib/fileUpload.js";
 import {
@@ -163,6 +166,8 @@ function maintenanceScheduleJson(r: MaintenanceScheduleRow, now = new Date()) {
         }
       : null,
     isActive: r.isActive,
+    meterType: r.meterType,
+    meterThreshold: r.meterThreshold != null ? Number(r.meterThreshold) : null,
     asset: r.asset,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
@@ -331,6 +336,10 @@ type OmAssetRowDb = Prisma.AssetGetPayload<{
 function toOmAssetJson(a: OmAssetRowDb) {
   const {
     occupantScanSecret,
+    imageS3Key,
+    imageMimeType,
+    imageFileName,
+    imageSizeBytes,
     installDate,
     warrantyExpires,
     lastServiceAt,
@@ -341,6 +350,7 @@ function toOmAssetJson(a: OmAssetRowDb) {
   return {
     ...rest,
     hasOccupantQr: Boolean(occupantScanSecret),
+    hasImage: Boolean(imageS3Key),
     installDate: installDate?.toISOString() ?? null,
     warrantyExpires: warrantyExpires?.toISOString() ?? null,
     lastServiceAt: lastServiceAt?.toISOString() ?? null,
@@ -1249,6 +1259,231 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     return c.json({ ok: true as const });
   });
 
+  r.post("/projects/:projectId/om/assets/:assetId/image/presign", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const assetId = c.req.param("assetId")!;
+    const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (ctx.workspaceMember.isExternal) return c.json({ error: "Forbidden" }, 403);
+    if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
+      return c.json({ error: "Operations assets are not enabled" }, 403);
+    }
+    const gate = requireOmBilling(ctx.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const asset = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
+    if (!asset) return c.json({ error: "Not found" }, 404);
+
+    const body = z
+      .object({
+        fileName: z.string().min(1),
+        contentType: z.string().default("application/octet-stream"),
+        sizeBytes: z.coerce.bigint(),
+      })
+      .safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    const ct = body.data.contentType.trim().toLowerCase();
+    if (!ALLOWED_ISSUE_PHOTO_CONTENT_TYPES.has(ct)) {
+      return c.json({ error: "Only JPEG, PNG, WebP, GIF, or HEIC/HEIF images are allowed" }, 400);
+    }
+    if (body.data.sizeBytes <= 0n) return c.json({ error: "File is empty" }, 400);
+    if (body.data.sizeBytes > MAX_ISSUE_PHOTO_BYTES) {
+      return c.json({ error: "File too large (max 15 MB per image)" }, 400);
+    }
+
+    const ws = ctx.project.workspace;
+    const reclaim = asset.imageSizeBytes ?? 0n;
+    const newUsed = ws.storageUsedBytes - reclaim + body.data.sizeBytes;
+    if (newUsed > ws.storageQuotaBytes) {
+      return c.json({ error: "Storage quota exceeded" }, 400);
+    }
+
+    const uploadId = newUploadId();
+    const key = buildAssetImageKey(
+      ctx.project.workspaceId,
+      projectId,
+      assetId,
+      uploadId,
+      body.data.fileName,
+    );
+    let url: string | null;
+    try {
+      url = await presignPut(env, key, ct);
+    } catch (e) {
+      console.error("[asset image presign]", e);
+      return c.json(
+        { error: "Could not create upload URL. Check S3 credentials and bucket configuration." },
+        503,
+      );
+    }
+    if (!url) {
+      return c.json({ error: "S3 not configured — set AWS_* and S3_BUCKET", devKey: key }, 503);
+    }
+    return c.json({ uploadUrl: url, key });
+  });
+
+  r.post("/projects/:projectId/om/assets/:assetId/image/complete", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const assetId = c.req.param("assetId")!;
+    const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (ctx.workspaceMember.isExternal) return c.json({ error: "Forbidden" }, 403);
+    if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
+      return c.json({ error: "Operations assets are not enabled" }, 403);
+    }
+    const gate = requireOmBilling(ctx.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const asset = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
+    if (!asset) return c.json({ error: "Not found" }, 404);
+
+    const body = z
+      .object({
+        key: z.string().min(1),
+        fileName: z.string().min(1),
+        contentType: z.string().default("application/octet-stream"),
+        sizeBytes: z.coerce.bigint(),
+      })
+      .safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    const ct = body.data.contentType.trim().toLowerCase();
+    if (!ALLOWED_ISSUE_PHOTO_CONTENT_TYPES.has(ct)) {
+      return c.json({ error: "Only JPEG, PNG, WebP, GIF, or HEIC/HEIF images are allowed" }, 400);
+    }
+    if (body.data.sizeBytes <= 0n) return c.json({ error: "File is empty" }, 400);
+    if (body.data.sizeBytes > MAX_ISSUE_PHOTO_BYTES) {
+      return c.json({ error: "File too large (max 15 MB per image)" }, 400);
+    }
+    if (!s3KeyMatchesAssetImage(body.data.key, ctx.project.workspaceId, projectId, assetId)) {
+      return c.json({ error: "Invalid upload key" }, 400);
+    }
+
+    const ws = ctx.project.workspace;
+    const reclaim = asset.imageSizeBytes ?? 0n;
+    const newUsed = ws.storageUsedBytes - reclaim + body.data.sizeBytes;
+    if (newUsed > ws.storageQuotaBytes) {
+      return c.json({ error: "Storage quota exceeded" }, 400);
+    }
+
+    if (asset.imageS3Key && asset.imageS3Key !== body.data.key) {
+      const del = await deleteObject(env, asset.imageS3Key);
+      if (!del.ok && del.error !== "S3 not configured") {
+        console.warn(`[asset image replace] deleteObject ${asset.imageS3Key}:`, del.error);
+      }
+    }
+
+    const storageDelta = body.data.sizeBytes - reclaim;
+    const row = await prisma.$transaction(async (tx) => {
+      const updated = await tx.asset.update({
+        where: { id: assetId },
+        data: {
+          imageS3Key: body.data.key,
+          imageMimeType: ct,
+          imageFileName: body.data.fileName,
+          imageSizeBytes: body.data.sizeBytes,
+        },
+        include: {
+          file: { select: { id: true, name: true } },
+          fileVersion: { select: { id: true, version: true } },
+        },
+      });
+      if (storageDelta !== 0n) {
+        await tx.workspace.update({
+          where: { id: ctx.project.workspaceId },
+          data: { storageUsedBytes: { increment: storageDelta } },
+        });
+      }
+      return updated;
+    });
+
+    await logActivity(ctx.project.workspaceId, ActivityType.PROJECT_UPDATED, {
+      actorUserId: c.get("user").id,
+      entityId: assetId,
+      projectId,
+      metadata: { omAssetImageUpdated: body.data.fileName, assetTag: asset.tag },
+    });
+
+    return c.json(toOmAssetJson(row));
+  });
+
+  r.get("/projects/:projectId/om/assets/:assetId/image/presign-read", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const assetId = c.req.param("assetId")!;
+    const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
+      return c.json({ error: "Not found" }, 404);
+    }
+    const gate = requireOmBilling(ctx.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const asset = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
+    if (!asset?.imageS3Key) return c.json({ error: "Not found" }, 404);
+
+    let url: string | null;
+    try {
+      url = await presignGet(env, asset.imageS3Key);
+    } catch (e) {
+      console.error("[asset image presign-read]", e);
+      return c.json({ error: "Could not create download link (S3)." }, 503);
+    }
+    if (!url) return c.json({ error: "S3 not configured" }, 503);
+    return c.json({ url });
+  });
+
+  r.delete("/projects/:projectId/om/assets/:assetId/image", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const assetId = c.req.param("assetId")!;
+    const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (ctx.workspaceMember.isExternal) return c.json({ error: "Forbidden" }, 403);
+    if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
+      return c.json({ error: "Operations assets are not enabled" }, 403);
+    }
+    const gate = requireOmBilling(ctx.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const asset = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
+    if (!asset?.imageS3Key) return c.json({ error: "Not found" }, 404);
+
+    const del = await deleteObject(env, asset.imageS3Key);
+    if (!del.ok && del.error !== "S3 not configured") {
+      return c.json({ error: del.error }, 503);
+    }
+
+    const dec = asset.imageSizeBytes ?? 0n;
+    const row = await prisma.$transaction(async (tx) => {
+      const updated = await tx.asset.update({
+        where: { id: assetId },
+        data: {
+          imageS3Key: null,
+          imageMimeType: null,
+          imageFileName: null,
+          imageSizeBytes: null,
+        },
+        include: {
+          file: { select: { id: true, name: true } },
+          fileVersion: { select: { id: true, version: true } },
+        },
+      });
+      if (dec > 0n) {
+        await tx.workspace.update({
+          where: { id: ctx.project.workspaceId },
+          data: { storageUsedBytes: { decrement: dec } },
+        });
+      }
+      return updated;
+    });
+
+    return c.json(toOmAssetJson(row));
+  });
+
   r.delete("/projects/:projectId/om/assets/:assetId", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const assetId = c.req.param("assetId")!;
@@ -1266,7 +1501,13 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     if (!existing) return c.json({ error: "Not found" }, 404);
 
     const docs = await prisma.assetDocument.findMany({ where: { assetId } });
-    let dec = 0n;
+    let dec = existing.imageSizeBytes ?? 0n;
+    if (existing.imageS3Key) {
+      const imgDel = await deleteObject(env, existing.imageS3Key);
+      if (!imgDel.ok && imgDel.error !== "S3 not configured") {
+        console.warn(`[asset delete] deleteObject ${existing.imageS3Key}:`, imgDel.error);
+      }
+    }
     for (const d of docs) {
       dec += d.sizeBytes;
       const del = await deleteObject(env, d.s3Key);
@@ -1362,12 +1603,18 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         nextDueAt: z.string().datetime().nullable().optional(),
         assignedVendorLabel: z.string().max(200).nullable().optional(),
         assignedToUserId: z.string().nullable().optional(),
+        meterType: z.nativeEnum(AssetMeterType).nullable().optional(),
+        meterThreshold: z.number().min(0).nullable().optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
 
     const asset = await prisma.asset.findFirst({ where: { id: body.data.assetId, projectId } });
     if (!asset) return c.json({ error: "Asset not found" }, 404);
+
+    if (body.data.meterThreshold != null && !body.data.meterType) {
+      return c.json({ error: "meterType is required when meterThreshold is set" }, 400);
+    }
 
     if (body.data.assignedToUserId) {
       const assignCheck = await assertUserAssignableToProject(
@@ -1396,6 +1643,8 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         nextDueAt: nextDue,
         assignedVendorLabel: body.data.assignedVendorLabel ?? null,
         assignedToUserId: body.data.assignedToUserId ?? null,
+        meterType: body.data.meterType ?? null,
+        meterThreshold: body.data.meterThreshold ?? null,
       },
       include: maintenanceScheduleInclude,
     });
@@ -1450,10 +1699,16 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         assignedVendorLabel: z.string().max(200).nullable().optional(),
         assignedToUserId: z.string().nullable().optional(),
         isActive: z.boolean().optional(),
+        meterType: z.nativeEnum(AssetMeterType).nullable().optional(),
+        meterThreshold: z.number().min(0).nullable().optional(),
       })
       .safeParse(await c.req.json());
     if (!body.success) return c.json({ error: body.error.flatten() }, 400);
     const d = body.data;
+
+    if (d.meterThreshold != null && d.meterType === undefined && !existing.meterType) {
+      return c.json({ error: "meterType is required when meterThreshold is set" }, 400);
+    }
 
     if (d.assignedToUserId) {
       const assignCheck = await assertUserAssignableToProject(
@@ -1481,6 +1736,8 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
           : {}),
         ...(d.assignedToUserId !== undefined ? { assignedToUserId: d.assignedToUserId } : {}),
         ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
+        ...(d.meterType !== undefined ? { meterType: d.meterType } : {}),
+        ...(d.meterThreshold !== undefined ? { meterThreshold: d.meterThreshold } : {}),
       },
       include: maintenanceScheduleInclude,
     });
@@ -1684,11 +1941,22 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
           projectId,
           issueKind: IssueKind.WORK_ORDER,
         },
-        select: { id: true, maintenanceScheduleId: true },
+        select: {
+          id: true,
+          maintenanceScheduleId: true,
+          completionEvidenceRequired: true,
+          procedureJson: true,
+          procedureResultJson: true,
+          referencePhotos: true,
+          status: true,
+        },
       });
       if (!wo) return c.json({ error: "Work order not found" }, 404);
       if (wo.maintenanceScheduleId && wo.maintenanceScheduleId !== existing.id) {
         return c.json({ error: "Work order is linked to another schedule" }, 400);
+      }
+      if (wo.status !== IssueStatus.RESOLVED && wo.status !== IssueStatus.CLOSED) {
+        return c.json({ error: "Complete the linked work order before marking PM done" }, 400);
       }
       workOrderId = wo.id;
     }
@@ -2604,6 +2872,11 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     const weekStart = startOfUtcWeek(now);
     const weekEnd = endOfUtcWeek(weekStart);
 
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setUTCDate(sevenDaysAgo.getUTCDate() - 7);
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
+
     const [
       assetTotal,
       assetsLinkedToDrawing,
@@ -2615,6 +2888,9 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       schedulesForWeek,
       recentWo,
       recentTenantReq,
+      backlogOver7,
+      backlogOver30,
+      pmCompletions,
     ] = await Promise.all([
       prisma.asset.count({ where: { projectId } }),
       prisma.asset.count({ where: { projectId, fileId: { not: null } } }),
@@ -2670,6 +2946,28 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
           updatedAt: true,
         },
       }),
+      prisma.issue.count({
+        where: {
+          projectId,
+          issueKind: IssueKind.WORK_ORDER,
+          status: { in: [IssueStatus.OPEN, IssueStatus.IN_PROGRESS] },
+          createdAt: { lt: sevenDaysAgo },
+        },
+      }),
+      prisma.issue.count({
+        where: {
+          projectId,
+          issueKind: IssueKind.WORK_ORDER,
+          status: { in: [IssueStatus.OPEN, IssueStatus.IN_PROGRESS] },
+          createdAt: { lt: thirtyDaysAgo },
+        },
+      }),
+      prisma.maintenanceCompletion.findMany({
+        where: { projectId },
+        select: { completedAt: true, previousDueAt: true },
+        orderBy: { completedAt: "desc" },
+        take: 200,
+      }),
     ]);
 
     let maintenanceOverdue = 0;
@@ -2683,6 +2981,16 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
 
     const buildingHealthPct =
       assetTotal === 0 ? 100 : Math.round((assetsLinkedToDrawing / assetTotal) * 100);
+
+    let pmOnTime = 0;
+    let pmLate = 0;
+    for (const cpl of pmCompletions) {
+      if (!cpl.previousDueAt) continue;
+      if (cpl.completedAt <= cpl.previousDueAt) pmOnTime++;
+      else pmLate++;
+    }
+    const pmTotal = pmOnTime + pmLate;
+    const pmCompliancePct = pmTotal === 0 ? 100 : Math.round((pmOnTime / pmTotal) * 100);
 
     return c.json({
       projectId,
@@ -2701,6 +3009,9 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         assetsTracked: assetTotal,
         overdueMaintenanceTasks: maintenanceOverdue,
         maintenanceDueSoon,
+        workOrderBacklogOver7Days: backlogOver7,
+        workOrderBacklogOver30Days: backlogOver30,
+        pmCompliancePct,
       },
       buildingHealthPct,
       upcomingMaintenanceThisWeek: schedulesForWeek.map((s) => ({

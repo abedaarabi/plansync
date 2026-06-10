@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  ASSET_METER_TYPE_LABEL,
   fetchOmMaintenanceCompletions,
   fetchOmMaintenance,
   type OmMaintenanceRow,
@@ -26,6 +27,8 @@ import { qk } from "@/lib/queryKeys";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { OmMaintenanceScheduleSlideOver } from "@/components/enterprise/OmMaintenanceScheduleSlideOver";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
+import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 
 type Props = { projectId: string };
 
@@ -58,6 +61,15 @@ function assigneeLabel(r: OmMaintenanceRow): string {
   if (r.assignedTo?.email) return r.assignedTo.email;
   if (r.assignedVendorLabel?.trim()) return r.assignedVendorLabel.trim();
   return "—";
+}
+
+function meterTriggerLabel(r: OmMaintenanceRow): string | null {
+  if (!r.meterType || r.meterThreshold == null) return null;
+  const type =
+    r.meterType in ASSET_METER_TYPE_LABEL
+      ? ASSET_METER_TYPE_LABEL[r.meterType as keyof typeof ASSET_METER_TYPE_LABEL]
+      : r.meterType;
+  return `Meter: ${type} ≥ ${r.meterThreshold}`;
 }
 
 function formatScheduleDate(iso: string | null | undefined): string {
@@ -198,34 +210,21 @@ export function OmMaintenanceClient({ projectId }: Props) {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-6 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 gap-4">
-          <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
-            aria-hidden
-          >
-            <CalendarRange className="h-7 w-7 text-[var(--enterprise-primary)]" strokeWidth={1.5} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
-              Maintenance (PPM)
-            </h1>
-            <p className="mt-1.5 text-sm text-[var(--enterprise-text-muted)]">
-              Manage recurring schedules, create due work orders, and review completed maintenance.
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <div className={OM_PAGE_CLASS}>
+      <OmSubPageHeader
+        icon={CalendarRange}
+        title="Maintenance (PPM)"
+        description="Recurring schedules, due work orders, and completion history."
+        action={
           <EnterpriseButton size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
             New schedule
           </EnterpriseButton>
-        </div>
-      </header>
+        }
+      />
 
       {rows.length === 0 ? (
-        <div className="enterprise-card flex flex-col items-center gap-4 px-4 py-12 text-center text-sm text-[var(--enterprise-text-muted)]">
+        <div className="enterprise-card flex flex-col items-center gap-3 px-4 py-8 text-center text-sm text-[var(--enterprise-text-muted)]">
           <p>
             No maintenance schedules yet. Add a preventive schedule for an asset to get started.
           </p>
@@ -237,8 +236,8 @@ export function OmMaintenanceClient({ projectId }: Props) {
       ) : null}
 
       {rows.length > 0 ? (
-        <section className="enterprise-card p-4 sm:p-5">
-          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <section className="enterprise-card p-3 sm:p-4">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
             <div>
               <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Due now</h2>
               <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
@@ -249,7 +248,7 @@ export function OmMaintenanceClient({ projectId }: Props) {
               type="button"
               onClick={() => genMut.mutate()}
               disabled={genMut.isPending || dueNowRows.length === 0}
-              className="inline-flex min-h-10 items-center rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
+              className="inline-flex min-h-8 items-center rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
             >
               Create work orders for due items
             </button>
@@ -263,19 +262,19 @@ export function OmMaintenanceClient({ projectId }: Props) {
               <table className="w-full min-w-[980px] border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-[var(--enterprise-border)] text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                    <th className="px-4 py-3">Asset</th>
-                    <th className="px-4 py-3">Schedule</th>
-                    <th className="px-4 py-3">Next due</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Assigned to</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-3 py-2">Asset</th>
+                    <th className="px-3 py-2">Schedule</th>
+                    <th className="px-3 py-2">Next due</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Assigned to</th>
+                    <th className="px-3 py-2 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {dueNowRows.map((r) => (
                     <tr key={r.id} className="border-b border-[var(--enterprise-border)]/80">
-                      <td className="px-4 py-3 font-mono text-xs font-semibold">{r.asset.tag}</td>
-                      <td className="px-4 py-3 text-[var(--enterprise-text)]">
+                      <td className="px-3 py-2 font-mono text-xs font-semibold">{r.asset.tag}</td>
+                      <td className="px-3 py-2 text-[var(--enterprise-text)]">
                         <button
                           type="button"
                           onClick={() => openEdit(r)}
@@ -283,21 +282,26 @@ export function OmMaintenanceClient({ projectId }: Props) {
                         >
                           {r.title || r.frequency}
                         </button>
+                        {meterTriggerLabel(r) ? (
+                          <p className="mt-0.5 text-[11px] text-violet-700 dark:text-violet-300">
+                            {meterTriggerLabel(r)}
+                          </p>
+                        ) : null}
                       </td>
-                      <td className="px-4 py-3 tabular-nums text-[var(--enterprise-text-muted)]">
+                      <td className="px-3 py-2 tabular-nums text-[var(--enterprise-text-muted)]">
                         {formatScheduleDate(r.nextDueAt)}
                       </td>
-                      <td className="px-4 py-3">{healthBadge(r.health)}</td>
-                      <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
+                      <td className="px-3 py-2">{healthBadge(r.health)}</td>
+                      <td className="px-3 py-2 text-[var(--enterprise-text-muted)]">
                         {assigneeLabel(r)}
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
+                      <td className="px-3 py-2 text-right">
+                        <div className="flex justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => createWorkOrderMut.mutate(r.id)}
                             disabled={createWorkOrderMut.isPending}
-                            className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
+                            className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
                           >
                             <ClipboardList className="h-3.5 w-3.5" aria-hidden />
                             Create work order
@@ -306,14 +310,14 @@ export function OmMaintenanceClient({ projectId }: Props) {
                             type="button"
                             onClick={() => completeMut.mutate(r.id)}
                             disabled={completeMut.isPending}
-                            className="inline-flex min-h-10 items-center rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
+                            className="inline-flex min-h-8 items-center rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
                           >
                             Complete directly
                           </button>
                           <button
                             type="button"
                             onClick={() => openEdit(r)}
-                            className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)]"
+                            className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)]"
                           >
                             <Pencil className="h-3.5 w-3.5" aria-hidden />
                             Edit
@@ -330,34 +334,34 @@ export function OmMaintenanceClient({ projectId }: Props) {
       ) : null}
 
       {upcomingRows.length > 0 ? (
-        <section className="enterprise-card p-4 sm:p-5">
+        <section className="enterprise-card p-3 sm:p-4">
           <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
             Upcoming schedules
           </h2>
           <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
             Active recurring schedules beyond the next 7 days.
           </p>
-          <div className="mobile-table-wrap mt-4 overflow-x-auto">
+          <div className="mobile-table-wrap mt-3 overflow-x-auto">
             <table className="w-full min-w-[920px] border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--enterprise-border)] text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                  <th className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-4 py-3">
+                  <th className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-3 py-2">
                     Asset
                   </th>
-                  <th className="px-4 py-3">Schedule</th>
-                  <th className="px-4 py-3">Next due</th>
-                  <th className="px-4 py-3">Last completed</th>
-                  <th className="px-4 py-3">Assigned to</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="px-3 py-2">Schedule</th>
+                  <th className="px-3 py-2">Next due</th>
+                  <th className="px-3 py-2">Last completed</th>
+                  <th className="px-3 py-2">Assigned to</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {upcomingRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--enterprise-border)]/80">
-                    <td className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-4 py-3 font-mono text-xs font-semibold">
+                    <td className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-3 py-2 font-mono text-xs font-semibold">
                       {r.asset.tag}
                     </td>
-                    <td className="px-4 py-3 text-[var(--enterprise-text)]">
+                    <td className="px-3 py-2 text-[var(--enterprise-text)]">
                       <button
                         type="button"
                         onClick={() => openEdit(r)}
@@ -365,21 +369,26 @@ export function OmMaintenanceClient({ projectId }: Props) {
                       >
                         {r.title || r.frequency}
                       </button>
+                      {meterTriggerLabel(r) ? (
+                        <p className="mt-0.5 text-[11px] text-violet-700 dark:text-violet-300">
+                          {meterTriggerLabel(r)}
+                        </p>
+                      ) : null}
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-[var(--enterprise-text-muted)]">
+                    <td className="px-3 py-2 tabular-nums text-[var(--enterprise-text-muted)]">
                       {formatScheduleDate(r.nextDueAt)}
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-[var(--enterprise-text-muted)]">
+                    <td className="px-3 py-2 tabular-nums text-[var(--enterprise-text-muted)]">
                       {formatScheduleDate(r.lastCompletedAt)}
                     </td>
-                    <td className="px-4 py-3 text-[var(--enterprise-text-muted)]">
+                    <td className="px-3 py-2 text-[var(--enterprise-text-muted)]">
                       {assigneeLabel(r)}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-3 py-2 text-right">
                       <button
                         type="button"
                         onClick={() => openEdit(r)}
-                        className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)]"
+                        className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)]"
                       >
                         <Pencil className="h-3.5 w-3.5" aria-hidden />
                         Edit
@@ -393,7 +402,7 @@ export function OmMaintenanceClient({ projectId }: Props) {
         </section>
       ) : null}
 
-      <section className="enterprise-card p-4 sm:p-5">
+      <section className="enterprise-card p-3 sm:p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
@@ -424,7 +433,7 @@ export function OmMaintenanceClient({ projectId }: Props) {
             {completions.map((c) => (
               <li
                 key={c.id}
-                className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm first:pt-0 last:pb-0"
+                className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm first:pt-0 last:pb-0"
               >
                 <div className="min-w-0">
                   <p className="font-medium text-[var(--enterprise-text)]">
@@ -448,7 +457,7 @@ export function OmMaintenanceClient({ projectId }: Props) {
       </section>
 
       {rows.some((r) => !r.isActive) ? (
-        <section className="enterprise-card p-4 sm:p-5">
+        <section className="enterprise-card p-3 sm:p-4">
           <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
             Inactive schedules
           </h2>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ProjectAuditClient } from "@/components/enterprise/ProjectAuditClient";
+import { EnterpriseCompactPageShell } from "@/components/enterprise/EnterpriseCompactPageShell";
 import { FileExplorerPageSkeleton } from "@/components/file-explorer";
 
 export const metadata: Metadata = { title: "Audit log" };
@@ -13,12 +14,10 @@ const AUDIT_SUBHEAD =
 export default async function ProjectAuditPage({ params }: Props) {
   const { projectId } = await params;
   return (
-    <div className="mobile-app-page enterprise-animate-in mobile-viewport-pane box-border flex min-h-0 w-full max-w-full flex-col overflow-hidden px-3 py-2 sm:px-4 sm:py-3 lg:px-5">
-      <div className="flex min-h-0 flex-1 flex-col">
-        <Suspense fallback={<FileExplorerPageSkeleton />}>
-          <ProjectAuditClient projectId={projectId} subhead={AUDIT_SUBHEAD} />
-        </Suspense>
-      </div>
-    </div>
+    <EnterpriseCompactPageShell maxWidth="1600" fullHeight>
+      <Suspense fallback={<FileExplorerPageSkeleton />}>
+        <ProjectAuditClient projectId={projectId} subhead={AUDIT_SUBHEAD} />
+      </Suspense>
+    </EnterpriseCompactPageShell>
   );
 }

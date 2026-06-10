@@ -13,6 +13,7 @@ import {
 import { useMemo } from "react";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import {
   fetchProjects,
   fetchProposalsList,
@@ -24,6 +25,7 @@ import {
   proposalStatusColor,
   proposalStatusLabel,
 } from "@/lib/proposalStatus";
+import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 
@@ -233,46 +235,36 @@ export function ProposalsDashboardClient() {
   ];
 
   return (
-    <div className="mobile-app-page space-y-6 sm:space-y-8">
-      <header className="enterprise-card overflow-hidden p-5 sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-1 text-xs font-medium text-[var(--enterprise-text-muted)]">
-              <FileSpreadsheet className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" />
-              Workspace overview
-            </div>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-[1.75rem]">
-              Proposals Dashboard
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm text-[var(--enterprise-text-muted)]">
-              Monitor pipeline, status, and conversion trends across all projects in your workspace.
+    <div className={OM_PAGE_CLASS}>
+      <OmSubPageHeader
+        icon={BarChart3}
+        title="Proposals dashboard"
+        description="Monitor pipeline, status, and conversion trends across all projects in your workspace."
+      >
+        <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
+          <div className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+              Est. pipeline
+            </p>
+            <p className="mt-0.5 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
+              {weightedPipelineTotal > 0
+                ? fmtMoney(weightedPipelineTotal, topCurrencies[0]?.[0] ?? "USD")
+                : "—"}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:max-w-sm">
-            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-3">
-              <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
-                Est. pipeline
-              </p>
-              <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
-                {weightedPipelineTotal > 0
-                  ? fmtMoney(weightedPipelineTotal, topCurrencies[0]?.[0] ?? "USD")
-                  : "—"}
-              </p>
-            </div>
-            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-3">
-              <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
-                Active projects
-              </p>
-              <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
-                {aggregate.projectsWithProposals}
-                <span className="text-[var(--enterprise-text-muted)]"> / {totalProjects}</span>
-              </p>
-            </div>
+          <div className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+              Active projects
+            </p>
+            <p className="mt-0.5 text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
+              {aggregate.projectsWithProposals}
+              <span className="text-[var(--enterprise-text-muted)]"> / {totalProjects}</span>
+            </p>
           </div>
         </div>
-      </header>
+      </OmSubPageHeader>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard icon={FolderKanban} label="Total proposals" value={String(aggregate.total)} />
         <MetricCard icon={Inbox} label="Pending review" value={String(pendingReview)} />
         <MetricCard
@@ -287,8 +279,8 @@ export function ProposalsDashboardClient() {
         />
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-12">
-        <div className="enterprise-card p-5 sm:p-6 xl:col-span-7">
+      <section className="grid gap-3 xl:grid-cols-12">
+        <div className="enterprise-card p-3 sm:p-4 xl:col-span-7">
           <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Status breakdown</h2>
           <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
             Distribution of proposals by current status
@@ -320,8 +312,8 @@ export function ProposalsDashboardClient() {
           </div>
         </div>
 
-        <div className="space-y-6 xl:col-span-5">
-          <div className="enterprise-card p-5 sm:p-6">
+        <div className="space-y-3 xl:col-span-5">
+          <div className="enterprise-card p-3 sm:p-4">
             <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Top projects</h2>
             <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
               Projects with the most proposal activity
@@ -359,7 +351,7 @@ export function ProposalsDashboardClient() {
             </div>
           </div>
 
-          <div className="enterprise-card p-5 sm:p-6">
+          <div className="enterprise-card p-3 sm:p-4">
             <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
               Conversion funnel
             </h2>
@@ -372,7 +364,7 @@ export function ProposalsDashboardClient() {
       </section>
 
       <section className="enterprise-card overflow-hidden">
-        <div className="border-b border-[var(--enterprise-border)] px-5 py-4 sm:px-6">
+        <div className="border-b border-[var(--enterprise-border)] px-3 py-3 sm:px-4">
           <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Latest proposals</h2>
           <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
             Most recently sent or created across your workspace
@@ -622,13 +614,13 @@ function MetricCard({
   value: string;
 }) {
   return (
-    <article className="enterprise-card flex items-center gap-4 p-4 sm:p-5">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
-        <Icon className="h-5 w-5" strokeWidth={1.75} />
+    <article className="enterprise-card flex items-center gap-3 p-3 sm:p-4">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
+        <Icon className="h-4 w-4" strokeWidth={1.75} />
       </div>
       <div className="min-w-0">
         <p className="text-xs font-medium text-[var(--enterprise-text-muted)]">{label}</p>
-        <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-[var(--enterprise-text)]">
+        <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight text-[var(--enterprise-text)]">
           {value}
         </p>
       </div>

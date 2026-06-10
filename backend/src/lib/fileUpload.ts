@@ -99,6 +99,27 @@ export function s3KeyMatchesAssetDocument(
   assetId: string,
 ): boolean {
   const prefix = `ws/${workspaceId}/p/${projectId}/asset/${assetId}/`;
+  return s3Key.startsWith(prefix) && !s3Key.includes("/image/");
+}
+
+export function buildAssetImageKey(
+  workspaceId: string,
+  projectId: string,
+  assetId: string,
+  uploadId: string,
+  fileName: string,
+): string {
+  const safe = sanitizeAttachmentFileName(fileName);
+  return `ws/${workspaceId}/p/${projectId}/asset/${assetId}/image/${uploadId}/${safe}`;
+}
+
+export function s3KeyMatchesAssetImage(
+  s3Key: string,
+  workspaceId: string,
+  projectId: string,
+  assetId: string,
+): boolean {
+  const prefix = `ws/${workspaceId}/p/${projectId}/asset/${assetId}/image/`;
   return s3Key.startsWith(prefix);
 }
 

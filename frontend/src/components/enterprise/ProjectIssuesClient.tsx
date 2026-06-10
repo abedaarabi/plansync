@@ -14,7 +14,6 @@ import {
   CircleDot,
   ExternalLink,
   FileText,
-  Filter,
   Flag,
   FolderOpen,
   LayoutGrid,
@@ -35,10 +34,10 @@ import { IssueCreateSlideOver } from "@/components/enterprise/IssueCreateSlideOv
 import { IssueEditSlideOver } from "@/components/enterprise/IssueEditSlideOver";
 import { WorkOrderCreateSlideOver } from "@/components/enterprise/WorkOrderCreateSlideOver";
 import { WorkOrderEditSlideOver } from "@/components/enterprise/WorkOrderEditSlideOver";
-import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
-import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
 import {
   deleteIssue,
   fetchIssuesForProject,
@@ -61,6 +60,12 @@ import {
   priorityBadgeClassLight,
 } from "@/lib/issueStatusStyle";
 import { MOBILE_FIELD_SELECT } from "@/lib/mobileFormStyles";
+import {
+  OM_COMPACT_CHIP_ACTIVE,
+  OM_COMPACT_CHIP_IDLE,
+  OM_COMPACT_SELECT,
+  OM_PAGE_CLASS,
+} from "@/lib/omCompactStyles";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 
@@ -341,10 +346,10 @@ const ProjectIssueMobileCard = memo(function ProjectIssueMobileCard({
   const photoCount = issue.referencePhotos?.length ?? 0;
 
   return (
-    <li className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)]">
+    <li className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 shadow-[var(--enterprise-shadow-xs)]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-base font-semibold leading-snug text-[var(--enterprise-text)]">
+          <p className="text-sm font-semibold leading-snug text-[var(--enterprise-text)]">
             {issue.title}
           </p>
           <p className="mt-1 line-clamp-1 text-sm text-[var(--enterprise-text-muted)]">
@@ -730,63 +735,46 @@ export function ProjectIssuesClient({
   }, [filterAssetId, pathname, router, searchParams]);
 
   return (
-    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-5 sm:space-y-6">
-      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-5 sm:flex-row sm:items-start sm:justify-between sm:pb-6">
-        <div className="flex min-w-0 gap-3 sm:gap-4">
-          <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
-            aria-hidden
-          >
-            <ListIcon
-              className={`h-6 w-6 sm:h-7 sm:w-7 ${isWorkOrders ? "text-sky-600 dark:text-sky-400" : "text-[var(--enterprise-primary)]"}`}
-              strokeWidth={1.5}
-            />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
-              {listTitle}
-            </h1>
-            {!isPending ? (
-              <p className="mt-1.5 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
-                {stats.total === 0
-                  ? `No ${listTitle.toLowerCase()} recorded for this project yet.`
-                  : `${stats.total} ${listItemNoun} in this project`}
-              </p>
-            ) : null}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 self-start">
-          {canCreate ? (
-            <EnterpriseAddPulseWrap
-              disabled={ctxLoading || !isPro}
-              className="hidden sm:inline-flex"
-            >
-              <button
-                type="button"
-                onClick={openCreateForm}
+    <div className={`${OM_PAGE_CLASS} w-full min-w-0 max-w-full`}>
+      <OmSubPageHeader
+        icon={MapPin}
+        title={listTitle}
+        description={
+          !isPending
+            ? stats.total === 0
+              ? `No ${listTitle.toLowerCase()} recorded for this project yet.`
+              : `${stats.total} ${listItemNoun} in this project`
+            : undefined
+        }
+        action={
+          <>
+            {canCreate ? (
+              <EnterpriseButton
+                size="sm"
                 disabled={ctxLoading || !isPro}
-                className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-[var(--enterprise-shadow-sm)] transition disabled:opacity-50 ${isWorkOrders ? "bg-sky-600 hover:bg-sky-700" : "bg-[var(--enterprise-primary)] hover:bg-[var(--enterprise-primary-deep)]"}`}
+                onClick={openCreateForm}
+                className={isWorkOrders ? "bg-sky-600 hover:bg-sky-700" : undefined}
               >
                 <Plus className="h-4 w-4" strokeWidth={1.75} />
                 {createLabel}
-              </button>
-            </EnterpriseAddPulseWrap>
-          ) : null}
-          <Link
-            href={
-              isWorkOrders ? `/projects/${projectId}/om/assets` : `/projects/${projectId}/files`
-            }
-            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:bg-[var(--enterprise-hover-surface)]"
-          >
-            {isWorkOrders ? (
-              <Wrench className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-            ) : (
-              <FolderOpen className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-            )}
-            {isWorkOrders ? "Assets" : "Project files"}
-          </Link>
-        </div>
-      </header>
+              </EnterpriseButton>
+            ) : null}
+            <Link
+              href={
+                isWorkOrders ? `/projects/${projectId}/om/assets` : `/projects/${projectId}/files`
+              }
+              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
+            >
+              {isWorkOrders ? (
+                <Wrench className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+              ) : (
+                <FolderOpen className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+              )}
+              {isWorkOrders ? "Assets" : "Project files"}
+            </Link>
+          </>
+        }
+      />
 
       {canCreate && !isPro ? (
         <div className="enterprise-alert-info flex items-start gap-3 px-4 py-3 shadow-[var(--enterprise-shadow-xs)]">
@@ -819,55 +807,49 @@ export function ProjectIssuesClient({
         </div>
       ) : null}
 
-      <div className="sticky top-0 z-10 space-y-3 rounded-2xl border border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)]/95 p-3 shadow-[var(--enterprise-shadow-xs)] backdrop-blur-md lg:static lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
-        <div className="flex items-center justify-between gap-2 lg:mb-1">
-          <div className="hidden items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] lg:flex">
-            <Filter className="h-3.5 w-3.5 opacity-80" aria-hidden />
-            Refine list
+      <div className="sticky top-0 z-10 flex flex-col gap-2 border-b border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)]/95 pb-3 backdrop-blur-md lg:static lg:bg-transparent">
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            className="mobile-chip-scroll flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            role="tablist"
+            aria-label="Filter by status"
+          >
+            {ISSUE_FILTER_DEFS.map((f) => {
+              const TabIcon = f.Icon;
+              const selected = filter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setFilter(f.key)}
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
+                    selected ? OM_COMPACT_CHIP_ACTIVE : OM_COMPACT_CHIP_IDLE
+                  }`}
+                  style={selected ? { backgroundColor: "var(--enterprise-primary)" } : undefined}
+                >
+                  <TabIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                  {f.label}
+                </button>
+              );
+            })}
           </div>
           {filtersActive ? (
             <button
               type="button"
               onClick={clearFilters}
-              className="mobile-touch-target ml-auto inline-flex items-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text-muted)] transition active:scale-[0.98] hover:text-[var(--enterprise-text)]"
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-text)]"
             >
-              <RotateCcw className="h-3.5 w-3.5 opacity-80" strokeWidth={2} aria-hidden />
+              <RotateCcw className="h-3 w-3 opacity-80" strokeWidth={2} aria-hidden />
               Reset
             </button>
           ) : null}
         </div>
 
-        <div
-          className="mobile-chip-scroll -mx-0.5 flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex-wrap lg:overflow-visible"
-          role="tablist"
-          aria-label="Filter by status"
-        >
-          {ISSUE_FILTER_DEFS.map((f) => {
-            const TabIcon = f.Icon;
-            const selected = filter === f.key;
-            return (
-              <button
-                key={f.key}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() => setFilter(f.key)}
-                className={`inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition active:scale-[0.97] ${
-                  selected
-                    ? "bg-[var(--enterprise-primary)] text-white shadow-sm [&_svg]:text-white"
-                    : "border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)] [&_svg]:opacity-80"
-                }`}
-              >
-                <TabIcon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 pt-1 lg:flex lg:flex-wrap lg:items-end lg:gap-3 lg:pt-0">
-          <label className="min-w-0 lg:min-w-[11rem]">
-            <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-[var(--enterprise-text-muted)]">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="min-w-[9rem]">
+            <span className="mb-0.5 flex items-center gap-1 text-xs font-medium text-[var(--enterprise-text-muted)]">
               <Users className="h-3.5 w-3.5" aria-hidden />
               Assignee
             </span>
@@ -875,7 +857,7 @@ export function ProjectIssuesClient({
               id="issues-assignee-filter"
               value={assigneeFilter}
               onChange={(e) => setAssigneeFilter(e.target.value as AssigneeFilter)}
-              className={`${MOBILE_FIELD_SELECT} py-2.5 text-sm`}
+              className={OM_COMPACT_SELECT}
             >
               <option value="ALL">All assignees</option>
               <option value="UNASSIGNED">Unassigned</option>
@@ -886,8 +868,8 @@ export function ProjectIssuesClient({
               ))}
             </select>
           </label>
-          <label className="min-w-0 lg:min-w-[10rem]">
-            <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-[var(--enterprise-text-muted)]">
+          <label className="min-w-[9rem]">
+            <span className="mb-0.5 flex items-center gap-1 text-xs font-medium text-[var(--enterprise-text-muted)]">
               <SortAsc className="h-3.5 w-3.5" aria-hidden />
               Sort
             </span>
@@ -895,7 +877,7 @@ export function ProjectIssuesClient({
               id="issues-sort"
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
-              className={`${MOBILE_FIELD_SELECT} py-2.5 text-sm`}
+              className={OM_COMPACT_SELECT}
             >
               <option value="newest">Newest first</option>
               <option value="file">File name</option>
@@ -1141,17 +1123,6 @@ export function ProjectIssuesClient({
           if (deleteConfirmIssue) deleteMut.mutate(deleteConfirmIssue.id);
         }}
       />
-
-      {canCreate ? (
-        <EnterpriseAddPulseWrap disabled={ctxLoading || !isPro} className="sm:hidden">
-          <EnterpriseFab
-            label={createLabel}
-            disabled={ctxLoading || !isPro}
-            onClick={openCreateForm}
-            icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
-          />
-        </EnterpriseAddPulseWrap>
-      ) : null}
     </div>
   );
 }

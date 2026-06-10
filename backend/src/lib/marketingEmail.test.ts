@@ -3,6 +3,7 @@ import {
   buildMarketingEmailHtml,
   buildMarketingEmailText,
   parseMarketingRecipients,
+  parseMarketingSentFlag,
   resolveMarketingAppUrl,
 } from "./marketingEmail.js";
 
@@ -16,16 +17,41 @@ describe("parseMarketingRecipients", () => {
     ]);
 
     expect(recipients).toEqual([
-      { email: "a@co.com", company: "A Co", name: "Ann" },
-      { email: "b@co.com", company: "B Co", name: undefined },
+      { email: "a@co.com", company: "A Co", name: "Ann", rowIndex: 0 },
+      { email: "b@co.com", company: "B Co", name: undefined, rowIndex: 1 },
     ]);
     expect(skipped).toHaveLength(2);
+  });
+
+  it("skips rows already marked sent", () => {
+    const { recipients, skipped, alreadySent } = parseMarketingRecipients([
+      { email: "a@co.com", company: "A Co", sent: true },
+      { email: "b@co.com", company: "B Co", sent: false },
+      { email: "c@co.com", sent: "TRUE" },
+      { email: "d@co.com" },
+    ]);
+
+    expect(recipients).toEqual([
+      { email: "b@co.com", company: "B Co", name: undefined, rowIndex: 1 },
+      { email: "d@co.com", company: undefined, name: undefined, rowIndex: 3 },
+    ]);
+    expect(alreadySent).toBe(2);
+    expect(skipped.filter((s) => s.reason === "already sent")).toHaveLength(2);
+  });
+
+  it("parseMarketingSentFlag accepts common truthy values", () => {
+    expect(parseMarketingSentFlag(true)).toBe(true);
+    expect(parseMarketingSentFlag("true")).toBe(true);
+    expect(parseMarketingSentFlag("yes")).toBe(true);
+    expect(parseMarketingSentFlag(false)).toBe(false);
+    expect(parseMarketingSentFlag("")).toBe(false);
+    expect(parseMarketingSentFlag("false")).toBe(false);
   });
 });
 
 describe("buildMarketingEmailHtml", () => {
   it("includes personalized founder note, offer, and preview images", () => {
-    const html = buildMarketingEmailHtml({ email: "x@y.com", name: "Sam" });
+    const html = buildMarketingEmailHtml({ email: "x@y.com", name: "Sam", rowIndex: 0 });
     expect(html).toContain("Hi Sam,");
     expect(html).toContain("founder of PlanSync");
     expect(html).toContain("From PDF drawing to sent proposal");
@@ -44,7 +70,7 @@ describe("buildMarketingEmailHtml", () => {
 
   it("uses production app URL when publicAppUrl is localhost", () => {
     const html = buildMarketingEmailHtml(
-      { email: "x@y.com", name: "Sam" },
+      { email: "x@y.com", name: "Sam", rowIndex: 0 },
       { publicAppUrl: "http://localhost:3000" },
     );
     expect(html).toContain("https://plansync.dev/icons/icon-180.png");
@@ -67,7 +93,7 @@ describe("buildMarketingEmailHtml", () => {
 
   it("embeds inline player in preview mode", () => {
     const html = buildMarketingEmailHtml(
-      { email: "x@y.com" },
+      { email: "x@y.com", rowIndex: 0 },
       { embedVideo: true, previewOrigin: "http://127.0.0.1:8765" },
     );
     expect(html).toContain("youtube.com/embed/7g1qpgmHNg0");
@@ -80,7 +106,7 @@ describe("buildMarketingEmailHtml", () => {
   });
 
   it("uses clickable thumbnail when not embedding", () => {
-    const html = buildMarketingEmailHtml({ email: "x@y.com" });
+    const html = buildMarketingEmailHtml({ email: "x@y.com", rowIndex: 0 });
     expect(html).toContain("Play demo");
     expect(html).toContain("Watch the 2-minute walkthrough on YouTube");
     expect(html).toContain("background-image:url");
@@ -88,7 +114,7 @@ describe("buildMarketingEmailHtml", () => {
   });
 
   it("plain text includes founder note and value copy", () => {
-    const text = buildMarketingEmailText({ email: "x@y.com", company: "BuildCo" });
+    const text = buildMarketingEmailText({ email: "x@y.com", company: "BuildCo", rowIndex: 0 });
     expect(text).toContain("Hi BuildCo team, I'm Abed, founder of PlanSync.");
     expect(text).toContain("https://plansync.dev/sign-in");
     expect(text).toContain("Open the PDF");

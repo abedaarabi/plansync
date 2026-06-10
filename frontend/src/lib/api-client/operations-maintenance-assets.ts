@@ -5,6 +5,7 @@ import { apiUrl } from "@/lib/api-url";
 import type { ProjectSessionResponse } from "./core-project-ops";
 import { jsonHeaders, readJsonErrorBody, readJsonOrEmpty } from "./shared";
 import { ProRequiredError } from "./errors";
+import { referencePhotoContentType } from "@/lib/referencePhotoMime";
 
 // --- Operations & Maintenance (O&M) ---
 
@@ -35,6 +36,8 @@ export type OmAssetRow = {
   fileVersion: { id: string; version: number } | null;
   /** True when a tenant portal equipment QR secret exists for this asset. */
   hasOccupantQr: boolean;
+  /** True when a primary equipment photo has been uploaded. */
+  hasImage: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -138,6 +141,129 @@ export async function deleteOmAsset(projectId: string, assetId: string): Promise
     const j = (await res.json().catch(() => ({}))) as { error?: unknown };
     throw new Error(typeof j.error === "string" ? j.error : "Could not delete asset.");
   }
+}
+
+const MAX_ASSET_IMAGE_BYTES = 15 * 1024 * 1024;
+
+export async function presignOmAssetImageUpload(
+  projectId: string,
+  assetId: string,
+  body: { fileName: string; contentType: string; sizeBytes: number },
+): Promise<{ uploadUrl: string; key: string }> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}/image/presign`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as {
+    error?: unknown;
+    uploadUrl?: string;
+    key?: string;
+  };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not start image upload.");
+  }
+  if (!j.uploadUrl || !j.key) throw new Error("Invalid presign response.");
+  return { uploadUrl: j.uploadUrl, key: j.key };
+}
+
+export async function completeOmAssetImageUpload(
+  projectId: string,
+  assetId: string,
+  body: {
+    key: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+  },
+): Promise<OmAssetRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}/image/complete`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not save image.");
+  }
+  return res.json() as Promise<OmAssetRow>;
+}
+
+export async function fetchOmAssetImageReadUrl(
+  projectId: string,
+  assetId: string,
+): Promise<string> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}/image/presign-read`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown; url?: string };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not load image.");
+  }
+  if (!j.url) throw new Error("Invalid response.");
+  return j.url;
+}
+
+export async function deleteOmAssetImage(projectId: string, assetId: string): Promise<OmAssetRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}/image`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not remove image.");
+  }
+  return res.json() as Promise<OmAssetRow>;
+}
+
+/** Presign PUT, upload to S3, then complete — returns the updated asset row. */
+export async function uploadOmAssetImageFile(
+  projectId: string,
+  assetId: string,
+  file: File,
+): Promise<OmAssetRow> {
+  if (file.size > MAX_ASSET_IMAGE_BYTES) {
+    throw new Error("Image too large (max 15 MB).");
+  }
+  const contentType = referencePhotoContentType(file);
+  const { uploadUrl, key } = await presignOmAssetImageUpload(projectId, assetId, {
+    fileName: file.name,
+    contentType,
+    sizeBytes: file.size,
+  });
+  const put = await fetch(uploadUrl, {
+    method: "PUT",
+    body: file,
+    headers: { "Content-Type": contentType },
+  });
+  if (!put.ok) throw new Error("Could not upload image to storage.");
+  return completeOmAssetImageUpload(projectId, assetId, {
+    key,
+    fileName: file.name,
+    contentType,
+    sizeBytes: file.size,
+  });
 }
 
 export type OmAssetDocumentRow = {
@@ -395,6 +521,9 @@ export type OmFmDashboardResponse = {
     assetsTracked: number;
     overdueMaintenanceTasks: number;
     maintenanceDueSoon: number;
+    workOrderBacklogOver7Days: number;
+    workOrderBacklogOver30Days: number;
+    pmCompliancePct: number;
   };
   buildingHealthPct: number;
   upcomingMaintenanceThisWeek: {

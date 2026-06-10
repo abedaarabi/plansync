@@ -115,6 +115,7 @@ import { getEmailBrandIconPngBytes } from "../../lib/emailBrandIcon.js";
 import { registerMaterialsRoutes } from "./materialsRoutes.js";
 import { registerIssuesRoutes } from "./issuesRoutes.js";
 import { registerOmRoutes, registerOccupantPublicRoutes } from "./omRoutes.js";
+import { registerVendorWorkOrderPublicRoutes, registerWorkOrderRoutes } from "./workOrderRoutes.js";
 import { runOmMaintenanceReminders } from "../../lib/omMaintenanceReminders.js";
 import { registerRfiRoutes } from "./rfiRoutes.js";
 import { registerTakeoffRoutes } from "./takeoffRoutes.js";
@@ -4971,7 +4972,9 @@ export function v1Routes(
   }
 
   registerOccupantPublicRoutes(r, env);
+  registerVendorWorkOrderPublicRoutes(r);
   registerOmRoutes(r, needUser, env);
+  registerWorkOrderRoutes(r, needUser, env);
   registerPunchRoutes(r, needUser, env);
   registerIssuesRoutes(r, needUser, env, {
     onIssuesMutated: (fileVersionId) => {

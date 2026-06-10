@@ -16,9 +16,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { EnterpriseAddPulseWrap } from "@/components/enterprise/EnterpriseAddPulseWrap";
-import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import {
@@ -42,6 +42,7 @@ import {
   type PunchRow,
 } from "@/lib/api-client";
 import type { Project } from "@/types/projects";
+import { OM_COMPACT_INPUT, OM_COMPACT_SELECT, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { qk } from "@/lib/queryKeys";
 import { referencePhotoContentType } from "@/lib/referencePhotoMime";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
@@ -627,440 +628,405 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
 
   return (
     <div
-      className="enterprise-animate-in min-h-0 flex-1 bg-[var(--enterprise-bg)] p-4 pb-[env(safe-area-inset-bottom,0px)] sm:p-6 lg:p-8"
+      className={OM_PAGE_CLASS}
       style={{ fontFamily: "var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif" }}
     >
-      <div className="mx-auto max-w-6xl space-y-5 sm:space-y-6">
-        {/* SECTION 1 — Header */}
-        <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-5 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
-              aria-hidden
-            >
-              <ClipboardList className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
-                Punch list
-              </h1>
-              <p className="mt-1 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
-                Track open items, photos, and closeouts.
-              </p>
-            </div>
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+      <OmSubPageHeader
+        icon={ClipboardList}
+        title="Punch list"
+        description="Track open items, photos, and closeouts."
+        action={
+          <>
             <a
               href={punchExportCsvUrl(projectId)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/25 hover:bg-[var(--enterprise-hover-surface)] sm:min-h-10 sm:rounded-lg sm:px-3 sm:text-xs"
+              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
             >
               <Download className="h-4 w-4" />
               Export
             </a>
-            <button
-              type="button"
+            <EnterpriseButton
+              size="sm"
+              variant="secondary"
               onClick={() => setChecklistModalOpen(true)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-4 text-sm font-semibold text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-primary)]/15 sm:min-h-10 sm:rounded-lg sm:px-3 sm:text-xs"
             >
               <FileText className="h-4 w-4" />
               From checklist
+            </EnterpriseButton>
+            <EnterpriseButton size="sm" onClick={() => setNewModalOpen(true)}>
+              <Plus className="h-4 w-4" />
+              New item
+            </EnterpriseButton>
+          </>
+        }
+      />
+
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        {(
+          [
+            ["Total", stats.total],
+            ["Open", stats.open],
+            ["In progress", stats.inProgress],
+            ["Ready for GC", stats.readyGc],
+            ["Closed", stats.closed],
+          ] as const
+        ).map(([label, n]) => (
+          <div
+            key={label}
+            className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-xs)]"
+          >
+            <p className="text-lg font-bold tabular-nums text-[var(--enterprise-text)]">{n}</p>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+              {label}
+            </p>
+          </div>
+        ))}
+      </section>
+      <div className="flex h-2 overflow-hidden rounded-full bg-[var(--enterprise-border)]">
+        {progressSegments.map((s) => (
+          <div
+            key={s.key}
+            title={`${s.label}: ${s.pct.toFixed(0)}%`}
+            className="h-full min-w-0 transition-[width]"
+            style={{ width: `${s.pct}%`, backgroundColor: s.fill }}
+          />
+        ))}
+      </div>
+
+      {/* Bulk bar OR filters */}
+      {selectedIds.length > 0 ? (
+        <div
+          className="sticky top-0 z-20 flex flex-col gap-3 rounded-xl border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-4 py-3 shadow-[var(--enterprise-shadow-xs)] sm:flex-row sm:items-center sm:justify-between"
+          style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
+        >
+          <p className="text-sm font-semibold text-[var(--enterprise-primary)]">
+            {selectedIds.length} item{selectedIds.length === 1 ? "" : "s"} selected
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <BulkAssignSelect
+              members={members}
+              onApply={(userId) => bulkMut.mutate({ ids: selectedIds, assigneeId: userId })}
+            />
+            <BulkStatusSelect onApply={(st) => bulkMut.mutate({ ids: selectedIds, status: st })} />
+            <button
+              type="button"
+              className="inline-flex h-9 items-center rounded-lg border border-red-200 bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    `Delete ${selectedIds.length} punch item(s)? This cannot be undone.`,
+                  )
+                )
+                  return;
+                void (async () => {
+                  for (const id of selectedIds) {
+                    try {
+                      await deletePunchItem(projectId, id);
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Delete failed");
+                      break;
+                    }
+                  }
+                  await qc.invalidateQueries({ queryKey: qk.projectPunch(projectId) });
+                  setSelectedIds([]);
+                  toast.success("Selected items removed.");
+                })();
+              }}
+            >
+              <Trash2 className="mr-1 inline h-3.5 w-3.5" />
+              Delete
             </button>
             <button
               type="button"
-              onClick={() => setNewModalOpen(true)}
-              className="hidden min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] sm:inline-flex lg:min-h-10 lg:rounded-lg lg:px-3 lg:text-xs"
+              className="text-xs font-semibold text-[var(--enterprise-primary)] underline"
+              onClick={() => setSelectedIds([])}
             >
-              <Plus className="h-4 w-4" />
-              New Item
+              Clear selection
             </button>
           </div>
-        </header>
-
-        {/* SECTION 2 — Stats */}
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {(
-            [
-              ["Total", stats.total],
-              ["Open", stats.open],
-              ["In progress", stats.inProgress],
-              ["Ready for GC", stats.readyGc],
-              ["Closed", stats.closed],
-            ] as const
-          ).map(([label, n]) => (
-            <div
-              key={label}
-              className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 shadow-[var(--enterprise-shadow-xs)]"
-            >
-              <p className="text-2xl font-bold tabular-nums text-[var(--enterprise-text)]">{n}</p>
-              <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                {label}
-              </p>
-            </div>
-          ))}
-        </section>
-        <div className="flex h-2 overflow-hidden rounded-full bg-[var(--enterprise-border)]">
-          {progressSegments.map((s) => (
-            <div
-              key={s.key}
-              title={`${s.label}: ${s.pct.toFixed(0)}%`}
-              className="h-full min-w-0 transition-[width]"
-              style={{ width: `${s.pct}%`, backgroundColor: s.fill }}
-            />
-          ))}
         </div>
-
-        {/* Bulk bar OR filters */}
-        {selectedIds.length > 0 ? (
-          <div
-            className="sticky top-0 z-20 flex flex-col gap-3 rounded-xl border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-4 py-3 shadow-[var(--enterprise-shadow-xs)] sm:flex-row sm:items-center sm:justify-between"
-            style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
+      ) : (
+        <section className="enterprise-card flex flex-col gap-2 p-3 sm:flex-row sm:flex-wrap sm:items-center sm:p-4">
+          <input
+            type="search"
+            placeholder="Search items…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className={`${OM_COMPACT_INPUT} min-w-[8rem] flex-1 sm:max-w-xs`}
+          />
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className={`${OM_COMPACT_SELECT} min-w-[7rem]`}
           >
-            <p className="text-sm font-semibold text-[var(--enterprise-primary)]">
-              {selectedIds.length} item{selectedIds.length === 1 ? "" : "s"} selected
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <BulkAssignSelect
-                members={members}
-                onApply={(userId) => bulkMut.mutate({ ids: selectedIds, assigneeId: userId })}
-              />
-              <BulkStatusSelect
-                onApply={(st) => bulkMut.mutate({ ids: selectedIds, status: st })}
-              />
-              <button
-                type="button"
-                className="inline-flex h-9 items-center rounded-lg border border-red-200 bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50"
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      `Delete ${selectedIds.length} punch item(s)? This cannot be undone.`,
-                    )
-                  )
-                    return;
-                  void (async () => {
-                    for (const id of selectedIds) {
-                      try {
-                        await deletePunchItem(projectId, id);
-                      } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "Delete failed");
-                        break;
-                      }
-                    }
-                    await qc.invalidateQueries({ queryKey: qk.projectPunch(projectId) });
-                    setSelectedIds([]);
-                    toast.success("Selected items removed.");
-                  })();
-                }}
-              >
-                <Trash2 className="mr-1 inline h-3.5 w-3.5" />
-                Delete
-              </button>
-              <button
-                type="button"
-                className="text-xs font-semibold text-[var(--enterprise-primary)] underline"
-                onClick={() => setSelectedIds([])}
-              >
-                Clear selection
-              </button>
-            </div>
+            <option value="ALL">Status</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABEL[s]}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterAssignee}
+            onChange={(e) => setFilterAssignee(e.target.value)}
+            className={`${OM_COMPACT_SELECT} min-w-[8rem] flex-1 sm:flex-none`}
+          >
+            <option value="ALL">Assignee</option>
+            <option value="UNASSIGNED">Unassigned</option>
+            {members.map((m) => (
+              <option key={m.userId} value={m.userId}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterLocation}
+            onChange={(e) => setFilterLocation(e.target.value)}
+            className={`${OM_COMPACT_SELECT} min-w-[8rem] flex-1 sm:flex-none`}
+          >
+            <option value="ALL">Location</option>
+            {locationOptions.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+            className={`${OM_COMPACT_SELECT} min-w-[7rem]`}
+          >
+            <option value="ALL">Priority</option>
+            {PRIORITIES.map((pr) => (
+              <option key={pr} value={pr}>
+                {PRIORITY_LABEL[pr]}
+              </option>
+            ))}
+          </select>
+          <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => setChecklistModalOpen(true)}
+              className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-3 text-sm font-semibold text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary)]/15 sm:flex-none"
+            >
+              <FileText className="h-4 w-4 shrink-0" />
+              Add from checklist
+            </button>
+            <button
+              type="button"
+              onClick={() => setManageTemplatesOpen(true)}
+              className="min-h-10 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-normal text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] sm:shrink-0"
+            >
+              Edit checklists
+            </button>
           </div>
-        ) : (
-          <section className="enterprise-card flex flex-col gap-2 p-3 sm:flex-row sm:flex-wrap sm:items-center sm:p-4">
-            <input
-              type="search"
-              placeholder="Search items…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="min-h-10 w-full min-w-[8rem] flex-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20 sm:max-w-xs"
-            />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="min-h-10 min-w-[7rem] rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 text-sm text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
-            >
-              <option value="ALL">Status</option>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filterAssignee}
-              onChange={(e) => setFilterAssignee(e.target.value)}
-              className="min-h-10 min-w-[8rem] flex-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 text-sm text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20 sm:flex-none"
-            >
-              <option value="ALL">Assignee</option>
-              <option value="UNASSIGNED">Unassigned</option>
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filterLocation}
-              onChange={(e) => setFilterLocation(e.target.value)}
-              className="min-h-10 min-w-[8rem] flex-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 text-sm text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20 sm:flex-none"
-            >
-              <option value="ALL">Location</option>
-              {locationOptions.map((loc) => (
-                <option key={loc} value={loc}>
-                  {loc}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              className="min-h-10 min-w-[7rem] rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 text-sm text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
-            >
-              <option value="ALL">Priority</option>
-              {PRIORITIES.map((pr) => (
-                <option key={pr} value={pr}>
-                  {PRIORITY_LABEL[pr]}
-                </option>
-              ))}
-            </select>
-            <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:items-center">
-              <button
-                type="button"
-                onClick={() => setChecklistModalOpen(true)}
-                className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-3 text-sm font-semibold text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary)]/15 sm:flex-none"
-              >
-                <FileText className="h-4 w-4 shrink-0" />
-                Add from checklist
-              </button>
-              <button
-                type="button"
-                onClick={() => setManageTemplatesOpen(true)}
-                className="min-h-10 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-normal text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] sm:shrink-0"
-              >
-                Edit checklists
-              </button>
-            </div>
-          </section>
-        )}
+        </section>
+      )}
 
-        {/* SECTION 4 — Table */}
-        {isPending ? (
-          <div className="py-16">
-            <EnterpriseLoadingState
-              variant="minimal"
-              message="Loading punch list…"
-              label="Loading"
-            />
-          </div>
-        ) : (
-          <>
-            <ul className="space-y-2 lg:hidden" aria-label="Punch list">
-              {filteredSorted.length === 0 ? (
-                <li className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-10 text-center text-sm text-[var(--enterprise-text-muted)]">
-                  No items match your filters.
-                </li>
-              ) : (
-                filteredSorted.map((p) => {
-                  const st = p.status as PunchStatus;
-                  const active = activePunchId === p.id && slideOpen;
-                  return (
-                    <li key={`m-${p.id}`}>
-                      <button
-                        type="button"
-                        onClick={() => openRow(p.id)}
-                        className={`flex min-h-14 w-full items-center gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-left shadow-[var(--enterprise-shadow-xs)] transition-all duration-150 active:scale-[0.99] active:bg-[var(--enterprise-hover-surface)]/60 ${
-                          active
-                            ? "border-[var(--enterprise-primary)]/35 ring-2 ring-[var(--enterprise-primary)]/15"
-                            : ""
-                        }`}
+      {/* SECTION 4 — Table */}
+      {isPending ? (
+        <div className="py-16">
+          <EnterpriseLoadingState variant="minimal" message="Loading punch list…" label="Loading" />
+        </div>
+      ) : (
+        <>
+          <ul className="space-y-2 lg:hidden" aria-label="Punch list">
+            {filteredSorted.length === 0 ? (
+              <li className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-10 text-center text-sm text-[var(--enterprise-text-muted)]">
+                No items match your filters.
+              </li>
+            ) : (
+              filteredSorted.map((p) => {
+                const st = p.status as PunchStatus;
+                const active = activePunchId === p.id && slideOpen;
+                return (
+                  <li key={`m-${p.id}`}>
+                    <button
+                      type="button"
+                      onClick={() => openRow(p.id)}
+                      className={`flex min-h-10 w-full items-center gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-left shadow-[var(--enterprise-shadow-xs)] transition-all duration-150 active:scale-[0.99] active:bg-[var(--enterprise-hover-surface)]/60 ${
+                        active
+                          ? "border-[var(--enterprise-primary)]/35 ring-2 ring-[var(--enterprise-primary)]/15"
+                          : ""
+                      }`}
+                    >
+                      <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-[var(--enterprise-primary)]">
+                        #{p.punchNumber}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-base font-semibold text-[var(--enterprise-text)]">
+                          {p.title}
+                        </p>
+                        <p className="truncate text-sm text-[var(--enterprise-text-muted)]">
+                          {p.location} · {assigneeLabel(p)}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE_CLASS[st] ?? "bg-slate-100 text-slate-700"}`}
                       >
-                        <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-[var(--enterprise-primary)]">
-                          #{p.punchNumber}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-base font-semibold text-[var(--enterprise-text)]">
-                            {p.title}
-                          </p>
-                          <p className="truncate text-sm text-[var(--enterprise-text-muted)]">
-                            {p.location} · {assigneeLabel(p)}
-                          </p>
-                        </div>
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE_CLASS[st] ?? "bg-slate-100 text-slate-700"}`}
-                        >
-                          {STATUS_LABEL[st] ?? p.status}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
-            <div
-              className="hidden lg:block lg:-mx-0 lg:overflow-x-auto"
-              style={{ WebkitOverflowScrolling: "touch" }}
-            >
-              <div className="inline-block min-w-full align-middle">
-                <table className="w-full min-w-[760px] border-collapse rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] md:min-w-[920px]">
-                  <thead>
-                    <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
-                      <th className="w-10 px-2 py-2 text-left text-[#0f172a]">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-[var(--enterprise-border)]"
-                          checked={allSelected}
-                          onChange={toggleAll}
-                          aria-label="Select all"
-                        />
-                      </th>
-                      <th className="px-3 py-2 text-left">
-                        <SortHeader
-                          label="#"
-                          active={sortCol === "punchNumber"}
-                          dir={sortDir}
-                          onToggle={() => toggleSort("punchNumber")}
-                        />
-                      </th>
-                      <th className="min-w-[140px] px-3 py-2 text-left">
-                        <SortHeader
-                          label="Title"
-                          active={sortCol === "title"}
-                          dir={sortDir}
-                          onToggle={() => toggleSort("title")}
-                        />
-                      </th>
-                      <th className="min-w-[120px] px-3 py-2 text-left">
-                        <SortHeader
-                          label="Location"
-                          active={sortCol === "location"}
-                          dir={sortDir}
-                          onToggle={() => toggleSort("location")}
-                        />
-                      </th>
-                      <th className="min-w-[140px] px-3 py-2 text-left">
-                        <SortHeader
-                          label="Assignee"
-                          active={sortCol === "assignee"}
-                          dir={sortDir}
-                          onToggle={() => toggleSort("assignee")}
-                        />
-                      </th>
-                      <th className="min-w-[100px] px-3 py-2 text-left">
-                        <SortHeader
-                          label="Due"
-                          active={sortCol === "dueDate"}
-                          dir={sortDir}
-                          onToggle={() => toggleSort("dueDate")}
-                        />
-                      </th>
-                      <th className="min-w-[120px] px-3 py-2 text-left">
-                        <SortHeader
-                          label="Status"
-                          active={sortCol === "status"}
-                          dir={sortDir}
-                          onToggle={() => toggleSort("status")}
-                        />
-                      </th>
-                      <th className="min-w-[100px] px-3 py-2 text-left">
-                        <SortHeader
-                          label="Priority"
-                          active={sortCol === "priority"}
-                          dir={sortDir}
-                          onToggle={() => toggleSort("priority")}
-                        />
-                      </th>
+                        {STATUS_LABEL[st] ?? p.status}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+          <div
+            className="hidden lg:block lg:-mx-0 lg:overflow-x-auto"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            <div className="inline-block min-w-full align-middle">
+              <table className="w-full min-w-[760px] border-collapse rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] md:min-w-[920px]">
+                <thead>
+                  <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
+                    <th className="w-10 px-2 py-2 text-left text-[#0f172a]">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-[var(--enterprise-border)]"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        aria-label="Select all"
+                      />
+                    </th>
+                    <th className="px-3 py-2 text-left">
+                      <SortHeader
+                        label="#"
+                        active={sortCol === "punchNumber"}
+                        dir={sortDir}
+                        onToggle={() => toggleSort("punchNumber")}
+                      />
+                    </th>
+                    <th className="min-w-[140px] px-3 py-2 text-left">
+                      <SortHeader
+                        label="Title"
+                        active={sortCol === "title"}
+                        dir={sortDir}
+                        onToggle={() => toggleSort("title")}
+                      />
+                    </th>
+                    <th className="min-w-[120px] px-3 py-2 text-left">
+                      <SortHeader
+                        label="Location"
+                        active={sortCol === "location"}
+                        dir={sortDir}
+                        onToggle={() => toggleSort("location")}
+                      />
+                    </th>
+                    <th className="min-w-[140px] px-3 py-2 text-left">
+                      <SortHeader
+                        label="Assignee"
+                        active={sortCol === "assignee"}
+                        dir={sortDir}
+                        onToggle={() => toggleSort("assignee")}
+                      />
+                    </th>
+                    <th className="min-w-[100px] px-3 py-2 text-left">
+                      <SortHeader
+                        label="Due"
+                        active={sortCol === "dueDate"}
+                        dir={sortDir}
+                        onToggle={() => toggleSort("dueDate")}
+                      />
+                    </th>
+                    <th className="min-w-[120px] px-3 py-2 text-left">
+                      <SortHeader
+                        label="Status"
+                        active={sortCol === "status"}
+                        dir={sortDir}
+                        onToggle={() => toggleSort("status")}
+                      />
+                    </th>
+                    <th className="min-w-[100px] px-3 py-2 text-left">
+                      <SortHeader
+                        label="Priority"
+                        active={sortCol === "priority"}
+                        dir={sortDir}
+                        onToggle={() => toggleSort("priority")}
+                      />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSorted.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-4 py-12 text-center text-sm text-[var(--enterprise-text-muted)]"
+                      >
+                        No items match your filters.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredSorted.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={8}
-                          className="px-4 py-12 text-center text-sm text-[var(--enterprise-text-muted)]"
+                  ) : (
+                    filteredSorted.map((p) => {
+                      const sel = selectedIds.includes(p.id);
+                      const active = activePunchId === p.id && slideOpen;
+                      const rowHi = sel || active;
+                      const st = p.status as PunchStatus;
+                      return (
+                        <tr
+                          key={p.id}
+                          id={`punch-row-${p.id}`}
+                          onClick={() => openRow(p.id)}
+                          className={`h-11 cursor-pointer border-b border-[var(--enterprise-border)] text-sm transition-colors last:border-b-0 ${
+                            rowHi
+                              ? "border-l-4 border-l-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/10"
+                              : "hover:bg-[var(--enterprise-hover-surface)]"
+                          }`}
                         >
-                          No items match your filters.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredSorted.map((p) => {
-                        const sel = selectedIds.includes(p.id);
-                        const active = activePunchId === p.id && slideOpen;
-                        const rowHi = sel || active;
-                        const st = p.status as PunchStatus;
-                        return (
-                          <tr
-                            key={p.id}
-                            id={`punch-row-${p.id}`}
-                            onClick={() => openRow(p.id)}
-                            className={`h-11 cursor-pointer border-b border-[var(--enterprise-border)] text-sm transition-colors last:border-b-0 ${
-                              rowHi
-                                ? "border-l-4 border-l-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/10"
-                                : "hover:bg-[var(--enterprise-hover-surface)]"
-                            }`}
-                          >
-                            <td className="px-2 py-0" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded border-[var(--enterprise-border)]"
-                                checked={sel}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedIds((ids) =>
-                                    e.target.checked
-                                      ? [...ids, p.id]
-                                      : ids.filter((x) => x !== p.id),
-                                  );
-                                }}
-                                aria-label={`Select #${p.punchNumber}`}
-                              />
-                            </td>
-                            <td className="px-3 font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
-                              {p.punchNumber}
-                            </td>
-                            <td className="max-w-[220px] truncate px-3 font-medium text-[var(--enterprise-text)]">
-                              {p.title}
-                            </td>
-                            <td className="max-w-[160px] truncate px-3 text-[#0f172a]">
-                              {p.location}
-                            </td>
-                            <td className="px-3">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <AssigneeAvatar member={p.assignee} />
-                                <span className="truncate text-[var(--enterprise-text)]/85">
-                                  {assigneeLabel(p)}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="whitespace-nowrap px-3 text-[#0f172a]">
-                              {formatTableDate(p.dueDate)}
-                            </td>
-                            <td className="px-3">
-                              <span
-                                className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_BADGE_CLASS[st] ?? "bg-slate-100 text-slate-700"}`}
-                              >
-                                {STATUS_LABEL[st] ?? p.status}
+                          <td className="px-2 py-0" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-[var(--enterprise-border)]"
+                              checked={sel}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                setSelectedIds((ids) =>
+                                  e.target.checked ? [...ids, p.id] : ids.filter((x) => x !== p.id),
+                                );
+                              }}
+                              aria-label={`Select #${p.punchNumber}`}
+                            />
+                          </td>
+                          <td className="px-3 font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
+                            {p.punchNumber}
+                          </td>
+                          <td className="max-w-[220px] truncate px-3 font-medium text-[var(--enterprise-text)]">
+                            {p.title}
+                          </td>
+                          <td className="max-w-[160px] truncate px-3 text-[#0f172a]">
+                            {p.location}
+                          </td>
+                          <td className="px-3">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <AssigneeAvatar member={p.assignee} />
+                              <span className="truncate text-[var(--enterprise-text)]/85">
+                                {assigneeLabel(p)}
                               </span>
-                            </td>
-                            <td className="px-3 text-[#0f172a]">
-                              {PRIORITY_LABEL[p.priority] ?? p.priority}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-3 text-[#0f172a]">
+                            {formatTableDate(p.dueDate)}
+                          </td>
+                          <td className="px-3">
+                            <span
+                              className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_BADGE_CLASS[st] ?? "bg-slate-100 text-slate-700"}`}
+                            >
+                              {STATUS_LABEL[st] ?? p.status}
+                            </span>
+                          </td>
+                          <td className="px-3 text-[#0f172a]">
+                            {PRIORITY_LABEL[p.priority] ?? p.priority}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-          </>
-        )}
-      </div>
-
-      <EnterpriseAddPulseWrap variant="fab" className="lg:hidden">
-        <EnterpriseFab
-          label="New punch item"
-          onClick={() => setNewModalOpen(true)}
-          icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
-        />
-      </EnterpriseAddPulseWrap>
+          </div>
+        </>
+      )}
       <button
         type="button"
         onClick={() => setChecklistModalOpen(true)}

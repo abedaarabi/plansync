@@ -27,6 +27,18 @@ function ymdFromDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+const linkTypeSchema = z.enum(["e2s", "s2s", "e2e", "s2e"]);
+
+const linkInSchema = z.object({
+  id: z.string().min(1).max(80),
+  sourceId: z.string().min(1).max(80),
+  targetId: z.string().min(1).max(80),
+  type: linkTypeSchema.default("e2s"),
+  lagDays: z.number().int().min(-3650).max(3650).default(0),
+});
+
+type LinkIn = z.infer<typeof linkInSchema>;
+
 const taskInSchema = z.object({
   id: z.string().min(1).max(80),
   title: z.string().min(1).max(500),
@@ -44,6 +56,38 @@ type TaskIn = z.infer<typeof taskInSchema>;
 
 function newTemplateTaskId(seed: string): string {
   return `sched_${seed}_${randomBytes(4).toString("hex")}`;
+}
+
+function newTemplateLinkId(seed: string): string {
+  return `schedlink_${seed}_${randomBytes(4).toString("hex")}`;
+}
+
+function buildDatacenterCommissioningLinks(tasks: TaskIn[]): LinkIn[] {
+  const bySuffix = new Map<string, string>();
+  for (const t of tasks) {
+    const m = /^sched_(dc_[a-z]+)_/.exec(t.id);
+    if (m) bySuffix.set(m[1], t.id);
+  }
+  const chain: [string, string][] = [
+    ["dc_design", "dc_readiness"],
+    ["dc_readiness", "dc_ist"],
+    ["dc_ist", "dc_oat"],
+    ["dc_oat", "dc_handover"],
+  ];
+  return chain.flatMap(([from, to]) => {
+    const sourceId = bySuffix.get(from);
+    const targetId = bySuffix.get(to);
+    if (!sourceId || !targetId) return [];
+    return [
+      {
+        id: newTemplateLinkId(`${from}_${to}`),
+        sourceId,
+        targetId,
+        type: "e2s" as const,
+        lagDays: 0,
+      },
+    ];
+  });
 }
 
 function buildDatacenterCommissioningTemplate(anchorDate: Date, baseSortOrder: number): TaskIn[] {
@@ -174,6 +218,32 @@ function validateForest(tasks: TaskIn[]): { ok: true } | { error: string } {
   return { ok: true };
 }
 
+function validateLinks(tasks: TaskIn[], links: LinkIn[]): { ok: true } | { error: string } {
+  const ids = new Set(tasks.map((t) => t.id));
+  const linkIds = new Set<string>();
+  for (const link of links) {
+    if (link.sourceId === link.targetId) {
+      return { error: "A task cannot depend on itself" };
+    }
+    if (!ids.has(link.sourceId) || !ids.has(link.targetId)) {
+      return { error: "Dependency endpoints must reference tasks in the same save" };
+    }
+    if (linkIds.has(link.id)) {
+      return { error: "Duplicate dependency ids in request" };
+    }
+    linkIds.add(link.id);
+  }
+  const pairKeys = new Set<string>();
+  for (const link of links) {
+    const key = `${link.sourceId}->${link.targetId}`;
+    if (pairKeys.has(key)) {
+      return { error: "Duplicate dependency between the same tasks" };
+    }
+    pairKeys.add(key);
+  }
+  return { ok: true };
+}
+
 /** Parents before children for FK inserts. */
 function orderForUpsert(tasks: TaskIn[]): TaskIn[] {
   const ids = new Set(tasks.map((t) => t.id));
@@ -226,6 +296,40 @@ function rowJson(row: {
   };
 }
 
+function linkJson(row: {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  type: string;
+  lagDays: number;
+}) {
+  return {
+    id: row.id,
+    sourceId: row.sourceId,
+    targetId: row.targetId,
+    type: row.type,
+    lagDays: row.lagDays,
+  };
+}
+
+async function loadSchedulePayload(projectId: string) {
+  const [rows, links] = await Promise.all([
+    prisma.scheduleTask.findMany({
+      where: { projectId },
+      include: { takeoffLinks: { select: { takeoffLineId: true } } },
+      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    }),
+    prisma.scheduleTaskLink.findMany({
+      where: { projectId },
+      orderBy: [{ id: "asc" }],
+    }),
+  ]);
+  return {
+    tasks: rows.map(rowJson),
+    links: links.map(linkJson),
+  };
+}
+
 export function registerScheduleRoutes(r: Hono, needUser: MiddlewareHandler) {
   r.get("/projects/:projectId/schedule", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
@@ -237,17 +341,12 @@ export function registerScheduleRoutes(r: Hono, needUser: MiddlewareHandler) {
       return c.json({ error: "Forbidden" }, 403);
     }
     if (!ctx.settings.modules.schedule) {
-      return c.json([]);
+      return c.json({ tasks: [], links: [] });
     }
     const gate = requirePro(ctx.project.workspace);
     if (gate) return c.json({ error: gate.error }, gate.status);
 
-    const rows = await prisma.scheduleTask.findMany({
-      where: { projectId },
-      include: { takeoffLinks: { select: { takeoffLineId: true } } },
-      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-    });
-    return c.json(rows.map(rowJson));
+    return c.json(await loadSchedulePayload(projectId));
   });
 
   r.post(
@@ -286,7 +385,8 @@ export function registerScheduleRoutes(r: Hono, needUser: MiddlewareHandler) {
       }
 
       const tasks = buildDatacenterCommissioningTemplate(new Date(), baseSortOrder);
-      return c.json({ mode: body.data.mode, tasks });
+      const links = buildDatacenterCommissioningLinks(tasks);
+      return c.json({ mode: body.data.mode, tasks, links });
     },
   );
 
@@ -306,16 +406,22 @@ export function registerScheduleRoutes(r: Hono, needUser: MiddlewareHandler) {
     if (gate) return c.json({ error: gate.error }, gate.status);
 
     const parsed = z
-      .object({ tasks: z.array(taskInSchema).max(5000) })
+      .object({
+        tasks: z.array(taskInSchema).max(5000),
+        links: z.array(linkInSchema).max(10000).default([]),
+      })
       .safeParse(await c.req.json());
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
     const tasks = parsed.data.tasks;
+    const links = parsed.data.links;
     const idList = tasks.map((t) => t.id);
     if (new Set(idList).size !== idList.length) {
       return c.json({ error: "Duplicate task ids in request" }, 400);
     }
     const forest = validateForest(tasks);
     if ("error" in forest) return c.json({ error: forest.error }, 400);
+    const linkForest = validateLinks(tasks, links);
+    if ("error" in linkForest) return c.json({ error: linkForest.error }, 400);
 
     const allTakeoffIds = [...new Set(tasks.flatMap((t) => [...new Set(t.takeoffLineIds ?? [])]))];
     if (allTakeoffIds.length > 0) {
@@ -332,6 +438,7 @@ export function registerScheduleRoutes(r: Hono, needUser: MiddlewareHandler) {
     }
 
     const incomingIds = tasks.map((t) => t.id);
+    const incomingLinkIds = links.map((l) => l.id);
     const ordered = orderForUpsert(tasks);
 
     const foreignIds = await prisma.scheduleTask.findMany({
@@ -343,6 +450,9 @@ export function registerScheduleRoutes(r: Hono, needUser: MiddlewareHandler) {
     }
 
     await prisma.$transaction(async (tx) => {
+      await tx.scheduleTaskLink.deleteMany({
+        where: { projectId, id: { notIn: incomingLinkIds } },
+      });
       await tx.scheduleTask.deleteMany({
         where: { projectId, id: { notIn: incomingIds } },
       });
@@ -385,13 +495,27 @@ export function registerScheduleRoutes(r: Hono, needUser: MiddlewareHandler) {
           });
         }
       }
+      for (const link of links) {
+        await tx.scheduleTaskLink.upsert({
+          where: { id: link.id },
+          create: {
+            id: link.id,
+            projectId,
+            sourceId: link.sourceId,
+            targetId: link.targetId,
+            type: link.type,
+            lagDays: link.lagDays,
+          },
+          update: {
+            sourceId: link.sourceId,
+            targetId: link.targetId,
+            type: link.type,
+            lagDays: link.lagDays,
+          },
+        });
+      }
     });
 
-    const rows = await prisma.scheduleTask.findMany({
-      where: { projectId },
-      include: { takeoffLinks: { select: { takeoffLineId: true } } },
-      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-    });
-    return c.json(rows.map(rowJson));
+    return c.json(await loadSchedulePayload(projectId));
   });
 }

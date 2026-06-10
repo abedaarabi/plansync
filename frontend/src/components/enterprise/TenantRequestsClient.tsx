@@ -14,7 +14,6 @@ import {
   ChevronRight,
   CircleDot,
   ExternalLink,
-  Filter,
   Flag,
   ImageIcon,
   Inbox,
@@ -28,6 +27,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
@@ -39,6 +39,7 @@ import {
   fetchWorkspaceMembers,
   formatIssueLockHint,
   patchIssue,
+  postWorkOrderFromOccupant,
   presignReadIssueReferencePhoto,
   ProRequiredError,
   viewerHrefForIssue,
@@ -55,7 +56,13 @@ import {
   priorityBadgeClassLight,
 } from "@/lib/issueStatusStyle";
 import { qk } from "@/lib/queryKeys";
-import { MOBILE_FIELD_SELECT } from "@/lib/mobileFormStyles";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
+import {
+  OM_COMPACT_CHIP_ACTIVE,
+  OM_COMPACT_CHIP_IDLE,
+  OM_COMPACT_SELECT,
+  OM_PAGE_CLASS,
+} from "@/lib/omCompactStyles";
 
 type StatusFilter = "ALL" | "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
 type SortKey = "newest" | "status";
@@ -114,9 +121,9 @@ function TenantRequestsEmpty({
     "/tenant-portal",
   );
   return (
-    <div className="flex flex-col items-center justify-center gap-4 px-4 py-12 text-center sm:py-14">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
-        <Inbox className="h-7 w-7 text-[var(--enterprise-primary)]" strokeWidth={1.5} aria-hidden />
+    <div className="flex flex-col items-center justify-center gap-3 px-4 py-8 text-center">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
+        <Inbox className="h-5 w-5 text-[var(--enterprise-primary)]" strokeWidth={1.5} aria-hidden />
       </div>
       <div className="max-w-md">
         <p className="text-sm font-semibold text-[var(--enterprise-text)]">
@@ -155,17 +162,17 @@ function TenantRequestMobileCard({
 
   return (
     <li>
-      <div className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)]">
+      <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 shadow-[var(--enterprise-shadow-xs)]">
         <button
           type="button"
           onClick={() => onOpen(issue.id)}
-          className="flex w-full items-start gap-3 text-left active:opacity-90"
+          className="flex w-full items-start gap-2 text-left active:opacity-90"
         >
           <div className="min-w-0 flex-1">
-            <p className="text-base font-semibold leading-snug text-[var(--enterprise-text)]">
+            <p className="text-sm font-semibold leading-snug text-[var(--enterprise-text)]">
               {issue.title}
             </p>
-            <p className="mt-1 line-clamp-2 text-sm text-[var(--enterprise-text-muted)]">
+            <p className="mt-0.5 line-clamp-2 text-xs text-[var(--enterprise-text-muted)]">
               {previewText(issue.description, 100)}
             </p>
             <p className="mt-2 text-xs text-[var(--enterprise-text-muted)]">
@@ -173,11 +180,11 @@ function TenantRequestMobileCard({
               {issue.reporterEmail?.trim() ? ` · ${issue.reporterEmail.trim()}` : ""}
             </p>
           </div>
-          <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-[var(--enterprise-text-muted)]" />
+          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]" />
         </button>
 
         {(issue.asset || issue.location?.trim()) && (
-          <p className="mt-3 text-sm text-[var(--enterprise-text)]">
+          <p className="mt-2 text-xs text-[var(--enterprise-text)]">
             {issue.asset ? (
               <>
                 <span className="font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
@@ -192,7 +199,7 @@ function TenantRequestMobileCard({
           </p>
         )}
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--enterprise-text-muted)]">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--enterprise-text-muted)]">
           <time dateTime={issue.createdAt}>
             {new Date(issue.createdAt).toLocaleString(undefined, {
               dateStyle: "short",
@@ -213,16 +220,16 @@ function TenantRequestMobileCard({
           </span>
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
           <label className="block min-w-0" onClick={(e) => e.stopPropagation()}>
-            <span className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]">
+            <span className="mb-0.5 block text-[11px] font-medium text-[var(--enterprise-text-muted)]">
               Status
             </span>
             <select
               value={issue.status}
               onChange={(e) => onStatusChange(issue.id, e.target.value)}
               disabled={patching}
-              className={`${MOBILE_FIELD_SELECT} cursor-pointer border-0 py-2.5 text-sm font-semibold shadow-sm disabled:opacity-50 ${issueStatusBadgeClassLight(issue.status)}`}
+              className={`${OM_COMPACT_SELECT} cursor-pointer text-xs font-semibold disabled:opacity-50 ${issueStatusBadgeClassLight(issue.status)}`}
             >
               {ISSUE_STATUS_ORDER.map((s) => (
                 <option key={s} value={s}>
@@ -232,10 +239,10 @@ function TenantRequestMobileCard({
             </select>
           </label>
           <div className="min-w-0">
-            <span className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]">
+            <span className="mb-0.5 block text-[11px] font-medium text-[var(--enterprise-text-muted)]">
               Assignee
             </span>
-            <p className="flex min-h-12 items-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]">
+            <p className="flex min-h-9 items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2.5 text-xs text-[var(--enterprise-text)]">
               <UserRound
                 className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]"
                 strokeWidth={1.75}
@@ -274,6 +281,7 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
   const [patchingIssueId, setPatchingIssueId] = useState<string | null>(null);
   const [promotingIssueId, setPromotingIssueId] = useState<string | null>(null);
+  const [creatingWoIssueId, setCreatingWoIssueId] = useState<string | null>(null);
 
   const issuesKey = qk.issuesForProject(projectId, undefined, "OCCUPANT", undefined);
   const { data: items = [], isPending } = useQuery({
@@ -408,6 +416,21 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
     },
   });
 
+  const createWoMut = useMutation({
+    mutationFn: (id: string) => postWorkOrderFromOccupant(projectId, id),
+    onMutate: (id) => setPromotingIssueId(id),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["issues", "project", projectId], exact: false });
+      await qc.invalidateQueries({ queryKey: qk.workOrders(projectId), exact: false });
+      toast.success("Work order created from tenant request.");
+      router.push(workOrdersHref);
+    },
+    onError: (e: Error) => {
+      toast.error(e instanceof ProRequiredError ? "Pro required." : e.message);
+    },
+    onSettled: () => setPromotingIssueId(null),
+  });
+
   const stats = useMemo(() => {
     let open = 0;
     let inProgress = 0;
@@ -454,93 +477,75 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
   const photoCount = detailIssue?.referencePhotos?.length ?? 0;
 
   return (
-    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-5 sm:space-y-6">
-      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-5 sm:flex-row sm:items-start sm:justify-between sm:pb-6">
-        <div className="flex min-w-0 gap-3 sm:gap-4">
-          <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
-            aria-hidden
-          >
-            <Inbox
-              className="h-6 w-6 text-[var(--enterprise-primary)] sm:h-7 sm:w-7"
-              strokeWidth={1.5}
-            />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
-              Occupant inbox
-            </h1>
-            {!isPending ? (
-              <p className="mt-1.5 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
-                {stats.total === 0
-                  ? "Occupant submissions for this building — triage and track without the construction drawings workflow."
-                  : `${stats.total} request${stats.total === 1 ? "" : "s"} from tenants or visitors`}
-              </p>
-            ) : null}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Link
-            href={tenantPortalHref}
-            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:bg-[var(--enterprise-hover-surface)]"
-          >
-            <Building2 className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-            Occupant hub
-          </Link>
-          <Link
-            href={assetsHref}
-            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition active:scale-[0.98] hover:bg-[var(--enterprise-hover-surface)]"
-          >
-            <Package className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-            Assets
-          </Link>
-        </div>
-      </header>
+    <div className={OM_PAGE_CLASS}>
+      <OmSubPageHeader
+        icon={Inbox}
+        title="Occupant inbox"
+        description={
+          isPending
+            ? "Loading requests…"
+            : stats.total === 0
+              ? "Occupant submissions — triage without the construction issues workflow."
+              : `${stats.total} request${stats.total === 1 ? "" : "s"} from tenants or visitors`
+        }
+        action={
+          <>
+            <Link
+              href={tenantPortalHref}
+              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
+            >
+              <Building2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Hub
+            </Link>
+            <Link
+              href={assetsHref}
+              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
+            >
+              <Package className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Assets
+            </Link>
+          </>
+        }
+      />
 
-      <div className="sticky top-0 z-10 space-y-3 rounded-2xl border border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)]/95 p-3 shadow-[var(--enterprise-shadow-xs)] backdrop-blur-md lg:static lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
-        <div className="flex items-center justify-between gap-2 lg:mb-1">
-          <div className="hidden items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] lg:flex">
-            <Filter className="h-3.5 w-3.5 opacity-80" aria-hidden />
-            Refine inbox
+      <div className="sticky top-0 z-10 flex flex-col gap-2 border-b border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)]/95 pb-3 backdrop-blur-md lg:static lg:bg-transparent">
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            className="mobile-chip-scroll flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            role="tablist"
+            aria-label="Filter by status"
+          >
+            {ISSUE_FILTER_DEFS.map((f) => {
+              const TabIcon = f.Icon;
+              const selected = filter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setFilter(f.key)}
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
+                    selected ? OM_COMPACT_CHIP_ACTIVE : OM_COMPACT_CHIP_IDLE
+                  }`}
+                  style={selected ? { backgroundColor: "var(--enterprise-primary)" } : undefined}
+                >
+                  <TabIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                  {f.label}
+                </button>
+              );
+            })}
           </div>
           {filtersActive ? (
             <button
               type="button"
               onClick={clearFilters}
-              className="mobile-touch-target ml-auto inline-flex items-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text-muted)] transition active:scale-[0.98] hover:text-[var(--enterprise-text)]"
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-text)]"
             >
-              <RotateCcw className="h-3.5 w-3.5 opacity-80" strokeWidth={2} aria-hidden />
+              <RotateCcw className="h-3 w-3 opacity-80" strokeWidth={2} aria-hidden />
               Reset
             </button>
           ) : null}
-        </div>
-
-        <div
-          className="mobile-chip-scroll flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex-wrap lg:overflow-visible"
-          role="tablist"
-          aria-label="Filter by status"
-        >
-          {ISSUE_FILTER_DEFS.map((f) => {
-            const TabIcon = f.Icon;
-            const selected = filter === f.key;
-            return (
-              <button
-                key={f.key}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() => setFilter(f.key)}
-                className={`inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition active:scale-[0.97] ${
-                  selected
-                    ? "bg-[var(--enterprise-primary)] text-white shadow-sm [&_svg]:text-white"
-                    : "border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)] [&_svg]:opacity-80"
-                }`}
-              >
-                <TabIcon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-                {f.label}
-              </button>
-            );
-          })}
         </div>
 
         <div className="grid grid-cols-2 gap-2 pt-1 lg:flex lg:flex-wrap lg:items-end lg:gap-3 lg:pt-0">
@@ -553,7 +558,7 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
               id="tenant-assignee-filter"
               value={assigneeFilter}
               onChange={(e) => setAssigneeFilter(e.target.value as AssigneeFilter)}
-              className={`${MOBILE_FIELD_SELECT} py-2.5 text-sm`}
+              className={OM_COMPACT_SELECT}
             >
               <option value="ALL">All assignees</option>
               <option value="UNASSIGNED">Unassigned</option>
@@ -573,7 +578,7 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
               id="tenant-sort"
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
-              className={`${MOBILE_FIELD_SELECT} py-2.5 text-sm`}
+              className={OM_COMPACT_SELECT}
             >
               <option value="newest">Newest first</option>
               <option value="status">Status</option>
@@ -584,7 +589,7 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
 
       {msg ? (
         <div
-          className="flex items-start justify-between gap-3 rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-3 text-sm text-red-900"
+          className="flex items-start justify-between gap-3 rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-red-900"
           role="alert"
         >
           <span className="min-w-0 flex-1 leading-relaxed">{msg}</span>
@@ -636,7 +641,7 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
             </div>
           ) : null}
 
-          <ul className="space-y-3 lg:hidden" aria-label="Occupant requests">
+          <ul className="space-y-2 lg:hidden" aria-label="Occupant requests">
             {filtered.length === 0 ? (
               <li className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-10 text-center text-sm text-[var(--enterprise-text-muted)]">
                 No requests match these filters.
@@ -659,31 +664,31 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
               <table className="w-full min-w-[900px] text-left">
                 <thead>
                   <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80">
-                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                    <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                       Received
                     </th>
-                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                       Reporter
                     </th>
-                    <th className="min-w-[220px] px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                    <th className="min-w-[220px] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                       Request
                     </th>
-                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                       Location / equipment
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                    <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                       Photos
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                    <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                       Status
                     </th>
-                    <th className="min-w-[8rem] px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                    <th className="min-w-[8rem] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                       Assignee
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                    <th className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                       Priority
                     </th>
-                    <th className="whitespace-nowrap px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                    <th className="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                       Open
                     </th>
                   </tr>
@@ -709,13 +714,13 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
                           className="cursor-pointer border-b border-[var(--enterprise-border)]/80 transition-colors last:border-0 hover:bg-[var(--enterprise-hover-surface)]/80 mobile-tappable-row min-h-14 active:scale-[0.99]"
                           onClick={() => openDetail(issue.id)}
                         >
-                          <td className="whitespace-nowrap px-4 py-3 align-top text-sm tabular-nums text-[var(--enterprise-text)]">
+                          <td className="whitespace-nowrap px-3 py-2 align-top text-sm tabular-nums text-[var(--enterprise-text)]">
                             {new Date(issue.createdAt).toLocaleString(undefined, {
                               dateStyle: "short",
                               timeStyle: "short",
                             })}
                           </td>
-                          <td className="max-w-[10rem] px-4 py-3 align-top text-sm text-[var(--enterprise-text)]">
+                          <td className="max-w-[10rem] px-3 py-2 align-top text-sm text-[var(--enterprise-text)]">
                             <div className="min-w-0">
                               <p className="line-clamp-2 font-medium leading-snug">
                                 {issue.reporterName?.trim() || "—"}
@@ -727,7 +732,7 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
                               ) : null}
                             </div>
                           </td>
-                          <td className="max-w-[min(360px,40vw)] px-4 py-3 align-top">
+                          <td className="max-w-[min(360px,40vw)] px-3 py-2 align-top">
                             <p className="line-clamp-2 text-sm font-medium leading-snug text-[var(--enterprise-text)]">
                               {issue.title}
                             </p>
@@ -735,7 +740,7 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
                               {previewText(issue.description)}
                             </p>
                           </td>
-                          <td className="max-w-[12rem] px-4 py-3 align-top text-sm text-[var(--enterprise-text)]">
+                          <td className="max-w-[12rem] px-3 py-2 align-top text-sm text-[var(--enterprise-text)]">
                             {issue.asset ? (
                               <span className="line-clamp-2">
                                 <span className="font-mono text-xs">{issue.asset.tag}</span>
@@ -748,13 +753,13 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
                               <span className="text-[var(--enterprise-text-muted)]">—</span>
                             )}
                           </td>
-                          <td className="whitespace-nowrap px-4 py-3 align-top text-sm text-[var(--enterprise-text-muted)]">
+                          <td className="whitespace-nowrap px-3 py-2 align-top text-sm text-[var(--enterprise-text-muted)]">
                             <span className="inline-flex items-center gap-1 tabular-nums">
                               <ImageIcon className="h-4 w-4 opacity-70" aria-hidden />
                               {nPhotos}
                             </span>
                           </td>
-                          <td className="w-[1%] min-w-[10rem] whitespace-nowrap px-4 py-3 align-top">
+                          <td className="w-[1%] min-w-[10rem] whitespace-nowrap px-3 py-2 align-top">
                             <label className="block min-w-0">
                               <span className="sr-only">Status</span>
                               <select
@@ -775,7 +780,7 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
                               </select>
                             </label>
                           </td>
-                          <td className="px-4 py-3 align-top text-sm text-[var(--enterprise-text)]">
+                          <td className="px-3 py-2 align-top text-sm text-[var(--enterprise-text)]">
                             <div className="flex items-start gap-2">
                               <UserRound
                                 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]"
@@ -791,7 +796,7 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 align-top">
+                          <td className="px-3 py-2 align-top">
                             <span
                               className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold ${priRowClass}`}
                             >
@@ -803,7 +808,7 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
                               {ISSUE_PRIORITY_LABEL[priRow] ?? priRow}
                             </span>
                           </td>
-                          <td className="whitespace-nowrap px-4 py-3 align-top text-right">
+                          <td className="whitespace-nowrap px-3 py-2 align-top text-right">
                             <button
                               type="button"
                               onClick={(e) => {
@@ -857,19 +862,32 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
         footer={
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
             {detailIssue && canPromoteOccupant && detailIssue.issueKind === "OCCUPANT" ? (
-              <button
-                type="button"
-                disabled={promotingIssueId === detailIssue.id}
-                onClick={() => promoteMut.mutate(detailIssue.id)}
-                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white hover:opacity-95 disabled:opacity-50 sm:w-auto"
-              >
-                {promotingIssueId === detailIssue.id ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                ) : (
+              <>
+                <EnterpriseButton
+                  className="w-full sm:w-auto"
+                  disabled={
+                    creatingWoIssueId === detailIssue.id ||
+                    promotingIssueId === detailIssue.id ||
+                    !detailIssue.assetId
+                  }
+                  loading={creatingWoIssueId === detailIssue.id}
+                  onClick={() => createWoMut.mutate(detailIssue.id)}
+                >
                   <ArrowUpCircle className="h-4 w-4" aria-hidden />
-                )}
-                Promote to work order
-              </button>
+                  Create work order
+                </EnterpriseButton>
+                <EnterpriseButton
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  disabled={
+                    creatingWoIssueId === detailIssue.id || promotingIssueId === detailIssue.id
+                  }
+                  loading={promotingIssueId === detailIssue.id}
+                  onClick={() => promoteMut.mutate(detailIssue.id)}
+                >
+                  Promote in place
+                </EnterpriseButton>
+              </>
             ) : null}
             <Link
               href={

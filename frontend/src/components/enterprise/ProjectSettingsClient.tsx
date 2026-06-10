@@ -24,6 +24,8 @@ import { isWorkspaceOmBillingClient } from "@/lib/workspaceSubscription";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { OccupantPortalLinksSettings } from "./OccupantPortalLinksSettings";
 import { AccessRestricted } from "./AccessRestricted";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
+import { OM_COMPACT_INPUT, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 
 type Props = { projectId: string };
 
@@ -221,7 +223,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
   }
 
   const sectionClass =
-    "rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 shadow-[var(--enterprise-shadow-xs)] sm:p-6";
+    "rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 shadow-[var(--enterprise-shadow-xs)] sm:p-4";
 
   const row = (label: string, on: boolean, onToggle: (v: boolean) => void, disabled?: boolean) => (
     <div className="flex flex-col gap-2 rounded-xl border border-[var(--enterprise-border)]/75 bg-[var(--enterprise-bg)]/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -237,7 +239,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
           aria-label={`${label} toggle`}
           disabled={disabled}
           onClick={() => onToggle(!on)}
-          className={`relative inline-flex h-6 w-11 min-h-[44px] min-w-[44px] items-center rounded-full border transition ${
+          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition ${
             on
               ? "border-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]"
               : "border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]"
@@ -255,34 +257,20 @@ export function ProjectSettingsClient({ projectId }: Props) {
   );
 
   return (
-    <div className="enterprise-animate-in mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
-      <header className="rounded-2xl border border-[var(--enterprise-border)] bg-linear-to-r from-[var(--enterprise-surface)] to-[var(--enterprise-bg)] p-5 shadow-[var(--enterprise-shadow-xs)] sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]"
-              aria-hidden
-            >
-              <Settings className="h-5 w-5" strokeWidth={1.75} />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
-                Project settings
-              </h1>
-              <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
-                {session.projectName} — modules, integrations, and client visibility controls.
-              </p>
-            </div>
-          </div>
-          <span className="inline-flex items-center gap-2 self-start rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1 text-xs font-semibold text-[var(--enterprise-text-muted)]">
-            <ShieldCheck className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" />
-            Super Admin controls
-          </span>
-        </div>
-      </header>
+    <div className={OM_PAGE_CLASS}>
+      <OmSubPageHeader
+        icon={Settings}
+        title="Project settings"
+        description={`${session.projectName} — modules, integrations, and client visibility.`}
+      >
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-0.5 text-[11px] font-semibold text-[var(--enterprise-text-muted)]">
+          <ShieldCheck className="h-3 w-3 text-[var(--enterprise-primary)]" />
+          Super Admin controls
+        </span>
+      </OmSubPageHeader>
 
       <section className={sectionClass}>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
           Modules
         </h2>
         {!canEditSettings ? (
@@ -304,7 +292,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
                 type="button"
                 disabled={datacenterDefaultsMutation.isPending}
                 onClick={() => datacenterDefaultsMutation.mutate()}
-                className="mt-2 inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
+                className="mt-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
               >
                 {datacenterDefaultsMutation.isPending
                   ? "Applying data center defaults..."
@@ -346,7 +334,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
               </code>
               <button
                 type="button"
-                className="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white"
+                className="inline-flex min-h-9 items-center justify-center rounded-lg bg-emerald-700 px-3 text-xs font-semibold text-white"
                 onClick={async () => {
                   await navigator.clipboard.writeText(newApiKeyPlainText);
                 }}
@@ -355,7 +343,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
               </button>
               <button
                 type="button"
-                className="inline-flex min-h-11 items-center justify-center rounded-lg border border-emerald-400 bg-white px-4 text-sm font-semibold text-emerald-900"
+                className="inline-flex min-h-9 items-center justify-center rounded-lg border border-emerald-400 bg-white px-3 text-xs font-semibold text-emerald-900"
                 onClick={() => setNewApiKeyPlainText(null)}
               >
                 Dismiss
@@ -369,7 +357,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
             value={apiKeyNameDraft}
             onChange={(e) => setApiKeyNameDraft(e.target.value)}
             placeholder="Key name (e.g. Power BI sync)"
-            className="min-h-11 w-full max-w-xl rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]"
+            className={`${OM_COMPACT_INPUT} max-w-xl`}
             disabled={createApiKeyMutation.isPending}
             maxLength={120}
           />
@@ -378,13 +366,13 @@ export function ProjectSettingsClient({ projectId }: Props) {
             value={apiKeyServiceDraft}
             onChange={(e) => setApiKeyServiceDraft(e.target.value)}
             placeholder="Service label (optional)"
-            className="min-h-11 w-full max-w-xs rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]"
+            className={`${OM_COMPACT_INPUT} max-w-xs`}
             disabled={createApiKeyMutation.isPending}
             maxLength={120}
           />
           <button
             type="button"
-            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white disabled:opacity-50"
+            className="inline-flex min-h-9 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-3 text-xs font-semibold text-white disabled:opacity-50"
             disabled={createApiKeyMutation.isPending}
             onClick={() =>
               createApiKeyMutation.mutate({
@@ -463,7 +451,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
                 {!k.revokedAt ? (
                   <button
                     type="button"
-                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-red-300 bg-white px-3 text-xs font-semibold text-red-700 disabled:opacity-50"
+                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 bg-white px-3 text-xs font-semibold text-red-700 disabled:opacity-50"
                     disabled={revokeApiKeyMutation.isPending}
                     onClick={() => revokeApiKeyMutation.mutate(k.id)}
                   >
@@ -491,18 +479,18 @@ export function ProjectSettingsClient({ projectId }: Props) {
             value={webhookUrlDraft}
             onChange={(e) => setWebhookUrlDraft(e.target.value)}
             placeholder="https://example.com/plansync-events"
-            className="min-h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]"
+            className={OM_COMPACT_INPUT}
           />
           <input
             type="text"
             value={webhookEventsDraft}
             onChange={(e) => setWebhookEventsDraft(e.target.value)}
             placeholder="Events (comma separated, optional)"
-            className="min-h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]"
+            className={OM_COMPACT_INPUT}
           />
           <button
             type="button"
-            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white disabled:opacity-50"
+            className="inline-flex min-h-9 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-3 text-xs font-semibold text-white disabled:opacity-50"
             disabled={createWebhookMutation.isPending || !webhookUrlDraft.trim()}
             onClick={() =>
               createWebhookMutation.mutate({
@@ -540,7 +528,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)]"
+                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)]"
                     onClick={() =>
                       toggleWebhookMutation.mutate({ webhookId: w.id, isActive: !w.isActive })
                     }
@@ -549,7 +537,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
                   </button>
                   <button
                     type="button"
-                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-red-300 bg-white px-3 text-xs font-semibold text-red-700"
+                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 bg-white px-3 text-xs font-semibold text-red-700"
                     onClick={() => deleteWebhookMutation.mutate(w.id)}
                   >
                     Delete
@@ -661,7 +649,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
                       onChange={(e) => setOccupantHeadlineDraft(e.target.value)}
                       disabled={mutation.isPending}
                       placeholder="e.g. Report a maintenance issue for this building"
-                      className="min-h-11 w-full max-w-xl rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]"
+                      className={`${OM_COMPACT_INPUT} max-w-xl`}
                     />
                     <button
                       type="button"

@@ -20,6 +20,7 @@ import {
   buildMarketingEmailHtml,
   buildMarketingEmailText,
   marketingEmailSubject,
+  markMarketingRowsSent,
   parseMarketingRecipients,
   resolveMarketingAppUrl,
   type MarketingRecipient,
@@ -78,7 +79,7 @@ Usage:
   npm run send:marketing -- --file marketing/recipients.xlsx [--dry-run] [--confirm] [--limit N]
 
 Options:
-  --file <path>           Excel (.xlsx) or CSV with columns: email, company (optional), name (optional)
+  --file <path>           Excel (.xlsx) or CSV: email, company (optional), name (optional), sent (optional)
   --write-template [path] Write an empty Excel template (default: marketing/recipients.template.xlsx)
   --preview [path]        Write HTML preview (default: marketing/email-preview.html)
   --dry-run               Preview recipients and subjects without sending
@@ -99,11 +100,11 @@ Environment:
 function writeTemplate(outPath: string): void {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
-    ["email", "company", "name"],
-    ["contact@example.com", "Acme Construction", "Alex"],
-    ["ops@example.org", "BuildCo FM", ""],
+    ["email", "company", "name", "sent"],
+    ["contact@example.com", "Acme Construction", "Alex", false],
+    ["ops@example.org", "BuildCo FM", "", false],
   ]);
-  ws["!cols"] = [{ wch: 32 }, { wch: 28 }, { wch: 20 }];
+  ws["!cols"] = [{ wch: 32 }, { wch: 28 }, { wch: 20 }, { wch: 8 }];
   XLSX.utils.book_append_sheet(wb, ws, "Recipients");
   writeFileSync(outPath, XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
   console.log(`Wrote template: ${outPath}`);
@@ -160,6 +161,18 @@ function loadRowsFromFile(filePath: string): Record<string, unknown>[] {
   return XLSX.utils.sheet_to_json(sheet, { defval: "" }) as Record<string, unknown>[];
 }
 
+function saveRowsToFile(filePath: string, rows: Record<string, unknown>[]): void {
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Recipients");
+  const ext = extname(filePath).toLowerCase();
+  if (ext === ".csv") {
+    writeFileSync(filePath, XLSX.utils.sheet_to_csv(ws));
+    return;
+  }
+  writeFileSync(filePath, XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -213,6 +226,7 @@ async function main(): Promise<void> {
       email: opts.testTo.trim().toLowerCase(),
       company: "Sample Construction Co.",
       name: "Alex",
+      rowIndex: 0,
     };
     if (opts.dryRun) {
       console.log(`[dry-run] Would send test to ${sample.email}`);
@@ -236,15 +250,16 @@ async function main(): Promise<void> {
   }
 
   let filePath = resolveRecipientsFilePath(opts.file);
-  const rows = loadRowsFromFile(filePath);
-  const { recipients, skipped } = parseMarketingRecipients(rows);
+  let rows = loadRowsFromFile(filePath);
+  const { recipients, skipped, alreadySent } = parseMarketingRecipients(rows);
   let toSend = recipients;
   if (opts.limit != null && opts.limit > 0) {
     toSend = recipients.slice(0, opts.limit);
   }
 
   console.log(`Loaded ${filePath}`);
-  console.log(`  Valid recipients: ${recipients.length}`);
+  console.log(`  Valid recipients (not sent yet): ${recipients.length}`);
+  if (alreadySent) console.log(`  Already sent (skipped): ${alreadySent}`);
   if (skipped.length) console.log(`  Skipped rows: ${skipped.length}`);
   if (opts.limit) console.log(`  Sending to: ${toSend.length} (limit ${opts.limit})`);
 
@@ -256,14 +271,17 @@ async function main(): Promise<void> {
   }
 
   if (toSend.length === 0) {
-    console.error("No valid recipients to send to.");
+    console.error("No valid recipients to send to (all sent, invalid, or empty).");
     process.exit(1);
   }
 
   if (opts.dryRun) {
-    console.log("\n[dry-run] Preview (first 5):");
-    for (const r of toSend.slice(0, 5)) {
-      console.log(`  → ${r.email}${r.company ? ` (${r.company})` : ""}`);
+    console.log(`\n[dry-run] Would send to ${toSend.length} recipient(s):`);
+    for (const r of toSend) {
+      const parts = [r.email];
+      if (r.company) parts.push(r.company);
+      if (r.name) parts.push(r.name);
+      console.log(`  → ${parts.join(" · ")}`);
     }
     console.log(`\nSubject: ${marketingEmailSubject()}`);
     console.log(`From: ${from}`);
@@ -284,6 +302,7 @@ async function main(): Promise<void> {
   const resend = new Resend(apiKey);
   let sent = 0;
   let failed = 0;
+  const sentRowIndices: number[] = [];
 
   console.log(`\nSending from ${from} …\n`);
 
@@ -291,6 +310,7 @@ async function main(): Promise<void> {
     const result = await sendOne(resend, from, recipient, publicAppUrl);
     if (result.ok) {
       sent++;
+      sentRowIndices.push(recipient.rowIndex);
       console.log(`  ✓ ${recipient.email}`);
     } else {
       failed++;
@@ -299,6 +319,12 @@ async function main(): Promise<void> {
     if (opts.delayMs > 0 && sent + failed < toSend.length) {
       await sleep(opts.delayMs);
     }
+  }
+
+  if (sentRowIndices.length > 0) {
+    rows = markMarketingRowsSent(rows, sentRowIndices);
+    saveRowsToFile(filePath, rows);
+    console.log(`\nUpdated ${filePath} — marked ${sentRowIndices.length} row(s) sent=true`);
   }
 
   console.log(`\nDone. Sent: ${sent}, failed: ${failed}`);

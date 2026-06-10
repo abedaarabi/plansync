@@ -14,6 +14,9 @@ import {
   patchProposalTemplate,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
+import { OM_COMPACT_INPUT, OM_COMPACT_LABEL, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
+import { FileText } from "lucide-react";
 
 const VARS = [
   "{{client.name}}",
@@ -89,18 +92,24 @@ export function ProposalTemplatesClient({
   if (isPending || !data) return <EnterpriseLoadingState label="Loading templates…" />;
 
   return (
-    <div className="mobile-app-page w-full min-w-0 max-w-full mx-auto max-w-3xl space-y-6">
-      <Link href={base} className="text-sm font-medium text-[#2563EB] hover:underline">
-        ← Proposals
-      </Link>
-      <h1 className="text-xl font-semibold text-[#0F172A]">Proposal templates</h1>
-
-      <ul className="space-y-2">
-        {data.templates.map((t) => (
-          <li
-            key={t.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3"
+    <div className={`mx-auto w-full max-w-3xl ${OM_PAGE_CLASS}`}>
+      <OmSubPageHeader
+        icon={FileText}
+        title="Proposal templates"
+        description="Reusable proposal bodies with merge variables."
+        action={
+          <Link
+            href={base}
+            className="inline-flex min-h-9 items-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm hover:bg-[var(--enterprise-hover-surface)]"
           >
+            ← Proposals
+          </Link>
+        }
+      />
+
+      <ul className="divide-y divide-[var(--enterprise-border)] rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
+        {data.templates.map((t) => (
+          <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
             <span className="font-medium">{t.name}</span>
             <div className="flex gap-2">
               <button
@@ -130,12 +139,14 @@ export function ProposalTemplatesClient({
         ))}
       </ul>
 
-      <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
-        <h2 className="font-semibold">{editingId ? "Edit template" : "New template"}</h2>
-        <label className="mt-4 block text-sm">
-          <span className="text-slate-600">Name</span>
+      <div className="enterprise-card p-3 sm:p-4">
+        <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
+          {editingId ? "Edit template" : "New template"}
+        </h2>
+        <label className="mt-3 block">
+          <span className={OM_COMPACT_LABEL}>Name</span>
           <input
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+            className={OM_COMPACT_INPUT}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />

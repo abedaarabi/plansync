@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ProjectIssuesClient } from "@/components/enterprise/ProjectIssuesClient";
+import { EnterpriseCompactPageShell } from "@/components/enterprise/EnterpriseCompactPageShell";
 
 export const metadata: Metadata = { title: "Issues" };
 
@@ -22,14 +23,12 @@ export default async function ProjectIssuesPage({ params, searchParams }: Props)
         : "Issues";
 
   return (
-    <div className="enterprise-animate-in p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-6xl">
-        <ProjectIssuesClient
-          projectId={projectId}
-          issueKindFilter={issueKind}
-          listTitle={listTitle}
-        />
-      </div>
-    </div>
+    <EnterpriseCompactPageShell>
+      <ProjectIssuesClient
+        projectId={projectId}
+        issueKindFilter={issueKind}
+        listTitle={listTitle}
+      />
+    </EnterpriseCompactPageShell>
   );
 }

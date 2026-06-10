@@ -30,9 +30,10 @@ import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
-import { EnterpriseFab } from "@/components/mobile/EnterpriseFab";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import {
   createFieldReport,
   deleteFieldReport,
@@ -58,6 +59,7 @@ import {
   type FieldReportDetails,
   type WeeklyVirtual,
 } from "@/lib/fieldReportUtils";
+import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { qk } from "@/lib/queryKeys";
 
 const PAGE_BG = "#f8fafc";
@@ -768,432 +770,331 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
 
   return (
     <div
-      className="mobile-app-page w-full min-w-0 max-w-full enterprise-animate-in min-h-0 flex-1 p-4 pb-[env(safe-area-inset-bottom,0px)] sm:p-6 lg:p-8"
+      className={OM_PAGE_CLASS}
       style={{
         fontFamily: "var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif",
         backgroundColor: PAGE_BG,
       }}
     >
-      <div className="w-full max-w-6xl mx-auto lg:mx-auto space-y-5 sm:space-y-6">
-        {/* Section 1 — header */}
-        <header
-          className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-start sm:justify-between"
-          style={{ borderColor: BORDER }}
-        >
-          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-            <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#e2e8f0] bg-white text-[#2563eb] shadow-sm sm:h-14 sm:w-14"
-              aria-hidden
-            >
-              <ScrollText className="h-6 w-6 sm:h-7 sm:w-7" strokeWidth={1.75} />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-normal tracking-tight text-[#0f172a] sm:text-3xl">
-                Field Reports
-              </h1>
-              <p className="mt-1 text-sm leading-relaxed text-[#0f172a]">
-                Daily logs and weekly rollups for this project.
-              </p>
-            </div>
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
-            <button
-              type="button"
+      <OmSubPageHeader
+        icon={ScrollText}
+        title="Field reports"
+        description="Daily logs and weekly rollups for this project."
+        action={
+          <>
+            <EnterpriseButton
+              size="sm"
+              variant="secondary"
               onClick={() => exportFieldReportsCsv(project?.name ?? "project", sortedRows, numMap)}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-normal text-[#0f172a] shadow-sm transition hover:bg-white sm:h-9 sm:px-3 sm:text-xs"
-              style={{ borderColor: BORDER, backgroundColor: TABLE_BG }}
             >
               <Download className="h-4 w-4" strokeWidth={1.75} />
               Export
-            </button>
-            <button
-              type="button"
+            </EnterpriseButton>
+            <EnterpriseButton
+              size="sm"
               onClick={() => {
                 setNewMsg(null);
                 setNewReportDate(new Date().toISOString().slice(0, 10));
                 setNewAuthor(members[0]?.name ?? "");
                 setNewModalOpen(true);
               }}
-              className="hidden h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-normal text-white shadow-sm transition hover:opacity-95 lg:inline-flex lg:h-9 lg:px-3 lg:text-xs"
-              style={{ backgroundColor: PRIMARY, borderRadius: 8 }}
             >
               <Plus className="h-4 w-4" strokeWidth={1.75} />
-              New Report
+              New report
+            </EnterpriseButton>
+          </>
+        }
+      />
+
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {(
+          [
+            ["Total reports", stats.total],
+            ["Draft", stats.draft],
+            ["Submitted", stats.submitted],
+            ["This month", stats.thisMonth],
+          ] as const
+        ).map(([label, n]) => (
+          <div
+            key={label}
+            className="rounded-lg border px-3 py-2 shadow-sm"
+            style={{ borderColor: BORDER, backgroundColor: TABLE_BG, borderRadius: 8 }}
+          >
+            <p className="text-lg font-bold tabular-nums text-[#0f172a]">{n}</p>
+            <p className="text-[10px] font-normal uppercase tracking-wide text-[#0f172a]">
+              {label}
+            </p>
+          </div>
+        ))}
+      </section>
+
+      {selectedIds.length > 0 ? (
+        <div
+          className="flex flex-col gap-3 rounded-lg border px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+          style={{ borderColor: `${PRIMARY}33`, backgroundColor: SELECTED_BG }}
+        >
+          <p className="text-sm font-semibold" style={{ color: PRIMARY }}>
+            {selectedIds.length} report{selectedIds.length === 1 ? "" : "s"} selected
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="inline-flex h-9 items-center rounded-lg border border-[#e2e8f0] bg-white px-3 text-xs font-semibold text-[#0f172a]"
+              onClick={() => {
+                const subset = sortedRows.filter((row) =>
+                  selectedIds.includes(row.kind === "daily" ? row.r.id : row.w.id),
+                );
+                exportFieldReportsCsv(project?.name ?? "project", subset, numMap);
+                toast.success("Exported CSV.");
+              }}
+            >
+              Export CSV
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center rounded-lg border border-[#e2e8f0] bg-white px-3 text-xs font-semibold text-[#0f172a] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!sendTarget || sendTarget.alreadySent}
+              title={
+                !sendTarget
+                  ? "Select exactly one report in the table, or open a report in the side panel."
+                  : sendTarget.alreadySent
+                    ? "This report was already sent to client."
+                    : undefined
+              }
+              onClick={() => {
+                if (!sendTarget) {
+                  toast.error(
+                    "Select one report in the table, or open a report in the side panel first.",
+                  );
+                  return;
+                }
+                if (sendTarget.alreadySent) {
+                  toast.error("This report has already been sent to client.");
+                  return;
+                }
+                setSendModalOpen(true);
+              }}
+            >
+              Send to Client
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-700"
+              onClick={() => {
+                const real = selectedIds.filter((id) => !id.startsWith("virtual-week-"));
+                if (
+                  !window.confirm(
+                    `Delete ${real.length} report(s)? Weekly summaries are not stored and will reappear when dailies exist.`,
+                  )
+                )
+                  return;
+                void (async () => {
+                  for (const id of real) {
+                    try {
+                      await deleteFieldReport(projectId, id);
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Delete failed");
+                      break;
+                    }
+                  }
+                  await qc.invalidateQueries({ queryKey: qk.projectFieldReports(projectId) });
+                  setSelectedIds([]);
+                  closeSlide();
+                  toast.success("Deleted selected reports.");
+                })();
+              }}
+            >
+              <Trash2 className="mr-1 inline h-3.5 w-3.5" strokeWidth={1.75} />
+              Delete
+            </button>
+            <button
+              type="button"
+              className="text-xs font-semibold underline"
+              style={{ color: PRIMARY }}
+              onClick={() => setSelectedIds([])}
+            >
+              Clear selection
             </button>
           </div>
-        </header>
-
-        {/* Stats */}
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {(
-            [
-              ["Total reports", stats.total],
-              ["Draft", stats.draft],
-              ["Submitted", stats.submitted],
-              ["This month", stats.thisMonth],
-            ] as const
-          ).map(([label, n]) => (
-            <div
-              key={label}
-              className="rounded-lg border px-4 py-3 shadow-sm"
-              style={{ borderColor: BORDER, backgroundColor: TABLE_BG, borderRadius: 8 }}
-            >
-              <p className="text-2xl font-bold tabular-nums text-[#0f172a]">{n}</p>
-              <p className="text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
-                {label}
-              </p>
-            </div>
-          ))}
-        </section>
-
-        {selectedIds.length > 0 ? (
-          <div
-            className="flex flex-col gap-3 rounded-lg border px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-            style={{ borderColor: `${PRIMARY}33`, backgroundColor: SELECTED_BG }}
+        </div>
+      ) : (
+        <section
+          className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:flex-wrap sm:items-center sm:p-4"
+          style={{ borderColor: BORDER, backgroundColor: TABLE_BG }}
+        >
+          <input
+            type="search"
+            placeholder="Search reports…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="min-h-10 w-full min-w-[8rem] flex-1 rounded-lg border border-[#e2e8f0] px-3 text-sm text-[#0f172a] placeholder:text-[#94a3b8] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 sm:max-w-xs"
+            style={{ backgroundColor: PAGE_BG }}
+          />
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value as typeof filterType)}
+            className="min-h-10 min-w-[7rem] rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
           >
-            <p className="text-sm font-semibold" style={{ color: PRIMARY }}>
-              {selectedIds.length} report{selectedIds.length === 1 ? "" : "s"} selected
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="inline-flex h-9 items-center rounded-lg border border-[#e2e8f0] bg-white px-3 text-xs font-semibold text-[#0f172a]"
-                onClick={() => {
-                  const subset = sortedRows.filter((row) =>
-                    selectedIds.includes(row.kind === "daily" ? row.r.id : row.w.id),
-                  );
-                  exportFieldReportsCsv(project?.name ?? "project", subset, numMap);
-                  toast.success("Exported CSV.");
-                }}
-              >
-                Export CSV
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-9 items-center rounded-lg border border-[#e2e8f0] bg-white px-3 text-xs font-semibold text-[#0f172a] disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!sendTarget || sendTarget.alreadySent}
-                title={
-                  !sendTarget
-                    ? "Select exactly one report in the table, or open a report in the side panel."
-                    : sendTarget.alreadySent
-                      ? "This report was already sent to client."
-                      : undefined
-                }
-                onClick={() => {
-                  if (!sendTarget) {
-                    toast.error(
-                      "Select one report in the table, or open a report in the side panel first.",
-                    );
-                    return;
-                  }
-                  if (sendTarget.alreadySent) {
-                    toast.error("This report has already been sent to client.");
-                    return;
-                  }
-                  setSendModalOpen(true);
-                }}
-              >
-                Send to Client
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-9 items-center rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-700"
-                onClick={() => {
-                  const real = selectedIds.filter((id) => !id.startsWith("virtual-week-"));
-                  if (
-                    !window.confirm(
-                      `Delete ${real.length} report(s)? Weekly summaries are not stored and will reappear when dailies exist.`,
-                    )
-                  )
-                    return;
-                  void (async () => {
-                    for (const id of real) {
-                      try {
-                        await deleteFieldReport(projectId, id);
-                      } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "Delete failed");
-                        break;
-                      }
-                    }
-                    await qc.invalidateQueries({ queryKey: qk.projectFieldReports(projectId) });
-                    setSelectedIds([]);
-                    closeSlide();
-                    toast.success("Deleted selected reports.");
-                  })();
-                }}
-              >
-                <Trash2 className="mr-1 inline h-3.5 w-3.5" strokeWidth={1.75} />
-                Delete
-              </button>
-              <button
-                type="button"
-                className="text-xs font-semibold underline"
-                style={{ color: PRIMARY }}
-                onClick={() => setSelectedIds([])}
-              >
-                Clear selection
-              </button>
-            </div>
-          </div>
-        ) : (
-          <section
-            className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:flex-wrap sm:items-center sm:p-4"
-            style={{ borderColor: BORDER, backgroundColor: TABLE_BG }}
+            <option value="ALL">Type</option>
+            <option value="DAILY">Daily</option>
+            <option value="WEEKLY">Weekly</option>
+          </select>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+            className="min-h-10 min-w-[7rem] rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
           >
+            <option value="ALL">Status</option>
+            <option value="DRAFT">Draft</option>
+            <option value="SUBMITTED">Submitted</option>
+          </select>
+          <select
+            value={filterAuthor}
+            onChange={(e) => setFilterAuthor(e.target.value)}
+            className="min-h-10 min-w-[8rem] flex-1 rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 sm:flex-none"
+          >
+            <option value="ALL">Written by</option>
+            {authorOptions.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+          <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
             <input
-              type="search"
-              placeholder="Search reports…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="min-h-10 w-full min-w-[8rem] flex-1 rounded-lg border border-[#e2e8f0] px-3 text-sm text-[#0f172a] placeholder:text-[#94a3b8] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 sm:max-w-xs"
-              style={{ backgroundColor: PAGE_BG }}
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="min-h-10 min-w-[9rem] flex-1 rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] sm:flex-none"
+              aria-label="From date"
             />
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value as typeof filterType)}
-              className="min-h-10 min-w-[7rem] rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
-            >
-              <option value="ALL">Type</option>
-              <option value="DAILY">Daily</option>
-              <option value="WEEKLY">Weekly</option>
-            </select>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
-              className="min-h-10 min-w-[7rem] rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
-            >
-              <option value="ALL">Status</option>
-              <option value="DRAFT">Draft</option>
-              <option value="SUBMITTED">Submitted</option>
-            </select>
-            <select
-              value={filterAuthor}
-              onChange={(e) => setFilterAuthor(e.target.value)}
-              className="min-h-10 min-w-[8rem] flex-1 rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 sm:flex-none"
-            >
-              <option value="ALL">Written by</option>
-              {authorOptions.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-            <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="min-h-10 min-w-[9rem] flex-1 rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] sm:flex-none"
-                aria-label="From date"
-              />
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="min-h-10 min-w-[9rem] flex-1 rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] sm:flex-none"
-                aria-label="To date"
-              />
-            </div>
-          </section>
-        )}
-
-        {isPending ? (
-          <div className="py-16">
-            <EnterpriseLoadingState
-              variant="minimal"
-              message="Loading field reports…"
-              label="Loading"
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="min-h-10 min-w-[9rem] flex-1 rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] sm:flex-none"
+              aria-label="To date"
             />
           </div>
-        ) : (
-          <div
-            className="mobile-table-wrap -mx-4 overflow-x-auto sm:mx-0"
-            style={{ WebkitOverflowScrolling: "touch" }}
-          >
-            <div className="inline-block min-w-full align-middle">
-              <table
-                className="w-full min-w-[880px] border-collapse rounded-lg shadow-sm md:min-w-[960px]"
-                style={{
-                  border: `0.5px solid ${BORDER}`,
-                  backgroundColor: TABLE_BG,
-                  borderRadius: 8,
-                }}
-              >
-                <thead>
-                  <tr style={{ backgroundColor: HEADER_BG, borderBottom: `0.5px solid ${BORDER}` }}>
-                    <th className="w-10 px-2 py-2 text-left">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-[#cbd5e1]"
-                        checked={allSelected}
-                        onChange={toggleAll}
-                        aria-label="Select all"
-                      />
-                    </th>
-                    <th className="px-3 py-2 text-left">
-                      <SortHeader
-                        label="#"
-                        active={sortCol === "num"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("num")}
-                      />
-                    </th>
-                    <th className="min-w-[120px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Date"
-                        active={sortCol === "date"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("date")}
-                      />
-                    </th>
-                    <th className="min-w-[88px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Type"
-                        active={sortCol === "type"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("type")}
-                      />
-                    </th>
-                    <th className="min-w-[120px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Written by"
-                        active={sortCol === "author"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("author")}
-                      />
-                    </th>
-                    <th className="min-w-[120px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Weather"
-                        active={sortCol === "weather"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("weather")}
-                      />
-                    </th>
-                    <th className="min-w-[88px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Workers"
-                        active={sortCol === "workers"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("workers")}
-                      />
-                    </th>
-                    <th className="min-w-[100px] px-3 py-2 text-left">
-                      <SortHeader
-                        label="Status"
-                        active={sortCol === "status"}
-                        dir={sortDir}
-                        onToggle={() => toggleSort("status")}
-                      />
-                    </th>
+        </section>
+      )}
+
+      {isPending ? (
+        <div className="py-16">
+          <EnterpriseLoadingState
+            variant="minimal"
+            message="Loading field reports…"
+            label="Loading"
+          />
+        </div>
+      ) : (
+        <div
+          className="mobile-table-wrap -mx-4 overflow-x-auto sm:mx-0"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <div className="inline-block min-w-full align-middle">
+            <table
+              className="w-full min-w-[880px] border-collapse rounded-lg shadow-sm md:min-w-[960px]"
+              style={{
+                border: `0.5px solid ${BORDER}`,
+                backgroundColor: TABLE_BG,
+                borderRadius: 8,
+              }}
+            >
+              <thead>
+                <tr style={{ backgroundColor: HEADER_BG, borderBottom: `0.5px solid ${BORDER}` }}>
+                  <th className="w-10 px-2 py-2 text-left">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-[#cbd5e1]"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      aria-label="Select all"
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left">
+                    <SortHeader
+                      label="#"
+                      active={sortCol === "num"}
+                      dir={sortDir}
+                      onToggle={() => toggleSort("num")}
+                    />
+                  </th>
+                  <th className="min-w-[120px] px-3 py-2 text-left">
+                    <SortHeader
+                      label="Date"
+                      active={sortCol === "date"}
+                      dir={sortDir}
+                      onToggle={() => toggleSort("date")}
+                    />
+                  </th>
+                  <th className="min-w-[88px] px-3 py-2 text-left">
+                    <SortHeader
+                      label="Type"
+                      active={sortCol === "type"}
+                      dir={sortDir}
+                      onToggle={() => toggleSort("type")}
+                    />
+                  </th>
+                  <th className="min-w-[120px] px-3 py-2 text-left">
+                    <SortHeader
+                      label="Written by"
+                      active={sortCol === "author"}
+                      dir={sortDir}
+                      onToggle={() => toggleSort("author")}
+                    />
+                  </th>
+                  <th className="min-w-[120px] px-3 py-2 text-left">
+                    <SortHeader
+                      label="Weather"
+                      active={sortCol === "weather"}
+                      dir={sortDir}
+                      onToggle={() => toggleSort("weather")}
+                    />
+                  </th>
+                  <th className="min-w-[88px] px-3 py-2 text-left">
+                    <SortHeader
+                      label="Workers"
+                      active={sortCol === "workers"}
+                      dir={sortDir}
+                      onToggle={() => toggleSort("workers")}
+                    />
+                  </th>
+                  <th className="min-w-[100px] px-3 py-2 text-left">
+                    <SortHeader
+                      label="Status"
+                      active={sortCol === "status"}
+                      dir={sortDir}
+                      onToggle={() => toggleSort("status")}
+                    />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-12 text-center text-sm text-[#0f172a]">
+                      No reports match your filters.
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {sortedRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center text-sm text-[#0f172a]">
-                        No reports match your filters.
-                      </td>
-                    </tr>
-                  ) : (
-                    sortedRows.map((row) => {
-                      const id = row.kind === "daily" ? row.r.id : row.w.id;
-                      const sel = selectedIds.includes(id);
-                      const active =
-                        slideOpen &&
-                        (row.kind === "daily"
-                          ? activeDailyId === row.r.id
-                          : activeWeekly?.id === row.w.id);
-                      const hi = sel || active;
-                      if (row.kind === "daily") {
-                        const r = row.r;
-                        const wx = primaryWeatherLabel(r.weather, parseDetails(r.details));
-                        const st = (r.status ?? "DRAFT") as "DRAFT" | "SUBMITTED";
-                        return (
-                          <tr
-                            key={r.id}
-                            onClick={() => openDaily(r)}
-                            className="cursor-pointer border-b text-sm transition-colors last:border-b-0 mobile-tappable-row min-h-14 active:scale-[0.99]"
-                            style={{
-                              borderColor: BORDER,
-                              height: 44,
-                              backgroundColor: hi ? SELECTED_BG : undefined,
-                              borderLeft: hi ? `3px solid ${PRIMARY}` : undefined,
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!hi) e.currentTarget.style.backgroundColor = ROW_HOVER;
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!hi) e.currentTarget.style.backgroundColor = "";
-                            }}
-                          >
-                            <td className="px-2" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded border-[#cbd5e1]"
-                                checked={sel}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedIds((ids) =>
-                                    e.target.checked ? [...ids, id] : ids.filter((x) => x !== id),
-                                  );
-                                }}
-                              />
-                            </td>
-                            <td
-                              className="px-3 font-mono text-xs font-semibold"
-                              style={{ color: PRIMARY }}
-                            >
-                              {numMap.get(r.id) ?? "—"}
-                            </td>
-                            <td className="whitespace-nowrap px-3 text-[#0f172a]">
-                              {formatReportTableDate(r.reportDate)}
-                            </td>
-                            <td className="px-3">
-                              <span className="rounded-md bg-[#eff6ff] px-1.5 py-0.5 text-[11px] font-semibold text-[#1e40af]">
-                                Daily
-                              </span>
-                            </td>
-                            <td className="max-w-[140px] truncate px-3 text-[#0f172a]">
-                              {r.authorLabel?.trim() || "—"}
-                            </td>
-                            <td className="px-3">
-                              <div className="flex items-center gap-2 text-[#0f172a]">
-                                {wx === "—" ? <span>—</span> : <WeatherIcon text={wx} />}
-                                <span className="truncate">{wx === "—" ? "" : wx}</span>
-                              </div>
-                            </td>
-                            <td className="px-3 tabular-nums text-[#0f172a]">
-                              {workerCountForDaily(r)}
-                            </td>
-                            <td className="px-3">
-                              <div className="flex items-center gap-1">
-                                <span
-                                  className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
-                                  style={
-                                    st === "SUBMITTED"
-                                      ? { backgroundColor: "#f0fdf4", color: "#166534" }
-                                      : { backgroundColor: "#f8fafc", color: "#475569" }
-                                  }
-                                >
-                                  {st === "SUBMITTED" ? "Submitted" : "Draft"}
-                                </span>
-                                {!!r.lastEmailedAt || (r.emailSentCount ?? 0) > 0 ? (
-                                  <span className="rounded-md bg-[#eff6ff] px-1.5 py-0.5 text-[11px] font-semibold text-[#1d4ed8]">
-                                    Sent
-                                  </span>
-                                ) : null}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }
-                      const w = row.w;
-                      const st = weeklyStatus(w);
+                ) : (
+                  sortedRows.map((row) => {
+                    const id = row.kind === "daily" ? row.r.id : row.w.id;
+                    const sel = selectedIds.includes(id);
+                    const active =
+                      slideOpen &&
+                      (row.kind === "daily"
+                        ? activeDailyId === row.r.id
+                        : activeWeekly?.id === row.w.id);
+                    const hi = sel || active;
+                    if (row.kind === "daily") {
+                      const r = row.r;
+                      const wx = primaryWeatherLabel(r.weather, parseDetails(r.details));
+                      const st = (r.status ?? "DRAFT") as "DRAFT" | "SUBMITTED";
                       return (
                         <tr
-                          key={w.id}
-                          onClick={() => openWeekly(w)}
+                          key={r.id}
+                          onClick={() => openDaily(r)}
                           className="cursor-pointer border-b text-sm transition-colors last:border-b-0 mobile-tappable-row min-h-14 active:scale-[0.99]"
                           style={{
                             borderColor: BORDER,
@@ -1225,49 +1126,129 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                             className="px-3 font-mono text-xs font-semibold"
                             style={{ color: PRIMARY }}
                           >
-                            {w.weekLabel}
+                            {numMap.get(r.id) ?? "—"}
                           </td>
                           <td className="whitespace-nowrap px-3 text-[#0f172a]">
-                            {formatWeekEndingLabel(w.weekEndingFriday)}
+                            {formatReportTableDate(r.reportDate)}
                           </td>
                           <td className="px-3">
-                            <span className="rounded-md bg-[#f5f3ff] px-1.5 py-0.5 text-[11px] font-semibold text-[#6b21a8]">
-                              Weekly
+                            <span className="rounded-md bg-[#eff6ff] px-1.5 py-0.5 text-[11px] font-semibold text-[#1e40af]">
+                              Daily
                             </span>
                           </td>
-                          <td className="px-3 text-[#0f172a]">Auto</td>
-                          <td className="px-3 text-[#0f172a]">—</td>
-                          <td className="px-3 tabular-nums text-[#0f172a]">{weeklyWorkers(w)}</td>
+                          <td className="max-w-[140px] truncate px-3 text-[#0f172a]">
+                            {r.authorLabel?.trim() || "—"}
+                          </td>
                           <td className="px-3">
-                            <span
-                              className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
-                              style={
-                                st === "SUBMITTED"
-                                  ? { backgroundColor: "#f0fdf4", color: "#166534" }
-                                  : { backgroundColor: "#f8fafc", color: "#475569" }
-                              }
-                            >
-                              {st === "SUBMITTED" ? "Submitted" : "Draft"}
-                            </span>
+                            <div className="flex items-center gap-2 text-[#0f172a]">
+                              {wx === "—" ? <span>—</span> : <WeatherIcon text={wx} />}
+                              <span className="truncate">{wx === "—" ? "" : wx}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 tabular-nums text-[#0f172a]">
+                            {workerCountForDaily(r)}
+                          </td>
+                          <td className="px-3">
+                            <div className="flex items-center gap-1">
+                              <span
+                                className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
+                                style={
+                                  st === "SUBMITTED"
+                                    ? { backgroundColor: "#f0fdf4", color: "#166534" }
+                                    : { backgroundColor: "#f8fafc", color: "#475569" }
+                                }
+                              >
+                                {st === "SUBMITTED" ? "Submitted" : "Draft"}
+                              </span>
+                              {!!r.lastEmailedAt || (r.emailSentCount ?? 0) > 0 ? (
+                                <span className="rounded-md bg-[#eff6ff] px-1.5 py-0.5 text-[11px] font-semibold text-[#1d4ed8]">
+                                  Sent
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       );
-                    })
-                  )}
-                  {Array.from({ length: padCount }).map((_, i) => (
-                    <tr
-                      key={`pad-${i}`}
-                      style={{ height: 44, borderBottom: `0.5px solid ${BORDER}` }}
-                    >
-                      <td colSpan={8} style={{ backgroundColor: PAGE_BG }} />
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    }
+                    const w = row.w;
+                    const st = weeklyStatus(w);
+                    return (
+                      <tr
+                        key={w.id}
+                        onClick={() => openWeekly(w)}
+                        className="cursor-pointer border-b text-sm transition-colors last:border-b-0 mobile-tappable-row min-h-14 active:scale-[0.99]"
+                        style={{
+                          borderColor: BORDER,
+                          height: 44,
+                          backgroundColor: hi ? SELECTED_BG : undefined,
+                          borderLeft: hi ? `3px solid ${PRIMARY}` : undefined,
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!hi) e.currentTarget.style.backgroundColor = ROW_HOVER;
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!hi) e.currentTarget.style.backgroundColor = "";
+                        }}
+                      >
+                        <td className="px-2" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-[#cbd5e1]"
+                            checked={sel}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setSelectedIds((ids) =>
+                                e.target.checked ? [...ids, id] : ids.filter((x) => x !== id),
+                              );
+                            }}
+                          />
+                        </td>
+                        <td
+                          className="px-3 font-mono text-xs font-semibold"
+                          style={{ color: PRIMARY }}
+                        >
+                          {w.weekLabel}
+                        </td>
+                        <td className="whitespace-nowrap px-3 text-[#0f172a]">
+                          {formatWeekEndingLabel(w.weekEndingFriday)}
+                        </td>
+                        <td className="px-3">
+                          <span className="rounded-md bg-[#f5f3ff] px-1.5 py-0.5 text-[11px] font-semibold text-[#6b21a8]">
+                            Weekly
+                          </span>
+                        </td>
+                        <td className="px-3 text-[#0f172a]">Auto</td>
+                        <td className="px-3 text-[#0f172a]">—</td>
+                        <td className="px-3 tabular-nums text-[#0f172a]">{weeklyWorkers(w)}</td>
+                        <td className="px-3">
+                          <span
+                            className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
+                            style={
+                              st === "SUBMITTED"
+                                ? { backgroundColor: "#f0fdf4", color: "#166534" }
+                                : { backgroundColor: "#f8fafc", color: "#475569" }
+                            }
+                          >
+                            {st === "SUBMITTED" ? "Submitted" : "Draft"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+                {Array.from({ length: padCount }).map((_, i) => (
+                  <tr
+                    key={`pad-${i}`}
+                    style={{ height: 44, borderBottom: `0.5px solid ${BORDER}` }}
+                  >
+                    <td colSpan={8} style={{ backgroundColor: PAGE_BG }} />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Detail slider — single panel (daily or weekly) */}
       <EnterpriseSlideOver
@@ -1865,16 +1846,6 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
             document.body,
           )
         : null}
-      <EnterpriseFab
-        label="New report"
-        icon={<Plus className="h-7 w-7" strokeWidth={2} aria-hidden />}
-        onClick={() => {
-          setNewMsg(null);
-          setNewReportDate(new Date().toISOString().slice(0, 10));
-          setNewAuthor(members[0]?.name ?? "");
-          setNewModalOpen(true);
-        }}
-      />
     </div>
   );
 }

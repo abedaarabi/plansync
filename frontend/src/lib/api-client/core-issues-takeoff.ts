@@ -77,6 +77,20 @@ export type IssueRow = {
   resolvedAt?: string | null;
   reporterName?: string | null;
   reporterEmail?: string | null;
+  maintenanceScheduleId?: string | null;
+  maintenanceDueAt?: string | null;
+  workOrderType?: string | null;
+  procedureJson?: import("./operations-maintenance-work-orders").WorkOrderChecklistItem[];
+  procedureResultJson?: import("./operations-maintenance-work-orders").WorkOrderChecklistResult[];
+  laborMinutes?: number | null;
+  partsUsedJson?: import("./operations-maintenance-work-orders").WorkOrderPartUsed[];
+  completedById?: string | null;
+  completedBy?: IssueUserRef | null;
+  vendorId?: string | null;
+  vendor?: { id: string; name: string; email: string | null; trade: string | null } | null;
+  sourceOccupantIssueId?: string | null;
+  completionEvidenceRequired?: boolean;
+  hasVendorAccessLink?: boolean;
 };
 
 export type IssueKindApi = "WORK_ORDER" | "CONSTRUCTION" | "OCCUPANT";
@@ -107,6 +121,9 @@ export async function fetchIssuesForProject(
     assetId?: string;
     issueKind?: IssueKindApi;
     issueKinds?: IssueKindApi[];
+    assignee?: "me";
+    dueToday?: boolean;
+    overdueOnly?: boolean;
   },
 ): Promise<IssueRow[]> {
   const params = new URLSearchParams();
@@ -114,6 +131,9 @@ export async function fetchIssuesForProject(
   if (opts?.assetId) params.set("assetId", opts.assetId);
   if (opts?.issueKinds?.length) params.set("issueKinds", opts.issueKinds.join(","));
   else if (opts?.issueKind) params.set("issueKind", opts.issueKind);
+  if (opts?.assignee === "me") params.set("assignee", "me");
+  if (opts?.dueToday) params.set("dueToday", "true");
+  if (opts?.overdueOnly) params.set("overdueOnly", "true");
   const q = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/issues${q}`), {
     credentials: "include",
@@ -298,6 +318,11 @@ export async function createIssue(body: {
   assetId?: string;
   externalAssigneeEmail?: string;
   externalAssigneeName?: string;
+  workOrderType?: string;
+  procedureJson?: import("./operations-maintenance-work-orders").WorkOrderChecklistItem[];
+  vendorId?: string;
+  sourceOccupantIssueId?: string;
+  completionEvidenceRequired?: boolean;
 }): Promise<IssueRow> {
   const res = await fetch(apiUrl("/api/v1/issues"), {
     method: "POST",
@@ -336,6 +361,15 @@ export async function patchIssue(
     assetId?: string | null;
     externalAssigneeEmail?: string | null;
     externalAssigneeName?: string | null;
+    workOrderType?: string | null;
+    procedureJson?: import("./operations-maintenance-work-orders").WorkOrderChecklistItem[] | null;
+    procedureResultJson?:
+      | import("./operations-maintenance-work-orders").WorkOrderChecklistResult[]
+      | null;
+    laborMinutes?: number | null;
+    partsUsedJson?: import("./operations-maintenance-work-orders").WorkOrderPartUsed[] | null;
+    vendorId?: string | null;
+    completionEvidenceRequired?: boolean;
   },
 ): Promise<IssueRow> {
   const res = await fetch(apiUrl(`/api/v1/issues/${encodeURIComponent(issueId)}`), {

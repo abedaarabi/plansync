@@ -1,6 +1,7 @@
 /**
  * O&M maintenance, inspections, and occupant portal endpoints.
  */
+import type { AssetMeterTypeApi } from "./operations-maintenance-work-orders";
 import { apiUrl } from "@/lib/api-url";
 import { omOccupantAssetQrCsvUrl } from "./operations-maintenance-assets";
 import { jsonHeaders, readJsonErrorBody } from "./shared";
@@ -19,6 +20,8 @@ export type OmMaintenanceRow = {
   assignedTo: { id: string; name: string; email: string; image: string | null } | null;
   isActive: boolean;
   health: "overdue" | "dueSoon" | "onTrack";
+  meterType: string | null;
+  meterThreshold: number | null;
   asset: { id: string; tag: string; name: string };
   createdAt: string;
   updatedAt: string;
@@ -93,6 +96,8 @@ export type OmMaintenanceCreateBody = {
   nextDueAt?: string | null;
   assignedVendorLabel?: string | null;
   assignedToUserId?: string | null;
+  meterType?: AssetMeterTypeApi | null;
+  meterThreshold?: number | null;
 };
 
 export type OmMaintenanceUpdateBody = {
@@ -103,6 +108,8 @@ export type OmMaintenanceUpdateBody = {
   assignedVendorLabel?: string | null;
   assignedToUserId?: string | null;
   isActive?: boolean;
+  meterType?: AssetMeterTypeApi | null;
+  meterThreshold?: number | null;
 };
 
 export async function createOmMaintenance(

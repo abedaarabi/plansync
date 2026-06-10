@@ -632,7 +632,7 @@ export function ProjectTakeoffClient({
   }
 
   return (
-    <div className="space-y-5 sm:space-y-6">
+    <div className="space-y-3">
       <div className="sticky top-0 z-10 rounded-xl border border-[#DBEAFE] bg-white/90 p-2.5 shadow-sm backdrop-blur-md sm:top-2 sm:p-2">
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
           <button
@@ -690,21 +690,24 @@ export function ProjectTakeoffClient({
           ) : null}
         </div>
       </div>
-      <header className="overflow-hidden rounded-2xl border border-[#E2E8F0] bg-gradient-to-b from-white to-[#F8FAFC]/80 p-4 shadow-sm sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 gap-3 sm:gap-4">
+      <header className="mb-3 space-y-2 border-b border-[var(--enterprise-border)] pb-3">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 gap-3">
             <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#2563EB] ring-1 ring-[#BFDBFE]/80 sm:h-12 sm:w-12"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)]"
               aria-hidden
             >
-              <Ruler className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={1.75} />
+              <Ruler className="h-5 w-5" strokeWidth={1.75} />
             </div>
-            <div className="min-w-0 pt-0.5">
-              <h1 className="text-xl font-bold tracking-tight text-[#0F172A] sm:text-2xl sm:text-[1.65rem]">
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
                 Quantity Takeoff
               </h1>
               {project?.name ? (
-                <p className="mt-1 line-clamp-2 text-sm text-[#64748B]" title={project.name}>
+                <p
+                  className="mt-1 line-clamp-2 text-xs text-[var(--enterprise-text-muted)]"
+                  title={project.name}
+                >
                   {project.name}
                 </p>
               ) : null}

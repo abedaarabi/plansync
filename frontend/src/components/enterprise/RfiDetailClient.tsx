@@ -1190,7 +1190,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
   const activityCount = activityQuery.data?.length ?? 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <DeleteRfiConfirmDialog
         open={deleteRfiOpen}
         reference={`RFI #${String(rfi.rfiNumber).padStart(3, "0")}`}
@@ -1199,10 +1199,10 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
         onCancel={() => setDeleteRfiOpen(false)}
         onConfirm={() => deleteRfiMut.mutate()}
       />
-      <div className="space-y-6 lg:space-y-7">
+      <div className="space-y-3">
         <header
           id="rfi-overview"
-          className="space-y-4 rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-card)] sm:p-5 lg:p-6"
+          className="space-y-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 shadow-[var(--enterprise-shadow-card)] sm:p-4"
         >
           <Link
             href={`/projects/${projectId}/rfi`}
@@ -1253,7 +1253,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
               ) : null}
             </button>
           </div>
-          <h1 className="text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl lg:text-3xl">
+          <h1 className="text-lg font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-xl">
             {rfi.title}
           </h1>
 

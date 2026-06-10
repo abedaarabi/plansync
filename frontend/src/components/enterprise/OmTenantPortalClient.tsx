@@ -27,6 +27,8 @@ import { ISSUE_STATUS_LABEL, issueStatusBadgeClassLight } from "@/lib/issueStatu
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
+import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 
 type Props = { projectId: string };
 
@@ -110,57 +112,39 @@ export function OmTenantPortalClient({ projectId }: Props) {
   }
 
   return (
-    <div className="mobile-app-page w-full min-w-0 max-w-full space-y-5 sm:space-y-8">
-      <header className="flex flex-col gap-4 border-b border-[var(--enterprise-border)] pb-5 lg:flex-row lg:items-start lg:justify-between lg:pb-6">
-        <div className="flex min-w-0 gap-3 sm:gap-4">
-          <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] sm:h-14 sm:w-14"
-            aria-hidden
+    <div className={OM_PAGE_CLASS}>
+      <OmSubPageHeader
+        icon={LayoutDashboard}
+        title="Occupant hub"
+        description={
+          <>
+            Submissions and building entry links. Triage in inbox; QR codes on{" "}
+            <Link
+              href={assetsHref}
+              className="font-semibold text-[var(--enterprise-primary)] hover:underline"
+            >
+              Assets
+            </Link>
+            .
+          </>
+        }
+        action={
+          <Link
+            href={inboxHref}
+            className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-95"
           >
-            <LayoutDashboard
-              className="h-6 w-6 text-[var(--enterprise-primary)] sm:h-7 sm:w-7"
-              strokeWidth={1.5}
-            />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-3xl">
-              Occupant hub
-            </h1>
-            <p className="mt-1.5 hidden text-sm leading-relaxed text-[var(--enterprise-text-muted)] sm:block">
-              Occupant submissions and building entry links for this project. Triage requests in the
-              inbox; full equipment URLs and QR codes stay on{" "}
-              <Link
-                href={assetsHref}
-                className="font-semibold text-[var(--enterprise-primary)] hover:underline"
-              >
-                Assets
-              </Link>
-              . Rotate or add optional links in{" "}
-              <Link
-                href={settingsHref}
-                className="font-semibold text-[var(--enterprise-primary)] hover:underline"
-              >
-                project settings
-              </Link>
-              .
-            </p>
-          </div>
-        </div>
-        <Link
-          href={inboxHref}
-          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 self-start rounded-xl bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] hover:opacity-95"
-        >
-          <Inbox className="h-4 w-4" />
-          Open inbox
-          <ArrowRight className="h-4 w-4" aria-hidden />
-        </Link>
-      </header>
+            <Inbox className="h-3.5 w-3.5" />
+            Inbox
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        }
+      />
 
       {/* Activity */}
-      <section aria-labelledby="occupant-activity-heading" className="space-y-4">
+      <section aria-labelledby="occupant-activity-heading" className="space-y-2">
         <h2
           id="occupant-activity-heading"
-          className="text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]"
+          className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]"
         >
           Activity
         </h2>
@@ -172,7 +156,7 @@ export function OmTenantPortalClient({ projectId }: Props) {
           <p className="text-sm text-[var(--enterprise-text-muted)]">Loading requests…</p>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            <div className="grid grid-cols-3 gap-2">
               {(
                 [
                   { label: "Open", value: stats.open, tone: "amber" as const },
@@ -182,12 +166,12 @@ export function OmTenantPortalClient({ projectId }: Props) {
               ).map((card) => (
                 <div
                   key={card.label}
-                  className="enterprise-card flex min-h-[4.5rem] flex-col justify-center gap-0.5 rounded-2xl border border-[var(--enterprise-border)] p-3 transition active:scale-[0.98] sm:min-h-0 sm:p-5"
+                  className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1.5 text-center"
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] sm:text-[11px]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                     {card.label}
                   </p>
-                  <p className="text-xl font-bold tabular-nums text-[var(--enterprise-text)] sm:text-2xl">
+                  <p className="text-sm font-bold tabular-nums text-[var(--enterprise-text)]">
                     {card.value}
                   </p>
                 </div>
