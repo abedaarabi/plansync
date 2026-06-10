@@ -1,23 +1,13 @@
 import type { FieldReport } from "@prisma/client";
 import type { Env } from "./env.js";
 import { buildTransactionalEmailHtml, escapeHtml } from "./transactionalEmailLayout.js";
+import { workWeekFridayKey } from "./workWeekFridayKey.js";
 
 export function buildFieldReportsPageUrl(env: Env, projectId: string, reportQuery?: string | null) {
   const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
   const q =
     reportQuery && reportQuery.length > 0 ? `?report=${encodeURIComponent(reportQuery)}` : "";
   return `${base}/projects/${encodeURIComponent(projectId)}/reports${q}`;
-}
-
-/** Monday-based week; returns UTC YYYY-MM-DD of that week's Friday (matches frontend fieldReportUtils). */
-export function workWeekFridayKey(reportDateIso: string): string {
-  const d = new Date(reportDateIso);
-  if (Number.isNaN(d.getTime())) return reportDateIso.slice(0, 10);
-  const dow = d.getUTCDay();
-  const monOffset = dow === 0 ? -6 : 1 - dow;
-  const mon = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + monOffset));
-  const fri = new Date(Date.UTC(mon.getUTCFullYear(), mon.getUTCMonth(), mon.getUTCDate() + 4));
-  return fri.toISOString().slice(0, 10);
 }
 
 export type FieldReportEmailInclude = {

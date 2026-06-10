@@ -1,19 +1,11 @@
 import type { TakeoffZone } from "@/lib/takeoffTypes";
+import { boundsNormFromPoints } from "@/lib/annotationLayout";
 
 export type NormRect = { x: number; y: number; w: number; h: number };
 
 function bboxNormPoints(points: { x: number; y: number }[]): NormRect {
   if (points.length === 0) return { x: 0.35, y: 0.35, w: 0.3, h: 0.3 };
-  let minX = 1;
-  let minY = 1;
-  let maxX = 0;
-  let maxY = 0;
-  for (const p of points) {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
-  }
+  const { minX, minY, maxX, maxY } = boundsNormFromPoints(points);
   const pad = 0.028;
   const x = Math.max(0, minX - pad);
   const y = Math.max(0, minY - pad);

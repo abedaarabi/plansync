@@ -4,6 +4,7 @@
 import { apiUrl } from "@/lib/api-url";
 import { jsonHeaders, readJsonErrorBody } from "./shared";
 import { HttpError, ProRequiredError } from "./errors";
+import { referencePhotoContentType } from "@/lib/referencePhotoMime";
 import type { RfiRow } from "./core-members-viewer-rfi";
 
 // --- Issues (Pro, sheet-scoped) ---
@@ -152,33 +153,12 @@ export async function fetchIssue(issueId: string): Promise<IssueRow> {
   return res.json() as Promise<IssueRow>;
 }
 
-/** MIME for S3 PUT + API validation (mobile cameras often omit type or use HEIC). */
-function issueReferencePhotoContentType(file: File): string {
-  const raw = file.type?.trim().toLowerCase() || "";
-  const allowed = new Set([
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    "image/heic",
-    "image/heif",
-  ]);
-  if (allowed.has(raw)) return raw;
-  const n = file.name.toLowerCase();
-  if (n.endsWith(".heic")) return "image/heic";
-  if (n.endsWith(".heif")) return "image/heif";
-  if (n.endsWith(".png")) return "image/png";
-  if (n.endsWith(".webp")) return "image/webp";
-  if (n.endsWith(".gif")) return "image/gif";
-  return "image/jpeg";
-}
-
 /** Presign PUT, upload to S3, then complete — returns the updated issue row. */
 export async function uploadIssueReferencePhotoFile(
   issueId: string,
   file: File,
 ): Promise<IssueRow> {
-  const contentType = issueReferencePhotoContentType(file);
+  const contentType = referencePhotoContentType(file);
   const { uploadUrl, key } = await presignIssueReferencePhotoUpload(issueId, {
     fileName: file.name,
     contentType,

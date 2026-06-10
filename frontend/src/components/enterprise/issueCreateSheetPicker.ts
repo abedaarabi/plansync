@@ -1,25 +1,11 @@
-import type { CloudFile, Folder, Project } from "@/types/projects";
+import type { CloudFile, Project } from "@/types/projects";
+import { folderPathLabel } from "@/lib/folderPathLabel";
 
 export type SheetPickRow = {
   file: CloudFile;
   version: { id: string; version: number };
   group: string;
 };
-
-function folderPathLabel(folders: Folder[], folderId: string | null): string {
-  const byId = new Map(folders.map((f) => [f.id, f]));
-  const segments: string[] = [];
-  let cur: string | null = folderId;
-  const seen = new Set<string>();
-  while (cur && !seen.has(cur)) {
-    seen.add(cur);
-    const row = byId.get(cur);
-    if (!row) break;
-    segments.unshift(row.name);
-    cur = row.parentId;
-  }
-  return segments.length ? segments.join(" / ") : "Project root";
-}
 
 export function sheetRowsForProject(project: Project): SheetPickRow[] {
   const out: SheetPickRow[] = [];

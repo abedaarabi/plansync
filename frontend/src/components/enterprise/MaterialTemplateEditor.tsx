@@ -12,21 +12,10 @@ import {
   type MaterialTemplateField,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
+import { slugifyMaterialFieldKey } from "@plansync/shared/materialFieldKey";
 import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
 
 const MAX_CUSTOM_MATERIAL_FIELDS = 20;
-
-function slugFromLabel(label: string): string {
-  const s = label
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .replace(/_+/g, "_")
-    .slice(0, 63);
-  if (/^[a-z][a-z0-9_]{0,62}$/.test(s)) return s;
-  return `field_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
-}
 
 type DraftField = MaterialTemplateField;
 
@@ -93,7 +82,7 @@ export function MaterialTemplateEditor({
       ...d,
       {
         id: crypto.randomUUID(),
-        key: slugFromLabel(label),
+        key: slugifyMaterialFieldKey(label),
         label,
         type: "text" as MaterialCustomFieldType,
         required: false,

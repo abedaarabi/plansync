@@ -5,6 +5,7 @@
 import { apiUrl } from "@/lib/api-url";
 import { jsonHeaders, readJsonErrorBody } from "./shared";
 import { ProRequiredError } from "./errors";
+import { downloadAuthenticatedBlob } from "@/lib/downloadBlob";
 
 // --- Proposals ---
 
@@ -548,24 +549,6 @@ export async function postPublicProposalMessage(token: string, body: string): Pr
   if (!res.ok) throw new Error("Could not send message.");
 }
 
-async function downloadProposalPdf(projectId: string, proposalId: string): Promise<void> {
-  const res = await fetch(
-    apiUrl(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/proposals/${encodeURIComponent(proposalId)}/pdf`,
-    ),
-    { credentials: "include" },
-  );
-  if (res.status === 402) throw new ProRequiredError();
-  if (!res.ok) throw new Error("Could not download PDF.");
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `proposal-${proposalId}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export type ProposalAnalyticsSummary = {
   totalProposals: number;
   accepted: number;
@@ -667,19 +650,7 @@ export async function downloadProposalCsvExport(
     ),
     { credentials: "include" },
   );
-  if (res.status === 402) throw new ProRequiredError();
-  if (!res.ok) throw new Error("Could not export CSV.");
-  const blob = await res.blob();
-  const cd = res.headers.get("Content-Disposition");
-  let filename = `proposal-${proposalId}-lines.csv`;
-  const m = cd?.match(/filename="([^"]+)"/);
-  if (m?.[1]) filename = m[1];
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  await downloadAuthenticatedBlob(res, `proposal-${proposalId}-lines.csv`, "Could not export CSV.");
 }
 
 export type ProposalRateHint = {

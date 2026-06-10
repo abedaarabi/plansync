@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@plansync/shared/*": ["../backend/src/shared/*"]
     }
   },
   "include": [

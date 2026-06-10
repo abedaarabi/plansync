@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { slugifyMaterialFieldKey } from "./materialFieldKey.js";
 
 const MATERIAL_TEMPLATE_VERSION = 1;
 const MAX_CUSTOM_MATERIAL_FIELDS = 20;
@@ -22,19 +23,6 @@ export type MaterialTemplate = {
 };
 
 const KEY_RE = /^[a-z][a-z0-9_]{0,62}$/;
-
-function slugifyMaterialFieldKey(label: string): string {
-  const s = label
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .replace(/_+/g, "_")
-    .slice(0, 63);
-  if (KEY_RE.test(s)) return s;
-  const fallback = `field_${randomUUID().replace(/-/g, "").slice(0, 10)}`;
-  return KEY_RE.test(fallback) ? fallback : `f_${randomUUID().replace(/-/g, "").slice(0, 8)}`;
-}
 
 /** Lenient parse for stored JSON (GET responses, after migrations). */
 export function parseMaterialTemplateJson(raw: unknown): MaterialTemplate {

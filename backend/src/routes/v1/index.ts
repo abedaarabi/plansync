@@ -177,8 +177,8 @@ import {
   buildFieldReportEmailSubject,
   buildFieldReportEmailText,
   buildFieldReportsPageUrl,
-  workWeekFridayKey,
 } from "../../lib/fieldReportClientEmail.js";
+import { workWeekFridayKey } from "../../lib/workWeekFridayKey.js";
 import { createUserNotifications } from "../../lib/userNotifications.js";
 
 function newInviteToken(): string {
