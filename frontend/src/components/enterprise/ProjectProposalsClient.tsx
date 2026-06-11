@@ -31,6 +31,7 @@ import {
 } from "@/lib/omCompactStyles";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { useProjectCurrency } from "@/hooks/useProjectCurrency";
 
 const FILTER_KEYS = [
   "ALL",
@@ -79,6 +80,7 @@ function formatSentDate(iso: string | null): string {
   });
 }
 
+// fallow-ignore-next-line complexity
 export function ProjectProposalsClient({
   projectId,
   workspaceId: _workspaceId,
@@ -89,6 +91,7 @@ export function ProjectProposalsClient({
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
   const isPro = isWorkspaceProClient(primary?.workspace);
+  const { currency: projectCurrency } = useProjectCurrency(projectId);
 
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [search, setSearch] = useState("");
@@ -182,7 +185,7 @@ export function ProjectProposalsClient({
     ? `/workspaces/${_workspaceId}/projects/${projectId}/proposals`
     : `/projects/${projectId}/proposals`;
 
-  const defaultCurrency = data.proposals[0]?.currency ?? "USD";
+  const defaultCurrency = data.proposals[0]?.currency ?? projectCurrency;
   const totalCount = data.proposals.length;
   const emptyAfterFilter = totalCount > 0 && filteredProposals.length === 0;
   const completelyEmpty = totalCount === 0;

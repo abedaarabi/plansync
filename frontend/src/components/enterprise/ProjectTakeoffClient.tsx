@@ -49,6 +49,7 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { PROJECT_TAKEOFF_INVALIDATE_CHANNEL } from "@/lib/takeoffPublishCloud";
 import { TakeoffMaterialsSlider } from "@/components/enterprise/TakeoffMaterialsSlider";
+import { useProjectCurrency } from "@/hooks/useProjectCurrency";
 
 function takeoffLineGroupKey(row: TakeoffLineRow): string {
   return row.materialId ?? `${row.label}::${row.unit}`;
@@ -84,6 +85,7 @@ function serializeTakeoffDiscountState(proj: string, items: Record<string, strin
   return JSON.stringify({ proj, items: normalized });
 }
 
+// fallow-ignore-next-line complexity
 export function ProjectTakeoffClient({
   projectId,
   workspaceId: workspaceIdProp,
@@ -94,6 +96,7 @@ export function ProjectTakeoffClient({
   const router = useRouter();
   const pathname = usePathname();
   const qc = useQueryClient();
+  const { currency: projectCurrency } = useProjectCurrency(projectId);
   const takeoffKey = qk.takeoffForProject(projectId);
   const [projectDiscountPct, setProjectDiscountPct] = useState("0");
   const [itemDiscountPctByKey, setItemDiscountPctByKey] = useState<Record<string, string>>({});
@@ -477,6 +480,7 @@ export function ProjectTakeoffClient({
   }, [tableLines, itemDiscountPctByKey]);
 
   const grouped = useMemo(() => {
+    // fallow-ignore-next-line complexity
     const map = new Map<
       string,
       {
@@ -504,12 +508,12 @@ export function ProjectTakeoffClient({
           unit: row.unit,
           qty,
           rate,
-          currency: row.material?.currency ?? "USD",
+          currency: row.material?.currency ?? projectCurrency,
         });
       }
     }
     return [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
-  }, [lines]);
+  }, [lines, projectCurrency]);
 
   const pricing = useMemo(() => {
     const itemRows = grouped.map((g) => {

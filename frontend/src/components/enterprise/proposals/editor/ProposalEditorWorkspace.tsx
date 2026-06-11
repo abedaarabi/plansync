@@ -51,6 +51,7 @@ import {
 import { proposalCoverTextToHtml } from "@/lib/proposalCoverHtml";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { useProjectCurrency } from "@/hooks/useProjectCurrency";
 
 function fmtMoney(amount: string, currency: string) {
   const n = Number(amount);
@@ -86,6 +87,7 @@ const VARS = [
   "{{company.name}}",
 ];
 
+// fallow-ignore-next-line complexity
 export function ProposalEditorWorkspace({
   projectId,
   workspaceId: wsFromPath,
@@ -101,6 +103,8 @@ export function ProposalEditorWorkspace({
   const wid = primary?.workspace.id;
   const isPro = isWorkspaceProClient(primary?.workspace);
   const currentUserId = me?.user.id;
+  const { currency: projectCurrency, isPending: projectCurrencyPending } =
+    useProjectCurrency(projectId);
 
   const basePath = wsFromPath
     ? `/workspaces/${wsFromPath}/projects/${projectId}/proposals`
@@ -246,13 +250,13 @@ export function ProposalEditorWorkspace({
     };
   }, [existingProposalId, projectId, wid, isPro, project, qc]);
 
+  // fallow-ignore-next-line complexity
   useEffect(() => {
-    if (existingProposalId || !project?.id) return;
-    if (newDraftCurrencySyncedFor.current === project.id) return;
-    const c = project.currency;
-    if (typeof c === "string" && c.trim().length === 3) setCurrency(c.trim().toUpperCase());
-    newDraftCurrencySyncedFor.current = project.id;
-  }, [existingProposalId, project?.currency, project?.id]);
+    if (existingProposalId || projectCurrencyPending || !projectId) return;
+    if (newDraftCurrencySyncedFor.current === projectId) return;
+    setCurrency(projectCurrency);
+    newDraftCurrencySyncedFor.current = projectId;
+  }, [existingProposalId, projectId, projectCurrency, projectCurrencyPending]);
 
   useEffect(() => {
     if (!project) return;

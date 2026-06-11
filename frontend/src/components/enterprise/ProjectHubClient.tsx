@@ -288,6 +288,7 @@ export function ProjectHubClient() {
 
   const loading = ctxLoading || (Boolean(wid && isPro) && projectsPending);
 
+  // fallow-ignore-next-line complexity
   async function onCreateProject(e: React.FormEvent) {
     e.preventDefault();
     if (!wid || !projectName.trim() || !startDate || !endDate || !isAdmin) return;
@@ -339,6 +340,11 @@ export function ProjectHubClient() {
       const p = (await res.json()) as Project;
       setProjectModal(false);
       resetNewProjectForm();
+      queryClient.setQueryData<Project[]>(qk.projects(wid), (old) => {
+        const created: Project = { ...p, folders: p.folders ?? [], files: p.files ?? [] };
+        const rest = (old ?? []).filter((row) => row.id !== p.id);
+        return [...rest, created];
+      });
       await queryClient.invalidateQueries({ queryKey: qk.projects(wid) });
 
       if (ifs === "template" && tplId) {

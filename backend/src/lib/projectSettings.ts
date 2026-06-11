@@ -40,6 +40,11 @@ export function parseProjectCurrency(raw: unknown): ProjectCurrencyCode | null {
  * Per-project module toggles + client visibility (stored in Project.settingsJson).
  * Null/undefined means "all enabled" for backwards compatibility.
  */
+import type {
+  OmTenantPortalUiSettings,
+  ProjectSessionClientVisibility,
+  ProjectSessionOmHandover,
+} from "../shared/projectSessionSettings.js";
 
 export type ProjectModules = {
   issues: boolean;
@@ -60,44 +65,13 @@ export type ProjectModules = {
   schedule: boolean;
 };
 
-/** Handover pack + FM wizard fields (stored in `settingsJson.omHandover`). */
-export type OmHandoverSettings = {
-  /** Free text: warranty contacts, training dates, caveats. */
-  notes: string;
-  /** ISO datetime when the team marked handover complete (optional). */
-  handoverCompletedAt: string | null;
-  /** Display name for the building in FM handover wizard (optional). */
-  buildingLabel: string | null;
-  /** Primary FM contact — workspace user id. */
-  facilityManagerUserId: string | null;
-  /** Handover date as YYYY-MM-DD from wizard (optional). */
-  handoverDate: string | null;
-  /** Wizard: transfer intent checkboxes (informational / planning). */
-  transferAsBuilt: boolean;
-  transferClosedIssues: boolean;
-  transferPunch: boolean;
-  transferTeamAccess: boolean;
-  /** ISO datetime when “Complete handover” was submitted in the wizard. */
-  handoverWizardCompletedAt: string | null;
-  /**
-   * When set, completing an inspection emails this address the PDF report (Resend + verified sender).
-   */
-  buildingOwnerEmail: string | null;
-};
+/** @deprecated Prefer `ProjectSessionOmHandover` from `shared/projectSessionSettings`. */
+export type OmHandoverSettings = ProjectSessionOmHandover;
 
-export type ClientVisibility = {
-  showIssues: boolean;
-  showRfis: boolean;
-  showFieldReports: boolean;
-  showPunchList: boolean;
-  showDrawings: boolean;
-  allowClientComment: boolean;
-};
+/** @deprecated Prefer `ProjectSessionClientVisibility` from `shared/projectSessionSettings`. */
+export type ClientVisibility = ProjectSessionClientVisibility;
 
-/** Optional occupant portal public page copy (headline on `/occupant/...`). */
-export type OmTenantPortalUiSettings = {
-  headline: string | null;
-};
+export type { OmTenantPortalUiSettings };
 
 export type ProjectSettingsResolved = {
   modules: ProjectModules;

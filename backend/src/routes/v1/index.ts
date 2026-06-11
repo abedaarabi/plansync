@@ -2107,6 +2107,8 @@ export function v1Routes(
       projectId: ctx.project.id,
       projectName: ctx.project.name,
       workspaceId: ctx.project.workspaceId,
+      currency: ctx.project.currency,
+      measurementSystem: ctx.project.measurementSystem,
       workspaceRole: ctx.workspaceMember.role,
       isExternal: ctx.workspaceMember.isExternal,
       projectRole: ctx.projectMember?.projectRole ?? null,

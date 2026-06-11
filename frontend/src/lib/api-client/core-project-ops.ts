@@ -4,6 +4,17 @@
 import type { MeResponse } from "@/types/enterprise";
 import type { WorkspaceRole } from "@/types/enterprise";
 import type { Project } from "@/types/projects";
+import type {
+  OmTenantPortalUiSettings,
+  ProjectSessionClientVisibility,
+  ProjectSessionOmHandover,
+} from "@plansync/shared/projectSessionSettings";
+
+export type {
+  OmTenantPortalUiSettings,
+  ProjectSessionClientVisibility,
+  ProjectSessionOmHandover,
+} from "@plansync/shared/projectSessionSettings";
 import { apiUrl } from "@/lib/api-url";
 import { jsonHeaders, readJsonErrorBody, readJsonOrEmpty } from "./shared";
 import { HttpError, ProRequiredError } from "./errors";
@@ -65,34 +76,14 @@ export type ProjectSessionModules = {
   schedule: boolean;
 };
 
-export type ProjectSessionClientVisibility = {
-  showIssues: boolean;
-  showRfis: boolean;
-  showFieldReports: boolean;
-  showPunchList: boolean;
-  showDrawings: boolean;
-  allowClientComment: boolean;
-};
-
-export type ProjectSessionOmHandover = {
-  notes: string;
-  handoverCompletedAt: string | null;
-  buildingLabel: string | null;
-  facilityManagerUserId: string | null;
-  handoverDate: string | null;
-  transferAsBuilt: boolean;
-  transferClosedIssues: boolean;
-  transferPunch: boolean;
-  transferTeamAccess: boolean;
-  handoverWizardCompletedAt: string | null;
-  /** Inspection complete → PDF emailed to this address (Resend). */
-  buildingOwnerEmail: string | null;
-};
-
 export type ProjectSessionResponse = {
   projectId: string;
   projectName: string;
   workspaceId: string;
+  /** ISO 4217 — budgets, proposals, takeoff pricing */
+  currency: string;
+  /** Metric vs imperial for measurements */
+  measurementSystem: string;
   workspaceRole: WorkspaceRole;
   isExternal: boolean;
   projectRole: string | null;
@@ -103,7 +94,7 @@ export type ProjectSessionResponse = {
     modules: ProjectSessionModules;
     clientVisibility: ProjectSessionClientVisibility;
     omHandover: ProjectSessionOmHandover;
-    omTenantPortalUi: { headline: string | null };
+    omTenantPortalUi: OmTenantPortalUiSettings;
   };
   uiMode: "internal" | "client" | "contractor" | "sub";
 };

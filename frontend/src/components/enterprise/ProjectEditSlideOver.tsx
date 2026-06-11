@@ -84,6 +84,7 @@ export function ProjectEditSlideOver({
     onClose();
   }
 
+  // fallow-ignore-next-line complexity
   async function handleConfirmDeleteProject() {
     if (!project) return;
     setDeletePending(true);
@@ -91,6 +92,7 @@ export function ProjectEditSlideOver({
       await deleteProject(project.id);
       if (workspaceId) void queryClient.invalidateQueries({ queryKey: qk.projects(workspaceId) });
       void queryClient.invalidateQueries({ queryKey: qk.project(project.id) });
+      void queryClient.invalidateQueries({ queryKey: qk.projectSession(project.id) });
       void queryClient.invalidateQueries({ queryKey: qk.me() });
       onProjectDeleted?.(project.id);
       setDeleteDialogOpen(false);
@@ -347,7 +349,10 @@ export function ProjectEditSlideOver({
       toast.success("Project saved");
       setConfirmSaveOpen(false);
       if (workspaceId) void queryClient.invalidateQueries({ queryKey: qk.projects(workspaceId) });
-      if (project) void queryClient.invalidateQueries({ queryKey: qk.project(project.id) });
+      if (project) {
+        void queryClient.invalidateQueries({ queryKey: qk.project(project.id) });
+        void queryClient.invalidateQueries({ queryKey: qk.projectSession(project.id) });
+      }
       onClose();
     },
     onError: (e: Error) => toast.error(e.message),

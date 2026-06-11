@@ -28,6 +28,16 @@ const PROJECT_CURRENCY_CODES = [
 
 export type ProjectCurrencyCode = (typeof PROJECT_CURRENCY_CODES)[number];
 
+export function normalizeProjectCurrency(code: unknown): ProjectCurrencyCode {
+  if (typeof code === "string") {
+    const normalized = code.trim().toUpperCase();
+    if ((PROJECT_CURRENCY_CODES as readonly string[]).includes(normalized)) {
+      return normalized as ProjectCurrencyCode;
+    }
+  }
+  return "USD";
+}
+
 /** Display metadata for the currency picker (symbols are typical; formatting uses project locale elsewhere). */
 export const PROJECT_CURRENCIES: {
   code: ProjectCurrencyCode;
