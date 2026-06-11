@@ -19,6 +19,16 @@ export function projectScopedBaseFromPathname(pathname: string): string | null {
   return null;
 }
 
+export function extractProjectIdFromPath(pathname: string): string | null {
+  const match =
+    pathname.match(/^\/projects\/([^/]+)/) ??
+    pathname.match(/^\/workspaces\/[^/]+\/projects\/([^/]+)/);
+  if (!match) return null;
+  const segment = match[1];
+  if (segment === "new") return null;
+  return segment;
+}
+
 /** Build a project-scoped href with optional workspace prefix. */
 export function projectScopedHref(
   projectId: string,

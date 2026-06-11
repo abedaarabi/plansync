@@ -34,24 +34,17 @@ import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { isSuperAdmin } from "@/lib/workspaceRole";
 import { useMaxLgViewport } from "@/hooks/useMaxLgViewport";
+import { extractProjectIdFromPath } from "@/lib/projectScopedPath";
+import { DEFAULT_PROJECT_SESSION_MODULES } from "@/lib/projectSessionDefaults";
 
 type Cmd = { id: string; label: string; hint?: string; href: string; icon: typeof LayoutDashboard };
-
-function extractProjectId(pathname: string): string | null {
-  const match =
-    pathname.match(/^\/projects\/([^/]+)/) ??
-    pathname.match(/^\/workspaces\/[^/]+\/projects\/([^/]+)/);
-  if (!match) return null;
-  const segment = match[1];
-  if (segment === "new") return null;
-  return segment;
-}
 
 type CommandPaletteProps = {
   open: boolean;
   onClose: () => void;
 };
 
+// fallow-ignore-next-line complexity
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -62,7 +55,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const workspaceRole = primary?.role;
   const isPro = isWorkspaceProClient(ws);
   const { projectId: lastProjectId } = useProjectNavHref();
-  const projectId = extractProjectId(pathname) ?? lastProjectId;
+  const projectId = extractProjectIdFromPath(pathname) ?? lastProjectId;
 
   const { data: projectSession } = useQuery({
     queryKey: qk.projectSession(projectId ?? ""),
@@ -71,20 +64,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     staleTime: 30_000,
   });
 
-  const defaultModules = {
-    issues: true,
-    rfis: true,
-    takeoff: true,
-    proposals: true,
-    punch: true,
-    fieldReports: true,
-    omAssets: true,
-    omMaintenance: true,
-    omInspections: true,
-    omTenantPortal: true,
-    schedule: true,
-  };
-  const mod = projectSession?.settings.modules ?? defaultModules;
+  const mod = projectSession?.settings.modules ?? DEFAULT_PROJECT_SESSION_MODULES;
   const operationsMode = projectSession?.operationsMode ?? false;
 
   const [q, setQ] = useState("");

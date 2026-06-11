@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useCallback } from "react";
 import {
   Building2,
   CalendarRange,
@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { fetchProjectSession } from "@/lib/api-client";
-import { projectScopedBaseFromPathname } from "@/lib/projectScopedPath";
+import { projectScopedBaseFromPathname, extractProjectIdFromPath } from "@/lib/projectScopedPath";
 import {
   faviconUrlFromHostname,
   isGoogleFaviconUrl,
@@ -42,6 +42,13 @@ import { qk } from "@/lib/queryKeys";
 import { isWorkspaceOmBillingClient, isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { isSuperAdmin } from "@/lib/workspaceRole";
 import type { MeWorkspace } from "@/types/enterprise";
+import {
+  getLastProjectContext,
+  LAST_PROJECT_CHANGED_EVENT,
+  markSkipProjectRestore,
+} from "@/lib/lastProject";
+import { sidebarItemState, sidebarRailLinkProps } from "./enterpriseSidebarNav";
+import { DEFAULT_PROJECT_SESSION_MODULES } from "@/lib/projectSessionDefaults";
 
 type EnterpriseSidebarProps = {
   mobileOpen: boolean;
@@ -49,8 +56,6 @@ type EnterpriseSidebarProps = {
   /** Desktop (lg+) only — icon rail; mobile drawer always shows full labels. */
   desktopCollapsed: boolean;
 };
-
-const LAST_PROJECT_PATH_KEY = "plansync-enterprise-last-project-path-v1";
 
 type NavItem = {
   href: string;
@@ -108,16 +113,7 @@ function resolveActiveMembership(
   return primary;
 }
 
-function extractProjectId(pathname: string): string | null {
-  const match =
-    pathname.match(/^\/projects\/([^/]+)/) ??
-    pathname.match(/^\/workspaces\/[^/]+\/projects\/([^/]+)/);
-  if (!match) return null;
-  const segment = match[1];
-  if (segment === "new") return null;
-  return segment;
-}
-
+// fallow-ignore-next-line complexity
 export function EnterpriseSidebar({
   mobileOpen,
   onCloseMobile,
@@ -143,28 +139,22 @@ export function EnterpriseSidebar({
   const wid = ws?.id;
   const isPro = isWorkspaceProClient(ws);
   const omBilling = isWorkspaceOmBillingClient(ws);
-  const projectId = extractProjectId(pathname);
+  const projectId = extractProjectIdFromPath(pathname);
   const isProjectContext = Boolean(projectId);
   const [lastProjectPath, setLastProjectPath] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const cached = localStorage.getItem(LAST_PROJECT_PATH_KEY);
-      if (cached) setLastProjectPath(cached);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isProjectContext) return;
-    setLastProjectPath(pathname);
-    try {
-      localStorage.setItem(LAST_PROJECT_PATH_KEY, pathname);
-    } catch {
-      /* ignore */
-    }
-  }, [isProjectContext, pathname]);
+    const sync = () => {
+      if (!wid) {
+        setLastProjectPath(null);
+        return;
+      }
+      setLastProjectPath(getLastProjectContext(wid)?.path ?? null);
+    };
+    sync();
+    window.addEventListener(LAST_PROJECT_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(LAST_PROJECT_CHANGED_EVENT, sync);
+  }, [wid]);
 
   const { data: projectSession } = useQuery({
     queryKey: qk.projectSession(projectId ?? ""),
@@ -173,23 +163,22 @@ export function EnterpriseSidebar({
     staleTime: 30_000,
   });
   const workspaceRole = activeMembership?.role;
-  const defaultModules = {
-    issues: true,
-    rfis: true,
-    takeoff: true,
-    proposals: true,
-    punch: true,
-    fieldReports: true,
-    omAssets: true,
-    omMaintenance: true,
-    omInspections: true,
-    omTenantPortal: true,
-    schedule: true,
-  };
-  const mod = projectSession?.settings.modules ?? defaultModules;
+  const mod = projectSession?.settings.modules ?? DEFAULT_PROJECT_SESSION_MODULES;
   const operationsMode = projectSession?.operationsMode ?? false;
 
   const afterNav = () => onCloseMobile();
+
+  const handleNavLinkClick = useCallback(
+    (e: React.MouseEvent, disabled: boolean, href: string) => {
+      if (disabled) {
+        e.preventDefault();
+        return;
+      }
+      if (href === "/projects" || href === "/dashboard") markSkipProjectRestore();
+      afterNav();
+    },
+    [onCloseMobile],
+  );
 
   const sidebarLogoSrc = useMemo(() => {
     if (!ws) return null;
@@ -628,7 +617,10 @@ export function EnterpriseSidebar({
         {isProjectContext && !railCollapsed ? (
           <Link
             href="/projects"
-            onClick={afterNav}
+            onClick={() => {
+              markSkipProjectRestore();
+              afterNav();
+            }}
             title={t("jumpToProjects")}
             className="mb-0.5 flex shrink-0 items-center rounded-md px-3 py-1.5 text-[13px] font-medium text-[var(--enterprise-sidebar-muted)] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[var(--enterprise-sidebar-active)]"
           >
@@ -648,79 +640,162 @@ export function EnterpriseSidebar({
         {useTwoLevelNav ? (
           <div className="enterprise-scrollbar enterprise-sidebar-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5">
             <div className="enterprise-scrollbar enterprise-sidebar-scrollbar min-h-0 flex-1 space-y-1.5 overflow-y-auto rounded-md bg-slate-800/35 p-1.5">
-              {SIDEBAR_NAV_SECTIONS.map((section, sectionIndex) => {
-                const sectionLabel =
-                  section.title?.trim() || section.description?.trim() || section.railLabel;
-                const isFooterStart = sectionIndex === SIDEBAR_NAV_PRIMARY.length;
-                const collapsed = collapsedSectionIds.includes(section.id);
-                const sectionHasActiveRoute = section.items.some((item) =>
-                  linkActiveInSection(section, item),
-                );
-                return (
-                  <div
-                    key={`section-${section.id}`}
-                    className={isFooterStart ? "mt-2 border-t border-white/12 pt-2" : ""}
-                  >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setCollapsedSectionIds((prev) =>
-                          prev.includes(section.id)
-                            ? prev.filter((id) => id !== section.id)
-                            : [...prev, section.id],
-                        )
-                      }
-                      aria-expanded={!collapsed}
-                      aria-controls={`enterprise-sidebar-group-${section.id}`}
-                      className={`mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-left transition-colors ${
-                        sectionHasActiveRoute ? "bg-white/12" : "hover:bg-white/7"
-                      }`}
-                      title={sectionLabel}
-                    >
-                      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-200">
-                        {sectionLabel}
-                      </span>
-                      <ChevronDown
-                        className={`h-4 w-4 shrink-0 text-slate-300 transition-transform ${
-                          collapsed ? "" : "rotate-180"
-                        }`}
-                        strokeWidth={2}
-                      />
-                    </button>
+              {
+                // fallow-ignore-next-line complexity
+                SIDEBAR_NAV_SECTIONS.map((section, sectionIndex) => {
+                  const sectionLabel =
+                    section.title?.trim() || section.description?.trim() || section.railLabel;
+                  const isFooterStart = sectionIndex === SIDEBAR_NAV_PRIMARY.length;
+                  const collapsed = collapsedSectionIds.includes(section.id);
+                  const sectionHasActiveRoute = section.items.some((item) =>
+                    linkActiveInSection(section, item),
+                  );
+                  return (
                     <div
-                      id={`enterprise-sidebar-group-${section.id}`}
-                      className={collapsed ? "hidden" : "space-y-0.5"}
+                      key={`section-${section.id}`}
+                      className={isFooterStart ? "mt-2 border-t border-white/12 pt-2" : ""}
                     >
-                      {section.items.map((item) => {
-                        const active = linkActiveInSection(section, item);
-                        const ItemIcon = item.icon;
-                        const disabled = "disabled" in item && item.disabled;
-                        const sectionHeading = section.title?.trim();
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCollapsedSectionIds((prev) =>
+                            prev.includes(section.id)
+                              ? prev.filter((id) => id !== section.id)
+                              : [...prev, section.id],
+                          )
+                        }
+                        aria-expanded={!collapsed}
+                        aria-controls={`enterprise-sidebar-group-${section.id}`}
+                        className={`mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-left transition-colors ${
+                          sectionHasActiveRoute ? "bg-white/12" : "hover:bg-white/7"
+                        }`}
+                        title={sectionLabel}
+                      >
+                        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-200">
+                          {sectionLabel}
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 shrink-0 text-slate-300 transition-transform ${
+                            collapsed ? "" : "rotate-180"
+                          }`}
+                          strokeWidth={2}
+                        />
+                      </button>
+                      <div
+                        id={`enterprise-sidebar-group-${section.id}`}
+                        className={collapsed ? "hidden" : "space-y-0.5"}
+                      >
+                        {
+                          // fallow-ignore-next-line complexity
+                          section.items.map((item) => {
+                            const { active, disabled, sectionHeading } = sidebarItemState(
+                              section,
+                              item,
+                              linkActiveInSection,
+                            );
+                            const ItemIcon = item.icon;
+                            return (
+                              <Link
+                                key={`${section.id}-${item.href}`}
+                                href={disabled ? "#" : item.href}
+                                onClick={(e) => handleNavLinkClick(e, disabled, item.href)}
+                                title={navItemTitle(item, sectionHeading, t)}
+                                className={`group flex min-h-9 items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+                                  active
+                                    ? "bg-[var(--enterprise-primary)]/90 text-white"
+                                    : disabled
+                                      ? "cursor-not-allowed text-[var(--enterprise-sidebar-muted)]/45 opacity-55"
+                                      : "text-slate-100 hover:bg-white/10 hover:text-white"
+                                }`}
+                              >
+                                <ItemIcon
+                                  className={`h-4 w-4 shrink-0 ${
+                                    active ? "text-white" : "text-slate-400 group-hover:text-white"
+                                  }`}
+                                  strokeWidth={1.75}
+                                />
+                                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                                {item.badge ? (
+                                  <span
+                                    className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
+                                  >
+                                    {item.badge}
+                                  </span>
+                                ) : null}
+                              </Link>
+                            );
+                          })
+                        }
+                      </div>
+                    </div>
+                  );
+                })
+              }
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-0 overflow-y-auto">
+            {
+              // fallow-ignore-next-line complexity
+              SIDEBAR_NAV_PRIMARY.map((section, sectionIndex) => (
+                <div
+                  key={section.id}
+                  role="group"
+                  aria-label={
+                    section.title?.trim() || section.description || t("navigationFallback")
+                  }
+                  className={
+                    sectionIndex > 0
+                      ? railCollapsed
+                        ? "mt-2"
+                        : "mt-3 border-t border-white/[0.08] pt-3 lg:mt-3.5 lg:pt-3.5"
+                      : ""
+                  }
+                >
+                  {railCollapsed && sectionIndex > 0 ? (
+                    <div
+                      className="mx-auto mb-2 hidden h-px w-8 shrink-0 bg-white/12 lg:block"
+                      aria-hidden
+                    />
+                  ) : null}
+                  {section.title?.trim() ? (
+                    <div
+                      className={`mb-1.5 px-3 ${railCollapsed ? "sr-only" : ""}`}
+                      title={section.description}
+                    >
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-sidebar-muted)]/70">
+                        {section.title}
+                      </p>
+                    </div>
+                  ) : null}
+                  <div className="space-y-0.5">
+                    {
+                      // fallow-ignore-next-line complexity
+                      section.items.map((item) => {
+                        const link = sidebarRailLinkProps(
+                          section,
+                          item,
+                          linkActiveInSection,
+                          handleNavLinkClick,
+                        );
+                        const { active, disabled, sectionHeading, Icon } = link;
                         return (
                           <Link
-                            key={`${section.id}-${item.href}`}
-                            href={disabled ? "#" : item.href}
-                            onClick={(e) => {
-                              if (disabled) e.preventDefault();
-                              else afterNav();
-                            }}
-                            title={navItemTitle(item, sectionHeading, t)}
-                            className={`group flex min-h-9 items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
-                              active
-                                ? "bg-[var(--enterprise-primary)]/90 text-white"
-                                : disabled
-                                  ? "cursor-not-allowed text-[var(--enterprise-sidebar-muted)]/45 opacity-55"
-                                  : "text-slate-100 hover:bg-white/10 hover:text-white"
-                            }`}
+                            key={link.key}
+                            href={link.href}
+                            onClick={link.onClick}
+                            title={
+                              railCollapsed && sectionHeading
+                                ? navItemTitle(item, sectionHeading, t)
+                                : navItemTitle(item)
+                            }
+                            className={navLinkClass(active, disabled)}
                           >
-                            <ItemIcon
-                              className={`h-4 w-4 shrink-0 ${
-                                active ? "text-white" : "text-slate-400 group-hover:text-white"
-                              }`}
-                              strokeWidth={1.75}
-                            />
-                            <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                            {item.badge ? (
+                            <Icon className={iconClass(active)} strokeWidth={1.75} />
+                            <span className={railCollapsed ? "sr-only" : "min-w-0 flex-1 truncate"}>
+                              {item.badge ? `${item.label} ${item.badge}` : item.label}
+                            </span>
+                            {!railCollapsed && item.badge ? (
                               <span
                                 className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
                               >
@@ -729,82 +804,12 @@ export function EnterpriseSidebar({
                             ) : null}
                           </Link>
                         );
-                      })}
-                    </div>
+                      })
+                    }
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-0 overflow-y-auto">
-            {SIDEBAR_NAV_PRIMARY.map((section, sectionIndex) => (
-              <div
-                key={section.id}
-                role="group"
-                aria-label={section.title?.trim() || section.description || t("navigationFallback")}
-                className={
-                  sectionIndex > 0
-                    ? railCollapsed
-                      ? "mt-2"
-                      : "mt-3 border-t border-white/[0.08] pt-3 lg:mt-3.5 lg:pt-3.5"
-                    : ""
-                }
-              >
-                {railCollapsed && sectionIndex > 0 ? (
-                  <div
-                    className="mx-auto mb-2 hidden h-px w-8 shrink-0 bg-white/12 lg:block"
-                    aria-hidden
-                  />
-                ) : null}
-                {section.title?.trim() ? (
-                  <div
-                    className={`mb-1.5 px-3 ${railCollapsed ? "sr-only" : ""}`}
-                    title={section.description}
-                  >
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-sidebar-muted)]/70">
-                      {section.title}
-                    </p>
-                  </div>
-                ) : null}
-                <div className="space-y-0.5">
-                  {section.items.map((item) => {
-                    const active = linkActiveInSection(section, item);
-                    const Icon = item.icon;
-                    const disabled = "disabled" in item && item.disabled;
-                    const sectionHeading = section.title?.trim();
-                    return (
-                      <Link
-                        key={`${section.id}-${item.href}`}
-                        href={disabled ? "#" : item.href}
-                        onClick={(e) => {
-                          if (disabled) e.preventDefault();
-                          else afterNav();
-                        }}
-                        title={
-                          railCollapsed && sectionHeading
-                            ? navItemTitle(item, sectionHeading, t)
-                            : navItemTitle(item)
-                        }
-                        className={navLinkClass(active, disabled)}
-                      >
-                        <Icon className={iconClass(active)} strokeWidth={1.75} />
-                        <span className={railCollapsed ? "sr-only" : "min-w-0 flex-1 truncate"}>
-                          {item.badge ? `${item.label} ${item.badge}` : item.label}
-                        </span>
-                        {!railCollapsed && item.badge ? (
-                          <span
-                            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
-                          >
-                            {item.badge}
-                          </span>
-                        ) : null}
-                      </Link>
-                    );
-                  })}
                 </div>
-              </div>
-            ))}
+              ))
+            }
             {SIDEBAR_RAIL_FOOTER_SECTIONS.length > 0 ? (
               <div
                 className={
@@ -824,17 +829,18 @@ export function EnterpriseSidebar({
                 <div className="space-y-0.5">
                   {SIDEBAR_RAIL_FOOTER_SECTIONS.flatMap((section) =>
                     section.items.map((item) => {
-                      const active = linkActiveInSection(section, item);
-                      const Icon = item.icon;
-                      const disabled = "disabled" in item && item.disabled;
+                      const link = sidebarRailLinkProps(
+                        section,
+                        item,
+                        linkActiveInSection,
+                        handleNavLinkClick,
+                      );
+                      const { active, disabled, Icon } = link;
                       return (
                         <Link
-                          key={`${section.id}-${item.href}`}
-                          href={disabled ? "#" : item.href}
-                          onClick={(e) => {
-                            if (disabled) e.preventDefault();
-                            else afterNav();
-                          }}
+                          key={link.key}
+                          href={link.href}
+                          onClick={link.onClick}
                           title={navItemTitle(item)}
                           className={navLinkClass(active, disabled)}
                         >

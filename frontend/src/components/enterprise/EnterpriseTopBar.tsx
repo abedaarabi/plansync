@@ -31,12 +31,14 @@ import {
   type MeNotificationRow,
 } from "@/lib/api-client";
 import { DEFAULT_ENTERPRISE_PRIMARY_HEX } from "@/lib/enterpriseTheme";
+import { extractProjectIdFromPath } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
 import { userInitials } from "@/lib/user-initials";
 import { isWorkspaceProClient, trialDaysLeft } from "@/lib/workspaceSubscription";
 import { isSuperAdmin } from "@/lib/workspaceRole";
 import { clearAppBadgeSafe, syncAppBadgeFromUnreadCount } from "@/lib/appBadge";
 import Link from "next/link";
+import { markSkipProjectRestore } from "@/lib/lastProject";
 import { useTranslations } from "next-intl";
 
 const TOOL_ICONS: Record<string, LucideIcon> = {
@@ -74,16 +76,6 @@ type EnterpriseTopBarProps = {
   onToggleDesktopSidebar: () => void;
 };
 
-function extractProjectId(pathname: string): string | null {
-  const match =
-    pathname.match(/^\/projects\/([^/]+)/) ??
-    pathname.match(/^\/workspaces\/[^/]+\/projects\/([^/]+)/);
-  if (!match) return null;
-  const segment = match[1];
-  if (segment === "new") return null;
-  return segment;
-}
-
 function extractToolSegment(pathname: string): string | null {
   const match =
     pathname.match(/^\/projects\/[^/]+\/([^/]+)/) ??
@@ -91,6 +83,7 @@ function extractToolSegment(pathname: string): string | null {
   return match ? match[1] : null;
 }
 
+// fallow-ignore-next-line complexity
 export function EnterpriseTopBar({
   onOpenCommandPalette,
   onToggleMobileNav,
@@ -194,7 +187,7 @@ export function EnterpriseTopBar({
     setNotifOpen(false);
   }
 
-  const projectId = extractProjectId(pathname);
+  const projectId = extractProjectIdFromPath(pathname);
   const globalPageTitle = resolveGlobalTitle(pathname, tGlobal);
   const isProjectContext = Boolean(projectId);
   const activeProject = projectId ? projects.find((p) => p.id === projectId) : null;
@@ -264,6 +257,7 @@ export function EnterpriseTopBar({
               >
                 <Link
                   href="/projects"
+                  onClick={() => markSkipProjectRestore()}
                   className="hidden min-[400px]:inline shrink-0 font-medium text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-text)]"
                 >
                   {t("projects")}

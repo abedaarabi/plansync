@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { fetchProjectSession } from "@/lib/api-client";
+import { extractProjectIdFromPath } from "@/lib/projectScopedPath";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
@@ -30,16 +31,6 @@ export type MobileNavTab = {
   /** Opens overflow menu instead of navigating */
   isMore?: boolean;
 };
-
-function extractProjectId(pathname: string): string | null {
-  const match =
-    pathname.match(/^\/projects\/([^/]+)/) ??
-    pathname.match(/^\/workspaces\/[^/]+\/projects\/([^/]+)/);
-  if (!match) return null;
-  const segment = match[1];
-  if (segment === "new") return null;
-  return segment;
-}
 
 function isNavActive(pathname: string, href: string, exact?: boolean): boolean {
   if (exact) return pathname === href;
@@ -58,6 +49,7 @@ function isGlobalActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+// fallow-ignore-next-line complexity
 export function useEnterpriseMobileNav(): {
   tabs: MobileNavTab[];
   isProjectContext: boolean;
@@ -68,7 +60,7 @@ export function useEnterpriseMobileNav(): {
   const { primary } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
   const isPro = isWorkspaceProClient(primary?.workspace);
-  const projectId = extractProjectId(pathname);
+  const projectId = extractProjectIdFromPath(pathname);
   const isProjectContext = Boolean(projectId);
 
   const { data: projectSession } = useQuery({

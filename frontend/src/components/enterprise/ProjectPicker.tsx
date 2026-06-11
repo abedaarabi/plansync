@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation";
 import { Search, ChevronDown, Check, Building2, LayoutGrid } from "lucide-react";
 import { ProjectLogo } from "./ProjectLogo";
 import { useProjectNavHref } from "./useProjectNavHref";
-import { setLastProjectId } from "@/lib/lastProject";
+import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
+import {
+  defaultProjectPath,
+  markSkipProjectRestore,
+  setLastProjectContext,
+} from "@/lib/lastProject";
 import Link from "next/link";
 
 const MENU_WIDTH = 280;
@@ -23,8 +28,11 @@ function menuWidthForViewport(): number {
   return Math.min(MENU_WIDTH, Math.max(240, window.innerWidth - 24));
 }
 
+// fallow-ignore-next-line complexity
 export function ProjectPicker() {
   const router = useRouter();
+  const { primary } = useEnterpriseWorkspace();
+  const wid = primary?.workspace.id;
   const { projects, activeProject } = useProjectNavHref();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -90,10 +98,11 @@ export function ProjectPicker() {
   }, [isOpen]);
 
   const handleSelect = (id: string) => {
-    setLastProjectId(id);
+    const home = defaultProjectPath(id);
+    if (wid) setLastProjectContext(wid, id, home);
     setIsOpen(false);
     setSearch("");
-    router.push(`/projects/${id}`);
+    router.push(home);
   };
 
   const menu =
@@ -167,7 +176,10 @@ export function ProjectPicker() {
             <div className="mt-1.5 border-t border-[var(--enterprise-border)]/60 p-1">
               <Link
                 href="/projects"
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  markSkipProjectRestore();
+                  setIsOpen(false);
+                }}
                 className="enterprise-type-caption flex items-center gap-2 rounded-lg px-2 py-2 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
               >
                 <LayoutGrid className="h-3.5 w-3.5" />

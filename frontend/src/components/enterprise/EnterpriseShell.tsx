@@ -11,6 +11,7 @@ import { EnterpriseTopBar } from "./EnterpriseTopBar";
 import { UserMenu } from "./UserMenu";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { EnterpriseWorkspaceProvider } from "./EnterpriseWorkspaceContext";
+import { ProjectContextSync } from "./ProjectContextSync";
 import { ProjectSessionRedirect } from "./ProjectSessionRedirect";
 import { UploadProgressDock } from "./UploadProgressDock";
 import { EnterpriseMobileBottomNav } from "./EnterpriseMobileBottomNav";
@@ -108,6 +109,7 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
     <QueryProvider>
       <EnterpriseWorkspaceProvider>
         <ProjectSessionRedirect />
+        <ProjectContextSync />
         {isWorkspaceGate ? (
           <div
             className="flex h-dvh min-h-0 w-full min-w-0 max-w-full flex-col overflow-x-hidden bg-[var(--enterprise-bg)] text-[var(--enterprise-text)] lg:flex-row"
