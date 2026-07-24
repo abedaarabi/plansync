@@ -84,6 +84,12 @@ export class SectionBoxController {
     this.slots.clear();
     this.bounds = null;
     const clipper = this.getClipper();
+    // SimplePlane.dispose() removes the helper before detaching TransformControls.
+    // deleteAll → setPlane → renderer.update then throws if controls are still attached.
+    for (const [, plane] of clipper.list) {
+      plane.controls.detach();
+      plane.controls.enabled = false;
+    }
     clipper.deleteAll();
   }
 
@@ -316,9 +322,9 @@ export class SectionBoxController {
     this.boxOutline = new THREE.LineSegments(
       edges,
       new THREE.LineBasicMaterial({
-        color: 0x64748b,
+        color: 0x06b6d4,
         transparent: true,
-        opacity: 0.4,
+        opacity: 0.25,
         depthTest: false,
       }),
     );
@@ -342,7 +348,7 @@ export class SectionBoxController {
   }
 
   private buildArrow(handle: SectionHandle): THREE.Group {
-    const color = handle === "top" ? new THREE.Color("#22c55e") : new THREE.Color("#2563eb");
+    const color = handle === "top" ? new THREE.Color("#22C55E") : new THREE.Color("#3B82F6");
     const mat = new THREE.MeshBasicMaterial({
       color,
       depthTest: false,
@@ -350,7 +356,7 @@ export class SectionBoxController {
       opacity: 0.96,
     });
     const rim = new THREE.MeshBasicMaterial({
-      color: new THREE.Color("#ffffff"),
+      color: new THREE.Color("#F9FAFB"),
       depthTest: false,
       transparent: true,
       opacity: 0.35,
@@ -425,7 +431,7 @@ export class SectionBoxController {
   }
 }
 
-/** Hide SimplePlane face mesh — clipping only, no blue quad. */
+/** Hide SimplePlane face mesh — clipping only, no fill quad. */
 // fallow-ignore-next-line complexity
 export function hideClipPlaneFace(plane: OBC.SimplePlane): void {
   const mat = plane.planeMaterial;
@@ -444,7 +450,10 @@ export function hideClipPlaneFace(plane: OBC.SimplePlane): void {
     }
   }
   plane.helper.visible = false;
+  // Custom section gizmos replace built-in TransformControls — detach so
+  // clipper teardown / renderer.update never see an orphan attached object.
   const controls = plane.controls;
+  controls.detach();
   controls.showX = false;
   controls.showY = false;
   controls.showZ = false;

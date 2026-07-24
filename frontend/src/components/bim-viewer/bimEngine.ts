@@ -46,10 +46,24 @@ import {
   PLAN_GEOMETRY_ITEM_CAP,
 } from "@/lib/bim/planMinimapSlice";
 import {
+  applyTransformOffsets,
+  backupGlobalTransforms,
+  computeClusterCameraPose,
+  computeTightClusterOffsets,
+  mapItemsToTransformIds,
+  restoreGlobalTransforms,
+  shouldClusterType,
+  type ClusterCategoryPack,
+  type ClusterPackUnit,
+  type ClusterTransformBackup,
+  type ClusterTypeLabel,
+} from "@/lib/bim/clusterByType";
+import {
   hideClipPlaneFace,
   SectionBoxController,
 } from "@/components/bim-viewer/sectionBoxController";
 import * as THREE from "three";
+import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 import * as FRAGS from "@thatopen/fragments";
@@ -309,9 +323,17 @@ export class BimEngine {
   private planMinimapStorey: string | null = null;
   private planMinimapBoundsCache: PlanMinimapBounds | null = null;
   private planMinimapStoreyFloorY: number | null = null;
+  /** Autodesk-style visual clusters (elements grouped by IFC type). */
+  private clusterByTypeActive = false;
+  private clusterTransformBackup: ClusterTransformBackup = new Map();
+  private clusterLabelRoot: THREE.Group | null = null;
 
   constructor(events: BimEngineEvents) {
     this.events = events;
+  }
+
+  isClusterByTypeActive(): boolean {
+    return this.clusterByTypeActive;
   }
 
   getLoadedModels(): BimLoadedModel[] {
@@ -344,6 +366,9 @@ export class BimEngine {
     const entry = this.modelRegistry.get(modelId);
     if (!entry) return;
 
+    if (this.clusterByTypeActive) {
+      await this.clearClusterByType();
+    }
     this.clearSelection();
     const fragments = this.mustComponents().get(OBC.FragmentsManager);
     const model = fragments.list.get(modelId) ?? entry.model;
@@ -622,6 +647,9 @@ export class BimEngine {
 
   // fallow-ignore-next-line complexity
   private async afterModelAdded(fitView: boolean): Promise<void> {
+    if (this.clusterByTypeActive) {
+      await this.clearClusterByType();
+    }
     const world = this.mustWorld();
     const fragments = this.mustComponents().get(OBC.FragmentsManager);
     for (const entry of this.modelRegistry.values()) {
@@ -988,10 +1016,10 @@ export class BimEngine {
     threeMat.fog = true;
     threeMat.userData.renderTier = resolved.renderTier;
     if (isSpace && this.appearance.spaceDisplay === "outline") {
-      threeMat.emissive.set("#2563eb");
+      threeMat.emissive.set(BIM_ACCENT);
       threeMat.emissiveIntensity = 0.35;
     } else if (isSpace) {
-      threeMat.emissive.set("#1a4a6e");
+      threeMat.emissive.set(BIM_SPACE_MATERIAL.color);
       threeMat.emissiveIntensity = 0.1;
     } else if (resolved.renderTier === BimRenderTier.glass) {
       threeMat.emissive.copy(resolved.color).multiplyScalar(0.04);
@@ -2188,6 +2216,203 @@ export class BimEngine {
     for (const k of this.categoryVisible.keys()) this.categoryVisible.set(k, true);
     this.emitGroups();
     this.invalidatePlanSilhouette();
+  }
+
+  /**
+   * Toggle Autodesk-style visual clustering: elements of each IFC type are
+   * packed into a tight pile, piles sit close together, then the camera flies
+   * to an elevated overview.
+   */
+  // fallow-ignore-next-line complexity
+  async setClusterByType(enabled: boolean): Promise<void> {
+    if (enabled === this.clusterByTypeActive) return;
+    if (!enabled) {
+      await this.clearClusterByType();
+      await this.flyToClusterScene(false);
+      return;
+    }
+    if (this.categoryMaps.size === 0) {
+      throw new Error("No element types available to cluster.");
+    }
+
+    const fragments = this.mustComponents().get(OBC.FragmentsManager);
+    const editor = fragments.core.editor;
+    const packs: ClusterCategoryPack[] = [];
+    const backup: ClusterTransformBackup = new Map();
+
+    const names = [...this.categoryMaps.keys()].sort((a, b) => a.localeCompare(b));
+    for (const name of names) {
+      if (!shouldClusterType(name)) continue;
+      if (!(this.categoryVisible.get(name) ?? true)) continue;
+      const map = this.categoryMaps.get(name);
+      if (!map) continue;
+      const units = await this.collectClusterPackUnits(map, backup);
+      if (units.length === 0) continue;
+      packs.push({ name, units });
+    }
+    if (packs.length === 0) {
+      throw new Error("No visible element types to cluster.");
+    }
+
+    const { offsets, labels } = computeTightClusterOffsets(packs);
+    for (const [modelId, byTransform] of offsets) {
+      const model = fragments.list.get(modelId);
+      if (!model) continue;
+      await applyTransformOffsets(editor, modelId, model, byTransform);
+    }
+
+    this.clusterTransformBackup = backup;
+    this.clusterByTypeActive = true;
+    this.showClusterTypeLabels(labels);
+    await fragments.core.update(true);
+    this.invalidatePlanSilhouette();
+    this.bumpRender();
+    await this.flyToClusterScene(true);
+  }
+
+  /** Build pack units (unique transforms) and snapshot originals into backup. */
+  // fallow-ignore-next-line complexity
+  private async collectClusterPackUnits(
+    map: OBC.ModelIdMap,
+    backup: ClusterTransformBackup,
+  ): Promise<ClusterPackUnit[]> {
+    const fragments = this.mustComponents().get(OBC.FragmentsManager);
+    const units: ClusterPackUnit[] = [];
+    const seen = new Set<string>();
+
+    for (const [modelId, idSet] of Object.entries(map)) {
+      const model = fragments.list.get(modelId);
+      if (!model || idSet.size === 0) continue;
+      const itemIds = [...idSet];
+      let modelBackup = backup.get(modelId);
+      if (!modelBackup) {
+        modelBackup = new Map();
+        backup.set(modelId, modelBackup);
+      }
+      await backupGlobalTransforms(model, itemIds, modelBackup);
+      const itemToTransform = await mapItemsToTransformIds(model, itemIds);
+
+      for (let i = 0; i < itemIds.length; i += 200) {
+        const chunk = itemIds.slice(i, i + 200);
+        let boxes: THREE.Box3[] = [];
+        try {
+          boxes = await model.getBoxes(chunk);
+        } catch {
+          boxes = [];
+        }
+        for (let j = 0; j < chunk.length; j++) {
+          const itemId = chunk[j]!;
+          const transformLocalId = itemToTransform.get(itemId);
+          if (transformLocalId == null) continue;
+          const key = `${modelId}:${transformLocalId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const box = boxes[j];
+          if (!box || !this.isValidBox3(box)) continue;
+          units.push({ modelId, transformLocalId, box: box.clone() });
+        }
+      }
+    }
+    return units;
+  }
+
+  /** Smooth elevated overview (cluster on) or animated fit-to-model (cluster off). */
+  // fallow-ignore-next-line complexity
+  private async flyToClusterScene(clustered: boolean): Promise<void> {
+    const world = this.world;
+    const controls = world?.camera?.controls;
+    if (!world || !controls) {
+      await this.fitToView();
+      return;
+    }
+    await this.mustComponents().get(OBC.FragmentsManager).core.update(true);
+    const box = this.getModelBoundingBox();
+    if (!this.isValidBox3(box)) {
+      await this.fitToView();
+      return;
+    }
+
+    const prevSmooth = controls.smoothTime;
+    // Slightly longer ease for a cinematic reveal / restore.
+    controls.smoothTime = Math.max(prevSmooth, 0.55);
+
+    try {
+      if (!clustered) {
+        await this.fitToView();
+        return;
+      }
+
+      const { eye, target, sphere } = computeClusterCameraPose(box);
+      this.adjustCameraClipping(sphere);
+      await controls.setLookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, true);
+      controls.setOrbitPoint(target.x, target.y, target.z);
+      this.bumpRender();
+    } finally {
+      controls.smoothTime = prevSmooth;
+    }
+  }
+
+  // fallow-ignore-next-line complexity
+  private showClusterTypeLabels(labels: ClusterTypeLabel[]): void {
+    this.clearClusterTypeLabels();
+    const world = this.world;
+    if (!world || labels.length === 0) return;
+
+    const root = new THREE.Group();
+    root.name = "bim-cluster-labels";
+    for (const label of labels) {
+      const el = document.createElement("div");
+      el.className = "bim-cluster-type-label";
+      el.setAttribute("role", "text");
+      const title = document.createElement("span");
+      title.className = "bim-cluster-type-label__title";
+      title.textContent = label.title;
+      const count = document.createElement("span");
+      count.className = "bim-cluster-type-label__count";
+      count.textContent = `${label.count.toLocaleString()} ${label.count === 1 ? "element" : "elements"}`;
+      el.append(title, count);
+
+      const obj = new CSS2DObject(el);
+      obj.position.copy(label.position);
+      root.add(obj);
+    }
+    world.scene.three.add(root);
+    this.clusterLabelRoot = root;
+  }
+
+  private clearClusterTypeLabels(): void {
+    const root = this.clusterLabelRoot;
+    if (!root) return;
+    root.removeFromParent();
+    for (const child of [...root.children]) {
+      const obj = child as CSS2DObject;
+      obj.element?.remove();
+      root.remove(child);
+    }
+    this.clusterLabelRoot = null;
+  }
+
+  // fallow-ignore-next-line complexity
+  private async clearClusterByType(): Promise<void> {
+    if (!this.clusterByTypeActive && this.clusterTransformBackup.size === 0) return;
+    this.clearClusterTypeLabels();
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    if (fragments?.initialized) {
+      const editor = fragments.core.editor;
+      for (const [modelId, backup] of this.clusterTransformBackup) {
+        if (!fragments.list.has(modelId)) continue;
+        try {
+          await restoreGlobalTransforms(editor, modelId, backup);
+        } catch {
+          /* model may have been removed */
+        }
+      }
+      await fragments.core.update(true);
+    }
+    this.clusterTransformBackup.clear();
+    this.clusterByTypeActive = false;
+    this.invalidatePlanSilhouette();
+    this.bumpRender();
   }
 
   // fallow-ignore-next-line complexity
@@ -3422,7 +3647,7 @@ export class BimEngine {
   }
 
   // fallow-ignore-next-line complexity
-  private async zoomToModelIdMap(map: OBC.ModelIdMap): Promise<void> {
+  private async getModelIdMapBoundingBox(map: OBC.ModelIdMap): Promise<THREE.Box3 | null> {
     const fragments = this.mustComponents().get(OBC.FragmentsManager);
     const box = new THREE.Box3();
     for (const [mid, ids] of Object.entries(map)) {
@@ -3445,7 +3670,13 @@ export class BimEngine {
         }
       }
     }
-    if (!this.isValidBox3(box)) {
+    return this.isValidBox3(box) ? box : null;
+  }
+
+  // fallow-ignore-next-line complexity
+  private async zoomToModelIdMap(map: OBC.ModelIdMap): Promise<void> {
+    const box = await this.getModelIdMapBoundingBox(map);
+    if (!box) {
       await this.fitToView();
       return;
     }
@@ -3675,6 +3906,9 @@ export class BimEngine {
     this.planSilhouette = null;
     this.planMinimapBoundsCache = null;
     this.planMinimapStoreyFloorY = null;
+    this.clearClusterTypeLabels();
+    this.clusterByTypeActive = false;
+    this.clusterTransformBackup.clear();
     this.issuePlacementPick = null;
     this.issueAnchors = [];
     this.issueWorldByGuid.clear();

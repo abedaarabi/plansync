@@ -377,7 +377,7 @@ export class ViewCubeOverlay {
   private addEdgePickers(): void {
     const mat = () =>
       new THREE.MeshStandardMaterial({
-        color: "#2563eb",
+        color: "#3B82F6",
         transparent: true,
         opacity: 0,
         roughness: 0.45,
@@ -422,7 +422,7 @@ export class ViewCubeOverlay {
 
   private addCornerPickers(): void {
     const mat = new THREE.MeshStandardMaterial({
-      color: "#2563eb",
+      color: "#3B82F6",
       transparent: true,
       opacity: 0,
       roughness: 0.4,
@@ -512,7 +512,7 @@ export class ViewCubeOverlay {
         this.highlightTarget = target;
         this.highlightMaterial = mat;
         mat.opacity = target.userData.kind === "corner" ? 0.88 : 0.72;
-        mat.emissive.set("#2563eb");
+        mat.emissive.set("#3B82F6");
         mat.emissiveIntensity = 0.42;
         mat.needsUpdate = true;
         this.renderer.domElement.classList.add("is-hover");
@@ -522,7 +522,7 @@ export class ViewCubeOverlay {
         const index = hits[0].face?.materialIndex ?? 0;
         const faceMat = target.material[index];
         if (faceMat instanceof THREE.MeshStandardMaterial) {
-          faceMat.emissive.set("#2563eb");
+          faceMat.emissive.set("#3B82F6");
           faceMat.emissiveIntensity = 0.22;
           this.faceHoverMaterials.push(faceMat);
         }

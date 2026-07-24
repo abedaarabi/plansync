@@ -104,12 +104,14 @@ export function BimModelQualityPanel(props: {
       ) : null}
 
       {failed ? (
-        <div className="rounded-lg border border-red-200 bg-red-50/80 px-3 py-4">
+        <div className="rounded-lg border border-[color-mix(in_srgb,var(--bim-danger)_35%,var(--bim-border))] bg-[color-mix(in_srgb,var(--bim-danger)_10%,var(--bim-panel))] px-3 py-4">
           <div className="flex items-start gap-2">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bim-danger)]" aria-hidden />
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-medium text-red-900">Quantity index build failed</p>
-              <p className="mt-1 text-[11px] text-red-800/80">
+              <p className="text-[12px] font-medium text-[var(--bim-text)]">
+                Quantity index build failed
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--bim-text-muted)]">
                 Rebuild the index to restore search and takeoff features.
               </p>
               {props.onRebuildIndex ? (
@@ -155,7 +157,7 @@ export function BimModelQualityPanel(props: {
               Full tessellation, space boundaries, and double-sided materials.
             </p>
           </div>
-          <div className="rounded-lg border border-[var(--bim-border)] bg-slate-50/80 px-3 py-2.5">
+          <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-hover)] px-3 py-2.5">
             <div className="flex items-center gap-2">
               <Palette className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
               <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--bim-text-subtle)]">
@@ -163,7 +165,7 @@ export function BimModelQualityPanel(props: {
               </p>
             </div>
             <ul className="mt-2 space-y-1 text-[10px] leading-relaxed text-[var(--bim-text-muted)]">
-              <li>PBR shading with type-based roughness and metalness</li>
+              <li>Matte PBR surfaces with type-based roughness and subtle micro-texture</li>
               <li>Transparent layers sorted — glass and spaces render on top</li>
               <li>Selection highlight uses the app accent blue</li>
             </ul>
@@ -235,7 +237,7 @@ function LoqMetrics(props: {
       </div>
 
       {loq.recommendedExportHints.length > 0 ? (
-        <div className="rounded-lg border border-[var(--bim-border)] bg-slate-50/80 px-3 py-3">
+        <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-hover)] px-3 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--bim-text-subtle)]">
             Export recommendations
           </p>
@@ -276,7 +278,11 @@ function StatCard(props: { label: string; value: string }) {
 
 function CoverageBar(props: { label: string; pct: number }) {
   const tone =
-    props.pct >= 70 ? "bg-[var(--bim-accent)]" : props.pct >= 40 ? "bg-amber-500" : "bg-red-500";
+    props.pct >= 70
+      ? "bg-[var(--bim-accent)]"
+      : props.pct >= 40
+        ? "bg-[var(--bim-warning)]"
+        : "bg-[var(--bim-danger)]";
 
   return (
     <div>

@@ -1,29 +1,33 @@
-/** Balanced colorize palette — clear on dark viewports without harsh saturation. */
+import { BIM_PALETTE } from "@/lib/bim/bimPalette";
+
+const { status: S, mep: M, interaction: I, materials: MAT } = BIM_PALETTE;
+
+/** Balanced colorize palette — only colors from the viewer system. */
 const COLORIZE_PALETTE = [
-  "#4d9ae8",
-  "#e06c6c",
-  "#52b872",
-  "#e8a030",
-  "#9470d8",
-  "#38a8b8",
-  "#d85898",
-  "#78b848",
-  "#e08848",
-  "#6070d8",
-  "#40a898",
-  "#c85858",
-  "#c8a838",
-  "#8068c0",
-  "#4890c8",
-  "#b850a8",
-  "#48a878",
-  "#c84868",
-  "#5868c8",
-  "#38a0a0",
-  "#d88038",
-  "#8868c0",
-  "#48c068",
-  "#c85878",
+  S.primary,
+  S.danger,
+  S.success,
+  S.warning,
+  M.communication,
+  S.information,
+  M.hvac,
+  M.plumbing,
+  M.electrical,
+  M.fire,
+  I.hoveredOutline,
+  MAT.glass,
+  S.primary,
+  M.communication,
+  S.information,
+  M.hvac,
+  S.success,
+  S.danger,
+  S.primary,
+  S.information,
+  S.warning,
+  M.communication,
+  S.success,
+  S.danger,
 ] as const;
 
 /** Opacity for colorized geometry — visible but not flat/opaque. */

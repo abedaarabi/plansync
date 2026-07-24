@@ -54,9 +54,9 @@ const PLAN_COLORS = {
   ink: "#334155",
   muted: "#64748b",
   subtle: "#94a3b8",
-  accent: "#2563eb",
-  accentSoft: "rgba(37, 99, 235, 0.16)",
-  accentLine: "rgba(37, 99, 235, 0.42)",
+  accent: "#3B82F6",
+  accentSoft: "rgba(59, 130, 246, 0.16)",
+  accentLine: "rgba(59, 130, 246, 0.42)",
 } as const;
 
 function getPlanMinimapTransform(bounds: PlanMinimapBounds, mapPx: number): PlanMinimapTransform {

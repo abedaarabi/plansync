@@ -608,7 +608,7 @@ export function BimMarkupOverlay({ interactive, engine, container }: Props) {
               if (e.key === "Escape") setTextAnchor(null);
             }}
             placeholder="Comment text"
-            className="min-w-[10rem] rounded-md border border-[var(--bim-border)] bg-white px-2 py-1 text-[12px] text-[var(--bim-text)]"
+            className="min-w-[10rem] rounded-md border border-[var(--bim-border)] bg-[var(--bim-panel)] px-2 py-1 text-[12px] text-[var(--bim-text)]"
             autoFocus
           />
           <div className="flex gap-1">

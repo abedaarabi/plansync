@@ -10,7 +10,8 @@ import {
 } from "@/lib/bim/viewportAppearance";
 
 const STORAGE_KEY = "plansync-bim-viewport-appearance";
-const STORAGE_VERSION = 1;
+/** Bump when default look changes so browsers pick up the new cinematic profile. */
+const STORAGE_VERSION = 4;
 
 const ENV_IDS = new Set(BIM_ENVIRONMENT_OPTIONS.map((o) => o.id));
 const COLOR_IDS = new Set(BIM_COLOR_MODE_OPTIONS.map((o) => o.id));
@@ -46,7 +47,8 @@ export function readSavedViewportAppearance(): BimViewportAppearance {
     if (!stored) return { ...DEFAULT_BIM_VIEWPORT_APPEARANCE };
     const parsed = JSON.parse(stored) as { v?: number; appearance?: unknown };
     if (parsed.v !== STORAGE_VERSION) {
-      return parseViewportAppearance(parsed.appearance);
+      // New default look — do not carry forward stale presets.
+      return { ...DEFAULT_BIM_VIEWPORT_APPEARANCE };
     }
     return parseViewportAppearance(parsed.appearance);
   } catch {

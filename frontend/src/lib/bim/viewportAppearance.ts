@@ -1,6 +1,7 @@
 /** Viewport appearance settings — environment, materials, fog, grid. */
 
 export type BimEnvironmentPreset =
+  | "cinematic"
   | "clear"
   | "overcast"
   | "golden_hour"
@@ -43,11 +44,11 @@ export type BimViewportAppearance = {
 };
 
 export const DEFAULT_BIM_VIEWPORT_APPEARANCE: BimViewportAppearance = {
-  environment: "clear",
+  environment: "cinematic",
   colorMode: "ifc_priority",
-  spaceDisplay: "ifc_storey",
-  fogMode: "auto",
-  gridMode: "show",
+  spaceDisplay: "subtle",
+  fogMode: "off",
+  gridMode: "subtle",
 };
 
 export type BimAppearanceOption<T extends string> = {
@@ -57,7 +58,8 @@ export type BimAppearanceOption<T extends string> = {
 };
 
 export const BIM_ENVIRONMENT_OPTIONS: BimAppearanceOption<BimEnvironmentPreset>[] = [
-  { id: "clear", label: "Clear sky", hint: "Bright daytime — default outdoor view" },
+  { id: "cinematic", label: "Cinematic", hint: "Dark cool stage — modern game-engine look" },
+  { id: "clear", label: "Clear sky", hint: "Bright daytime outdoor view" },
   { id: "overcast", label: "Overcast", hint: "Soft gray clouds, even diffuse light" },
   { id: "golden_hour", label: "Golden hour", hint: "Warm sunset tones on the horizon" },
   { id: "dusk", label: "Dusk", hint: "Deep blue sky with violet horizon glow" },
@@ -74,7 +76,7 @@ export const BIM_COLOR_MODE_OPTIONS: BimAppearanceOption<BimColorMode>[] = [
   { id: "type_palette", label: "By IFC type", hint: "Walls, slabs, ducts, etc." },
   { id: "monochrome", label: "Monochrome", hint: "Grayscale shading" },
   { id: "high_contrast", label: "High contrast", hint: "Bold saturated discipline colors" },
-  { id: "soft_pastel", label: "Soft pastel", hint: "Desaturated presentation look" },
+  { id: "soft_pastel", label: "Soft pastel", hint: "Muted presentation tones" },
   { id: "technical", label: "Technical", hint: "Neutral shell, colored systems only" },
 ];
 

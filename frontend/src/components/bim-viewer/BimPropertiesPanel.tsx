@@ -208,7 +208,7 @@ export function BimPropertiesPanel(props: {
       <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
         <p className="text-[13px] font-medium text-[var(--bim-text)]">No element selected</p>
         <p className="max-w-[16rem] text-[12px] leading-relaxed text-[var(--bim-text-muted)]">
-          Click an element in the model, then choose Show properties.
+          Click an element in the model to view its properties.
         </p>
       </div>
     );

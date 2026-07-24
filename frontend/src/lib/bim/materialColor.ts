@@ -1,7 +1,15 @@
+import { BIM_PALETTE } from "@/lib/bim/bimPalette";
 import { disciplineForIfcType } from "@/lib/bim/discipline";
+import {
+  applyBimSurfaceMaps,
+  surfaceKindFromIfcType,
+  type BimSurfaceKind,
+} from "@/lib/bim/materialSurfaces";
 import type { BimColorMode, BimSpaceDisplayMode } from "@/lib/bim/viewportAppearance";
 import * as FRAGS from "@thatopen/fragments";
 import * as THREE from "three";
+
+const { materials: M, mep: MEP, status: STATUS, ui: UI, interaction: IX } = BIM_PALETTE;
 
 /** Default web-ifc / Revit export gray — treated as “no authored color”. */
 const DEFAULT_GRAY_SAMPLES: readonly [number, number, number][] = [
@@ -18,6 +26,9 @@ export type BimPbrParams = {
   roughness: number;
   metalness: number;
   envMapIntensity: number;
+  clearcoat: number;
+  clearcoatRoughness: number;
+  surfaceKind: BimSurfaceKind;
 };
 
 export type BimResolvedColor = {
@@ -39,40 +50,53 @@ export const BimRenderTier = {
 } as const;
 
 const DISCIPLINE_COLORS: Record<string, string> = {
-  Structure: "#8b939e",
-  Architecture: "#d9b896",
-  Mechanical: "#4a9fd4",
-  Electrical: "#f0a030",
-  MEP: "#3db8a8",
-  Other: "#a8b4bc",
+  Structure: M.column,
+  Architecture: M.wall,
+  Mechanical: MEP.hvac,
+  Electrical: MEP.electrical,
+  MEP: MEP.plumbing,
+  Other: UI.disabled,
 };
 
+/** Default IFC materials + MEP — from BIM_PALETTE only. */
 const IFC_TYPE_COLORS: Record<string, string> = {
-  IfcWall: "#c9a87c",
-  IfcWallStandardCase: "#c9a87c",
-  IfcSlab: "#b8b2a8",
-  IfcColumn: "#6e6a66",
-  IfcBeam: "#73706c",
-  IfcMember: "#5c6370",
-  IfcPlate: "#8899aa",
-  IfcDoor: "#a16207",
-  IfcWindow: "#67c3ea",
-  IfcCurtainWall: "#22d3ee",
-  IfcRoof: "#7a756f",
-  IfcStair: "#a39e96",
-  IfcRailing: "#64748b",
-  IfcCovering: "#ddd6ce",
-  IfcPipeSegment: "#0ea5e9",
-  IfcPipeFitting: "#0284c7",
-  IfcDuctSegment: "#10b981",
-  IfcDuctFitting: "#059669",
-  IfcCableCarrierSegment: "#eab308",
-  IfcFlowTerminal: "#3b82f6",
-  IfcFurnishingElement: "#a855f7",
-  IfcFooting: "#78716c",
-  IfcPile: "#57534e",
-  IfcBuildingElementProxy: "#94a3b8",
-  IfcOpeningElement: "#374151",
+  IfcWall: M.wall,
+  IfcWallStandardCase: M.wall,
+  IfcSlab: M.floor,
+  IfcColumn: M.column,
+  IfcBeam: M.column,
+  IfcMember: M.column,
+  IfcPlate: M.column,
+  IfcDoor: M.door,
+  IfcWindow: M.glass,
+  IfcCurtainWall: M.glass,
+  IfcRoof: M.ceiling,
+  IfcStair: M.floor,
+  IfcRailing: M.door,
+  IfcCovering: M.ceiling,
+  IfcPipeSegment: MEP.plumbing,
+  IfcPipeFitting: MEP.plumbing,
+  IfcFlowSegment: MEP.plumbing,
+  IfcFlowFitting: MEP.plumbing,
+  IfcSanitaryTerminal: MEP.plumbing,
+  IfcDuctSegment: MEP.hvac,
+  IfcDuctFitting: MEP.hvac,
+  IfcAirTerminal: MEP.hvac,
+  IfcCableCarrierSegment: MEP.electrical,
+  IfcCableSegment: MEP.electrical,
+  IfcElectricDistributionBoard: MEP.electrical,
+  IfcLightFixture: MEP.electrical,
+  IfcAlarm: MEP.fire,
+  IfcFireSuppressionTerminal: MEP.fire,
+  IfcProtectiveDevice: MEP.fire,
+  IfcCommunicationsAppliance: MEP.communication,
+  IfcAudioVisualAppliance: MEP.communication,
+  IfcFlowTerminal: MEP.hvac,
+  IfcFurnishingElement: M.door,
+  IfcFooting: M.column,
+  IfcPile: M.column,
+  IfcBuildingElementProxy: M.wall,
+  IfcOpeningElement: UI.border,
 };
 
 function clamp01(n: number): number {
@@ -191,7 +215,7 @@ function applyColorMode(
       if (hasIfc && src) {
         out.setRGB(src.r / 255, src.g / 255, src.b / 255, THREE.SRGBColorSpace);
       } else {
-        out.set("#9ca3af");
+        out.set(UI.disabled);
       }
       break;
     case "discipline":
@@ -222,7 +246,8 @@ function applyColorMode(
       {
         const hsl = { h: 0, s: 0, l: 0 };
         out.getHSL(hsl);
-        out.setHSL(hsl.h, hsl.s * 0.45, Math.min(0.82, hsl.l + 0.08));
+        // Keep form readable on the dark cinematic stage — muted, not washed out.
+        out.setHSL(hsl.h, hsl.s * 0.55, Math.min(0.72, Math.max(0.28, hsl.l * 0.92 + 0.02)));
       }
       break;
     case "technical": {
@@ -230,7 +255,7 @@ function applyColorMode(
       if (disc === "Mechanical" || disc === "Electrical" || disc === "MEP") {
         out.copy(disciplineColor(type));
       } else {
-        out.set("#e5e7eb");
+        out.set(M.ceiling);
       }
       break;
     }
@@ -248,13 +273,27 @@ function applyColorMode(
 function spaceColorFromStorey(storey: string | null): THREE.Color {
   const hue = storeyHueOffset(storey) / 360;
   const c = new THREE.Color();
-  c.setHSL(hue, 0.55, 0.55);
+  c.setHSL(hue, 0.32, 0.52);
   return c;
 }
+// fallow-ignore-next-line complexity
 function fallbackColorForType(ifcType: string): THREE.Color {
   const key = normalizeIfcType(ifcType);
-  const hex =
-    IFC_TYPE_COLORS[key] ?? DISCIPLINE_COLORS[disciplineForIfcType(key)] ?? DISCIPLINE_COLORS.Other;
+  const mapped = IFC_TYPE_COLORS[key];
+  if (mapped) return new THREE.Color(mapped);
+
+  const n = key.toLowerCase();
+  if (/sprinkler|fire|alarm|protective|extinguish/.test(n)) return new THREE.Color(MEP.fire);
+  if (/communicat|data|telecom|network|audiovisual|sensor/.test(n)) {
+    return new THREE.Color(MEP.communication);
+  }
+  if (/duct|hvac|air.?terminal|fan|chiller|boiler/.test(n)) return new THREE.Color(MEP.hvac);
+  if (/pipe|plumb|sanitary|drain|sewer|valve|pump/.test(n)) return new THREE.Color(MEP.plumbing);
+  if (/electric|cable|conduit|light|lamp|switch|outlet/.test(n)) {
+    return new THREE.Color(MEP.electrical);
+  }
+
+  const hex = DISCIPLINE_COLORS[disciplineForIfcType(key)] ?? DISCIPLINE_COLORS.Other;
   return new THREE.Color(hex);
 }
 
@@ -266,25 +305,51 @@ function storeyHueOffset(storey: string | null | undefined): number {
   return ((hash % 360) + 360) % 360;
 }
 
+function pbr(
+  roughness: number,
+  metalness: number,
+  envMapIntensity: number,
+  surfaceKind: BimSurfaceKind,
+  clearcoat = 0,
+  clearcoatRoughness = 0.35,
+): BimPbrParams {
+  return { roughness, metalness, envMapIntensity, clearcoat, clearcoatRoughness, surfaceKind };
+}
+
 // fallow-ignore-next-line complexity
 function derivePbrParams(ifcType: string, alpha: number, doubleSided: boolean): BimPbrParams {
   const t = normalizeIfcType(ifcType);
+  const kind = surfaceKindFromIfcType(t);
+  // Keep env/clearcoat low — strong IBL reads as white shine on BIM solids.
   if (isGlassType(t) || alpha < 180) {
-    return { roughness: 0.06, metalness: 0.04, envMapIntensity: 1.35 };
+    return pbr(0.18, 0, 0.35, "glass");
   }
   if (/column|beam|member|plate|reinfor|steel|metal/i.test(t)) {
-    return { roughness: 0.32, metalness: 0.58, envMapIntensity: 1.05 };
+    return pbr(0.45, 0.35, 0.4, "metal");
   }
   if (/pipe|duct|terminal|flow|fitting|cable|conduit|electric|light|lamp/i.test(t)) {
-    return { roughness: 0.38, metalness: 0.28, envMapIntensity: 1.0 };
+    return pbr(0.5, 0.22, 0.35, "metal");
   }
-  if (/slab|wall|roof|stair|railing|covering|furniture|footing|foundation/i.test(t)) {
-    return { roughness: 0.72, metalness: 0.03, envMapIntensity: 0.95 };
+  if (/door|furnish/i.test(t)) {
+    return pbr(0.68, 0.04, 0.28, "plastic");
+  }
+  if (/slab|wall|roof|stair|railing|covering|footing|foundation/i.test(t)) {
+    return pbr(0.86, 0.01, 0.22, "concrete");
   }
   if (doubleSided) {
-    return { roughness: 0.62, metalness: 0.06, envMapIntensity: 0.95 };
+    return pbr(0.75, 0.03, 0.28, kind);
   }
-  return { roughness: 0.65, metalness: 0.05, envMapIntensity: 0.92 };
+  return pbr(0.78, 0.02, 0.25, kind);
+}
+
+/** Lift midtones / saturation so materials stay readable on the dark cinematic stage. */
+function boostColorForVisibility(color: THREE.Color): THREE.Color {
+  const hsl = { h: 0, s: 0, l: 0 };
+  color.getHSL(hsl);
+  const l = clamp01(0.22 + hsl.l * 0.78);
+  const s = clamp01(hsl.s * 1.12 + (hsl.s > 0.04 ? 0.04 : 0));
+  color.setHSL(hsl.h, s, l);
+  return color;
 }
 
 export function fallbackColorHexForType(ifcType: string): string {
@@ -308,7 +373,7 @@ export function resolveSpaceColor(
       transparent: true,
       depthWrite: false,
       renderTier: BimRenderTier.space,
-      pbr: { roughness: 0.55, metalness: 0.02, envMapIntensity: 0.9 },
+      pbr: pbr(0.55, 0.02, 0.75, "default"),
     };
   }
 
@@ -339,12 +404,10 @@ export function resolveSpaceColor(
   }
 
   let opacity = fallbackOpacity;
-  if (mode === "subtle") opacity = 0.12;
+  if (mode === "subtle") opacity = IX.nonSelectedOpacity;
   else if (mode === "vivid") opacity = 0.38;
-  else if (mode === "outline") opacity = 0.08;
+  else if (mode === "outline") opacity = IX.hiddenOpacity;
   else if (src && src.a < 255) opacity = clamp01(src.a / 255) * 0.85;
-
-  const pbr = { roughness: 0.55, metalness: 0.02, envMapIntensity: 0.9 };
 
   return {
     color: base,
@@ -352,7 +415,7 @@ export function resolveSpaceColor(
     transparent: opacity > 0,
     depthWrite: false,
     renderTier: BimRenderTier.space,
-    pbr,
+    pbr: pbr(0.6, 0.02, 0.7, "default"),
   };
 }
 
@@ -368,7 +431,7 @@ export function resolveElementColor(
   const pbr = derivePbrParams(type, alpha, doubleSided);
   const mode = options.colorMode ?? "ifc_priority";
 
-  const color = applyColorMode(new THREE.Color(), type, src, mode);
+  const color = boostColorForVisibility(applyColorMode(new THREE.Color(), type, src, mode));
 
   const opacity = clamp01(alpha / 255);
   const transparent = opacity < 0.995 || isGlassType(type);
@@ -379,12 +442,53 @@ export function resolveElementColor(
 
   return {
     color,
-    opacity: isGlassType(type) ? Math.min(opacity, 0.55) : opacity,
+    opacity: isGlassType(type) ? Math.min(opacity, M.glassOpacity) : opacity,
     transparent,
     depthWrite: !transparent || isStructureType(type),
     renderTier,
     pbr,
   };
+}
+
+/** Apply resolved color/PBR onto a Fragments-safe MeshStandardMaterial. */
+// fallow-ignore-next-line complexity
+function applyResolvedPbr(
+  mat: THREE.MeshStandardMaterial,
+  resolved: BimResolvedColor,
+  spaceDisplay?: BimSpaceDisplayMode,
+): void {
+  mat.color.copy(resolved.color);
+  mat.opacity = resolved.opacity;
+  mat.transparent = resolved.transparent;
+  mat.depthWrite = resolved.depthWrite;
+  mat.visible = resolved.opacity > 0;
+  mat.roughness = resolved.pbr.roughness;
+  mat.metalness = resolved.pbr.metalness;
+  mat.envMapIntensity = resolved.pbr.envMapIntensity;
+  mat.side = THREE.DoubleSide;
+  mat.fog = true;
+  mat.flatShading = false;
+  mat.userData.renderTier = resolved.renderTier;
+  mat.metalnessMap = null;
+  mat.map = null;
+  applyBimSurfaceMaps(mat, resolved.pbr.surfaceKind);
+
+  const isSpace = resolved.renderTier === BimRenderTier.space;
+  if (isSpace && spaceDisplay === "outline") {
+    mat.emissive.set(STATUS.primary);
+    mat.emissiveIntensity = 0.35;
+  } else if (isSpace) {
+    mat.emissive.set(STATUS.information);
+    mat.emissiveIntensity = 0.1;
+  } else if (resolved.renderTier === BimRenderTier.glass) {
+    mat.emissive.copy(resolved.color).multiplyScalar(0.04);
+    mat.emissiveIntensity = 1;
+  } else {
+    mat.emissive.copy(resolved.color).multiplyScalar(0.035);
+    mat.emissiveIntensity = 0.85;
+  }
+
+  mat.needsUpdate = true;
 }
 
 // fallow-ignore-next-line complexity
@@ -393,46 +497,18 @@ export function upgradeLambertToStandard(
   resolved: BimResolvedColor,
   spaceDisplay?: BimSpaceDisplayMode,
 ): THREE.MeshStandardMaterial {
-  const standard = new THREE.MeshStandardMaterial({
-    color: resolved.color,
-    opacity: resolved.opacity,
-    transparent: resolved.transparent,
-    depthWrite: resolved.depthWrite,
-    side: lambert.side,
-    roughness: resolved.pbr.roughness,
-    metalness: resolved.pbr.metalness,
-    envMapIntensity: resolved.pbr.envMapIntensity,
-    flatShading: false,
-    fog: true,
-    polygonOffset: lambert.polygonOffset,
-    polygonOffsetFactor: lambert.polygonOffsetFactor,
-    polygonOffsetUnits: lambert.polygonOffsetUnits,
-  });
+  const standard = new THREE.MeshStandardMaterial();
 
-  if (resolved.renderTier === BimRenderTier.space) {
-    if (resolved.opacity <= 0) {
-      standard.visible = false;
-    } else if (spaceDisplay === "outline") {
-      standard.emissive.set("#2563eb");
-      standard.emissiveIntensity = 0.35;
-    } else {
-      standard.emissive.set("#1a4a6e");
-      standard.emissiveIntensity = 0.1;
-    }
-  } else if (resolved.renderTier === BimRenderTier.glass) {
-    standard.emissive.copy(resolved.color).multiplyScalar(0.04);
-    standard.emissiveIntensity = 1;
-  } else {
-    standard.emissive.copy(resolved.color).multiplyScalar(0.04);
-    standard.emissiveIntensity = 1;
-  }
-
+  standard.side = lambert.side;
+  standard.polygonOffset = lambert.polygonOffset;
+  standard.polygonOffsetFactor = lambert.polygonOffsetFactor;
+  standard.polygonOffsetUnits = lambert.polygonOffsetUnits;
   standard.userData = {
     ...lambert.userData,
     renderTier: resolved.renderTier,
     upgradedFromLambert: true,
   };
-  standard.needsUpdate = true;
+  applyResolvedPbr(standard, resolved, spaceDisplay);
   return standard;
 }
 

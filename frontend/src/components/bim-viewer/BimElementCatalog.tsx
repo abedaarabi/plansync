@@ -186,7 +186,7 @@ function ElementRow(props: {
         {entry.name ?? entry.ifcType.replace(/^Ifc/i, "")}
       </span>
       {entry.lodFlags.color ? (
-        <span className="shrink-0 rounded-full bg-white/60 px-1.5 py-px text-[9px] font-semibold text-[var(--bim-text-muted)]">
+        <span className="shrink-0 rounded-full bg-[var(--bim-hover)] px-1.5 py-px text-[9px] font-semibold text-[var(--bim-text-muted)]">
           IFC
         </span>
       ) : null}

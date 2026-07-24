@@ -7,6 +7,7 @@ import {
   Eraser,
   Expand,
   Layers,
+  LayoutGrid,
   Map,
   Maximize2,
   MoreHorizontal,
@@ -50,6 +51,8 @@ export function BimBottomToolBar(props: {
   onPlacePoint: () => void;
   showPlanMinimap: boolean;
   onTogglePlanMinimap: () => void;
+  clusterByType: boolean;
+  onToggleClusterByType: () => void;
   onSelectElement: (guid: string) => void;
   onCloseSearch: () => void;
   markupShape: MarkupShape;
@@ -120,7 +123,7 @@ export function BimBottomToolBar(props: {
         <button
           type="button"
           aria-label="Select"
-          title="Select"
+          title="Select · Ctrl/Shift+click to multi-select"
           data-active={props.tool === "select"}
           onClick={() => props.onSelectTool("select")}
           className="bim-bottom-bar-btn mobile-touch-target"
@@ -166,7 +169,11 @@ export function BimBottomToolBar(props: {
         <button
           type="button"
           aria-label="Section"
-          title="Section"
+          title={
+            props.selectedGuids.size > 0
+              ? `Section box on ${props.selectedGuids.size} selected`
+              : "Section box (full model)"
+          }
           data-active={props.tool === "clip"}
           onClick={() => props.onSelectTool("clip")}
           className="bim-bottom-bar-btn mobile-touch-target"
@@ -190,6 +197,21 @@ export function BimBottomToolBar(props: {
         </div>
 
         <div className="bim-bottom-bar-divider" aria-hidden />
+
+        <button
+          type="button"
+          aria-label={props.clusterByType ? "Restore model layout" : "Cluster by type"}
+          title={
+            props.clusterByType
+              ? "Cluster by type · on — click to restore"
+              : "Cluster by type — group elements like Autodesk Viewer"
+          }
+          data-active={props.clusterByType}
+          onClick={props.onToggleClusterByType}
+          className="bim-bottom-bar-btn mobile-touch-target"
+        >
+          <LayoutGrid className="h-[18px] w-[18px]" aria-hidden />
+        </button>
 
         <button
           type="button"

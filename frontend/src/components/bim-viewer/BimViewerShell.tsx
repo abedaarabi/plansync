@@ -46,7 +46,6 @@ import { BimBreadcrumbChip } from "./BimBreadcrumbChip";
 import { BimIconRail } from "./BimIconRail";
 import { BimGlassDock } from "./BimGlassDock";
 import { BimBottomToolBar, type BimBottomFlyout } from "./BimBottomToolBar";
-import { BimSelectionTag } from "./BimSelectionTag";
 import { BimLeftDockContent, type BimLeftDockId } from "./BimLeftDockContent";
 import { BimInspectDockContent, type BimInspectTab } from "./BimInspectDockContent";
 import { BimTakeoffViewsDockContent } from "./BimTakeoffViewsDockContent";
@@ -103,8 +102,8 @@ type Phase =
   | { kind: "error"; message: string };
 
 const TOOL_HINTS: Record<BimTool, string | null> = {
-  select: null,
-  clip: "Drag green (top) or blue (side) arrow inward · Esc exits",
+  select: "Click to select · Ctrl/Shift+click to multi-select · Right-click → Section box",
+  clip: "Drag green (top) or blue (side) arrow inward · Fits selection when elements are selected · Esc exits",
   length: "Click two points to measure length · Esc cancels",
   area: "Click corners, double-click to finish · Esc cancels",
   angle: "Click three points for angle · Esc cancels",
@@ -173,6 +172,7 @@ export function BimViewerShell(props: {
   } | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [showPlanMinimap, setShowPlanMinimap] = useState(true);
+  const [clusterByType, setClusterByType] = useState(false);
   const [planMinimapStorey, setPlanMinimapStorey] = useState<string | null>(null);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [compareDeltas, setCompareDeltas] = useState<{
@@ -244,6 +244,12 @@ export function BimViewerShell(props: {
         if (cancelled) return;
         setSelectedGuids(new Set(guids));
       },
+      onToolChange: (next) => {
+        if (cancelled) return;
+        setTool(next);
+        if (next === "markup") setActiveFlyout("markup");
+        else setActiveFlyout(null);
+      },
     });
     engineRef.current = engine;
     setActiveEngine(engine);
@@ -305,6 +311,7 @@ export function BimViewerShell(props: {
       cancelled = true;
       engineRef.current = null;
       setActiveEngine(null);
+      setClusterByType(false);
       engine.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one engine per primary model session
@@ -596,6 +603,36 @@ export function BimViewerShell(props: {
     setFilterState(EMPTY_BIM_FILTER_STATE);
     void engineRef.current?.showAllElements();
   }, []);
+
+  const onToggleClusterByType = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    setActiveFlyout(null);
+    const next = !engine.isClusterByTypeActive();
+    const toastId = toast.loading(next ? "Clustering by type…" : "Restoring layout…");
+    void engine
+      .setClusterByType(next)
+      .then(() => {
+        setClusterByType(engine.isClusterByTypeActive());
+        toast.success(
+          engine.isClusterByTypeActive()
+            ? "Clustered by type — click again to restore."
+            : "Model layout restored.",
+          { id: toastId, duration: 2500 },
+        );
+      })
+      .catch((err: unknown) => {
+        setClusterByType(engine.isClusterByTypeActive());
+        toast.error(err instanceof Error ? err.message : "Could not cluster by type.", {
+          id: toastId,
+        });
+      });
+  }, []);
+
+  // Keep toolbar state in sync if the engine clears clustering (e.g. model add/remove).
+  useEffect(() => {
+    setClusterByType(engineRef.current?.isClusterByTypeActive() ?? false);
+  }, [loadedModels]);
 
   /** Esc resets active filter / colorize (same as Filters → Reset). */
   useEffect(() => {
@@ -1470,6 +1507,7 @@ export function BimViewerShell(props: {
             open
             title={dockMeta.properties.title}
             subtitle={dockMeta.properties.subtitle}
+            closeOnOutsideClick={false}
             onClose={() => setActiveDock(null)}
           >
             <BimInspectDockContent
@@ -1577,15 +1615,6 @@ export function BimViewerShell(props: {
           </div>
         ) : null}
 
-        {phase.kind === "ready" && selection ? (
-          <BimSelectionTag
-            engine={activeEngine}
-            selection={selection}
-            onShowProperties={() => openPropertiesDock("properties")}
-            onDismiss={clearSelection}
-          />
-        ) : null}
-
         {phase.kind === "ready" && contextMenu ? (
           <BimContextMenu
             x={contextMenu.x}
@@ -1641,6 +1670,8 @@ export function BimViewerShell(props: {
             onPlacePoint={() => engineRef.current?.measureConfirmPoint()}
             showPlanMinimap={showPlanMinimap}
             onTogglePlanMinimap={() => setShowPlanMinimap((v) => !v)}
+            clusterByType={clusterByType}
+            onToggleClusterByType={onToggleClusterByType}
             onSelectElement={onSelectElementFromSearch}
             onCloseSearch={closeElementSearch}
             markupShape={markupShape}

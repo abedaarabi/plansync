@@ -45,7 +45,7 @@ export function BimInspectDockContent(props: {
       <div className="flex flex-col items-center justify-center gap-1.5 px-5 py-10 text-center">
         <p className="text-[12px] font-medium text-[var(--bim-text)]">Nothing selected</p>
         <p className="max-w-[14rem] text-[10px] leading-relaxed text-[var(--bim-text-muted)]">
-          Select an element, then choose Show properties.
+          Select an element in the model to inspect it.
         </p>
       </div>
     );

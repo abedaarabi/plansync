@@ -6,15 +6,7 @@ import type { Env } from "../env.js";
 
 export { processBimConversion, storeFragmentsBuffer } from "./runBimConversion.js";
 
-/** Runs IFC index build in a worker thread so web-ifc does not block the API event loop. */
-function startBimConversionWorker(fileVersionId: string, jobRunId: string): void {
-  const jsEntry = new URL("./bimConversionWorker.js", import.meta.url);
-  const entry = existsSync(fileURLToPath(jsEntry))
-    ? jsEntry
-    : new URL("./bimConversionWorker.ts", import.meta.url);
-  const worker = new Worker(entry, {
-    workerData: { fileVersionId, jobRunId },
-  });
+function attachWorkerHandlers(worker: Worker, fileVersionId: string): void {
   worker.on("message", (msg: { ok: boolean; error?: string }) => {
     if (!msg.ok) {
       console.error("[bim.convert] failed", fileVersionId, msg.error ?? "unknown error");
@@ -23,6 +15,49 @@ function startBimConversionWorker(fileVersionId: string, jobRunId: string): void
   worker.on("error", (err) => {
     console.error("[bim.convert] worker error", fileVersionId, err);
   });
+}
+
+/**
+ * Runs IFC index build off the API event loop when a compiled worker exists.
+ * In tsx/dev, Node's type-stripping can load `.ts` but not resolve `.js` → `.ts`,
+ * so we either run via `tsx/cli` or fall back in-process.
+ */
+function startBimConversionWorker(fileVersionId: string, jobRunId: string): void {
+  const workerData = { fileVersionId, jobRunId };
+  const jsEntry = new URL("./bimConversionWorker.js", import.meta.url);
+  if (existsSync(fileURLToPath(jsEntry))) {
+    attachWorkerHandlers(new Worker(jsEntry, { workerData }), fileVersionId);
+    return;
+  }
+
+  const tsPath = fileURLToPath(new URL("./bimConversionWorker.ts", import.meta.url));
+  try {
+    const tsxCli = new URL(import.meta.resolve("tsx/cli"));
+    attachWorkerHandlers(
+      new Worker(tsxCli, {
+        argv: [tsPath],
+        workerData,
+      }),
+      fileVersionId,
+    );
+    return;
+  } catch {
+    /* fall through — in-process */
+  }
+
+  void (async () => {
+    try {
+      const { loadEnv } = await import("../env.js");
+      const { processBimConversion } = await import("./runBimConversion.js");
+      await processBimConversion(loadEnv(), fileVersionId, jobRunId);
+    } catch (err) {
+      console.error(
+        "[bim.convert] failed",
+        fileVersionId,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  })();
 }
 
 /** Enqueue conversion as async in-process job (returns JobRun id). */

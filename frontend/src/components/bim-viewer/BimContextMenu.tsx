@@ -30,7 +30,7 @@ export function BimContextMenu(props: {
         { id: "zoom", label: "Zoom to selection" },
         { id: "isolate", label: "Isolate" },
         { id: "xray", label: "Isolate in X-Ray" },
-        { id: "section", label: "Section box" },
+        { id: "section", label: "Section box on selection" },
         { id: "hide", label: "Hide" },
         { id: "properties", label: "Properties" },
         { id: "createIssue", label: "Create issue" },

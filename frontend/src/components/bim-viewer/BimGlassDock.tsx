@@ -9,9 +9,15 @@ export function BimGlassDock(props: {
   title: string;
   subtitle?: string;
   onClose: () => void;
+  /**
+   * When false, outside clicks reach the 3D viewer and do not close the dock
+   * (e.g. properties stays open while selecting another element). Default true.
+   */
+  closeOnOutsideClick?: boolean;
   children: ReactNode;
 }) {
   const panelRef = useRef<HTMLElement | null>(null);
+  const closeOnOutsideClick = props.closeOnOutsideClick !== false;
 
   useEffect(() => {
     if (!props.open) return;
@@ -34,16 +40,18 @@ export function BimGlassDock(props: {
 
   return (
     <>
-      <button
-        type="button"
-        className="bim-glass-dock-backdrop"
-        aria-label="Close panel"
-        onClick={props.onClose}
-      />
+      {closeOnOutsideClick ? (
+        <button
+          type="button"
+          className="bim-glass-dock-backdrop"
+          aria-label="Close panel"
+          onClick={props.onClose}
+        />
+      ) : null}
       <aside
         ref={panelRef}
         role="dialog"
-        aria-modal="true"
+        aria-modal={closeOnOutsideClick}
         aria-label={props.title}
         className="bim-glass-dock bim-glass-surface bim-glass-dock-enter"
         data-side={props.side}

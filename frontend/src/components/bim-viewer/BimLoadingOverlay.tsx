@@ -79,7 +79,7 @@ export function BimLoadingOverlay({ phase }: { phase: Phase }) {
               style={{ width: `${progress}%` }}
             />
           ) : (
-            <div className="bim-loading-bar h-full w-[42%] rounded-full bg-gradient-to-r from-[var(--bim-accent)] to-[#60a5fa]" />
+            <div className="bim-loading-bar h-full w-[42%] rounded-full bg-gradient-to-r from-[var(--bim-accent)] to-[var(--bim-accent-hover)]" />
           )}
         </div>
 
