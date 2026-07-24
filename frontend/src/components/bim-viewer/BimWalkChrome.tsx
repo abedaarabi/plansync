@@ -1,14 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { BimEngine } from "./bimEngine";
 import { isCoarsePointer } from "@/lib/bim/viewportPixelRatio";
 import { BimWalkJoystick } from "./BimWalkJoystick";
-import { BimWalkPlanMap } from "./BimWalkPlanMap";
 
-/** Walk-mode HUD: hint, plan map, and joystick — fixed above viewer chrome. */
+/** Walk-mode HUD: hint and joystick — fixed above viewer chrome. */
 export function BimWalkChrome(props: {
-  engine: BimEngine | null;
   onJoystickChange: (forward: number, strafe: number) => void;
 }) {
   const [touchDevice, setTouchDevice] = useState(false);
@@ -28,7 +25,6 @@ export function BimWalkChrome(props: {
           ? "Drag to look · joystick to move · pinch to zoom"
           : "Walk mode — drag to look, WASD or joystick to move"}
       </p>
-      <BimWalkPlanMap engine={props.engine} />
       <BimWalkJoystick onChange={props.onJoystickChange} />
     </div>
   );

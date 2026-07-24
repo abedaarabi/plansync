@@ -39,6 +39,7 @@ import {
 } from "./bimEngine";
 
 import { BimWalkChrome } from "./BimWalkChrome";
+import { BimPlanMinimap } from "./BimPlanMinimap";
 import { BimContextMenu } from "./BimContextMenu";
 import { BimIssueMarkersOverlay } from "./BimIssueMarkersOverlay";
 import { BimBreadcrumbChip } from "./BimBreadcrumbChip";
@@ -171,6 +172,8 @@ export function BimViewerShell(props: {
     hasSelection: boolean;
   } | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [showPlanMinimap, setShowPlanMinimap] = useState(true);
+  const [planMinimapStorey, setPlanMinimapStorey] = useState<string | null>(null);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [compareDeltas, setCompareDeltas] = useState<{
     baseVersion: number;
@@ -185,6 +188,7 @@ export function BimViewerShell(props: {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const issueFocusConsumedRef = useRef<string | null>(null);
   const filterZoomTimerRef = useRef<number | null>(null);
+  const filterApplyGenRef = useRef(0);
 
   const markupAnnotations = useBimMarkupStore((s) => s.annotations);
   const markupSelectedIds = useBimMarkupStore((s) => s.selectedIds);
@@ -593,6 +597,25 @@ export function BimViewerShell(props: {
     void engineRef.current?.showAllElements();
   }, []);
 
+  /** Esc resets active filter / colorize (same as Filters → Reset). */
+  useEffect(() => {
+    if (phase.kind !== "ready") return;
+
+    // fallow-ignore-next-line complexity
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || issuePlacementActive) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((e.target as HTMLElement | null)?.isContentEditable) return;
+      if (!hasActiveFilter(filterState) && !filterState.colorize?.enabled) return;
+      e.preventDefault();
+      onShowAll();
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [filterState, phase.kind, onShowAll, issuePlacementActive]);
+
   // fallow-ignore-next-line complexity
   useEffect(() => {
     const engine = engineRef.current;
@@ -600,10 +623,14 @@ export function BimViewerShell(props: {
 
     const filterActive = hasActiveFilter(filterState);
     const colorizeActive = Boolean(filterState.colorize?.enabled);
+    const applyGen = ++filterApplyGenRef.current;
 
     if (!filterActive && !colorizeActive) {
-      void engine.clearColorize();
-      void engine.resetFilterVisibility();
+      void (async () => {
+        await engine.clearColorize();
+        await engine.clearFilterGhost();
+        await engine.resetFilterVisibility();
+      })();
       return;
     }
 
@@ -614,20 +641,26 @@ export function BimViewerShell(props: {
       window.clearTimeout(filterZoomTimerRef.current);
     }
 
+    const guids = filterMatches.map((m) => m.guid);
+    const legend = filterLegend;
+    const visualize = filterState.visualize;
+
     filterZoomTimerRef.current = window.setTimeout(() => {
       // fallow-ignore-next-line complexity
       void (async () => {
-        const guids = filterMatches.map((m) => m.guid);
+        if (applyGen !== filterApplyGenRef.current) return;
 
         if (filterActive) {
-          await engine.applyFilterVisualize(guids, filterState.visualize);
+          await engine.applyFilterVisualize(guids, visualize);
         } else {
+          await engine.clearFilterGhost();
           await engine.resetFilterVisibility();
         }
+        if (applyGen !== filterApplyGenRef.current) return;
 
-        if (colorizeActive && filterLegend.length > 0) {
+        if (colorizeActive && legend.length > 0) {
           await engine.applyColorize(
-            filterLegend.map((entry, i) => ({
+            legend.map((entry, i) => ({
               styleId: `colorize:${i}`,
               color: entry.color,
               guids: entry.guids,
@@ -636,6 +669,7 @@ export function BimViewerShell(props: {
         } else {
           await engine.clearColorize();
         }
+        if (applyGen !== filterApplyGenRef.current) return;
 
         if (filterActive && guids.length > 0) {
           await engine.zoomToGuids(guids);
@@ -647,6 +681,7 @@ export function BimViewerShell(props: {
       if (filterZoomTimerRef.current != null) {
         window.clearTimeout(filterZoomTimerRef.current);
       }
+      filterApplyGenRef.current += 1;
     };
   }, [filterState, filterMatches, filterLegend, phase.kind]);
 
@@ -1604,6 +1639,8 @@ export function BimViewerShell(props: {
             onSnapshot={captureSnapshot}
             onToggleFullscreen={toggleFullscreen}
             onPlacePoint={() => engineRef.current?.measureConfirmPoint()}
+            showPlanMinimap={showPlanMinimap}
+            onTogglePlanMinimap={() => setShowPlanMinimap((v) => !v)}
             onSelectElement={onSelectElementFromSearch}
             onCloseSearch={closeElementSearch}
             markupShape={markupShape}
@@ -1670,8 +1707,18 @@ export function BimViewerShell(props: {
 
         {cameraMode === "walk" && phase.kind === "ready" ? (
           <BimWalkChrome
-            engine={activeEngine}
             onJoystickChange={(forward, strafe) => engineRef.current?.setWalkInput(forward, strafe)}
+          />
+        ) : null}
+
+        {cameraMode === "walk" && showPlanMinimap && phase.kind === "ready" ? (
+          <BimPlanMinimap
+            engine={activeEngine}
+            storeys={storeys.map((s) => s.name)}
+            selectedStorey={planMinimapStorey}
+            onSelectStorey={(name) => {
+              setPlanMinimapStorey(name);
+            }}
           />
         ) : null}
       </div>

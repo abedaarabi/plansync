@@ -7,6 +7,7 @@ import {
   Eraser,
   Expand,
   Layers,
+  Map,
   Maximize2,
   MoreHorizontal,
   MousePointer2,
@@ -47,6 +48,8 @@ export function BimBottomToolBar(props: {
   onSnapshot: () => void;
   onToggleFullscreen: () => void;
   onPlacePoint: () => void;
+  showPlanMinimap: boolean;
+  onTogglePlanMinimap: () => void;
   onSelectElement: (guid: string) => void;
   onCloseSearch: () => void;
   markupShape: MarkupShape;
@@ -227,6 +230,14 @@ export function BimBottomToolBar(props: {
             />
             <FlyoutBtn label="Fit" active={false} onClick={props.onFitToView} icon={Maximize2} />
             <FlyoutBtn label="Show all" active={false} onClick={props.onShowAll} icon={Layers} />
+            {props.cameraMode === "walk" ? (
+              <FlyoutBtn
+                label="Plan"
+                active={props.showPlanMinimap}
+                onClick={props.onTogglePlanMinimap}
+                icon={Map}
+              />
+            ) : null}
           </div>
         </div>
 

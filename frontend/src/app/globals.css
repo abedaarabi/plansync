@@ -357,6 +357,7 @@ button:active:not(:disabled),
     );
     --bim-joystick-pad: 112px;
     --bim-joystick-knob: 48px;
+    --bim-plan-minimap-size: 18rem;
     overscroll-behavior: none;
     touch-action: manipulation;
     font-family: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
@@ -371,6 +372,7 @@ button:active:not(:disabled),
       --bim-bottom-bar-h: 3.5rem;
       --bim-joystick-pad: 132px;
       --bim-joystick-knob: 56px;
+      --bim-plan-minimap-size: 15rem;
     }
   }
 
@@ -380,6 +382,7 @@ button:active:not(:disabled),
       --bim-bottom-bar-h: 3.375rem;
       --bim-joystick-pad: 120px;
       --bim-joystick-knob: 52px;
+      --bim-plan-minimap-size: 16.5rem;
     }
   }
 
@@ -816,43 +819,118 @@ button:active:not(:disabled),
     transition: transform 100ms ease;
   }
 
-  .bim-walk-chrome .bim-walk-minimap {
+  .bim-plan-minimap {
     position: absolute;
-    right: calc(env(safe-area-inset-right, 0px) + var(--bim-rail-w) + 12px);
-    bottom: var(--bim-bottom-bar-offset);
-    z-index: 1;
-  }
-
-  .bim-walk-minimap {
-    position: absolute;
-    right: calc(env(safe-area-inset-right, 0px) + var(--bim-rail-w) + 12px);
+    left: calc(env(safe-area-inset-left, 0px) + 12px);
     bottom: var(--bim-bottom-bar-offset);
     z-index: 25;
-    width: 132px;
-    border-radius: 10px;
+    width: var(--bim-plan-minimap-size);
+    border-radius: 1rem;
     border: 1px solid var(--bim-border);
     background: var(--bim-panel);
-    box-shadow:
-      0 1px 2px rgba(15, 23, 42, 0.06),
-      0 6px 16px rgba(15, 23, 42, 0.08);
-    pointer-events: none;
+    box-shadow: var(--bim-panel-shadow);
+    pointer-events: auto;
+    touch-action: none;
     overflow: hidden;
   }
 
-  .bim-walk-minimap__label {
-    display: block;
-    padding: 4px 8px 0;
-    font-size: 10px;
+  .bim-walk-chrome ~ .bim-plan-minimap {
+    bottom: calc(var(--bim-bottom-bar-offset) + var(--bim-joystick-pad) + 16px);
+  }
+
+  .bim-plan-minimap__header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.625rem 0.75rem 0.5rem;
+    border-bottom: 1px solid var(--bim-border);
+    background: linear-gradient(180deg, var(--bim-panel) 0%, var(--bim-hover) 100%);
+  }
+
+  .bim-plan-minimap__title {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .bim-plan-minimap__icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    color: var(--bim-accent);
+    flex-shrink: 0;
+  }
+
+  .bim-plan-minimap__label {
+    font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
+    color: var(--bim-text);
+    flex-shrink: 0;
+  }
+
+  .bim-plan-minimap__floor-wrap {
+    position: relative;
+    width: 100%;
+  }
+
+  .bim-plan-minimap__floor {
+    width: 100%;
+    min-height: 2rem;
+    appearance: none;
+    border: 1px solid var(--bim-border-strong);
+    border-radius: 0.5rem;
+    background: var(--bim-panel);
+    padding: 0.375rem 1.75rem 0.375rem 0.625rem;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--bim-text);
+    cursor: pointer;
+    transition:
+      border-color var(--bim-transition),
+      box-shadow var(--bim-transition);
+  }
+
+  .bim-plan-minimap__floor:hover {
+    border-color: color-mix(in srgb, var(--bim-accent) 35%, var(--bim-border-strong));
+  }
+
+  .bim-plan-minimap__floor:focus-visible {
+    outline: none;
+    border-color: var(--bim-accent);
+    box-shadow: 0 0 0 3px var(--bim-accent-muted);
+  }
+
+  .bim-plan-minimap__floor-icon {
+    pointer-events: none;
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    width: 0.875rem;
+    height: 0.875rem;
+    transform: translateY(-50%);
     color: var(--bim-text-muted);
   }
 
-  .bim-walk-minimap__canvas {
+  .bim-plan-minimap__map {
+    padding: 0.625rem 0.75rem 0.75rem;
+    background: var(--bim-hover);
+  }
+
+  .bim-plan-minimap__canvas {
     display: block;
-    width: 132px;
-    height: 132px;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    border-radius: 0.625rem;
+    border: 1px solid var(--bim-border);
+    background: var(--bim-canvas);
+    cursor: grab;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+  }
+
+  .bim-plan-minimap__canvas:active {
+    cursor: grabbing;
   }
 
   .bim-tool-btn {
@@ -1192,10 +1270,6 @@ button:active:not(:disabled),
       padding: 0.25rem;
     }
 
-    .bim-walk-minimap {
-      width: 112px;
-    }
-
     .bim-selection-tag {
       max-width: min(16rem, 86vw);
     }
@@ -1209,10 +1283,6 @@ button:active:not(:disabled),
   @media (min-width: 640px) and (max-width: 1023px) {
     .bim-glass-dock[data-side="right"] {
       right: calc(env(safe-area-inset-right, 0px) + var(--bim-rail-w) + 10px);
-    }
-
-    .bim-walk-minimap {
-      width: 120px;
     }
   }
 

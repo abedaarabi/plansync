@@ -38,7 +38,13 @@ import {
 import { buildModelId, type BimFederationMember } from "@/lib/bim/federation";
 import { bimViewportPixelRatio } from "@/lib/bim/viewportPixelRatio";
 import { ROTATE_SENSITIVITY, ViewCubeOverlay } from "@/lib/bim/viewCube";
-import type { WalkPlanBounds, WalkPlanMapState } from "@/lib/bim/walkMinimap";
+import type { PlanMinimapBounds, PlanMinimapPose, PlanMinimapState } from "@/lib/bim/planMinimap";
+import {
+  bakePlanFromSlice,
+  boundsFromBox3,
+  filterPlanCategories,
+  PLAN_GEOMETRY_ITEM_CAP,
+} from "@/lib/bim/planMinimapSlice";
 import {
   hideClipPlaneFace,
   SectionBoxController,
@@ -290,6 +296,19 @@ export class BimEngine {
   /** Active colorize highlighter style ids (filter visualization). */
   private colorizeStyleIds: string[] = [];
   private static readonly FILTER_GHOST_STYLE = "filter:ghost";
+  /** Persisted filter highlight state so material sync / plan bake can restore tints. */
+  private activeFilterGhostMap: OBC.ModelIdMap | null = null;
+  private activeFilterGhostOpacity = 0.18;
+  private activeColorizeGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
+  private materialSyncInProgress = false;
+  private planSilhouette: ImageBitmap | null = null;
+  private planSilhouetteDirty = true;
+  private planSilhouetteBaking = false;
+  private planSilhouetteBakeTimer: number | null = null;
+  /** When set, the minimap silhouette bakes only this IFC storey. */
+  private planMinimapStorey: string | null = null;
+  private planMinimapBoundsCache: PlanMinimapBounds | null = null;
+  private planMinimapStoreyFloorY: number | null = null;
 
   constructor(events: BimEngineEvents) {
     this.events = events;
@@ -313,6 +332,7 @@ export class BimEngine {
     entry.visible = visible;
     entry.model.object.visible = visible;
     await this.mustComponents().get(OBC.FragmentsManager).core.update(true);
+    this.invalidatePlanSilhouette();
     this.bumpRender();
   }
 
@@ -344,6 +364,7 @@ export class BimEngine {
     await this.buildClassifications();
     await fragments.core.update(true);
     this.applyViewportAtmosphere(this.getModelBoundingSphere());
+    this.invalidatePlanSilhouette();
     this.bumpRender();
   }
 
@@ -441,6 +462,7 @@ export class BimEngine {
 
     // fallow-ignore-next-line complexity
     fragments.core.models.materials.list.onItemSet.add(({ value: material }) => {
+      if (this.materialSyncInProgress) return;
       if (!("isLodMaterial" in material && material.isLodMaterial)) {
         material.polygonOffset = true;
         material.polygonOffsetUnits = 1;
@@ -483,6 +505,7 @@ export class BimEngine {
     highlighter.events.select.onClear.add(() => {
       this.events.onSelection(null);
     });
+    this.installFilterHighlightGuard(highlighter);
 
     const hoverer = components.get(OBF.Hoverer);
     hoverer.world = world;
@@ -626,6 +649,7 @@ export class BimEngine {
     } else {
       this.setupMarkupTools(world);
     }
+    this.invalidatePlanSilhouette();
   }
 
   /** Ensures the model is parented to the scene and wired to the active camera. */
@@ -683,8 +707,9 @@ export class BimEngine {
   // fallow-ignore-next-line complexity
   private async syncViewportMaterials(): Promise<void> {
     const fragments = this.components?.get(OBC.FragmentsManager);
-    if (!fragments?.initialized) return;
+    if (!fragments?.initialized || this.materialSyncInProgress) return;
 
+    this.materialSyncInProgress = true;
     try {
       const colorOpts = {
         colorMode: this.appearance.colorMode,
@@ -802,9 +827,147 @@ export class BimEngine {
         applyRenderOrderToModel(model);
       }
       await fragments.core.update(true);
+      await this.refreshHighlightStyles();
     } catch {
       /* Material sync is best-effort — never block tools or model load. */
+    } finally {
+      this.materialSyncInProgress = false;
     }
+  }
+
+  /**
+   * Highlighter.updateColors() races resetHighlight || highlight via Promise.allSettled.
+   * After that finishes, re-paint ghost/colorize so they are not left wiped.
+   */
+  private installFilterHighlightGuard(highlighter: OBF.Highlighter): void {
+    const guarded = highlighter as OBF.Highlighter & {
+      __planSyncFilterGuard?: boolean;
+      updateColors: () => Promise<void>;
+    };
+    if (guarded.__planSyncFilterGuard) return;
+    const original = guarded.updateColors.bind(highlighter);
+    guarded.updateColors = async () => {
+      await original();
+      if (this.hasActiveFilterHighlights()) {
+        await this.paintFilterHighlights();
+      }
+    };
+    guarded.__planSyncFilterGuard = true;
+  }
+
+  /** Re-apply ghost / colorize tints after fragment material or tile updates. */
+  private hasActiveFilterHighlights(): boolean {
+    return this.activeFilterGhostMap != null || this.activeColorizeGroups.length > 0;
+  }
+
+  /**
+   * Paint filter tints via FragmentsManager sequentially.
+   * Do NOT use Highlighter.updateColors() — it Promise.allSettles reset+highlight
+   * in parallel, so reset often wins and ghost/colorize vanish immediately.
+   *
+   * Never set preserveOriginalMaterial without _explicitProps — That Open then
+   * applies zero property overrides and ghost/colorize become invisible.
+   */
+  // fallow-ignore-next-line complexity
+  private async paintFilterHighlights(): Promise<void> {
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    const highlighter = this.components?.get(OBF.Highlighter);
+    if (!fragments?.initialized) return;
+
+    await fragments.resetHighlight();
+
+    // fallow-ignore-next-line complexity
+    const paint = async (
+      customId: string,
+      def: {
+        color: THREE.Color;
+        opacity: number;
+        transparent: boolean;
+        renderedFaces?: number;
+        depthTest?: boolean;
+        depthWrite?: boolean;
+      },
+      map: OBC.ModelIdMap | null | undefined,
+    ) => {
+      if (!map) return;
+      let empty = true;
+      for (const ids of Object.values(map)) {
+        if (ids instanceof Set && ids.size > 0) {
+          empty = false;
+          break;
+        }
+      }
+      if (empty) return;
+      await fragments.highlight(
+        {
+          color: def.color,
+          opacity: def.opacity,
+          transparent: def.transparent,
+          renderedFaces: def.renderedFaces ?? 0,
+          depthTest: def.depthTest ?? true,
+          depthWrite: def.depthWrite ?? true,
+          customId,
+        },
+        map,
+      );
+    };
+
+    if (this.activeFilterGhostMap) {
+      await paint(
+        BimEngine.FILTER_GHOST_STYLE,
+        {
+          color: new THREE.Color("#64748b"),
+          opacity: this.activeFilterGhostOpacity,
+          transparent: true,
+          renderedFaces: 0,
+          depthTest: true,
+          depthWrite: false,
+        },
+        this.activeFilterGhostMap,
+      );
+    }
+
+    for (const group of this.activeColorizeGroups) {
+      await paint(
+        group.styleId,
+        {
+          color: new THREE.Color(group.color),
+          opacity: COLORIZE_HIGHLIGHT_OPACITY,
+          transparent: true,
+          renderedFaces: 0,
+        },
+        group.map,
+      );
+    }
+
+    // Keep selection tint on top when present.
+    if (highlighter) {
+      const selectName = highlighter.config.selectName;
+      const selectDef = highlighter.styles.get(selectName);
+      const selectMap = highlighter.selection[selectName];
+      if (selectDef?.color && selectMap) {
+        await paint(
+          selectName,
+          {
+            color: selectDef.color,
+            opacity: selectDef.opacity ?? 1,
+            transparent: selectDef.transparent ?? true,
+            renderedFaces: selectDef.renderedFaces ?? 0,
+            depthTest: selectDef.depthTest ?? true,
+            depthWrite: selectDef.depthWrite ?? false,
+          },
+          selectMap,
+        );
+      }
+    }
+
+    await fragments.core.update(true);
+    this.bumpRender();
+  }
+
+  private async refreshHighlightStyles(): Promise<void> {
+    if (!this.hasActiveFilterHighlights()) return;
+    await this.paintFilterHighlights();
   }
 
   // fallow-ignore-next-line complexity
@@ -936,11 +1099,10 @@ export class BimEngine {
         await fragments.core.update(true);
       }
       const box = this.getModelBoundingBox();
-      if (!box) return;
+      if (!this.isValidBox3(box)) return;
 
       const controls = world.camera.controls;
-      const size = box.getSize(new THREE.Vector3());
-      const eyeHeight = Math.min(Math.max(size.y * 0.05, 1.6), 2.1);
+      const eyeHeight = this.walkEyeHeight(box);
       const pivot = walkPivot ?? controls.getTarget(new THREE.Vector3());
       const eye = this.clampWalkEyePosition(pivot, box, eyeHeight);
 
@@ -972,22 +1134,93 @@ export class BimEngine {
     }
   }
 
+  /** Standing eye height in model units (metres or millimetres). */
+  private walkEyeHeight(box: THREE.Box3): number {
+    const units = this.detectModelUnits();
+    if (!this.isValidBox3(box)) {
+      return units === "mm" ? 1700 : 1.7;
+    }
+    const size = box.getSize(new THREE.Vector3());
+    if (units === "mm") {
+      return THREE.MathUtils.clamp(size.y * 0.05, 1400, 2100);
+    }
+    return THREE.MathUtils.clamp(size.y * 0.05, 1.4, 2.1);
+  }
+
+  // fallow-ignore-next-line complexity
+  private isValidBox3(box: THREE.Box3 | null | undefined): box is THREE.Box3 {
+    if (!box || box.isEmpty()) return false;
+    const { min, max } = box;
+    return (
+      Number.isFinite(min.x) &&
+      Number.isFinite(min.y) &&
+      Number.isFinite(min.z) &&
+      Number.isFinite(max.x) &&
+      Number.isFinite(max.y) &&
+      Number.isFinite(max.z) &&
+      min.x <= max.x &&
+      min.y <= max.y &&
+      min.z <= max.z
+    );
+  }
+
+  // fallow-ignore-next-line complexity
+  private walkFeetInset(clampBox: THREE.Box3): number {
+    const units = this.detectModelUnits();
+    const minInset = units === "mm" ? 250 : 0.25;
+    if (!this.isValidBox3(clampBox)) return minInset;
+    const size = clampBox.getSize(new THREE.Vector3());
+    const span = Math.min(Math.abs(size.x), Math.abs(size.z));
+    if (!Number.isFinite(span) || span <= 0) return minInset;
+    return Math.max(span * 0.02, minInset);
+  }
+
+  /** Resolve walkable floor elevation (fragments are not THREE.Raycaster-safe). */
+  // fallow-ignore-next-line complexity
+  private findWalkFloorY(hintY: number, modelBox: THREE.Box3 | null): number {
+    if (this.planMinimapStoreyFloorY != null && Number.isFinite(this.planMinimapStoreyFloorY)) {
+      return this.planMinimapStoreyFloorY;
+    }
+    if (Number.isFinite(hintY)) return hintY;
+    if (this.isValidBox3(modelBox)) return modelBox.min.y;
+    return 0;
+  }
+
   /** Place walk camera on the model floor near the orbit pivot (or bbox center). */
+  // fallow-ignore-next-line complexity
   private clampWalkEyePosition(
     pivot: THREE.Vector3,
-    box: THREE.Box3,
+    modelBox: THREE.Box3,
     eyeHeight: number,
+    footprintBox: THREE.Box3 = modelBox,
   ): THREE.Vector3 {
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const inset = Math.max(Math.min(size.x, size.z) * 0.02, 0.25);
-    const x = Number.isFinite(pivot.x)
-      ? THREE.MathUtils.clamp(pivot.x, box.min.x + inset, box.max.x - inset)
-      : center.x;
-    const z = Number.isFinite(pivot.z)
-      ? THREE.MathUtils.clamp(pivot.z, box.min.z + inset, box.max.z - inset)
-      : center.z;
-    return new THREE.Vector3(x, box.min.y + eyeHeight, z);
+    const clampBox = this.isValidBox3(footprintBox)
+      ? footprintBox
+      : this.isValidBox3(modelBox)
+        ? modelBox
+        : null;
+
+    let x = pivot.x;
+    let z = pivot.z;
+    if (clampBox) {
+      const inset = this.walkFeetInset(clampBox);
+      const center = clampBox.getCenter(new THREE.Vector3());
+      const loX = Math.min(clampBox.min.x + inset, clampBox.max.x - inset);
+      const hiX = Math.max(clampBox.min.x + inset, clampBox.max.x - inset);
+      const loZ = Math.min(clampBox.min.z + inset, clampBox.max.z - inset);
+      const hiZ = Math.max(clampBox.min.z + inset, clampBox.max.z - inset);
+      x = Number.isFinite(pivot.x) ? THREE.MathUtils.clamp(pivot.x, loX, hiX) : center.x;
+      z = Number.isFinite(pivot.z) ? THREE.MathUtils.clamp(pivot.z, loZ, hiZ) : center.z;
+    }
+
+    const hintY = Number.isFinite(pivot.y)
+      ? pivot.y
+      : this.isValidBox3(modelBox)
+        ? modelBox.min.y
+        : 0;
+    const floorY = this.findWalkFloorY(hintY, modelBox);
+    const safeEyeHeight = Number.isFinite(eyeHeight) ? eyeHeight : this.walkEyeHeight(modelBox);
+    return new THREE.Vector3(x, floorY + safeEyeHeight, z);
   }
 
   /** Section planes + measure tools — colors, units, snapping (BIM 360 style). */
@@ -1109,28 +1342,429 @@ export class BimEngine {
     return this.cameraMode;
   }
 
-  // fallow-ignore-next-line complexity
-  getWalkPlanState(): WalkPlanMapState | null {
-    const world = this.world;
-    if (!world || this.cameraMode !== "walk") return null;
-    const dir = new THREE.Vector3();
-    world.camera.three.getWorldDirection(dir);
-    const box = this.getModelBoundingBox();
-    let bounds: WalkPlanBounds | null = null;
-    if (box && !box.isEmpty()) {
-      bounds = {
-        minX: box.min.x,
-        maxX: box.max.x,
-        minZ: box.min.z,
-        maxZ: box.max.z,
-      };
+  invalidatePlanSilhouette(): void {
+    this.planSilhouetteDirty = true;
+    this.schedulePlanSilhouetteBake();
+  }
+
+  private cancelPlanSilhouetteBakeTimer(): void {
+    if (this.planSilhouetteBakeTimer != null) {
+      window.clearTimeout(this.planSilhouetteBakeTimer);
+      this.planSilhouetteBakeTimer = null;
     }
-    return {
-      playerX: world.camera.three.position.x,
-      playerZ: world.camera.three.position.z,
-      heading: Math.atan2(dir.x, dir.z),
-      bounds,
+  }
+
+  schedulePlanSilhouetteBake(): void {
+    if (this.disposed) return;
+    if (this.planSilhouetteBakeTimer != null) {
+      window.clearTimeout(this.planSilhouetteBakeTimer);
+    }
+    this.planSilhouetteBakeTimer = window.setTimeout(() => {
+      this.planSilhouetteBakeTimer = null;
+      void this.bakePlanSilhouetteNow();
+    }, 200);
+  }
+
+  private planSilhouetteBakeGen = 0;
+  private planSilhouetteBakePending = false;
+
+  // fallow-ignore-next-line complexity
+  private async bakePlanSilhouetteNow(): Promise<void> {
+    if (this.disposed) return;
+    const world = this.world;
+    if (!world) return;
+    if (this.planSilhouetteBaking) {
+      this.planSilhouetteBakePending = true;
+      return;
+    }
+
+    this.cancelPlanSilhouetteBakeTimer();
+    const bakeGen = ++this.planSilhouetteBakeGen;
+    const storeyAtStart = this.planMinimapStorey;
+    this.planSilhouetteBaking = true;
+    try {
+      const elementsByModel = this.filterPlanLocalIds(this.planMinimapStorey);
+      const worldBounds = await this.computePlanBounds(elementsByModel, this.planMinimapStorey);
+      if (bakeGen !== this.planSilhouetteBakeGen || storeyAtStart !== this.planMinimapStorey)
+        return;
+      if (!worldBounds || !this.isValidBox3(worldBounds)) {
+        if (bakeGen !== this.planSilhouetteBakeGen || storeyAtStart !== this.planMinimapStorey)
+          return;
+        this.planSilhouette?.close();
+        this.planSilhouette = null;
+        this.planMinimapBoundsCache = null;
+        this.planSilhouetteDirty = false;
+        return;
+      }
+
+      const fragments = this.mustComponents().get(OBC.FragmentsManager);
+      await fragments.core.update(true);
+      world.scene.three.updateMatrixWorld(true);
+
+      if (bakeGen !== this.planSilhouetteBakeGen || storeyAtStart !== this.planMinimapStorey)
+        return;
+
+      const bounds = boundsFromBox3(worldBounds);
+      const next = await bakePlanFromSlice({
+        fragments: fragments.list,
+        elementsByModel,
+        bounds,
+        worldBounds,
+        units: this.detectModelUnits(),
+      });
+
+      if (bakeGen !== this.planSilhouetteBakeGen || storeyAtStart !== this.planMinimapStorey) {
+        next?.close();
+        return;
+      }
+
+      this.planSilhouette?.close();
+      this.planSilhouette = next;
+      this.planMinimapBoundsCache = bounds;
+      if (this.planMinimapStorey) {
+        this.planMinimapStoreyFloorY = worldBounds.min.y;
+      } else {
+        this.planMinimapStoreyFloorY = null;
+      }
+      this.planSilhouetteDirty = false;
+      this.bumpRender();
+    } catch {
+      /* Silhouette is optional — footprint fallback still works. */
+    } finally {
+      this.planSilhouetteBaking = false;
+      if (this.hasActiveFilterHighlights()) {
+        await this.paintFilterHighlights();
+      }
+      if (this.planSilhouetteBakePending) {
+        this.planSilhouetteBakePending = false;
+        void this.bakePlanSilhouetteNow();
+      }
+    }
+  }
+
+  /** IFC elements to include in the plan slice (storey + architectural categories). */
+  // fallow-ignore-next-line complexity
+  private filterPlanLocalIds(storeyName: string | null): Map<string, number[]> {
+    const planCats = filterPlanCategories(this.categoryMaps.keys()).filter(
+      (cat) => this.categoryVisible.get(cat) ?? true,
+    );
+    const grouped = new Map<string, Set<number>>();
+
+    const addId = (modelId: string, localId: number) => {
+      const bucket = grouped.get(modelId) ?? new Set<number>();
+      bucket.add(localId);
+      grouped.set(modelId, bucket);
     };
+
+    const groupedCount = () => {
+      let total = 0;
+      for (const ids of grouped.values()) total += ids.size;
+      return total;
+    };
+
+    const matchesPlanCategory = (modelId: string, localId: number): boolean => {
+      if (planCats.length === 0) return true;
+      for (const cat of planCats) {
+        const catMap = this.categoryMaps.get(cat);
+        if (catMap?.[modelId]?.has(localId)) return true;
+      }
+      return false;
+    };
+
+    const targetStoreys = (): string[] => {
+      if (storeyName) {
+        return this.storeyMaps.has(storeyName) ? [storeyName] : [];
+      }
+      return [...this.storeyMaps.keys()].filter((name) => this.storeyVisible.get(name) ?? true);
+    };
+
+    // fallow-ignore-next-line complexity
+    const addFromStoreys = (useCategoryFilter: boolean) => {
+      for (const name of targetStoreys()) {
+        const storeyMap = this.storeyMaps.get(name);
+        if (!storeyMap) continue;
+        for (const [modelId, idSet] of Object.entries(storeyMap)) {
+          for (const localId of idSet) {
+            if (useCategoryFilter && !matchesPlanCategory(modelId, localId)) continue;
+            addId(modelId, localId);
+          }
+        }
+      }
+    };
+
+    // Selected floor → all elements on that storey (category trim only for "All levels").
+    const useCategoryFilter = !storeyName && planCats.length > 0;
+    addFromStoreys(useCategoryFilter);
+
+    if (groupedCount() === 0 && useCategoryFilter) {
+      addFromStoreys(false);
+    }
+
+    // Models without IFC storeys: fall back to visible architectural categories only.
+    if (groupedCount() === 0 && !storeyName && this.storeyMaps.size === 0) {
+      const cats =
+        planCats.length > 0
+          ? planCats
+          : [...this.categoryMaps.keys()].filter((cat) => this.categoryVisible.get(cat) ?? true);
+      for (const cat of cats) {
+        const catMap = this.categoryMaps.get(cat);
+        if (!catMap) continue;
+        for (const [modelId, idSet] of Object.entries(catMap)) {
+          for (const localId of idSet) {
+            addId(modelId, localId);
+          }
+        }
+      }
+    }
+
+    const out = new Map<string, number[]>();
+    let total = 0;
+    for (const [modelId, ids] of grouped) {
+      const list = [...ids];
+      const room = Math.max(PLAN_GEOMETRY_ITEM_CAP - total, 0);
+      if (room <= 0) break;
+      out.set(modelId, list.slice(0, room));
+      total += Math.min(list.length, room);
+    }
+    return out;
+  }
+
+  // fallow-ignore-next-line complexity
+  private async computePlanBounds(
+    elementsByModel: Map<string, number[]>,
+    storeyName: string | null = null,
+  ): Promise<THREE.Box3 | null> {
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    if (!fragments?.initialized || elementsByModel.size === 0) {
+      if (storeyName) return null;
+      return this.getModelBoundingBox();
+    }
+
+    const bounds = new THREE.Box3();
+    for (const [modelId, ids] of elementsByModel) {
+      const model = fragments.list.get(modelId);
+      if (!model || ids.length === 0) continue;
+      for (let i = 0; i < ids.length; i += 200) {
+        const chunk = ids.slice(i, i + 200);
+        try {
+          bounds.union(await model.getMergedBox(chunk));
+        } catch {
+          /* skip chunk */
+        }
+      }
+    }
+
+    if (bounds.isEmpty()) {
+      return storeyName ? null : this.getModelBoundingBox();
+    }
+    return bounds;
+  }
+
+  /** Storey floor elevation and footprint for walk + minimap framing. */
+  // fallow-ignore-next-line complexity
+  private async getStoreyWalkHint(
+    storeyName: string,
+  ): Promise<{ floorY: number; centerX: number; centerZ: number; bounds: THREE.Box3 } | null> {
+    try {
+      const elementsByModel = this.filterPlanLocalIds(storeyName);
+      const bounds = await this.computePlanBounds(elementsByModel, storeyName);
+      if (!bounds || !this.isValidBox3(bounds)) return null;
+      const center = bounds.getCenter(new THREE.Vector3());
+      const floorY = Number.isFinite(bounds.min.y) ? bounds.min.y : center.y;
+      if (!Number.isFinite(floorY)) return null;
+      return {
+        floorY,
+        centerX: center.x,
+        centerZ: center.z,
+        bounds: bounds.clone(),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private horizontalLookDir(out = new THREE.Vector3()): THREE.Vector3 {
+    const world = this.world;
+    if (!world) return out.set(0, 0, -1);
+    world.camera.three.getWorldDirection(out);
+    out.y = 0;
+    if (out.lengthSq() < 1e-6) return out.set(0, 0, -1);
+    return out.normalize();
+  }
+
+  // fallow-ignore-next-line complexity
+  private async placeWalkOnStorey(storeyName: string, animate: boolean): Promise<void> {
+    const world = this.world;
+    if (!world || this.cameraMode !== "walk") return;
+    try {
+      const hint = await this.getStoreyWalkHint(storeyName);
+      const box = this.getModelBoundingBox();
+      if (!hint || !this.isValidBox3(box)) return;
+
+      const cam = world.camera.three.position;
+      const inset = this.walkFeetInset(hint.bounds);
+      const loX = Math.min(hint.bounds.min.x + inset, hint.bounds.max.x - inset);
+      const hiX = Math.max(hint.bounds.min.x + inset, hint.bounds.max.x - inset);
+      const loZ = Math.min(hint.bounds.min.z + inset, hint.bounds.max.z - inset);
+      const hiZ = Math.max(hint.bounds.min.z + inset, hint.bounds.max.z - inset);
+      const x = THREE.MathUtils.clamp(cam.x, loX, hiX);
+      const z = THREE.MathUtils.clamp(cam.z, loZ, hiZ);
+      const eyeHeight = this.walkEyeHeight(box);
+      const pivot = new THREE.Vector3(x, hint.floorY, z);
+      const eye = this.clampWalkEyePosition(pivot, box, eyeHeight, hint.bounds);
+      const dir = this.horizontalLookDir();
+      const lookTarget = eye.clone().add(dir.multiplyScalar(4));
+
+      await world.camera.controls.setLookAt(
+        eye.x,
+        eye.y,
+        eye.z,
+        lookTarget.x,
+        lookTarget.y,
+        lookTarget.z,
+        animate,
+      );
+      await this.mustComponents().get(OBC.FragmentsManager).core.update(true);
+      this.bumpRender();
+    } catch {
+      /* Walk placement is best-effort when fragment bounds are unavailable. */
+    }
+  }
+
+  // fallow-ignore-next-line complexity
+  getPlanMinimapState(): PlanMinimapState | null {
+    const world = this.world;
+    if (!world) return null;
+
+    const dir = this.horizontalLookDir();
+    const controls = world.camera.controls;
+    const target = controls.getTarget(new THREE.Vector3());
+    const camPos = world.camera.three.position;
+    const isWalk = this.cameraMode === "walk";
+    const anchorX = isWalk ? camPos.x : target.x;
+    const anchorZ = isWalk ? camPos.z : target.z;
+
+    const box = this.getModelBoundingBox();
+    const bounds =
+      this.planMinimapBoundsCache ?? (box && !box.isEmpty() ? boundsFromBox3(box) : null);
+
+    const persp = world.camera.three as THREE.PerspectiveCamera;
+    const vFovRad = ((persp.fov ?? 50) * Math.PI) / 180;
+    const aspect = persp.aspect > 0 ? persp.aspect : 1;
+    const hFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * aspect);
+    const fovHalfRad = isWalk ? (35 * Math.PI) / 180 : hFovRad / 2;
+
+    if (this.planSilhouetteDirty && !this.planSilhouetteBaking && !this.planSilhouetteBakeTimer) {
+      this.schedulePlanSilhouetteBake();
+    }
+
+    return {
+      anchorX,
+      anchorZ,
+      heading: Math.atan2(dir.x, dir.z),
+      fovHalfRad,
+      bounds,
+      silhouette: this.planSilhouette,
+      baking: this.planSilhouetteBaking || this.planSilhouetteDirty,
+      activeStorey: this.planMinimapStorey,
+    };
+  }
+
+  // fallow-ignore-next-line complexity
+  async setPlanMinimapStorey(name: string | null): Promise<void> {
+    const next = name && this.storeyMaps.has(name) ? name : null;
+    if (this.planMinimapStorey === next && !this.planSilhouetteDirty) return;
+    this.planMinimapStorey = next;
+    this.planSilhouetteDirty = true;
+    this.cancelPlanSilhouetteBakeTimer();
+
+    if (this.cameraMode === "walk" && next) {
+      try {
+        await this.placeWalkOnStorey(next, true);
+      } catch {
+        /* Floor teleport is best-effort. */
+      }
+    }
+
+    await this.bakePlanSilhouetteNow();
+  }
+
+  // fallow-ignore-next-line unused-class-member, complexity
+  async applyPlanMinimapPose(pose: PlanMinimapPose): Promise<void> {
+    const world = this.world;
+    if (!world) return;
+    const controls = world.camera.controls;
+    const animate = pose.animate ?? false;
+
+    if (this.cameraMode === "walk") {
+      const box = this.getModelBoundingBox();
+      if (!this.isValidBox3(box)) return;
+      const eyeHeight = this.walkEyeHeight(box);
+      const controlsTarget = controls.getTarget(new THREE.Vector3());
+      const hintY = this.planMinimapStoreyFloorY ?? controlsTarget.y;
+      const pivot = new THREE.Vector3(pose.x, hintY, pose.z);
+      const footprint =
+        this.planMinimapBoundsCache != null
+          ? (() => {
+              const b = new THREE.Box3();
+              b.min.set(
+                this.planMinimapBoundsCache!.minX,
+                box.min.y,
+                this.planMinimapBoundsCache!.minZ,
+              );
+              b.max.set(
+                this.planMinimapBoundsCache!.maxX,
+                box.max.y,
+                this.planMinimapBoundsCache!.maxZ,
+              );
+              return b;
+            })()
+          : box;
+      const eye = this.clampWalkEyePosition(pivot, box, eyeHeight, footprint);
+      const dir =
+        pose.heading != null
+          ? new THREE.Vector3(Math.sin(pose.heading), 0, Math.cos(pose.heading))
+          : this.horizontalLookDir();
+      const lookTarget = eye.clone().add(dir.multiplyScalar(4));
+
+      await controls.setLookAt(
+        eye.x,
+        eye.y,
+        eye.z,
+        lookTarget.x,
+        lookTarget.y,
+        lookTarget.z,
+        animate,
+      );
+    } else {
+      const target = controls.getTarget(new THREE.Vector3());
+      const camPos = world.camera.three.position.clone();
+      const offset = camPos.clone().sub(target);
+
+      if (pose.heading != null) {
+        const horizDist = Math.max(Math.hypot(offset.x, offset.z), 0.001);
+        const yOff = offset.y;
+        offset.x = -Math.sin(pose.heading) * horizDist;
+        offset.z = -Math.cos(pose.heading) * horizDist;
+        offset.y = yOff;
+      }
+
+      const newTarget = new THREE.Vector3(pose.x, target.y, pose.z);
+      const newPos = newTarget.clone().add(offset);
+      await controls.setLookAt(
+        newPos.x,
+        newPos.y,
+        newPos.z,
+        newTarget.x,
+        newTarget.y,
+        newTarget.z,
+        animate,
+      );
+      controls.setOrbitPoint(newTarget.x, newTarget.y, newTarget.z);
+    }
+
+    await this.mustComponents().get(OBC.FragmentsManager).core.update(true);
+    this.bumpRender();
   }
 
   /** Drag the view cube to orbit the main camera. */
@@ -1285,8 +1919,11 @@ export class BimEngine {
   }
 
   /** Re-apply PBR + space colors when fragments stream in new tile materials. */
+  // fallow-ignore-next-line complexity
   private scheduleMaterialSync(): void {
-    if (this.disposed || this.modelRegistry.size === 0) return;
+    if (this.disposed || this.modelRegistry.size === 0 || this.materialSyncInProgress) return;
+    // PBR recolor fights fragment highlights — defer until ghost/colorize is cleared.
+    if (this.hasActiveFilterHighlights()) return;
     if (this.materialSyncTimer != null) window.clearTimeout(this.materialSyncTimer);
     this.materialSyncTimer = window.setTimeout(() => {
       this.materialSyncTimer = null;
@@ -1509,17 +2146,7 @@ export class BimEngine {
     }
 
     // Re-apply hide state so newly linked models respect existing toggles.
-    const hider = components.get(OBC.Hider);
-    for (const [name, visible] of this.storeyVisible) {
-      if (visible) continue;
-      const map = this.storeyMaps.get(name);
-      if (map) await hider.set(false, map);
-    }
-    for (const [name, visible] of this.categoryVisible) {
-      if (visible) continue;
-      const map = this.categoryMaps.get(name);
-      if (map) await hider.set(false, map);
-    }
+    await this.reapplyGroupVisibility();
 
     this.emitGroups();
   }
@@ -1551,6 +2178,7 @@ export class BimEngine {
     const hider = this.mustComponents().get(OBC.Hider);
     await hider.set(visible, map);
     this.emitGroups();
+    this.invalidatePlanSilhouette();
   }
 
   async showAllGroups(): Promise<void> {
@@ -1559,6 +2187,7 @@ export class BimEngine {
     for (const k of this.storeyVisible.keys()) this.storeyVisible.set(k, true);
     for (const k of this.categoryVisible.keys()) this.categoryVisible.set(k, true);
     this.emitGroups();
+    this.invalidatePlanSilhouette();
   }
 
   // fallow-ignore-next-line complexity
@@ -1666,7 +2295,7 @@ export class BimEngine {
     components.get(OBF.AngleMeasurement).enabled = tool === "angle";
     const highlighter = components.get(OBF.Highlighter);
     highlighter.config.selectEnabled = tool === "select";
-    highlighter.enabled = tool === "select";
+    highlighter.enabled = true;
     components.get(OBF.Hoverer).enabled = false;
     if (tool !== "select" && tool !== "markup") this.clearSelection();
     if (tool !== "clip") {
@@ -1760,7 +2389,7 @@ export class BimEngine {
     if (!canvas) return;
 
     const target = e.target as HTMLElement | null;
-    if (target?.closest(".bim-view-cube, .bim-walk-minimap")) return;
+    if (target?.closest(".bim-view-cube, .bim-plan-minimap")) return;
 
     const rect = canvas.getBoundingClientRect();
     if (
@@ -2292,6 +2921,7 @@ export class BimEngine {
     await this.showAllGroups();
     this.xRayActive = false;
     this.clearSelection();
+    this.invalidatePlanSilhouette();
     this.bumpRender();
   }
 
@@ -2299,7 +2929,30 @@ export class BimEngine {
   async resetFilterVisibility(): Promise<void> {
     const hider = this.mustComponents().get(OBC.Hider);
     await hider.set(true);
+    await this.reapplyGroupVisibility();
     this.bumpRender();
+  }
+
+  /** Show all elements for ghost filter without triggering a plan rebake. */
+  private async ensureBaseVisibilityForFilter(): Promise<void> {
+    const hider = this.mustComponents().get(OBC.Hider);
+    await hider.set(true);
+    await this.reapplyGroupVisibility();
+  }
+
+  // fallow-ignore-next-line complexity
+  private async reapplyGroupVisibility(): Promise<void> {
+    const hider = this.mustComponents().get(OBC.Hider);
+    for (const [name, visible] of this.storeyVisible) {
+      if (visible) continue;
+      const map = this.storeyMaps.get(name);
+      if (map) await hider.set(false, map);
+    }
+    for (const [name, visible] of this.categoryVisible) {
+      if (visible) continue;
+      const map = this.categoryMaps.get(name);
+      if (map) await hider.set(false, map);
+    }
   }
 
   async isolateByGuids(guids: string[]): Promise<void> {
@@ -2308,6 +2961,7 @@ export class BimEngine {
     if (!map) return;
     const hider = this.mustComponents().get(OBC.Hider);
     await hider.isolate(map);
+    this.invalidatePlanSilhouette();
     this.bumpRender();
   }
 
@@ -2328,12 +2982,13 @@ export class BimEngine {
   }
 
   async clearFilterGhost(): Promise<void> {
-    const highlighter = this.components?.get(OBF.Highlighter);
-    if (!highlighter?.styles.has(BimEngine.FILTER_GHOST_STYLE)) return;
-    await highlighter.clear(BimEngine.FILTER_GHOST_STYLE);
-    highlighter.styles.delete(BimEngine.FILTER_GHOST_STYLE);
-    await this.mustComponents().get(OBC.FragmentsManager).core.update(true);
-    this.bumpRender();
+    const hadGhost = this.activeFilterGhostMap != null;
+    this.activeFilterGhostMap = null;
+    if (!hadGhost && this.activeColorizeGroups.length === 0) return;
+    await this.paintFilterHighlights();
+    if (!this.hasActiveFilterHighlights()) {
+      this.scheduleMaterialSync();
+    }
   }
 
   /** Dim non-matching elements while keeping matches at full opacity. */
@@ -2343,71 +2998,55 @@ export class BimEngine {
     if (!index || matchGuids.length === 0) return;
 
     await this.syncGuidLocalIdMap();
-    await this.resetFilterVisibility();
+    await this.ensureBaseVisibilityForFilter();
 
     const matchSet = new Set(matchGuids);
     const ghostGuids = index.elements.filter((el) => !matchSet.has(el.guid)).map((el) => el.guid);
-    if (ghostGuids.length === 0) return;
+    if (ghostGuids.length === 0) {
+      this.activeFilterGhostMap = null;
+      await this.paintFilterHighlights();
+      return;
+    }
 
     const map = this.buildModelIdMapFromGuids(ghostGuids);
-    const highlighter = this.components?.get(OBF.Highlighter);
-    if (!highlighter || !map) return;
+    if (!map) return;
 
-    highlighter.styles.set(BimEngine.FILTER_GHOST_STYLE, {
-      color: new THREE.Color("#64748b"),
-      opacity,
-      transparent: true,
-      renderedFaces: 0,
-      depthTest: true,
-      depthWrite: false,
-    });
-    await highlighter.highlightByID(BimEngine.FILTER_GHOST_STYLE, map, false);
-    await this.mustComponents().get(OBC.FragmentsManager).core.update(true);
-    this.bumpRender();
+    this.activeFilterGhostMap = map;
+    this.activeFilterGhostOpacity = opacity;
+    await this.paintFilterHighlights();
   }
 
   // fallow-ignore-next-line complexity
   async applyColorize(
     groups: { styleId: string; color: string; guids: string[] }[],
   ): Promise<void> {
-    await this.clearColorize();
-    const highlighter = this.components?.get(OBF.Highlighter);
-    if (!highlighter || groups.length === 0) return;
-
     await this.syncGuidLocalIdMap();
-    const fragments = this.mustComponents().get(OBC.FragmentsManager);
 
+    const nextGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
+    this.colorizeStyleIds = [];
     for (const group of groups) {
-      highlighter.styles.set(group.styleId, {
-        color: new THREE.Color(group.color),
-        opacity: COLORIZE_HIGHLIGHT_OPACITY,
-        transparent: true,
-        renderedFaces: 0,
-      });
       const map = this.buildModelIdMapFromGuids(group.guids);
       if (!map) continue;
       this.colorizeStyleIds.push(group.styleId);
-      await highlighter.highlightByID(group.styleId, map, false);
+      nextGroups.push({ styleId: group.styleId, color: group.color, map });
     }
 
-    await fragments.core.update(true);
-    this.bumpRender();
+    this.activeColorizeGroups = nextGroups;
+    await this.paintFilterHighlights();
   }
 
   async clearColorize(): Promise<void> {
-    const highlighter = this.components?.get(OBF.Highlighter);
-    if (!highlighter || this.colorizeStyleIds.length === 0) {
-      this.colorizeStyleIds = [];
+    const hadColorize = this.activeColorizeGroups.length > 0;
+    this.activeColorizeGroups = [];
+    this.colorizeStyleIds = [];
+    if (!hadColorize && this.activeFilterGhostMap == null) {
+      this.scheduleMaterialSync();
       return;
     }
-
-    for (const styleId of this.colorizeStyleIds) {
-      await highlighter.clear(styleId);
-      highlighter.styles.delete(styleId);
+    await this.paintFilterHighlights();
+    if (!this.hasActiveFilterHighlights()) {
+      this.scheduleMaterialSync();
     }
-    this.colorizeStyleIds = [];
-    await this.mustComponents().get(OBC.FragmentsManager).core.update(true);
-    this.bumpRender();
   }
 
   async setXRayMode(enabled: boolean): Promise<void> {
@@ -2789,22 +3428,33 @@ export class BimEngine {
     for (const [mid, ids] of Object.entries(map)) {
       const model = fragments.list.get(mid);
       if (!model) continue;
-      for (const lid of ids) {
+      const localIds = [...ids];
+      for (let i = 0; i < localIds.length; i += 200) {
+        const chunk = localIds.slice(i, i + 200);
         try {
-          const [pos] = await model.getPositions([lid]);
-          if (pos) box.expandByPoint(new THREE.Vector3(pos.x, pos.y, pos.z));
+          box.union(await model.getMergedBox(chunk));
         } catch {
-          /* optional */
+          try {
+            const positions = await model.getPositions(chunk);
+            for (const pos of positions) {
+              if (pos) box.expandByPoint(new THREE.Vector3(pos.x, pos.y, pos.z));
+            }
+          } catch {
+            /* optional */
+          }
         }
       }
     }
-    if (box.isEmpty()) {
+    if (!this.isValidBox3(box)) {
       await this.fitToView();
       return;
     }
     const sphere = new THREE.Sphere();
     box.getBoundingSphere(sphere);
-    if (sphere.radius < 0.5) sphere.radius = 2;
+    const minRadius = this.detectModelUnits() === "mm" ? 500 : 0.5;
+    if (!Number.isFinite(sphere.radius) || sphere.radius < minRadius) {
+      sphere.radius = this.detectModelUnits() === "mm" ? 2000 : 2;
+    }
     await this.focusCameraOnSphere(sphere);
   }
 
@@ -3017,6 +3667,14 @@ export class BimEngine {
       window.clearTimeout(this.materialSyncTimer);
       this.materialSyncTimer = null;
     }
+    if (this.planSilhouetteBakeTimer != null) {
+      window.clearTimeout(this.planSilhouetteBakeTimer);
+      this.planSilhouetteBakeTimer = null;
+    }
+    this.planSilhouette?.close();
+    this.planSilhouette = null;
+    this.planMinimapBoundsCache = null;
+    this.planMinimapStoreyFloorY = null;
     this.issuePlacementPick = null;
     this.issueAnchors = [];
     this.issueWorldByGuid.clear();
