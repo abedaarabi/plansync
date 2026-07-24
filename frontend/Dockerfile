@@ -53,8 +53,10 @@ RUN set -eu; \
   else \
     echo "Unsupported arch for Tailwind native deps: $ARCH (need x86_64 or aarch64)"; \
     exit 1; \
-  fi
-
+  fi; \
+  # Platform-only install can prune nested That Open deps — ensure camera-controls stays.
+  test -d node_modules/camera-controls \
+    || npm install --no-save --legacy-peer-deps "camera-controls@>=3.1.2"
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
