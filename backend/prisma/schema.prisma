@@ -869,7 +869,7 @@ model FileVersion {
   /// Server-side IFC → fragments conversion artifacts (S3).
   fragmentsS3Key        String?
   quantityIndexS3Key    String?
-  bimConversionStatus   String                  @default("pending")
+  bimConversionStatus   String  @default("pending")
   bimLoqReport          Json?
   bimConversionJobRunId String?
 
@@ -1332,12 +1332,12 @@ model TakeoffLine {
   tags                      String[] @default([])
 
   /// BIM model takeoff linkage (IFC element keys / guids).
-  sourceBimKey    String?
-  sourceIfcGuid   String?
-  sourceIfcGuids  Json?
-  ifcType         String?
-  quantitySource  String?
-  bimMetadata     Json?
+  sourceBimKey   String?
+  sourceIfcGuid  String?
+  sourceIfcGuids Json?
+  ifcType        String?
+  quantitySource String?
+  bimMetadata    Json?
 
   workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
