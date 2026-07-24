@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import type { CloudFile, Folder as ProjectFolder, Project } from "@/types/projects";
 import { PdfFileIcon } from "@/components/icons/PdfFileIcon";
-import { isPdfFile } from "@/lib/isPdfFile";
+import { IfcFileIcon } from "@/components/icons/IfcFileIcon";
+import { isIfcFile, isPdfFile } from "@/lib/isPdfFile";
 import { PdfFileThumbnail } from "@/components/enterprise/PdfFileThumbnail";
 import {
   countDirectChildren,
@@ -66,6 +67,9 @@ export type FileExplorerContentProps = {
   /** When set with `onFileVersionPick`, files with multiple versions show a revision selector for opening in the viewer. */
   fileVersionPick?: Record<string, number>;
   onFileVersionPick?: (fileId: string, version: number) => void;
+  /** Cmd/Ctrl-click toggles IFC files for a federated BIM viewer session. */
+  federationIfcIds?: Set<string>;
+  onToggleFederationIfc?: (file: CloudFile) => void;
 };
 
 function itemKeyForFolder(id: string) {
@@ -111,8 +115,28 @@ export function FileExplorerContent({
   onDragStartMove,
   fileVersionPick,
   onFileVersionPick,
+  federationIfcIds,
+  onToggleFederationIfc,
 }: FileExplorerContentProps) {
   const versionUi = Boolean(onFileVersionPick);
+
+  // fallow-ignore-next-line complexity
+  function handleFileSelect(f: CloudFile, e?: React.MouseEvent | React.KeyboardEvent) {
+    if (
+      isIfcFile(f) &&
+      onToggleFederationIfc &&
+      ("metaKey" in (e ?? {}) || "ctrlKey" in (e ?? {})) &&
+      ((e as React.MouseEvent)?.metaKey || (e as React.MouseEvent)?.ctrlKey)
+    ) {
+      onToggleFederationIfc(f);
+      return;
+    }
+    onSelectItem(itemKeyForFile(f.id));
+  }
+
+  function fileRowSelected(f: CloudFile) {
+    return selectedItemKey === itemKeyForFile(f.id) || Boolean(federationIfcIds?.has(f.id));
+  }
 
   function selectedVersionForFile(f: (typeof files)[0]) {
     const sv = sortedVersions(f);
@@ -341,13 +365,15 @@ export function FileExplorerContent({
               const latest = sv[0];
               const displayVer = sv.find((x) => x.version === selectedVersionForFile(f)) ?? latest;
               const size = displayVer ? formatBytes(displayVer.sizeBytes) : "—";
-              const selected = selectedItemKey === itemKeyForFile(f.id);
+              const selected = fileRowSelected(f);
               return (
                 <div
                   key={f.id}
                   className={`group relative flex flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all duration-200 sm:rounded-xl sm:hover:-translate-y-0.5 sm:hover:shadow-md ${
                     selected
-                      ? "border-[var(--enterprise-primary)]/40 ring-2 ring-[var(--enterprise-primary)]/25"
+                      ? federationIfcIds?.has(f.id)
+                        ? "border-emerald-500/40 ring-2 ring-emerald-500/25"
+                        : "border-[var(--enterprise-primary)]/40 ring-2 ring-[var(--enterprise-primary)]/25"
                       : "border-slate-200/90 hover:border-slate-300/90"
                   }`}
                 >
@@ -356,13 +382,11 @@ export function FileExplorerContent({
                     tabIndex={0}
                     draggable={Boolean(onDragStartMove)}
                     onDragStart={(e) => onDragStartMove?.(e, { kind: "file", id: f.id })}
-                    onClick={() => {
-                      onSelectItem(itemKeyForFile(f.id));
-                    }}
+                    onClick={(e) => handleFileSelect(f, e)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        onSelectItem(itemKeyForFile(f.id));
+                        handleFileSelect(f, e);
                       }
                     }}
                     className="flex cursor-pointer flex-col text-left"
@@ -372,6 +396,7 @@ export function FileExplorerContent({
                         fileId={f.id}
                         fileName={f.name}
                         mimeType={f.mimeType}
+                        fileVersionId={displayVer?.id ?? null}
                         isPdf={isPdfFile(f)}
                         className="h-full w-full"
                       />
@@ -383,9 +408,13 @@ export function FileExplorerContent({
                           </span>
                         </div>
                       ) : null}
-                      {isPdfFile(f) ? (
+                      {isPdfFile(f) || isIfcFile(f) ? (
                         <div className="pointer-events-none absolute bottom-1 left-1 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/95 shadow-md ring-1 ring-slate-200/80 sm:bottom-1.5 sm:left-1.5 sm:h-7 sm:w-7">
-                          <PdfFileIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          {isPdfFile(f) ? (
+                            <PdfFileIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          ) : (
+                            <IfcFileIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          )}
                         </div>
                       ) : null}
                     </div>
@@ -596,12 +625,12 @@ export function FileExplorerContent({
                   const latest = sv[0];
                   const displayVer =
                     sv.find((x) => x.version === selectedVersionForFile(f)) ?? latest;
-                  const selected = selectedItemKey === itemKeyForFile(f.id);
+                  const selected = fileRowSelected(f);
                   return (
                     <li key={`m-file-${f.id}`}>
                       <SwipeableListRow
                         onTap={() => {
-                          onSelectItem(itemKeyForFile(f.id));
+                          handleFileSelect(f);
                           onOpenFile(f);
                         }}
                         actions={[
@@ -623,7 +652,11 @@ export function FileExplorerContent({
                             onDragStartMove?.(e, { kind: "file", id: f.id });
                           }}
                           className={`mobile-list-row flex w-full items-center gap-2.5 py-2.5 text-left transition-colors duration-150 ${
-                            selected ? "bg-[var(--enterprise-primary-soft)]/80" : ""
+                            selected
+                              ? federationIfcIds?.has(f.id)
+                                ? "bg-emerald-50/90"
+                                : "bg-[var(--enterprise-primary-soft)]/80"
+                              : ""
                           }`}
                         >
                           <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200/60">
@@ -631,6 +664,7 @@ export function FileExplorerContent({
                               fileId={f.id}
                               fileName={f.name}
                               mimeType={f.mimeType}
+                              fileVersionId={displayVer?.id ?? null}
                               isPdf={isPdfFile(f)}
                               className="h-full w-full"
                             />
@@ -845,7 +879,7 @@ export function FileExplorerContent({
                     const latest = sv[0];
                     const displayVer =
                       sv.find((x) => x.version === selectedVersionForFile(f)) ?? latest;
-                    const selected = selectedItemKey === itemKeyForFile(f.id);
+                    const selected = fileRowSelected(f);
                     return (
                       <tr
                         key={f.id}
@@ -863,18 +897,24 @@ export function FileExplorerContent({
                         }}
                         className={`cursor-pointer border-b border-slate-50 transition-colors last:border-b-0 ${
                           selected
-                            ? "bg-[var(--enterprise-primary-soft)]/80"
+                            ? federationIfcIds?.has(f.id)
+                              ? "bg-emerald-50/90"
+                              : "bg-[var(--enterprise-primary-soft)]/80"
                             : "hover:bg-slate-50/90"
                         }`}
-                        onClick={() => {
-                          onSelectItem(itemKeyForFile(f.id));
-                          onOpenFile(f);
+                        onClick={(e) => {
+                          const federationToggle =
+                            isIfcFile(f) && onToggleFederationIfc && (e.metaKey || e.ctrlKey);
+                          handleFileSelect(f, e);
+                          if (!federationToggle) onOpenFile(f);
                         }}
                       >
                         <td className="py-2.5 pl-4">
                           <span className="inline-flex items-center gap-1.5 font-normal text-[var(--enterprise-text)]">
                             {isPdfFile(f) ? (
                               <PdfFileIcon className="h-3.5 w-3.5 shrink-0" />
+                            ) : isIfcFile(f) ? (
+                              <IfcFileIcon className="h-3.5 w-3.5 shrink-0" />
                             ) : (
                               <FileText
                                 className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-primary)]"
@@ -891,7 +931,9 @@ export function FileExplorerContent({
                             ) : null}
                           </span>
                         </td>
-                        <td className="py-2.5 text-slate-500">{isPdfFile(f) ? "PDF" : "File"}</td>
+                        <td className="py-2.5 text-slate-500">
+                          {isPdfFile(f) ? "PDF" : isIfcFile(f) ? "IFC" : "File"}
+                        </td>
                         <td className="py-2.5 text-slate-600">
                           {versionUi && sv.length > 1 && onFileVersionPick ? (
                             <select

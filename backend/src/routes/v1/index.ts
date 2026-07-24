@@ -127,6 +127,8 @@ import { registerCloudRoutes } from "./cloudRoutes.js";
 import { registerPunchRoutes } from "./punchRoutes.js";
 import { registerScheduleRoutes } from "./scheduleRoutes.js";
 import { registerOrchestrationRoutes } from "./orchestrationRoutes.js";
+import { registerBimRoutes } from "./bimRoutes.js";
+import { enqueueBimConversion } from "../../lib/bim/conversionProcessor.js";
 import {
   auditLogsToRows,
   buildAuditPdfBuffer,
@@ -3555,6 +3557,16 @@ export function v1Routes(
       data: { mimeType: mt },
     });
 
+    const isIfc =
+      mt === "model/ifc" ||
+      file.name.toLowerCase().endsWith(".ifc") ||
+      body.data.fileName.toLowerCase().endsWith(".ifc");
+    if (isIfc) {
+      void enqueueBimConversion(env, fv.id, c.get("user").id).catch((err) => {
+        console.error("[bim.convert] enqueue on upload failed", fv.id, err);
+      });
+    }
+
     return c.json({ file: fileOut, fileVersion: fileVersionJson(fv) });
   });
 
@@ -4990,6 +5002,7 @@ export function v1Routes(
   registerMaterialsRoutes(r, needUser);
   registerScheduleRoutes(r, needUser);
   registerOrchestrationRoutes(r, needUser);
+  registerBimRoutes(r, needUser, env);
 
   return r;
 }

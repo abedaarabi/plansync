@@ -1,5 +1,6 @@
 import type { MeasureUnit } from "@/lib/coords";
 import type { TakeoffItem, TakeoffPackageStatus, TakeoffZone } from "@/lib/takeoffTypes";
+import type { BimAnnotation } from "@/store/bimMarkupStore";
 import type { Annotation, Calibration } from "@/store/viewerStore";
 
 /** Matches `FileVersion.annotationBlob` / PUT body (server adds `v: 1`). */
@@ -14,6 +15,7 @@ export type ViewerStatePayload = {
   takeoffItems?: TakeoffItem[];
   takeoffZones?: TakeoffZone[];
   takeoffPackageStatus?: TakeoffPackageStatus;
+  bimAnnotations?: BimAnnotation[];
 };
 
 export function parseServerViewerState(data: unknown): ViewerStatePayload | null {
@@ -38,6 +40,10 @@ export function parseServerViewerState(data: unknown): ViewerStatePayload | null
       ? (o.takeoffPackageStatus as TakeoffPackageStatus)
       : undefined;
 
+  const bimAnnotations = Array.isArray(o.bimAnnotations)
+    ? (o.bimAnnotations as BimAnnotation[])
+    : undefined;
+
   return {
     annotations: o.annotations as Annotation[],
     calibrationByPage,
@@ -49,5 +55,6 @@ export function parseServerViewerState(data: unknown): ViewerStatePayload | null
     takeoffItems,
     takeoffZones,
     takeoffPackageStatus,
+    bimAnnotations,
   };
 }

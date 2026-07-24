@@ -38,6 +38,16 @@ export type IssueReferencePhotoRow = {
   sketch?: IssuePhotoSketchV1 | null;
 };
 
+/** 3D anchor for issues created from the BIM viewer (mirrors `Issue.bimAnchor`). */
+export type IssueBimAnchor = {
+  ifcGuid: string;
+  localId?: number;
+  name?: string;
+  ifcType?: string;
+  spatialPath?: string[];
+  position?: { x: number; y: number; z: number };
+};
+
 export type IssueRow = {
   id: string;
   workspaceId: string;
@@ -55,6 +65,8 @@ export type IssueRow = {
   sheetVersion?: number | null;
   pageNumber?: number | null;
   annotationId: string | null;
+  /** 3D anchor when created from the BIM viewer. */
+  bimAnchor?: IssueBimAnchor | null;
   /** Extra viewer annotation ids linked to this issue (same sheet revision), not the pin. */
   attachedMarkupAnnotationIds?: string[];
   /** Reference images (with optional sketch JSON) attached to the issue. */
@@ -292,6 +304,7 @@ export async function createIssue(body: {
   dueDate?: string | null;
   location?: string | null;
   pageNumber?: number;
+  bimAnchor?: IssueBimAnchor;
   rfiId?: string;
   rfiIds?: string[];
   issueKind?: "WORK_ORDER" | "CONSTRUCTION";
@@ -410,7 +423,8 @@ export function viewerHrefForTakeoffLine(row: TakeoffLineRow): string {
   return `/viewer?${q.toString()}`;
 }
 
-/** Relative URL to open the viewer on this issue (same sheet revision), or null when no sheet is linked. */
+/** Relative URL to open the viewer on this issue, or null when no file is linked. */
+// fallow-ignore-next-line complexity
 export function viewerHrefForIssue(row: IssueRow): string | null {
   if (!row.fileId || !row.fileVersionId || !row.file || !row.fileVersion) return null;
   const q = new URLSearchParams();
@@ -420,7 +434,9 @@ export function viewerHrefForIssue(row: IssueRow): string | null {
   q.set("fileVersionId", row.fileVersionId);
   q.set("version", String(row.fileVersion.version));
   q.set("issueId", row.id);
-  return `/viewer?${q.toString()}`;
+  if (row.bimAnchor?.ifcGuid) q.set("guid", row.bimAnchor.ifcGuid);
+  const path = row.bimAnchor ? "/bim-viewer" : "/viewer";
+  return `${path}?${q.toString()}`;
 }
 
 /** RFI drawing link; passes `issueId` for the first referenced issue when present (viewer zoom). */

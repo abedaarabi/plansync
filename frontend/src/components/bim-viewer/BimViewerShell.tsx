@@ -1,0 +1,1680 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Boxes,
+  CircleAlert,
+  ClipboardList,
+  Eye,
+  Filter,
+  TableProperties,
+  Home,
+  ScanSearch,
+  Sparkles,
+} from "lucide-react";
+import { toast } from "sonner";
+import { apiUrl } from "@/lib/api-url";
+import {
+  fetchBimQuantityIndex,
+  fetchBimSavedViews,
+  fetchBimStatus,
+  createBimSavedView,
+  deleteBimSavedView,
+  triggerBimConversion,
+} from "@/lib/api-client/bim-viewer";
+import type {
+  BimLoqReport,
+  BimQuantityEntry,
+  BimQuantityIndex,
+  BimSavedViewRecord,
+} from "@/lib/bim/types";
+import {
+  BimEngine,
+  type BimCameraMode,
+  type BimLoadedModel,
+  type BimSelection,
+  type BimTool,
+  type BimVisibilityGroup,
+} from "./bimEngine";
+
+import { BimWalkChrome } from "./BimWalkChrome";
+import { BimContextMenu } from "./BimContextMenu";
+import { BimIssueMarkersOverlay } from "./BimIssueMarkersOverlay";
+import { BimBreadcrumbChip } from "./BimBreadcrumbChip";
+import { BimIconRail } from "./BimIconRail";
+import { BimGlassDock } from "./BimGlassDock";
+import { BimBottomToolBar, type BimBottomFlyout } from "./BimBottomToolBar";
+import { BimSelectionTag } from "./BimSelectionTag";
+import { BimLeftDockContent, type BimLeftDockId } from "./BimLeftDockContent";
+import { BimInspectDockContent, type BimInspectTab } from "./BimInspectDockContent";
+import { BimTakeoffViewsDockContent } from "./BimTakeoffViewsDockContent";
+import { fetchIssuesForFileVersion } from "@/lib/api-client/core-issues-takeoff";
+import type { IssueRow } from "@/lib/api-client/core-issues-takeoff";
+import { fetchIssue } from "@/lib/api-client";
+import { compareBimQuantities } from "@/lib/api-client/bim-viewer";
+import { rollupBimQuantities, type BimModelQuantityRollup } from "@/lib/bim/modelQuantity";
+import { mergeViewportAppearance, type BimViewportAppearance } from "@/lib/bim/viewportAppearance";
+import {
+  readSavedViewportAppearance,
+  writeSavedViewportAppearance,
+} from "@/lib/bim/viewportAppearanceStorage";
+import {
+  buildModelId,
+  mergeFederatedQuantityIndices,
+  syncFederationViewerUrl,
+  type BimFederationMember,
+} from "@/lib/bim/federation";
+import { loadFederationMember, resolveFederationMember } from "@/lib/bim/loadFederationModel";
+import type { CloudFile } from "@/types/projects";
+import { BimMarkupOverlay } from "./BimMarkupOverlay";
+import { BimIssuesDockContent } from "./BimIssuesDockContent";
+import { IssueFormSlider } from "@/components/pdf-viewer/IssueFormSlider";
+import { focusBimIssueInViewer } from "@/lib/bim/focusBimIssue";
+import type { IssueBimAnchor } from "@/lib/api-client/core-issues-takeoff";
+import { selectionToBimAnchor } from "@/lib/bim/bimIssueAnchor";
+import { compositeBimMarkupSnapshot, dataUrlToFile } from "@/lib/bim/bimMarkupSnapshot";
+import { projectAnnotationsForDisplay } from "@/lib/bim/bimMarkupWorld";
+import {
+  hydrateBimMarkupViewerState,
+  persistBimMarkupsNow,
+  scheduleBimMarkupPersist,
+} from "@/lib/bim/bimMarkupSync";
+import { useBimMarkupStore } from "@/store/bimMarkupStore";
+import {
+  EMPTY_BIM_FILTER_STATE,
+  hasActiveFilter,
+  parseFilterState,
+  ruleFromPropertyRow,
+  type BimFilterState,
+} from "@/lib/bim/bimFilters";
+import { BimFiltersPanel, useBimFilterPreview } from "./BimFiltersPanel";
+import { BimLoadingOverlay } from "./BimLoadingOverlay";
+import { disposeModelThumbnailService } from "@/lib/bim/modelThumbnail";
+
+type BimDockId = BimLeftDockId | "properties" | "takeoffViews" | "issues" | "filters";
+
+type Phase =
+  | { kind: "resolving" }
+  | { kind: "downloading"; label?: string; index?: number; total?: number }
+  | { kind: "converting"; fraction: number; label?: string }
+  | { kind: "ready" }
+  | { kind: "error"; message: string };
+
+const TOOL_HINTS: Record<BimTool, string | null> = {
+  select: null,
+  clip: "Drag green (top) or blue (side) arrow inward · Esc exits",
+  length: "Click two points to measure length · Esc cancels",
+  area: "Click corners, double-click to finish · Esc cancels",
+  angle: "Click three points for angle · Esc cancels",
+  markup: "Draw on the model view — markups stay with this camera angle · Right-drag to orbit",
+};
+
+// fallow-ignore-next-line complexity
+export function BimViewerShell(props: {
+  fileId: string;
+  fileName: string;
+  projectId: string | null;
+  version: string | null;
+  fileVersionId: string | null;
+  initialGuid?: string | null;
+  issueId?: string | null;
+  compareFileVersionId?: string | null;
+  federationMembers: BimFederationMember[];
+  collabEnabled?: boolean;
+}) {
+  const router = useRouter();
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [viewportEl, setViewportEl] = useState<HTMLDivElement | null>(null);
+  const engineRef = useRef<BimEngine | null>(null);
+  const [activeEngine, setActiveEngine] = useState<BimEngine | null>(null);
+
+  const [phase, setPhase] = useState<Phase>({ kind: "resolving" });
+  const [tool, setTool] = useState<BimTool>("select");
+  const [cameraMode, setCameraMode] = useState<BimCameraMode>("orbit");
+  const [selection, setSelection] = useState<BimSelection | null>(null);
+  const [storeys, setStoreys] = useState<BimVisibilityGroup[]>([]);
+  const [categories, setCategories] = useState<BimVisibilityGroup[]>([]);
+  const [activeDock, setActiveDock] = useState<BimDockId | null>(null);
+  const [inspectTab, setInspectTab] = useState<BimInspectTab>("properties");
+  const [activeFlyout, setActiveFlyout] = useState<BimBottomFlyout>(null);
+
+  const [fps, setFps] = useState<number | null>(null);
+  const [resolvedFileVersionId, setResolvedFileVersionId] = useState<string | null>(
+    props.fileVersionId,
+  );
+  const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(props.projectId);
+  const [quantityIndex, setQuantityIndex] = useState<BimQuantityIndex | null>(null);
+  const [loq, setLoq] = useState<BimLoqReport | null>(null);
+  const [conversionStatus, setConversionStatus] = useState("pending");
+  const [quantityIndexError, setQuantityIndexError] = useState<string | null>(null);
+  const [selectedGuids, setSelectedGuids] = useState<Set<string>>(new Set());
+
+  const [loadedModels, setLoadedModels] = useState<BimLoadedModel[]>([]);
+  const [federationMembers, setFederationMembers] = useState<BimFederationMember[]>(
+    props.federationMembers,
+  );
+  const [addingFileVersionId, setAddingFileVersionId] = useState<string | null>(null);
+  const initialMembersRef = useRef(props.federationMembers);
+  const [appearance, setAppearance] = useState<BimViewportAppearance>(() =>
+    readSavedViewportAppearance(),
+  );
+  const [savedViews, setSavedViews] = useState<BimSavedViewRecord[]>([]);
+  const [filterState, setFilterState] = useState<BimFilterState>(EMPTY_BIM_FILTER_STATE);
+  const { matches: filterMatches, legend: filterLegend } = useBimFilterPreview(
+    quantityIndex,
+    filterState,
+  );
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    hasSelection: boolean;
+  } | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [issues, setIssues] = useState<IssueRow[]>([]);
+  const [compareDeltas, setCompareDeltas] = useState<{
+    baseVersion: number;
+    compareVersion: number;
+    deltas: {
+      ifcType: string;
+      countDelta: number;
+      areaDelta: number | null;
+      volumeDelta: number | null;
+    }[];
+  } | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const issueFocusConsumedRef = useRef<string | null>(null);
+  const filterZoomTimerRef = useRef<number | null>(null);
+
+  const markupAnnotations = useBimMarkupStore((s) => s.annotations);
+  const markupSelectedIds = useBimMarkupStore((s) => s.selectedIds);
+  const markupShape = useBimMarkupStore((s) => s.markupShape);
+  const markupMode = useBimMarkupStore((s) => s.markupMode);
+  const strokeColor = useBimMarkupStore((s) => s.strokeColor);
+  const strokeWidth = useBimMarkupStore((s) => s.strokeWidth);
+  const markupHydrated = useBimMarkupStore((s) => s.viewerStateHydrated);
+  const setMarkupShape = useBimMarkupStore((s) => s.setMarkupShape);
+  const setMarkupMode = useBimMarkupStore((s) => s.setMarkupMode);
+  const setStrokeColor = useBimMarkupStore((s) => s.setStrokeColor);
+  const setStrokeWidth = useBimMarkupStore((s) => s.setStrokeWidth);
+  const setMarkupSelectedIds = useBimMarkupStore((s) => s.setSelectedIds);
+  const removeMarkupAnnotations = useBimMarkupStore((s) => s.removeAnnotations);
+  const linkMarkupsToIssue = useBimMarkupStore((s) => s.linkMarkupsToIssue);
+
+  const [issueCreateDraft, setIssueCreateDraft] = useState<{
+    bimAnchor?: IssueBimAnchor;
+    initialLinkedMarkupIds?: string[];
+    pendingReferencePhoto?: File;
+  } | null>(null);
+  const [issuePlacementActive, setIssuePlacementActive] = useState(false);
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [editIssue, setEditIssue] = useState<IssueRow | null>(null);
+
+  const onViewportRef = useCallback((node: HTMLDivElement | null) => {
+    if (viewportRef.current === node) return;
+    viewportRef.current = node;
+    setViewportEl(node);
+  }, []);
+
+  useEffect(() => {
+    if (!viewportEl) return;
+
+    let cancelled = false;
+    disposeModelThumbnailService();
+    setPhase({ kind: "downloading", label: props.fileName, index: 0, total: 1 });
+
+    const engine = new BimEngine({
+      onSelection: (sel) => {
+        if (cancelled) return;
+        setSelection(sel);
+      },
+      onGroupsChanged: (groups) => {
+        if (cancelled) return;
+        setStoreys(groups.storeys);
+        setCategories(groups.categories);
+      },
+      onContextMenu: (pos) => {
+        setContextMenu(pos);
+      },
+      onMultiSelection: (guids) => {
+        if (cancelled) return;
+        setSelectedGuids(new Set(guids));
+      },
+    });
+    engineRef.current = engine;
+    setActiveEngine(engine);
+
+    // fallow-ignore-next-line complexity
+    void (async () => {
+      try {
+        await engine.init(viewportEl);
+        if (cancelled) return;
+        await engine.setViewportAppearance(readSavedViewportAppearance());
+
+        const resolvedMembers: BimFederationMember[] = [];
+        for (const member of initialMembersRef.current) {
+          if (cancelled) return;
+          const resolved = member.fileVersionId
+            ? member
+            : await resolveFederationMember(member, props.projectId);
+          resolvedMembers.push(resolved);
+        }
+        if (cancelled) return;
+
+        const primary = resolvedMembers[0];
+        setResolvedFileVersionId(primary?.fileVersionId ?? null);
+        setResolvedProjectId(props.projectId);
+
+        for (let i = 0; i < resolvedMembers.length; i++) {
+          const member = resolvedMembers[i]!;
+          if (cancelled) return;
+          setPhase({
+            kind: "downloading",
+            label: member.name,
+            index: i,
+            total: resolvedMembers.length,
+          });
+          await loadFederationMember(engine, member, {
+            fitView: false,
+            onConverting: (fraction) => {
+              if (!cancelled) setPhase({ kind: "converting", fraction, label: member.name });
+            },
+          });
+          if (!cancelled) setLoadedModels(engine.getLoadedModels());
+        }
+
+        if (cancelled) return;
+        await engine.fitToView();
+        await engine.resizeViewport();
+        setPhase({ kind: "ready" });
+      } catch (e) {
+        if (!cancelled) {
+          setPhase({
+            kind: "error",
+            message: e instanceof Error ? e.message : "Could not load the model.",
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      engineRef.current = null;
+      setActiveEngine(null);
+      engine.dispose();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one engine per primary model session
+  }, [viewportEl, props.fileId, props.fileVersionId, props.fileName, props.projectId]);
+
+  useEffect(() => {
+    const members = federationMembers.filter((m) => m.fileVersionId);
+    if (members.length === 0 || phase.kind !== "ready") return;
+    let cancelled = false;
+    let timer: number | undefined;
+
+    // fallow-ignore-next-line complexity
+    const poll = async () => {
+      try {
+        const sources = [];
+        let anyFailed = false;
+        let anyPending = false;
+
+        for (const member of members) {
+          const status = await fetchBimStatus(member.fileVersionId);
+          if (cancelled) return;
+          if (status.conversionStatus === "failed") anyFailed = true;
+          if (status.quantityIndexReady) {
+            const index = await fetchBimQuantityIndex(member.fileVersionId);
+            if (cancelled) return;
+            sources.push({
+              fileVersionId: member.fileVersionId,
+              modelId: buildModelId(member),
+              label: member.name,
+              index,
+            });
+          } else {
+            anyPending = true;
+          }
+          if (member.fileVersionId === resolvedFileVersionId) {
+            setConversionStatus(status.conversionStatus);
+            setLoq(status.loq);
+          }
+        }
+
+        if (sources.length > 0) {
+          const merged = mergeFederatedQuantityIndices(sources);
+          if (merged) {
+            setQuantityIndex(merged);
+            setQuantityIndexError(null);
+            engineRef.current?.setQuantityIndex(merged);
+          }
+        }
+
+        if (anyPending) {
+          setQuantityIndexError(
+            anyFailed
+              ? "Quantity index build failed for one or more models. Open Quality to rebuild."
+              : null,
+          );
+          timer = window.setTimeout(poll, anyFailed ? 4000 : 2500);
+          return;
+        }
+
+        if (anyFailed && sources.length === 0) {
+          setQuantityIndexError("Quantity index build failed. Open the Quality tab to rebuild.");
+        }
+      } catch (e) {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : "Could not load quantity index status.";
+        setQuantityIndexError(msg);
+        timer = window.setTimeout(poll, 4000);
+      }
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [federationMembers, phase.kind, resolvedFileVersionId]);
+
+  useEffect(() => {
+    const fvId = resolvedFileVersionId;
+    if (!fvId || phase.kind !== "ready") return;
+    void fetchBimSavedViews(fvId)
+      .then((res) => setSavedViews(res.views))
+      .catch(() => undefined);
+  }, [resolvedFileVersionId, phase.kind]);
+
+  useEffect(() => {
+    const members = federationMembers.filter((m) => m.fileVersionId);
+    if (members.length === 0 || phase.kind !== "ready") return;
+    let cancelled = false;
+    void Promise.all(members.map((m) => fetchIssuesForFileVersion(m.fileVersionId)))
+      // fallow-ignore-next-line complexity
+      .then((rows) => {
+        if (cancelled) return;
+        const byId = new Map<string, IssueRow>();
+        for (const list of rows) {
+          for (const row of list) {
+            if (row.bimAnchor?.ifcGuid || row.bimAnchor?.position) {
+              byId.set(row.id, row);
+            }
+          }
+        }
+        setIssues([...byId.values()]);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [federationMembers, phase.kind]);
+
+  const reloadIssues = useCallback(() => {
+    const members = federationMembers.filter((m) => m.fileVersionId);
+    if (members.length === 0) return;
+    void Promise.all(members.map((m) => fetchIssuesForFileVersion(m.fileVersionId)))
+      // fallow-ignore-next-line complexity
+      .then((rows) => {
+        const byId = new Map<string, IssueRow>();
+        for (const list of rows) {
+          for (const row of list) {
+            if (row.bimAnchor?.ifcGuid || row.bimAnchor?.position) {
+              byId.set(row.id, row);
+            }
+          }
+        }
+        setIssues([...byId.values()]);
+      })
+      .catch(() => undefined);
+  }, [federationMembers]);
+
+  useEffect(() => {
+    const fvId = resolvedFileVersionId;
+    if (!fvId || phase.kind !== "ready") return;
+    void hydrateBimMarkupViewerState(fvId);
+  }, [resolvedFileVersionId, phase.kind]);
+
+  useEffect(() => {
+    if (!useBimMarkupStore.getState().viewerStateHydrated) return;
+    scheduleBimMarkupPersist();
+  }, [markupAnnotations]);
+
+  useEffect(() => {
+    const fvId = resolvedFileVersionId;
+    const otherId = props.compareFileVersionId;
+    if (!fvId || !otherId || phase.kind !== "ready") return;
+    void compareBimQuantities(fvId, otherId)
+      .then(setCompareDeltas)
+      .catch(() => undefined);
+  }, [resolvedFileVersionId, props.compareFileVersionId, phase.kind]);
+
+  useEffect(() => {
+    const guid = props.initialGuid;
+    if (props.issueId?.trim()) return;
+    if (!guid || phase.kind !== "ready") return;
+    void engineRef.current?.selectByGuids([guid], false).then(() => {
+      void engineRef.current?.zoomToSelection();
+    });
+  }, [props.initialGuid, props.issueId, phase.kind, quantityIndex]);
+
+  useEffect(() => {
+    issueFocusConsumedRef.current = null;
+  }, [props.issueId]);
+
+  useEffect(() => {
+    const issueId = props.issueId?.trim();
+    if (!issueId || phase.kind !== "ready") return;
+    if (issueFocusConsumedRef.current === issueId) return;
+
+    let cancelled = false;
+    // fallow-ignore-next-line complexity
+    void (async () => {
+      try {
+        const issue = await fetchIssue(issueId);
+        if (cancelled) return;
+
+        const fvId = issue.fileVersionId;
+        const matchesLoadedModel = (id: string | null | undefined) =>
+          Boolean(
+            id &&
+            (id === props.fileVersionId ||
+              id === resolvedFileVersionId ||
+              federationMembers.some((m) => m.fileVersionId === id)),
+          );
+        if (!matchesLoadedModel(fvId)) {
+          toast.error("This issue is linked to a different model revision.");
+          issueFocusConsumedRef.current = issueId;
+          return;
+        }
+
+        const engine = engineRef.current;
+        if (!engine) return;
+
+        const focused = await focusBimIssueInViewer(engine, issue, { retryMs: 15_000 });
+        if (!focused && !cancelled) {
+          toast.info("Could not locate the linked element — showing the full model.");
+        }
+
+        if (!cancelled) {
+          setSelectedIssueId(issue.id);
+          setActiveDock("issues");
+          setEditIssue(issue);
+          issueFocusConsumedRef.current = issueId;
+        }
+      } catch (e) {
+        if (!cancelled) {
+          toast.error(e instanceof Error ? e.message : "Could not open issue.");
+          issueFocusConsumedRef.current = issueId;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    props.issueId,
+    props.fileVersionId,
+    federationMembers,
+    phase.kind,
+    resolvedFileVersionId,
+    quantityIndex,
+  ]);
+
+  useEffect(() => {
+    const onFs = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  useEffect(() => {
+    if (phase.kind !== "ready") return;
+    const resize = () => engineRef.current?.resizeViewport();
+    resize();
+    requestAnimationFrame(resize);
+    const t = window.setTimeout(resize, 150);
+    window.addEventListener("resize", resize);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("resize", resize);
+    };
+  }, [phase.kind, activeDock]);
+
+  useEffect(() => {
+    const body: { fileVersionId?: string; version?: number } = {};
+    if (props.fileVersionId) body.fileVersionId = props.fileVersionId;
+    if (props.version) {
+      const n = Number(props.version);
+      if (!Number.isNaN(n)) body.version = n;
+    }
+    void fetch(apiUrl(`/api/v1/files/${encodeURIComponent(props.fileId)}/open`), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => undefined);
+  }, [props.fileId, props.version, props.fileVersionId]);
+
+  const selectTool = useCallback((next: BimTool) => {
+    setTool(next);
+    if (next === "markup") {
+      setActiveFlyout("markup");
+    } else {
+      setActiveFlyout(null);
+    }
+    engineRef.current?.setTool(next);
+  }, []);
+
+  const selectCameraMode = useCallback(async (next: BimCameraMode) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    setActiveFlyout(null);
+    try {
+      await engine.setCameraMode(next);
+      setCameraMode(engine.getCameraMode());
+      if (next === "walk") {
+        toast.info("Walk mode: drag to look, WASD to move.", { duration: 3000 });
+      }
+    } catch {
+      toast.error("Could not switch camera mode.");
+      setCameraMode(engine.getCameraMode());
+    }
+  }, []);
+
+  const fitToView = useCallback(() => {
+    setActiveFlyout(null);
+    void engineRef.current?.fitToView();
+  }, []);
+
+  const onShowAll = useCallback(() => {
+    setActiveFlyout(null);
+    setFilterState(EMPTY_BIM_FILTER_STATE);
+    void engineRef.current?.showAllElements();
+  }, []);
+
+  // fallow-ignore-next-line complexity
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || phase.kind !== "ready") return;
+
+    const filterActive = hasActiveFilter(filterState);
+    const colorizeActive = Boolean(filterState.colorize?.enabled);
+
+    if (!filterActive && !colorizeActive) {
+      void engine.clearColorize();
+      void engine.resetFilterVisibility();
+      return;
+    }
+
+    const textOnly = filterState.rules.length === 0 && filterState.textQuery.trim().length > 0;
+    const zoomDelay = textOnly ? 450 : 0;
+
+    if (filterZoomTimerRef.current != null) {
+      window.clearTimeout(filterZoomTimerRef.current);
+    }
+
+    filterZoomTimerRef.current = window.setTimeout(() => {
+      // fallow-ignore-next-line complexity
+      void (async () => {
+        const guids = filterMatches.map((m) => m.guid);
+
+        if (filterActive) {
+          await engine.applyFilterVisualize(guids, filterState.visualize);
+        } else {
+          await engine.resetFilterVisibility();
+        }
+
+        if (colorizeActive && filterLegend.length > 0) {
+          await engine.applyColorize(
+            filterLegend.map((entry, i) => ({
+              styleId: `colorize:${i}`,
+              color: entry.color,
+              guids: entry.guids,
+            })),
+          );
+        } else {
+          await engine.clearColorize();
+        }
+
+        if (filterActive && guids.length > 0) {
+          await engine.zoomToGuids(guids);
+        }
+      })();
+    }, zoomDelay);
+
+    return () => {
+      if (filterZoomTimerRef.current != null) {
+        window.clearTimeout(filterZoomTimerRef.current);
+      }
+    };
+  }, [filterState, filterMatches, filterLegend, phase.kind]);
+
+  const clearMarkups = useCallback(() => {
+    setActiveFlyout(null);
+    engineRef.current?.deleteMeasurements();
+    engineRef.current?.deleteClippingPlanes();
+    useBimMarkupStore.getState().clearAnnotations();
+    void persistBimMarkupsNow();
+  }, []);
+
+  const onToggleGroup = useCallback(
+    (kind: "storey" | "category", name: string, visible: boolean) => {
+      void engineRef.current?.setGroupVisible(kind, name, visible);
+    },
+    [],
+  );
+
+  const clearSelection = useCallback(() => {
+    engineRef.current?.clearSelection();
+    setSelection(null);
+    setSelectedGuids(new Set());
+  }, []);
+
+  const openPropertiesDock = useCallback((tab: BimInspectTab = "properties") => {
+    setInspectTab(tab);
+    setActiveDock("properties");
+  }, []);
+
+  const toggleDock = useCallback((id: BimDockId) => {
+    setActiveDock((prev) => (prev === id ? null : id));
+  }, []);
+
+  const openIssueDetail = useCallback(
+    // fallow-ignore-next-line complexity
+    async (issue: IssueRow, opts?: { fly?: boolean; openForm?: boolean }) => {
+      setSelectedIssueId(issue.id);
+      setActiveDock("issues");
+      if (opts?.fly !== false) {
+        const engine = engineRef.current;
+        if (engine) await focusBimIssueInViewer(engine, issue);
+      }
+      if (opts?.openForm !== false) {
+        setEditIssue(issue);
+      }
+    },
+    [],
+  );
+
+  const focusIssueOnly = useCallback(async (issue: IssueRow) => {
+    setSelectedIssueId(issue.id);
+    setActiveDock("issues");
+    const engine = engineRef.current;
+    if (engine) await focusBimIssueInViewer(engine, issue);
+  }, []);
+
+  const toggleFlyout = useCallback((flyout: Exclude<BimBottomFlyout, null>) => {
+    setActiveFlyout((prev) => {
+      const next = prev === flyout ? null : flyout;
+      if (flyout === "markup" && next === "markup") {
+        setTool("markup");
+        engineRef.current?.setTool("markup");
+      }
+      return next;
+    });
+  }, []);
+
+  const deleteSelectedMarkups = useCallback(() => {
+    const ids = useBimMarkupStore.getState().selectedIds;
+    if (ids.length === 0) return;
+    removeMarkupAnnotations(ids);
+    setMarkupSelectedIds([]);
+    scheduleBimMarkupPersist();
+  }, [removeMarkupAnnotations, setMarkupSelectedIds]);
+
+  const startIssueCreate = useCallback(
+    (draft: {
+      bimAnchor?: IssueBimAnchor;
+      initialLinkedMarkupIds?: string[];
+      pendingReferencePhoto?: File;
+    }) => {
+      if (!resolvedFileVersionId || !resolvedProjectId) {
+        toast.error(
+          "Missing project or file version. Reopen this model from the project Files tab.",
+        );
+        return;
+      }
+      setIssuePlacementActive(false);
+      engineRef.current?.setIssuePlacementPick(null);
+      setEditIssue(null);
+      setIssueCreateDraft(draft);
+    },
+    [resolvedFileVersionId, resolvedProjectId],
+  );
+
+  const armIssuePlacement = useCallback(() => {
+    if (!resolvedFileVersionId || !resolvedProjectId) {
+      toast.error("Missing project or file version. Reopen this model from the project Files tab.");
+      return;
+    }
+    setIssueCreateDraft(null);
+    setEditIssue(null);
+    setActiveDock(null);
+    setActiveFlyout(null);
+    setTool("select");
+    engineRef.current?.setTool("select");
+    setIssuePlacementActive(true);
+    toast.message("Click the model to place the issue.", { duration: 5000 });
+  }, [resolvedFileVersionId, resolvedProjectId]);
+
+  const captureIssueSnapshotFile = useCallback(
+    // fallow-ignore-next-line complexity
+    async (
+      focus?: { normX: number; normY: number } | { anchor: IssueBimAnchor },
+    ): Promise<File | undefined> => {
+      const engine = engineRef.current;
+      if (!engine) return undefined;
+      let dataUrl: string | null;
+      if (focus && "normX" in focus) {
+        dataUrl = await engine.capturePlacementSnapshot(focus.normX, focus.normY);
+      } else if (focus && "anchor" in focus) {
+        dataUrl = await engine.captureAnchorSnapshot(focus.anchor);
+      } else {
+        dataUrl = await engine.captureSnapshot();
+      }
+      if (!dataUrl) return undefined;
+      return dataUrlToFile(dataUrl, `${props.fileName.replace(/\.[^.]+$/, "")}-issue.png`);
+    },
+    [props.fileName],
+  );
+
+  const startIssueCreateFromSelection = useCallback(() => {
+    void (async () => {
+      if (!selection) {
+        toast.error("Select an element in the model first.");
+        return;
+      }
+      const anchor = selectionToBimAnchor(selection);
+      if (!anchor) {
+        toast.error("Could not anchor an issue to this selection.");
+        return;
+      }
+      const pendingReferencePhoto = await captureIssueSnapshotFile({ anchor });
+      startIssueCreate({ bimAnchor: anchor, pendingReferencePhoto });
+    })();
+  }, [captureIssueSnapshotFile, selection, startIssueCreate]);
+
+  // fallow-ignore-next-line complexity
+  const buildMarkupBimAnchor = useCallback((): IssueBimAnchor | undefined => {
+    if (selection?.ifcGuid) {
+      return {
+        ifcGuid: selection.ifcGuid,
+        localId: selection.localId,
+        name: selection.name ?? undefined,
+        ifcType: selection.ifcType ?? undefined,
+        spatialPath: selection.storey ? [selection.storey] : undefined,
+        position: selection.position ?? undefined,
+      };
+    }
+    const cam = engineRef.current?.getCameraState();
+    const tgt = cam?.target;
+    if (Array.isArray(tgt) && tgt.length === 3) {
+      return {
+        ifcGuid: "viewport-markup",
+        position: { x: tgt[0] as number, y: tgt[1] as number, z: tgt[2] as number },
+      };
+    }
+    return undefined;
+  }, [selection]);
+
+  const onCreateIssueFromMarkup = useCallback(() => {
+    // fallow-ignore-next-line complexity
+    void (async () => {
+      try {
+        const ids = useBimMarkupStore.getState().selectedIds;
+        if (ids.length === 0) {
+          toast.error("Select at least one markup first.");
+          return;
+        }
+        const engine = engineRef.current;
+        const container = viewportRef.current;
+        if (!engine || !container || !resolvedFileVersionId || !resolvedProjectId) {
+          toast.error("Could not prepare issue from markup.");
+          return;
+        }
+        const baseDataUrl = await engine.captureSnapshot();
+        if (!baseDataUrl) {
+          toast.error("Could not capture model snapshot.");
+          return;
+        }
+        const rect = container.getBoundingClientRect();
+        const storeAnnotations = useBimMarkupStore.getState().annotations;
+        const projected = projectAnnotationsForDisplay(
+          engine,
+          storeAnnotations,
+          rect.width,
+          rect.height,
+        );
+        const projectedById = new Map(projected.map((a) => [a.id, a]));
+        const snapshotAnnotations = ids
+          .map((id) => projectedById.get(id) ?? storeAnnotations.find((a) => a.id === id))
+          .filter((a): a is NonNullable<typeof a> => a != null);
+        const composite = await compositeBimMarkupSnapshot(
+          baseDataUrl,
+          snapshotAnnotations.length > 0 ? snapshotAnnotations : projected,
+          { markupIds: ids, cssW: rect.width, cssH: rect.height, cropToBounds: true },
+        );
+        if (!composite) {
+          toast.error("Could not composite markup snapshot.");
+          return;
+        }
+        const snapshotFile = dataUrlToFile(
+          composite,
+          `${props.fileName.replace(/\.[^.]+$/, "")}-markup.png`,
+        );
+        startIssueCreate({
+          initialLinkedMarkupIds: ids,
+          pendingReferencePhoto: snapshotFile,
+          bimAnchor: buildMarkupBimAnchor(),
+        });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not prepare issue from markup.");
+      }
+    })();
+  }, [
+    buildMarkupBimAnchor,
+    props.fileName,
+    resolvedFileVersionId,
+    resolvedProjectId,
+    startIssueCreate,
+  ]);
+
+  const quantityRollup = useMemo(() => {
+    if (selectedGuids.size === 0) {
+      return {
+        count: 0,
+        length: null,
+        area: null,
+        volume: null,
+        entries: [] as BimQuantityEntry[],
+      };
+    }
+    return (
+      engineRef.current?.rollupSelectedQuantities() ?? {
+        count: selectedGuids.size,
+        length: null,
+        area: null,
+        volume: null,
+        entries: [] as BimQuantityEntry[],
+      }
+    );
+  }, [selection, selectedGuids]);
+
+  // fallow-ignore-next-line complexity
+  const takeoffSelectionSummary = useMemo(() => {
+    if (selectedGuids.size === 0) return null;
+    const entries =
+      quantityRollup.entries.length > 0
+        ? quantityRollup.entries
+        : (quantityIndex?.elements.filter((e) => selectedGuids.has(e.guid)) ?? []);
+    const ifcTypes = [...new Set(entries.map((e) => e.ifcType).filter(Boolean))];
+    return {
+      elementCount: selectedGuids.size,
+      ifcTypes,
+      sampleName: entries[0]?.name ?? null,
+    };
+  }, [quantityRollup.entries, quantityIndex, selectedGuids]);
+
+  const selectedGuidsKey = useMemo(() => [...selectedGuids].sort().join("|"), [selectedGuids]);
+
+  // fallow-ignore-next-line complexity
+  const resolveModelQuantities = useCallback(async (): Promise<BimModelQuantityRollup> => {
+    const guids = selectedGuidsKey ? selectedGuidsKey.split("|") : [];
+    if (guids.length === 0) {
+      return { count: 0, length: null, area: null, volume: null };
+    }
+    const engine = engineRef.current;
+    if (engine) return engine.resolveQuantityRollup(guids);
+    const entries = quantityIndex?.elements.filter((e) => selectedGuids.has(e.guid)) ?? [];
+    return rollupBimQuantities(
+      entries.map((e) => e.quantities),
+      guids.length,
+    );
+  }, [selectedGuidsKey, quantityIndex, selectedGuids]);
+
+  const onSelectGuids = useCallback((guids: string[], additive: boolean) => {
+    void engineRef.current?.selectByGuids(guids, additive);
+  }, []);
+
+  const onSelectType = useCallback(
+    (ifcType: string, additive: boolean) => {
+      const guids = quantityIndex?.byType[ifcType]?.guids ?? [];
+      if (guids.length) void engineRef.current?.selectByGuids(guids, additive);
+    },
+    [quantityIndex],
+  );
+
+  const onContextAction = useCallback(
+    (action: string) => {
+      // fallow-ignore-next-line complexity
+      void (async () => {
+        const engine = engineRef.current;
+        if (!engine) return;
+        if (action !== "showAll") {
+          await engine.flushContextMenuPick();
+        }
+        switch (action) {
+          case "zoom":
+            await engine.zoomToSelection();
+            break;
+          case "isolate":
+            await engine.isolateSelection();
+            break;
+          case "xray":
+            await engine.setXRayMode(true);
+            break;
+          case "section":
+            await engine.sectionBoxOnSelection();
+            break;
+          case "hide":
+            await engine.hideSelection();
+            break;
+          case "properties":
+            openPropertiesDock("properties");
+            break;
+          case "createIssue":
+            startIssueCreateFromSelection();
+            break;
+          case "showAll":
+            await engine.showAllElements();
+            break;
+        }
+      })();
+    },
+    [openPropertiesDock, startIssueCreateFromSelection],
+  );
+
+  useEffect(() => {
+    const engine = activeEngine;
+    if (!engine || phase.kind !== "ready") return;
+
+    if (!issuePlacementActive) {
+      engine.setIssuePlacementPick(null);
+      return;
+    }
+
+    engine.setIssuePlacementPick((normX, normY) => {
+      void (async () => {
+        const pendingReferencePhoto = await captureIssueSnapshotFile({ normX, normY });
+        const anchor = await engine.buildIssueAnchorAtNorm(normX, normY);
+        if (!anchor) {
+          toast.error("Could not place issue on the model.");
+          return;
+        }
+        startIssueCreate({ bimAnchor: anchor, pendingReferencePhoto });
+      })();
+    });
+
+    return () => engine.setIssuePlacementPick(null);
+  }, [captureIssueSnapshotFile, issuePlacementActive, activeEngine, phase.kind, startIssueCreate]);
+
+  useEffect(() => {
+    if (!issuePlacementActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIssuePlacementActive(false);
+        engineRef.current?.setIssuePlacementPick(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [issuePlacementActive]);
+
+  // fallow-ignore-next-line complexity
+  const saveCurrentView = useCallback(async () => {
+    const fvId = resolvedFileVersionId;
+    const engine = engineRef.current;
+    if (!fvId || !engine) return;
+    const name = window.prompt("Saved view name");
+    if (!name?.trim()) return;
+    try {
+      const { view } = await createBimSavedView(fvId, {
+        name: name.trim(),
+        cameraJson: engine.getCameraState(),
+        filtersJson: filterState as unknown as Record<string, unknown>,
+        hiddenGuids: [],
+        isolatedGuids: filterMatches.map((m) => m.guid),
+      });
+      setSavedViews((prev) => [...prev, view]);
+      toast.success("View saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save view.");
+    }
+  }, [resolvedFileVersionId, filterState, filterMatches]);
+
+  // fallow-ignore-next-line complexity
+  const saveFilterView = useCallback(async () => {
+    const fvId = resolvedFileVersionId;
+    const engine = engineRef.current;
+    if (!fvId || !engine) return;
+    const name = window.prompt("Saved filter name");
+    if (!name?.trim()) return;
+    try {
+      const { view } = await createBimSavedView(fvId, {
+        name: name.trim(),
+        cameraJson: engine.getCameraState(),
+        filtersJson: filterState as unknown as Record<string, unknown>,
+        hiddenGuids: [],
+        isolatedGuids: filterMatches.map((m) => m.guid),
+      });
+      setSavedViews((prev) => [...prev, view]);
+      toast.success("Filter saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save filter.");
+    }
+  }, [resolvedFileVersionId, filterState, filterMatches]);
+
+  // fallow-ignore-next-line complexity
+  const applySavedView = useCallback(async (view: BimSavedViewRecord) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    await engine.applyCameraState(view.cameraJson);
+    const parsed = parseFilterState(view.filtersJson);
+    if (parsed) {
+      setFilterState(parsed);
+      return;
+    }
+    if (view.isolatedGuids?.length) {
+      await engine.selectByGuids(view.isolatedGuids, false);
+      await engine.isolateSelection();
+    } else {
+      setFilterState(EMPTY_BIM_FILTER_STATE);
+      await engine.showAllElements();
+    }
+  }, []);
+
+  const addFilterRuleFromProperty = useCallback(
+    (group: string, property: string, value: string) => {
+      const rule = ruleFromPropertyRow(group, property, value);
+      if (!rule) return;
+      setFilterState((prev) => ({
+        ...prev,
+        rules: [...prev.rules, rule],
+      }));
+      setActiveDock("filters");
+      toast.success("Filter rule added.");
+    },
+    [],
+  );
+
+  const deleteSavedView = useCallback(async (viewId: string) => {
+    try {
+      await deleteBimSavedView(viewId);
+      setSavedViews((prev) => prev.filter((v) => v.id !== viewId));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete view.");
+    }
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void el.requestFullscreen();
+  }, []);
+
+  const captureSnapshot = useCallback(() => {
+    void (async () => {
+      const dataUrl = await engineRef.current?.captureSnapshot();
+      if (!dataUrl) {
+        toast.error("Could not capture snapshot.");
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `${props.fileName.replace(/\.[^.]+$/, "")}-snapshot.png`;
+      a.click();
+      toast.success("Snapshot downloaded.");
+    })();
+  }, [props.fileName]);
+
+  const onSelectIssue = useCallback(
+    (issue: IssueRow) => {
+      void openIssueDetail(issue);
+    },
+    [openIssueDetail],
+  );
+
+  const onAppearanceChange = useCallback((patch: Partial<BimViewportAppearance>) => {
+    setAppearance((prev) => {
+      const next = mergeViewportAppearance(prev, patch);
+      writeSavedViewportAppearance(next);
+      return next;
+    });
+    void engineRef.current?.setViewportAppearance(patch);
+  }, []);
+
+  const rebuildIndex = useCallback(() => {
+    const members = federationMembers.filter((m) => m.fileVersionId);
+    if (members.length === 0) return;
+    setConversionStatus("pending");
+    setQuantityIndexError(null);
+    void Promise.all(members.map((m) => triggerBimConversion(m.fileVersionId)))
+      .then(() =>
+        toast.success(
+          members.length > 1
+            ? `Index rebuild queued for ${members.length} models.`
+            : "Index rebuild queued.",
+        ),
+      )
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Could not rebuild index."));
+  }, [federationMembers]);
+
+  const backHref = resolvedProjectId ? `/projects/${resolvedProjectId}/files` : "/projects";
+  const loading = phase.kind !== "ready" && phase.kind !== "error";
+  const hint = TOOL_HINTS[tool];
+  const toolNeedsPoint =
+    tool !== "select" && tool !== "clip" && tool !== "markup" && phase.kind === "ready";
+  const selectionCount = selectedGuids.size || (selection ? 1 : 0);
+  const activeFileVersionId = selection?.fileVersionId ?? resolvedFileVersionId;
+  const activeFileId = selection?.modelId?.split(":")[0] ?? props.fileId;
+  const isFederated = federationMembers.length > 1;
+
+  const onToggleModelVisible = useCallback((modelId: string, visible: boolean) => {
+    void engineRef.current?.setModelVisible(modelId, visible).then(() => {
+      setLoadedModels(engineRef.current?.getLoadedModels() ?? []);
+    });
+  }, []);
+
+  const onAddFederationMember = useCallback(
+    // fallow-ignore-next-line complexity
+    async (file: CloudFile, fileVersionId: string, version: number) => {
+      const engine = engineRef.current;
+      const projectId = resolvedProjectId ?? props.projectId;
+      if (!engine || phase.kind !== "ready" || !projectId) return;
+      if (federationMembers.some((m) => m.fileVersionId === fileVersionId)) return;
+
+      const member: BimFederationMember = {
+        fileId: file.id,
+        fileVersionId,
+        version: String(version),
+        name: file.name,
+      };
+
+      setAddingFileVersionId(fileVersionId);
+      try {
+        const resolved = await resolveFederationMember(member, projectId);
+        await loadFederationMember(engine, resolved, { fitView: false });
+        setFederationMembers((prev) => {
+          const next = [...prev, resolved];
+          syncFederationViewerUrl(projectId, next);
+          return next;
+        });
+        setLoadedModels(engine.getLoadedModels());
+        toast.success(`Added ${resolved.name} to federation.`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not load model.");
+      } finally {
+        setAddingFileVersionId(null);
+      }
+    },
+    [federationMembers, phase.kind, props.projectId, resolvedProjectId],
+  );
+
+  const onRemoveFederationMember = useCallback(
+    // fallow-ignore-next-line complexity
+    async (fileVersionId: string) => {
+      const engine = engineRef.current;
+      const projectId = resolvedProjectId ?? props.projectId;
+      if (!engine || phase.kind !== "ready" || !projectId) return;
+
+      const member = federationMembers.find((m) => m.fileVersionId === fileVersionId);
+      if (!member || federationMembers.length <= 1) return;
+
+      const modelId = buildModelId(member);
+      try {
+        await engine.removeModel(modelId);
+        setFederationMembers((prev) => {
+          const next = prev.filter((m) => m.fileVersionId !== fileVersionId);
+          syncFederationViewerUrl(projectId, next);
+          return next;
+        });
+        setLoadedModels(engine.getLoadedModels());
+        setSelectedGuids((prev) => {
+          const index = quantityIndex;
+          if (!index) return prev;
+          const removedGuids = new Set(
+            index.elements
+              .filter((el) => el.sourceFileVersionId === fileVersionId)
+              .map((el) => el.guid),
+          );
+          if (removedGuids.size === 0) return prev;
+          const next = new Set(prev);
+          for (const guid of removedGuids) next.delete(guid);
+          return next;
+        });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not remove model.");
+      }
+    },
+    [federationMembers, phase.kind, props.projectId, quantityIndex, resolvedProjectId],
+  );
+
+  useEffect(() => {
+    if (!activeFlyout) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setActiveFlyout(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [activeFlyout]);
+
+  const onSelectElementFromSearch = useCallback((guid: string) => {
+    setActiveFlyout(null);
+    void engineRef.current?.selectByGuids([guid], false).then(() => {
+      void engineRef.current?.zoomToSelection();
+    });
+  }, []);
+
+  const closeElementSearch = useCallback(() => {
+    setActiveFlyout(null);
+  }, []);
+
+  const railSections = useMemo(
+    // fallow-ignore-next-line complexity
+    () => [
+      [
+        {
+          id: "issues",
+          label: "Issues",
+          icon: CircleAlert,
+          badge: issues.length > 0 ? issues.length : undefined,
+        },
+        {
+          id: "properties",
+          label: "Properties",
+          icon: TableProperties,
+          badge: selectionCount > 0 ? selectionCount : undefined,
+        },
+        {
+          id: "filters",
+          label: "Filters",
+          icon: Filter,
+          badge:
+            hasActiveFilter(filterState) || filterState.colorize?.enabled
+              ? filterMatches.length
+              : undefined,
+        },
+        { id: "takeoffViews", label: "Takeoff and views", icon: ClipboardList },
+      ],
+      [
+        { id: "objects", label: "Objects", icon: ScanSearch },
+        {
+          id: "models",
+          label: "Models",
+          icon: Boxes,
+          badge: isFederated ? federationMembers.length : undefined,
+        },
+        { id: "visibility", label: "Visibility", icon: Eye },
+        { id: "quality", label: "Quality", icon: Sparkles },
+      ],
+    ],
+    [
+      isFederated,
+      issues.length,
+      federationMembers.length,
+      selectionCount,
+      filterState,
+      filterMatches.length,
+    ],
+  );
+
+  const dockMeta: Record<BimDockId, { title: string; subtitle: string }> = {
+    objects: { title: "Objects", subtitle: "Browse and search IFC elements" },
+    models: { title: "Models", subtitle: "Federation and loaded files" },
+    visibility: { title: "Visibility", subtitle: "Levels and disciplines" },
+    quality: { title: "Quality", subtitle: "LOQ and viewport appearance" },
+    properties: {
+      title: "Properties",
+      subtitle:
+        selectionCount > 0
+          ? `${selectionCount} element${selectionCount === 1 ? "" : "s"} selected`
+          : "IFC element data",
+    },
+    filters: {
+      title: "Filters",
+      subtitle:
+        hasActiveFilter(filterState) || filterState.colorize?.enabled
+          ? `${filterMatches.length.toLocaleString()} elements`
+          : "Search, isolate, and colorize",
+    },
+    takeoffViews: {
+      title: "Takeoff & views",
+      subtitle: "Quantities, export, and saved cameras",
+    },
+    issues: { title: "Issues", subtitle: `${issues.length} on this model` },
+  };
+
+  const isBrowserDock = (dock: BimDockId): dock is BimLeftDockId =>
+    dock === "objects" || dock === "models" || dock === "visibility" || dock === "quality";
+
+  return (
+    <div ref={shellRef} className="bim-viewer fixed inset-0 z-40 overflow-hidden">
+      <div className="bim-canvas-full">
+        <div
+          ref={onViewportRef}
+          data-issue-placement={issuePlacementActive ? "true" : undefined}
+          className={`relative h-full w-full touch-none${issuePlacementActive ? " bim-viewport--issue-placement" : ""}`}
+        >
+          {phase.kind === "ready" ? (
+            <BimMarkupOverlay
+              interactive={tool === "markup" && markupHydrated}
+              engine={activeEngine}
+              container={viewportEl}
+            />
+          ) : null}
+        </div>
+
+        <BimBreadcrumbChip
+          backHref={backHref}
+          onBack={() => router.push(backHref)}
+          fileName={props.fileName}
+          federatedLabel={isFederated ? `Federated · ${federationMembers.length} models` : null}
+        />
+
+        {phase.kind === "ready" ? (
+          <BimIconRail
+            side="right"
+            sections={railSections}
+            activeId={activeDock}
+            onSelect={(id) => toggleDock(id as BimDockId)}
+            ariaLabel="Viewer panels"
+            header={
+              <button
+                type="button"
+                onClick={fitToView}
+                aria-label="Fit model to view"
+                title="Fit model to view"
+                className="bim-rail-btn mobile-touch-target"
+              >
+                <Home className="h-[18px] w-[18px]" aria-hidden />
+              </button>
+            }
+          />
+        ) : null}
+
+        {phase.kind === "ready" && activeDock && isBrowserDock(activeDock) ? (
+          <BimGlassDock
+            side="right"
+            open
+            title={dockMeta[activeDock].title}
+            subtitle={dockMeta[activeDock].subtitle}
+            onClose={() => setActiveDock(null)}
+          >
+            <BimLeftDockContent
+              dock={activeDock}
+              anchorFileId={props.fileId}
+              storeys={storeys}
+              categories={categories}
+              onToggleGroup={onToggleGroup}
+              onShowAll={onShowAll}
+              quantityIndex={quantityIndex}
+              quantityIndexError={quantityIndexError}
+              conversionStatus={conversionStatus}
+              selectedGuids={selectedGuids}
+              onSelectGuids={onSelectGuids}
+              onSelectType={onSelectType}
+              loq={loq}
+              onRebuildIndex={rebuildIndex}
+              appearance={appearance}
+              onAppearanceChange={onAppearanceChange}
+              projectId={resolvedProjectId}
+              federationMembers={federationMembers}
+              loadedModels={loadedModels}
+              addingFileVersionId={addingFileVersionId}
+              onAddFederationMember={onAddFederationMember}
+              onRemoveFederationMember={onRemoveFederationMember}
+              onToggleModelVisible={onToggleModelVisible}
+            />
+          </BimGlassDock>
+        ) : null}
+
+        {phase.kind === "ready" && activeDock === "properties" ? (
+          <BimGlassDock
+            side="right"
+            open
+            title={dockMeta.properties.title}
+            subtitle={dockMeta.properties.subtitle}
+            onClose={() => setActiveDock(null)}
+          >
+            <BimInspectDockContent
+              key={inspectTab}
+              selection={selection}
+              selectionCount={selectionCount}
+              quantityIndex={quantityIndex}
+              fileId={activeFileId}
+              fileVersionId={activeFileVersionId}
+              projectId={resolvedProjectId}
+              onClearSelection={clearSelection}
+              quantityRollup={quantityRollup}
+              takeoffSelectionSummary={takeoffSelectionSummary}
+              initialTab={inspectTab}
+              onStartCreateIssue={(anchor) => startIssueCreate({ bimAnchor: anchor })}
+              onAddFilterRule={addFilterRuleFromProperty}
+            />
+          </BimGlassDock>
+        ) : null}
+
+        {phase.kind === "ready" && activeDock === "filters" ? (
+          <BimGlassDock
+            side="right"
+            open
+            title={dockMeta.filters.title}
+            subtitle={dockMeta.filters.subtitle}
+            onClose={() => setActiveDock(null)}
+          >
+            <BimFiltersPanel
+              index={quantityIndex}
+              filterState={filterState}
+              onFilterStateChange={setFilterState}
+              matchCount={filterMatches.length}
+              legend={filterLegend}
+              savedViews={savedViews}
+              onSaveFilter={() => void saveFilterView()}
+              onApplySavedView={(v) => void applySavedView(v)}
+              onDeleteSavedView={(id) => void deleteSavedView(id)}
+            />
+          </BimGlassDock>
+        ) : null}
+
+        {phase.kind === "ready" && activeDock === "takeoffViews" ? (
+          <BimGlassDock
+            side="right"
+            open
+            title={dockMeta.takeoffViews.title}
+            subtitle={dockMeta.takeoffViews.subtitle}
+            onClose={() => setActiveDock(null)}
+          >
+            <BimTakeoffViewsDockContent
+              fileVersionId={activeFileVersionId}
+              projectId={resolvedProjectId}
+              selectedGuids={[...selectedGuids]}
+              takeoffSelectionSummary={takeoffSelectionSummary}
+              resolveModelQuantities={resolveModelQuantities}
+              savedViews={savedViews}
+              onSaveView={() => void saveCurrentView()}
+              onApplyView={(v) => void applySavedView(v)}
+              onDeleteView={(id) => void deleteSavedView(id)}
+              compareDeltas={compareDeltas}
+              markupAnnotations={markupAnnotations}
+              markupSelectedIds={markupSelectedIds}
+              markupEngine={activeEngine}
+              onSelectMarkup={(id) => setMarkupSelectedIds([id])}
+            />
+          </BimGlassDock>
+        ) : null}
+
+        {phase.kind === "ready" && activeDock === "issues" ? (
+          <BimGlassDock
+            side="right"
+            open
+            title={dockMeta.issues.title}
+            subtitle={dockMeta.issues.subtitle}
+            onClose={() => {
+              setActiveDock(null);
+              setIssuePlacementActive(false);
+            }}
+          >
+            <BimIssuesDockContent
+              issues={issues}
+              selectedIssueId={selectedIssueId}
+              onOpenIssue={(issue) => void openIssueDetail(issue, { fly: false })}
+              onFocusIssue={(issue) => void focusIssueOnly(issue)}
+              onStartPlacement={armIssuePlacement}
+              onStartCreateOnSelection={startIssueCreateFromSelection}
+              hasSelection={Boolean(selection)}
+            />
+          </BimGlassDock>
+        ) : null}
+
+        {phase.kind === "ready" ? (
+          <BimIssueMarkersOverlay
+            engine={activeEngine}
+            issues={issues}
+            selectedIssueId={selectedIssueId}
+            onSelectIssue={onSelectIssue}
+          />
+        ) : null}
+
+        {issuePlacementActive && phase.kind === "ready" ? (
+          <div className="bim-placement-hint bim-glass-surface pointer-events-none absolute left-1/2 z-[8] -translate-x-1/2 rounded-full px-4 py-2 text-[11px] font-medium text-[var(--bim-text)]">
+            Tap or click the model to place an issue · Esc to cancel
+          </div>
+        ) : null}
+
+        {phase.kind === "ready" && selection ? (
+          <BimSelectionTag
+            engine={activeEngine}
+            selection={selection}
+            onShowProperties={() => openPropertiesDock("properties")}
+            onDismiss={clearSelection}
+          />
+        ) : null}
+
+        {phase.kind === "ready" && contextMenu ? (
+          <BimContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            hasSelection={contextMenu.hasSelection}
+            onAction={onContextAction}
+            onClose={() => setContextMenu(null)}
+          />
+        ) : null}
+
+        {loading ? <BimLoadingOverlay phase={phase} /> : null}
+
+        {phase.kind === "error" ? (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--bim-shell)]">
+            <p className="text-[14px] font-medium text-[var(--bim-text)]">
+              Could not open this model
+            </p>
+            <p className="max-w-sm text-center text-[12px] text-[var(--bim-text-muted)]">
+              {phase.message}
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push(backHref)}
+              className="bim-focus-ring rounded-md bg-[var(--bim-accent)] px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-[var(--bim-accent-hover)]"
+            >
+              Back to files
+            </button>
+          </div>
+        ) : null}
+
+        {phase.kind === "ready" ? (
+          <BimBottomToolBar
+            tool={tool}
+            cameraMode={cameraMode}
+            activeFlyout={activeFlyout}
+            fullscreen={fullscreen}
+            toolHint={hint}
+            showPlacePoint={toolNeedsPoint}
+            quantityIndex={quantityIndex}
+            selectedGuids={selectedGuids}
+            onSelectTool={selectTool}
+            onSelectCameraMode={selectCameraMode}
+            onToggleFlyout={toggleFlyout}
+            onFitToView={fitToView}
+            onShowAll={onShowAll}
+            onToggleProjection={() => {
+              setActiveFlyout(null);
+              void engineRef.current?.toggleProjection();
+            }}
+            onClearMarkups={clearMarkups}
+            onSnapshot={captureSnapshot}
+            onToggleFullscreen={toggleFullscreen}
+            onPlacePoint={() => engineRef.current?.measureConfirmPoint()}
+            onSelectElement={onSelectElementFromSearch}
+            onCloseSearch={closeElementSearch}
+            markupShape={markupShape}
+            markupMode={markupMode}
+            strokeColor={strokeColor}
+            strokeWidth={strokeWidth}
+            markupSelectionCount={markupSelectedIds.length}
+            onSetMarkupShape={setMarkupShape}
+            onSetMarkupMode={setMarkupMode}
+            onSetStrokeColor={setStrokeColor}
+            onSetStrokeWidth={setStrokeWidth}
+            onDeleteSelectedMarkups={deleteSelectedMarkups}
+            onCreateIssueFromMarkup={onCreateIssueFromMarkup}
+          />
+        ) : null}
+
+        {issueCreateDraft && resolvedFileVersionId && resolvedProjectId ? (
+          <IssueFormSlider
+            variant="create"
+            open
+            annotationId={null}
+            layout="overlay"
+            bimContext={{
+              fileId: props.fileId,
+              fileVersionId: resolvedFileVersionId,
+              projectId: resolvedProjectId,
+              bimAnchor: issueCreateDraft.bimAnchor,
+              modelName: props.fileName,
+            }}
+            initialLinkedMarkupIds={issueCreateDraft.initialLinkedMarkupIds}
+            pendingReferencePhoto={issueCreateDraft.pendingReferencePhoto}
+            onClose={() => setIssueCreateDraft(null)}
+            onCreated={(issue) => {
+              const markupIds = issueCreateDraft.initialLinkedMarkupIds ?? [];
+              if (markupIds.length > 0) {
+                linkMarkupsToIssue(markupIds, {
+                  id: issue.id,
+                  title: issue.title,
+                  status: issue.status,
+                });
+                scheduleBimMarkupPersist();
+              }
+              setIssueCreateDraft(null);
+              setSelectedIssueId(issue.id);
+              setActiveDock("issues");
+              setEditIssue(issue);
+              reloadIssues();
+            }}
+          />
+        ) : null}
+
+        {editIssue ? (
+          <IssueFormSlider
+            variant="edit"
+            open
+            issue={editIssue}
+            layout="overlay"
+            onClose={() => {
+              setEditIssue(null);
+              reloadIssues();
+            }}
+          />
+        ) : null}
+
+        {cameraMode === "walk" && phase.kind === "ready" ? (
+          <BimWalkChrome
+            engine={activeEngine}
+            onJoystickChange={(forward, strafe) => engineRef.current?.setWalkInput(forward, strafe)}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}

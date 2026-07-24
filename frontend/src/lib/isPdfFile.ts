@@ -10,10 +10,24 @@ export function isPdfFile(file: {
   return file.name.toLowerCase().endsWith(".pdf");
 }
 
+/** Whether a cloud file, `File`, or upload is an IFC (BIM) model — opens in the 3D viewer. */
+// fallow-ignore-next-line complexity
+export function isIfcFile(file: {
+  name: string;
+  mimeType?: string | null;
+  /** Browser `File.type` */
+  type?: string | null;
+}): boolean {
+  const mt = (file.mimeType ?? file.type ?? "").toLowerCase();
+  if (mt === "application/x-step" || mt === "model/ifc" || mt === "application/ifc") return true;
+  return file.name.toLowerCase().endsWith(".ifc");
+}
+
 const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "webp", "gif"]);
 
 const EXT_MIME: Record<string, string> = {
   pdf: "application/pdf",
+  ifc: "model/ifc",
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",

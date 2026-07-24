@@ -4,8 +4,11 @@ import { apiUrl } from "@/lib/api-url";
 import { useEffect, useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
 import { PdfFileIcon } from "@/components/icons/PdfFileIcon";
-import { isImageThumbnailFile } from "@/lib/isPdfFile";
+import { IfcFileIcon } from "@/components/icons/IfcFileIcon";
+import { isIfcFile, isImageThumbnailFile } from "@/lib/isPdfFile";
 import { setupPdfWorker } from "@/lib/pdf";
+import { fetchResolvedFileRevision } from "@/lib/api-client";
+import { requestModelThumbnail } from "@/lib/bim/modelThumbnail";
 
 type Props = {
   fileId: string;
@@ -15,6 +18,8 @@ type Props = {
   /** With `mimeType`, non-PDF images may show a real thumbnail. */
   fileName?: string;
   mimeType?: string | null;
+  /** Latest revision — required for IFC 3D preview tiles. */
+  fileVersionId?: string | null;
 };
 
 function NonPdfPlaceholder({ className }: { className?: string }) {
@@ -159,9 +164,106 @@ function PdfFileThumbnailInner({ fileId, className }: { fileId: string; classNam
   );
 }
 
-export function PdfFileThumbnail({ fileId, className, isPdf = true, fileName, mimeType }: Props) {
+// fallow-ignore-next-line complexity
+function IfcFileThumbnailInner({
+  fileId,
+  fileVersionId,
+  className,
+}: {
+  fileId: string;
+  fileVersionId?: string | null;
+  className?: string;
+}) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [phase, setPhase] = useState<"loading" | "ready" | "fallback">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    let retryTimer: number | null = null;
+    setPhase("loading");
+    setDataUrl(null);
+
+    // fallow-ignore-next-line complexity
+    const tryRender = async (attempt: number) => {
+      let versionId = fileVersionId?.trim() || null;
+      if (!versionId) {
+        try {
+          const resolved = await fetchResolvedFileRevision(fileId);
+          versionId = resolved.fileVersionId;
+        } catch {
+          if (!cancelled) setPhase("fallback");
+          return;
+        }
+      }
+
+      const url = await requestModelThumbnail(versionId, fileId);
+      if (cancelled) return;
+      if (url) {
+        setDataUrl(url);
+        setPhase("ready");
+        return;
+      }
+      if (attempt < 4) {
+        retryTimer = window.setTimeout(() => void tryRender(attempt + 1), 2500);
+        return;
+      }
+      setPhase("fallback");
+    };
+
+    void tryRender(0);
+
+    return () => {
+      cancelled = true;
+      if (retryTimer != null) window.clearTimeout(retryTimer);
+    };
+  }, [fileId, fileVersionId]);
+
+  if (phase === "loading") {
+    return (
+      <div
+        className={`flex items-center justify-center bg-gradient-to-br from-indigo-50 to-slate-200 text-indigo-400 ${className ?? ""}`}
+      >
+        <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+      </div>
+    );
+  }
+
+  if (phase === "fallback" || !dataUrl) {
+    return (
+      <div
+        className={`flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-indigo-50 to-slate-200 ${className ?? ""}`}
+      >
+        <IfcFileIcon className="h-12 w-12" />
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- generated JPEG data URL
+    <img
+      src={dataUrl}
+      alt=""
+      className={`h-full w-full object-cover object-center ${className ?? ""}`}
+    />
+  );
+}
+
+// fallow-ignore-next-line complexity
+export function PdfFileThumbnail({
+  fileId,
+  className,
+  isPdf = true,
+  fileName,
+  mimeType,
+  fileVersionId,
+}: Props) {
   if (isPdf) {
     return <PdfFileThumbnailInner fileId={fileId} className={className} />;
+  }
+  if (isIfcFile({ name: fileName ?? "", mimeType })) {
+    return (
+      <IfcFileThumbnailInner fileId={fileId} fileVersionId={fileVersionId} className={className} />
+    );
   }
   if (isImageThumbnailFile({ name: fileName ?? "", mimeType })) {
     return <ImageFileThumbnailInner fileId={fileId} className={className} />;

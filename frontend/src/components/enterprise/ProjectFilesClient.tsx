@@ -2,7 +2,9 @@
 
 import { apiUrl } from "@/lib/api-url";
 import { downloadProjectFileVersion } from "@/lib/downloadProjectFile";
-import { isImageThumbnailFile, isPdfFile } from "@/lib/isPdfFile";
+import { isIfcFile, isImageThumbnailFile, isPdfFile } from "@/lib/isPdfFile";
+import { buildFederationViewerUrl, type BimFederationMember } from "@/lib/bim/federation";
+import { openBimViewer } from "@/lib/bim/openBimViewer";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { FolderPlus, Globe2, ShieldCheck, Users } from "lucide-react";
@@ -187,6 +189,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
+  const [federationIfcIds, setFederationIfcIds] = useState<Set<string>>(() => new Set());
   const [isDragOver, setIsDragOver] = useState(false);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion>(null);
@@ -457,6 +460,44 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     });
   }
 
+  function toggleFederationIfc(f: CloudFile) {
+    if (!isIfcFile(f)) return;
+    setFederationIfcIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(f.id)) next.delete(f.id);
+      else next.add(f.id);
+      return next;
+    });
+  }
+
+  // fallow-ignore-next-line complexity
+  function openFederationInViewer() {
+    if (!project || federationIfcIds.size < 2) return;
+    const members: BimFederationMember[] = [];
+    for (const fileId of federationIfcIds) {
+      const f = project.files.find((file) => file.id === fileId);
+      if (!f || !isIfcFile(f)) continue;
+      const sorted = sortedVersions(f);
+      const fallback = sorted[0]?.version ?? 1;
+      const pick = fileVersionPick[f.id];
+      const v = pick != null && sorted.some((x) => x.version === pick) ? pick : fallback;
+      const verRow = sorted.find((x) => x.version === v) ?? sorted[0];
+      if (!verRow) continue;
+      members.push({
+        fileId: f.id,
+        fileVersionId: verRow.id,
+        version: String(verRow.version),
+        name: f.name,
+      });
+    }
+    if (members.length < 2) {
+      toast.error("Select at least two IFC files.");
+      return;
+    }
+    setFederationIfcIds(new Set());
+    openBimViewer(buildFederationViewerUrl(projectId, members));
+  }
+
   function openFileInViewer(f: CloudFile) {
     const sorted = sortedVersions(f);
     const fallback = sorted[0]?.version ?? 1;
@@ -468,6 +509,17 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
 
     if (isImageThumbnailFile(f)) {
       setImageLightbox({ fileId: f.id, fileName: f.name, version: ver });
+      return;
+    }
+
+    if (isIfcFile(f)) {
+      const q = new URLSearchParams({ fileId: f.id, name: f.name });
+      q.set("projectId", projectId);
+      if (verRow) {
+        q.set("version", String(verRow.version));
+        q.set("fileVersionId", verRow.id);
+      }
+      openBimViewer(`/bim-viewer?${q.toString()}`);
       return;
     }
 
@@ -917,6 +969,8 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             onDragStartMove={canManage ? bindDragStartMove : undefined}
             fileVersionPick={fileVersionPick}
             onFileVersionPick={(fid, ver) => setFileVersionPick((p) => ({ ...p, [fid]: ver }))}
+            federationIfcIds={federationIfcIds}
+            onToggleFederationIfc={toggleFederationIfc}
           />
         </div>
       </div>
@@ -1371,6 +1425,33 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             void invalidate();
           }}
         />
+      ) : null}
+
+      {federationIfcIds.size >= 2 ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
+          <div className="pointer-events-auto flex max-w-lg flex-wrap items-center justify-center gap-2 rounded-xl border border-slate-200/90 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm">
+            <p className="text-[13px] font-medium text-[var(--enterprise-text)]">
+              {federationIfcIds.size} IFC models selected
+            </p>
+            <button
+              type="button"
+              onClick={openFederationInViewer}
+              className="rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:opacity-90"
+            >
+              Open federated view
+            </button>
+            <button
+              type="button"
+              onClick={() => setFederationIfcIds(new Set())}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Clear
+            </button>
+            <span className="hidden text-[11px] text-slate-500 sm:inline">
+              Tip: ⌘/Ctrl-click IFC files to add or remove
+            </span>
+          </div>
+        </div>
       ) : null}
     </div>
   );

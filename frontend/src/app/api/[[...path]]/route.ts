@@ -12,6 +12,8 @@ const HOP_BY_HOP = new Set([
   "trailer",
   "transfer-encoding",
   "upgrade",
+  /** curl sends `Expect: 100-continue` on large bodies; undici fetch rejects it (body is re-buffered here anyway). */
+  "expect",
 ]);
 
 const DEFAULT_PROXY_TIMEOUT_MS = 15_000;
@@ -24,6 +26,19 @@ function proxyTimeoutMs(): number {
   const raw = Number(process.env.API_PROXY_TIMEOUT_MS);
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_PROXY_TIMEOUT_MS;
   return Math.max(1_000, Math.min(120_000, Math.trunc(raw)));
+}
+
+// fallow-ignore-next-line complexity
+function proxyTimeoutMsForPath(path: string): number {
+  const extended = Math.max(proxyTimeoutMs(), 120_000);
+  if (path.includes("/bim/takeoff/auto-map") || path.includes("/bim/convert")) {
+    return extended;
+  }
+  // Large binary transfers — fragments cache upload/download and IFC source files.
+  if (path.includes("/bim/fragments") || /\/files\/[^/]+\/content(?:$|\?)/.test(path)) {
+    return extended;
+  }
+  return proxyTimeoutMs();
 }
 
 function publicAppUrl(): string | undefined {
@@ -87,6 +102,7 @@ function splitSetCookieHeader(raw: string): string[] {
   return out;
 }
 
+// fallow-ignore-next-line complexity
 async function proxy(req: NextRequest, params: Params): Promise<Response> {
   const sub = params.path?.length ? params.path.join("/") : "";
   const path = sub ? `/api/${sub}` : "/api";
@@ -115,7 +131,7 @@ async function proxy(req: NextRequest, params: Params): Promise<Response> {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort("proxy-timeout"), proxyTimeoutMs());
+  const timeout = setTimeout(() => controller.abort("proxy-timeout"), proxyTimeoutMsForPath(path));
   const cancelOnClientAbort = () => controller.abort("client-abort");
   req.signal.addEventListener("abort", cancelOnClientAbort, { once: true });
 
@@ -126,6 +142,14 @@ async function proxy(req: NextRequest, params: Params): Promise<Response> {
     const aborted = err instanceof Error && err.name === "AbortError";
     const reason = String(controller.signal.reason ?? "");
     const status = aborted && reason === "proxy-timeout" ? 504 : 502;
+    if (status === 502) {
+      const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+      console.error(
+        `[api-proxy] ${req.method} ${path} failed:`,
+        err instanceof Error ? err.message : err,
+        cause ? `(cause: ${cause.code ?? ""} ${cause.message ?? ""})` : "",
+      );
+    }
     return NextResponse.json(
       {
         error:

@@ -38,7 +38,9 @@ import {
   formatIssueLockHint,
   patchIssue,
   presignIssueReferencePhotoUpload,
+  uploadIssueReferencePhotoFile,
   presignReadIssueReferencePhoto,
+  type IssueBimAnchor,
   type IssueReferencePhotoRow,
   type IssueRow,
 } from "@/lib/api-client";
@@ -62,12 +64,25 @@ import { IssueGuide } from "./IssueGuide";
 
 type PanelLayout = "docked" | "overlay";
 
+type IssueFormBimContext = {
+  fileId: string;
+  fileVersionId: string;
+  projectId: string;
+  bimAnchor?: IssueBimAnchor;
+  modelName?: string;
+};
+
 type CreateProps = {
   variant: "create";
   open: boolean;
   annotationId: string | null;
   onClose: () => void;
   layout?: PanelLayout;
+  /** BIM viewer: link issue to a 3D element instead of a sheet pin. */
+  bimContext?: IssueFormBimContext;
+  initialLinkedMarkupIds?: string[];
+  pendingReferencePhoto?: File | null;
+  onCreated?: (issue: IssueRow) => void;
 };
 
 type EditProps = {
@@ -156,12 +171,15 @@ export function IssueFormSlider(props: Props) {
   const { open, onClose, layout = "overlay" } = props;
   const variant = props.variant;
   const isDocked = layout === "docked";
+  const bimContext = variant === "create" ? props.bimContext : undefined;
+  const isBimCreate = Boolean(bimContext);
   const searchParams = useSearchParams();
-  const fileId = searchParams.get("fileId");
+  const fileId = bimContext?.fileId ?? searchParams.get("fileId");
   const projectIdFromUrl = searchParams.get("projectId")?.trim() || null;
   const versionParam = searchParams.get("version");
   const viewerFileName = useViewerStore((s) => s.fileName);
-  const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
+  const storeFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
+  const cloudFileVersionId = bimContext?.fileVersionId ?? storeFileVersionId;
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
   const annotations = useViewerStore((s) => s.annotations);
   const setIssueCreateDraft = useViewerStore((s) => s.setIssueCreateDraft);
@@ -193,12 +211,34 @@ export function IssueFormSlider(props: Props) {
       ),
     });
 
+  // fallow-ignore-next-line complexity
   const resolvedProjectId = useMemo(() => {
     if (variant === "edit") return props.issue.projectId;
-    return viewerProjectId ?? projectIdFromUrl ?? revisionResolve?.projectId ?? null;
-  }, [variant, props, viewerProjectId, projectIdFromUrl, revisionResolve?.projectId]);
+    return (
+      bimContext?.projectId ??
+      viewerProjectId ??
+      projectIdFromUrl ??
+      revisionResolve?.projectId ??
+      null
+    );
+  }, [
+    variant,
+    props,
+    bimContext?.projectId,
+    viewerProjectId,
+    projectIdFromUrl,
+    revisionResolve?.projectId,
+  ]);
 
+  // fallow-ignore-next-line complexity
   const sheetContext = useMemo(() => {
+    if (variant === "create" && bimContext) {
+      return {
+        sheetName: bimContext.modelName ?? bimContext.bimAnchor?.name ?? "3D model",
+        sheetVersion: null as number | null,
+        pageNumber: null as number | null,
+      };
+    }
     if (variant === "edit") {
       const i = props.issue;
       let pageNum = i.pageNumber ?? null;
@@ -226,7 +266,7 @@ export function IssueFormSlider(props: Props) {
       sheetVersion: parsedUrlVersion,
       pageNumber,
     };
-  }, [annotations, currentPage, parsedUrlVersion, props, variant, viewerFileName]);
+  }, [annotations, bimContext, currentPage, parsedUrlVersion, props, variant, viewerFileName]);
 
   const { data: project } = useQuery({
     queryKey: qk.project(resolvedProjectId ?? ""),
@@ -264,6 +304,7 @@ export function IssueFormSlider(props: Props) {
     startInViewMode?: boolean;
   } | null>(null);
   const [photoThumbUrls, setPhotoThumbUrls] = useState<Record<string, string>>({});
+  const [pendingSnapshotPreviewUrl, setPendingSnapshotPreviewUrl] = useState<string | null>(null);
   const [liveCaptureOpen, setLiveCaptureOpen] = useState(false);
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
   const [assigneeSearchQuery, setAssigneeSearchQuery] = useState("");
@@ -349,6 +390,21 @@ export function IssueFormSlider(props: Props) {
   );
 
   useEffect(() => {
+    if (variant !== "create" || !open || props.variant !== "create") {
+      setPendingSnapshotPreviewUrl(null);
+      return;
+    }
+    const file = props.pendingReferencePhoto;
+    if (!file) {
+      setPendingSnapshotPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPendingSnapshotPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [open, variant, props.variant === "create" ? props.pendingReferencePhoto : null]);
+
+  useEffect(() => {
     if (variant !== "edit" || !open || !editIssueId || referencePhotos.length === 0) {
       setPhotoThumbUrls({});
       return;
@@ -390,7 +446,7 @@ export function IssueFormSlider(props: Props) {
    * markups. Sync `issueFormSliderOpen` for create flow (edit sets it synchronously in the sidebar).
    */
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open || isBimCreate) return;
     setIssuePlacement(null);
     setNewIssuePlacementActive(false);
     setTool("select");
@@ -401,7 +457,14 @@ export function IssueFormSlider(props: Props) {
       setTool("select");
       setIssueFormSliderOpen(false);
     };
-  }, [open, setIssuePlacement, setNewIssuePlacementActive, setTool, setIssueFormSliderOpen]);
+  }, [
+    open,
+    isBimCreate,
+    setIssuePlacement,
+    setNewIssuePlacementActive,
+    setTool,
+    setIssueFormSliderOpen,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -428,7 +491,7 @@ export function IssueFormSlider(props: Props) {
       setDueDate("");
       setLocation("");
       setRfiLinkIds([]);
-      setLinkedMarkupIds([]);
+      setLinkedMarkupIds(props.variant === "create" ? (props.initialLinkedMarkupIds ?? []) : []);
       setReferencePhotos([]);
     }
   }, [
@@ -436,6 +499,7 @@ export function IssueFormSlider(props: Props) {
     props.variant,
     props.variant === "edit" ? props.issue.id : props.annotationId,
     props.variant === "edit" ? props.issue.updatedAt : "",
+    props.variant === "create" ? (props.initialLinkedMarkupIds?.join(",") ?? "") : "",
   ]);
 
   useEffect(() => {
@@ -449,7 +513,31 @@ export function IssueFormSlider(props: Props) {
   }, [annotations, open, props, setIssueCreateDraft, variant]);
 
   const createMut = useMutation({
+    // fallow-ignore-next-line complexity
     mutationFn: () => {
+      if (isBimCreate && bimContext) {
+        return createIssue({
+          workspaceId: workspaceId!,
+          projectId: bimContext.projectId,
+          fileId: bimContext.fileId,
+          fileVersionId: bimContext.fileVersionId,
+          title: title.trim(),
+          description: description.trim() || undefined,
+          assigneeId: assigneeId || undefined,
+          status,
+          priority,
+          startDate: startDate.trim() || undefined,
+          dueDate: dueDate.trim() || undefined,
+          ...(location.trim()
+            ? { location: location.trim() }
+            : bimContext.bimAnchor?.spatialPath?.[0]
+              ? { location: bimContext.bimAnchor.spatialPath[0] }
+              : {}),
+          ...(bimContext.bimAnchor ? { bimAnchor: bimContext.bimAnchor } : {}),
+          ...(linkedMarkupIds.length > 0 ? { attachedMarkupAnnotationIds: linkedMarkupIds } : {}),
+          ...(rfiLinkIds.length > 0 && !viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
+        });
+      }
       const page = sheetContext.pageNumber;
       if (page == null) throw new Error("Missing page for issue.");
       return createIssue({
@@ -470,7 +558,7 @@ export function IssueFormSlider(props: Props) {
         ...(rfiLinkIds.length > 0 && !viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
       });
     },
-    onSuccess: (row) => {
+    onSuccess: async (row) => {
       void qc.invalidateQueries({ queryKey: issuesQueryKey });
       if (cloudFileVersionId) {
         void qc.invalidateQueries({
@@ -482,42 +570,55 @@ export function IssueFormSlider(props: Props) {
       if (resolvedProjectId)
         void qc.invalidateQueries({ queryKey: qk.projectRfis(resolvedProjectId) });
       if (variant === "create") {
-        if (props.annotationId) {
-          updateAnnotation(props.annotationId, {
-            linkedIssueId: row.id,
-            issueDraft: false,
-            linkedIssueTitle: row.title,
-            issueStatus: row.status,
-            color: issueStatusMarkerStrokeHex(row.status),
-            linkedIssueKind:
-              row.issueKind === "CONSTRUCTION"
-                ? "CONSTRUCTION"
-                : row.issueKind === "OCCUPANT"
-                  ? "OCCUPANT"
-                  : "WORK_ORDER",
-          });
-        }
-        const pri = row.priority ?? "MEDIUM";
-        const k =
-          row.issueKind === "CONSTRUCTION"
-            ? "CONSTRUCTION"
-            : row.issueKind === "OCCUPANT"
-              ? "OCCUPANT"
-              : "WORK_ORDER";
-        for (const aid of linkedMarkupIds) {
-          updateAnnotation(aid, {
-            linkedIssueId: row.id,
-            linkedIssueAttachment: true,
-            linkedIssueTitle: row.title,
-            issueStatus: row.status,
-            linkedIssueKind: k,
-            linkedIssuePriority: pri,
-          });
-        }
-        setIssueCreateDraft(null);
-        if (saveAndNextRef.current) {
-          saveAndNextRef.current = false;
-          setNewIssuePlacementActive(true);
+        if (isBimCreate) {
+          const pendingPhoto = props.variant === "create" ? props.pendingReferencePhoto : null;
+          let savedRow = row;
+          if (pendingPhoto) {
+            try {
+              savedRow = await uploadIssueReferencePhotoFile(row.id, pendingPhoto);
+            } catch {
+              toast.error("Issue saved, but the snapshot photo could not be uploaded.");
+            }
+          }
+          props.onCreated?.(savedRow);
+        } else {
+          if (props.annotationId) {
+            updateAnnotation(props.annotationId, {
+              linkedIssueId: row.id,
+              issueDraft: false,
+              linkedIssueTitle: row.title,
+              issueStatus: row.status,
+              color: issueStatusMarkerStrokeHex(row.status),
+              linkedIssueKind:
+                row.issueKind === "CONSTRUCTION"
+                  ? "CONSTRUCTION"
+                  : row.issueKind === "OCCUPANT"
+                    ? "OCCUPANT"
+                    : "WORK_ORDER",
+            });
+          }
+          const pri = row.priority ?? "MEDIUM";
+          const k =
+            row.issueKind === "CONSTRUCTION"
+              ? "CONSTRUCTION"
+              : row.issueKind === "OCCUPANT"
+                ? "OCCUPANT"
+                : "WORK_ORDER";
+          for (const aid of linkedMarkupIds) {
+            updateAnnotation(aid, {
+              linkedIssueId: row.id,
+              linkedIssueAttachment: true,
+              linkedIssueTitle: row.title,
+              issueStatus: row.status,
+              linkedIssueKind: k,
+              linkedIssuePriority: pri,
+            });
+          }
+          setIssueCreateDraft(null);
+          if (saveAndNextRef.current) {
+            saveAndNextRef.current = false;
+            setNewIssuePlacementActive(true);
+          }
         }
         onClose();
       }
@@ -689,9 +790,10 @@ export function IssueFormSlider(props: Props) {
 
   const annotationId = variant === "create" ? props.annotationId : null;
 
-  const canSubmit =
-    Boolean(workspaceId && fileId && cloudFileVersionId && title.trim().length > 0) &&
-    (variant === "edit" || sheetContext.pageNumber != null);
+  const canSubmit = isBimCreate
+    ? Boolean(workspaceId && bimContext && title.trim().length > 0)
+    : Boolean(workspaceId && fileId && cloudFileVersionId && title.trim().length > 0) &&
+      (variant === "edit" || sheetContext.pageNumber != null);
 
   const assignableMembers = (membersRes?.members ?? []).filter((m) => m.email?.trim());
 
@@ -750,6 +852,7 @@ export function IssueFormSlider(props: Props) {
   }, [assigneePickerOpen]);
 
   /** Only Cancel / successful Save / Delete — backdrop and Escape use the same handler. */
+  // fallow-ignore-next-line complexity
   const onCancel = useCallback(() => {
     if (deleteDialogOpen) return;
     if (liveCaptureOpen) {
@@ -764,7 +867,7 @@ export function IssueFormSlider(props: Props) {
       removeRefPhotoMut.isPending
     )
       return;
-    if (variant === "create") {
+    if (variant === "create" && !isBimCreate) {
       if (annotationId) removeAnnotation(annotationId);
       setIssueCreateDraft(null);
     }
@@ -773,6 +876,7 @@ export function IssueFormSlider(props: Props) {
     annotationId,
     createMut.isPending,
     deleteMut.isPending,
+    isBimCreate,
     removeRefPhotoMut.isPending,
     uploadRefPhotoMut.isPending,
     onClose,
@@ -818,7 +922,11 @@ export function IssueFormSlider(props: Props) {
 
   const versionLabel =
     sheetContext.sheetVersion != null ? `v${sheetContext.sheetVersion}` : "Version —";
-  const pageLabel = sheetContext.pageNumber != null ? `Page ${sheetContext.pageNumber}` : "Page —";
+  const pageLabel = isBimCreate
+    ? (bimContext?.bimAnchor?.ifcType ?? "3D markup")
+    : sheetContext.pageNumber != null
+      ? `Page ${sheetContext.pageNumber}`
+      : "Page —";
 
   const fieldClass =
     "w-full rounded-lg border border-slate-600/70 bg-slate-900/60 px-2.5 py-2 text-[12px] leading-snug text-slate-100 shadow-sm placeholder:text-slate-500 outline-none transition focus:border-[var(--viewer-primary)]/55 focus:ring-2 focus:ring-[var(--viewer-primary)]/20";
@@ -866,7 +974,9 @@ export function IssueFormSlider(props: Props) {
                 ? "Capture the task scope, assignment, and schedule for field execution."
                 : "Update execution details, assignment, and dates before saving."
               : variant === "create"
-                ? "Add a title and any details below. A sheet pin and linked markups are optional."
+                ? isBimCreate
+                  ? "Add a title and any details below. This issue will be linked to the selected 3D element."
+                  : "Add a title and any details below. A sheet pin and linked markups are optional."
                 : "Update this issue and save your changes."}
           </p>
         </div>
@@ -894,14 +1004,16 @@ export function IssueFormSlider(props: Props) {
       >
         <IssueGuide
           variant={variant}
-          hasPin={Boolean(variant === "create" && props.annotationId)}
+          hasPin={Boolean(
+            (variant === "create" && props.annotationId) || (variant === "create" && isBimCreate),
+          )}
           hasTitle={title.trim().length > 0}
           hasAssignee={Boolean(assigneeId)}
         />
         <div
           className="mb-3 flex flex-col gap-1.5 rounded-lg border border-slate-800/90 bg-slate-900/50 px-3 py-2 ring-1 ring-white/[0.03] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3 sm:gap-y-1"
           role="group"
-          aria-label="Sheet context"
+          aria-label={isBimCreate ? "Model context" : "Sheet context"}
         >
           <div className="flex min-w-0 items-start gap-2 sm:items-center">
             <FileStack
@@ -914,15 +1026,44 @@ export function IssueFormSlider(props: Props) {
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
-            <span className="inline-flex items-center rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-400">
-              Rev {versionLabel}
-            </span>
+            {isBimCreate ? (
+              <span className="inline-flex items-center rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+                BIM
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-400">
+                Rev {versionLabel}
+              </span>
+            )}
             <span className="inline-flex items-center gap-0.5 rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-400">
               <Hash className="h-2.5 w-2.5 text-slate-500" strokeWidth={2} aria-hidden />
               {pageLabel}
             </span>
           </div>
         </div>
+
+        {variant === "create" && isBimCreate && pendingSnapshotPreviewUrl ? (
+          <section
+            className={`${sectionCompactCardClass} mb-3`}
+            aria-labelledby="issue-section-model-snapshot"
+          >
+            <h3 id="issue-section-model-snapshot" className={sectionTitleClass}>
+              Model snapshot
+            </h3>
+            <div className="overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950">
+              {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
+              <img
+                src={pendingSnapshotPreviewUrl}
+                alt="Model snapshot for this issue"
+                className="max-h-[min(320px,42dvh)] w-full object-contain"
+              />
+            </div>
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              Cropped view of the model at the issue location, with a pin marking where it was
+              placed.
+            </p>
+          </section>
+        ) : null}
 
         <div className={`${viewerOperationsMode ? "space-y-4 pb-1" : "space-y-6 pb-2"}`}>
           {viewerOperationsMode ? (
@@ -1054,48 +1195,50 @@ export function IssueFormSlider(props: Props) {
             </section>
           ) : null}
 
-          <section
-            className={sectionCompactCardClass}
-            aria-labelledby="issue-section-linked-markups"
-          >
-            <h3 id="issue-section-linked-markups" className={sectionTitleClass}>
-              {viewerOperationsMode ? "Related markups" : "Linked markups"}
-            </h3>
-            <p className="text-[11px] leading-relaxed text-slate-500">
-              {viewerOperationsMode
-                ? "Optional: connect markups that explain the field task or required repair location."
-                : "Optional: add shapes or text on this page to the issue. They stay as markups (not a second pin) and update when the issue changes."}
-            </p>
-            {attachableMarkups.length === 0 ? (
-              <p className="text-[11px] text-slate-500">
-                No other markups on this page yet. Draw on the sheet, then reopen this form.
+          {!isBimCreate ? (
+            <section
+              className={sectionCompactCardClass}
+              aria-labelledby="issue-section-linked-markups"
+            >
+              <h3 id="issue-section-linked-markups" className={sectionTitleClass}>
+                {viewerOperationsMode ? "Related markups" : "Linked markups"}
+              </h3>
+              <p className="text-[11px] leading-relaxed text-slate-500">
+                {viewerOperationsMode
+                  ? "Optional: connect markups that explain the field task or required repair location."
+                  : "Optional: add shapes or text on this page to the issue. They stay as markups (not a second pin) and update when the issue changes."}
               </p>
-            ) : (
-              <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border border-slate-800/60 bg-slate-950/40 p-1 [scrollbar-width:thin]">
-                {attachableMarkups.map((a) => (
-                  <label
-                    key={a.id}
-                    className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-[12px] leading-snug text-slate-200 transition hover:bg-slate-800/50"
-                  >
-                    <input
-                      type="checkbox"
-                      className="viewer-focus-ring mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 accent-[var(--viewer-primary)]"
-                      checked={linkedMarkupIds.includes(a.id)}
-                      onChange={() => {
-                        setLinkedMarkupIds((prev) =>
-                          prev.includes(a.id) ? prev.filter((x) => x !== a.id) : [...prev, a.id],
-                        );
-                      }}
-                    />
-                    <span className="min-w-0 font-mono text-[11px] text-slate-300">
-                      {markupAttachLabel(a.type)} ·{" "}
-                      <span className="text-slate-500">{a.id.slice(0, 8)}…</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </section>
+              {attachableMarkups.length === 0 ? (
+                <p className="text-[11px] text-slate-500">
+                  No other markups on this page yet. Draw on the sheet, then reopen this form.
+                </p>
+              ) : (
+                <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border border-slate-800/60 bg-slate-950/40 p-1 [scrollbar-width:thin]">
+                  {attachableMarkups.map((a) => (
+                    <label
+                      key={a.id}
+                      className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-[12px] leading-snug text-slate-200 transition hover:bg-slate-800/50"
+                    >
+                      <input
+                        type="checkbox"
+                        className="viewer-focus-ring mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 accent-[var(--viewer-primary)]"
+                        checked={linkedMarkupIds.includes(a.id)}
+                        onChange={() => {
+                          setLinkedMarkupIds((prev) =>
+                            prev.includes(a.id) ? prev.filter((x) => x !== a.id) : [...prev, a.id],
+                          );
+                        }}
+                      />
+                      <span className="min-w-0 font-mono text-[11px] text-slate-300">
+                        {markupAttachLabel(a.type)} ·{" "}
+                        <span className="text-slate-500">{a.id.slice(0, 8)}…</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
 
           {variant === "edit" ? (
             <section className={sectionCompactCardClass} aria-labelledby="issue-section-ref-photos">
@@ -1186,7 +1329,7 @@ export function IssueFormSlider(props: Props) {
                       key={p.id}
                       className="flex flex-wrap items-center gap-2.5 rounded-md px-1.5 py-1.5 text-[11px] text-slate-200"
                     >
-                      <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md border border-slate-700/80 bg-slate-900">
+                      <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900">
                         {photoThumbUrls[p.id] ? (
                           // eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL
                           <img

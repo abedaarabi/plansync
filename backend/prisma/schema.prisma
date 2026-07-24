@@ -63,6 +63,7 @@ model User {
   maintenanceCompletions       MaintenanceCompletion[]   @relation("MaintenanceCompletionActor")
   workOrdersCompleted          Issue[]                   @relation("WorkOrderCompleter")
   assetMeterReadings           AssetMeterReading[]       @relation("AssetMeterReadingActor")
+  bimSavedViews                BimSavedView[]
 
   /// When true, omit this user from PDF viewer presence / collaborator lists (still can edit).
   hideViewerPresence Boolean @default(false)
@@ -474,6 +475,7 @@ model Project {
   orchestrationRuns         OrchestrationRun[]
   vendors                   Vendor[]
   partsInventory            PartsInventoryItem[]
+  bimSavedViews             BimSavedView[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -864,6 +866,13 @@ model FileVersion {
   lockedAt               DateTime?
   lockExpiresAt          DateTime?
 
+  /// Server-side IFC → fragments conversion artifacts (S3).
+  fragmentsS3Key        String?
+  quantityIndexS3Key    String?
+  bimConversionStatus   String                  @default("pending")
+  bimLoqReport          Json?
+  bimConversionJobRunId String?
+
   createdAt              DateTime                @default(now())
   issues                 Issue[]
   takeoffLines           TakeoffLine[]
@@ -874,6 +883,7 @@ model FileVersion {
   comments               FileComment[]
   assets                 Asset[]
   inspectionRuns         InspectionRun[]
+  bimSavedViews          BimSavedView[]
 
   @@unique([fileId, version])
   @@index([fileId])
@@ -1321,6 +1331,14 @@ model TakeoffLine {
   sourceZoneId              String?
   tags                      String[] @default([])
 
+  /// BIM model takeoff linkage (IFC element keys / guids).
+  sourceBimKey    String?
+  sourceIfcGuid   String?
+  sourceIfcGuids  Json?
+  ifcType         String?
+  quantitySource  String?
+  bimMetadata     Json?
+
   workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   file        File        @relation(fields: [fileId], references: [id], onDelete: Cascade)
@@ -1333,10 +1351,34 @@ model TakeoffLine {
   updatedAt DateTime @updatedAt
 
   @@unique([fileVersionId, sourceZoneId])
+  @@unique([fileVersionId, sourceBimKey])
   @@index([workspaceId])
   @@index([projectId])
   @@index([fileId])
   @@index([fileVersionId])
+}
+
+/// Saved BIM viewer state: camera, filters, hidden/isolated elements.
+model BimSavedView {
+  id            String @id @default(cuid())
+  projectId     String
+  fileVersionId String
+  userId        String
+  name          String
+  cameraJson    Json
+  filtersJson   Json?
+  hiddenGuids   Json?
+  isolatedGuids Json?
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileVersion FileVersion @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fileVersionId])
+  @@index([projectId, userId])
 }
 
 /// Saved per-user view state for takeoff table (filters, columns, sort, search).

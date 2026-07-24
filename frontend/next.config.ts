@@ -7,9 +7,19 @@ import withPWAInit from "@ducanh2912/next-pwa";
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(configDir, "..");
 /** Repo root env — `.env`, `.env.prod`, then `.env.local` (local overrides; same order as backend / Prisma). */
+const portBeforeEnvLoad = process.env.PORT;
 loadEnv({ path: path.join(repoRoot, ".env") });
 loadEnv({ path: path.join(repoRoot, ".env.prod") });
 loadEnv({ path: path.join(repoRoot, ".env.local"), override: true });
+/**
+ * Root `.env.local` sets `PORT` for the backend (8787). If it leaks into this
+ * process, `next dev` auto-restarts (config changes) bind the backend's port
+ * instead of 3000. Keep whatever PORT the frontend was actually started with.
+ */
+if (portBeforeEnvLoad !== process.env.PORT) {
+  if (portBeforeEnvLoad === undefined) delete process.env.PORT;
+  else process.env.PORT = portBeforeEnvLoad;
+}
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -62,8 +72,33 @@ const nextConfig: NextConfig = {
   output: "standalone",
   /** Monorepo: trace from repo root (`frontend` sits directly under root). */
   outputFileTracingRoot: path.join(configDir, ".."),
+  experimental: {
+    /**
+     * With `proxy.ts` present, Next buffers request bodies at 10MB by default,
+     * truncating larger uploads (IFC models) before they reach the API route →
+     * 502. Backend `MAX_DIRECT_UPLOAD_BYTES` is 100MB; keep this just above it
+     * so the backend's own 413 stays authoritative.
+     */
+    proxyClientMaxBodySize: "110mb",
+  },
   /** Next 16 defaults `next dev` to Turbopack; @ducanh2912/next-pwa injects webpack. Acknowledge both. */
-  turbopack: {},
+  turbopack: {
+    resolveAlias: {
+      /** three's TTFLoader imports opentype.js from a CDN URL — unbundleable; unused (BIM viewer). */
+      "three/examples/jsm/loaders/TTFLoader.js": "./src/lib/three-ttfloader-stub.js",
+    },
+  },
+  webpack: (config) => {
+    config.resolve = config.resolve ?? {};
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "three/examples/jsm/loaders/TTFLoader.js": path.join(
+        configDir,
+        "src/lib/three-ttfloader-stub.js",
+      ),
+    };
+    return config;
+  },
   /**
    * `/api/*` is proxied to Hono via `app/api/[[...path]]/route.ts` (not rewrites) so multiple
    * `Set-Cookie` headers from Better Auth are forwarded correctly in production.

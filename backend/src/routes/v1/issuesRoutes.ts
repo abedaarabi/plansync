@@ -173,6 +173,7 @@ function issueRowJson(row: IssueRow, opts?: { maskPortalReporter?: boolean }) {
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     location: row.location,
     annotationId: row.annotationId,
+    bimAnchor: row.bimAnchor ?? null,
     attachedMarkupAnnotationIds: parseAttachedMarkupAnnotationIds(row.attachedMarkupAnnotationIds),
     referencePhotos: parseReferencePhotos(row.referencePhotos),
     sheetName: row.sheetName ?? row.file?.name ?? null,
@@ -711,6 +712,17 @@ export function registerIssuesRoutes(
         dueDate: optionalYmd,
         location: z.string().max(500).nullable().optional(),
         pageNumber: z.number().int().min(1).optional(),
+        /** 3D anchor for issues created from the BIM viewer (IFC GUID + context). */
+        bimAnchor: z
+          .object({
+            ifcGuid: z.string().min(1).max(64),
+            localId: z.number().int().optional(),
+            name: z.string().max(300).optional(),
+            ifcType: z.string().max(120).optional(),
+            spatialPath: z.array(z.string().max(300)).max(20).optional(),
+            position: z.object({ x: z.number(), y: z.number(), z: z.number() }).optional(),
+          })
+          .optional(),
         /** Link new issue to one or more project RFIs (merged with `rfiId` if both sent). */
         rfiId: z.string().optional(),
         rfiIds: z.array(z.string()).max(50).optional(),
@@ -785,6 +797,9 @@ export function registerIssuesRoutes(
 
     if (body.data.pageNumber !== undefined && !hasSheet) {
       return c.json({ error: "pageNumber requires a linked sheet" }, 400);
+    }
+    if (body.data.bimAnchor !== undefined && !hasSheet) {
+      return c.json({ error: "bimAnchor requires a linked model file" }, 400);
     }
     if (body.data.annotationId?.trim() && !hasSheet) {
       return c.json({ error: "annotationId requires a linked sheet" }, 400);
@@ -894,6 +909,9 @@ export function registerIssuesRoutes(
           ...(dueDate !== undefined ? { dueDate } : {}),
           ...(body.data.location !== undefined ? { location: body.data.location } : {}),
           ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
+          ...(body.data.bimAnchor !== undefined
+            ? { bimAnchor: body.data.bimAnchor as Prisma.InputJsonValue }
+            : {}),
           ...(body.data.issueKind !== undefined ? { issueKind: body.data.issueKind } : {}),
           ...(body.data.assetId !== undefined ? { assetId: body.data.assetId } : {}),
           ...(extEmail

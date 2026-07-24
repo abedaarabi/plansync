@@ -60,7 +60,10 @@ function isProtectedPath(pathname: string): boolean {
  * We treat these query params as cloud context and gate behind sign-in.
  */
 function isCloudViewerRequest(request: NextRequest): boolean {
-  if (request.nextUrl.pathname !== "/viewer") return false;
+  const pathname = request.nextUrl.pathname;
+  /** `/bim-viewer` (3D IFC) always loads a cloud file, so it is always gated. */
+  if (pathname === "/bim-viewer") return true;
+  if (pathname !== "/viewer") return false;
   const sp = request.nextUrl.searchParams;
   return ["fileId", "fileVersionId", "projectId", "version"].some((k) => {
     const v = sp.get(k);
