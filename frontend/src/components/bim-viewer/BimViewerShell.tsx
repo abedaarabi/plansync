@@ -42,6 +42,7 @@ import { BimWalkChrome } from "./BimWalkChrome";
 import { BimPlanMinimap } from "./BimPlanMinimap";
 import { BimContextMenu } from "./BimContextMenu";
 import { BimIssueMarkersOverlay } from "./BimIssueMarkersOverlay";
+import { BimIssueCommentDialog } from "./BimIssueCommentDialog";
 import { BimBreadcrumbChip } from "./BimBreadcrumbChip";
 import { BimIconRail } from "./BimIconRail";
 import { BimGlassDock } from "./BimGlassDock";
@@ -49,7 +50,7 @@ import { BimBottomToolBar, type BimBottomFlyout } from "./BimBottomToolBar";
 import { BimLeftDockContent, type BimLeftDockId } from "./BimLeftDockContent";
 import { BimInspectDockContent, type BimInspectTab } from "./BimInspectDockContent";
 import { BimTakeoffViewsDockContent } from "./BimTakeoffViewsDockContent";
-import { fetchIssuesForFileVersion } from "@/lib/api-client/core-issues-takeoff";
+import { fetchIssuesForFileVersion, patchIssue } from "@/lib/api-client/core-issues-takeoff";
 import type { IssueRow } from "@/lib/api-client/core-issues-takeoff";
 import { fetchIssue } from "@/lib/api-client";
 import { compareBimQuantities } from "@/lib/api-client/bim-viewer";
@@ -213,6 +214,7 @@ export function BimViewerShell(props: {
   const [issuePlacementActive, setIssuePlacementActive] = useState(false);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [editIssue, setEditIssue] = useState<IssueRow | null>(null);
+  const [commentDialogIssue, setCommentDialogIssue] = useState<IssueRow | null>(null);
 
   const onViewportRef = useCallback((node: HTMLDivElement | null) => {
     if (viewportRef.current === node) return;
@@ -663,11 +665,12 @@ export function BimViewerShell(props: {
     const applyGen = ++filterApplyGenRef.current;
 
     if (!filterActive && !colorizeActive) {
-      void (async () => {
-        await engine.clearColorize();
-        await engine.clearFilterGhost();
-        await engine.resetFilterVisibility();
-      })();
+      void engine.applyFilterPresentation({
+        filterActive: false,
+        visualize: "none",
+        matchGuids: [],
+        colorizeGroups: [],
+      });
       return;
     }
 
@@ -687,25 +690,19 @@ export function BimViewerShell(props: {
       void (async () => {
         if (applyGen !== filterApplyGenRef.current) return;
 
-        if (filterActive) {
-          await engine.applyFilterVisualize(guids, visualize);
-        } else {
-          await engine.clearFilterGhost();
-          await engine.resetFilterVisibility();
-        }
-        if (applyGen !== filterApplyGenRef.current) return;
-
-        if (colorizeActive && legend.length > 0) {
-          await engine.applyColorize(
-            legend.map((entry, i) => ({
-              styleId: `colorize:${i}`,
-              color: entry.color,
-              guids: entry.guids,
-            })),
-          );
-        } else {
-          await engine.clearColorize();
-        }
+        await engine.applyFilterPresentation({
+          filterActive,
+          visualize,
+          matchGuids: guids,
+          colorizeGroups:
+            colorizeActive && legend.length > 0
+              ? legend.map((entry, i) => ({
+                  styleId: `colorize:${i}`,
+                  color: entry.color,
+                  guids: entry.guids,
+                }))
+              : [],
+        });
         if (applyGen !== filterApplyGenRef.current) return;
 
         if (filterActive && guids.length > 0) {
@@ -851,20 +848,19 @@ export function BimViewerShell(props: {
   );
 
   const startIssueCreateFromSelection = useCallback(() => {
+    // fallow-ignore-next-line complexity
     void (async () => {
-      if (!selection) {
-        toast.error("Select an element in the model first.");
-        return;
-      }
-      const anchor = selectionToBimAnchor(selection);
+      const anchor =
+        (selection ? selectionToBimAnchor(selection) : undefined) ??
+        (selectedGuids.size > 0 ? { ifcGuid: [...selectedGuids][0]! } : undefined);
       if (!anchor) {
-        toast.error("Could not anchor an issue to this selection.");
+        toast.error("Select an element in the model first.");
         return;
       }
       const pendingReferencePhoto = await captureIssueSnapshotFile({ anchor });
       startIssueCreate({ bimAnchor: anchor, pendingReferencePhoto });
     })();
-  }, [captureIssueSnapshotFile, selection, startIssueCreate]);
+  }, [captureIssueSnapshotFile, selectedGuids, selection, startIssueCreate]);
 
   // fallow-ignore-next-line complexity
   const buildMarkupBimAnchor = useCallback((): IssueBimAnchor | undefined => {
@@ -1200,11 +1196,54 @@ export function BimViewerShell(props: {
     })();
   }, [props.fileName]);
 
-  const onSelectIssue = useCallback(
+  const onSelectIssue = useCallback((issue: IssueRow) => {
+    setSelectedIssueId(issue.id);
+  }, []);
+
+  const onMarkerOpenDetails = useCallback(
     (issue: IssueRow) => {
-      void openIssueDetail(issue);
+      void openIssueDetail(issue, { fly: false });
     },
     [openIssueDetail],
+  );
+
+  const onMarkerLocateAsset = useCallback(
+    (issue: IssueRow) => {
+      void focusIssueOnly(issue);
+      const guid = issue.bimAnchor?.ifcGuid;
+      if (guid && guid !== "viewport-markup") {
+        void engineRef.current?.selectByGuids([guid]);
+      }
+    },
+    [focusIssueOnly],
+  );
+
+  const onMarkerOpenDocuments = useCallback(
+    (issue: IssueRow) => {
+      void openIssueDetail(issue, { fly: false });
+    },
+    [openIssueDetail],
+  );
+
+  const onMarkerAddComment = useCallback((issue: IssueRow) => {
+    setCommentDialogIssue(issue);
+  }, []);
+
+  const onIssueCommentAdded = useCallback((issueId: string, commentCount: number) => {
+    setIssues((prev) => prev.map((row) => (row.id === issueId ? { ...row, commentCount } : row)));
+    setEditIssue((prev) => (prev?.id === issueId ? { ...prev, commentCount } : prev));
+  }, []);
+
+  const onMarkerResolveIssue = useCallback(
+    (issue: IssueRow) => {
+      void patchIssue(issue.id, { status: "RESOLVED" })
+        .then(() => {
+          toast.success("Issue resolved.");
+          reloadIssues();
+        })
+        .catch((e) => toast.error(e instanceof Error ? e.message : "Could not resolve issue."));
+    },
+    [reloadIssues],
   );
 
   const onAppearanceChange = useCallback((patch: Partial<BimViewportAppearance>) => {
@@ -1595,7 +1634,7 @@ export function BimViewerShell(props: {
               onFocusIssue={(issue) => void focusIssueOnly(issue)}
               onStartPlacement={armIssuePlacement}
               onStartCreateOnSelection={startIssueCreateFromSelection}
-              hasSelection={Boolean(selection)}
+              hasSelection={selectionCount > 0}
             />
           </BimGlassDock>
         ) : null}
@@ -1606,6 +1645,12 @@ export function BimViewerShell(props: {
             issues={issues}
             selectedIssueId={selectedIssueId}
             onSelectIssue={onSelectIssue}
+            onFocusIssue={(issue) => void focusIssueOnly(issue)}
+            onOpenDetails={onMarkerOpenDetails}
+            onLocateAsset={onMarkerLocateAsset}
+            onOpenDocuments={onMarkerOpenDocuments}
+            onAddComment={onMarkerAddComment}
+            onResolveIssue={onMarkerResolveIssue}
           />
         ) : null}
 
@@ -1729,6 +1774,15 @@ export function BimViewerShell(props: {
             open
             issue={editIssue}
             layout="overlay"
+            bimContext={
+              resolvedFileVersionId && resolvedProjectId
+                ? {
+                    fileId: editIssue.fileId ?? props.fileId,
+                    fileVersionId: editIssue.fileVersionId ?? resolvedFileVersionId,
+                    projectId: resolvedProjectId,
+                  }
+                : undefined
+            }
             onClose={() => {
               setEditIssue(null);
               reloadIssues();
@@ -1753,6 +1807,13 @@ export function BimViewerShell(props: {
           />
         ) : null}
       </div>
+
+      <BimIssueCommentDialog
+        open={Boolean(commentDialogIssue)}
+        issue={commentDialogIssue}
+        onClose={() => setCommentDialogIssue(null)}
+        onCommentAdded={onIssueCommentAdded}
+      />
     </div>
   );
 }

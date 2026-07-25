@@ -45,6 +45,61 @@ export async function presignGet(env: Env, key: string, expiresIn = 3600): Promi
   return getSignedUrl(client, cmd, { expiresIn });
 }
 
+export type PresignPutRouteResult =
+  | { ok: true; uploadUrl: string; key: string }
+  | { ok: false; status: 503; body: { error: string; devKey?: string } };
+
+/** Shared presign-put handler body for route upload endpoints. */
+export async function presignPutUploadResponse(
+  env: Env,
+  key: string,
+  contentType: string,
+  logLabel: string,
+): Promise<PresignPutRouteResult> {
+  try {
+    const url = await presignPut(env, key, contentType);
+    if (!url) {
+      return {
+        ok: false,
+        status: 503,
+        body: { error: "S3 not configured — set AWS_* and S3_BUCKET", devKey: key },
+      };
+    }
+    return { ok: true, uploadUrl: url, key };
+  } catch (e) {
+    console.error(`[${logLabel}]`, e);
+    return {
+      ok: false,
+      status: 503,
+      body: {
+        error: "Could not create upload URL. Check S3 credentials and bucket configuration.",
+      },
+    };
+  }
+}
+
+export type PresignGetRouteResult =
+  | { ok: true; url: string }
+  | { ok: false; status: 503; body: { error: string } };
+
+/** Shared presign-get handler body for route download endpoints. */
+export async function presignGetDownloadResponse(
+  env: Env,
+  s3Key: string,
+  logLabel: string,
+): Promise<PresignGetRouteResult> {
+  try {
+    const url = await presignGet(env, s3Key);
+    if (!url) {
+      return { ok: false, status: 503, body: { error: "S3 not configured" } };
+    }
+    return { ok: true, url };
+  } catch (e) {
+    console.error(`[${logLabel}]`, e);
+    return { ok: false, status: 503, body: { error: "Could not create download link (S3)." } };
+  }
+}
+
 /** Stream object bytes (for same-origin viewer proxy — avoids S3 GET CORS in the browser). */
 export async function getObjectStream(
   env: Env,

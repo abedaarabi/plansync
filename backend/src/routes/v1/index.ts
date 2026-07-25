@@ -112,6 +112,7 @@ import {
 } from "../../lib/workspaceBranding.js";
 import { apiPublicOrigin, workspaceLogoUrlForClients } from "../../lib/workspaceLogo.js";
 import { getEmailBrandIconPngBytes } from "../../lib/emailBrandIcon.js";
+import { commentAuthorInclude } from "../../lib/userCommentJson.js";
 import { registerMaterialsRoutes } from "./materialsRoutes.js";
 import { registerIssuesRoutes } from "./issuesRoutes.js";
 import { registerOmRoutes, registerOccupantPublicRoutes } from "./omRoutes.js";
@@ -3731,7 +3732,7 @@ export function v1Routes(
     const comments = await prisma.fileComment.findMany({
       where,
       orderBy: { createdAt: "asc" },
-      include: { author: { select: { id: true, name: true, email: true, image: true } } },
+      include: commentAuthorInclude,
     });
     return c.json({
       comments: comments.map((cm) => ({

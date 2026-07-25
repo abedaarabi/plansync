@@ -91,6 +91,8 @@ type EditProps = {
   issue: IssueRow;
   onClose: () => void;
   layout?: PanelLayout;
+  /** BIM viewer: supply file context when URL/store lack sheet viewer ids. */
+  bimContext?: IssueFormBimContext;
 };
 
 type Props = CreateProps | EditProps;
@@ -167,19 +169,22 @@ function markupAttachLabel(type: string): string {
   }
 }
 
+// fallow-ignore-next-line complexity
 export function IssueFormSlider(props: Props) {
   const { open, onClose, layout = "overlay" } = props;
   const variant = props.variant;
   const isDocked = layout === "docked";
-  const bimContext = variant === "create" ? props.bimContext : undefined;
-  const isBimCreate = Boolean(bimContext);
+  const bimContext = props.bimContext;
+  const isBimCreate = variant === "create" && Boolean(bimContext);
   const searchParams = useSearchParams();
-  const fileId = bimContext?.fileId ?? searchParams.get("fileId");
+  const editIssueRow = variant === "edit" ? props.issue : null;
+  const fileId = bimContext?.fileId ?? searchParams.get("fileId") ?? editIssueRow?.fileId ?? null;
   const projectIdFromUrl = searchParams.get("projectId")?.trim() || null;
   const versionParam = searchParams.get("version");
   const viewerFileName = useViewerStore((s) => s.fileName);
   const storeFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
-  const cloudFileVersionId = bimContext?.fileVersionId ?? storeFileVersionId;
+  const cloudFileVersionId =
+    bimContext?.fileVersionId ?? storeFileVersionId ?? editIssueRow?.fileVersionId ?? null;
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
   const annotations = useViewerStore((s) => s.annotations);
   const setIssueCreateDraft = useViewerStore((s) => s.setIssueCreateDraft);
@@ -792,8 +797,10 @@ export function IssueFormSlider(props: Props) {
 
   const canSubmit = isBimCreate
     ? Boolean(workspaceId && bimContext && title.trim().length > 0)
-    : Boolean(workspaceId && fileId && cloudFileVersionId && title.trim().length > 0) &&
-      (variant === "edit" || sheetContext.pageNumber != null);
+    : variant === "edit"
+      ? Boolean(workspaceId && title.trim().length > 0)
+      : Boolean(workspaceId && fileId && cloudFileVersionId && title.trim().length > 0) &&
+        sheetContext.pageNumber != null;
 
   const assignableMembers = (membersRes?.members ?? []).filter((m) => m.email?.trim());
 

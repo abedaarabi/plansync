@@ -315,6 +315,11 @@ export class BimEngine {
   private activeFilterGhostOpacity = 0.18;
   private activeColorizeGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
   private materialSyncInProgress = false;
+  /** Serialize fragment highlight paints — parallel reset/highlight races wipe tints. */
+  private highlightPaintInFlight: Promise<void> | null = null;
+  private highlightPaintQueued = false;
+  /** Material sync deferred while selection/filter overlays are active. */
+  private pendingMaterialSync = false;
   private planSilhouette: ImageBitmap | null = null;
   private planSilhouetteDirty = true;
   private planSilhouetteBaking = false;
@@ -528,6 +533,9 @@ export class BimEngine {
       void this.handleHighlight(map);
     });
     highlighter.events.select.onClear.add(() => {
+      // Fragment repaints reset the highlighter style map; keep shell selection
+      // while selectedGuids / lastPickMap still represent an active pick.
+      if (this.hasActiveSelectionHighlight()) return;
       this.events.onSelection(null);
     });
     this.installFilterHighlightGuard(highlighter);
@@ -535,7 +543,7 @@ export class BimEngine {
     const hoverer = components.get(OBF.Hoverer);
     hoverer.world = world;
     hoverer.fade = false;
-    hoverer.mode = OBF.HovererMode.MOUSE_STOP;
+    hoverer.mode = OBF.HovererMode.MOUSE_MOVE;
     hoverer.material = new THREE.MeshBasicMaterial({
       color: new THREE.Color(HOVER_ACCENT),
       transparent: true,
@@ -736,6 +744,10 @@ export class BimEngine {
   private async syncViewportMaterials(): Promise<void> {
     const fragments = this.components?.get(OBC.FragmentsManager);
     if (!fragments?.initialized || this.materialSyncInProgress) return;
+    if (this.hasActiveFragmentHighlights()) {
+      this.pendingMaterialSync = true;
+      return;
+    }
 
     this.materialSyncInProgress = true;
     try {
@@ -855,7 +867,6 @@ export class BimEngine {
         applyRenderOrderToModel(model);
       }
       await fragments.core.update(true);
-      await this.refreshHighlightStyles();
     } catch {
       /* Material sync is best-effort — never block tools or model load. */
     } finally {
@@ -864,8 +875,9 @@ export class BimEngine {
   }
 
   /**
-   * Highlighter.updateColors() races resetHighlight || highlight via Promise.allSettled.
-   * After that finishes, re-paint ghost/colorize so they are not left wiped.
+   * Highlighter.updateColors() races resetHighlight || highlight via Promise.allSettled,
+   * so reset often wins and selection/filter tints vanish immediately. Route all
+   * highlight updates through our serialized painter instead.
    */
   private installFilterHighlightGuard(highlighter: OBF.Highlighter): void {
     const guarded = highlighter as OBF.Highlighter & {
@@ -873,12 +885,8 @@ export class BimEngine {
       updateColors: () => Promise<void>;
     };
     if (guarded.__planSyncFilterGuard) return;
-    const original = guarded.updateColors.bind(highlighter);
     guarded.updateColors = async () => {
-      await original();
-      if (this.hasActiveFilterHighlights()) {
-        await this.paintFilterHighlights();
-      }
+      await this.requestFragmentHighlights();
     };
     guarded.__planSyncFilterGuard = true;
   }
@@ -886,6 +894,62 @@ export class BimEngine {
   /** Re-apply ghost / colorize tints after fragment material or tile updates. */
   private hasActiveFilterHighlights(): boolean {
     return this.activeFilterGhostMap != null || this.activeColorizeGroups.length > 0;
+  }
+
+  // fallow-ignore-next-line complexity
+  private hasActiveSelectionHighlight(): boolean {
+    if (this.selectedGuids.size > 0 || this.lastPickMap != null) return true;
+    const highlighter = this.components?.get(OBF.Highlighter);
+    if (!highlighter) return false;
+    const selectMap = highlighter.selection[highlighter.config.selectName];
+    if (!selectMap) return false;
+    for (const ids of Object.values(selectMap)) {
+      if (ids instanceof Set && ids.size > 0) return true;
+    }
+    return false;
+  }
+
+  private hasActiveFragmentHighlights(): boolean {
+    return this.hasActiveFilterHighlights() || this.hasActiveSelectionHighlight();
+  }
+
+  /** Hover preview is only useful in orbit select mode. */
+  private syncHoverEnabled(): void {
+    const hoverer = this.components?.get(OBF.Hoverer);
+    if (!hoverer) return;
+    hoverer.enabled = this.tool === "select" && this.cameraMode !== "walk";
+  }
+
+  /** Queue a single coalesced repaint of selection + filter overlays. */
+  private requestFragmentHighlights(): Promise<void> {
+    if (this.highlightPaintInFlight) {
+      this.highlightPaintQueued = true;
+      return this.highlightPaintInFlight;
+    }
+    this.highlightPaintInFlight = this.runFragmentHighlightPaint().finally(() => {
+      this.highlightPaintInFlight = null;
+      if (this.highlightPaintQueued) {
+        this.highlightPaintQueued = false;
+        void this.requestFragmentHighlights();
+      }
+    });
+    return this.highlightPaintInFlight;
+  }
+
+  /** Drop model/local ids that are no longer in the loaded fragment list. */
+  // fallow-ignore-next-line complexity
+  private sanitizeHighlightMap(
+    map: OBC.ModelIdMap | null | undefined,
+    fragments: OBC.FragmentsManager,
+  ): OBC.ModelIdMap | null {
+    if (!map) return null;
+    const out: OBC.ModelIdMap = {};
+    for (const [modelId, ids] of Object.entries(map)) {
+      if (!fragments.list.has(modelId)) continue;
+      if (!(ids instanceof Set) || ids.size === 0) continue;
+      out[modelId] = new Set(ids);
+    }
+    return Object.keys(out).length > 0 ? out : null;
   }
 
   /**
@@ -897,105 +961,134 @@ export class BimEngine {
    * applies zero property overrides and ghost/colorize become invisible.
    */
   // fallow-ignore-next-line complexity
-  private async paintFilterHighlights(): Promise<void> {
+  private async runFragmentHighlightPaint(): Promise<void> {
     const fragments = this.components?.get(OBC.FragmentsManager);
     const highlighter = this.components?.get(OBF.Highlighter);
     if (!fragments?.initialized) return;
 
-    await fragments.resetHighlight();
-
-    // fallow-ignore-next-line complexity
-    const paint = async (
-      customId: string,
-      def: {
-        color: THREE.Color;
-        opacity: number;
-        transparent: boolean;
-        renderedFaces?: number;
-        depthTest?: boolean;
-        depthWrite?: boolean;
-      },
-      map: OBC.ModelIdMap | null | undefined,
-    ) => {
-      if (!map) return;
-      let empty = true;
-      for (const ids of Object.values(map)) {
-        if (ids instanceof Set && ids.size > 0) {
-          empty = false;
-          break;
+    try {
+      if (!this.hasActiveFragmentHighlights()) {
+        try {
+          await fragments.resetHighlight();
+          await fragments.core.update(true);
+        } catch {
+          /* fragment list may be mid-load or already torn down */
         }
+        this.bumpRender();
+        return;
       }
-      if (empty) return;
-      await fragments.highlight(
-        {
-          color: def.color,
-          opacity: def.opacity,
-          transparent: def.transparent,
-          renderedFaces: def.renderedFaces ?? 0,
-          depthTest: def.depthTest ?? true,
-          depthWrite: def.depthWrite ?? true,
-          customId,
-        },
-        map,
-      );
-    };
 
-    if (this.activeFilterGhostMap) {
-      await paint(
-        BimEngine.FILTER_GHOST_STYLE,
-        {
-          color: new THREE.Color("#64748b"),
-          opacity: this.activeFilterGhostOpacity,
-          transparent: true,
-          renderedFaces: 0,
-          depthTest: true,
-          depthWrite: false,
-        },
-        this.activeFilterGhostMap,
-      );
-    }
+      try {
+        await fragments.resetHighlight();
+      } catch {
+        /* best-effort reset before repainting overlays */
+      }
 
-    for (const group of this.activeColorizeGroups) {
-      await paint(
-        group.styleId,
-        {
-          color: new THREE.Color(group.color),
-          opacity: COLORIZE_HIGHLIGHT_OPACITY,
-          transparent: true,
-          renderedFaces: 0,
+      // fallow-ignore-next-line complexity
+      const paint = async (
+        customId: string,
+        def: {
+          color: THREE.Color;
+          opacity: number;
+          transparent: boolean;
+          renderedFaces?: number;
+          depthTest?: boolean;
+          depthWrite?: boolean;
         },
-        group.map,
-      );
-    }
+        map: OBC.ModelIdMap | null | undefined,
+      ) => {
+        const safeMap = this.sanitizeHighlightMap(map, fragments);
+        if (!safeMap) return;
+        try {
+          await fragments.highlight(
+            {
+              color: def.color,
+              opacity: def.opacity,
+              transparent: def.transparent,
+              renderedFaces: def.renderedFaces ?? 0,
+              depthTest: def.depthTest ?? true,
+              depthWrite: def.depthWrite ?? false,
+              customId,
+            },
+            safeMap,
+          );
+        } catch {
+          /* stale selection/filter maps during federation or filter churn */
+        }
+      };
 
-    // Keep selection tint on top when present.
-    if (highlighter) {
-      const selectName = highlighter.config.selectName;
-      const selectDef = highlighter.styles.get(selectName);
-      const selectMap = highlighter.selection[selectName];
-      if (selectDef?.color && selectMap) {
+      if (this.activeFilterGhostMap) {
+        await paint(
+          BimEngine.FILTER_GHOST_STYLE,
+          {
+            color: new THREE.Color("#64748b"),
+            opacity: this.activeFilterGhostOpacity,
+            transparent: true,
+            renderedFaces: 0,
+            depthTest: true,
+            depthWrite: false,
+          },
+          this.activeFilterGhostMap,
+        );
+      }
+
+      for (const group of this.activeColorizeGroups) {
+        await paint(
+          group.styleId,
+          {
+            color: new THREE.Color(group.color),
+            opacity: COLORIZE_HIGHLIGHT_OPACITY,
+            transparent: true,
+            renderedFaces: 0,
+            depthTest: true,
+            depthWrite: false,
+          },
+          group.map,
+        );
+      }
+
+      // Keep selection tint on top when present.
+      const selectMap = this.sanitizeHighlightMap(this.getActiveSelectionMap(), fragments);
+      if (selectMap && highlighter) {
+        const selectName = highlighter.config.selectName;
+        const selectDef = highlighter.styles.get(selectName);
         await paint(
           selectName,
           {
-            color: selectDef.color,
-            opacity: selectDef.opacity ?? 1,
-            transparent: selectDef.transparent ?? true,
-            renderedFaces: selectDef.renderedFaces ?? 0,
-            depthTest: selectDef.depthTest ?? true,
-            depthWrite: selectDef.depthWrite ?? false,
+            color: selectDef?.color ?? new THREE.Color(SELECTION_ACCENT),
+            opacity: selectDef?.opacity ?? BIM_SELECTION.fillOpacity,
+            transparent: selectDef?.transparent ?? true,
+            renderedFaces: selectDef?.renderedFaces ?? 0,
+            depthTest: selectDef?.depthTest ?? true,
+            depthWrite: selectDef?.depthWrite ?? false,
           },
           selectMap,
         );
       }
-    }
 
-    await fragments.core.update(true);
-    this.bumpRender();
+      try {
+        await fragments.core.update(true);
+      } catch {
+        /* worker may reject update while tiles are rebuilding */
+      }
+      this.bumpRender();
+    } finally {
+      this.maybeScheduleDeferredMaterialSync();
+    }
+  }
+
+  private async paintFilterHighlights(): Promise<void> {
+    await this.requestFragmentHighlights();
   }
 
   private async refreshHighlightStyles(): Promise<void> {
-    if (!this.hasActiveFilterHighlights()) return;
-    await this.paintFilterHighlights();
+    await this.requestFragmentHighlights();
+  }
+
+  private maybeScheduleDeferredMaterialSync(): void {
+    if (!this.pendingMaterialSync || this.hasActiveFragmentHighlights()) return;
+    this.pendingMaterialSync = false;
+    this.scheduleMaterialSync();
   }
 
   // fallow-ignore-next-line complexity
@@ -1460,8 +1553,8 @@ export class BimEngine {
       /* Silhouette is optional — footprint fallback still works. */
     } finally {
       this.planSilhouetteBaking = false;
-      if (this.hasActiveFilterHighlights()) {
-        await this.paintFilterHighlights();
+      if (this.hasActiveFragmentHighlights()) {
+        await this.requestFragmentHighlights();
       }
       if (this.planSilhouetteBakePending) {
         this.planSilhouetteBakePending = false;
@@ -1950,8 +2043,11 @@ export class BimEngine {
   // fallow-ignore-next-line complexity
   private scheduleMaterialSync(): void {
     if (this.disposed || this.modelRegistry.size === 0 || this.materialSyncInProgress) return;
-    // PBR recolor fights fragment highlights — defer until ghost/colorize is cleared.
-    if (this.hasActiveFilterHighlights()) return;
+    // PBR recolor fights fragment highlights — defer until overlays are cleared.
+    if (this.hasActiveFragmentHighlights()) {
+      this.pendingMaterialSync = true;
+      return;
+    }
     if (this.materialSyncTimer != null) window.clearTimeout(this.materialSyncTimer);
     this.materialSyncTimer = window.setTimeout(() => {
       this.materialSyncTimer = null;
@@ -2501,8 +2597,7 @@ export class BimEngine {
   clearSelection(): void {
     this.selectedGuids.clear();
     this.lastPickMap = null;
-    const highlighter = this.components?.get(OBF.Highlighter);
-    if (highlighter) void highlighter.clear("select");
+    void this.requestFragmentHighlights();
     this.events.onSelection(null);
     this.events.onMultiSelection?.([]);
   }
@@ -2521,7 +2616,7 @@ export class BimEngine {
     const highlighter = components.get(OBF.Highlighter);
     highlighter.config.selectEnabled = tool === "select";
     highlighter.enabled = true;
-    components.get(OBF.Hoverer).enabled = false;
+    this.syncHoverEnabled();
     if (tool !== "select" && tool !== "markup") this.clearSelection();
     if (tool !== "clip") {
       this.sectionBox?.deactivate();
@@ -2770,7 +2865,6 @@ export class BimEngine {
     if (!components || !this.model) return false;
     if (this.tool !== "select" && !opts.forContextMenu) return false;
 
-    const highlighter = components.get(OBF.Highlighter);
     const hit = await this.fastPickElement(e);
     if (!hit) {
       if (opts.forContextMenu) {
@@ -2849,11 +2943,8 @@ export class BimEngine {
     }
 
     this.lastPickMap = map;
-    await highlighter.highlightByID(highlighter.config.selectName, map, true);
-    await fragments.core.update(true);
-    if (opts.forContextMenu) {
-      await this.handleHighlight(map);
-    }
+    await this.requestFragmentHighlights();
+    await this.handleHighlight(map);
     this.bumpRender();
     this.events.onMultiSelection?.([...this.selectedGuids]);
     return true;
@@ -2887,8 +2978,7 @@ export class BimEngine {
         this.applyBim360Navigation();
       }
     } finally {
-      const hoverer = this.mustComponents().get(OBF.Hoverer);
-      hoverer.enabled = false;
+      this.syncHoverEnabled();
       this.syncViewportOverlays();
       this.bumpRender();
     }
@@ -3099,8 +3189,31 @@ export class BimEngine {
     return Object.keys(map).length > 0 ? map : null;
   }
 
+  // fallow-ignore-next-line complexity
+  private async resolveModelIdMapFromGuids(guids: string[]): Promise<OBC.ModelIdMap | null> {
+    if (guids.length === 0) return null;
+    let map = this.buildModelIdMapFromGuids(guids);
+    if (map) return map;
+
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    if (!fragments?.initialized) return null;
+    try {
+      map = await fragments.guidsToModelIdMap(guids);
+      return map && Object.keys(map).length > 0 ? map : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // fallow-ignore-next-line complexity
   private getActiveSelectionMap(): OBC.ModelIdMap | null {
-    return this.buildModelIdMapFromGuids([...this.selectedGuids]) ?? this.lastPickMap;
+    const raw = this.buildModelIdMapFromGuids([...this.selectedGuids]) ?? this.lastPickMap;
+    if (!raw) return null;
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    if (!fragments?.initialized) return raw;
+    const safe = this.sanitizeHighlightMap(raw, fragments);
+    if (!safe && this.lastPickMap === raw) this.lastPickMap = null;
+    return safe;
   }
 
   // fallow-ignore-next-line complexity
@@ -3109,16 +3222,13 @@ export class BimEngine {
     for (const g of guids) this.selectedGuids.add(g);
     await this.syncGuidLocalIdMap();
     const map = this.buildModelIdMapFromGuids([...this.selectedGuids]);
-    const highlighter = this.components?.get(OBF.Highlighter);
-    if (!highlighter || !map) {
+    if (!map) {
       if (!additive) this.clearSelection();
       return;
     }
     this.lastPickMap = map;
-    void highlighter.highlightByID(highlighter.config.selectName, map, !additive).then(async () => {
-      await this.mustComponents().get(OBC.FragmentsManager).core.update(true);
-      this.bumpRender();
-    });
+    await this.requestFragmentHighlights();
+    await this.handleHighlight(map);
     this.events.onMultiSelection?.([...this.selectedGuids]);
   }
 
@@ -3180,84 +3290,84 @@ export class BimEngine {
     }
   }
 
-  async isolateByGuids(guids: string[]): Promise<void> {
+  /**
+   * Apply filter visualize + colorize in one pass so ghost/colorize/selection
+   * are painted together without intermediate wipes.
+   */
+  // fallow-ignore-next-line complexity
+  async applyFilterPresentation(opts: {
+    filterActive: boolean;
+    visualize: "isolate" | "ghost" | "none";
+    matchGuids: string[];
+    colorizeGroups: { styleId: string; color: string; guids: string[] }[];
+  }): Promise<void> {
     await this.syncGuidLocalIdMap();
-    const map = this.buildModelIdMapFromGuids(guids);
-    if (!map) return;
-    const hider = this.mustComponents().get(OBC.Hider);
-    await hider.isolate(map);
-    this.invalidatePlanSilhouette();
-    this.bumpRender();
-  }
 
-  async applyFilterVisualize(
-    matchGuids: string[],
-    mode: "isolate" | "ghost" | "none",
-  ): Promise<void> {
-    await this.clearFilterGhost();
-    if (mode === "none") {
+    this.activeFilterGhostMap = null;
+
+    if (opts.filterActive) {
+      if (opts.visualize === "none") {
+        await this.resetFilterVisibility();
+      } else if (opts.visualize === "isolate") {
+        const map = await this.resolveModelIdMapFromGuids(opts.matchGuids);
+        if (map) {
+          const hider = this.mustComponents().get(OBC.Hider);
+          await hider.isolate(map);
+          this.invalidatePlanSilhouette();
+        }
+      } else {
+        await this.applyFilterGhostState(opts.matchGuids);
+      }
+    } else {
       await this.resetFilterVisibility();
-      return;
     }
-    if (mode === "isolate") {
-      await this.isolateByGuids(matchGuids);
-      return;
+
+    const nextGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
+    this.colorizeStyleIds = [];
+    for (const group of opts.colorizeGroups) {
+      const map = await this.resolveModelIdMapFromGuids(group.guids);
+      if (!map) continue;
+      this.colorizeStyleIds.push(group.styleId);
+      nextGroups.push({ styleId: group.styleId, color: group.color, map });
     }
-    await this.applyFilterGhost(matchGuids);
+    this.activeColorizeGroups = nextGroups;
+
+    await this.requestFragmentHighlights();
+    if (!this.hasActiveFragmentHighlights()) {
+      this.maybeScheduleDeferredMaterialSync();
+    }
   }
 
   async clearFilterGhost(): Promise<void> {
     const hadGhost = this.activeFilterGhostMap != null;
     this.activeFilterGhostMap = null;
     if (!hadGhost && this.activeColorizeGroups.length === 0) return;
-    await this.paintFilterHighlights();
-    if (!this.hasActiveFilterHighlights()) {
-      this.scheduleMaterialSync();
+    await this.requestFragmentHighlights();
+    if (!this.hasActiveFragmentHighlights()) {
+      this.maybeScheduleDeferredMaterialSync();
     }
   }
 
-  /** Dim non-matching elements while keeping matches at full opacity. */
+  /** Update ghost state only — caller paints via requestFragmentHighlights(). */
   // fallow-ignore-next-line complexity
-  async applyFilterGhost(matchGuids: string[], opacity = 0.18): Promise<void> {
+  private async applyFilterGhostState(matchGuids: string[], opacity = 0.18): Promise<void> {
     const index = this.quantityIndex;
     if (!index || matchGuids.length === 0) return;
 
-    await this.syncGuidLocalIdMap();
     await this.ensureBaseVisibilityForFilter();
 
     const matchSet = new Set(matchGuids);
     const ghostGuids = index.elements.filter((el) => !matchSet.has(el.guid)).map((el) => el.guid);
     if (ghostGuids.length === 0) {
       this.activeFilterGhostMap = null;
-      await this.paintFilterHighlights();
       return;
     }
 
-    const map = this.buildModelIdMapFromGuids(ghostGuids);
+    const map = await this.resolveModelIdMapFromGuids(ghostGuids);
     if (!map) return;
 
     this.activeFilterGhostMap = map;
     this.activeFilterGhostOpacity = opacity;
-    await this.paintFilterHighlights();
-  }
-
-  // fallow-ignore-next-line complexity
-  async applyColorize(
-    groups: { styleId: string; color: string; guids: string[] }[],
-  ): Promise<void> {
-    await this.syncGuidLocalIdMap();
-
-    const nextGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
-    this.colorizeStyleIds = [];
-    for (const group of groups) {
-      const map = this.buildModelIdMapFromGuids(group.guids);
-      if (!map) continue;
-      this.colorizeStyleIds.push(group.styleId);
-      nextGroups.push({ styleId: group.styleId, color: group.color, map });
-    }
-
-    this.activeColorizeGroups = nextGroups;
-    await this.paintFilterHighlights();
   }
 
   async clearColorize(): Promise<void> {
@@ -3265,12 +3375,12 @@ export class BimEngine {
     this.activeColorizeGroups = [];
     this.colorizeStyleIds = [];
     if (!hadColorize && this.activeFilterGhostMap == null) {
-      this.scheduleMaterialSync();
+      this.maybeScheduleDeferredMaterialSync();
       return;
     }
-    await this.paintFilterHighlights();
-    if (!this.hasActiveFilterHighlights()) {
-      this.scheduleMaterialSync();
+    await this.requestFragmentHighlights();
+    if (!this.hasActiveFragmentHighlights()) {
+      this.maybeScheduleDeferredMaterialSync();
     }
   }
 

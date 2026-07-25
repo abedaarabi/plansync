@@ -1690,11 +1690,131 @@ button:active:not(:disabled),
     color: var(--bim-chrome-text-muted);
   }
 
+  /* Premium floating issue markers in the 3D viewport. */
+  .bim-issue-marker-pin {
+    transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translate(-50%, -50%);
+  }
+
+  .bim-issue-marker-pin:hover,
+  .bim-issue-marker-pin:focus-visible {
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+
+  .bim-issue-marker-pin--expanded {
+    animation: bim-issue-marker-expand 220ms cubic-bezier(0.34, 1.2, 0.64, 1) both;
+  }
+
+  @keyframes bim-issue-marker-expand {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.55);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+
+  .bim-issue-marker-pin__disc {
+    position: relative;
+    display: flex;
+    height: 1.75rem;
+    min-width: 1.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    padding: 0 0.35rem;
+    color: #fff;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow:
+      0 2px 8px rgba(15, 23, 42, 0.45),
+      0 0 0 2px rgba(255, 255, 255, 0.92);
+  }
+
+  .bim-issue-marker-pin__disc::after {
+    content: "";
+    position: absolute;
+    bottom: -3px;
+    left: 50%;
+    z-index: -1;
+    height: 0.45rem;
+    width: 0.45rem;
+    transform: translate(-50%, 50%) rotate(45deg);
+    border-radius: 0 0 2px 0;
+    background-color: inherit;
+    box-shadow: 1px 2px 3px rgba(15, 23, 42, 0.28);
+  }
+
+  .bim-issue-marker-pin__disc[data-selected="true"] {
+    box-shadow:
+      0 2px 10px rgba(15, 23, 42, 0.5),
+      0 0 0 2px var(--bim-accent),
+      0 0 0 4px color-mix(in srgb, var(--bim-accent) 35%, transparent);
+  }
+
+  .bim-issue-marker-pin__label {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .bim-issue-marker-leader {
+    stroke: color-mix(in srgb, var(--bim-text) 45%, transparent);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+    opacity: 0.85;
+  }
+
+  .bim-issue-marker-card {
+    transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .bim-issue-marker-card__surface {
+    border: 1px solid color-mix(in srgb, var(--bim-border) 55%, transparent);
+    background: color-mix(in srgb, var(--bim-shell-deep) 82%, transparent);
+    box-shadow:
+      0 4px 6px rgba(15, 23, 42, 0.18),
+      0 16px 40px rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .bim-issue-marker-card__action {
+    display: flex;
+    height: 2rem;
+    width: 2rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    color: var(--bim-text-muted);
+    transition:
+      background-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .bim-issue-marker-card__action:hover {
+    background: color-mix(in srgb, var(--bim-hover) 70%, transparent);
+    color: var(--bim-text);
+  }
+
+  .bim-issue-meta-chip {
+    background: color-mix(in srgb, var(--bim-panel) 65%, transparent);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .bim-glass-dock-enter {
       animation: none;
     }
     .bim-bottom-flyout {
+      transition: none;
+    }
+    .bim-issue-marker-pin,
+    .bim-issue-marker-pin--expanded,
+    .bim-issue-marker-card {
+      animation: none;
       transition: none;
     }
   }

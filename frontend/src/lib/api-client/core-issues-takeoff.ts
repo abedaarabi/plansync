@@ -104,6 +104,9 @@ export type IssueRow = {
   sourceOccupantIssueId?: string | null;
   completionEvidenceRequired?: boolean;
   hasVendorAccessLink?: boolean;
+  /** 1-based project issue number (from API). */
+  displayNumber?: number | null;
+  commentCount?: number;
 };
 
 export type IssueKindApi = "WORK_ORDER" | "CONSTRUCTION" | "OCCUPANT";
@@ -391,6 +394,44 @@ export async function deleteIssue(issueId: string): Promise<void> {
     const msg = typeof j.error === "string" ? j.error : "Could not delete issue.";
     throw new HttpError(res.status, msg);
   }
+}
+
+export type IssueCommentRow = {
+  id: string;
+  body: string;
+  createdAt: string;
+  author: IssueUserRef;
+};
+
+export async function fetchIssueComments(issueId: string): Promise<IssueCommentRow[]> {
+  const res = await fetch(apiUrl(`/api/v1/issues/${encodeURIComponent(issueId)}/comments`), {
+    credentials: "include",
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load comments.");
+  const j = (await res.json()) as { comments: IssueCommentRow[] };
+  return j.comments ?? [];
+}
+
+export async function createIssueComment(
+  issueId: string,
+  body: string,
+): Promise<IssueCommentRow & { commentCount: number }> {
+  const res = await fetch(apiUrl(`/api/v1/issues/${encodeURIComponent(issueId)}/comments`), {
+    method: "POST",
+    credentials: "include",
+    headers: jsonHeaders,
+    body: JSON.stringify({ body }),
+  });
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown } & Partial<
+    IssueCommentRow & { commentCount: number }
+  >;
+  if (!res.ok) {
+    const msg = typeof j.error === "string" ? j.error : "Could not add comment.";
+    throw new HttpError(res.status, msg);
+  }
+  return j as IssueCommentRow & { commentCount: number };
 }
 
 /** Relative URL to open the viewer on a cloud file revision. */

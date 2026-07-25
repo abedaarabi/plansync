@@ -17,7 +17,12 @@ import { prisma } from "../../lib/prisma.js";
 import { fileVersionWriteBlocked } from "../../lib/fileVersionLock.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectForMember, assertUserAssignableToProject } from "../../lib/projectAccess.js";
-import { canCreateIssues, issuesWhereForAuth, loadProjectWithAuth } from "../../lib/permissions.js";
+import {
+  canCreateIssues,
+  issuesWhereForAuth,
+  loadProjectWithAuth,
+  type ProjectAuthContext,
+} from "../../lib/permissions.js";
 import { logActivity } from "../../lib/activity.js";
 import type { Env } from "../../lib/env.js";
 import {
@@ -26,7 +31,11 @@ import {
   s3KeyMatchesIssueReferencePhoto,
 } from "../../lib/fileUpload.js";
 import { inviteFromAddress } from "../../lib/inviteEmail.js";
-import { deleteObject, presignGet, presignPut } from "../../lib/s3.js";
+import {
+  deleteObject,
+  presignGetDownloadResponse,
+  presignPutUploadResponse,
+} from "../../lib/s3.js";
 import {
   buildIssueAssignedEmailHtml,
   buildIssueAssignedEmailText,
@@ -47,6 +56,11 @@ import {
   sketchJsonByteSize,
   type IssueReferencePhotoParsed,
 } from "../../lib/issueReferencePhotos.js";
+import {
+  commentAuthorInclude,
+  simpleCommentJson,
+  userPublicSelect,
+} from "../../lib/userCommentJson.js";
 import {
   parsePartsUsedJson,
   parseWorkOrderProcedure,
@@ -136,9 +150,9 @@ function frequencyToNextFrom(
 }
 
 const issueInclude = {
-  assignee: { select: { id: true, name: true, email: true, image: true } },
-  creator: { select: { id: true, name: true, email: true, image: true } },
-  completedBy: { select: { id: true, name: true, email: true, image: true } },
+  assignee: { select: userPublicSelect },
+  creator: { select: userPublicSelect },
+  completedBy: { select: userPublicSelect },
   asset: { select: { id: true, tag: true, name: true } },
   vendor: { select: { id: true, name: true, email: true, trade: true } },
   file: { select: { name: true } },
@@ -149,12 +163,98 @@ const issueInclude = {
     },
     orderBy: { createdAt: "asc" as const },
   },
+  _count: { select: { comments: true } },
 } as const;
 
 type IssueRow = Prisma.IssueGetPayload<{ include: typeof issueInclude }>;
 const CARRY_FORWARD_META_KEY = "__carryForwardFromFileVersionId";
 
-function issueRowJson(row: IssueRow, opts?: { maskPortalReporter?: boolean }) {
+async function issueDisplayNumbersForProject(projectId: string): Promise<Map<string, number>> {
+  const chron = await prisma.issue.findMany({
+    where: { projectId },
+    select: { id: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+  return new Map(chron.map((row, i) => [row.id, i + 1]));
+}
+
+async function issueRowJsonWithDisplay(row: IssueRow, opts?: { maskPortalReporter?: boolean }) {
+  const displayNums = await issueDisplayNumbersForProject(row.projectId);
+  return issueRowJson(row, {
+    ...opts,
+    displayNumber: displayNums.get(row.id) ?? null,
+  });
+}
+
+async function issueRowsToJson(rows: IssueRow[], projectId: string, maskPortalReporter: boolean) {
+  const displayNums = await issueDisplayNumbersForProject(projectId);
+  return rows.map((row) =>
+    issueRowJson(row, {
+      maskPortalReporter,
+      displayNumber: displayNums.get(row.id) ?? null,
+    }),
+  );
+}
+
+type IssueAccessResult =
+  | { ok: false; status: 402 | 403 | 404; error: string }
+  | {
+      ok: true;
+      issue: {
+        id: string;
+        projectId: string;
+        workspaceId: string;
+        fileVersionId?: string | null;
+        title?: string;
+      };
+      ctx: ProjectAuthContext;
+    };
+
+async function authorizeIssueAccess(
+  issueId: string,
+  userId: string,
+  select: { id: true; projectId: true; workspaceId: true; fileVersionId?: true; title?: true },
+): Promise<IssueAccessResult> {
+  const issue = await prisma.issue.findUnique({ where: { id: issueId }, select });
+  if (!issue) return { ok: false, status: 404, error: "Not found" };
+  const auth = await loadProjectWithAuth(issue.projectId, userId);
+  if ("error" in auth) return { ok: false, status: auth.status, error: auth.error };
+  const { ctx } = auth;
+  if (!ctx.settings.modules.issues) return { ok: false, status: 404, error: "Not found" };
+  const gate = requirePro(ctx.project.workspace);
+  if (gate) return { ok: false, status: gate.status, error: gate.error };
+  const scope = issuesWhereForAuth(ctx, userId);
+  const allowed = await prisma.issue.count({
+    where: { id: issueId, projectId: issue.projectId, ...scope },
+  });
+  if (allowed === 0) return { ok: false, status: 404, error: "Not found" };
+  return { ok: true, issue, ctx };
+}
+
+const issueCommentReadSelect = {
+  id: true,
+  projectId: true,
+  workspaceId: true,
+} as const;
+
+const issueCommentWriteSelect = {
+  ...issueCommentReadSelect,
+  fileVersionId: true,
+  title: true,
+} as const;
+
+async function loadIssueCommentAccess(
+  c: { req: { param: (name: string) => string }; get: (key: "user") => { id: string } },
+  select: typeof issueCommentReadSelect | typeof issueCommentWriteSelect,
+): Promise<IssueAccessResult> {
+  return authorizeIssueAccess(c.req.param("issueId")!, c.get("user").id, select);
+}
+
+// fallow-ignore-next-line complexity
+function issueRowJson(
+  row: IssueRow,
+  opts?: { maskPortalReporter?: boolean; displayNumber?: number | null },
+) {
   const mask =
     Boolean(opts?.maskPortalReporter) &&
     row.issueKind === IssueKind.OCCUPANT &&
@@ -244,6 +344,8 @@ function issueRowJson(row: IssueRow, opts?: { maskPortalReporter?: boolean }) {
     sourceOccupantIssueId: row.sourceOccupantIssueId,
     completionEvidenceRequired: row.completionEvidenceRequired,
     hasVendorAccessLink: Boolean(row.vendorAccessToken),
+    displayNumber: opts?.displayNumber ?? null,
+    commentCount: row._count?.comments ?? 0,
   };
 }
 
@@ -373,9 +475,10 @@ export function registerIssuesRoutes(
       orderBy: { createdAt: "desc" },
     });
     const mask = access.ctx.workspaceMember.isExternal;
-    return c.json(rows.map((row) => issueRowJson(row, { maskPortalReporter: mask })));
+    return c.json(await issueRowsToJson(rows, fv.file.projectId, mask));
   });
 
+  // fallow-ignore-next-line complexity
   r.get("/projects/:projectId/issues", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const fileVersionId = c.req.query("fileVersionId")?.trim() || undefined;
@@ -428,7 +531,7 @@ export function registerIssuesRoutes(
       orderBy: { createdAt: "desc" },
     });
     const mask = ctx.workspaceMember.isExternal;
-    return c.json(rows.map((row) => issueRowJson(row, { maskPortalReporter: mask })));
+    return c.json(await issueRowsToJson(rows, projectId, mask));
   });
 
   r.get("/issues/:issueId", needUser, async (c) => {
@@ -453,9 +556,10 @@ export function registerIssuesRoutes(
     });
     if (allowed === 0) return c.json({ error: "Not found" }, 404);
     const mask = ctx.workspaceMember.isExternal;
-    return c.json(issueRowJson(row, { maskPortalReporter: mask }));
+    return c.json(await issueRowJsonWithDisplay(row, { maskPortalReporter: mask }));
   });
 
+  // fallow-ignore-next-line complexity
   r.post("/issues/:issueId/reference-photos/presign", needUser, async (c) => {
     const issueId = c.req.param("issueId")!;
     const issue = await prisma.issue.findUnique({
@@ -534,22 +638,12 @@ export function registerIssuesRoutes(
       uploadId,
       body.data.fileName,
     );
-    let url: string | null;
-    try {
-      url = await presignPut(env, key, ct);
-    } catch (e) {
-      console.error("[issue reference photo presign]", e);
-      return c.json(
-        { error: "Could not create upload URL. Check S3 credentials and bucket configuration." },
-        503,
-      );
-    }
-    if (!url) {
-      return c.json({ error: "S3 not configured — set AWS_* and S3_BUCKET", devKey: key }, 503);
-    }
-    return c.json({ uploadUrl: url, key });
+    const presign = await presignPutUploadResponse(env, key, ct, "issue reference photo presign");
+    if (!presign.ok) return c.json(presign.body, presign.status);
+    return c.json({ uploadUrl: presign.uploadUrl, key: presign.key });
   });
 
+  // fallow-ignore-next-line complexity
   r.post("/issues/:issueId/reference-photos/complete", needUser, async (c) => {
     const issueId = c.req.param("issueId")!;
     const issue = await prisma.issue.findUnique({
@@ -650,7 +744,44 @@ export function registerIssuesRoutes(
     });
 
     if (updated.fileVersionId) notifyIssues(updated.fileVersionId);
-    return c.json(issueRowJson(updated, { maskPortalReporter: ctx.workspaceMember.isExternal }));
+    return c.json(
+      await issueRowJsonWithDisplay(updated, {
+        maskPortalReporter: ctx.workspaceMember.isExternal,
+      }),
+    );
+  });
+
+  r.get("/issues/:issueId/comments", needUser, async (c) => {
+    const access = await loadIssueCommentAccess(c, issueCommentReadSelect);
+    if (!access.ok) return c.json({ error: access.error }, access.status);
+
+    const comments = await prisma.issueComment.findMany({
+      where: { issueId: access.issue.id },
+      orderBy: { createdAt: "asc" },
+      include: commentAuthorInclude,
+    });
+    return c.json({ comments: comments.map(simpleCommentJson) });
+  });
+
+  r.post("/issues/:issueId/comments", needUser, async (c) => {
+    const access = await loadIssueCommentAccess(c, issueCommentWriteSelect);
+    if (!access.ok) return c.json({ error: access.error }, access.status);
+    if (!canCreateIssues(access.ctx)) return c.json({ error: "Forbidden" }, 403);
+
+    const body = await c.req.json<{ body?: string }>();
+    const text = body.body?.trim();
+    if (!text) return c.json({ error: "body is required" }, 400);
+
+    const issueId = access.issue.id;
+    const comment = await prisma.issueComment.create({
+      data: { issueId, authorId: c.get("user").id, body: text },
+      include: commentAuthorInclude,
+    });
+    if (access.issue.fileVersionId) notifyIssues(access.issue.fileVersionId);
+    return c.json({
+      ...simpleCommentJson(comment),
+      commentCount: await prisma.issueComment.count({ where: { issueId } }),
+    });
   });
 
   r.get("/issues/:issueId/reference-photos/:photoId/presign-read", needUser, async (c) => {
@@ -680,17 +811,16 @@ export function registerIssuesRoutes(
     const hit = photos.find((p) => p.id === photoId);
     if (!hit) return c.json({ error: "Not found" }, 404);
 
-    let url: string | null;
-    try {
-      url = await presignGet(env, hit.s3Key);
-    } catch (e) {
-      console.error("[issue reference photo presign-read]", e);
-      return c.json({ error: "Could not create download link (S3)." }, 503);
-    }
-    if (!url) return c.json({ error: "S3 not configured" }, 503);
-    return c.json({ url });
+    const presign = await presignGetDownloadResponse(
+      env,
+      hit.s3Key,
+      "issue reference photo presign-read",
+    );
+    if (!presign.ok) return c.json(presign.body, presign.status);
+    return c.json({ url: presign.url });
   });
 
+  // fallow-ignore-next-line complexity
   r.post("/issues", needUser, async (c) => {
     const optionalYmd = z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.null()]).optional();
     const body = z
@@ -1038,7 +1168,9 @@ export function registerIssuesRoutes(
     }
 
     if (issue.fileVersionId) notifyIssues(issue.fileVersionId);
-    return c.json(issueRowJson(issue, { maskPortalReporter: ctx.workspaceMember.isExternal }));
+    return c.json(
+      await issueRowJsonWithDisplay(issue, { maskPortalReporter: ctx.workspaceMember.isExternal }),
+    );
   });
 
   r.post("/file-versions/:newFileVersionId/issues/carry-forward", needUser, async (c) => {
@@ -1196,6 +1328,7 @@ export function registerIssuesRoutes(
     return c.json({ ok: true as const, copiedIssueCount: result, idempotent: false as const });
   });
 
+  // fallow-ignore-next-line complexity
   r.patch("/issues/:issueId", needUser, async (c) => {
     const issueId = c.req.param("issueId")!;
     const issue = await prisma.issue.findUnique({
@@ -1736,7 +1869,7 @@ export function registerIssuesRoutes(
 
     if (issue.fileVersionId) notifyIssues(issue.fileVersionId);
     return c.json(
-      issueRowJson(updated, {
+      await issueRowJsonWithDisplay(updated, {
         maskPortalReporter: issuePatchAuth.ctx.workspaceMember.isExternal,
       }),
     );

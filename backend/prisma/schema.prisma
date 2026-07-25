@@ -64,6 +64,7 @@ model User {
   workOrdersCompleted          Issue[]                   @relation("WorkOrderCompleter")
   assetMeterReadings           AssetMeterReading[]       @relation("AssetMeterReadingActor")
   bimSavedViews                BimSavedView[]
+  issueComments                IssueComment[]            @relation("IssueCommentAuthor")
 
   /// When true, omit this user from PDF viewer presence / collaborator lists (still can edit).
   hideViewerPresence Boolean @default(false)
@@ -1026,6 +1027,7 @@ model Issue {
   updatedAt DateTime @updatedAt
 
   rfiLinks RfiIssueLink[]
+  comments IssueComment[]
 
   @@unique([maintenanceScheduleId, maintenanceDueAt])
   @@index([workspaceId])
@@ -1038,6 +1040,19 @@ model Issue {
   @@index([vendorId])
   @@index([sourceOccupantIssueId])
   @@index([completedById])
+}
+
+model IssueComment {
+  id        String   @id @default(cuid())
+  issueId   String
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation("IssueCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([issueId])
 }
 
 enum MaintenanceFrequency {
