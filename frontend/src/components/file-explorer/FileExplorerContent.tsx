@@ -70,6 +70,12 @@ export type FileExplorerContentProps = {
   /** Cmd/Ctrl-click toggles IFC files for a federated BIM viewer session. */
   federationIfcIds?: Set<string>;
   onToggleFederationIfc?: (file: CloudFile) => void;
+  /** Published IFC badge label, e.g. "3 levels · 12 sheets". */
+  ifcPublishBadge?: (file: CloudFile) => string | null;
+  onPublishIfcModel?: (file: CloudFile) => void;
+  onMapIfcDrawings?: (file: CloudFile) => void;
+  onAlignIfcCoordinates?: (file: CloudFile) => void;
+  onLoadIfcPublishMeta?: (file: CloudFile) => void;
 };
 
 function itemKeyForFolder(id: string) {
@@ -117,6 +123,11 @@ export function FileExplorerContent({
   onFileVersionPick,
   federationIfcIds,
   onToggleFederationIfc,
+  ifcPublishBadge,
+  onPublishIfcModel,
+  onMapIfcDrawings,
+  onAlignIfcCoordinates,
+  onLoadIfcPublishMeta,
 }: FileExplorerContentProps) {
   const versionUi = Boolean(onFileVersionPick);
 
@@ -136,6 +147,60 @@ export function FileExplorerContent({
 
   function fileRowSelected(f: CloudFile) {
     return selectedItemKey === itemKeyForFile(f.id) || Boolean(federationIfcIds?.has(f.id));
+  }
+
+  // fallow-ignore-next-line complexity
+  function renderIfcActions(f: CloudFile, compact?: boolean) {
+    if (!isIfcFile(f)) return null;
+    void onLoadIfcPublishMeta?.(f);
+    const badge = ifcPublishBadge?.(f);
+    const btnClass = compact
+      ? "rounded-md border border-slate-200 px-1.5 py-1 text-[10px] font-normal text-[var(--enterprise-text)] hover:bg-slate-50"
+      : "inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-normal text-[var(--enterprise-text)] hover:bg-slate-50";
+    return (
+      <div className={`flex flex-wrap items-center gap-1 ${compact ? "mt-1.5" : ""}`}>
+        {badge ? (
+          <span className="enterprise-badge-info rounded-md px-1.5 py-0.5 text-[9px] sm:text-[10px]">
+            {badge}
+          </span>
+        ) : onPublishIfcModel ? (
+          <button
+            type="button"
+            className={btnClass}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPublishIfcModel(f);
+            }}
+          >
+            Publish model
+          </button>
+        ) : null}
+        {onMapIfcDrawings && badge ? (
+          <button
+            type="button"
+            className={btnClass}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMapIfcDrawings(f);
+            }}
+          >
+            Map drawings
+          </button>
+        ) : null}
+        {onAlignIfcCoordinates && badge ? (
+          <button
+            type="button"
+            className={btnClass}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAlignIfcCoordinates(f);
+            }}
+          >
+            Align coordinates
+          </button>
+        ) : null}
+      </div>
+    );
   }
 
   function selectedVersionForFile(f: (typeof files)[0]) {
@@ -447,6 +512,7 @@ export function FileExplorerContent({
                           ))}
                         </div>
                       ) : null}
+                      {renderIfcActions(f, true)}
                       <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-slate-100/90 pt-2">
                         <button
                           type="button"
@@ -930,6 +996,7 @@ export function FileExplorerContent({
                               </span>
                             ) : null}
                           </span>
+                          {renderIfcActions(f)}
                         </td>
                         <td className="py-2.5 text-slate-500">
                           {isPdfFile(f) ? "PDF" : isIfcFile(f) ? "IFC" : "File"}

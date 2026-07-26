@@ -6,6 +6,7 @@
  */
 
 import { BIM_RENDER_PROFILE_VERSION } from "@/lib/bim/renderingProfile";
+import { readAndTouchIndexedDbRow, writeIndexedDbRow } from "@/lib/indexedDbHelpers";
 
 const DB_NAME = "plansync-bim-fragments";
 const STORE = "fragments";
@@ -24,43 +25,9 @@ export function buildFragmentsCacheKey(fileId: string, fileVersionId: string | n
   return `frag:v${BIM_RENDER_PROFILE_VERSION}:${fileId}:${fileVersionId ?? "latest"}`;
 }
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains(STORE)) {
-        req.result.createObjectStore(STORE, { keyPath: "key" });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("IndexedDB unavailable"));
-  });
-}
-
-function txDone(tx: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("IndexedDB transaction failed"));
-    tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction aborted"));
-  });
-}
-
-// fallow-ignore-next-line complexity
 export async function readCachedFragments(key: string): Promise<ArrayBuffer | null> {
   try {
-    const db = await openDb();
-    const tx = db.transaction(STORE, "readwrite");
-    const store = tx.objectStore(STORE);
-    const row = await new Promise<CacheRow | undefined>((resolve, reject) => {
-      const req = store.get(key);
-      req.onsuccess = () => resolve(req.result as CacheRow | undefined);
-      req.onerror = () => reject(req.error);
-    });
-    if (row) {
-      store.put({ ...row, lastAccess: Date.now() } satisfies CacheRow);
-    }
-    await txDone(tx);
-    db.close();
+    const row = await readAndTouchIndexedDbRow<CacheRow>(DB_NAME, STORE, key, DB_VERSION);
     return row?.buffer ?? null;
   } catch {
     return null;
@@ -69,42 +36,19 @@ export async function readCachedFragments(key: string): Promise<ArrayBuffer | nu
 
 export async function writeCachedFragments(key: string, buffer: ArrayBuffer): Promise<void> {
   try {
-    const db = await openDb();
-    const tx = db.transaction(STORE, "readwrite");
-    const store = tx.objectStore(STORE);
-    store.put({
-      key,
-      buffer,
-      sizeBytes: buffer.byteLength,
-      lastAccess: Date.now(),
-    } satisfies CacheRow);
-    await txDone(tx);
-
-    await evictIfOverBudget(db, buffer.byteLength);
-    db.close();
+    await writeIndexedDbRow(
+      DB_NAME,
+      STORE,
+      {
+        key,
+        buffer,
+        sizeBytes: buffer.byteLength,
+        lastAccess: Date.now(),
+      },
+      MAX_TOTAL_BYTES,
+      DB_VERSION,
+    );
   } catch {
     /* Cache is best-effort — conversion still succeeded in-memory. */
   }
-}
-
-async function evictIfOverBudget(db: IDBDatabase, _justAdded: number): Promise<void> {
-  const tx = db.transaction(STORE, "readwrite");
-  const store = tx.objectStore(STORE);
-  const rows = await new Promise<CacheRow[]>((resolve, reject) => {
-    const req = store.getAll();
-    req.onsuccess = () => resolve(req.result as CacheRow[]);
-    req.onerror = () => reject(req.error);
-  });
-  let total = rows.reduce((s, r) => s + r.sizeBytes, 0);
-  if (total <= MAX_TOTAL_BYTES) {
-    await txDone(tx);
-    return;
-  }
-  const byOldest = [...rows].sort((a, b) => a.lastAccess - b.lastAccess);
-  for (const row of byOldest) {
-    if (total <= MAX_TOTAL_BYTES) break;
-    store.delete(row.key);
-    total -= row.sizeBytes;
-  }
-  await txDone(tx);
 }

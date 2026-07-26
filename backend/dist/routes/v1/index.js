@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { PassThrough, Readable } from "node:stream";
 import Stripe from "stripe";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -12,8 +13,9 @@ import { isWorkspaceOmBilling, isWorkspacePro } from "../../lib/subscription.js"
 import { deleteObject, getObjectStream, presignPut, presignGet, putObjectBuffer, } from "../../lib/s3.js";
 import { isWebPushConfigured } from "../../lib/webPush.js";
 import { Resend } from "resend";
-import { ActivityType, EmailInviteKind, Prisma, ProjectMeasurementSystem, ProjectMemberRole, ProjectStage, WorkspaceRole, } from "@prisma/client";
-import { loadProjectWithAuth } from "../../lib/permissions.js";
+import { ActivityType, EmailInviteKind, FolderAccessMode, Prisma, ProjectMeasurementSystem, ProjectMemberRole, ProjectStage, WorkspaceRole, } from "@prisma/client";
+import * as yazl from "yazl";
+import { canCommentOnFiles, canManageFiles, canUploadDrawings, canViewFile, canViewFolderForUser, loadProjectWithAuth, } from "../../lib/permissions.js";
 /** Workspace roles that can manage members, invites, and project-level admin actions. */
 const WORKSPACE_MANAGER_ROLES = [WorkspaceRole.SUPER_ADMIN, WorkspaceRole.ADMIN];
 function isWorkspaceManagerRole(role) {
@@ -46,9 +48,11 @@ import { fileVersionPublicSelect, viewerStatePutSchema } from "../../lib/viewerS
 import { faviconUrlFromHostname, isGoogleFaviconUrl, normalizeWorkspaceWebsite, } from "../../lib/workspaceBranding.js";
 import { apiPublicOrigin, workspaceLogoUrlForClients } from "../../lib/workspaceLogo.js";
 import { getEmailBrandIconPngBytes } from "../../lib/emailBrandIcon.js";
+import { commentAuthorInclude } from "../../lib/userCommentJson.js";
 import { registerMaterialsRoutes } from "./materialsRoutes.js";
 import { registerIssuesRoutes } from "./issuesRoutes.js";
 import { registerOmRoutes, registerOccupantPublicRoutes } from "./omRoutes.js";
+import { registerVendorWorkOrderPublicRoutes, registerWorkOrderRoutes } from "./workOrderRoutes.js";
 import { runOmMaintenanceReminders } from "../../lib/omMaintenanceReminders.js";
 import { registerRfiRoutes } from "./rfiRoutes.js";
 import { registerTakeoffRoutes } from "./takeoffRoutes.js";
@@ -59,9 +63,12 @@ import { marketingChatRateLimited } from "../../lib/marketingChatRateLimit.js";
 import { registerCloudRoutes } from "./cloudRoutes.js";
 import { registerPunchRoutes } from "./punchRoutes.js";
 import { registerScheduleRoutes } from "./scheduleRoutes.js";
+import { registerOrchestrationRoutes } from "./orchestrationRoutes.js";
+import { registerBimRoutes } from "./bimRoutes.js";
+import { enqueueBimConversion } from "../../lib/bim/conversionProcessor.js";
 import { auditLogsToRows, buildAuditPdfBuffer, buildAuditXlsxBuffer, } from "../../lib/projectAuditExport.js";
 import { formatAuditPresentation } from "../../lib/auditFormat.js";
-import { fetchProjectAuditLogs } from "../../lib/projectAuditQuery.js";
+import { countProjectAuditLogs, fetchProjectAuditActors, fetchProjectAuditLogs, } from "../../lib/projectAuditQuery.js";
 import { allowSseConnect, broadcastIssuesChanged, broadcastViewerState, buildViewerCollabWsHandler, collabMetrics, disconnectViewerCollabSse, endViewerCollabSession, getCollabMetricsSnapshot, registerSseConnection, touchHeartbeat, unregisterSseConnection, } from "../../lib/viewerCollabHub.js";
 import { collaborationEnabledForWorkspace, collaborationGloballyEnabled, } from "../../lib/viewerCollabPolicy.js";
 import { loadProjectForMember, isProjectScopedMember } from "../../lib/projectAccess.js";
@@ -69,7 +76,9 @@ import { applyFolderStructureFromTemplate, copyFolderStructureBetweenProjects, }
 import { parseFolderTreeFromJson } from "../../lib/folderStructureTemplate.js";
 import { buildProjectTeamMembers } from "../../lib/projectTeamMembers.js";
 import { buildProjectInviteEmailHtml, buildProjectInviteEmailText, inviteFromAddress, resolveWorkspaceEmailLogoUrl, } from "../../lib/inviteEmail.js";
-import { buildFieldReportEmailHtml, buildFieldReportEmailSubject, buildFieldReportEmailText, buildFieldReportsPageUrl, workWeekFridayKey, } from "../../lib/fieldReportClientEmail.js";
+import { buildFieldReportEmailHtml, buildFieldReportEmailSubject, buildFieldReportEmailText, buildFieldReportsPageUrl, } from "../../lib/fieldReportClientEmail.js";
+import { workWeekFridayKey } from "../../lib/workWeekFridayKey.js";
+import { createUserNotifications } from "../../lib/userNotifications.js";
 function newInviteToken() {
     return randomBytes(24).toString("base64url");
 }
@@ -95,20 +104,51 @@ async function revokePendingEmailInvitesForWorkspaceEmail(db, workspaceId, rawEm
 function dateFromYmd(ymd) {
     return new Date(`${ymd}T00:00:00.000Z`);
 }
+async function canAccessFolderForUser(ctx, userId, folderId) {
+    if (!folderId)
+        return true;
+    const folder = await prisma.folder.findFirst({
+        where: { id: folderId, projectId: ctx.project.id },
+        select: { accessMode: true, allowedUserIds: true },
+    });
+    if (!folder)
+        return false;
+    return canViewFolderForUser(ctx, folder, userId);
+}
+function filterFolderTreeForUser(folders, ctx, userId) {
+    const byId = new Map(folders.map((folder) => [folder.id, folder]));
+    const visible = new Set();
+    for (const folder of folders) {
+        if (!canViewFolderForUser(ctx, folder, userId))
+            continue;
+        let cursor = folder;
+        while (cursor) {
+            visible.add(cursor.id);
+            cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+        }
+    }
+    return visible;
+}
 async function logFileOpenedActivity(file, userId, parsed) {
-    const access = await loadProjectForMember(file.projectId, userId);
+    const access = await loadProjectWithAuth(file.projectId, userId);
     if ("error" in access)
         return { error: access.error, status: access.status };
-    const gate = requirePro(access.project.workspace);
+    const gate = requirePro(access.ctx.project.workspace);
     if (gate)
         return { error: gate.error, status: gate.status };
-    await logActivitySafe(access.project.workspaceId, ActivityType.FILE_OPENED, {
+    if (!canViewFile(access.ctx, file.disciplines))
+        return { error: "Forbidden", status: 403 };
+    if (!(await canAccessFolderForUser(access.ctx, userId, file.folderId))) {
+        return { error: "Forbidden", status: 403 };
+    }
+    await logActivitySafe(access.ctx.project.workspaceId, ActivityType.FILE_OPENED, {
         actorUserId: userId,
         entityId: file.id,
         projectId: file.projectId,
         metadata: {
             fileId: file.id,
             fileName: file.name,
+            ...(file.folderId ? { folderId: file.folderId } : {}),
             ...(parsed.version != null ? { version: parsed.version } : {}),
             ...(parsed.fileVersionId ? { fileVersionId: parsed.fileVersionId } : {}),
         },
@@ -118,6 +158,16 @@ async function logFileOpenedActivity(file, userId, parsed) {
         data: { lastOpenedAt: new Date() },
     });
     return { ok: true };
+}
+function folderIdFromActivityMeta(meta) {
+    if (!meta || typeof meta !== "object")
+        return null;
+    const maybe = meta.folderId;
+    return typeof maybe === "string" && maybe.trim().length > 0 ? maybe : null;
+}
+function safeZipSegment(input) {
+    const cleaned = input.replace(/[\\/:*?"<>|]+/g, " ").trim();
+    return cleaned || "untitled";
 }
 async function countSeatPressure(workspaceId) {
     const now = new Date();
@@ -1725,6 +1775,7 @@ export function v1Routes(auth, env, deps) {
                 folders: true,
                 files: {
                     include: {
+                        _count: { select: { comments: true } },
                         versions: {
                             orderBy: { version: "desc" },
                             select: fileVersionPublicSelect,
@@ -1733,7 +1784,53 @@ export function v1Routes(auth, env, deps) {
                 },
             },
         });
-        return c.json(projects.map(projectTreeJson));
+        const projectsWithVisibleFiles = await Promise.all(projects.map(async (project) => {
+            const authz = await loadProjectWithAuth(project.id, c.get("user").id);
+            if ("error" in authz)
+                return project;
+            const folderOpenRows = await prisma.activityLog.findMany({
+                where: { projectId: project.id, type: ActivityType.FILE_OPENED },
+                orderBy: { createdAt: "desc" },
+                take: 500,
+                select: {
+                    createdAt: true,
+                    metadata: true,
+                    actor: { select: { name: true, email: true } },
+                },
+            });
+            const folderLastOpenById = new Map();
+            for (const row of folderOpenRows) {
+                const folderId = folderIdFromActivityMeta(row.metadata);
+                if (!folderId || folderLastOpenById.has(folderId))
+                    continue;
+                folderLastOpenById.set(folderId, {
+                    openedAt: row.createdAt.toISOString(),
+                    openedBy: row.actor?.name || row.actor?.email || null,
+                });
+            }
+            const visibleFolderIds = filterFolderTreeForUser(project.folders, authz.ctx, c.get("user").id);
+            const visibleFileIds = new Set(project.files
+                .filter((file) => canViewFile(authz.ctx, file.disciplines) &&
+                (file.folderId == null || visibleFolderIds.has(file.folderId)))
+                .map((file) => file.id));
+            const foldersWithAccess = project.folders.map((folder) => ({
+                ...folder,
+                canAccess: canViewFolderForUser(authz.ctx, folder, c.get("user").id),
+                lastOpenedAt: folderLastOpenById.get(folder.id)?.openedAt ?? null,
+                lastOpenedBy: folderLastOpenById.get(folder.id)?.openedBy ?? null,
+            }));
+            return {
+                ...project,
+                files: project.files
+                    .filter((file) => visibleFileIds.has(file.id))
+                    .map((file) => ({
+                    ...file,
+                    commentCount: file._count?.comments ?? 0,
+                })),
+                folders: foldersWithAccess.filter((folder) => visibleFolderIds.has(folder.id) || !folder.canAccess),
+            };
+        }));
+        return c.json(projectsWithVisibleFiles.map(projectTreeJson));
     });
     /** Auth session for this project: role, module toggles, and UI mode (internal vs client vs contractor). */
     r.get("/projects/:projectId/session", needUser, async (c) => {
@@ -1746,6 +1843,8 @@ export function v1Routes(auth, env, deps) {
             projectId: ctx.project.id,
             projectName: ctx.project.name,
             workspaceId: ctx.project.workspaceId,
+            currency: ctx.project.currency,
+            measurementSystem: ctx.project.measurementSystem,
             workspaceRole: ctx.workspaceMember.role,
             isExternal: ctx.workspaceMember.isExternal,
             projectRole: ctx.projectMember?.projectRole ?? null,
@@ -1793,6 +1892,7 @@ export function v1Routes(auth, env, deps) {
                 showRfis: z.boolean().optional(),
                 showFieldReports: z.boolean().optional(),
                 showPunchList: z.boolean().optional(),
+                showDrawings: z.boolean().optional(),
                 allowClientComment: z.boolean().optional(),
             })
                 .optional(),
@@ -1874,6 +1974,8 @@ export function v1Routes(auth, env, deps) {
             select: {
                 id: true,
                 name: true,
+                serviceLabel: true,
+                scopes: true,
                 keyPrefix: true,
                 createdById: true,
                 createdAt: true,
@@ -1886,6 +1988,8 @@ export function v1Routes(auth, env, deps) {
             items: keys.map((k) => ({
                 id: k.id,
                 name: k.name,
+                serviceLabel: k.serviceLabel ?? null,
+                scopes: k.scopes ?? [],
                 keyPrefix: k.keyPrefix,
                 createdById: k.createdById,
                 createdAt: k.createdAt.toISOString(),
@@ -1909,6 +2013,8 @@ export function v1Routes(auth, env, deps) {
         const body = z
             .object({
             name: z.string().trim().min(1).max(120).optional(),
+            serviceLabel: z.string().trim().max(120).nullable().optional(),
+            scopes: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
         })
             .safeParse(await c.req.json().catch(() => ({})));
         if (!body.success)
@@ -1919,12 +2025,18 @@ export function v1Routes(auth, env, deps) {
                 projectId,
                 createdById: c.get("user").id,
                 name: body.data.name ?? "Integration key",
+                serviceLabel: body.data.serviceLabel && body.data.serviceLabel.trim()
+                    ? body.data.serviceLabel.trim()
+                    : null,
+                scopes: [...new Set((body.data.scopes ?? []).map((s) => s.trim()).filter(Boolean))],
                 keyPrefix: fresh.keyPrefix,
                 keyHash: fresh.keyHash,
             },
             select: {
                 id: true,
                 name: true,
+                serviceLabel: true,
+                scopes: true,
                 keyPrefix: true,
                 createdById: true,
                 createdAt: true,
@@ -1938,6 +2050,8 @@ export function v1Routes(auth, env, deps) {
             key: {
                 id: created.id,
                 name: created.name,
+                serviceLabel: created.serviceLabel ?? null,
+                scopes: created.scopes ?? [],
                 keyPrefix: created.keyPrefix,
                 createdById: created.createdById,
                 createdAt: created.createdAt.toISOString(),
@@ -1972,6 +2086,142 @@ export function v1Routes(auth, env, deps) {
             where: { id: keyId },
             data: { revokedAt: new Date() },
         });
+        return c.json({ ok: true });
+    });
+    r.get("/projects/:projectId/webhooks", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const res = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in res)
+            return c.json({ error: res.error }, res.status);
+        const { ctx } = res;
+        if (ctx.workspaceMember.isExternal ||
+            (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN &&
+                ctx.workspaceMember.role !== WorkspaceRole.ADMIN)) {
+            return c.json({ error: "Admin or Super Admin only" }, 403);
+        }
+        const rows = await prisma.projectWebhook.findMany({
+            where: { projectId },
+            orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
+        });
+        return c.json({
+            projectId,
+            items: rows.map((w) => ({
+                id: w.id,
+                url: w.url,
+                events: w.events,
+                isActive: w.isActive,
+                lastSuccessAt: w.lastSuccessAt?.toISOString() ?? null,
+                lastErrorAt: w.lastErrorAt?.toISOString() ?? null,
+                lastErrorMessage: w.lastErrorMessage ?? null,
+                createdAt: w.createdAt.toISOString(),
+            })),
+        });
+    });
+    r.post("/projects/:projectId/webhooks", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const res = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in res)
+            return c.json({ error: res.error }, res.status);
+        const { ctx } = res;
+        if (ctx.workspaceMember.isExternal ||
+            (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN &&
+                ctx.workspaceMember.role !== WorkspaceRole.ADMIN)) {
+            return c.json({ error: "Admin or Super Admin only" }, 403);
+        }
+        const body = z
+            .object({
+            url: z.string().url(),
+            events: z.array(z.nativeEnum(ActivityType)).max(50).optional(),
+            isActive: z.boolean().optional(),
+        })
+            .safeParse(await c.req.json().catch(() => ({})));
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const secret = randomBytes(32).toString("hex");
+        const created = await prisma.projectWebhook.create({
+            data: {
+                projectId,
+                url: body.data.url.trim(),
+                secret,
+                events: body.data.events ?? [],
+                isActive: body.data.isActive ?? true,
+                createdById: c.get("user").id,
+            },
+        });
+        return c.json({
+            id: created.id,
+            url: created.url,
+            events: created.events,
+            isActive: created.isActive,
+            lastSuccessAt: created.lastSuccessAt?.toISOString() ?? null,
+            lastErrorAt: created.lastErrorAt?.toISOString() ?? null,
+            lastErrorMessage: created.lastErrorMessage ?? null,
+            createdAt: created.createdAt.toISOString(),
+        });
+    });
+    r.patch("/projects/:projectId/webhooks/:webhookId", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const webhookId = c.req.param("webhookId");
+        const res = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in res)
+            return c.json({ error: res.error }, res.status);
+        const { ctx } = res;
+        if (ctx.workspaceMember.isExternal ||
+            (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN &&
+                ctx.workspaceMember.role !== WorkspaceRole.ADMIN)) {
+            return c.json({ error: "Admin or Super Admin only" }, 403);
+        }
+        const body = z
+            .object({
+            events: z.array(z.nativeEnum(ActivityType)).max(50).optional(),
+            isActive: z.boolean().optional(),
+        })
+            .safeParse(await c.req.json().catch(() => ({})));
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const existing = await prisma.projectWebhook.findFirst({
+            where: { id: webhookId, projectId },
+            select: { id: true },
+        });
+        if (!existing)
+            return c.json({ error: "Webhook not found" }, 404);
+        const updated = await prisma.projectWebhook.update({
+            where: { id: webhookId },
+            data: {
+                ...(body.data.events !== undefined ? { events: body.data.events } : {}),
+                ...(body.data.isActive !== undefined ? { isActive: body.data.isActive } : {}),
+            },
+        });
+        return c.json({
+            id: updated.id,
+            url: updated.url,
+            events: updated.events,
+            isActive: updated.isActive,
+            lastSuccessAt: updated.lastSuccessAt?.toISOString() ?? null,
+            lastErrorAt: updated.lastErrorAt?.toISOString() ?? null,
+            lastErrorMessage: updated.lastErrorMessage ?? null,
+            createdAt: updated.createdAt.toISOString(),
+        });
+    });
+    r.delete("/projects/:projectId/webhooks/:webhookId", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const webhookId = c.req.param("webhookId");
+        const res = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in res)
+            return c.json({ error: res.error }, res.status);
+        const { ctx } = res;
+        if (ctx.workspaceMember.isExternal ||
+            (ctx.workspaceMember.role !== WorkspaceRole.SUPER_ADMIN &&
+                ctx.workspaceMember.role !== WorkspaceRole.ADMIN)) {
+            return c.json({ error: "Admin or Super Admin only" }, 403);
+        }
+        const existing = await prisma.projectWebhook.findFirst({
+            where: { id: webhookId, projectId },
+            select: { id: true },
+        });
+        if (!existing)
+            return c.json({ error: "Webhook not found" }, 404);
+        await prisma.projectWebhook.delete({ where: { id: webhookId } });
         return c.json({ ok: true });
     });
     /** Folder tree presets from DB (`FolderStructureTemplate`); list updates when rows change. */
@@ -2012,12 +2262,27 @@ export function v1Routes(auth, env, deps) {
         const gate = requirePro(project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
-        const limit = Math.min(200, Math.max(1, Number(c.req.query("limit")) || 80));
-        const logs = await fetchProjectAuditLogs({
+        const page = Math.max(1, Number(c.req.query("page")) || 1);
+        const pageSize = Math.min(100, Math.max(1, Number(c.req.query("pageSize")) || 50));
+        const total = await countProjectAuditLogs({
             workspaceId: project.workspaceId,
             projectId,
-            limit,
         });
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        const safePage = Math.min(page, totalPages);
+        const offset = (safePage - 1) * pageSize;
+        const [logs, actorMeta] = await Promise.all([
+            fetchProjectAuditLogs({
+                workspaceId: project.workspaceId,
+                projectId,
+                limit: pageSize,
+                offset,
+            }),
+            fetchProjectAuditActors({
+                workspaceId: project.workspaceId,
+                projectId,
+            }),
+        ]);
         return c.json({
             projectId,
             projectName: project.name,
@@ -2041,6 +2306,12 @@ export function v1Routes(auth, env, deps) {
                     detail: fmt.detail,
                 };
             }),
+            total,
+            page: safePage,
+            pageSize,
+            totalPages,
+            actors: actorMeta.actors,
+            hasNoActor: actorMeta.hasNoActor,
         });
     });
     /** Log viewer open (PDF) for project audit — optional; prefer `POST /files/:fileId/open` (no projectId in URL). */
@@ -2116,23 +2387,36 @@ export function v1Routes(auth, env, deps) {
     });
     r.post("/projects/:projectId/folders", needUser, async (c) => {
         const projectId = c.req.param("projectId");
-        const access = await loadProjectForMember(projectId, c.get("user").id);
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
-        const project = access.project;
+        const project = access.ctx.project;
         const gate = requirePro(project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canManageFiles(access.ctx))
+            return c.json({ error: "Forbidden" }, 403);
         const body = z
-            .object({ name: z.string().min(1), parentId: z.string().optional() })
+            .object({
+            name: z.string().min(1),
+            parentId: z.string().optional(),
+            accessMode: z.nativeEnum(FolderAccessMode).optional(),
+            allowedUserIds: z.array(z.string().min(1)).optional(),
+        })
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
+        const accessMode = body.data.accessMode ?? FolderAccessMode.ALL;
+        const allowedUserIds = accessMode === FolderAccessMode.SELECTED_USERS
+            ? [...new Set(body.data.allowedUserIds ?? [])]
+            : [];
         const folder = await prisma.folder.create({
             data: {
                 projectId,
                 name: body.data.name,
                 parentId: body.data.parentId,
+                accessMode,
+                allowedUserIds,
             },
         });
         await logActivity(project.workspaceId, ActivityType.FOLDER_CREATED, {
@@ -2143,19 +2427,111 @@ export function v1Routes(auth, env, deps) {
         });
         return c.json(folder);
     });
+    /** Download a folder (including nested folders/files) as a ZIP archive. */
+    r.get("/projects/:projectId/folders/:folderId/download", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const folderId = c.req.param("folderId");
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in access)
+            return c.json({ error: access.error }, access.status);
+        const gate = requirePro(access.ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const allFolders = await prisma.folder.findMany({
+            where: { projectId },
+            select: { id: true, name: true, parentId: true, accessMode: true, allowedUserIds: true },
+        });
+        const rootFolder = allFolders.find((f) => f.id === folderId);
+        if (!rootFolder)
+            return c.json({ error: "Not found" }, 404);
+        if (!canViewFolderForUser(access.ctx, rootFolder, c.get("user").id)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const visibleFolderIds = filterFolderTreeForUser(allFolders, access.ctx, c.get("user").id);
+        if (!visibleFolderIds.has(folderId))
+            return c.json({ error: "Forbidden" }, 403);
+        const childrenByParent = new Map();
+        for (const folder of allFolders) {
+            const list = childrenByParent.get(folder.parentId) ?? [];
+            list.push(folder);
+            childrenByParent.set(folder.parentId, list);
+        }
+        const subtreeIds = new Set();
+        const queue = [folderId];
+        while (queue.length > 0) {
+            const current = queue.shift();
+            if (subtreeIds.has(current))
+                continue;
+            if (!visibleFolderIds.has(current))
+                continue;
+            subtreeIds.add(current);
+            for (const child of childrenByParent.get(current) ?? [])
+                queue.push(child.id);
+        }
+        const files = await prisma.file.findMany({
+            where: { projectId, folderId: { in: [...subtreeIds] } },
+            include: {
+                versions: { orderBy: { version: "desc" }, take: 1, select: fileVersionPublicSelect },
+            },
+        });
+        const visibleFiles = files.filter((f) => canViewFile(access.ctx, f.disciplines));
+        const zip = new yazl.ZipFile();
+        const folderById = new Map(allFolders.map((f) => [f.id, f]));
+        const rootName = safeZipSegment(rootFolder.name);
+        const folderPathById = new Map();
+        const subtreeRows = allFolders.filter((f) => subtreeIds.has(f.id));
+        for (const folder of subtreeRows) {
+            const parts = [];
+            let cursor = folder.id;
+            while (cursor && cursor !== folderId) {
+                const row = folderById.get(cursor);
+                if (!row)
+                    break;
+                parts.unshift(safeZipSegment(row.name));
+                cursor = row.parentId;
+            }
+            const folderPath = [rootName, ...parts].join("/");
+            folderPathById.set(folder.id, folderPath);
+            // Keep explicit directory entries so empty folders are preserved in the zip.
+            zip.addEmptyDirectory(folderPath);
+        }
+        for (const file of visibleFiles) {
+            const latest = file.versions[0];
+            if (!latest)
+                continue;
+            const got = await getObjectStream(env, latest.s3Key);
+            if (!got.ok)
+                continue;
+            const folderPath = file.folderId ? (folderPathById.get(file.folderId) ?? rootName) : rootName;
+            const pathInZip = [folderPath, safeZipSegment(file.name)].join("/");
+            zip.addReadStream(Readable.fromWeb(got.stream), pathInZip);
+        }
+        zip.end();
+        const zipName = `${safeZipSegment(rootFolder.name)}.zip`;
+        const pass = new PassThrough();
+        zip.outputStream.pipe(pass);
+        return new Response(Readable.toWeb(pass), {
+            headers: {
+                "Content-Type": "application/zip",
+                "Content-Disposition": `attachment; filename="${zipName}"`,
+            },
+        });
+    });
     /**
      * Apply a built-in template or copy folder names only from another project (no files).
      * Existing folders with the same name under the same parent are reused.
      */
     r.post("/projects/:projectId/folders/apply-structure", needUser, async (c) => {
         const projectId = c.req.param("projectId");
-        const access = await loadProjectForMember(projectId, c.get("user").id);
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
-        const project = access.project;
+        const project = access.ctx.project;
         const gate = requirePro(project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canManageFiles(access.ctx))
+            return c.json({ error: "Forbidden" }, 403);
         const body = z
             .object({
             targetParentId: z.string().nullable().optional(),
@@ -2188,10 +2564,10 @@ export function v1Routes(auth, env, deps) {
                 });
                 return c.json(result);
             }
-            const srcAccess = await loadProjectForMember(body.data.source.sourceProjectId, userId);
+            const srcAccess = await loadProjectWithAuth(body.data.source.sourceProjectId, userId);
             if ("error" in srcAccess)
                 return c.json({ error: srcAccess.error }, srcAccess.status);
-            if (srcAccess.project.workspaceId !== project.workspaceId) {
+            if (srcAccess.ctx.project.workspaceId !== project.workspaceId) {
                 return c.json({ error: "Source project must be in the same workspace." }, 400);
             }
             const result = await copyFolderStructureBetweenProjects({
@@ -2223,13 +2599,15 @@ export function v1Routes(auth, env, deps) {
         });
         if (!folder || folder.projectId !== projectId)
             return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(projectId, c.get("user").id);
-        if ("error" in access)
-            return c.json({ error: access.error }, access.status);
-        const gate = requirePro(access.project.workspace);
+        const fullAccess = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in fullAccess)
+            return c.json({ error: fullAccess.error }, fullAccess.status);
+        const gate = requirePro(fullAccess.ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
-        const beforeUsed = access.project.workspace.storageUsedBytes;
+        if (!canManageFiles(fullAccess.ctx))
+            return c.json({ error: "Forbidden" }, 403);
+        const beforeUsed = fullAccess.ctx.project.workspace.storageUsedBytes;
         const result = await deleteFolderTreeFromDbAndS3(env, folderId);
         if (!result.ok)
             return c.json({ error: result.error }, 500);
@@ -2256,13 +2634,15 @@ export function v1Routes(auth, env, deps) {
         });
         if (!file || file.projectId !== projectId)
             return c.json({ error: "Not found" }, 404);
-        const delAccess = await loadProjectForMember(projectId, c.get("user").id);
+        const delAccess = await loadProjectWithAuth(projectId, c.get("user").id);
         if ("error" in delAccess)
             return c.json({ error: delAccess.error }, delAccess.status);
         const gate = requirePro(file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
-        const beforeUsed = delAccess.project.workspace.storageUsedBytes;
+        if (!canManageFiles(delAccess.ctx))
+            return c.json({ error: "Forbidden" }, 403);
+        const beforeUsed = delAccess.ctx.project.workspace.storageUsedBytes;
         let bytesFreed;
         if (versionRaw !== undefined && versionRaw !== "") {
             const version = Number.parseInt(versionRaw, 10);
@@ -2342,12 +2722,14 @@ export function v1Routes(auth, env, deps) {
         });
         if (!file || file.projectId !== projectId)
             return c.json({ error: "Not found" }, 404);
-        const moveFileAccess = await loadProjectForMember(projectId, c.get("user").id);
+        const moveFileAccess = await loadProjectWithAuth(projectId, c.get("user").id);
         if ("error" in moveFileAccess)
             return c.json({ error: moveFileAccess.error }, moveFileAccess.status);
         const gate = requirePro(file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canManageFiles(moveFileAccess.ctx))
+            return c.json({ error: "Forbidden" }, 403);
         const newFolderId = body.data.folderId;
         if (newFolderId) {
             const destFolder = await prisma.folder.findFirst({
@@ -2406,12 +2788,14 @@ export function v1Routes(auth, env, deps) {
         });
         if (!folder || folder.projectId !== projectId)
             return c.json({ error: "Not found" }, 404);
-        const moveFolderAccess = await loadProjectForMember(projectId, c.get("user").id);
+        const moveFolderAccess = await loadProjectWithAuth(projectId, c.get("user").id);
         if ("error" in moveFolderAccess)
             return c.json({ error: moveFolderAccess.error }, moveFolderAccess.status);
         const gate = requirePro(folder.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canManageFiles(moveFolderAccess.ctx))
+            return c.json({ error: "Forbidden" }, 403);
         const newParentId = body.data.parentId;
         if (newParentId) {
             const parent = await prisma.folder.findFirst({
@@ -2452,6 +2836,99 @@ export function v1Routes(auth, env, deps) {
         }
         return c.json(updated);
     });
+    /** Set folder visibility: all users or selected users. */
+    r.patch("/projects/:projectId/folders/:folderId/access", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const folderId = c.req.param("folderId");
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in access)
+            return c.json({ error: access.error }, access.status);
+        const gate = requirePro(access.ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        if (!canManageFiles(access.ctx))
+            return c.json({ error: "Forbidden" }, 403);
+        const body = z
+            .object({
+            mode: z.enum(["all", "selected"]),
+            userIds: z.array(z.string()).optional(),
+        })
+            .safeParse(await c.req.json().catch(() => ({})));
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const folder = await prisma.folder.findFirst({
+            where: { id: folderId, projectId },
+            select: { id: true },
+        });
+        if (!folder)
+            return c.json({ error: "Not found" }, 404);
+        const requestedUserIds = Array.from(new Set((body.data.userIds ?? []).map((id) => id.trim()).filter(Boolean)));
+        if (body.data.mode === "selected") {
+            if (requestedUserIds.length === 0) {
+                return c.json({ error: "Select at least one user for restricted folders." }, 400);
+            }
+            const validMembers = await prisma.workspaceMember.findMany({
+                where: { workspaceId: access.ctx.project.workspaceId, userId: { in: requestedUserIds } },
+                select: { userId: true },
+            });
+            if (validMembers.length !== requestedUserIds.length) {
+                return c.json({ error: "One or more selected users are not in this workspace." }, 400);
+            }
+        }
+        const updated = await prisma.folder.update({
+            where: { id: folderId },
+            data: {
+                accessMode: body.data.mode === "all" ? "ALL" : "SELECTED_USERS",
+                allowedUserIds: body.data.mode === "all" ? [] : requestedUserIds,
+            },
+        });
+        return c.json(updated);
+    });
+    /** Request access to a restricted folder; notifies workspace admins. */
+    r.post("/projects/:projectId/folders/:folderId/access-request", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const folderId = c.req.param("folderId");
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in access)
+            return c.json({ error: access.error }, access.status);
+        const gate = requirePro(access.ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const folder = await prisma.folder.findFirst({
+            where: { id: folderId, projectId },
+            select: { id: true, name: true, accessMode: true, allowedUserIds: true },
+        });
+        if (!folder)
+            return c.json({ error: "Not found" }, 404);
+        if (canViewFolderForUser(access.ctx, folder, c.get("user").id)) {
+            return c.json({ error: "You already have access to this folder." }, 400);
+        }
+        const admins = await prisma.workspaceMember.findMany({
+            where: {
+                workspaceId: access.ctx.project.workspaceId,
+                role: { in: [WorkspaceRole.SUPER_ADMIN, WorkspaceRole.ADMIN] },
+                isExternal: false,
+            },
+            select: { userId: true },
+        });
+        const recipientUserIds = admins.map((row) => row.userId);
+        const requester = await prisma.user.findUnique({
+            where: { id: c.get("user").id },
+            select: { name: true, email: true },
+        });
+        await createUserNotifications({
+            workspaceId: access.ctx.project.workspaceId,
+            projectId,
+            recipientUserIds,
+            excludeUserId: c.get("user").id,
+            kind: "FOLDER_ACCESS_REQUEST",
+            title: "Folder access request",
+            body: `${requester?.name || requester?.email || "A user"} requested access to folder "${folder.name}".`,
+            href: `/projects/${projectId}/files?folder=${folderId}`,
+            actorUserId: c.get("user").id,
+        });
+        return c.json({ ok: true });
+    });
     r.post("/projects/:projectId/uploads/preview", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const body = z
@@ -2465,12 +2942,14 @@ export function v1Routes(auth, env, deps) {
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
-        const access = await loadProjectForMember(projectId, c.get("user").id);
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
-        const gate = requirePro(access.project.workspace);
+        const gate = requirePro(access.ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canUploadDrawings(access.ctx))
+            return c.json({ error: "Forbidden" }, 403);
         const folderKey = folderKeyFromFolderId(body.data.folderId ?? undefined);
         const files = await prisma.file.findMany({
             where: { projectId, folderKey },
@@ -2527,16 +3006,18 @@ export function v1Routes(auth, env, deps) {
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
-        const presignProj = await loadProjectForMember(body.data.projectId, c.get("user").id);
+        const presignProj = await loadProjectWithAuth(body.data.projectId, c.get("user").id);
         if ("error" in presignProj)
             return c.json({ error: presignProj.error }, presignProj.status);
-        if (presignProj.project.workspaceId !== body.data.workspaceId) {
+        if (presignProj.ctx.project.workspaceId !== body.data.workspaceId) {
             return c.json({ error: "Forbidden" }, 403);
         }
-        const gate = requirePro(presignProj.project.workspace);
+        const gate = requirePro(presignProj.ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
-        const ws = presignProj.project.workspace;
+        if (!canUploadDrawings(presignProj.ctx))
+            return c.json({ error: "Forbidden" }, 403);
+        const ws = presignProj.ctx.project.workspace;
         const newUsed = ws.storageUsedBytes + body.data.sizeBytes;
         if (newUsed > ws.storageQuotaBytes) {
             return c.json({ error: "Storage quota exceeded" }, 400);
@@ -2597,16 +3078,18 @@ export function v1Routes(auth, env, deps) {
         if (BigInt(uploaded.size) > env.MAX_DIRECT_UPLOAD_BYTES) {
             return c.json({ error: "File too large for direct upload" }, 413);
         }
-        const directUp = await loadProjectForMember(fields.data.projectId, c.get("user").id);
+        const directUp = await loadProjectWithAuth(fields.data.projectId, c.get("user").id);
         if ("error" in directUp)
             return c.json({ error: directUp.error }, directUp.status);
-        if (directUp.project.workspaceId !== fields.data.workspaceId) {
+        if (directUp.ctx.project.workspaceId !== fields.data.workspaceId) {
             return c.json({ error: "Forbidden" }, 403);
         }
-        const gate = requirePro(directUp.project.workspace);
+        const gate = requirePro(directUp.ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
-        const ws = directUp.project.workspace;
+        if (!canUploadDrawings(directUp.ctx))
+            return c.json({ error: "Forbidden" }, 403);
+        const ws = directUp.ctx.project.workspace;
         const sizeBytes = BigInt(uploaded.size);
         const newUsed = ws.storageUsedBytes + sizeBytes;
         if (newUsed > ws.storageQuotaBytes) {
@@ -2662,6 +3145,12 @@ export function v1Routes(auth, env, deps) {
             metadata: { fileId: file.id, fileName: file.name, version: fv.version },
         });
         await maybeSendStorageAlerts(env, updatedWs.id, beforeUsed, updatedWs.storageUsedBytes, updatedWs.storageQuotaBytes);
+        const isIfc = contentType === "model/ifc" || fields.data.fileName.toLowerCase().endsWith(".ifc");
+        if (isIfc) {
+            void enqueueBimConversion(env, fv.id, c.get("user").id).catch((err) => {
+                console.error("[bim.convert] enqueue on upload failed", fv.id, err);
+            });
+        }
         return c.json({ file: fileRow, fileVersion: fileVersionJson(fv) });
     });
     r.post("/files/complete-upload", needUser, async (c) => {
@@ -2680,16 +3169,18 @@ export function v1Routes(auth, env, deps) {
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
-        const uploadAccess = await loadProjectForMember(body.data.projectId, c.get("user").id);
+        const uploadAccess = await loadProjectWithAuth(body.data.projectId, c.get("user").id);
         if ("error" in uploadAccess)
             return c.json({ error: uploadAccess.error }, uploadAccess.status);
-        if (uploadAccess.project.workspaceId !== body.data.workspaceId) {
+        if (uploadAccess.ctx.project.workspaceId !== body.data.workspaceId) {
             return c.json({ error: "Forbidden" }, 403);
         }
-        const gate = requirePro(uploadAccess.project.workspace);
+        const gate = requirePro(uploadAccess.ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
-        const ws = uploadAccess.project.workspace;
+        if (!canUploadDrawings(uploadAccess.ctx))
+            return c.json({ error: "Forbidden" }, 403);
+        const ws = uploadAccess.ctx.project.workspace;
         const newUsed = ws.storageUsedBytes + body.data.sizeBytes;
         if (newUsed > ws.storageQuotaBytes) {
             return c.json({ error: "Storage quota exceeded" }, 400);
@@ -2747,6 +3238,14 @@ export function v1Routes(auth, env, deps) {
             where: { id: file.id },
             data: { mimeType: mt },
         });
+        const isIfc = mt === "model/ifc" ||
+            file.name.toLowerCase().endsWith(".ifc") ||
+            body.data.fileName.toLowerCase().endsWith(".ifc");
+        if (isIfc) {
+            void enqueueBimConversion(env, fv.id, c.get("user").id).catch((err) => {
+                console.error("[bim.convert] enqueue on upload failed", fv.id, err);
+            });
+        }
         return c.json({ file: fileOut, fileVersion: fileVersionJson(fv) });
     });
     r.get("/files/:fileId/presign-read", needUser, async (c) => {
@@ -2762,12 +3261,17 @@ export function v1Routes(auth, env, deps) {
         });
         if (!file || file.versions.length === 0)
             return c.json({ error: "Not found" }, 404);
-        const presignAccess = await loadProjectForMember(file.projectId, c.get("user").id);
+        const presignAccess = await loadProjectWithAuth(file.projectId, c.get("user").id);
         if ("error" in presignAccess)
             return c.json({ error: presignAccess.error }, presignAccess.status);
         const gate = requirePro(file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canViewFile(presignAccess.ctx, file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(presignAccess.ctx, c.get("user").id, file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
         const vParam = c.req.query("version");
         const fv = vParam != null && vParam !== ""
             ? file.versions.find((x) => x.version === Number(vParam))
@@ -2796,12 +3300,17 @@ export function v1Routes(auth, env, deps) {
         });
         if (!file || file.versions.length === 0)
             return c.json({ error: "Not found" }, 404);
-        const rrAccess = await loadProjectForMember(file.projectId, c.get("user").id);
+        const rrAccess = await loadProjectWithAuth(file.projectId, c.get("user").id);
         if ("error" in rrAccess)
             return c.json({ error: rrAccess.error }, rrAccess.status);
         const gate = requirePro(file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canViewFile(rrAccess.ctx, file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(rrAccess.ctx, c.get("user").id, file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
         const vParam = c.req.query("version");
         const fv = vParam != null && vParam !== ""
             ? file.versions.find((x) => x.version === Number(vParam))
@@ -2828,16 +3337,26 @@ export function v1Routes(auth, env, deps) {
         });
         if (!file || file.versions.length === 0)
             return c.json({ error: "Not found" }, 404);
-        const contentAccess = await loadProjectForMember(file.projectId, c.get("user").id);
+        const contentAccess = await loadProjectWithAuth(file.projectId, c.get("user").id);
         if ("error" in contentAccess)
             return c.json({ error: contentAccess.error }, contentAccess.status);
         const gate = requirePro(file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canViewFile(contentAccess.ctx, file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(contentAccess.ctx, c.get("user").id, file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const fvIdParam = c.req.query("fileVersionId");
         const vParam = c.req.query("version");
-        const fv = vParam != null && vParam !== ""
-            ? file.versions.find((x) => x.version === Number(vParam))
-            : file.versions[0];
+        let fv = file.versions[0];
+        if (fvIdParam) {
+            fv = file.versions.find((x) => x.id === fvIdParam) ?? fv;
+        }
+        else if (vParam != null && vParam !== "") {
+            fv = file.versions.find((x) => x.version === Number(vParam)) ?? fv;
+        }
         if (!fv)
             return c.json({ error: "Version not found" }, 404);
         const obj = await getObjectStream(env, fv.s3Key);
@@ -2878,6 +3397,184 @@ export function v1Routes(auth, env, deps) {
             return c.json({ error: result.error }, result.status);
         return c.json({ ok: true });
     });
+    r.get("/projects/:projectId/files/:fileId/comments", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const fileId = c.req.param("fileId");
+        const fileVersionId = c.req.query("fileVersionId")?.trim() || null;
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in access)
+            return c.json({ error: access.error }, access.status);
+        const gate = requirePro(access.ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const file = await prisma.file.findFirst({ where: { id: fileId, projectId } });
+        if (!file)
+            return c.json({ error: "Not found" }, 404);
+        if (!canViewFile(access.ctx, file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(access.ctx, c.get("user").id, file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const where = { projectId, fileId };
+        if (fileVersionId)
+            where.fileVersionId = fileVersionId;
+        const comments = await prisma.fileComment.findMany({
+            where,
+            orderBy: { createdAt: "asc" },
+            include: commentAuthorInclude,
+        });
+        return c.json({
+            comments: comments.map((cm) => ({
+                id: cm.id,
+                body: cm.body,
+                fileVersionId: cm.fileVersionId,
+                resolvedAt: cm.resolvedAt?.toISOString() ?? null,
+                editedAt: cm.editedAt?.toISOString() ?? null,
+                createdAt: cm.createdAt.toISOString(),
+                author: cm.author,
+            })),
+        });
+    });
+    r.post("/projects/:projectId/files/:fileId/comments", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const fileId = c.req.param("fileId");
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in access)
+            return c.json({ error: access.error }, access.status);
+        const gate = requirePro(access.ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const file = await prisma.file.findFirst({ where: { id: fileId, projectId } });
+        if (!file)
+            return c.json({ error: "Not found" }, 404);
+        if (!canViewFile(access.ctx, file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(access.ctx, c.get("user").id, file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        if (!canCommentOnFiles(access.ctx))
+            return c.json({ error: "Forbidden" }, 403);
+        const body = z
+            .object({
+            body: z.string().min(1),
+            fileVersionId: z.string().optional().nullable(),
+        })
+            .safeParse(await c.req.json().catch(() => ({})));
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        if (body.data.fileVersionId) {
+            const fv = await prisma.fileVersion.findFirst({
+                where: { id: body.data.fileVersionId, fileId },
+                select: { id: true },
+            });
+            if (!fv)
+                return c.json({ error: "Version not found" }, 404);
+        }
+        const created = await prisma.fileComment.create({
+            data: {
+                projectId,
+                fileId,
+                fileVersionId: body.data.fileVersionId ?? null,
+                authorId: c.get("user").id,
+                body: body.data.body.trim(),
+            },
+            include: { author: { select: { id: true, name: true, email: true, image: true } } },
+        });
+        return c.json({
+            id: created.id,
+            body: created.body,
+            fileVersionId: created.fileVersionId,
+            resolvedAt: created.resolvedAt?.toISOString() ?? null,
+            editedAt: created.editedAt?.toISOString() ?? null,
+            createdAt: created.createdAt.toISOString(),
+            author: created.author,
+        });
+    });
+    r.patch("/projects/:projectId/files/:fileId/comments/:commentId", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const fileId = c.req.param("fileId");
+        const commentId = c.req.param("commentId");
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in access)
+            return c.json({ error: access.error }, access.status);
+        const gate = requirePro(access.ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const file = await prisma.file.findFirst({ where: { id: fileId, projectId } });
+        if (!file)
+            return c.json({ error: "Not found" }, 404);
+        if (!canViewFile(access.ctx, file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(access.ctx, c.get("user").id, file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        if (!canCommentOnFiles(access.ctx))
+            return c.json({ error: "Forbidden" }, 403);
+        const comment = await prisma.fileComment.findFirst({
+            where: { id: commentId, projectId, fileId },
+            include: { author: { select: { id: true, name: true, email: true, image: true } } },
+        });
+        if (!comment)
+            return c.json({ error: "Not found" }, 404);
+        if (comment.authorId !== c.get("user").id && !canManageFiles(access.ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const body = z
+            .object({
+            body: z.string().min(1).optional(),
+            resolved: z.boolean().optional(),
+        })
+            .safeParse(await c.req.json().catch(() => ({})));
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const updated = await prisma.fileComment.update({
+            where: { id: commentId },
+            data: {
+                ...(body.data.body != null ? { body: body.data.body.trim(), editedAt: new Date() } : {}),
+                ...(body.data.resolved === true ? { resolvedAt: new Date() } : {}),
+                ...(body.data.resolved === false ? { resolvedAt: null } : {}),
+            },
+            include: { author: { select: { id: true, name: true, email: true, image: true } } },
+        });
+        return c.json({
+            id: updated.id,
+            body: updated.body,
+            fileVersionId: updated.fileVersionId,
+            resolvedAt: updated.resolvedAt?.toISOString() ?? null,
+            editedAt: updated.editedAt?.toISOString() ?? null,
+            createdAt: updated.createdAt.toISOString(),
+            author: updated.author,
+        });
+    });
+    r.delete("/projects/:projectId/files/:fileId/comments/:commentId", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const fileId = c.req.param("fileId");
+        const commentId = c.req.param("commentId");
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in access)
+            return c.json({ error: access.error }, access.status);
+        const gate = requirePro(access.ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const file = await prisma.file.findFirst({ where: { id: fileId, projectId } });
+        if (!file)
+            return c.json({ error: "Not found" }, 404);
+        if (!canViewFile(access.ctx, file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(access.ctx, c.get("user").id, file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        const comment = await prisma.fileComment.findFirst({
+            where: { id: commentId, projectId, fileId },
+        });
+        if (!comment)
+            return c.json({ error: "Not found" }, 404);
+        if (comment.authorId !== c.get("user").id && !canManageFiles(access.ctx)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        await prisma.fileComment.delete({ where: { id: commentId } });
+        return c.json({ ok: true });
+    });
     /** Pro: load markups, measurements, calibration, and viewer prefs for a file revision (same shape as localStorage session minus fingerprint). */
     r.get("/file-versions/:fileVersionId/viewer-state", needUser, async (c) => {
         const fileVersionId = c.req.param("fileVersionId");
@@ -2887,12 +3584,17 @@ export function v1Routes(auth, env, deps) {
         });
         if (!fv)
             return c.json({ error: "Not found" }, 404);
-        const vsAccess = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+        const vsAccess = await loadProjectWithAuth(fv.file.projectId, c.get("user").id);
         if ("error" in vsAccess)
             return c.json({ error: vsAccess.error }, vsAccess.status);
         const gate = requirePro(fv.file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canViewFile(vsAccess.ctx, fv.file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(vsAccess.ctx, c.get("user").id, fv.file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
         return c.json({
             viewerState: fv.annotationBlob,
             revision: fv.annotationBlobRevision,
@@ -2922,12 +3624,17 @@ export function v1Routes(auth, env, deps) {
         });
         if (!fv)
             return c.json({ error: "Not found" }, 404);
-        const vsPutAccess = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+        const vsPutAccess = await loadProjectWithAuth(fv.file.projectId, c.get("user").id);
         if ("error" in vsPutAccess)
             return c.json({ error: vsPutAccess.error }, vsPutAccess.status);
         const gate = requirePro(fv.file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canViewFile(vsPutAccess.ctx, fv.file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(vsPutAccess.ctx, c.get("user").id, fv.file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
         if (baseRevision !== undefined && baseRevision !== fv.annotationBlobRevision) {
             collabMetrics.put409Count++;
             return c.json({
@@ -2972,12 +3679,17 @@ export function v1Routes(auth, env, deps) {
         });
         if (!fv)
             return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, userId);
+        const access = await loadProjectWithAuth(fv.file.projectId, userId);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
         const gate = requirePro(fv.file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canViewFile(access.ctx, fv.file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(access.ctx, userId, fv.file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
         if (!collaborationEnabledForWorkspace(env, fv.file.project.workspace)) {
             return c.json({ error: "Collaboration disabled" }, 403);
         }
@@ -3021,12 +3733,17 @@ export function v1Routes(auth, env, deps) {
         });
         if (!fv)
             return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+        const access = await loadProjectWithAuth(fv.file.projectId, c.get("user").id);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
         const gate = requirePro(fv.file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canViewFile(access.ctx, fv.file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(access.ctx, c.get("user").id, fv.file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
         if (!collaborationEnabledForWorkspace(env, fv.file.project.workspace)) {
             return c.json({ error: "Collaboration disabled" }, 403);
         }
@@ -3048,12 +3765,17 @@ export function v1Routes(auth, env, deps) {
         });
         if (!fv)
             return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+        const access = await loadProjectWithAuth(fv.file.projectId, c.get("user").id);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
         const gate = requirePro(fv.file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canViewFile(access.ctx, fv.file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(access.ctx, c.get("user").id, fv.file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
         if (!collaborationEnabledForWorkspace(env, fv.file.project.workspace)) {
             return c.json({ error: "Collaboration disabled" }, 403);
         }
@@ -3068,12 +3790,17 @@ export function v1Routes(auth, env, deps) {
         });
         if (!fv)
             return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+        const access = await loadProjectWithAuth(fv.file.projectId, c.get("user").id);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
         const gate = requirePro(fv.file.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canViewFile(access.ctx, fv.file.disciplines))
+            return c.json({ error: "Forbidden" }, 403);
+        if (!(await canAccessFolderForUser(access.ctx, c.get("user").id, fv.file.folderId))) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
         if (!collaborationEnabledForWorkspace(env, fv.file.project.workspace)) {
             return c.json({ error: "Collaboration disabled" }, 403);
         }
@@ -3090,7 +3817,7 @@ export function v1Routes(auth, env, deps) {
             return c.json({ error: "Forbidden" }, 403);
         return c.json(getCollabMetricsSnapshot());
     });
-    /** Daily cron: email workspace admins a digest of PPM items overdue or due within 7 days (UTC). Same auth as RFI overdue reminders. */
+    /** Daily cron: email + in-app notifications for PPM items overdue or due within 7 days (UTC). */
     r.post("/internal/om-maintenance-reminders", async (c) => {
         const secret = env.INTERNAL_CRON_SECRET?.trim();
         if (!secret)
@@ -3100,19 +3827,15 @@ export function v1Routes(auth, env, deps) {
             return c.json({ error: "Unauthorized" }, 401);
         try {
             const result = await runOmMaintenanceReminders(env);
-            if (result.skippedNoResend) {
-                return c.json({
-                    ok: true,
-                    skipped: true,
-                    reason: "RESEND not configured",
-                    dayKey: result.dayKey,
-                });
-            }
             return c.json({
                 ok: true,
                 dayKey: result.dayKey,
                 workspacesEmailed: result.workspacesEmailed,
+                workspacesNotified: result.workspacesNotified,
+                membersEmailed: result.membersEmailed,
+                membersNotified: result.membersNotified,
                 workspacesSkipped: result.workspacesSkipped,
+                skippedNoResend: result.skippedNoResend,
             });
         }
         catch (e) {
@@ -3203,12 +3926,14 @@ export function v1Routes(auth, env, deps) {
         });
         if (!fv)
             return c.json({ error: "Not found" }, 404);
-        const lockAccess = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+        const lockAccess = await loadProjectWithAuth(fv.file.projectId, c.get("user").id);
         if ("error" in lockAccess)
             return c.json({ error: lockAccess.error }, lockAccess.status);
-        const gate = requirePro(lockAccess.project.workspace);
+        const gate = requirePro(lockAccess.ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canManageFiles(lockAccess.ctx))
+            return c.json({ error: "Forbidden" }, 403);
         const expires = new Date(Date.now() + 5 * 60 * 1000);
         const updated = await prisma.fileVersion.update({
             where: { id: fv.id },
@@ -3227,9 +3952,11 @@ export function v1Routes(auth, env, deps) {
         });
         if (!fv)
             return c.json({ error: "Not found" }, 404);
-        const lockDel = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+        const lockDel = await loadProjectWithAuth(fv.file.projectId, c.get("user").id);
         if ("error" in lockDel)
             return c.json({ error: lockDel.error }, lockDel.status);
+        if (!canManageFiles(lockDel.ctx))
+            return c.json({ error: "Forbidden" }, 403);
         if (fv.lockedByUserId && fv.lockedByUserId !== c.get("user").id) {
             return c.json({ error: "Locked by another user" }, 409);
         }
@@ -3923,7 +4650,9 @@ export function v1Routes(auth, env, deps) {
         }));
     }
     registerOccupantPublicRoutes(r, env);
+    registerVendorWorkOrderPublicRoutes(r);
     registerOmRoutes(r, needUser, env);
+    registerWorkOrderRoutes(r, needUser, env);
     registerPunchRoutes(r, needUser, env);
     registerIssuesRoutes(r, needUser, env, {
         onIssuesMutated: (fileVersionId) => {
@@ -3936,5 +4665,7 @@ export function v1Routes(auth, env, deps) {
     registerSheetAiRoutes(r, needUser, env);
     registerMaterialsRoutes(r, needUser);
     registerScheduleRoutes(r, needUser);
+    registerOrchestrationRoutes(r, needUser);
+    registerBimRoutes(r, needUser, env);
     return r;
 }

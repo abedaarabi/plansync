@@ -1,16 +1,17 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import PDFDocument from "pdfkit";
 import { z } from "zod";
-import { ActivityType, InspectionRunStatus, IssueKind, IssuePriority, IssueStatus, MaintenanceFrequency, PunchStatus, } from "@prisma/client";
+import { ActivityType, AssetMeterType, InspectionRunStatus, IssueKind, IssuePriority, IssueStatus, MaintenanceFrequency, Prisma, PunchStatus, } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { isWorkspaceOmBilling, isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectWithAuth } from "../../lib/permissions.js";
+import { assertUserAssignableToProject } from "../../lib/projectAccess.js";
 import { mergeProjectSettingsPatch, parseProjectSettingsJson } from "../../lib/projectSettings.js";
 import { cloneSettingsJson } from "../../lib/takeoffPricing.js";
-import { logActivity } from "../../lib/activity.js";
+import { logActivity, logActivitySafe } from "../../lib/activity.js";
 import { Resend } from "resend";
 import { createUserNotifications } from "../../lib/userNotifications.js";
-import { buildAssetDocumentKey, buildIssueReferencePhotoKey, newUploadId, s3KeyMatchesAssetDocument, s3KeyMatchesIssueReferencePhoto, } from "../../lib/fileUpload.js";
+import { buildAssetDocumentKey, buildAssetImageKey, buildIssueReferencePhotoKey, newUploadId, s3KeyMatchesAssetDocument, s3KeyMatchesAssetImage, s3KeyMatchesIssueReferencePhoto, } from "../../lib/fileUpload.js";
 import { ALLOWED_ISSUE_PHOTO_CONTENT_TYPES, MAX_ISSUE_PHOTO_BYTES, MAX_ISSUE_REFERENCE_PHOTOS, parseReferencePhotos, referencePhotosToJsonValue, } from "../../lib/issueReferencePhotos.js";
 import { deleteObject, presignGet, presignPut } from "../../lib/s3.js";
 import { broadcastIssuesChanged } from "../../lib/viewerCollabHub.js";
@@ -78,7 +79,7 @@ function frequencyToNextFrom(frequency, intervalDays, from) {
     }
 }
 /** PPM health: overdue | dueSoon | onTrack */
-export function ppmHealthLabel(nextDueAt, now = new Date()) {
+function ppmHealthLabel(nextDueAt, now = new Date()) {
     if (!nextDueAt)
         return "onTrack";
     const d0 = new Date(now);
@@ -91,6 +92,131 @@ export function ppmHealthLabel(nextDueAt, now = new Date()) {
     if (due <= soon)
         return "dueSoon";
     return "onTrack";
+}
+const maintenanceScheduleInclude = {
+    asset: { select: { id: true, tag: true, name: true } },
+    assignedTo: { select: { id: true, name: true, email: true, image: true } },
+};
+function maintenanceScheduleJson(r, now = new Date()) {
+    return {
+        id: r.id,
+        assetId: r.assetId,
+        title: r.title,
+        frequency: r.frequency,
+        intervalDays: r.intervalDays,
+        nextDueAt: r.nextDueAt?.toISOString() ?? null,
+        lastCompletedAt: r.lastCompletedAt?.toISOString() ?? null,
+        assignedVendorLabel: r.assignedVendorLabel,
+        assignedToUserId: r.assignedToUserId,
+        assignedTo: r.assignedTo
+            ? {
+                id: r.assignedTo.id,
+                name: r.assignedTo.name,
+                email: r.assignedTo.email,
+                image: r.assignedTo.image,
+            }
+            : null,
+        isActive: r.isActive,
+        meterType: r.meterType,
+        meterThreshold: r.meterThreshold != null ? Number(r.meterThreshold) : null,
+        asset: r.asset,
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString(),
+        health: ppmHealthLabel(r.nextDueAt, now),
+    };
+}
+function notifyMaintenanceAssigned(opts) {
+    const label = opts.title.trim() || "Maintenance schedule";
+    void createUserNotifications({
+        workspaceId: opts.workspaceId,
+        projectId: opts.projectId,
+        recipientUserIds: [opts.assigneeUserId],
+        excludeUserId: opts.actorUserId,
+        kind: "MAINTENANCE_ASSIGNED",
+        title: `Assigned: ${label.length > 120 ? `${label.slice(0, 120)}…` : label}`,
+        body: `Asset ${opts.assetTag}`,
+        href: `/projects/${opts.projectId}/om/maintenance`,
+        actorUserId: opts.actorUserId,
+    }).catch((e) => console.error("[maintenance-assignment-notification]", e));
+}
+function maintenanceAuditMetadata(row) {
+    return {
+        scheduleId: row.id,
+        title: row.title.trim() || row.frequency,
+        assetTag: row.asset.tag,
+        assetName: row.asset.name,
+        frequency: row.frequency,
+        nextDueAt: row.nextDueAt?.toISOString() ?? null,
+        lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
+    };
+}
+const maintenanceCompletionInclude = {
+    asset: { select: { id: true, tag: true, name: true } },
+    schedule: { select: { id: true, title: true, frequency: true } },
+    completedBy: { select: { id: true, name: true, email: true, image: true } },
+    workOrder: { select: { id: true, title: true, status: true, issueKind: true } },
+};
+function maintenanceCompletionJson(row) {
+    return {
+        id: row.id,
+        workspaceId: row.workspaceId,
+        projectId: row.projectId,
+        assetId: row.assetId,
+        scheduleId: row.scheduleId,
+        completedAt: row.completedAt.toISOString(),
+        completedByUserId: row.completedByUserId,
+        previousDueAt: row.previousDueAt?.toISOString() ?? null,
+        nextDueAt: row.nextDueAt?.toISOString() ?? null,
+        workOrderId: row.workOrderId,
+        notes: row.notes,
+        vendorLabel: row.vendorLabel,
+        createdAt: row.createdAt.toISOString(),
+        asset: row.asset,
+        schedule: row.schedule,
+        completedBy: row.completedBy,
+        workOrder: row.workOrder,
+    };
+}
+async function createWorkOrderForDueSchedule(opts, db = prisma) {
+    if (!opts.schedule.nextDueAt) {
+        throw new Error("Schedule has no due date.");
+    }
+    const existing = await db.issue.findFirst({
+        where: {
+            projectId: opts.projectId,
+            issueKind: IssueKind.WORK_ORDER,
+            maintenanceScheduleId: opts.schedule.id,
+            maintenanceDueAt: opts.schedule.nextDueAt,
+        },
+        select: { id: true },
+    });
+    if (existing)
+        return { created: false, issueId: existing.id };
+    const title = opts.schedule.title.trim()
+        ? opts.schedule.title.trim()
+        : `PPM: ${opts.schedule.asset.tag} — ${opts.schedule.frequency}`;
+    const issue = await db.issue.create({
+        data: {
+            workspaceId: opts.workspaceId,
+            projectId: opts.projectId,
+            fileId: opts.defaultFv.fileId,
+            fileVersionId: opts.defaultFv.fileVersionId,
+            title,
+            description: `Preventive maintenance due for asset ${opts.schedule.asset.tag} (${opts.schedule.asset.name}). Schedule: ${opts.schedule.frequency}. Next due: ${opts.schedule.nextDueAt.toISOString()}.`,
+            issueKind: IssueKind.WORK_ORDER,
+            assetId: opts.schedule.assetId,
+            status: IssueStatus.OPEN,
+            priority: IssuePriority.MEDIUM,
+            creatorId: opts.actorUserId,
+            assigneeId: opts.schedule.assignedToUserId ?? null,
+            maintenanceScheduleId: opts.schedule.id,
+            maintenanceDueAt: opts.schedule.nextDueAt,
+            sheetName: opts.defaultFv.file.name,
+            sheetVersion: opts.defaultFv.fileVersion.version,
+        },
+        select: { id: true },
+    });
+    return { created: true, issueId: issue.id };
 }
 async function getDefaultFileVersion(projectId, db = prisma) {
     const file = await db.file.findFirst({
@@ -109,10 +235,11 @@ async function getDefaultFileVersion(projectId, db = prisma) {
 }
 const OCCUPANT_PHOTO_TOKEN_MS = 60 * 60 * 1000;
 function toOmAssetJson(a) {
-    const { occupantScanSecret, installDate, warrantyExpires, lastServiceAt, createdAt, updatedAt, ...rest } = a;
+    const { occupantScanSecret, imageS3Key, imageMimeType, imageFileName, imageSizeBytes, installDate, warrantyExpires, lastServiceAt, createdAt, updatedAt, ...rest } = a;
     return {
         ...rest,
         hasOccupantQr: Boolean(occupantScanSecret),
+        hasImage: Boolean(imageS3Key),
         installDate: installDate?.toISOString() ?? null,
         warrantyExpires: warrantyExpires?.toISOString() ?? null,
         lastServiceAt: lastServiceAt?.toISOString() ?? null,
@@ -427,6 +554,10 @@ export function registerOmRoutes(r, needUser, env) {
                     { model: { contains: qRaw, mode: "insensitive" } },
                     { serialNumber: { contains: qRaw, mode: "insensitive" } },
                     { locationLabel: { contains: qRaw, mode: "insensitive" } },
+                    { hall: { contains: qRaw, mode: "insensitive" } },
+                    { rowLabel: { contains: qRaw, mode: "insensitive" } },
+                    { rack: { contains: qRaw, mode: "insensitive" } },
+                    { positionU: { contains: qRaw, mode: "insensitive" } },
                     { notes: { contains: qRaw, mode: "insensitive" } },
                     { category: { contains: qRaw, mode: "insensitive" } },
                     { file: { name: { contains: qRaw, mode: "insensitive" } } },
@@ -466,6 +597,10 @@ export function registerOmRoutes(r, needUser, env) {
             model: z.string().max(200).nullable().optional(),
             serialNumber: z.string().max(200).nullable().optional(),
             locationLabel: z.string().max(500).nullable().optional(),
+            hall: z.string().max(120).nullable().optional(),
+            rowLabel: z.string().max(120).nullable().optional(),
+            rack: z.string().max(120).nullable().optional(),
+            positionU: z.string().max(120).nullable().optional(),
             installDate: z.string().datetime().nullable().optional(),
             warrantyExpires: z.string().datetime().nullable().optional(),
             lastServiceAt: z.string().datetime().nullable().optional(),
@@ -493,32 +628,49 @@ export function registerOmRoutes(r, needUser, env) {
         const occupantScanSecret = ctx.settings.modules.omTenantPortal
             ? randomBytes(24).toString("hex")
             : null;
-        const row = await prisma.asset.create({
-            data: {
-                projectId,
-                tag: d.tag.trim(),
-                name: d.name.trim(),
-                category: d.category?.trim() ? d.category.trim() : null,
-                manufacturer: d.manufacturer ?? null,
-                model: d.model ?? null,
-                serialNumber: d.serialNumber ?? null,
-                locationLabel: d.locationLabel ?? null,
-                installDate: d.installDate ? new Date(d.installDate) : null,
-                warrantyExpires: d.warrantyExpires ? new Date(d.warrantyExpires) : null,
-                lastServiceAt: d.lastServiceAt ? new Date(d.lastServiceAt) : null,
-                notes: d.notes ?? null,
-                fileId: d.fileId ?? null,
-                fileVersionId: d.fileVersionId ?? null,
-                pageNumber: d.pageNumber ?? null,
-                annotationId: d.annotationId ?? null,
-                pinJson: d.pinJson === undefined ? undefined : d.pinJson,
-                ...(occupantScanSecret ? { occupantScanSecret } : {}),
-            },
-            include: {
-                file: { select: { id: true, name: true } },
-                fileVersion: { select: { id: true, version: true } },
-            },
-        });
+        let row;
+        try {
+            row = await prisma.asset.create({
+                data: {
+                    projectId,
+                    tag: d.tag.trim(),
+                    name: d.name.trim(),
+                    category: d.category?.trim() ? d.category.trim() : null,
+                    manufacturer: d.manufacturer ?? null,
+                    model: d.model ?? null,
+                    serialNumber: d.serialNumber ?? null,
+                    locationLabel: d.locationLabel ?? null,
+                    hall: d.hall ?? null,
+                    rowLabel: d.rowLabel ?? null,
+                    rack: d.rack ?? null,
+                    positionU: d.positionU ?? null,
+                    installDate: d.installDate ? new Date(d.installDate) : null,
+                    warrantyExpires: d.warrantyExpires ? new Date(d.warrantyExpires) : null,
+                    lastServiceAt: d.lastServiceAt ? new Date(d.lastServiceAt) : null,
+                    notes: d.notes ?? null,
+                    fileId: d.fileId ?? null,
+                    fileVersionId: d.fileVersionId ?? null,
+                    pageNumber: d.pageNumber ?? null,
+                    annotationId: d.annotationId ?? null,
+                    pinJson: d.pinJson === undefined ? undefined : d.pinJson,
+                    ...(occupantScanSecret ? { occupantScanSecret } : {}),
+                },
+                include: {
+                    file: { select: { id: true, name: true } },
+                    fileVersion: { select: { id: true, version: true } },
+                },
+            });
+        }
+        catch (e) {
+            if (e instanceof Prisma.PrismaClientKnownRequestError &&
+                e.code === "P2002" &&
+                Array.isArray(e.meta?.target) &&
+                e.meta.target.includes("projectId") &&
+                e.meta.target.includes("tag")) {
+                return c.json({ error: "Asset tag already exists in this project" }, 409);
+            }
+            throw e;
+        }
         await logActivity(ctx.project.workspaceId, ActivityType.PROJECT_UPDATED, {
             actorUserId: c.get("user").id,
             entityId: row.id,
@@ -554,6 +706,10 @@ export function registerOmRoutes(r, needUser, env) {
             model: z.string().max(200).nullable().optional(),
             serialNumber: z.string().max(200).nullable().optional(),
             locationLabel: z.string().max(500).nullable().optional(),
+            hall: z.string().max(120).nullable().optional(),
+            rowLabel: z.string().max(120).nullable().optional(),
+            rack: z.string().max(120).nullable().optional(),
+            positionU: z.string().max(120).nullable().optional(),
             installDate: z.string().datetime().nullable().optional(),
             warrantyExpires: z.string().datetime().nullable().optional(),
             lastServiceAt: z.string().datetime().nullable().optional(),
@@ -594,6 +750,10 @@ export function registerOmRoutes(r, needUser, env) {
                 ...(d.model !== undefined ? { model: d.model } : {}),
                 ...(d.serialNumber !== undefined ? { serialNumber: d.serialNumber } : {}),
                 ...(d.locationLabel !== undefined ? { locationLabel: d.locationLabel } : {}),
+                ...(d.hall !== undefined ? { hall: d.hall } : {}),
+                ...(d.rowLabel !== undefined ? { rowLabel: d.rowLabel } : {}),
+                ...(d.rack !== undefined ? { rack: d.rack } : {}),
+                ...(d.positionU !== undefined ? { positionU: d.positionU } : {}),
                 ...(d.installDate !== undefined
                     ? { installDate: d.installDate ? new Date(d.installDate) : null }
                     : {}),
@@ -887,6 +1047,221 @@ export function registerOmRoutes(r, needUser, env) {
         ]);
         return c.json({ ok: true });
     });
+    r.post("/projects/:projectId/om/assets/:assetId/image/presign", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const assetId = c.req.param("assetId");
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
+            return c.json({ error: "Operations assets are not enabled" }, 403);
+        }
+        const gate = requireOmBilling(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const asset = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
+        if (!asset)
+            return c.json({ error: "Not found" }, 404);
+        const body = z
+            .object({
+            fileName: z.string().min(1),
+            contentType: z.string().default("application/octet-stream"),
+            sizeBytes: z.coerce.bigint(),
+        })
+            .safeParse(await c.req.json());
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const ct = body.data.contentType.trim().toLowerCase();
+        if (!ALLOWED_ISSUE_PHOTO_CONTENT_TYPES.has(ct)) {
+            return c.json({ error: "Only JPEG, PNG, WebP, GIF, or HEIC/HEIF images are allowed" }, 400);
+        }
+        if (body.data.sizeBytes <= 0n)
+            return c.json({ error: "File is empty" }, 400);
+        if (body.data.sizeBytes > MAX_ISSUE_PHOTO_BYTES) {
+            return c.json({ error: "File too large (max 15 MB per image)" }, 400);
+        }
+        const ws = ctx.project.workspace;
+        const reclaim = asset.imageSizeBytes ?? 0n;
+        const newUsed = ws.storageUsedBytes - reclaim + body.data.sizeBytes;
+        if (newUsed > ws.storageQuotaBytes) {
+            return c.json({ error: "Storage quota exceeded" }, 400);
+        }
+        const uploadId = newUploadId();
+        const key = buildAssetImageKey(ctx.project.workspaceId, projectId, assetId, uploadId, body.data.fileName);
+        let url;
+        try {
+            url = await presignPut(env, key, ct);
+        }
+        catch (e) {
+            console.error("[asset image presign]", e);
+            return c.json({ error: "Could not create upload URL. Check S3 credentials and bucket configuration." }, 503);
+        }
+        if (!url) {
+            return c.json({ error: "S3 not configured — set AWS_* and S3_BUCKET", devKey: key }, 503);
+        }
+        return c.json({ uploadUrl: url, key });
+    });
+    r.post("/projects/:projectId/om/assets/:assetId/image/complete", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const assetId = c.req.param("assetId");
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
+            return c.json({ error: "Operations assets are not enabled" }, 403);
+        }
+        const gate = requireOmBilling(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const asset = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
+        if (!asset)
+            return c.json({ error: "Not found" }, 404);
+        const body = z
+            .object({
+            key: z.string().min(1),
+            fileName: z.string().min(1),
+            contentType: z.string().default("application/octet-stream"),
+            sizeBytes: z.coerce.bigint(),
+        })
+            .safeParse(await c.req.json());
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const ct = body.data.contentType.trim().toLowerCase();
+        if (!ALLOWED_ISSUE_PHOTO_CONTENT_TYPES.has(ct)) {
+            return c.json({ error: "Only JPEG, PNG, WebP, GIF, or HEIC/HEIF images are allowed" }, 400);
+        }
+        if (body.data.sizeBytes <= 0n)
+            return c.json({ error: "File is empty" }, 400);
+        if (body.data.sizeBytes > MAX_ISSUE_PHOTO_BYTES) {
+            return c.json({ error: "File too large (max 15 MB per image)" }, 400);
+        }
+        if (!s3KeyMatchesAssetImage(body.data.key, ctx.project.workspaceId, projectId, assetId)) {
+            return c.json({ error: "Invalid upload key" }, 400);
+        }
+        const ws = ctx.project.workspace;
+        const reclaim = asset.imageSizeBytes ?? 0n;
+        const newUsed = ws.storageUsedBytes - reclaim + body.data.sizeBytes;
+        if (newUsed > ws.storageQuotaBytes) {
+            return c.json({ error: "Storage quota exceeded" }, 400);
+        }
+        if (asset.imageS3Key && asset.imageS3Key !== body.data.key) {
+            const del = await deleteObject(env, asset.imageS3Key);
+            if (!del.ok && del.error !== "S3 not configured") {
+                console.warn(`[asset image replace] deleteObject ${asset.imageS3Key}:`, del.error);
+            }
+        }
+        const storageDelta = body.data.sizeBytes - reclaim;
+        const row = await prisma.$transaction(async (tx) => {
+            const updated = await tx.asset.update({
+                where: { id: assetId },
+                data: {
+                    imageS3Key: body.data.key,
+                    imageMimeType: ct,
+                    imageFileName: body.data.fileName,
+                    imageSizeBytes: body.data.sizeBytes,
+                },
+                include: {
+                    file: { select: { id: true, name: true } },
+                    fileVersion: { select: { id: true, version: true } },
+                },
+            });
+            if (storageDelta !== 0n) {
+                await tx.workspace.update({
+                    where: { id: ctx.project.workspaceId },
+                    data: { storageUsedBytes: { increment: storageDelta } },
+                });
+            }
+            return updated;
+        });
+        await logActivity(ctx.project.workspaceId, ActivityType.PROJECT_UPDATED, {
+            actorUserId: c.get("user").id,
+            entityId: assetId,
+            projectId,
+            metadata: { omAssetImageUpdated: body.data.fileName, assetTag: asset.tag },
+        });
+        return c.json(toOmAssetJson(row));
+    });
+    r.get("/projects/:projectId/om/assets/:assetId/image/presign-read", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const assetId = c.req.param("assetId");
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
+            return c.json({ error: "Not found" }, 404);
+        }
+        const gate = requireOmBilling(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const asset = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
+        if (!asset?.imageS3Key)
+            return c.json({ error: "Not found" }, 404);
+        let url;
+        try {
+            url = await presignGet(env, asset.imageS3Key);
+        }
+        catch (e) {
+            console.error("[asset image presign-read]", e);
+            return c.json({ error: "Could not create download link (S3)." }, 503);
+        }
+        if (!url)
+            return c.json({ error: "S3 not configured" }, 503);
+        return c.json({ url });
+    });
+    r.delete("/projects/:projectId/om/assets/:assetId/image", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const assetId = c.req.param("assetId");
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        if (!ctx.project.operationsMode || !ctx.settings.modules.omAssets) {
+            return c.json({ error: "Operations assets are not enabled" }, 403);
+        }
+        const gate = requireOmBilling(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const asset = await prisma.asset.findFirst({ where: { id: assetId, projectId } });
+        if (!asset?.imageS3Key)
+            return c.json({ error: "Not found" }, 404);
+        const del = await deleteObject(env, asset.imageS3Key);
+        if (!del.ok && del.error !== "S3 not configured") {
+            return c.json({ error: del.error }, 503);
+        }
+        const dec = asset.imageSizeBytes ?? 0n;
+        const row = await prisma.$transaction(async (tx) => {
+            const updated = await tx.asset.update({
+                where: { id: assetId },
+                data: {
+                    imageS3Key: null,
+                    imageMimeType: null,
+                    imageFileName: null,
+                    imageSizeBytes: null,
+                },
+                include: {
+                    file: { select: { id: true, name: true } },
+                    fileVersion: { select: { id: true, version: true } },
+                },
+            });
+            if (dec > 0n) {
+                await tx.workspace.update({
+                    where: { id: ctx.project.workspaceId },
+                    data: { storageUsedBytes: { decrement: dec } },
+                });
+            }
+            return updated;
+        });
+        return c.json(toOmAssetJson(row));
+    });
     r.delete("/projects/:projectId/om/assets/:assetId", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const assetId = c.req.param("assetId");
@@ -906,7 +1281,13 @@ export function registerOmRoutes(r, needUser, env) {
         if (!existing)
             return c.json({ error: "Not found" }, 404);
         const docs = await prisma.assetDocument.findMany({ where: { assetId } });
-        let dec = 0n;
+        let dec = existing.imageSizeBytes ?? 0n;
+        if (existing.imageS3Key) {
+            const imgDel = await deleteObject(env, existing.imageS3Key);
+            if (!imgDel.ok && imgDel.error !== "S3 not configured") {
+                console.warn(`[asset delete] deleteObject ${existing.imageS3Key}:`, imgDel.error);
+            }
+        }
         for (const d of docs) {
             dec += d.sizeBytes;
             const del = await deleteObject(env, d.s3Key);
@@ -945,18 +1326,40 @@ export function registerOmRoutes(r, needUser, env) {
             return c.json({ error: gate.error }, gate.status);
         const rows = await prisma.maintenanceSchedule.findMany({
             where: { asset: { projectId } },
-            include: { asset: { select: { id: true, tag: true, name: true } } },
+            include: maintenanceScheduleInclude,
             orderBy: [{ nextDueAt: "asc" }],
         });
         const now = new Date();
-        return c.json(rows.map((r) => ({
-            ...r,
-            nextDueAt: r.nextDueAt?.toISOString() ?? null,
-            lastCompletedAt: r.lastCompletedAt?.toISOString() ?? null,
-            createdAt: r.createdAt.toISOString(),
-            updatedAt: r.updatedAt.toISOString(),
-            health: ppmHealthLabel(r.nextDueAt, now),
-        })));
+        return c.json(rows.map((r) => maintenanceScheduleJson(r, now)));
+    });
+    r.get("/projects/:projectId/om/maintenance/completions", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        if (!ctx.project.operationsMode || !ctx.settings.modules.omMaintenance) {
+            return c.json({ error: "Maintenance module is not enabled" }, 403);
+        }
+        const gate = requireOmBilling(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const limit = Math.min(300, Math.max(1, Number(c.req.query("limit")) || 100));
+        const assetId = c.req.query("assetId")?.trim();
+        if (assetId) {
+            const exists = await prisma.asset.count({ where: { id: assetId, projectId } });
+            if (exists === 0)
+                return c.json({ error: "Asset not found" }, 404);
+        }
+        const rows = await prisma.maintenanceCompletion.findMany({
+            where: { projectId, ...(assetId ? { assetId } : {}) },
+            include: maintenanceCompletionInclude,
+            orderBy: [{ completedAt: "desc" }],
+            take: limit,
+        });
+        return c.json(rows.map(maintenanceCompletionJson));
     });
     r.post("/projects/:projectId/om/maintenance", needUser, async (c) => {
         const projectId = c.req.param("projectId");
@@ -980,6 +1383,9 @@ export function registerOmRoutes(r, needUser, env) {
             intervalDays: z.number().int().min(1).max(3650).nullable().optional(),
             nextDueAt: z.string().datetime().nullable().optional(),
             assignedVendorLabel: z.string().max(200).nullable().optional(),
+            assignedToUserId: z.string().nullable().optional(),
+            meterType: z.nativeEnum(AssetMeterType).nullable().optional(),
+            meterThreshold: z.number().min(0).nullable().optional(),
         })
             .safeParse(await c.req.json());
         if (!body.success)
@@ -987,6 +1393,14 @@ export function registerOmRoutes(r, needUser, env) {
         const asset = await prisma.asset.findFirst({ where: { id: body.data.assetId, projectId } });
         if (!asset)
             return c.json({ error: "Asset not found" }, 404);
+        if (body.data.meterThreshold != null && !body.data.meterType) {
+            return c.json({ error: "meterType is required when meterThreshold is set" }, 400);
+        }
+        if (body.data.assignedToUserId) {
+            const assignCheck = await assertUserAssignableToProject(body.data.assignedToUserId, projectId, ctx.project.workspaceId);
+            if ("error" in assignCheck)
+                return c.json({ error: assignCheck.error }, assignCheck.status);
+        }
         let nextDue = body.data.nextDueAt ? new Date(body.data.nextDueAt) : new Date();
         if (!body.data.nextDueAt) {
             nextDue = frequencyToNextFrom(body.data.frequency, body.data.intervalDays ?? null, new Date());
@@ -999,17 +1413,30 @@ export function registerOmRoutes(r, needUser, env) {
                 intervalDays: body.data.intervalDays ?? null,
                 nextDueAt: nextDue,
                 assignedVendorLabel: body.data.assignedVendorLabel ?? null,
+                assignedToUserId: body.data.assignedToUserId ?? null,
+                meterType: body.data.meterType ?? null,
+                meterThreshold: body.data.meterThreshold ?? null,
             },
-            include: { asset: { select: { id: true, tag: true, name: true } } },
+            include: maintenanceScheduleInclude,
         });
-        return c.json({
-            ...row,
-            nextDueAt: row.nextDueAt?.toISOString() ?? null,
-            lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
-            createdAt: row.createdAt.toISOString(),
-            updatedAt: row.updatedAt.toISOString(),
-            health: ppmHealthLabel(row.nextDueAt),
+        if (row.assignedToUserId) {
+            notifyMaintenanceAssigned({
+                workspaceId: ctx.project.workspaceId,
+                projectId,
+                assigneeUserId: row.assignedToUserId,
+                actorUserId: c.get("user").id,
+                assetTag: row.asset.tag,
+                title: row.title,
+            });
+        }
+        await logActivitySafe(ctx.project.workspaceId, ActivityType.MAINTENANCE_SCHEDULE_CREATED, {
+            actorUserId: c.get("user").id,
+            entityType: "MaintenanceSchedule",
+            entityId: row.id,
+            projectId,
+            metadata: maintenanceAuditMetadata(row),
         });
+        return c.json(maintenanceScheduleJson(row));
     });
     r.patch("/projects/:projectId/om/maintenance/:scheduleId", needUser, async (c) => {
         const projectId = c.req.param("projectId");
@@ -1039,12 +1466,23 @@ export function registerOmRoutes(r, needUser, env) {
             nextDueAt: z.string().datetime().nullable().optional(),
             lastCompletedAt: z.string().datetime().nullable().optional(),
             assignedVendorLabel: z.string().max(200).nullable().optional(),
+            assignedToUserId: z.string().nullable().optional(),
             isActive: z.boolean().optional(),
+            meterType: z.nativeEnum(AssetMeterType).nullable().optional(),
+            meterThreshold: z.number().min(0).nullable().optional(),
         })
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
         const d = body.data;
+        if (d.meterThreshold != null && d.meterType === undefined && !existing.meterType) {
+            return c.json({ error: "meterType is required when meterThreshold is set" }, 400);
+        }
+        if (d.assignedToUserId) {
+            const assignCheck = await assertUserAssignableToProject(d.assignedToUserId, projectId, ctx.project.workspaceId);
+            if ("error" in assignCheck)
+                return c.json({ error: assignCheck.error }, assignCheck.status);
+        }
         const row = await prisma.maintenanceSchedule.update({
             where: { id: scheduleId },
             data: {
@@ -1060,18 +1498,92 @@ export function registerOmRoutes(r, needUser, env) {
                 ...(d.assignedVendorLabel !== undefined
                     ? { assignedVendorLabel: d.assignedVendorLabel }
                     : {}),
+                ...(d.assignedToUserId !== undefined ? { assignedToUserId: d.assignedToUserId } : {}),
                 ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
+                ...(d.meterType !== undefined ? { meterType: d.meterType } : {}),
+                ...(d.meterThreshold !== undefined ? { meterThreshold: d.meterThreshold } : {}),
             },
-            include: { asset: { select: { id: true, tag: true, name: true } } },
+            include: maintenanceScheduleInclude,
         });
-        return c.json({
-            ...row,
-            nextDueAt: row.nextDueAt?.toISOString() ?? null,
-            lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
-            createdAt: row.createdAt.toISOString(),
-            updatedAt: row.updatedAt.toISOString(),
-            health: ppmHealthLabel(row.nextDueAt),
+        if (d.assignedToUserId &&
+            d.assignedToUserId !== existing.assignedToUserId &&
+            d.assignedToUserId !== c.get("user").id) {
+            notifyMaintenanceAssigned({
+                workspaceId: ctx.project.workspaceId,
+                projectId,
+                assigneeUserId: d.assignedToUserId,
+                actorUserId: c.get("user").id,
+                assetTag: row.asset.tag,
+                title: row.title,
+            });
+        }
+        await logActivitySafe(ctx.project.workspaceId, ActivityType.MAINTENANCE_SCHEDULE_UPDATED, {
+            actorUserId: c.get("user").id,
+            entityType: "MaintenanceSchedule",
+            entityId: row.id,
+            projectId,
+            metadata: maintenanceAuditMetadata(row),
         });
+        return c.json(maintenanceScheduleJson(row));
+    });
+    /** Create a work order for one due schedule occurrence. */
+    r.post("/projects/:projectId/om/maintenance/:scheduleId/create-work-order", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const scheduleId = c.req.param("scheduleId");
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        if (!ctx.project.operationsMode || !ctx.settings.modules.omMaintenance) {
+            return c.json({ error: "Maintenance module is not enabled" }, 403);
+        }
+        if (!ctx.settings.modules.issues) {
+            return c.json({ error: "Issues/work orders module is disabled" }, 403);
+        }
+        const gate = requireOmBilling(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const defaultFv = await getDefaultFileVersion(projectId);
+        if (!defaultFv) {
+            return c.json({ error: "Upload at least one PDF before generating work orders" }, 400);
+        }
+        const endToday = new Date();
+        endToday.setUTCHours(23, 59, 59, 999);
+        const schedule = await prisma.maintenanceSchedule.findFirst({
+            where: {
+                id: scheduleId,
+                isActive: true,
+                asset: { projectId },
+            },
+            include: { asset: true },
+        });
+        if (!schedule)
+            return c.json({ error: "Schedule not found" }, 404);
+        if (!schedule.nextDueAt || schedule.nextDueAt > endToday) {
+            return c.json({ error: "Schedule is not due yet" }, 400);
+        }
+        const made = await createWorkOrderForDueSchedule({
+            schedule,
+            projectId,
+            workspaceId: ctx.project.workspaceId,
+            actorUserId: c.get("user").id,
+            defaultFv,
+        }, prisma);
+        await logActivitySafe(ctx.project.workspaceId, ActivityType.MAINTENANCE_WORK_ORDERS_GENERATED, {
+            actorUserId: c.get("user").id,
+            entityType: "MaintenanceSchedule",
+            entityId: schedule.id,
+            projectId,
+            metadata: {
+                workOrderCount: made.created ? 1 : 0,
+                workOrderIds: [made.issueId],
+                scheduleIds: [schedule.id],
+                deduped: !made.created,
+            },
+        });
+        return c.json({ created: made.created, issueId: made.issueId });
     });
     /** Create work orders (issues) for schedules that are due or overdue. */
     r.post("/projects/:projectId/om/maintenance/generate-work-orders", needUser, async (c) => {
@@ -1106,34 +1618,34 @@ export function registerOmRoutes(r, needUser, env) {
             include: { asset: true },
         });
         const created = [];
+        const existing = [];
         for (const s of due) {
-            const title = s.title.trim() ? s.title.trim() : `PPM: ${s.asset.tag} — ${s.frequency}`;
-            const iss = await prisma.issue.create({
-                data: {
-                    workspaceId: ctx.project.workspaceId,
-                    projectId,
-                    fileId: defaultFv.fileId,
-                    fileVersionId: defaultFv.fileVersionId,
-                    title,
-                    description: `Preventive maintenance due for asset ${s.asset.tag} (${s.asset.name}). Schedule: ${s.frequency}. Next due: ${s.nextDueAt?.toISOString() ?? "—"}.`,
-                    issueKind: IssueKind.WORK_ORDER,
-                    assetId: s.assetId,
-                    status: IssueStatus.OPEN,
-                    priority: IssuePriority.MEDIUM,
-                    creatorId: c.get("user").id,
-                    sheetName: defaultFv.file.name,
-                    sheetVersion: defaultFv.fileVersion.version,
-                },
-            });
-            created.push(iss.id);
+            const made = await createWorkOrderForDueSchedule({
+                schedule: s,
+                projectId,
+                workspaceId: ctx.project.workspaceId,
+                actorUserId: c.get("user").id,
+                defaultFv,
+            }, prisma);
+            if (made.created)
+                created.push(made.issueId);
+            else
+                existing.push(made.issueId);
         }
-        await logActivity(ctx.project.workspaceId, ActivityType.ISSUE_CREATED, {
+        await logActivitySafe(ctx.project.workspaceId, ActivityType.MAINTENANCE_WORK_ORDERS_GENERATED, {
             actorUserId: c.get("user").id,
+            entityType: "Project",
             entityId: projectId,
             projectId,
-            metadata: { omGeneratedWorkOrders: created.length },
+            metadata: {
+                workOrderCount: created.length,
+                workOrderIds: created,
+                scheduleIds: due.map((s) => s.id),
+                skippedExistingCount: existing.length,
+                skippedExistingWorkOrderIds: existing,
+            },
         });
-        return c.json({ createdIds: created });
+        return c.json({ createdIds: created, existingIds: existing });
     });
     r.post("/projects/:projectId/om/maintenance/:scheduleId/complete", needUser, async (c) => {
         const projectId = c.req.param("projectId");
@@ -1156,23 +1668,88 @@ export function registerOmRoutes(r, needUser, env) {
         });
         if (!existing)
             return c.json({ error: "Not found" }, 404);
+        const body = z
+            .object({
+            notes: z.string().max(2000).optional(),
+            workOrderId: z.string().optional(),
+        })
+            .safeParse(await c.req.json().catch(() => ({})));
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        let workOrderId = null;
+        if (body.data.workOrderId?.trim()) {
+            const wo = await prisma.issue.findFirst({
+                where: {
+                    id: body.data.workOrderId.trim(),
+                    projectId,
+                    issueKind: IssueKind.WORK_ORDER,
+                },
+                select: {
+                    id: true,
+                    maintenanceScheduleId: true,
+                    completionEvidenceRequired: true,
+                    procedureJson: true,
+                    procedureResultJson: true,
+                    referencePhotos: true,
+                    status: true,
+                },
+            });
+            if (!wo)
+                return c.json({ error: "Work order not found" }, 404);
+            if (wo.maintenanceScheduleId && wo.maintenanceScheduleId !== existing.id) {
+                return c.json({ error: "Work order is linked to another schedule" }, 400);
+            }
+            if (wo.status !== IssueStatus.RESOLVED && wo.status !== IssueStatus.CLOSED) {
+                return c.json({ error: "Complete the linked work order before marking PM done" }, 400);
+            }
+            workOrderId = wo.id;
+        }
         const completedAt = new Date();
+        const previousDueAt = existing.nextDueAt;
         const next = frequencyToNextFrom(existing.frequency, existing.intervalDays, completedAt);
-        const row = await prisma.maintenanceSchedule.update({
-            where: { id: scheduleId },
-            data: {
-                lastCompletedAt: completedAt,
-                nextDueAt: next,
+        const { row, completion } = await prisma.$transaction(async (tx) => {
+            const row = await tx.maintenanceSchedule.update({
+                where: { id: scheduleId },
+                data: {
+                    lastCompletedAt: completedAt,
+                    nextDueAt: next,
+                },
+                include: maintenanceScheduleInclude,
+            });
+            const completion = await tx.maintenanceCompletion.create({
+                data: {
+                    workspaceId: ctx.project.workspaceId,
+                    projectId,
+                    assetId: existing.assetId,
+                    scheduleId,
+                    completedAt,
+                    completedByUserId: c.get("user").id,
+                    previousDueAt,
+                    nextDueAt: next,
+                    workOrderId,
+                    notes: body.data.notes?.trim() || null,
+                    vendorLabel: row.assignedVendorLabel ?? null,
+                },
+                include: maintenanceCompletionInclude,
+            });
+            return { row, completion };
+        });
+        await logActivitySafe(ctx.project.workspaceId, ActivityType.MAINTENANCE_SCHEDULE_COMPLETED, {
+            actorUserId: c.get("user").id,
+            entityType: "MaintenanceSchedule",
+            entityId: row.id,
+            projectId,
+            metadata: {
+                ...maintenanceAuditMetadata(row),
+                completionId: completion.id,
+                workOrderId: completion.workOrderId,
+                notes: completion.notes,
+                completedAt: completedAt.toISOString(),
             },
-            include: { asset: { select: { id: true, tag: true, name: true } } },
         });
         return c.json({
-            ...row,
-            nextDueAt: row.nextDueAt?.toISOString() ?? null,
-            lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
-            createdAt: row.createdAt.toISOString(),
-            updatedAt: row.updatedAt.toISOString(),
-            health: ppmHealthLabel(row.nextDueAt),
+            ...maintenanceScheduleJson(row),
+            completion: maintenanceCompletionJson(completion),
         });
     });
     // --- Inspection templates ---
@@ -1986,7 +2563,11 @@ export function registerOmRoutes(r, needUser, env) {
         const now = new Date();
         const weekStart = startOfUtcWeek(now);
         const weekEnd = endOfUtcWeek(weekStart);
-        const [assetTotal, assetsLinkedToDrawing, openWo, inProgressWo, openTenantReq, inProgressTenantReq, maintRows, schedulesForWeek, recentWo, recentTenantReq,] = await Promise.all([
+        const sevenDaysAgo = new Date(now);
+        sevenDaysAgo.setUTCDate(sevenDaysAgo.getUTCDate() - 7);
+        const thirtyDaysAgo = new Date(now);
+        thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
+        const [assetTotal, assetsLinkedToDrawing, openWo, inProgressWo, openTenantReq, inProgressTenantReq, maintRows, schedulesForWeek, recentWo, recentTenantReq, backlogOver7, backlogOver30, pmCompletions,] = await Promise.all([
             prisma.asset.count({ where: { projectId } }),
             prisma.asset.count({ where: { projectId, fileId: { not: null } } }),
             prisma.issue.count({
@@ -2041,6 +2622,28 @@ export function registerOmRoutes(r, needUser, env) {
                     updatedAt: true,
                 },
             }),
+            prisma.issue.count({
+                where: {
+                    projectId,
+                    issueKind: IssueKind.WORK_ORDER,
+                    status: { in: [IssueStatus.OPEN, IssueStatus.IN_PROGRESS] },
+                    createdAt: { lt: sevenDaysAgo },
+                },
+            }),
+            prisma.issue.count({
+                where: {
+                    projectId,
+                    issueKind: IssueKind.WORK_ORDER,
+                    status: { in: [IssueStatus.OPEN, IssueStatus.IN_PROGRESS] },
+                    createdAt: { lt: thirtyDaysAgo },
+                },
+            }),
+            prisma.maintenanceCompletion.findMany({
+                where: { projectId },
+                select: { completedAt: true, previousDueAt: true },
+                orderBy: { completedAt: "desc" },
+                take: 200,
+            }),
         ]);
         let maintenanceOverdue = 0;
         let maintenanceDueSoon = 0;
@@ -2054,6 +2657,18 @@ export function registerOmRoutes(r, needUser, env) {
                 maintenanceDueSoon++;
         }
         const buildingHealthPct = assetTotal === 0 ? 100 : Math.round((assetsLinkedToDrawing / assetTotal) * 100);
+        let pmOnTime = 0;
+        let pmLate = 0;
+        for (const cpl of pmCompletions) {
+            if (!cpl.previousDueAt)
+                continue;
+            if (cpl.completedAt <= cpl.previousDueAt)
+                pmOnTime++;
+            else
+                pmLate++;
+        }
+        const pmTotal = pmOnTime + pmLate;
+        const pmCompliancePct = pmTotal === 0 ? 100 : Math.round((pmOnTime / pmTotal) * 100);
         return c.json({
             projectId,
             projectName: ctx.project.name,
@@ -2071,6 +2686,9 @@ export function registerOmRoutes(r, needUser, env) {
                 assetsTracked: assetTotal,
                 overdueMaintenanceTasks: maintenanceOverdue,
                 maintenanceDueSoon,
+                workOrderBacklogOver7Days: backlogOver7,
+                workOrderBacklogOver30Days: backlogOver30,
+                pmCompliancePct,
             },
             buildingHealthPct,
             upcomingMaintenanceThisWeek: schedulesForWeek.map((s) => ({
@@ -2455,15 +3073,16 @@ export function registerOccupantPublicRoutes(r, env) {
             notifyUserIds.add(a.userId);
         for (const p of projectInternals)
             notifyUserIds.add(p.userId);
-        const viewerParams = {
-            issueId: issue.id,
-            fileId: issue.fileId,
-            fileVersionId: issue.fileVersionId,
-            projectId: issue.projectId,
-            fileName: sheetName?.trim() ? sheetName.trim() : "Drawing",
-            version: sheetVersion ?? 1,
-        };
-        const viewerPath = buildViewerIssuePath(viewerParams);
+        const viewerPath = issue.fileId && issue.fileVersionId
+            ? buildViewerIssuePath({
+                issueId: issue.id,
+                fileId: issue.fileId,
+                fileVersionId: issue.fileVersionId,
+                projectId: issue.projectId,
+                fileName: sheetName?.trim() ? sheetName.trim() : "Drawing",
+                version: sheetVersion ?? 1,
+            })
+            : `/projects/${link.projectId}/om/tenant-requests/${issue.id}`;
         const baseUrl = env.PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
         const viewerAbs = baseUrl ? `${baseUrl}${viewerPath}` : viewerPath;
         const tenantListAbs = baseUrl
@@ -2702,7 +3321,7 @@ export function registerOccupantPublicRoutes(r, env) {
                 select: { fileVersionId: true },
             });
         });
-        if (collaborationGloballyEnabled(env)) {
+        if (updated.fileVersionId && collaborationGloballyEnabled(env)) {
             broadcastIssuesChanged(updated.fileVersionId);
         }
         return c.json({ ok: true, photoId });

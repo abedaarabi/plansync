@@ -1,7 +1,7 @@
 import { bodyLimit } from "hono/body-limit";
 import { prisma } from "../../lib/prisma.js";
 import { geminiConfigured, geminiSheetChat, geminiSheetSummary, geminiTakeoffAssistDetect, } from "../../lib/geminiSheetAi.js";
-import { loadProjectForMember } from "../../lib/projectAccess.js";
+import { canManageFiles, canViewFile, canViewFolderForUser, loadProjectWithAuth, } from "../../lib/permissions.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { getSheetAiPageFromDb, saveSheetAiChatToDb, saveSheetAiSummaryToDb, saveTakeoffAssistToDb, } from "../../lib/sheetAiCacheDb.js";
 import { assertImageSizeOk, sheetChatBodySchema, sheetSummaryBodySchema, sheetTakeoffDetectBodySchema, } from "../../lib/sheetAiSchemas.js";
@@ -18,12 +18,25 @@ async function authorizeSheetAi(fileVersionId, userId) {
     });
     if (!fv)
         return { error: "Not found", status: 404 };
-    const access = await loadProjectForMember(fv.file.projectId, userId);
+    const access = await loadProjectWithAuth(fv.file.projectId, userId);
     if ("error" in access)
         return { error: access.error, status: access.status };
-    const gate = requirePro(access.project.workspace);
+    const gate = requirePro(access.ctx.project.workspace);
     if (gate)
         return { error: gate.error, status: gate.status };
+    if (!canViewFile(access.ctx, fv.file.disciplines))
+        return { error: "Forbidden", status: 403 };
+    if (fv.file.folderId) {
+        const folder = await prisma.folder.findFirst({
+            where: { id: fv.file.folderId, projectId: fv.file.projectId },
+            select: { accessMode: true, allowedUserIds: true },
+        });
+        if (!folder)
+            return { error: "Forbidden", status: 403 };
+        if (!canManageFiles(access.ctx) && !canViewFolderForUser(access.ctx, folder, userId)) {
+            return { error: "Forbidden", status: 403 };
+        }
+    }
     return { fv };
 }
 const aiBodyLimit = bodyLimit({

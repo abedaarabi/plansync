@@ -1,8 +1,7 @@
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { gunzipSync } from "node:zlib";
 import * as WebIFC from "web-ifc";
 import { disciplineForIfcType } from "./discipline.js";
+import { ifcNumVal, ifcStrVal, webIfcWasmDir } from "./ifcParseUtils.js";
 import { extractSurfaceColorFromMaterials, hasAuthoredSurfaceStyle } from "./surfaceColor.js";
 import type {
   BimElementQuantities,
@@ -14,46 +13,18 @@ import type {
   BimTypeAggregate,
 } from "./types.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
 type SpatialNode = { expressID: number; type: string; children: SpatialNode[] };
 
 function wasmDir(): string {
-  const candidates = [
-    join(__dirname, "../../../../node_modules/web-ifc"),
-    join(__dirname, "../../../node_modules/web-ifc"),
-    join(process.cwd(), "node_modules/web-ifc"),
-    join(process.cwd(), "../node_modules/web-ifc"),
-  ];
-  for (const p of candidates) {
-    if (existsSync(join(p, "web-ifc-node.wasm")) || existsSync(join(p, "web-ifc.wasm"))) {
-      // web-ifc concatenates the filename onto this path — trailing slash is required.
-      return p.endsWith("/") ? p : `${p}/`;
-    }
-  }
-  const fallback = candidates[0]!;
-  return fallback.endsWith("/") ? fallback : `${fallback}/`;
+  return webIfcWasmDir();
 }
 
 function strVal(v: unknown): string | null {
-  if (v == null) return null;
-  if (typeof v === "string") {
-    const s = v.trim();
-    return s === "" ? null : s;
-  }
-  if (typeof v === "object" && v !== null && "value" in v) {
-    return strVal((v as { value: unknown }).value);
-  }
-  return String(v);
+  return ifcStrVal(v);
 }
 
 function numVal(v: unknown): number | undefined {
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "object" && v !== null && "value" in v) {
-    const n = Number((v as { value: unknown }).value);
-    return Number.isFinite(n) ? n : undefined;
-  }
-  return undefined;
+  return ifcNumVal(v);
 }
 
 // fallow-ignore-next-line complexity
@@ -207,6 +178,7 @@ async function buildElementStoreyMap(
   ifcApi: WebIFC.IfcAPI,
   modelId: number,
 ): Promise<Map<number, string>> {
+  // fallow-ignore-next-line code-duplication
   const storeyNames = new Map<number, string>();
   const storeyIds = ifcApi.GetLineIDsWithType(modelId, WebIFC.IFCBUILDINGSTOREY, true);
   for (let i = 0; i < storeyIds.size(); i++) {
@@ -247,98 +219,271 @@ async function buildElementStoreyMap(
   return elementToStorey;
 }
 
-/** Builds a quantity index from raw IFC bytes using web-ifc. */
-export async function buildQuantityIndexFromIfc(
+function buildLoqFromLightEntries(
+  entries: Pick<BimQuantityEntry, "guid" | "ifcType" | "level">[],
+): BimLoqReport {
+  const total = entries.length;
+  let withIdentity = 0;
+  let withLevel = 0;
+  const pct = (n: number) => (total === 0 ? 0 : Math.round((n / total) * 100));
+  for (const el of entries) {
+    if (el.guid && el.ifcType) withIdentity += 1;
+    if (el.level) withLevel += 1;
+  }
+  return {
+    totalElements: total,
+    withIdentity,
+    withLevel,
+    withMaterial: 0,
+    withQuantities: 0,
+    withAuthoredColor: 0,
+    pctIdentity: pct(withIdentity),
+    pctQuantities: 0,
+    pctMaterial: 0,
+    pctLevel: pct(withLevel),
+    pctAuthoredColor: 0,
+    recommendedExportHints: [],
+  };
+}
+
+type IfcSession = {
+  ifcApi: WebIFC.IfcAPI;
+  modelId: number;
+  close: () => void;
+};
+
+async function openIfcSession(ifcBytes: Uint8Array): Promise<IfcSession> {
+  const ifcApi = new WebIFC.IfcAPI();
+  ifcApi.SetWasmPath(wasmDir(), true);
+  await ifcApi.Init();
+  const modelId = ifcApi.OpenModel(ifcBytes);
+  return {
+    ifcApi,
+    modelId,
+    close: () => {
+      ifcApi.CloseModel(modelId);
+    },
+  };
+}
+
+function collectProductIds(ifcApi: WebIFC.IfcAPI, modelId: number): number[] {
+  const productIds = ifcApi.GetLineIDsWithType(modelId, WebIFC.IFCPRODUCT, true);
+  const allIds: number[] = [];
+  for (let i = 0; i < productIds.size(); i++) allIds.push(productIds.get(i));
+  return allIds;
+}
+
+async function processSummaryExpressId(
+  // fallow-ignore-next-line code-duplication
+  ifcApi: WebIFC.IfcAPI,
+  modelId: number,
+  expressId: number,
+  storeyMap: Map<number, string>,
+): Promise<BimQuantityEntry | null> {
+  try {
+    const ifcType = resolveIfcTypeName(ifcApi, modelId, expressId);
+    const props = await ifcApi.properties.getItemProperties(modelId, expressId, false, false);
+    const guid = strVal((props as Record<string, unknown>).GlobalId) ?? `express-${expressId}`;
+    const name = strVal((props as Record<string, unknown>).Name);
+    const lodFlags: BimLodFlags = {
+      identity: Boolean(guid && ifcType),
+      dimensions: false,
+      quantities: false,
+      material: false,
+      color: false,
+    };
+    return {
+      expressId,
+      guid,
+      ifcType,
+      name,
+      level: storeyMap.get(expressId) ?? null,
+      material: null,
+      discipline: disciplineForIfcType(ifcType),
+      surfaceColor: null,
+      quantities: {},
+      quantitySource: "missing",
+      lodFlags,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function processFullExpressId(
+  ifcApi: WebIFC.IfcAPI,
+  modelId: number,
+  expressId: number,
+  storeyMap: Map<number, string>,
+): Promise<BimQuantityEntry | null> {
+  try {
+    const ifcType = resolveIfcTypeName(ifcApi, modelId, expressId);
+    const props = await ifcApi.properties.getItemProperties(modelId, expressId, false, false);
+    const guid = strVal((props as Record<string, unknown>).GlobalId) ?? `express-${expressId}`;
+    const name = strVal((props as Record<string, unknown>).Name);
+
+    let psets: unknown[] = [];
+    let materials: unknown[] = [];
+    try {
+      psets = await ifcApi.properties.getPropertySets(modelId, expressId, true, true);
+    } catch {
+      /* optional */
+    }
+    try {
+      materials = await ifcApi.properties.getMaterialsProperties(modelId, expressId, true, true);
+    } catch {
+      /* optional */
+    }
+
+    const { quantities, source } = parseQuantitiesFromPsets(psets);
+    const material = materialFromPsets(materials);
+    const surfaceColor = extractSurfaceColorFromMaterials(materials);
+
+    const lodFlags: BimLodFlags = {
+      identity: Boolean(guid && ifcType),
+      dimensions: Boolean(quantities.length || quantities.area || quantities.volume),
+      quantities: source !== "missing",
+      material: Boolean(material),
+      color: hasAuthoredSurfaceStyle(materials, surfaceColor),
+    };
+
+    return {
+      expressId,
+      guid,
+      ifcType,
+      name,
+      level: storeyMap.get(expressId) ?? null,
+      material,
+      discipline: disciplineForIfcType(ifcType),
+      surfaceColor,
+      quantities,
+      quantitySource: source,
+      lodFlags,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function processExpressIdsParallel<T>(
+  allIds: number[],
+  worker: (expressId: number) => Promise<T | null>,
+  onProgress?: (fraction: number) => void,
+): Promise<T[]> {
+  const results: T[] = [];
+  const total = allIds.length;
+  const concurrency = Math.min(48, Math.max(1, total));
+  let nextIndex = 0;
+  let completed = 0;
+
+  const workers = Array.from({ length: concurrency }, async () => {
+    while (true) {
+      const i = nextIndex++;
+      if (i >= total) break;
+      const entry = await worker(allIds[i]!);
+      if (entry) results.push(entry);
+      completed += 1;
+      if (completed % 200 === 0 || completed === total) {
+        onProgress?.(completed / Math.max(total, 1));
+      }
+    }
+  });
+  await Promise.all(workers);
+  onProgress?.(1);
+  return results;
+}
+
+/** Fast pass — types, levels, and GUID lists without property-set walks. */
+export async function buildQuantityIndexSummaryFromIfc(
   ifcBytes: Uint8Array,
   fileVersionId: string,
   onProgress?: (fraction: number) => void,
 ): Promise<BimQuantityIndex> {
-  const ifcApi = new WebIFC.IfcAPI();
-  ifcApi.SetWasmPath(wasmDir(), true);
-  await ifcApi.Init();
-
-  const modelId = ifcApi.OpenModel(ifcBytes);
-  const elements: BimQuantityEntry[] = [];
-  const storeyMap = await buildElementStoreyMap(ifcApi, modelId);
-
-  const productIds = ifcApi.GetLineIDsWithType(modelId, WebIFC.IFCPRODUCT, true);
-  const allIds: number[] = [];
-  for (let i = 0; i < productIds.size(); i++) allIds.push(productIds.get(i));
-  const total = allIds.length;
-
-  for (let i = 0; i < allIds.length; i++) {
-    const expressId = allIds[i]!;
-    if (i % 200 === 0) onProgress?.(i / Math.max(total, 1));
-
-    try {
-      const ifcType = resolveIfcTypeName(ifcApi, modelId, expressId);
-      const props = await ifcApi.properties.getItemProperties(modelId, expressId, false, false);
-      const guid = strVal((props as Record<string, unknown>).GlobalId) ?? `express-${expressId}`;
-      const name = strVal((props as Record<string, unknown>).Name);
-
-      let psets: unknown[] = [];
-      let materials: unknown[] = [];
-      try {
-        psets = await ifcApi.properties.getPropertySets(modelId, expressId, true, true);
-      } catch {
-        /* optional */
-      }
-      try {
-        materials = await ifcApi.properties.getMaterialsProperties(modelId, expressId, true, true);
-      } catch {
-        /* optional */
-      }
-
-      const { quantities, source } = parseQuantitiesFromPsets(psets);
-      const material = materialFromPsets(materials);
-      const surfaceColor = extractSurfaceColorFromMaterials(materials);
-
-      const lodFlags: BimLodFlags = {
-        identity: Boolean(guid && ifcType),
-        dimensions: Boolean(quantities.length || quantities.area || quantities.volume),
-        quantities: source !== "missing",
-        material: Boolean(material),
-        color: hasAuthoredSurfaceStyle(materials, surfaceColor),
-      };
-
-      elements.push({
-        expressId,
-        guid,
-        ifcType,
-        name,
-        level: storeyMap.get(expressId) ?? null,
-        material,
-        discipline: disciplineForIfcType(ifcType),
-        surfaceColor,
-        quantities,
-        quantitySource: source,
-        lodFlags,
-      });
-    } catch {
-      /* skip malformed elements */
-    }
+  const session = await openIfcSession(ifcBytes);
+  try {
+    const storeyMap = await buildElementStoreyMap(session.ifcApi, session.modelId);
+    onProgress?.(0.05);
+    const allIds = collectProductIds(session.ifcApi, session.modelId);
+    const lightEntries = await processExpressIdsParallel(
+      allIds,
+      (id) => processSummaryExpressId(session.ifcApi, session.modelId, id, storeyMap),
+      (fraction) => onProgress?.(0.05 + fraction * 0.95),
+    );
+    const loq = buildLoqFromLightEntries(lightEntries);
+    return {
+      version: 1,
+      fileVersionId,
+      generatedAt: new Date().toISOString(),
+      loq,
+      elements: [],
+      byType: aggregateByType(lightEntries),
+      byLevel: aggregateByLevel(lightEntries),
+      partial: true,
+    };
+  } finally {
+    session.close();
   }
+}
 
-  ifcApi.CloseModel(modelId);
-
-  const loq = buildLoq(elements);
-  onProgress?.(1);
-
-  return {
-    version: 1,
-    fileVersionId,
-    generatedAt: new Date().toISOString(),
-    loq,
-    elements,
-    byType: aggregateByType(elements),
-    byLevel: aggregateByLevel(elements),
-  };
+/** Full pass — property sets, materials, and per-element quantities. */
+export async function buildQuantityIndexFullFromIfc(
+  ifcBytes: Uint8Array,
+  fileVersionId: string,
+  onProgress?: (fraction: number) => void,
+): Promise<BimQuantityIndex> {
+  const session = await openIfcSession(ifcBytes);
+  try {
+    const storeyMap = await buildElementStoreyMap(session.ifcApi, session.modelId);
+    onProgress?.(0.02);
+    const allIds = collectProductIds(session.ifcApi, session.modelId);
+    const elements = await processExpressIdsParallel(
+      allIds,
+      (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap),
+      (fraction) => onProgress?.(0.02 + fraction * 0.98),
+    );
+    const loq = buildLoq(elements);
+    return {
+      version: 1,
+      fileVersionId,
+      generatedAt: new Date().toISOString(),
+      loq,
+      elements,
+      byType: aggregateByType(elements),
+      byLevel: aggregateByLevel(elements),
+      partial: false,
+    };
+  } finally {
+    session.close();
+  }
 }
 
 /** Parse stored quantity index JSON safely. */
-export function parseQuantityIndex(raw: unknown): BimQuantityIndex | null {
+function parseQuantityIndex(raw: unknown): BimQuantityIndex | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as BimQuantityIndex;
   if (o.version !== 1 || !Array.isArray(o.elements)) return null;
+  if (!o.byType || !o.byLevel) return null;
   return o;
+}
+
+/** Strip element payloads for incremental API responses. */
+export function toQuantityIndexSummary(index: BimQuantityIndex): BimQuantityIndex {
+  return {
+    ...index,
+    elements: [],
+    partial: true,
+  };
+}
+
+/** Decode quantity index bytes from S3 (plain JSON or gzip). */
+export function parseQuantityIndexBuffer(buf: Buffer): BimQuantityIndex | null {
+  try {
+    const text =
+      buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b
+        ? gunzipSync(buf).toString("utf8")
+        : buf.toString("utf8");
+    return parseQuantityIndex(JSON.parse(text));
+  } catch {
+    return null;
+  }
 }

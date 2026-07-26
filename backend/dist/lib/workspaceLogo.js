@@ -8,7 +8,7 @@ export function apiPublicOrigin(env) {
     return env.PUBLIC_APP_URL.replace(/\/$/, "");
 }
 /** Absolute URL (emails, server-side fetch). Prefer `workspaceLogoUrlForClients` for browser JSON. */
-export function workspaceHostedLogoAbsoluteUrl(env, workspaceId) {
+function workspaceHostedLogoAbsoluteUrl(env, workspaceId) {
     return `${apiPublicOrigin(env)}/api/v1/public/workspaces/${encodeURIComponent(workspaceId)}/logo`;
 }
 /**

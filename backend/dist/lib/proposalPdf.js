@@ -2,12 +2,8 @@ import PDFDocument from "pdfkit";
 import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
 import { getEmailBrandIconPngBytes } from "./emailBrandIcon.js";
+import { looksLikeProposalCoverHtml } from "./proposalCoverHtml.js";
 marked.use({ gfm: true, breaks: true });
-/** Same heuristic as the app preview / client portal (proposalRoutes preview, ProposalLetterPreviewBlock). */
-function looksLikeProposalCoverHtml(raw) {
-    const t = raw.trim();
-    return /^\s*</.test(t) && /<[a-z]/i.test(t);
-}
 /**
  * Turn stored cover (Markdown or sanitized HTML) into plain text with real newlines for PDFKit.
  * Previously we stripped all tags and collapsed whitespace, which broke Markdown and paragraphs.
@@ -68,7 +64,7 @@ function truncateLine(s, max) {
     return `${t.slice(0, max - 1)}…`;
 }
 /** Human-friendly UTC line for signed proposal PDFs (avoids raw ISO). */
-export function formatProposalAcceptanceTimestamp(iso) {
+function formatProposalAcceptanceTimestamp(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime()))
         return iso;

@@ -33,6 +33,7 @@ function panelMotionClass(
   panelActive: boolean,
   panelMaxWidthClass: string,
   panelChromeClassName: string,
+  panelZClass: string,
 ) {
   const motion = panelActive
     ? "max-lg:translate-y-0 lg:translate-x-0"
@@ -41,7 +42,7 @@ function panelMotionClass(
     "w-full min-w-0 max-w-full",
     panelMaxWidthClass,
     SLIDE_OVER_PANEL_TRANSITION,
-    "fixed z-[101] flex flex-col overflow-x-hidden",
+    `fixed ${panelZClass} flex flex-col overflow-x-hidden`,
     panelChromeClassName,
     "max-lg:inset-x-0 max-lg:bottom-0 max-lg:top-auto max-lg:max-h-[min(92dvh,920px)] max-lg:rounded-t-2xl max-lg:border-l-0 max-lg:border-t",
     "lg:inset-y-0 lg:right-0 lg:left-auto lg:h-dvh lg:max-h-dvh lg:rounded-none",
@@ -58,7 +59,10 @@ export type EnterpriseSlideOverProps = {
   footer: ReactNode;
   /** When set, the sliding panel root is a `<form>` (e.g. submit in footer). */
   form?: FormHTMLAttributes<HTMLFormElement>;
+  /** Backdrop stacking (default `z-[100]`). Panel renders at `panelZClass` (default `z-[101]`). */
   overlayZClass?: string;
+  /** Panel stacking above backdrop (default `z-[101]`). */
+  panelZClass?: string;
   /** For `role="dialog"` + `aria-labelledby` on the panel. */
   ariaLabelledBy?: string;
   /** Tailwind max-width classes for the panel (default: `max-w-[520px]`). */
@@ -92,6 +96,7 @@ export function EnterpriseSlideOver({
   footer,
   form,
   overlayZClass = "z-[100]",
+  panelZClass = "z-[101]",
   ariaLabelledBy,
   panelMaxWidthClass = ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W,
   panelChromeClassName = "border-l border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]",
@@ -171,7 +176,12 @@ export function EnterpriseSlideOver({
     "pointer-events-auto absolute inset-0 bg-[var(--enterprise-text)]/40 backdrop-blur-[2px] transition-opacity duration-300 ease-out " +
     (panelActive ? "opacity-100" : "opacity-0");
 
-  const panelMotion = panelMotionClass(panelActive, panelMaxWidthClass, panelChromeClassName);
+  const panelMotion = panelMotionClass(
+    panelActive,
+    panelMaxWidthClass,
+    panelChromeClassName,
+    panelZClass,
+  );
 
   const panelInner = (
     <>

@@ -782,7 +782,7 @@ button:active:not(:disabled),
   }
 
   .bim-walk-chrome {
-    position: fixed;
+    position: absolute;
     inset: 0;
     z-index: 46;
     pointer-events: none;
@@ -942,6 +942,152 @@ button:active:not(:disabled),
 
   .bim-plan-minimap__canvas:active {
     cursor: grabbing;
+  }
+
+  .bim-canvas-full--split {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .bim-viewport-pane {
+    position: relative;
+    flex: 1 1 50%;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    height: 50%;
+  }
+
+  .bim-split-pane {
+    display: flex;
+    flex: 1 1 50%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    height: 50%;
+    border-top: 1px solid var(--bim-border);
+    background: var(--bim-panel);
+    z-index: 20;
+    pointer-events: auto;
+  }
+
+  .bim-split-pane__toolbar {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--bim-border);
+    background: linear-gradient(180deg, var(--bim-panel) 0%, var(--bim-hover) 100%);
+  }
+
+  .bim-split-pane__floor-wrap {
+    position: relative;
+    min-width: 7rem;
+    max-width: 10rem;
+    flex: 1 1 7rem;
+  }
+
+  .bim-split-pane__floor {
+    width: 100%;
+    min-height: 1.75rem;
+    appearance: none;
+    border: 1px solid var(--bim-border-strong);
+    border-radius: 0.5rem;
+    background: var(--bim-panel);
+    padding: 0.25rem 1.75rem 0.25rem 0.625rem;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--bim-text);
+    cursor: pointer;
+  }
+
+  .bim-split-pane__floor:focus-visible {
+    outline: none;
+    border-color: var(--bim-accent);
+    box-shadow: 0 0 0 3px var(--bim-accent-muted);
+  }
+
+  .bim-split-pane__floor-icon {
+    pointer-events: none;
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    width: 0.875rem;
+    height: 0.875rem;
+    transform: translateY(-50%);
+    color: var(--bim-text-muted);
+  }
+
+  .bim-split-pane__label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--bim-text-muted);
+  }
+
+  .bim-split-pane__body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .bim-split-pane__hint {
+    flex-shrink: 0;
+    padding: 0.375rem 0.75rem;
+    border-top: 1px solid var(--bim-border);
+    font-size: 10px;
+    color: var(--bim-text-muted);
+    text-align: center;
+  }
+
+  .bim-plan-minimap--split {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .bim-plan-minimap--split .bim-plan-minimap__map {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: 0.5rem;
+  }
+
+  .bim-plan-minimap--split .bim-plan-minimap__canvas {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1;
+  }
+
+  @media (min-width: 768px) {
+    .bim-canvas-full--split {
+      flex-direction: row;
+    }
+
+    .bim-viewport-pane {
+      width: 50%;
+      height: 100%;
+    }
+
+    .bim-split-pane {
+      width: 50%;
+      height: 100%;
+      border-top: none;
+      border-left: 1px solid var(--bim-border);
+    }
   }
 
   .bim-tool-btn {
@@ -1132,6 +1278,101 @@ button:active:not(:disabled),
 
   .bim-bottom-search-panel__result[data-selected="true"] {
     background: color-mix(in srgb, var(--bim-accent) 18%, transparent);
+  }
+
+  .bim-analytics-drawer {
+    @apply pointer-events-auto mb-2 flex max-h-[min(52dvh,440px)] w-[min(44rem,96vw)] flex-col overflow-hidden rounded-2xl;
+  }
+
+  .bim-analytics-drawer__header {
+    @apply flex shrink-0 items-center gap-2 border-b px-3 py-2.5;
+    border-color: var(--bim-chrome-border);
+  }
+
+  .bim-analytics-drawer__tabs {
+    @apply flex shrink-0 gap-1 overflow-x-auto border-b px-2 py-1.5;
+    border-color: var(--bim-chrome-border);
+    scrollbar-width: none;
+  }
+
+  .bim-analytics-drawer__tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .bim-analytics-drawer__tab {
+    @apply shrink-0 rounded-lg px-2.5 py-1 text-[10px] font-medium transition-colors;
+    color: var(--bim-chrome-text-muted);
+  }
+
+  .bim-analytics-drawer__tab[data-active="true"] {
+    color: var(--bim-chrome-text);
+    background: color-mix(in srgb, var(--bim-accent) 16%, transparent);
+  }
+
+  .bim-analytics-drawer__tab:hover {
+    color: var(--bim-chrome-text);
+    background: color-mix(in srgb, var(--bim-chrome-surface) 65%, transparent);
+  }
+
+  .bim-analytics-drawer__body {
+    @apply min-h-0 flex-1 overflow-y-auto px-3 py-3;
+  }
+
+  .bim-analytics-kpi-grid {
+    @apply grid grid-cols-2 gap-2 sm:grid-cols-4;
+  }
+
+  .bim-analytics-kpi {
+    @apply rounded-xl border px-2.5 py-2;
+    border-color: var(--bim-chrome-border);
+    background: color-mix(in srgb, var(--bim-chrome-surface) 50%, transparent);
+  }
+
+  .bim-analytics-kpi__label {
+    @apply text-[9px] font-medium uppercase tracking-wide;
+    color: var(--bim-chrome-text-muted);
+  }
+
+  .bim-analytics-kpi__value {
+    @apply mt-0.5 truncate text-[13px] font-semibold tabular-nums;
+    color: var(--bim-chrome-text);
+  }
+
+  .bim-analytics-bar {
+    @apply grid w-full grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors duration-100;
+  }
+
+  .bim-analytics-bar:hover {
+    background: color-mix(in srgb, var(--bim-chrome-surface) 65%, transparent);
+  }
+
+  .bim-analytics-bar[data-selected="true"] {
+    background: color-mix(in srgb, var(--bim-accent) 18%, transparent);
+    outline: 1px solid color-mix(in srgb, var(--bim-accent) 35%, transparent);
+  }
+
+  .bim-analytics-bar__label {
+    @apply truncate text-[10px] font-medium;
+    color: var(--bim-chrome-text);
+  }
+
+  .bim-analytics-bar__track {
+    @apply h-2 overflow-hidden rounded-full;
+    background: color-mix(in srgb, var(--bim-chrome-surface) 80%, transparent);
+  }
+
+  .bim-analytics-bar__fill {
+    @apply block h-full rounded-full transition-[width] duration-200;
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--bim-accent) 85%, white),
+      var(--bim-accent)
+    );
+  }
+
+  .bim-analytics-bar__value {
+    @apply shrink-0 text-[10px] tabular-nums;
+    color: var(--bim-chrome-text-muted);
   }
 
   .bim-dock-selection {

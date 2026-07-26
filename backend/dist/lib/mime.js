@@ -14,6 +14,7 @@ const EXT_TO_MIME = {
     docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     xls: "application/vnd.ms-excel",
     xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ifc: "model/ifc",
 };
 /** Prefer the client-provided type; fall back from filename when the browser sends an empty `type`. */
 export function resolvedMimeType(contentType, fileName) {

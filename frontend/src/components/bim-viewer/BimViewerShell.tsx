@@ -1,22 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Boxes,
   CircleAlert,
   ClipboardList,
   Eye,
   Filter,
-  TableProperties,
   Home,
   ScanSearch,
   Sparkles,
+  TableProperties,
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiUrl } from "@/lib/api-url";
 import {
-  fetchBimQuantityIndex,
+  fetchBimQuantityIndexSummaryWithCache,
+  fetchBimQuantityIndexWithCache,
   fetchBimSavedViews,
   fetchBimStatus,
   createBimSavedView,
@@ -39,7 +40,8 @@ import {
 } from "./bimEngine";
 
 import { BimWalkChrome } from "./BimWalkChrome";
-import { BimPlanMinimap } from "./BimPlanMinimap";
+import { BimSplitViewPane } from "./BimSplitViewPane";
+import { AlignCoordinatesPanel } from "./AlignCoordinatesPanel";
 import { BimContextMenu } from "./BimContextMenu";
 import { BimIssueMarkersOverlay } from "./BimIssueMarkersOverlay";
 import { BimIssueCommentDialog } from "./BimIssueCommentDialog";
@@ -92,6 +94,17 @@ import {
 import { BimFiltersPanel, useBimFilterPreview } from "./BimFiltersPanel";
 import { BimLoadingOverlay } from "./BimLoadingOverlay";
 import { disposeModelThumbnailService } from "@/lib/bim/modelThumbnail";
+import {
+  fetchBimSyncContext,
+  fetchDrawingLevelMaps,
+  type BimModelLevelDraft,
+  type BimSyncContext,
+  type DrawingMapRecord,
+} from "@/lib/api-client/bim-publish";
+import type { DrawingCoordTransform } from "@/lib/bim/drawingCoordBridge";
+import type { BimChartSegment } from "@/lib/bim/chartStats";
+
+type PlanPanelMode = "minimap" | "drawingSync";
 
 type BimDockId = BimLeftDockId | "properties" | "takeoffViews" | "issues" | "filters";
 
@@ -125,6 +138,7 @@ export function BimViewerShell(props: {
   collabEnabled?: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [viewportEl, setViewportEl] = useState<HTMLDivElement | null>(null);
   const engineRef = useRef<BimEngine | null>(null);
@@ -173,6 +187,12 @@ export function BimViewerShell(props: {
   } | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [showPlanMinimap, setShowPlanMinimap] = useState(true);
+  const [planPanelMode, setPlanPanelMode] = useState<PlanPanelMode>("minimap");
+  const [drawingMaps, setDrawingMaps] = useState<DrawingMapRecord[]>([]);
+  const [publishedLevels, setPublishedLevels] = useState<BimModelLevelDraft[]>([]);
+  const [syncContext, setSyncContext] = useState<BimSyncContext | null>(null);
+  const [alignMap, setAlignMap] = useState<DrawingMapRecord | null>(null);
+  const [alignOpen, setAlignOpen] = useState(false);
   const [clusterByType, setClusterByType] = useState(false);
   const [planMinimapStorey, setPlanMinimapStorey] = useState<string | null>(null);
   const [issues, setIssues] = useState<IssueRow[]>([]);
@@ -337,7 +357,7 @@ export function BimViewerShell(props: {
           if (cancelled) return;
           if (status.conversionStatus === "failed") anyFailed = true;
           if (status.quantityIndexReady) {
-            const index = await fetchBimQuantityIndex(member.fileVersionId);
+            const index = await fetchBimQuantityIndexWithCache(member.fileVersionId);
             if (cancelled) return;
             sources.push({
               fileVersionId: member.fileVersionId,
@@ -345,6 +365,16 @@ export function BimViewerShell(props: {
               label: member.name,
               index,
             });
+          } else if (status.quantityIndexSummaryReady) {
+            const index = await fetchBimQuantityIndexSummaryWithCache(member.fileVersionId);
+            if (cancelled) return;
+            sources.push({
+              fileVersionId: member.fileVersionId,
+              modelId: buildModelId(member),
+              label: member.name,
+              index,
+            });
+            anyPending = true;
           } else {
             anyPending = true;
           }
@@ -461,6 +491,130 @@ export function BimViewerShell(props: {
       .then(setCompareDeltas)
       .catch(() => undefined);
   }, [resolvedFileVersionId, props.compareFileVersionId, phase.kind]);
+
+  useEffect(() => {
+    const fvId = resolvedFileVersionId;
+    const projectId = resolvedProjectId;
+    if (!fvId || !projectId || phase.kind !== "ready") return;
+    void fetchDrawingLevelMaps(projectId, fvId)
+      .then((data) => {
+        setDrawingMaps(data.maps);
+        setPublishedLevels(data.levels);
+      })
+      .catch(() => {
+        setDrawingMaps([]);
+        setPublishedLevels([]);
+      });
+  }, [resolvedFileVersionId, resolvedProjectId, phase.kind]);
+
+  useEffect(() => {
+    if (searchParams.get("align") === "1" && drawingMaps.length > 0) {
+      setAlignMap(drawingMaps[0] ?? null);
+      setAlignOpen(true);
+    }
+  }, [searchParams, drawingMaps]);
+
+  // fallow-ignore-next-line complexity
+  useEffect(() => {
+    if (planMinimapStorey || !activeEngine) return;
+    const fromPublished = publishedLevels[0];
+    const fromMap = drawingMaps[0]?.level;
+    const candidate =
+      fromPublished?.sourceName ??
+      fromPublished?.displayName ??
+      fromMap?.sourceName ??
+      fromMap?.displayName ??
+      storeys[0]?.name ??
+      null;
+    const resolved = activeEngine.resolveStoreyName(candidate) ?? candidate;
+    if (resolved) setPlanMinimapStorey(resolved);
+  }, [planMinimapStorey, storeys, drawingMaps, publishedLevels, activeEngine]);
+
+  // fallow-ignore-next-line complexity
+  const planStoreyOptions = useMemo(() => {
+    const options: { value: string; label: string }[] = [];
+    const seen = new Set<string>();
+
+    const add = (value: string | null | undefined, label: string | null | undefined) => {
+      const v = value?.trim();
+      const l = label?.trim();
+      if (!v || !l || seen.has(v)) return;
+      seen.add(v);
+      options.push({ value: v, label: l });
+    };
+
+    for (const level of publishedLevels) {
+      const resolved =
+        activeEngine?.resolveStoreyName(level.sourceName) ??
+        activeEngine?.resolveStoreyName(level.displayName) ??
+        level.sourceName;
+      add(resolved, level.displayName || level.sourceName);
+    }
+
+    for (const map of drawingMaps) {
+      const src = map.level?.sourceName;
+      const disp = map.level?.displayName;
+      const resolved =
+        activeEngine?.resolveStoreyName(src) ??
+        activeEngine?.resolveStoreyName(disp) ??
+        src ??
+        disp;
+      add(resolved, disp ?? src);
+    }
+
+    for (const storey of storeys) {
+      add(storey.name, storey.name);
+    }
+
+    return options.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+  }, [publishedLevels, drawingMaps, storeys, activeEngine]);
+
+  // fallow-ignore-next-line complexity
+  const activeLevelMap = useMemo(() => {
+    if (drawingMaps.length === 0) return null;
+    if (!planMinimapStorey) return drawingMaps[0] ?? null;
+    return (
+      // fallow-ignore-next-line complexity
+      drawingMaps.find((m) => {
+        const src = m.level?.sourceName;
+        const disp = m.level?.displayName;
+        if (src === planMinimapStorey || disp === planMinimapStorey) return true;
+        const resolvedSrc = activeEngine?.resolveStoreyName(src);
+        const resolvedDisp = activeEngine?.resolveStoreyName(disp);
+        return (
+          resolvedSrc === planMinimapStorey ||
+          resolvedDisp === planMinimapStorey ||
+          activeEngine?.resolveStoreyName(planMinimapStorey) === resolvedSrc
+        );
+      }) ?? drawingMaps[0]
+    );
+  }, [drawingMaps, planMinimapStorey, activeEngine]);
+
+  const canDrawingSync = Boolean(
+    activeLevelMap?.coordTransformJson &&
+    (activeLevelMap.coordTransformJson as DrawingCoordTransform).version === 1,
+  );
+
+  useEffect(() => {
+    const fvId = resolvedFileVersionId;
+    if (!fvId || !activeLevelMap || !canDrawingSync) {
+      setSyncContext(null);
+      return;
+    }
+    void fetchBimSyncContext(fvId, activeLevelMap.bimModelLevelId)
+      .then(setSyncContext)
+      .catch(() => {
+        setSyncContext(null);
+        if (planPanelMode === "drawingSync") {
+          toast.error("Could not load drawing sync for this level.");
+        }
+      });
+  }, [resolvedFileVersionId, activeLevelMap, canDrawingSync, planPanelMode]);
+
+  useEffect(() => {
+    if (canDrawingSync && planPanelMode === "drawingSync") return;
+    if (!canDrawingSync) setPlanPanelMode("minimap");
+  }, [canDrawingSync, planPanelMode]);
 
   useEffect(() => {
     const guid = props.initialGuid;
@@ -1377,7 +1531,18 @@ export function BimViewerShell(props: {
     });
   }, []);
 
+  const onSelectChartSegment = useCallback((segment: BimChartSegment) => {
+    if (segment.guids.length === 0) return;
+    void engineRef.current?.selectByGuids(segment.guids, false).then(() => {
+      void engineRef.current?.zoomToSelection();
+    });
+  }, []);
+
   const closeElementSearch = useCallback(() => {
+    setActiveFlyout(null);
+  }, []);
+
+  const closeAnalytics = useCallback(() => {
     setActiveFlyout(null);
   }, []);
 
@@ -1459,19 +1624,29 @@ export function BimViewerShell(props: {
   const isBrowserDock = (dock: BimDockId): dock is BimLeftDockId =>
     dock === "objects" || dock === "models" || dock === "visibility" || dock === "quality";
 
+  const splitViewActive = cameraMode === "walk" && showPlanMinimap && phase.kind === "ready";
+
   return (
     <div ref={shellRef} className="bim-viewer fixed inset-0 z-40 overflow-hidden">
-      <div className="bim-canvas-full">
+      <div className={`bim-canvas-full${splitViewActive ? " bim-canvas-full--split" : ""}`}>
         <div
           ref={onViewportRef}
           data-issue-placement={issuePlacementActive ? "true" : undefined}
-          className={`relative h-full w-full touch-none${issuePlacementActive ? " bim-viewport--issue-placement" : ""}`}
+          className={`touch-none${splitViewActive ? " bim-viewport-pane" : " relative h-full w-full"}${issuePlacementActive ? " bim-viewport--issue-placement" : ""}`}
         >
           {phase.kind === "ready" ? (
             <BimMarkupOverlay
               interactive={tool === "markup" && markupHydrated}
               engine={activeEngine}
               container={viewportEl}
+            />
+          ) : null}
+
+          {cameraMode === "walk" && phase.kind === "ready" ? (
+            <BimWalkChrome
+              onJoystickChange={(forward, strafe) =>
+                engineRef.current?.setWalkInput(forward, strafe)
+              }
             />
           ) : null}
         </div>
@@ -1699,6 +1874,7 @@ export function BimViewerShell(props: {
             toolHint={hint}
             showPlacePoint={toolNeedsPoint}
             quantityIndex={quantityIndex}
+            conversionStatus={conversionStatus}
             selectedGuids={selectedGuids}
             onSelectTool={selectTool}
             onSelectCameraMode={selectCameraMode}
@@ -1718,7 +1894,9 @@ export function BimViewerShell(props: {
             clusterByType={clusterByType}
             onToggleClusterByType={onToggleClusterByType}
             onSelectElement={onSelectElementFromSearch}
+            onSelectChartSegment={onSelectChartSegment}
             onCloseSearch={closeElementSearch}
+            onCloseAnalytics={closeAnalytics}
             markupShape={markupShape}
             markupMode={markupMode}
             strokeColor={strokeColor}
@@ -1790,19 +1968,41 @@ export function BimViewerShell(props: {
           />
         ) : null}
 
-        {cameraMode === "walk" && phase.kind === "ready" ? (
-          <BimWalkChrome
-            onJoystickChange={(forward, strafe) => engineRef.current?.setWalkInput(forward, strafe)}
+        {splitViewActive ? (
+          <BimSplitViewPane
+            planPanelMode={planPanelMode}
+            onPlanPanelModeChange={setPlanPanelMode}
+            canDrawingSync={canDrawingSync}
+            engine={activeEngine}
+            storeys={planStoreyOptions.map((o) => o.value)}
+            storeyOptions={planStoreyOptions}
+            planMinimapStorey={planMinimapStorey}
+            onSelectStorey={setPlanMinimapStorey}
+            syncContext={syncContext}
+            activeLevelMap={activeLevelMap}
+            onAlign={() => {
+              setAlignMap(activeLevelMap);
+              setAlignOpen(true);
+            }}
+            hasDrawingMaps={drawingMaps.length > 0}
           />
         ) : null}
 
-        {cameraMode === "walk" && showPlanMinimap && phase.kind === "ready" ? (
-          <BimPlanMinimap
+        {alignOpen && alignMap && activeEngine && resolvedFileVersionId ? (
+          <AlignCoordinatesPanel
+            open={alignOpen}
+            onClose={() => setAlignOpen(false)}
             engine={activeEngine}
-            storeys={storeys.map((s) => s.name)}
-            selectedStorey={planMinimapStorey}
-            onSelectStorey={(name) => {
-              setPlanMinimapStorey(name);
+            map={alignMap}
+            ifcFileVersionId={resolvedFileVersionId}
+            onSaved={() => {
+              const fvId = resolvedFileVersionId;
+              const projectId = resolvedProjectId;
+              if (fvId && projectId) {
+                void fetchDrawingLevelMaps(projectId, fvId)
+                  .then((data) => setDrawingMaps(data.maps))
+                  .catch(() => undefined);
+              }
             }}
           />
         ) : null}

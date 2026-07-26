@@ -76,6 +76,10 @@ export async function enqueueBimConversion(
     return fv.bimConversionJobRunId ?? fileVersionId;
   }
 
+  if (fv.bimConversionStatus === "ready" && fv.quantityIndexS3Key) {
+    return fv.bimConversionJobRunId ?? fileVersionId;
+  }
+
   await prisma.fileVersion.update({
     where: { id: fileVersionId },
     data: { bimConversionStatus: "pending" },

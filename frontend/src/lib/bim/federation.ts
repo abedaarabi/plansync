@@ -88,33 +88,70 @@ export function mergeFederatedQuantityIndices(
   const elements: BimQuantityEntry[] = [];
   const byType: BimQuantityIndex["byType"] = {};
   const byLevel: BimQuantityIndex["byLevel"] = {};
+  let anyPartial = false;
+
+  // fallow-ignore-next-line complexity
+  const mergeTypeAgg = (
+    ifcType: string,
+    count: number,
+    guids: string[],
+    totals?: { totalLength?: number; totalArea?: number; totalVolume?: number },
+  ) => {
+    let typeAgg = byType[ifcType];
+    if (!typeAgg) {
+      typeAgg = { ifcType, count: 0, guids: [] };
+      byType[ifcType] = typeAgg;
+    }
+    typeAgg.count += count;
+    typeAgg.guids.push(...guids);
+    if (totals?.totalLength != null)
+      typeAgg.totalLength = (typeAgg.totalLength ?? 0) + totals.totalLength;
+    if (totals?.totalArea != null) typeAgg.totalArea = (typeAgg.totalArea ?? 0) + totals.totalArea;
+    if (totals?.totalVolume != null)
+      typeAgg.totalVolume = (typeAgg.totalVolume ?? 0) + totals.totalVolume;
+  };
+
+  const mergeLevelAgg = (level: string, count: number, guids: string[]) => {
+    let levelAgg = byLevel[level];
+    if (!levelAgg) {
+      levelAgg = { level, count: 0, guids: [] };
+      byLevel[level] = levelAgg;
+    }
+    levelAgg.count += count;
+    levelAgg.guids.push(...guids);
+  };
 
   for (const src of sources) {
-    for (const el of src.index.elements) {
-      const enriched: BimQuantityEntry = {
-        ...el,
-        sourceFileVersionId: src.fileVersionId,
-        sourceModelId: src.modelId,
-        sourceLabel: src.label,
-      };
-      elements.push(enriched);
+    if (src.index.partial) anyPartial = true;
 
-      let typeAgg = byType[el.ifcType];
-      if (!typeAgg) {
-        typeAgg = { ifcType: el.ifcType, count: 0, guids: [] };
-        byType[el.ifcType] = typeAgg;
+    if (src.index.elements.length > 0) {
+      for (const el of src.index.elements) {
+        const enriched: BimQuantityEntry = {
+          ...el,
+          sourceFileVersionId: src.fileVersionId,
+          sourceModelId: src.modelId,
+          sourceLabel: src.label,
+        };
+        elements.push(enriched);
+        mergeTypeAgg(el.ifcType, 1, [el.guid], {
+          totalLength: el.quantities.length,
+          totalArea: el.quantities.area,
+          totalVolume: el.quantities.volume,
+        });
+        mergeLevelAgg(el.level ?? "Unassigned", 1, [el.guid]);
       }
-      typeAgg.count += 1;
-      typeAgg.guids.push(el.guid);
+      continue;
+    }
 
-      const level = el.level ?? "Unassigned";
-      let levelAgg = byLevel[level];
-      if (!levelAgg) {
-        levelAgg = { level, count: 0, guids: [] };
-        byLevel[level] = levelAgg;
-      }
-      levelAgg.count += 1;
-      levelAgg.guids.push(el.guid);
+    for (const agg of Object.values(src.index.byType)) {
+      mergeTypeAgg(agg.ifcType, agg.count, agg.guids, {
+        totalLength: agg.totalLength,
+        totalArea: agg.totalArea,
+        totalVolume: agg.totalVolume,
+      });
+    }
+    for (const agg of Object.values(src.index.byLevel)) {
+      mergeLevelAgg(agg.level, agg.count, agg.guids);
     }
   }
 
@@ -127,5 +164,6 @@ export function mergeFederatedQuantityIndices(
     elements,
     byType,
     byLevel,
+    partial: anyPartial && elements.length === 0 ? true : undefined,
   };
 }

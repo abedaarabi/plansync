@@ -75,7 +75,7 @@ export function createAuth(env) {
             /** Long-lived sessions: stay signed in until explicit sign-out or prolonged inactivity. */
             expiresIn: 60 * 60 * 24 * 90,
             updateAge: 60 * 60 * 24,
-            cookieCache: { enabled: true, maxAge: 3600 },
+            cookieCache: { enabled: false },
         },
     });
 }

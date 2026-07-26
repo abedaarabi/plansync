@@ -1,3 +1,5 @@
+import { openIndexedDb, txDone } from "@/lib/indexedDbHelpers";
+
 const DB_NAME = "plansync-bim-thumbnails";
 const STORE = "thumbnails";
 const DB_VERSION = 1;
@@ -12,22 +14,9 @@ export function buildThumbnailCacheKey(fileVersionId: string): string {
   return `thumb:v1:${fileVersionId}`;
 }
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains(STORE)) {
-        req.result.createObjectStore(STORE, { keyPath: "key" });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("IndexedDB unavailable"));
-  });
-}
-
 export async function readCachedThumbnail(key: string): Promise<string | null> {
   try {
-    const db = await openDb();
+    const db = await openIndexedDb(DB_NAME, STORE, DB_VERSION);
     const tx = db.transaction(STORE, "readonly");
     const row = await new Promise<ThumbRow | undefined>((resolve, reject) => {
       const req = tx.objectStore(STORE).get(key);
@@ -43,17 +32,14 @@ export async function readCachedThumbnail(key: string): Promise<string | null> {
 
 export async function writeCachedThumbnail(key: string, dataUrl: string): Promise<void> {
   try {
-    const db = await openDb();
+    const db = await openIndexedDb(DB_NAME, STORE, DB_VERSION);
     const tx = db.transaction(STORE, "readwrite");
     tx.objectStore(STORE).put({
       key,
       dataUrl,
       updatedAt: Date.now(),
     } satisfies ThumbRow);
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    await txDone(tx);
     db.close();
   } catch {
     /* best-effort */

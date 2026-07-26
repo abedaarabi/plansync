@@ -5,7 +5,7 @@ import { signCloudOAuthState, verifyCloudOAuthState, newOAuthNonce, } from "../.
 import { buildDropboxAuthorizeUrl, buildGoogleAuthorizeUrl, buildMicrosoftAuthorizeUrl, downloadDropboxFile, downloadGoogleDriveFile, downloadMicrosoftDriveFile, getDropboxOpenUrl, getGoogleDriveWebViewUrl, getMicrosoftDriveWebUrl, exchangeDropboxCode, exchangeGoogleCode, exchangeMicrosoftCode, fetchDropboxAccountLabel, fetchGoogleAccountLabel, fetchMicrosoftAccountLabel, listDropboxFolder, listGoogleDriveChildren, listMicrosoftDriveChildren, oauthRedirectBase, } from "../../lib/cloudProviders.js";
 import { ensureFreshCloudAccessToken } from "../../lib/cloudTokens.js";
 import { commitProjectFileImportFromBuffer } from "../../lib/projectFileImport.js";
-import { loadProjectForMember } from "../../lib/projectAccess.js";
+import { canUploadDrawings, loadProjectWithAuth } from "../../lib/permissions.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import { resolvedMimeType } from "../../lib/mime.js";
 function requirePro(workspace) {
@@ -316,14 +316,16 @@ export function registerCloudRoutes(r, needUser, env, auth) {
         if (!parsed.success)
             return c.json({ error: parsed.error.flatten() }, 400);
         const { workspaceId, projectId, folderId, fileName, mimeType, externalRef } = parsed.data;
-        const access = await loadProjectForMember(projectId, c.get("user").id);
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
-        if (access.project.workspaceId !== workspaceId)
+        if (access.ctx.project.workspaceId !== workspaceId)
             return c.json({ error: "Forbidden" }, 403);
-        const gate = requirePro(access.project.workspace);
+        const gate = requirePro(access.ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canUploadDrawings(access.ctx))
+            return c.json({ error: "Forbidden" }, 403);
         const tok = await ensureFreshCloudAccessToken(env, c.get("user").id, CloudStorageProvider.GOOGLE_DRIVE);
         if ("error" in tok)
             return c.json({ error: tok.error }, tok.status);
@@ -350,14 +352,16 @@ export function registerCloudRoutes(r, needUser, env, auth) {
         if (!parsed.success)
             return c.json({ error: parsed.error.flatten() }, 400);
         const { workspaceId, projectId, folderId, fileName, mimeType, externalRef } = parsed.data;
-        const access = await loadProjectForMember(projectId, c.get("user").id);
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
-        if (access.project.workspaceId !== workspaceId)
+        if (access.ctx.project.workspaceId !== workspaceId)
             return c.json({ error: "Forbidden" }, 403);
-        const gate = requirePro(access.project.workspace);
+        const gate = requirePro(access.ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canUploadDrawings(access.ctx))
+            return c.json({ error: "Forbidden" }, 403);
         const tok = await ensureFreshCloudAccessToken(env, c.get("user").id, CloudStorageProvider.ONEDRIVE);
         if ("error" in tok)
             return c.json({ error: tok.error }, tok.status);
@@ -384,14 +388,16 @@ export function registerCloudRoutes(r, needUser, env, auth) {
         if (!parsed.success)
             return c.json({ error: parsed.error.flatten() }, 400);
         const { workspaceId, projectId, folderId, fileName, mimeType, externalRef } = parsed.data;
-        const access = await loadProjectForMember(projectId, c.get("user").id);
+        const access = await loadProjectWithAuth(projectId, c.get("user").id);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
-        if (access.project.workspaceId !== workspaceId)
+        if (access.ctx.project.workspaceId !== workspaceId)
             return c.json({ error: "Forbidden" }, 403);
-        const gate = requirePro(access.project.workspace);
+        const gate = requirePro(access.ctx.project.workspace);
         if (gate)
             return c.json({ error: gate.error }, gate.status);
+        if (!canUploadDrawings(access.ctx))
+            return c.json({ error: "Forbidden" }, 403);
         const tok = await ensureFreshCloudAccessToken(env, c.get("user").id, CloudStorageProvider.DROPBOX);
         if ("error" in tok)
             return c.json({ error: tok.error }, tok.status);

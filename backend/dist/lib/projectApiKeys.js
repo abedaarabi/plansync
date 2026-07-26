@@ -6,7 +6,7 @@ function toHash(raw) {
 export function hashProjectApiKey(raw) {
     return toHash(raw.trim());
 }
-export function buildProjectApiKeyPrefix(raw) {
+function buildProjectApiKeyPrefix(raw) {
     const t = raw.trim();
     return t.slice(0, Math.min(18, t.length));
 }

@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { parseMaterialTemplateJson } from "./materialTemplate.js";
-export const MATERIAL_TEMPLATE_HEADERS = [
+const MATERIAL_TEMPLATE_HEADERS = [
     "Material Type",
     "Material Name",
     "SKU",

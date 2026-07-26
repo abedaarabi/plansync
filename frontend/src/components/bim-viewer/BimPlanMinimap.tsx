@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, Map } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BimEngine } from "./bimEngine";
 import {
   drawPlanMinimap,
@@ -25,14 +25,40 @@ function mapPointer(canvas: HTMLCanvasElement, clientX: number, clientY: number)
   };
 }
 
+// fallow-ignore-next-line complexity
 export function BimPlanMinimap(props: {
   engine: BimEngine | null;
   storeys: string[];
   selectedStorey: string | null;
   onSelectStorey: (storey: string | null) => void;
+  variant?: "floating" | "split";
 }) {
+  const variant = props.variant ?? "floating";
+  const isSplit = variant === "split";
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragMode | null>(null);
+  const mapPxRef = useRef(PLAN_MINIMAP_PX);
+  const [mapPx, setMapPx] = useState(PLAN_MINIMAP_PX);
+
+  useEffect(() => {
+    if (!isSplit) {
+      mapPxRef.current = PLAN_MINIMAP_PX;
+      setMapPx(PLAN_MINIMAP_PX);
+      return;
+    }
+    const mapEl = mapContainerRef.current;
+    if (!mapEl) return;
+    const syncSize = () => {
+      const size = Math.max(200, Math.min(mapEl.clientWidth, mapEl.clientHeight, 640));
+      mapPxRef.current = size;
+      setMapPx(size);
+    };
+    syncSize();
+    const ro = new ResizeObserver(syncSize);
+    ro.observe(mapEl);
+    return () => ro.disconnect();
+  }, [isSplit]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -42,15 +68,24 @@ export function BimPlanMinimap(props: {
 
     let raf = 0;
     const tick = () => {
+      const px = mapPxRef.current;
       const state = props.engine?.getPlanMinimapState();
       if (state) {
-        drawPlanMinimap(ctx, PLAN_MINIMAP_PX, state);
+        drawPlanMinimap(ctx, px, state);
+      } else {
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillRect(0, 0, px, px);
+        ctx.fillStyle = "#64748b";
+        ctx.font = "600 11px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Loading plan…", px / 2, px / 2);
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [props.engine]);
+  }, [props.engine, mapPx]);
 
   useEffect(() => {
     void props.engine?.setPlanMinimapStorey(props.selectedStorey);
@@ -62,11 +97,12 @@ export function BimPlanMinimap(props: {
     const engine = props.engine;
     if (!canvas || !engine) return;
 
+    const px = mapPxRef.current;
     const state = engine.getPlanMinimapState();
     if (!state?.bounds) return;
 
     const pt = mapPointer(canvas, e.clientX, e.clientY);
-    const hit = hitTestPlanMinimap(pt.x, pt.y, PLAN_MINIMAP_PX, state);
+    const hit = hitTestPlanMinimap(pt.x, pt.y, px, state);
     if (hit.kind === "none") return;
 
     canvas.setPointerCapture(e.pointerId);
@@ -77,7 +113,7 @@ export function BimPlanMinimap(props: {
     }
 
     if (hit.kind === "rotate") {
-      const anchorMap = worldToMap(state.anchorX, state.anchorZ, state.bounds, PLAN_MINIMAP_PX);
+      const anchorMap = worldToMap(state.anchorX, state.anchorZ, state.bounds, px);
       const dx = pt.x - anchorMap.x;
       const dy = pt.y - anchorMap.y;
       dragRef.current = {
@@ -102,18 +138,19 @@ export function BimPlanMinimap(props: {
     const drag = dragRef.current;
     if (!canvas || !engine || !drag) return;
 
+    const px = mapPxRef.current;
     const state = engine.getPlanMinimapState();
     if (!state?.bounds) return;
 
     const pt = mapPointer(canvas, e.clientX, e.clientY);
 
     if (drag.kind === "pan") {
-      const world = mapToWorld(pt.x, pt.y, state.bounds, PLAN_MINIMAP_PX);
+      const world = mapToWorld(pt.x, pt.y, state.bounds, px);
       void engine.applyPlanMinimapPose({ x: world.x, z: world.z });
       return;
     }
 
-    const anchorMap = worldToMap(state.anchorX, state.anchorZ, state.bounds, PLAN_MINIMAP_PX);
+    const anchorMap = worldToMap(state.anchorX, state.anchorZ, state.bounds, px);
     const dx = pt.x - anchorMap.x;
     const dy = pt.y - anchorMap.y;
     const pointerAngle = Math.atan2(dy, dx);
@@ -134,41 +171,46 @@ export function BimPlanMinimap(props: {
   };
 
   return (
-    <div className="bim-plan-minimap" aria-label="Plan minimap navigator">
-      <div className="bim-plan-minimap__header">
-        <div className="bim-plan-minimap__title">
-          <Map className="bim-plan-minimap__icon" aria-hidden />
-          <span className="bim-plan-minimap__label">Plan</span>
-        </div>
-        {props.storeys.length > 0 ? (
-          <div className="bim-plan-minimap__floor-wrap">
-            <select
-              className="bim-plan-minimap__floor bim-focus-ring"
-              aria-label="Floor level"
-              value={props.selectedStorey ?? ""}
-              onChange={(e) => {
-                const value = e.target.value;
-                props.onSelectStorey(value === "" ? null : value);
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <option value="">All levels</option>
-              {props.storeys.map((storey) => (
-                <option key={storey} value={storey}>
-                  {storey}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="bim-plan-minimap__floor-icon" aria-hidden />
+    <div
+      className={`bim-plan-minimap${isSplit ? " bim-plan-minimap--split" : ""}`}
+      aria-label="Plan minimap navigator"
+    >
+      {!isSplit ? (
+        <div className="bim-plan-minimap__header">
+          <div className="bim-plan-minimap__title">
+            <Map className="bim-plan-minimap__icon" aria-hidden />
+            <span className="bim-plan-minimap__label">Plan</span>
           </div>
-        ) : null}
-      </div>
-      <div className="bim-plan-minimap__map">
+          {props.storeys.length > 0 ? (
+            <div className="bim-plan-minimap__floor-wrap">
+              <select
+                className="bim-plan-minimap__floor bim-focus-ring"
+                aria-label="Floor level"
+                value={props.selectedStorey ?? ""}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  props.onSelectStorey(value === "" ? null : value);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <option value="">All levels</option>
+                {props.storeys.map((storey) => (
+                  <option key={storey} value={storey}>
+                    {storey}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="bim-plan-minimap__floor-icon" aria-hidden />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <div ref={mapContainerRef} className="bim-plan-minimap__map">
         <canvas
           ref={canvasRef}
-          width={PLAN_MINIMAP_PX}
-          height={PLAN_MINIMAP_PX}
+          width={mapPx}
+          height={mapPx}
           className="bim-plan-minimap__canvas"
           aria-label="Interactive floor plan"
           onPointerDown={onPointerDown}

@@ -3458,6 +3458,15 @@ export function v1Routes(
         updatedWs.storageQuotaBytes,
       );
 
+      const isIfc =
+        // fallow-ignore-next-line code-duplication
+        contentType === "model/ifc" || fields.data.fileName.toLowerCase().endsWith(".ifc");
+      if (isIfc) {
+        void enqueueBimConversion(env, fv.id, c.get("user").id).catch((err) => {
+          console.error("[bim.convert] enqueue on upload failed", fv.id, err);
+        });
+      }
+
       return c.json({ file: fileRow, fileVersion: fileVersionJson(fv) });
     },
   );
@@ -3646,6 +3655,7 @@ export function v1Routes(
   });
 
   /** Same-origin PDF bytes for the viewer (pdf.js); streams from S3 — no bucket GET CORS in the browser. */
+  // fallow-ignore-next-line complexity
   r.get("/files/:fileId/content", needUser, async (c) => {
     const file = await prisma.file.findUnique({
       where: { id: c.req.param("fileId") },
@@ -3669,11 +3679,14 @@ export function v1Routes(
       return c.json({ error: "Forbidden" }, 403);
     }
 
+    const fvIdParam = c.req.query("fileVersionId");
     const vParam = c.req.query("version");
-    const fv =
-      vParam != null && vParam !== ""
-        ? file.versions.find((x) => x.version === Number(vParam))
-        : file.versions[0];
+    let fv = file.versions[0];
+    if (fvIdParam) {
+      fv = file.versions.find((x) => x.id === fvIdParam) ?? fv;
+    } else if (vParam != null && vParam !== "") {
+      fv = file.versions.find((x) => x.version === Number(vParam)) ?? fv;
+    }
     if (!fv) return c.json({ error: "Version not found" }, 404);
 
     const obj = await getObjectStream(env, fv.s3Key);

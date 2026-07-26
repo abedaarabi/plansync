@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import webpush from "web-push";
 import { prisma } from "./prisma.js";
 /** Short line for push body (shown under the title in the service worker). */
-export function pushKindCategoryLabel(kind) {
+function pushKindCategoryLabel(kind) {
     const labels = {
         RFI_MESSAGE: "RFI",
         RFI_ASSIGNED: "RFI",
@@ -19,6 +19,7 @@ export function pushKindCategoryLabel(kind) {
         PROPOSAL_ACCEPTED: "Proposal",
         PROPOSAL_DECLINED: "Proposal",
         PROPOSAL_CHANGE_REQUESTED: "Proposal",
+        PROPOSAL_PORTAL_MESSAGE: "Proposal",
     };
     return labels[kind] ?? "PlanSync";
 }
@@ -48,7 +49,7 @@ function ensureVapid(env) {
     }
     return true;
 }
-export function absoluteAppUrl(env, href) {
+function absoluteAppUrl(env, href) {
     const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
     const path = href.startsWith("/") ? href : `/${href}`;
     return `${base}${path}`;

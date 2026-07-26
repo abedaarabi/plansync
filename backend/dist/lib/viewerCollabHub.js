@@ -137,7 +137,7 @@ function ensureSessionHost(fvId) {
         return;
     collabSessionHostByFv.set(fvId, userIds[0]);
 }
-export function broadcastPresence(fvId, force = false) {
+function broadcastPresence(fvId, force = false) {
     const room = rooms.get(fvId);
     if (!room)
         return;
@@ -152,7 +152,7 @@ export function broadcastPresence(fvId, force = false) {
         sseWrite(c, ev);
     }
 }
-export function broadcastViewerCollabSessionEnded(fvId) {
+function broadcastViewerCollabSessionEnded(fvId) {
     const room = rooms.get(fvId);
     if (!room)
         return;
@@ -259,7 +259,7 @@ export function disconnectViewerCollabSse(fileVersionId, connectionId, userId) {
     unregisterSseConnection(fileVersionId, connectionId);
     return true;
 }
-export function setUserPageFromWs(fileVersionId, userId, pageIndex) {
+function setUserPageFromWs(fileVersionId, userId, pageIndex) {
     let m = lastPageByFv.get(fileVersionId);
     if (!m) {
         m = new Map();
@@ -313,7 +313,7 @@ function clearWsFanoutDedupe(fileVersionId, connectionId) {
     lastWsFanoutPayload.delete(`${fileVersionId}:${connectionId}`);
     lastWsFanoutPayload.delete(`${fileVersionId}:${connectionId}:sel`);
 }
-export function registerViewerCollabWs(fileVersionId, connectionId, ws) {
+function registerViewerCollabWs(fileVersionId, connectionId, ws) {
     let m = wsByFv.get(fileVersionId);
     if (!m) {
         m = new Map();
@@ -323,7 +323,7 @@ export function registerViewerCollabWs(fileVersionId, connectionId, ws) {
     collabMetrics.wsConnectionsOpen++;
     collabMetrics.wsConnectTotal++;
 }
-export function unregisterViewerCollabWs(fileVersionId, connectionId) {
+function unregisterViewerCollabWs(fileVersionId, connectionId) {
     const m = wsByFv.get(fileVersionId);
     if (!m?.delete(connectionId))
         return;
@@ -332,7 +332,7 @@ export function unregisterViewerCollabWs(fileVersionId, connectionId) {
     if (m.size === 0)
         wsByFv.delete(fileVersionId);
 }
-export function broadcastCursor(fileVersionId, fromConnectionId, fromUserId, payload, listInPresence) {
+function broadcastCursor(fileVersionId, fromConnectionId, fromUserId, payload, listInPresence) {
     if (!listInPresence)
         return;
     const connKey = `${fileVersionId}:${fromConnectionId}`;
@@ -358,7 +358,7 @@ export function broadcastCursor(fileVersionId, fromConnectionId, fromUserId, pay
         }
     }
 }
-export function broadcastSelection(fileVersionId, fromConnectionId, fromUserId, annotationIds, listInPresence) {
+function broadcastSelection(fileVersionId, fromConnectionId, fromUserId, annotationIds, listInPresence) {
     if (!listInPresence)
         return;
     const connKey = `${fileVersionId}:${fromConnectionId}:sel`;

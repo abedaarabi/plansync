@@ -40,6 +40,9 @@ import {
 import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
 import { ProjectFileImageLightbox } from "./ProjectFileImageLightbox";
 import { UploadDrawingsWizard } from "./UploadDrawingsWizard";
+import { UploadModelWizard } from "./UploadModelWizard";
+import { MapDrawingsSlideOver } from "./MapDrawingsSlideOver";
+import { fetchBimPublishSummary, type BimPublishSummary } from "@/lib/api-client/bim-publish";
 import { CloudImportModal } from "./CloudImportModal";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import {
@@ -197,6 +200,19 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   const [uploadWizardOpen, setUploadWizardOpen] = useState(false);
   const [uploadWizardInitialFiles, setUploadWizardInitialFiles] = useState<File[]>([]);
   const [uploadWizardFolderId, setUploadWizardFolderId] = useState<string | null>(folderId);
+  const [modelWizardOpen, setModelWizardOpen] = useState(false);
+  const [modelWizardInitialFile, setModelWizardInitialFile] = useState<File | null>(null);
+  const [modelWizardFolderId, setModelWizardFolderId] = useState<string | null>(folderId);
+  const [modelWizardRetroactive, setModelWizardRetroactive] = useState<{
+    file: CloudFile;
+    fileVersionId: string;
+    startAtStep?: 3 | 5;
+  } | null>(null);
+  const [mapDrawingsTarget, setMapDrawingsTarget] = useState<{
+    file: CloudFile;
+    fileVersionId: string;
+  } | null>(null);
+  const [bimPublishCache, setBimPublishCache] = useState<Record<string, BimPublishSummary>>({});
   const [imageLightbox, setImageLightbox] = useState<{
     fileId: string;
     fileName: string;
@@ -431,7 +447,8 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     if (list.length === 0) return;
 
     const pdfs = list.filter((file) => isPdfFile(file));
-    const nonPdfs = list.filter((file) => !isPdfFile(file));
+    const ifcs = list.filter((file) => isIfcFile(file));
+    const nonPdfs = list.filter((file) => !isPdfFile(file) && !isIfcFile(file));
 
     if (nonPdfs.length > 0) {
       useUploadQueueStore.getState().enqueue({
@@ -441,6 +458,16 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         files: nonPdfs,
         queryClient,
       });
+    }
+
+    if (ifcs.length > 0) {
+      if (ifcs.length > 1) {
+        toast.message("Publish one IFC model at a time.");
+      }
+      setModelWizardRetroactive(null);
+      setModelWizardInitialFile(ifcs[0]!);
+      setModelWizardFolderId(targetFolderId);
+      setModelWizardOpen(true);
     }
 
     if (pdfs.length === 0) return;
@@ -459,6 +486,78 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
       queryClient,
     });
   }
+
+  // fallow-ignore-next-line complexity
+  function selectedFileVersionRow(file: CloudFile) {
+    const sorted = sortedVersions(file);
+    const fallback = sorted[0]?.version ?? 1;
+    const pick = fileVersionPick[file.id];
+    const v = pick != null && sorted.some((x) => x.version === pick) ? pick : fallback;
+    return sorted.find((x) => x.version === v) ?? sorted[0] ?? null;
+  }
+
+  function openPublishModel(file: CloudFile) {
+    const verRow = selectedFileVersionRow(file);
+    if (!verRow) {
+      toast.error("No file version available.");
+      return;
+    }
+    setModelWizardInitialFile(null);
+    setModelWizardRetroactive({ file, fileVersionId: verRow.id, startAtStep: 3 });
+    setModelWizardFolderId(file.folderId);
+    setModelWizardOpen(true);
+  }
+
+  function openMapDrawings(file: CloudFile) {
+    const verRow = selectedFileVersionRow(file);
+    if (!verRow) return;
+    setMapDrawingsTarget({ file, fileVersionId: verRow.id });
+  }
+
+  function openAlignCoordinates(file: CloudFile) {
+    const verRow = selectedFileVersionRow(file);
+    if (!verRow) return;
+    const q = new URLSearchParams({
+      fileId: file.id,
+      name: file.name,
+      projectId,
+      fileVersionId: verRow.id,
+      align: "1",
+    });
+    openBimViewer(`/bim-viewer?${q.toString()}`);
+  }
+
+  async function loadIfcPublishBadge(file: CloudFile) {
+    const verRow = selectedFileVersionRow(file);
+    if (!verRow || bimPublishCache[verRow.id]) return;
+    try {
+      const summary = await fetchBimPublishSummary(verRow.id);
+      setBimPublishCache((prev) => ({ ...prev, [verRow.id]: summary }));
+    } catch {
+      /* backend may not expose summary yet */
+    }
+  }
+
+  // fallow-ignore-next-line complexity
+  function ifcPublishBadgeLabel(file: CloudFile): string | null {
+    const verRow = selectedFileVersionRow(file);
+    if (!verRow) return null;
+    const cached = bimPublishCache[verRow.id];
+    if (cached?.published) {
+      return `${cached.levelCount} levels · ${cached.mapCount} sheets`;
+    }
+    if (verRow.bimPublishedAt) {
+      return "Published";
+    }
+    return null;
+  }
+
+  useEffect(() => {
+    if (!project) return;
+    for (const f of project.files) {
+      if (isIfcFile(f)) void loadIfcPublishBadge(f);
+    }
+  }, [project, fileVersionPick]);
 
   function toggleFederationIfc(f: CloudFile) {
     if (!isIfcFile(f)) return;
@@ -971,6 +1070,11 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             onFileVersionPick={(fid, ver) => setFileVersionPick((p) => ({ ...p, [fid]: ver }))}
             federationIfcIds={federationIfcIds}
             onToggleFederationIfc={toggleFederationIfc}
+            ifcPublishBadge={ifcPublishBadgeLabel}
+            onPublishIfcModel={canUpload ? openPublishModel : undefined}
+            onMapIfcDrawings={canUpload ? openMapDrawings : undefined}
+            onAlignIfcCoordinates={openAlignCoordinates}
+            onLoadIfcPublishMeta={loadIfcPublishBadge}
           />
         </div>
       </div>
@@ -1403,6 +1507,40 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           projectId={projectId}
           folderId={uploadWizardFolderId}
           existingFiles={project.files.filter((f) => f.folderId === uploadWizardFolderId)}
+        />
+      ) : null}
+      {wid && canUpload && project ? (
+        <UploadModelWizard
+          open={modelWizardOpen}
+          onClose={() => {
+            setModelWizardOpen(false);
+            setModelWizardRetroactive(null);
+            setModelWizardInitialFile(null);
+            void invalidate();
+          }}
+          initialFile={modelWizardInitialFile}
+          existingFileVersionId={modelWizardRetroactive?.fileVersionId ?? null}
+          existingFile={modelWizardRetroactive?.file ?? null}
+          startAtStep={modelWizardRetroactive?.startAtStep}
+          workspaceId={wid}
+          projectId={projectId}
+          folderId={modelWizardFolderId}
+          existingFiles={project.files.filter((f) => f.folderId === modelWizardFolderId)}
+          folders={project.folders}
+        />
+      ) : null}
+      {wid && project && mapDrawingsTarget ? (
+        <MapDrawingsSlideOver
+          open
+          onClose={() => {
+            setMapDrawingsTarget(null);
+            void invalidate();
+          }}
+          projectId={projectId}
+          workspaceId={wid}
+          ifcFile={mapDrawingsTarget.file}
+          ifcFileVersionId={mapDrawingsTarget.fileVersionId}
+          folders={project.folders}
         />
       ) : null}
       {imageLightbox ? (

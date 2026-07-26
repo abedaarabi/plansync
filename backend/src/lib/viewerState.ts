@@ -44,4 +44,6 @@ export const fileVersionPublicSelect = {
   bimConversionStatus: true,
   bimLoqReport: true,
   bimConversionJobRunId: true,
+  bimPublishedAt: true,
+  bimPublishedById: true,
 } as const;

@@ -1,72 +1,9 @@
-/** BIM quantity index — shared shape for API + viewer. */
-export type BimLodFlags = {
-  identity: boolean;
-  dimensions: boolean;
-  quantities: boolean;
-  material: boolean;
-  /** True when IFC carries authored surface / style color (not default gray). */
-  color: boolean;
-};
-
-export type BimElementQuantities = {
-  length?: number;
-  area?: number;
-  volume?: number;
-  count?: number;
-  weight?: number;
-};
-
-export type BimQuantityEntry = {
-  expressId: number;
-  guid: string;
-  ifcType: string;
-  name: string | null;
-  level: string | null;
-  material: string | null;
-  discipline: string | null;
-  /** Authored IFC surface color (#rrggbb), when present in export. */
-  surfaceColor: string | null;
-  quantities: BimElementQuantities;
-  quantitySource: "base" | "qto" | "computed" | "missing";
-  lodFlags: BimLodFlags;
-};
-
-export type BimLoqReport = {
-  totalElements: number;
-  withIdentity: number;
-  withLevel: number;
-  withMaterial: number;
-  withQuantities: number;
-  withAuthoredColor: number;
-  pctQuantities: number;
-  pctMaterial: number;
-  pctLevel: number;
-  pctIdentity: number;
-  pctAuthoredColor: number;
-  recommendedExportHints: string[];
-};
-
-export type BimTypeAggregate = {
-  ifcType: string;
-  count: number;
-  guids: string[];
-  totalLength?: number;
-  totalArea?: number;
-  totalVolume?: number;
-};
-
-export type BimLevelAggregate = {
-  level: string;
-  count: number;
-  guids: string[];
-};
-
-export type BimQuantityIndex = {
-  version: 1;
-  fileVersionId: string;
-  generatedAt: string;
-  loq: BimLoqReport;
-  elements: BimQuantityEntry[];
-  byType: Record<string, BimTypeAggregate>;
-  byLevel: Record<string, BimLevelAggregate>;
-};
+export type {
+  BimElementQuantities,
+  BimLevelAggregate,
+  BimLodFlags,
+  BimLoqReport,
+  BimQuantityEntry,
+  BimQuantityIndex,
+  BimTypeAggregate,
+} from "../../shared/bimTypes.js";

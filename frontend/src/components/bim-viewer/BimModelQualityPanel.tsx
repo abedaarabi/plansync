@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import {
   AlertCircle,
   BarChart3,
+  Keyboard,
   Loader2,
   Palette,
   RefreshCw,
   SlidersHorizontal,
 } from "lucide-react";
+import { BimKeyboardShortcutsPanel } from "./BimKeyboardShortcutsPanel";
 import { resolveAuthoredColorPct } from "@/lib/bim/loqHelpers";
 import type { BimLoqReport, BimQuantityIndex } from "@/lib/bim/types";
 import { BIM_GEOMETRY_PROFILE } from "@/lib/bim/renderingProfile";
@@ -29,6 +32,7 @@ export function BimModelQualityPanel(props: {
   onAppearanceChange: (patch: Partial<BimViewportAppearance>) => void;
   onRebuildIndex?: () => void;
 }) {
+  const [qualityTab, setQualityTab] = useState<"appearance" | "shortcuts">("appearance");
   const building =
     !props.loq && (props.conversionStatus === "pending" || props.conversionStatus === "running");
   const failed = !props.loq && props.conversionStatus === "failed";
@@ -43,52 +47,77 @@ export function BimModelQualityPanel(props: {
         <div>
           <p className="bim-section-title">Model quality</p>
           <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--bim-text-muted)]">
-            Data coverage, viewport appearance, and export guidance.
+            Data coverage, viewport appearance, keyboard shortcuts, and export guidance.
           </p>
         </div>
       </div>
 
-      <div className="mb-4 rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] p-3">
-        <div className="mb-3 flex items-center gap-2">
-          <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
-          <p className="text-[11px] font-semibold text-[var(--bim-text)]">Viewport appearance</p>
+      <div className="mb-4">
+        <div className="mb-2.5">
+          <div className="bim-segment bim-segment-compact">
+            <QualityTabBtn
+              active={qualityTab === "appearance"}
+              label="Viewport appearance"
+              icon={SlidersHorizontal}
+              onClick={() => setQualityTab("appearance")}
+            />
+            <QualityTabBtn
+              active={qualityTab === "shortcuts"}
+              label="Keyboard shortcuts"
+              icon={Keyboard}
+              onClick={() => setQualityTab("shortcuts")}
+            />
+          </div>
         </div>
 
-        <p className="mb-3 text-[10px] leading-relaxed text-[var(--bim-text-muted)]">
-          Settings are saved in this browser and restored when you reopen the viewer.
-        </p>
-        <div className="space-y-3">
-          <AppearanceSelect
-            label="Environment"
-            value={props.appearance.environment}
-            options={BIM_ENVIRONMENT_OPTIONS}
-            onChange={(environment) => props.onAppearanceChange({ environment })}
-          />
-          <AppearanceSelect
-            label="Element colors"
-            value={props.appearance.colorMode}
-            options={BIM_COLOR_MODE_OPTIONS}
-            onChange={(colorMode) => props.onAppearanceChange({ colorMode })}
-          />
-          <AppearanceSelect
-            label="Space display"
-            value={props.appearance.spaceDisplay}
-            options={BIM_SPACE_DISPLAY_OPTIONS}
-            onChange={(spaceDisplay) => props.onAppearanceChange({ spaceDisplay })}
-          />
-          <AppearanceSelect
-            label="Atmospheric fog"
-            value={props.appearance.fogMode}
-            options={BIM_FOG_MODE_OPTIONS}
-            onChange={(fogMode) => props.onAppearanceChange({ fogMode })}
-          />
-          <AppearanceSelect
-            label="Ground grid"
-            value={props.appearance.gridMode}
-            options={BIM_GRID_MODE_OPTIONS}
-            onChange={(gridMode) => props.onAppearanceChange({ gridMode })}
-          />
-        </div>
+        {qualityTab === "appearance" ? (
+          <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] p-3">
+            <div className="mb-3 flex items-center gap-2">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+              <p className="text-[11px] font-semibold text-[var(--bim-text)]">
+                Viewport appearance
+              </p>
+            </div>
+
+            <p className="mb-3 text-[10px] leading-relaxed text-[var(--bim-text-muted)]">
+              Settings are saved in this browser and restored when you reopen the viewer.
+            </p>
+            <div className="space-y-3">
+              <AppearanceSelect
+                label="Environment"
+                value={props.appearance.environment}
+                options={BIM_ENVIRONMENT_OPTIONS}
+                onChange={(environment) => props.onAppearanceChange({ environment })}
+              />
+              <AppearanceSelect
+                label="Element colors"
+                value={props.appearance.colorMode}
+                options={BIM_COLOR_MODE_OPTIONS}
+                onChange={(colorMode) => props.onAppearanceChange({ colorMode })}
+              />
+              <AppearanceSelect
+                label="Space display"
+                value={props.appearance.spaceDisplay}
+                options={BIM_SPACE_DISPLAY_OPTIONS}
+                onChange={(spaceDisplay) => props.onAppearanceChange({ spaceDisplay })}
+              />
+              <AppearanceSelect
+                label="Atmospheric fog"
+                value={props.appearance.fogMode}
+                options={BIM_FOG_MODE_OPTIONS}
+                onChange={(fogMode) => props.onAppearanceChange({ fogMode })}
+              />
+              <AppearanceSelect
+                label="Ground grid"
+                value={props.appearance.gridMode}
+                options={BIM_GRID_MODE_OPTIONS}
+                onChange={(gridMode) => props.onAppearanceChange({ gridMode })}
+              />
+            </div>
+          </div>
+        ) : (
+          <BimKeyboardShortcutsPanel />
+        )}
       </div>
 
       {building ? (
@@ -179,6 +208,27 @@ export function BimModelQualityPanel(props: {
         </p>
       ) : null}
     </div>
+  );
+}
+
+function QualityTabBtn(props: {
+  active: boolean;
+  label: string;
+  icon: typeof SlidersHorizontal;
+  onClick: () => void;
+}) {
+  const Icon = props.icon;
+
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      data-active={props.active}
+      className="bim-segment-btn inline-flex items-center justify-center gap-1 text-[10px]"
+    >
+      <Icon className="h-3 w-3 shrink-0" aria-hidden />
+      {props.label}
+    </button>
   );
 }
 

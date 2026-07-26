@@ -1,33 +1,53 @@
 import { apiUrl } from "@/lib/api-url";
 import type { BimConversionStatus, BimQuantityIndex, BimSavedViewRecord } from "@/lib/bim/types";
-
-async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(apiUrl(url), { credentials: "include", ...init });
-  if (!res.ok) {
-    let msg = `Request failed (${res.status})`;
-    try {
-      const j = (await res.json()) as { error?: string };
-      if (j.error) msg = j.error;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(msg);
-  }
-  return res.json() as Promise<T>;
-}
+import { apiJsonFetch } from "./shared";
 
 export async function fetchBimStatus(fileVersionId: string): Promise<BimConversionStatus> {
-  return jsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/status`);
+  return apiJsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/status`);
 }
 
 export async function triggerBimConversion(fileVersionId: string): Promise<{ jobRunId: string }> {
-  return jsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/convert`, {
+  return apiJsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/convert`, {
     method: "POST",
   });
 }
 
-export async function fetchBimQuantityIndex(fileVersionId: string): Promise<BimQuantityIndex> {
-  return jsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/quantity-index`);
+async function fetchBimQuantityIndex(fileVersionId: string): Promise<BimQuantityIndex> {
+  return apiJsonFetch(
+    `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/quantity-index`,
+  );
+}
+
+async function fetchBimQuantityIndexSummary(fileVersionId: string): Promise<BimQuantityIndex> {
+  return apiJsonFetch(
+    `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/quantity-index/summary`,
+  );
+}
+
+export async function fetchBimQuantityIndexWithCache(
+  fileVersionId: string,
+): Promise<BimQuantityIndex> {
+  const { readCachedQuantityIndex, writeCachedQuantityIndex, buildQuantityIndexCacheKey } =
+    await import("@/lib/bimQuantityIndexCache");
+  const key = buildQuantityIndexCacheKey(fileVersionId);
+  const cached = await readCachedQuantityIndex(key);
+  if (cached && !cached.partial) return cached.index;
+  const index = await fetchBimQuantityIndex(fileVersionId);
+  void writeCachedQuantityIndex(key, index);
+  return index;
+}
+
+export async function fetchBimQuantityIndexSummaryWithCache(
+  fileVersionId: string,
+): Promise<BimQuantityIndex> {
+  const { readCachedQuantityIndex, writeCachedQuantityIndex, buildQuantityIndexCacheKey } =
+    await import("@/lib/bimQuantityIndexCache");
+  const key = buildQuantityIndexCacheKey(fileVersionId);
+  const cached = await readCachedQuantityIndex(key);
+  if (cached?.partial) return cached.index;
+  const index = await fetchBimQuantityIndexSummary(fileVersionId);
+  void writeCachedQuantityIndex(key, index);
+  return index;
 }
 
 export async function fetchBimFragmentsBuffer(fileVersionId: string): Promise<ArrayBuffer | null> {
@@ -67,7 +87,7 @@ export async function importBimTakeoff(
     notes?: string;
   },
 ): Promise<{ takeoffLineId: string; quantity: string; unit: string }> {
-  return jsonFetch(
+  return apiJsonFetch(
     `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/takeoff/import`,
     {
       method: "POST",
@@ -85,7 +105,7 @@ export async function autoMapBimTakeoff(
   createdLineIds: string[];
   errors?: string[];
 }> {
-  return jsonFetch(
+  return apiJsonFetch(
     `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/takeoff/auto-map`,
     {
       method: "POST",
@@ -117,7 +137,7 @@ export async function compareBimQuantities(
   }[];
 }> {
   const q = new URLSearchParams({ otherFileVersionId });
-  return jsonFetch(
+  return apiJsonFetch(
     `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/quantity-compare?${q}`,
   );
 }
@@ -125,7 +145,7 @@ export async function compareBimQuantities(
 export async function fetchBimSavedViews(
   fileVersionId: string,
 ): Promise<{ views: BimSavedViewRecord[] }> {
-  return jsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/saved-views`);
+  return apiJsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/saved-views`);
 }
 
 export async function createBimSavedView(
@@ -138,13 +158,16 @@ export async function createBimSavedView(
     isolatedGuids?: string[];
   },
 ): Promise<{ view: BimSavedViewRecord }> {
-  return jsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/saved-views`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  return apiJsonFetch(
+    `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/saved-views`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 export async function deleteBimSavedView(viewId: string): Promise<void> {
-  await jsonFetch(`/api/v1/bim/saved-views/${encodeURIComponent(viewId)}`, { method: "DELETE" });
+  await apiJsonFetch(`/api/v1/bim/saved-views/${encodeURIComponent(viewId)}`, { method: "DELETE" });
 }

@@ -139,6 +139,7 @@ export async function getObjectStream(
 
 export async function deleteObject(
   env: Env,
+  // fallow-ignore-next-line code-duplication
   key: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const client = s3Client(env);
@@ -160,6 +161,7 @@ export async function putObjectBuffer(
   key: string,
   body: Buffer,
   contentType: string,
+  contentEncoding?: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const client = s3Client(env);
   const bucket = env.S3_BUCKET;
@@ -171,6 +173,7 @@ export async function putObjectBuffer(
         Key: key,
         Body: body,
         ContentType: contentType,
+        ...(contentEncoding ? { ContentEncoding: contentEncoding } : {}),
       }),
     );
     return { ok: true };

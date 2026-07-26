@@ -32,4 +32,11 @@ export const fileVersionPublicSelect = {
     lockExpiresAt: true,
     createdAt: true,
     annotationBlobRevision: true,
+    fragmentsS3Key: true,
+    quantityIndexS3Key: true,
+    bimConversionStatus: true,
+    bimLoqReport: true,
+    bimConversionJobRunId: true,
+    bimPublishedAt: true,
+    bimPublishedById: true,
 };

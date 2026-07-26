@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BarChart3,
   Camera,
   Crosshair,
   DraftingCompass,
@@ -23,11 +24,20 @@ import {
 import type { BimCameraMode, BimTool } from "./bimEngine";
 import type { BimQuantityIndex } from "@/lib/bim/types";
 import { BimElementSearchPanel } from "./BimElementSearchPanel";
+import { BimAnalyticsDrawer } from "./BimAnalyticsDrawer";
 import { BimMarkupFlyoutPanel } from "./BimMarkupFlyoutPanel";
+import type { BimChartSegment } from "@/lib/bim/chartStats";
 import type { BimMarkupMode } from "@/store/bimMarkupStore";
 import type { MarkupShape } from "@/store/viewerStore";
 
-export type BimBottomFlyout = "measure" | "navigate" | "more" | "search" | "markup" | null;
+export type BimBottomFlyout =
+  | "measure"
+  | "navigate"
+  | "more"
+  | "search"
+  | "markup"
+  | "analytics"
+  | null;
 
 // fallow-ignore-next-line complexity
 export function BimBottomToolBar(props: {
@@ -38,6 +48,7 @@ export function BimBottomToolBar(props: {
   toolHint: string | null;
   showPlacePoint: boolean;
   quantityIndex: BimQuantityIndex | null;
+  conversionStatus: string;
   selectedGuids: Set<string>;
   onSelectTool: (tool: BimTool) => void;
   onSelectCameraMode: (mode: BimCameraMode) => void;
@@ -54,7 +65,9 @@ export function BimBottomToolBar(props: {
   clusterByType: boolean;
   onToggleClusterByType: () => void;
   onSelectElement: (guid: string) => void;
+  onSelectChartSegment: (segment: BimChartSegment) => void;
   onCloseSearch: () => void;
+  onCloseAnalytics: () => void;
   markupShape: MarkupShape;
   markupMode: BimMarkupMode;
   strokeColor: string;
@@ -79,7 +92,20 @@ export function BimBottomToolBar(props: {
         />
       ) : null}
 
-      {props.toolHint && props.activeFlyout !== "search" && props.activeFlyout !== "markup" ? (
+      {props.activeFlyout === "analytics" ? (
+        <BimAnalyticsDrawer
+          index={props.quantityIndex}
+          selectedGuids={props.selectedGuids}
+          conversionStatus={props.conversionStatus}
+          onSelectSegment={props.onSelectChartSegment}
+          onClose={props.onCloseAnalytics}
+        />
+      ) : null}
+
+      {props.toolHint &&
+      props.activeFlyout !== "search" &&
+      props.activeFlyout !== "markup" &&
+      props.activeFlyout !== "analytics" ? (
         <p className="bim-tool-hint-pill bim-glass-surface">{props.toolHint}</p>
       ) : null}
 
@@ -116,6 +142,18 @@ export function BimBottomToolBar(props: {
           className="bim-bottom-bar-btn mobile-touch-target"
         >
           <Search className="h-[18px] w-[18px]" aria-hidden />
+        </button>
+
+        <button
+          type="button"
+          aria-label="Model analytics"
+          aria-expanded={props.activeFlyout === "analytics"}
+          title="Charts & quantities"
+          data-active={props.activeFlyout === "analytics"}
+          onClick={() => props.onToggleFlyout("analytics")}
+          className="bim-bottom-bar-btn mobile-touch-target"
+        >
+          <BarChart3 className="h-[18px] w-[18px]" aria-hidden />
         </button>
 
         <div className="bim-bottom-bar-divider" aria-hidden />

@@ -10,7 +10,7 @@ function requirePro(workspace) {
     }
     return null;
 }
-export function normalizeMaterialKey(s) {
+function normalizeMaterialKey(s) {
     return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 function materialJson(m) {

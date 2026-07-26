@@ -1,5 +1,5 @@
 /** ISO 4217 codes accepted for `Project.currency` (common construction / international). */
-export const PROJECT_CURRENCY_CODES = [
+const PROJECT_CURRENCY_CODES = [
     "USD",
     "EUR",
     "GBP",
@@ -51,6 +51,7 @@ const DEFAULT_CLIENT_VISIBILITY = {
     showRfis: true,
     showFieldReports: true,
     showPunchList: true,
+    showDrawings: true,
     allowClientComment: false,
 };
 const DEFAULT_OM_HANDOVER = {
@@ -153,6 +154,9 @@ export function parseProjectSettingsJson(raw) {
             showPunchList: typeof c.showPunchList === "boolean"
                 ? c.showPunchList
                 : DEFAULT_CLIENT_VISIBILITY.showPunchList,
+            showDrawings: typeof c.showDrawings === "boolean"
+                ? c.showDrawings
+                : DEFAULT_CLIENT_VISIBILITY.showDrawings,
             allowClientComment: typeof c.allowClientComment === "boolean"
                 ? c.allowClientComment
                 : DEFAULT_CLIENT_VISIBILITY.allowClientComment,
@@ -241,7 +245,7 @@ export function mergeProjectSettingsPatch(current, patch) {
     };
 }
 /** When enabling `operationsMode`, optionally turn off construction-heavy modules (Super Admin choice). */
-export const OM_DEFAULT_MODULES_WHEN_ENABLING = {
+const OM_DEFAULT_MODULES_WHEN_ENABLING = {
     rfis: false,
     takeoff: false,
     proposals: false,

@@ -32,6 +32,44 @@ export async function presignGet(env, key, expiresIn = 3600) {
     const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
     return getSignedUrl(client, cmd, { expiresIn });
 }
+/** Shared presign-put handler body for route upload endpoints. */
+export async function presignPutUploadResponse(env, key, contentType, logLabel) {
+    try {
+        const url = await presignPut(env, key, contentType);
+        if (!url) {
+            return {
+                ok: false,
+                status: 503,
+                body: { error: "S3 not configured — set AWS_* and S3_BUCKET", devKey: key },
+            };
+        }
+        return { ok: true, uploadUrl: url, key };
+    }
+    catch (e) {
+        console.error(`[${logLabel}]`, e);
+        return {
+            ok: false,
+            status: 503,
+            body: {
+                error: "Could not create upload URL. Check S3 credentials and bucket configuration.",
+            },
+        };
+    }
+}
+/** Shared presign-get handler body for route download endpoints. */
+export async function presignGetDownloadResponse(env, s3Key, logLabel) {
+    try {
+        const url = await presignGet(env, s3Key);
+        if (!url) {
+            return { ok: false, status: 503, body: { error: "S3 not configured" } };
+        }
+        return { ok: true, url };
+    }
+    catch (e) {
+        console.error(`[${logLabel}]`, e);
+        return { ok: false, status: 503, body: { error: "Could not create download link (S3)." } };
+    }
+}
 /** Stream object bytes (for same-origin viewer proxy — avoids S3 GET CORS in the browser). */
 export async function getObjectStream(env, key) {
     const client = s3Client(env);
@@ -77,7 +115,7 @@ export async function deleteObject(env, key) {
         };
     }
 }
-export async function putObjectBuffer(env, key, body, contentType) {
+export async function putObjectBuffer(env, key, body, contentType, contentEncoding) {
     const client = s3Client(env);
     const bucket = env.S3_BUCKET;
     if (!client || !bucket)
@@ -88,6 +126,7 @@ export async function putObjectBuffer(env, key, body, contentType) {
             Key: key,
             Body: body,
             ContentType: contentType,
+            ...(contentEncoding ? { ContentEncoding: contentEncoding } : {}),
         }));
         return { ok: true };
     }

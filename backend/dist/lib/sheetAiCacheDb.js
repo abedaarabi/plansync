@@ -12,7 +12,7 @@ function parseRoot(raw) {
     }
     return { v: CACHE_V, byPage: { ...byPage } };
 }
-export function parseSheetAiPageCacheEntry(raw) {
+function parseSheetAiPageCacheEntry(raw) {
     const parsed = sheetAiPageCacheEntrySchema.safeParse(raw);
     return parsed.success ? parsed.data : null;
 }
@@ -35,7 +35,7 @@ export async function getSheetAiPageFromDb(fileVersionId, pageIndex0) {
     const key = String(pageIndex0);
     return parseSheetAiPageCacheEntry(root.byPage[key]);
 }
-export async function mergeSheetAiPageInDb(fileVersionId, pageIndex0, patch) {
+async function mergeSheetAiPageInDb(fileVersionId, pageIndex0, patch) {
     const fv = await prisma.fileVersion.findUnique({
         where: { id: fileVersionId },
         select: { sheetAiCache: true },

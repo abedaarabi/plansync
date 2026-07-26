@@ -2,6 +2,7 @@ import { apiUrl } from "@/lib/api-url";
 import { fetchResolvedFileRevision } from "@/lib/api-client";
 import {
   fetchBimFragmentsBuffer,
+  fetchBimStatus,
   triggerBimConversion,
   uploadBimFragments,
 } from "@/lib/api-client/bim-viewer";
@@ -44,7 +45,16 @@ export async function loadFederationMember(
   const modelId = buildModelId(resolved);
   const cacheKey = buildFragmentsCacheKey(resolved.fileId, resolved.fileVersionId);
 
-  void triggerBimConversion(resolved.fileVersionId).catch(() => undefined);
+  const status = await fetchBimStatus(resolved.fileVersionId).catch(() => null);
+  if (
+    !status ||
+    status.conversionStatus === "failed" ||
+    (!status.quantityIndexReady &&
+      status.conversionStatus !== "running" &&
+      status.conversionStatus !== "summary_ready")
+  ) {
+    void triggerBimConversion(resolved.fileVersionId).catch(() => undefined);
+  }
 
   try {
     const serverBuf = await fetchBimFragmentsBuffer(resolved.fileVersionId);

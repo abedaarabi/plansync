@@ -1,14 +1,14 @@
 import { z } from "zod";
 /** Normalized point 0–1 on the page image (full-page capture). */
-export const normPointSchema = z.object({
+const normPointSchema = z.object({
     x: z.number().finite(),
     y: z.number().finite(),
 });
-export const sheetAiMimeSchema = z.enum(["image/png", "image/jpeg"]);
+const sheetAiMimeSchema = z.enum(["image/png", "image/jpeg"]);
 /** Max decoded image size (bytes). */
-export const SHEET_AI_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-export const viewerSnapshotSchema = z.record(z.unknown()).optional();
-export const sheetAiContextBundleSchema = z.object({
+const SHEET_AI_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const viewerSnapshotSchema = z.record(z.unknown()).optional();
+const sheetAiContextBundleSchema = z.object({
     pageIndex: z.number().int().min(0).max(10_000),
     /** Raw base64 without data URL prefix */
     imageBase64: z.string().min(16).max(12_000_000),
@@ -16,7 +16,7 @@ export const sheetAiContextBundleSchema = z.object({
     viewerSnapshot: viewerSnapshotSchema,
     pdfTextSnippet: z.string().max(120_000).optional(),
 });
-export const chatMessageSchema = z.object({
+const chatMessageSchema = z.object({
     role: z.enum(["user", "model"]),
     content: z.string().max(24_000),
 });
@@ -24,7 +24,7 @@ export const sheetSummaryBodySchema = sheetAiContextBundleSchema;
 export const sheetChatBodySchema = sheetAiContextBundleSchema.extend({
     messages: z.array(chatMessageSchema).min(1).max(48),
 });
-export function clamp01(n) {
+function clamp01(n) {
     if (!Number.isFinite(n))
         return 0;
     return Math.min(1, Math.max(0, n));
@@ -38,7 +38,7 @@ export function assertImageSizeOk(imageBase64) {
     return { ok: true };
 }
 /** Takeoff Assist — countable drawing categories (vision estimates). */
-export const takeoffAssistCategorySchema = z.enum(["windows", "doors", "walls", "rooms"]);
+const takeoffAssistCategorySchema = z.enum(["windows", "doors", "walls", "rooms"]);
 export const sheetTakeoffDetectBodySchema = sheetAiContextBundleSchema.extend({
     categories: z.array(takeoffAssistCategorySchema).min(1).max(4),
 });
@@ -86,7 +86,7 @@ const takeoffAssistItemPersistSchema = z.object({
     maxY: z.number().finite(),
     label: z.string().max(120).optional(),
 });
-export const takeoffAssistCacheEntrySchema = z.object({
+const takeoffAssistCacheEntrySchema = z.object({
     categories: z.array(takeoffAssistCategorySchema).min(1).max(4),
     counts: z.object({
         windows: z.number().int().min(0).max(50_000).optional(),
@@ -151,7 +151,7 @@ function asFiniteNumberLoose(v) {
     return null;
 }
 /** Map common model variants to our enum (Gemini often returns Title Case or synonyms). */
-export function normalizeTakeoffCategoryLoose(v) {
+function normalizeTakeoffCategoryLoose(v) {
     const s = String(v ?? "")
         .toLowerCase()
         .trim()
@@ -328,7 +328,7 @@ export function sanitizeTakeoffAssistResult(parsed, expectedPageIndex0, allowedC
         items: itemsIn,
     };
 }
-export const sheetAiTocKindSchema = z.enum([
+const sheetAiTocKindSchema = z.enum([
     "area",
     "detail",
     "note",

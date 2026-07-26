@@ -8,10 +8,11 @@ import { logActivitySafe } from "../../lib/activity.js";
 import { createUserNotifications } from "../../lib/userNotifications.js";
 import { deleteObject, presignGet } from "../../lib/s3.js";
 import { lineTotalFor, proposalMoneyBreakdown, sumLineTotals, toDec, } from "../../lib/proposalMath.js";
+import { proposalCoverTextToHtml } from "../../lib/proposalCoverHtml.js";
 import { sanitizeProposalCoverHtml } from "../../lib/proposalSanitize.js";
 import { applyProposalTemplate, buildTakeoffTableHtml, formatMoneyAmount, } from "../../lib/proposalTemplateVars.js";
 import { buildProposalPdfBuffer, dataUrlToPngBuffer } from "../../lib/proposalPdf.js";
-import { proposalAppHref, proposalPortalUrl, sendProposalAcceptedToClient, sendProposalAcceptedToSender, sendProposalChangeRequestedToSender, sendProposalDeclinedToSender, sendProposalExpiringReminderToSender, assertProposalEmailReady, sendProposalPortalReplyToClient, sendProposalSentToClient, sendProposalViewedToSender, } from "../../lib/proposalEmail.js";
+import { proposalAppHref, proposalPortalUrl, sendProposalAcceptedToClient, sendProposalAcceptedToSender, sendProposalChangeRequestedToSender, sendProposalDeclinedToSender, sendProposalExpiringReminderToSender, assertProposalEmailReady, sendProposalPortalMessageToSender, sendProposalPortalReplyToClient, sendProposalSentToClient, sendProposalViewedToSender, } from "../../lib/proposalEmail.js";
 import { geminiConfigured } from "../../lib/geminiSheetAi.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { resolveGeminiApiKey } from "../../lib/env.js";
@@ -1259,7 +1260,14 @@ export function registerProposalRoutes(r, needUser, env) {
         const linesSummary = p.items
             .map((it) => `${it.itemName}: ${it.quantity.toString()} ${it.unit} @ ${it.rate.toString()} = ${it.lineTotal.toString()}`)
             .join("\n");
-        const prompt = `You are helping write a professional construction proposal cover letter (plain text or very simple markdown, no HTML).
+        const prompt = `You are helping write a professional construction proposal cover letter.
+
+Use Markdown only (no HTML tags):
+- Put a blank line between paragraphs (greeting, body paragraphs, closing).
+- Use **bold** sparingly for emphasis.
+- Use bullet lists (- item) when summarizing scope or line items.
+- End with a professional sign-off and sender name placeholder.
+
 Project: ${p.project.name}
 Client: ${p.clientName}
 Proposal ref: ${p.reference}
@@ -1279,7 +1287,8 @@ Rules: Do not invent quantities or prices. No legal guarantees. Keep under 400 w
         const text = result.response.text()?.trim() ?? "";
         if (!text)
             return c.json({ error: "Empty AI response" }, 502);
-        return c.json({ text });
+        const html = proposalCoverTextToHtml(text);
+        return c.json({ text: html });
     });
     // --- Public (no auth) ---
     r.get("/public/proposals/:token", async (c) => {
@@ -1654,14 +1663,48 @@ Rules: Do not invent quantities or prices. No legal guarantees. Keep under 400 w
         const body = z.object({ body: z.string().min(1).max(8000) }).safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
-        const p = await prisma.proposal.findUnique({ where: { publicToken: token } });
+        const trimmedBody = body.data.body.trim();
+        if (!trimmedBody)
+            return c.json({ error: "Message is required" }, 400);
+        const p = await prisma.proposal.findUnique({
+            where: { publicToken: token },
+            include: { createdBy: { select: { id: true, email: true, name: true } } },
+        });
         if (!p?.publicToken || !safeEqualToken(token, p.publicToken)) {
             return c.json({ error: "Not found" }, 404);
         }
         if (p.validUntil < new Date())
             return c.json({ error: "Expired" }, 410);
         const msg = await prisma.proposalPortalMessage.create({
-            data: { proposalId: p.id, body: body.data.body, isFromClient: true },
+            data: { proposalId: p.id, body: trimmedBody, isFromClient: true },
+        });
+        const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
+        const appUrl = `${base}${proposalAppHref(p.projectId, p.id)}`;
+        if (p.createdBy.email) {
+            try {
+                await sendProposalPortalMessageToSender({
+                    env,
+                    toEmail: p.createdBy.email,
+                    senderName: p.createdBy.name,
+                    clientName: p.clientName,
+                    reference: p.reference,
+                    title: p.title,
+                    messagePreview: trimmedBody,
+                    appUrl,
+                });
+            }
+            catch (e) {
+                console.error("[proposal-portal-message-email]", e);
+            }
+        }
+        await createUserNotifications({
+            workspaceId: p.workspaceId,
+            projectId: p.projectId,
+            recipientUserIds: [p.createdById],
+            kind: "PROPOSAL_PORTAL_MESSAGE",
+            title: `${p.clientName} commented on ${p.reference}`,
+            body: trimmedBody.slice(0, 200),
+            href: proposalAppHref(p.projectId, p.id),
         });
         return c.json({ id: msg.id, createdAt: msg.createdAt.toISOString() });
     });

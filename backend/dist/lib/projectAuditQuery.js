@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 /**
  * Activity rows for a project:
@@ -5,13 +6,9 @@ import { prisma } from "./prisma.js";
  * - Legacy rows with `projectId` null but entity/metadata still tied to this project
  *   (files, folders, issues, RFIs, punch, field reports, etc.).
  */
-export async function fetchProjectAuditLogs(opts) {
-    const { workspaceId, projectId, limit } = opts;
-    const take = Math.min(5000, Math.max(1, limit));
-    const rows = await prisma.$queryRaw `
-    SELECT a.id
-    FROM "ActivityLog" a
-    WHERE a."workspaceId" = ${workspaceId}
+function projectAuditScopeSql(workspaceId, projectId) {
+    return Prisma.sql `
+    a."workspaceId" = ${workspaceId}
     AND (
       a."projectId" = ${projectId}
       OR (
@@ -63,8 +60,28 @@ export async function fetchProjectAuditLogs(opts) {
         )
       )
     )
+  `;
+}
+export async function countProjectAuditLogs(opts) {
+    const { workspaceId, projectId } = opts;
+    const rows = await prisma.$queryRaw `
+    SELECT COUNT(*)::bigint AS count
+    FROM "ActivityLog" a
+    WHERE ${projectAuditScopeSql(workspaceId, projectId)}
+  `;
+    return Number(rows[0]?.count ?? 0);
+}
+export async function fetchProjectAuditLogs(opts) {
+    const { workspaceId, projectId, limit, offset = 0 } = opts;
+    const take = Math.min(5000, Math.max(1, limit));
+    const skip = Math.max(0, offset);
+    const rows = await prisma.$queryRaw `
+    SELECT a.id
+    FROM "ActivityLog" a
+    WHERE ${projectAuditScopeSql(workspaceId, projectId)}
     ORDER BY a."createdAt" DESC
     LIMIT ${take}
+    OFFSET ${skip}
   `;
     const ids = rows.map((r) => r.id);
     if (ids.length === 0)
@@ -78,4 +95,28 @@ export async function fetchProjectAuditLogs(opts) {
     const order = new Map(ids.map((id, i) => [id, i]));
     logs.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     return logs;
+}
+export async function fetchProjectAuditActors(opts) {
+    const { workspaceId, projectId } = opts;
+    const [actors, noActorRows] = await Promise.all([
+        prisma.$queryRaw `
+      SELECT DISTINCT u.id, u.name, u.email
+      FROM "ActivityLog" a
+      INNER JOIN "User" u ON u.id = a."actorUserId"
+      WHERE ${projectAuditScopeSql(workspaceId, projectId)}
+      ORDER BY u.name ASC
+    `,
+        prisma.$queryRaw `
+      SELECT EXISTS (
+        SELECT 1
+        FROM "ActivityLog" a
+        WHERE ${projectAuditScopeSql(workspaceId, projectId)}
+        AND a."actorUserId" IS NULL
+      ) AS exists
+    `,
+    ]);
+    return {
+        actors,
+        hasNoActor: Boolean(noActorRows[0]?.exists),
+    };
 }

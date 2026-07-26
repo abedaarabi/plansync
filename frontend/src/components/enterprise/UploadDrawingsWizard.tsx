@@ -1,6 +1,7 @@
 "use client";
 
 import { apiUrl } from "@/lib/api-url";
+import { uploadFileViaXHR } from "@/lib/api-client/uploadFileXHR";
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -57,42 +58,10 @@ function uploadPdfWithProgress(input: {
   };
   fileVersion: FileVersion;
 }> {
-  const fd = new FormData();
-  fd.append("workspaceId", input.workspaceId);
-  fd.append("projectId", input.projectId);
-  if (input.folderId) fd.append("folderId", input.folderId);
-  fd.append("fileName", input.fileName);
-  fd.append("file", input.file);
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", apiUrl("/api/v1/files/upload"));
-    xhr.withCredentials = true;
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        input.onProgress(Math.round((e.loaded / e.total) * 100));
-      }
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          resolve(JSON.parse(xhr.responseText));
-        } catch {
-          reject(new Error("Invalid upload response."));
-        }
-        return;
-      }
-      try {
-        const j = JSON.parse(xhr.responseText) as { error?: string };
-        reject(new Error(j.error ?? `Upload failed (${xhr.status}).`));
-      } catch {
-        reject(new Error(`Upload failed (${xhr.status}).`));
-      }
-    };
-    xhr.onerror = () => reject(new Error("Network error."));
-    xhr.send(fd);
-  });
+  return uploadFileViaXHR(input);
 }
 
+// fallow-ignore-next-line complexity
 export function UploadDrawingsWizard(props: {
   open: boolean;
   onClose: () => void;
@@ -128,6 +97,7 @@ export function UploadDrawingsWizard(props: {
 
   const hasCarryCandidates = previewRows.some(
     (row) =>
+      // fallow-ignore-next-line code-duplication
       row.kind === "new_version" && row.issueCountOnLatestVersion > 0 && row.fromFileVersionId,
   );
 

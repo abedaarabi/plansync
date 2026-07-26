@@ -34,7 +34,7 @@ export function newUploadId() {
     return randomUUID();
 }
 const SAFE_NAME_RE = /[^a-zA-Z0-9._-]/g;
-export function sanitizeAttachmentFileName(name) {
+function sanitizeAttachmentFileName(name) {
     const t = name.trim().replace(SAFE_NAME_RE, "_");
     return t.length > 0 ? t.slice(0, 200) : "file";
 }
@@ -52,6 +52,14 @@ export function buildAssetDocumentKey(workspaceId, projectId, assetId, uploadId,
 }
 export function s3KeyMatchesAssetDocument(s3Key, workspaceId, projectId, assetId) {
     const prefix = `ws/${workspaceId}/p/${projectId}/asset/${assetId}/`;
+    return s3Key.startsWith(prefix) && !s3Key.includes("/image/");
+}
+export function buildAssetImageKey(workspaceId, projectId, assetId, uploadId, fileName) {
+    const safe = sanitizeAttachmentFileName(fileName);
+    return `ws/${workspaceId}/p/${projectId}/asset/${assetId}/image/${uploadId}/${safe}`;
+}
+export function s3KeyMatchesAssetImage(s3Key, workspaceId, projectId, assetId) {
+    const prefix = `ws/${workspaceId}/p/${projectId}/asset/${assetId}/image/`;
     return s3Key.startsWith(prefix);
 }
 /** Project-scoped issue reference images (not tied to issue id so carry-forward can reuse keys). */

@@ -1,13 +1,13 @@
 export function oauthRedirectBase(env) {
     return env.BETTER_AUTH_URL.replace(/\/$/, "");
 }
-export function googleDriveCallbackUrl(env) {
+function googleDriveCallbackUrl(env) {
     return `${oauthRedirectBase(env)}/api/v1/cloud/google/callback`;
 }
-export function oneDriveCallbackUrl(env) {
+function oneDriveCallbackUrl(env) {
     return `${oauthRedirectBase(env)}/api/v1/cloud/microsoft/callback`;
 }
-export function dropboxCallbackUrl(env) {
+function dropboxCallbackUrl(env) {
     return `${oauthRedirectBase(env)}/api/v1/cloud/dropbox/callback`;
 }
 // --- Google Drive ---
@@ -84,7 +84,7 @@ export async function refreshGoogleAccessToken(env, refreshToken) {
 }
 const GOOGLE_FOLDER = "application/vnd.google-apps.folder";
 /** Synthetic folder id so we can open a shared drive root (`GET /drives` + `files.list` with driveId). */
-export const GOOGLE_SHARED_DRIVE_PREFIX = "sharedDrive:";
+const GOOGLE_SHARED_DRIVE_PREFIX = "sharedDrive:";
 function sortDriveItems(items) {
     return [...items].sort((a, b) => {
         if (a.kind !== b.kind)

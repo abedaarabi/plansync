@@ -305,6 +305,9 @@ export class BimEngine {
   private onViewportOverlayAfterUpdate: (() => void) | null = null;
   /** Fallback when GUID is not in the quantity index yet. */
   private lastPickMap: OBC.ModelIdMap | null = null;
+  /** Model id from the most recent click pick (for properties panel in federations). */
+  private lastPickedModelId: string | null = null;
+  private static readonly GUID_SYNC_CHUNK = 1000;
   private contextMenuPickPromise: Promise<boolean> | null = null;
   private sectionBox: SectionBoxController | null = null;
   /** Active colorize highlighter style ids (filter visualization). */
@@ -922,34 +925,48 @@ export class BimEngine {
 
   /** Queue a single coalesced repaint of selection + filter overlays. */
   private requestFragmentHighlights(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
     if (this.highlightPaintInFlight) {
       this.highlightPaintQueued = true;
       return this.highlightPaintInFlight;
     }
     this.highlightPaintInFlight = this.runFragmentHighlightPaint().finally(() => {
       this.highlightPaintInFlight = null;
-      if (this.highlightPaintQueued) {
+      if (this.highlightPaintQueued && !this.disposed) {
         this.highlightPaintQueued = false;
         void this.requestFragmentHighlights();
+      } else {
+        this.highlightPaintQueued = false;
       }
     });
     return this.highlightPaintInFlight;
+  }
+
+  private readyFragments(): OBC.FragmentsManager | null {
+    if (this.disposed || !this.components) return null;
+    const fragments = this.components.get(OBC.FragmentsManager);
+    if (!fragments.initialized) return null;
+    return fragments;
   }
 
   /** Drop model/local ids that are no longer in the loaded fragment list. */
   // fallow-ignore-next-line complexity
   private sanitizeHighlightMap(
     map: OBC.ModelIdMap | null | undefined,
-    fragments: OBC.FragmentsManager,
+    fragments: OBC.FragmentsManager | null | undefined,
   ): OBC.ModelIdMap | null {
-    if (!map) return null;
-    const out: OBC.ModelIdMap = {};
-    for (const [modelId, ids] of Object.entries(map)) {
-      if (!fragments.list.has(modelId)) continue;
-      if (!(ids instanceof Set) || ids.size === 0) continue;
-      out[modelId] = new Set(ids);
+    if (!map || !fragments?.initialized) return null;
+    try {
+      const out: OBC.ModelIdMap = {};
+      for (const [modelId, ids] of Object.entries(map)) {
+        if (!fragments.list.has(modelId)) continue;
+        if (!(ids instanceof Set) || ids.size === 0) continue;
+        out[modelId] = new Set(ids);
+      }
+      return Object.keys(out).length > 0 ? out : null;
+    } catch {
+      return null;
     }
-    return Object.keys(out).length > 0 ? out : null;
   }
 
   /**
@@ -962,14 +979,15 @@ export class BimEngine {
    */
   // fallow-ignore-next-line complexity
   private async runFragmentHighlightPaint(): Promise<void> {
-    const fragments = this.components?.get(OBC.FragmentsManager);
-    const highlighter = this.components?.get(OBF.Highlighter);
-    if (!fragments?.initialized) return;
+    const fragments = this.readyFragments();
+    const highlighter = this.disposed ? null : this.components?.get(OBF.Highlighter);
+    if (!fragments) return;
 
     try {
       if (!this.hasActiveFragmentHighlights()) {
         try {
           await fragments.resetHighlight();
+          if (!this.readyFragments()) return;
           await fragments.core.update(true);
         } catch {
           /* fragment list may be mid-load or already torn down */
@@ -997,10 +1015,12 @@ export class BimEngine {
         },
         map: OBC.ModelIdMap | null | undefined,
       ) => {
-        const safeMap = this.sanitizeHighlightMap(map, fragments);
+        const live = this.readyFragments();
+        if (!live) return;
+        const safeMap = this.sanitizeHighlightMap(map, live);
         if (!safeMap) return;
         try {
-          await fragments.highlight(
+          await live.highlight(
             {
               color: def.color,
               opacity: def.opacity,
@@ -1047,6 +1067,8 @@ export class BimEngine {
         );
       }
 
+      if (!this.readyFragments()) return;
+
       // Keep selection tint on top when present.
       const selectMap = this.sanitizeHighlightMap(this.getActiveSelectionMap(), fragments);
       if (selectMap && highlighter) {
@@ -1069,9 +1091,9 @@ export class BimEngine {
       try {
         await fragments.core.update(true);
       } catch {
-        /* worker may reject update while tiles are rebuilding */
+        /* worker may reject update while tiles are rebuilding or engine is disposing */
       }
-      this.bumpRender();
+      if (!this.disposed) this.bumpRender();
     } finally {
       this.maybeScheduleDeferredMaterialSync();
     }
@@ -1463,6 +1485,22 @@ export class BimEngine {
     return this.cameraMode;
   }
 
+  /** Match IFC storey key from source/display name or alias. */
+  // fallow-ignore-next-line complexity
+  resolveStoreyName(name: string | null | undefined): string | null {
+    if (!name) return null;
+    if (this.storeyMaps.has(name)) return name;
+    const lower = name.toLowerCase();
+    for (const key of this.storeyMaps.keys()) {
+      if (key.toLowerCase() === lower) return key;
+    }
+    for (const key of this.storeyMaps.keys()) {
+      const kl = key.toLowerCase();
+      if (kl.includes(lower) || lower.includes(kl)) return key;
+    }
+    return null;
+  }
+
   invalidatePlanSilhouette(): void {
     this.planSilhouetteDirty = true;
     this.schedulePlanSilhouetteBake();
@@ -1594,7 +1632,8 @@ export class BimEngine {
 
     const targetStoreys = (): string[] => {
       if (storeyName) {
-        return this.storeyMaps.has(storeyName) ? [storeyName] : [];
+        const resolved = this.resolveStoreyName(storeyName);
+        return resolved ? [resolved] : [];
       }
       return [...this.storeyMaps.keys()].filter((name) => this.storeyVisible.get(name) ?? true);
     };
@@ -1793,7 +1832,7 @@ export class BimEngine {
 
   // fallow-ignore-next-line complexity
   async setPlanMinimapStorey(name: string | null): Promise<void> {
-    const next = name && this.storeyMaps.has(name) ? name : null;
+    const next = this.resolveStoreyName(name);
     if (this.planMinimapStorey === next && !this.planSilhouetteDirty) return;
     this.planMinimapStorey = next;
     this.planSilhouetteDirty = true;
@@ -1810,7 +1849,7 @@ export class BimEngine {
     await this.bakePlanSilhouetteNow();
   }
 
-  // fallow-ignore-next-line unused-class-member, complexity
+  // fallow-ignore-next-line complexity
   async applyPlanMinimapPose(pose: PlanMinimapPose): Promise<void> {
     const world = this.world;
     if (!world) return;
@@ -2512,8 +2551,14 @@ export class BimEngine {
   }
 
   // fallow-ignore-next-line complexity
-  private async handleHighlight(map: OBC.ModelIdMap): Promise<void> {
-    const entry = Object.entries(map)[0];
+  private async handleHighlight(map: OBC.ModelIdMap, preferModelId?: string | null): Promise<void> {
+    const preferred =
+      preferModelId && map[preferModelId] instanceof Set && map[preferModelId]!.size > 0
+        ? preferModelId
+        : null;
+    const entry = preferred
+      ? ([preferred, map[preferred]!] as [string, Set<number>])
+      : Object.entries(map)[0];
     if (!entry) {
       this.events.onSelection(null);
       return;
@@ -2597,6 +2642,7 @@ export class BimEngine {
   clearSelection(): void {
     this.selectedGuids.clear();
     this.lastPickMap = null;
+    this.lastPickedModelId = null;
     void this.requestFragmentHighlights();
     this.events.onSelection(null);
     this.events.onMultiSelection?.([]);
@@ -2917,8 +2963,6 @@ export class BimEngine {
       this.selectedGuids.clear();
     }
 
-    await this.syncGuidLocalIdMap();
-
     if (guid && hit) {
       const meta = this.modelRegistry.get(hit.modelId);
       this.guidIndex.set(guid, {
@@ -2931,10 +2975,13 @@ export class BimEngine {
 
     let map: OBC.ModelIdMap | null = null;
     if (this.selectedGuids.size > 0) {
-      map = this.buildModelIdMapFromGuids([...this.selectedGuids]);
+      map = await this.resolveModelIdMapFromGuids([...this.selectedGuids]);
     }
     if (!map && pickMap) {
       map = pickMap;
+    } else if (map && pickMap && hit) {
+      if (!map[hit.modelId]) map[hit.modelId] = new Set<number>();
+      (map[hit.modelId] as Set<number>).add(hit.localId);
     }
 
     if (!map) {
@@ -2943,8 +2990,9 @@ export class BimEngine {
     }
 
     this.lastPickMap = map;
+    this.lastPickedModelId = hit.modelId;
     await this.requestFragmentHighlights();
-    await this.handleHighlight(map);
+    await this.handleHighlight(map, hit.modelId);
     this.bumpRender();
     this.events.onMultiSelection?.([...this.selectedGuids]);
     return true;
@@ -2972,6 +3020,8 @@ export class BimEngine {
         this.applyWalkNavigation();
         await this.enterWalkCamera(walkPivot);
         this.startWalkLoop();
+        this.planSilhouetteDirty = true;
+        this.schedulePlanSilhouetteBake();
       } else {
         world.camera.set("Orbit");
         this.stopWalkLoop();
@@ -3154,27 +3204,76 @@ export class BimEngine {
     const fragments = this.components?.get(OBC.FragmentsManager);
     if (!index || !fragments?.initialized) return;
 
+    const modelBuckets = new Map<
+      string,
+      {
+        guids: string[];
+        meta: Map<string, { fileVersionId: string; sourceLabel: string }>;
+      }
+    >();
+
     for (const el of index.elements) {
       const modelId = el.sourceModelId ?? this.primaryModelId;
       const fileVersionId =
         el.sourceFileVersionId ?? this.modelRegistry.get(modelId)?.fileVersionId;
       const sourceLabel = el.sourceLabel ?? this.modelRegistry.get(modelId)?.name ?? null;
       if (!modelId || !fileVersionId) continue;
+
+      let bucket = modelBuckets.get(modelId);
+      if (!bucket) {
+        bucket = { guids: [], meta: new Map() };
+        modelBuckets.set(modelId, bucket);
+      }
+      bucket.guids.push(el.guid);
+      bucket.meta.set(el.guid, {
+        fileVersionId,
+        sourceLabel: sourceLabel ?? "Model",
+      });
+    }
+
+    for (const [modelId, bucket] of modelBuckets) {
       const model = fragments.list.get(modelId);
       if (!model) continue;
-      try {
-        const [localId] = await model.getLocalIdsByGuids([el.guid]);
-        if (localId == null) continue;
-        this.guidIndex.set(el.guid, {
-          modelId,
-          localId,
-          fileVersionId,
-          sourceLabel: sourceLabel ?? "Model",
-        });
-      } catch {
-        /* best-effort */
+      for (let i = 0; i < bucket.guids.length; i += BimEngine.GUID_SYNC_CHUNK) {
+        const chunk = bucket.guids.slice(i, i + BimEngine.GUID_SYNC_CHUNK);
+        try {
+          const localIds = await model.getLocalIdsByGuids(chunk);
+          for (let j = 0; j < chunk.length; j++) {
+            const guid = chunk[j]!;
+            const localId = localIds[j];
+            if (localId == null) continue;
+            const meta = bucket.meta.get(guid);
+            if (!meta) continue;
+            this.guidIndex.set(guid, {
+              modelId,
+              localId,
+              fileVersionId: meta.fileVersionId,
+              sourceLabel: meta.sourceLabel,
+            });
+          }
+        } catch {
+          /* best-effort */
+        }
       }
     }
+  }
+
+  // fallow-ignore-next-line complexity
+  private mergeModelIdMaps(
+    a: OBC.ModelIdMap | null,
+    b: OBC.ModelIdMap | null,
+  ): OBC.ModelIdMap | null {
+    if (!a && !b) return null;
+    const out: OBC.ModelIdMap = {};
+    for (const src of [a, b]) {
+      if (!src) continue;
+      for (const [modelId, ids] of Object.entries(src)) {
+        if (!(ids instanceof Set) || ids.size === 0) continue;
+        if (!out[modelId]) out[modelId] = new Set<number>();
+        for (const id of ids) (out[modelId] as Set<number>).add(id);
+      }
+    }
+    return Object.keys(out).length > 0 ? out : null;
   }
 
   // fallow-ignore-next-line complexity
@@ -3192,22 +3291,49 @@ export class BimEngine {
   // fallow-ignore-next-line complexity
   private async resolveModelIdMapFromGuids(guids: string[]): Promise<OBC.ModelIdMap | null> {
     if (guids.length === 0) return null;
-    let map = this.buildModelIdMapFromGuids(guids);
-    if (map) return map;
-
-    const fragments = this.components?.get(OBC.FragmentsManager);
-    if (!fragments?.initialized) return null;
-    try {
-      map = await fragments.guidsToModelIdMap(guids);
-      return map && Object.keys(map).length > 0 ? map : null;
-    } catch {
-      return null;
+    const map = this.buildModelIdMapFromGuids(guids) ?? {};
+    const missing = guids.filter((g) => !this.guidIndex.has(g));
+    if (missing.length > 0) {
+      const fragments = this.components?.get(OBC.FragmentsManager);
+      if (fragments?.initialized) {
+        try {
+          const fallback = await fragments.guidsToModelIdMap(missing);
+          if (fallback) {
+            for (const [modelId, ids] of Object.entries(fallback)) {
+              if (!(ids instanceof Set) || ids.size === 0) continue;
+              if (!map[modelId]) map[modelId] = new Set<number>();
+              for (const id of ids) (map[modelId] as Set<number>).add(id);
+            }
+          }
+        } catch {
+          /* optional */
+        }
+      }
     }
+    return Object.keys(map).length > 0 ? map : null;
   }
 
   // fallow-ignore-next-line complexity
   private getActiveSelectionMap(): OBC.ModelIdMap | null {
-    const raw = this.buildModelIdMapFromGuids([...this.selectedGuids]) ?? this.lastPickMap;
+    // fallow-ignore-next-line code-duplication
+    const raw = this.mergeModelIdMaps(
+      this.buildModelIdMapFromGuids([...this.selectedGuids]),
+      this.lastPickMap,
+    );
+    if (!raw) return null;
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    if (!fragments?.initialized) return raw;
+    const safe = this.sanitizeHighlightMap(raw, fragments);
+    if (!safe && this.lastPickMap === raw) this.lastPickMap = null;
+    return safe;
+  }
+
+  // fallow-ignore-next-line complexity
+  private async getActiveSelectionMapAsync(): Promise<OBC.ModelIdMap | null> {
+    const raw =
+      (this.selectedGuids.size > 0
+        ? await this.resolveModelIdMapFromGuids([...this.selectedGuids])
+        : null) ?? this.lastPickMap;
     if (!raw) return null;
     const fragments = this.components?.get(OBC.FragmentsManager);
     if (!fragments?.initialized) return raw;
@@ -3220,8 +3346,7 @@ export class BimEngine {
   async selectByGuids(guids: string[], additive = false): Promise<void> {
     if (!additive) this.selectedGuids.clear();
     for (const g of guids) this.selectedGuids.add(g);
-    await this.syncGuidLocalIdMap();
-    const map = this.buildModelIdMapFromGuids([...this.selectedGuids]);
+    const map = await this.resolveModelIdMapFromGuids([...this.selectedGuids]);
     if (!map) {
       if (!additive) this.clearSelection();
       return;
@@ -3233,7 +3358,7 @@ export class BimEngine {
   }
 
   async isolateSelection(): Promise<void> {
-    const map = this.getActiveSelectionMap();
+    const map = await this.getActiveSelectionMapAsync();
     if (!map) return;
     const hider = this.mustComponents().get(OBC.Hider);
     await hider.isolate(map);
@@ -3241,7 +3366,7 @@ export class BimEngine {
   }
 
   async hideSelection(): Promise<void> {
-    const map = this.getActiveSelectionMap();
+    const map = await this.getActiveSelectionMapAsync();
     if (!map) return;
     const hider = this.mustComponents().get(OBC.Hider);
     await hider.set(false, map);
@@ -3301,8 +3426,6 @@ export class BimEngine {
     matchGuids: string[];
     colorizeGroups: { styleId: string; color: string; guids: string[] }[];
   }): Promise<void> {
-    await this.syncGuidLocalIdMap();
-
     this.activeFilterGhostMap = null;
 
     if (opts.filterActive) {
@@ -3386,7 +3509,7 @@ export class BimEngine {
 
   async setXRayMode(enabled: boolean): Promise<void> {
     this.xRayActive = enabled;
-    const map = this.getActiveSelectionMap();
+    const map = await this.getActiveSelectionMapAsync();
     if (!map) return;
     const hider = this.mustComponents().get(OBC.Hider);
     if (enabled) await hider.isolate(map);
@@ -3396,7 +3519,7 @@ export class BimEngine {
 
   // fallow-ignore-next-line complexity
   async sectionBoxOnSelection(): Promise<void> {
-    const map = this.getActiveSelectionMap();
+    const map = await this.getActiveSelectionMapAsync();
     if (!map) return;
     const world = this.mustWorld();
     const components = this.mustComponents();
@@ -3718,7 +3841,6 @@ export class BimEngine {
     }
     this.issueAnchorRefreshInFlight = true;
     try {
-      await this.syncGuidLocalIdMap();
       const fragments = this.components?.get(OBC.FragmentsManager);
       if (!fragments?.initialized) return;
 
@@ -3743,15 +3865,14 @@ export class BimEngine {
   }
 
   async zoomToSelection(): Promise<void> {
-    const map = this.getActiveSelectionMap();
+    const map = await this.getActiveSelectionMapAsync();
     if (!map) return;
     await this.zoomToModelIdMap(map);
   }
 
   async zoomToGuids(guids: string[]): Promise<void> {
     if (guids.length === 0) return;
-    await this.syncGuidLocalIdMap();
-    const map = this.buildModelIdMapFromGuids(guids);
+    const map = await this.resolveModelIdMapFromGuids(guids);
     if (!map) return;
     await this.zoomToModelIdMap(map);
   }

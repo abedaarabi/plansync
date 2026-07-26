@@ -5,6 +5,8 @@ export type FileVersion = {
   s3Key: string;
   /** When this revision was uploaded */
   createdAt?: string;
+  /** Set when IFC publish wizard completes */
+  bimPublishedAt?: string | null;
 };
 
 export type CloudFile = {
