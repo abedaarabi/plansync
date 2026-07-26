@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import { apiUrl } from "@/lib/api-url";
 import { nanoid } from "nanoid";
 import type { QueryClient } from "@tanstack/react-query";
+import { uploadFileViaXHR } from "@/lib/api-client/uploadFileXHR";
 import { mergeUploadedFileIntoProject } from "@/lib/projectsCache";
 import { qk } from "@/lib/queryKeys";
 import type { FileVersion } from "@/types/projects";
@@ -48,52 +48,13 @@ function uploadPdfWithProgress(
   };
   fileVersion: FileVersion;
 }> {
-  const fd = new FormData();
-  fd.append("workspaceId", workspaceId);
-  fd.append("projectId", projectId);
-  if (folderId) fd.append("folderId", folderId);
-  fd.append("fileName", file.name);
-  fd.append("file", file);
-
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", apiUrl("/api/v1/files/upload"));
-    xhr.withCredentials = true;
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        onProgress(Math.round((e.loaded / e.total) * 100));
-      }
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const data = JSON.parse(xhr.responseText) as {
-            file: {
-              id: string;
-              name: string;
-              mimeType: string;
-              folderId: string | null;
-              updatedAt?: string;
-            };
-            fileVersion: FileVersion;
-          };
-          resolve(data);
-        } catch {
-          reject(new Error("Invalid response"));
-        }
-      } else {
-        let msg = `Upload failed (${xhr.status})`;
-        try {
-          const j = JSON.parse(xhr.responseText) as { error?: string };
-          if (j.error) msg = j.error;
-        } catch {
-          /* ignore */
-        }
-        reject(new Error(msg));
-      }
-    };
-    xhr.onerror = () => reject(new Error("Network error"));
-    xhr.send(fd);
+  return uploadFileViaXHR({
+    workspaceId,
+    projectId,
+    folderId,
+    fileName: file.name,
+    file,
+    onProgress,
   });
 }
 

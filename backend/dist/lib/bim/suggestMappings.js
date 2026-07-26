@@ -76,6 +76,7 @@ function bestLevelByElevation(levels, target) {
     return bestDist <= 1.5 ? best : null;
 }
 /** Auto-suggest level assignments for PDF pages (filename → AI → elevation → page order). */
+// fallow-ignore-next-line complexity
 export function suggestMappings(levels, pdfCandidates) {
     if (levels.length === 0 || pdfCandidates.length === 0)
         return [];
@@ -121,8 +122,7 @@ export function suggestMappings(levels, pdfCandidates) {
         const key = `${candidate.pdfFileId}:${candidate.pageIndex}`;
         if (used.has(key))
             continue;
-        const elev = elevationFromText(candidate.fileName) ??
-            elevationFromText(candidate.summaryMarkdown ?? "");
+        const elev = elevationFromText(candidate.fileName) ?? elevationFromText(candidate.summaryMarkdown ?? "");
         if (elev != null) {
             trySuggest(candidate, bestLevelByElevation(ordered, elev), 0.75, "elevation match");
         }

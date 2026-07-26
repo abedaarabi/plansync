@@ -105,10 +105,10 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
 
     const resultJson = jobRun?.resultJson as { progress?: number; phase?: string } | null;
     const conversionStatus = fv.bimConversionStatus;
+    const quantityIndexReady = conversionStatus === "ready";
     const quantityIndexSummaryReady =
       Boolean(fv.quantityIndexS3Key) &&
-      (conversionStatus === "summary_ready" || conversionStatus === "ready");
-    const quantityIndexReady = conversionStatus === "ready";
+      (conversionStatus === "summary_ready" || !quantityIndexReady);
 
     return c.json({
       fileVersionId: fv.id,
@@ -116,7 +116,7 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
       fragmentsReady: Boolean(fv.fragmentsS3Key),
       quantityIndexSummaryReady,
       quantityIndexReady,
-      partial: conversionStatus === "summary_ready",
+      partial: quantityIndexSummaryReady,
       indexProgress: typeof resultJson?.progress === "number" ? resultJson.progress : null,
       indexPhase:
         resultJson?.phase === "summary" || resultJson?.phase === "full" ? resultJson.phase : null,

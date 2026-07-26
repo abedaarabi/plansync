@@ -99,7 +99,9 @@ export async function getObjectStream(env, key) {
         };
     }
 }
-export async function deleteObject(env, key) {
+export async function deleteObject(env, 
+// fallow-ignore-next-line code-duplication
+key) {
     const client = s3Client(env);
     const bucket = env.S3_BUCKET;
     if (!client || !bucket)

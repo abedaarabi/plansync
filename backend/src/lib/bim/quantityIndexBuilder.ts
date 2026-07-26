@@ -2,7 +2,6 @@ import { gunzipSync } from "node:zlib";
 import * as WebIFC from "web-ifc";
 import { disciplineForIfcType } from "./discipline.js";
 import { ifcNumVal, ifcStrVal, webIfcWasmDir } from "./ifcParseUtils.js";
-import { extractSurfaceColorFromMaterials, hasAuthoredSurfaceStyle } from "./surfaceColor.js";
 import type {
   BimElementQuantities,
   BimLevelAggregate,
@@ -64,15 +63,6 @@ function parseQuantitiesFromPsets(psets: unknown[]): {
   }
 
   return { quantities: out, source };
-}
-
-function materialFromPsets(materials: unknown[]): string | null {
-  for (const m of materials) {
-    if (!m || typeof m !== "object") continue;
-    const name = strVal((m as Record<string, unknown>).Name);
-    if (name) return name;
-  }
-  return null;
 }
 
 // fallow-ignore-next-line complexity
@@ -178,19 +168,13 @@ async function buildElementStoreyMap(
   ifcApi: WebIFC.IfcAPI,
   modelId: number,
 ): Promise<Map<number, string>> {
-  // fallow-ignore-next-line code-duplication
   const storeyNames = new Map<number, string>();
   const storeyIds = ifcApi.GetLineIDsWithType(modelId, WebIFC.IFCBUILDINGSTOREY, true);
   for (let i = 0; i < storeyIds.size(); i++) {
     const id = storeyIds.get(i);
     try {
-      const props = await ifcApi.properties.getItemProperties(modelId, id, false, false);
-      storeyNames.set(
-        id,
-        strVal((props as Record<string, unknown>).Name) ??
-          strVal((props as Record<string, unknown>).LongName) ??
-          `Level ${id}`,
-      );
+      const line = ifcApi.GetLine(modelId, id) as Record<string, unknown>;
+      storeyNames.set(id, strVal(line.Name) ?? strVal(line.LongName) ?? `Level ${id}`);
     } catch {
       storeyNames.set(id, `Level ${id}`);
     }
@@ -246,11 +230,26 @@ function buildLoqFromLightEntries(
   };
 }
 
+/** Below this size, skip the two-phase summary upload and do one full pass. */
+const SINGLE_PASS_MAX_PRODUCTS = 500;
+
 type IfcSession = {
   ifcApi: WebIFC.IfcAPI;
   modelId: number;
   close: () => void;
 };
+
+function readProductLineFields(
+  ifcApi: WebIFC.IfcAPI,
+  modelId: number,
+  expressId: number,
+): { guid: string; name: string | null } {
+  const line = ifcApi.GetLine(modelId, expressId) as Record<string, unknown>;
+  return {
+    guid: strVal(line.GlobalId) ?? `express-${expressId}`,
+    name: strVal(line.Name),
+  };
+}
 
 async function openIfcSession(ifcBytes: Uint8Array): Promise<IfcSession> {
   const ifcApi = new WebIFC.IfcAPI();
@@ -273,18 +272,15 @@ function collectProductIds(ifcApi: WebIFC.IfcAPI, modelId: number): number[] {
   return allIds;
 }
 
-async function processSummaryExpressId(
-  // fallow-ignore-next-line code-duplication
+function processSummaryExpressIdSync(
   ifcApi: WebIFC.IfcAPI,
   modelId: number,
   expressId: number,
   storeyMap: Map<number, string>,
-): Promise<BimQuantityEntry | null> {
+): BimQuantityEntry | null {
   try {
     const ifcType = resolveIfcTypeName(ifcApi, modelId, expressId);
-    const props = await ifcApi.properties.getItemProperties(modelId, expressId, false, false);
-    const guid = strVal((props as Record<string, unknown>).GlobalId) ?? `express-${expressId}`;
-    const name = strVal((props as Record<string, unknown>).Name);
+    const { guid, name } = readProductLineFields(ifcApi, modelId, expressId);
     const lodFlags: BimLodFlags = {
       identity: Boolean(guid && ifcType),
       dimensions: false,
@@ -318,33 +314,31 @@ async function processFullExpressId(
 ): Promise<BimQuantityEntry | null> {
   try {
     const ifcType = resolveIfcTypeName(ifcApi, modelId, expressId);
-    const props = await ifcApi.properties.getItemProperties(modelId, expressId, false, false);
-    const guid = strVal((props as Record<string, unknown>).GlobalId) ?? `express-${expressId}`;
-    const name = strVal((props as Record<string, unknown>).Name);
+    const { guid, name } = readProductLineFields(ifcApi, modelId, expressId);
 
     let psets: unknown[] = [];
-    let materials: unknown[] = [];
     try {
-      psets = await ifcApi.properties.getPropertySets(modelId, expressId, true, true);
-    } catch {
-      /* optional */
-    }
-    try {
-      materials = await ifcApi.properties.getMaterialsProperties(modelId, expressId, true, true);
+      psets = await withTimeout(
+        ifcApi.properties
+          .getPropertySets(modelId, expressId, true, true)
+          .catch(() => [] as unknown[]),
+        4000,
+        [] as unknown[],
+      );
     } catch {
       /* optional */
     }
 
     const { quantities, source } = parseQuantitiesFromPsets(psets);
-    const material = materialFromPsets(materials);
-    const surfaceColor = extractSurfaceColorFromMaterials(materials);
+    const material = null;
+    const surfaceColor = null;
 
     const lodFlags: BimLodFlags = {
       identity: Boolean(guid && ifcType),
       dimensions: Boolean(quantities.length || quantities.area || quantities.volume),
       quantities: source !== "missing",
-      material: Boolean(material),
-      color: hasAuthoredSurfaceStyle(materials, surfaceColor),
+      material: false,
+      color: false,
     };
 
     return {
@@ -365,93 +359,124 @@ async function processFullExpressId(
   }
 }
 
-async function processExpressIdsParallel<T>(
+async function processExpressIdsSequential<T>(
   allIds: number[],
   worker: (expressId: number) => Promise<T | null>,
   onProgress?: (fraction: number) => void,
 ): Promise<T[]> {
   const results: T[] = [];
   const total = allIds.length;
-  const concurrency = Math.min(48, Math.max(1, total));
-  let nextIndex = 0;
-  let completed = 0;
-
-  const workers = Array.from({ length: concurrency }, async () => {
-    while (true) {
-      const i = nextIndex++;
-      if (i >= total) break;
-      const entry = await worker(allIds[i]!);
-      if (entry) results.push(entry);
-      completed += 1;
-      if (completed % 200 === 0 || completed === total) {
-        onProgress?.(completed / Math.max(total, 1));
-      }
+  for (let i = 0; i < total; i++) {
+    const entry = await worker(allIds[i]!);
+    if (entry) results.push(entry);
+    if (i === 0 || i === total - 1 || (i + 1) % 100 === 0) {
+      onProgress?.((i + 1) / Math.max(total, 1));
     }
-  });
-  await Promise.all(workers);
+  }
   onProgress?.(1);
   return results;
 }
 
-/** Fast pass — types, levels, and GUID lists without property-set walks. */
-export async function buildQuantityIndexSummaryFromIfc(
-  ifcBytes: Uint8Array,
-  fileVersionId: string,
-  onProgress?: (fraction: number) => void,
-): Promise<BimQuantityIndex> {
-  const session = await openIfcSession(ifcBytes);
+async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const storeyMap = await buildElementStoreyMap(session.ifcApi, session.modelId);
-    onProgress?.(0.05);
-    const allIds = collectProductIds(session.ifcApi, session.modelId);
-    const lightEntries = await processExpressIdsParallel(
-      allIds,
-      (id) => processSummaryExpressId(session.ifcApi, session.modelId, id, storeyMap),
-      (fraction) => onProgress?.(0.05 + fraction * 0.95),
-    );
-    const loq = buildLoqFromLightEntries(lightEntries);
-    return {
-      version: 1,
-      fileVersionId,
-      generatedAt: new Date().toISOString(),
-      loq,
-      elements: [],
-      byType: aggregateByType(lightEntries),
-      byLevel: aggregateByLevel(lightEntries),
-      partial: true,
-    };
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), ms);
+      }),
+    ]);
   } finally {
-    session.close();
+    if (timer) clearTimeout(timer);
   }
 }
 
-/** Full pass — property sets, materials, and per-element quantities. */
-export async function buildQuantityIndexFullFromIfc(
+function finalizeSummaryIndex(
+  fileVersionId: string,
+  lightEntries: BimQuantityEntry[],
+): BimQuantityIndex {
+  return {
+    version: 1,
+    fileVersionId,
+    generatedAt: new Date().toISOString(),
+    loq: buildLoqFromLightEntries(lightEntries),
+    elements: [],
+    byType: aggregateByType(lightEntries),
+    byLevel: aggregateByLevel(lightEntries),
+    partial: true,
+  };
+}
+
+function finalizeFullIndex(fileVersionId: string, elements: BimQuantityEntry[]): BimQuantityIndex {
+  return {
+    version: 1,
+    fileVersionId,
+    generatedAt: new Date().toISOString(),
+    loq: buildLoq(elements),
+    elements,
+    byType: aggregateByType(elements),
+    byLevel: aggregateByLevel(elements),
+    partial: false,
+  };
+}
+
+export type BuildQuantityIndexPhasedOpts = {
+  skipSummary?: boolean;
+  onSummaryReady?: (summary: BimQuantityIndex) => Promise<void>;
+  onProgress?: (fraction: number, phase: "summary" | "full") => void;
+};
+
+/**
+ * Single IFC read: optional fast summary (sync GetLine scan), then one full property pass.
+ * Small models skip the summary phase entirely.
+ */
+export async function buildQuantityIndexPhased(
   ifcBytes: Uint8Array,
   fileVersionId: string,
-  onProgress?: (fraction: number) => void,
+  opts?: BuildQuantityIndexPhasedOpts,
 ): Promise<BimQuantityIndex> {
   const session = await openIfcSession(ifcBytes);
   try {
     const storeyMap = await buildElementStoreyMap(session.ifcApi, session.modelId);
-    onProgress?.(0.02);
     const allIds = collectProductIds(session.ifcApi, session.modelId);
-    const elements = await processExpressIdsParallel(
+    const total = allIds.length;
+
+    opts?.onProgress?.(0.02, total <= SINGLE_PASS_MAX_PRODUCTS ? "full" : "summary");
+
+    if (total <= SINGLE_PASS_MAX_PRODUCTS) {
+      const elements = await processExpressIdsSequential(
+        allIds,
+        (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap),
+        (fraction) => opts?.onProgress?.(0.02 + fraction * 0.98, "full"),
+      );
+      return finalizeFullIndex(fileVersionId, elements);
+    }
+
+    if (!opts?.skipSummary) {
+      const lightEntries: BimQuantityEntry[] = [];
+      for (let i = 0; i < total; i++) {
+        const entry = processSummaryExpressIdSync(
+          session.ifcApi,
+          session.modelId,
+          allIds[i]!,
+          storeyMap,
+        );
+        if (entry) lightEntries.push(entry);
+        if (i === 0 || i === total - 1 || (i + 1) % 500 === 0) {
+          opts?.onProgress?.(0.02 + ((i + 1) / total) * 0.33, "summary");
+        }
+      }
+      const summary = finalizeSummaryIndex(fileVersionId, lightEntries);
+      await opts?.onSummaryReady?.(summary);
+    }
+
+    opts?.onProgress?.(0.35, "full");
+    const elements = await processExpressIdsSequential(
       allIds,
       (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap),
-      (fraction) => onProgress?.(0.02 + fraction * 0.98),
+      (fraction) => opts?.onProgress?.(0.35 + fraction * 0.65, "full"),
     );
-    const loq = buildLoq(elements);
-    return {
-      version: 1,
-      fileVersionId,
-      generatedAt: new Date().toISOString(),
-      loq,
-      elements,
-      byType: aggregateByType(elements),
-      byLevel: aggregateByLevel(elements),
-      partial: false,
-    };
+    return finalizeFullIndex(fileVersionId, elements);
   } finally {
     session.close();
   }

@@ -50,9 +50,13 @@ export function BimElementCatalog(props: {
   }, [props.index, effectiveSearch]);
 
   if (!props.index) {
+    const waiting =
+      props.conversionStatus === "running" ||
+      props.conversionStatus === "summary_ready" ||
+      props.conversionStatus === "pending";
     const message =
       props.errorMessage ??
-      (props.conversionStatus === "running"
+      (waiting
         ? "Building quantity index…"
         : props.conversionStatus === "failed"
           ? "Quantity index build failed."
@@ -60,12 +64,15 @@ export function BimElementCatalog(props: {
     return <p className="px-4 py-3 text-[12px] text-[var(--bim-text-muted)]">{message}</p>;
   }
 
+  const partialNote = props.index.partial ? " · quantities loading" : "";
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <p className="border-b border-[var(--bim-border)] bg-[var(--bim-hover)] px-4 py-2.5 text-[11px] text-[var(--bim-text-muted)]">
         {props.index.elements.length.toLocaleString()} elements indexed ·{" "}
         {Object.keys(props.index.byType).length.toLocaleString()} types ·{" "}
         {Object.keys(props.index.byLevel).length.toLocaleString()} levels
+        {partialNote}
       </p>
       <div className="border-b border-[var(--bim-border)] px-4 py-2">
         <div className="relative">

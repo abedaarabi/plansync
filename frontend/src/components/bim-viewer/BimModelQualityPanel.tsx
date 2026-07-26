@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { BimKeyboardShortcutsPanel } from "./BimKeyboardShortcutsPanel";
 import { resolveAuthoredColorPct } from "@/lib/bim/loqHelpers";
+import { bimIndexBlockingLoad, bimIndexEnriching } from "@/lib/bim/indexStatus";
 import type { BimLoqReport, BimQuantityIndex } from "@/lib/bim/types";
 import { BIM_GEOMETRY_PROFILE } from "@/lib/bim/renderingProfile";
 import {
@@ -33,8 +34,8 @@ export function BimModelQualityPanel(props: {
   onRebuildIndex?: () => void;
 }) {
   const [qualityTab, setQualityTab] = useState<"appearance" | "shortcuts">("appearance");
-  const building =
-    !props.loq && (props.conversionStatus === "pending" || props.conversionStatus === "running");
+  const blocking = bimIndexBlockingLoad(props.conversionStatus, props.quantityIndex, props.loq);
+  const enriching = bimIndexEnriching(props.conversionStatus, props.quantityIndex, props.loq);
   const failed = !props.loq && props.conversionStatus === "failed";
   const authoredColorPct = resolveAuthoredColorPct(props.loq, props.quantityIndex);
 
@@ -120,7 +121,7 @@ export function BimModelQualityPanel(props: {
         )}
       </div>
 
-      {building ? (
+      {blocking ? (
         <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] px-3 py-4">
           <div className="flex items-center gap-2 text-[12px] font-medium text-[var(--bim-text)]">
             <Loader2 className="h-4 w-4 animate-spin text-[var(--bim-accent)]" aria-hidden />
@@ -129,6 +130,13 @@ export function BimModelQualityPanel(props: {
           <p className="mt-2 text-[11px] leading-relaxed text-[var(--bim-text-muted)]">
             This runs once per model revision and powers search, quantities, and auto-map.
           </p>
+        </div>
+      ) : null}
+
+      {enriching ? (
+        <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-hover)] px-3 py-2.5 text-[11px] text-[var(--bim-text-muted)]">
+          Detailed quantities are still loading. Charts and level coverage below are already
+          available.
         </div>
       ) : null}
 
@@ -164,7 +172,7 @@ export function BimModelQualityPanel(props: {
           authoredColorPct={authoredColorPct}
           onRebuildIndex={props.onRebuildIndex}
         />
-      ) : !building && !failed ? (
+      ) : !blocking && !failed ? (
         <div className="space-y-3 rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] p-3">
           <CoverageBar label="Authored colors" pct={authoredColorPct} />
           <p className="text-[10px] leading-relaxed text-[var(--bim-text-muted)]">
@@ -173,7 +181,7 @@ export function BimModelQualityPanel(props: {
         </div>
       ) : null}
 
-      {!building && !failed ? (
+      {!blocking && !failed ? (
         <div className="mt-4 space-y-3">
           <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] px-3 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--bim-text-subtle)]">
@@ -202,7 +210,7 @@ export function BimModelQualityPanel(props: {
         </div>
       ) : null}
 
-      {!building && !failed && !props.loq && authoredColorPct === 0 ? (
+      {!blocking && !failed && !props.loq && authoredColorPct === 0 ? (
         <p className="mt-3 text-[12px] text-[var(--bim-text-muted)]">
           No quality report available yet.
         </p>

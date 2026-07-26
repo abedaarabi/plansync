@@ -64,8 +64,8 @@ model User {
   workOrdersCompleted          Issue[]                   @relation("WorkOrderCompleter")
   assetMeterReadings           AssetMeterReading[]       @relation("AssetMeterReadingActor")
   bimSavedViews                BimSavedView[]
-  bimPublishedVersions           FileVersion[]     @relation("BimPublishedBy")
-  coordAlignedDrawingMaps        DrawingLevelMap[] @relation("CoordAlignedBy")
+  bimPublishedVersions         FileVersion[]             @relation("BimPublishedBy")
+  coordAlignedDrawingMaps      DrawingLevelMap[]         @relation("CoordAlignedBy")
   issueComments                IssueComment[]            @relation("IssueCommentAuthor")
 
   /// When true, omit this user from PDF viewer presence / collaborator lists (still can edit).
@@ -831,14 +831,14 @@ model File {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   folder  Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
-  versions       FileVersion[]
-  comments       FileComment[]
-  issues         Issue[]
-  takeoffLines   TakeoffLine[]
-  rfisDrawing    Rfi[]           @relation("RfiDrawingFile")
-  punchDrawing   PunchItem[]     @relation("PunchDrawingFile")
-  assets         Asset[]
-  inspectionRuns InspectionRun[]
+  versions         FileVersion[]
+  comments         FileComment[]
+  issues           Issue[]
+  takeoffLines     TakeoffLine[]
+  rfisDrawing      Rfi[]             @relation("RfiDrawingFile")
+  punchDrawing     PunchItem[]       @relation("PunchDrawingFile")
+  assets           Asset[]
+  inspectionRuns   InspectionRun[]
   drawingLevelMaps DrawingLevelMap[]
 
   createdAt    DateTime  @default(now())
@@ -892,10 +892,10 @@ model FileVersion {
   bimSavedViews          BimSavedView[]
   bimPublishedAt         DateTime?
   bimPublishedById       String?
-  bimPublishedBy         User?             @relation("BimPublishedBy", fields: [bimPublishedById], references: [id], onDelete: SetNull)
+  bimPublishedBy         User?                   @relation("BimPublishedBy", fields: [bimPublishedById], references: [id], onDelete: SetNull)
   bimModelLevels         BimModelLevel[]
-  ifcDrawingMaps         DrawingLevelMap[] @relation("IfcDrawingMaps")
-  pdfDrawingMaps         DrawingLevelMap[] @relation("PdfDrawingMaps")
+  ifcDrawingMaps         DrawingLevelMap[]       @relation("IfcDrawingMaps")
+  pdfDrawingMaps         DrawingLevelMap[]       @relation("PdfDrawingMaps")
 
   @@unique([fileId, version])
   @@index([fileId])
@@ -1418,8 +1418,8 @@ model BimModelLevel {
   elementCount     Int      @default(0)
   createdAt        DateTime @default(now())
 
-  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  ifcFileVersion FileVersion     @relation(fields: [ifcFileVersionId], references: [id], onDelete: Cascade)
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ifcFileVersion FileVersion       @relation(fields: [ifcFileVersionId], references: [id], onDelete: Cascade)
   drawingMaps    DrawingLevelMap[]
 
   @@unique([ifcFileVersionId, sourceName])
@@ -1427,7 +1427,7 @@ model BimModelLevel {
 }
 
 model DrawingLevelMap {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   projectId          String
   ifcFileVersionId   String
   bimModelLevelId    String
@@ -1437,14 +1437,14 @@ model DrawingLevelMap {
   coordTransformJson Json?
   coordAlignedAt     DateTime?
   coordAlignedById   String?
-  createdAt          DateTime @default(now())
+  createdAt          DateTime  @default(now())
 
-  project          Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  ifcFileVersion   FileVersion   @relation("IfcDrawingMaps", fields: [ifcFileVersionId], references: [id], onDelete: Cascade)
-  bimModelLevel    BimModelLevel @relation(fields: [bimModelLevelId], references: [id], onDelete: Cascade)
-  pdfFile          File          @relation(fields: [pdfFileId], references: [id], onDelete: Cascade)
-  pdfFileVersion   FileVersion?  @relation("PdfDrawingMaps", fields: [pdfFileVersionId], references: [id], onDelete: SetNull)
-  coordAlignedBy   User?         @relation("CoordAlignedBy", fields: [coordAlignedById], references: [id], onDelete: SetNull)
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ifcFileVersion FileVersion   @relation("IfcDrawingMaps", fields: [ifcFileVersionId], references: [id], onDelete: Cascade)
+  bimModelLevel  BimModelLevel @relation(fields: [bimModelLevelId], references: [id], onDelete: Cascade)
+  pdfFile        File          @relation(fields: [pdfFileId], references: [id], onDelete: Cascade)
+  pdfFileVersion FileVersion?  @relation("PdfDrawingMaps", fields: [pdfFileVersionId], references: [id], onDelete: SetNull)
+  coordAlignedBy User?         @relation("CoordAlignedBy", fields: [coordAlignedById], references: [id], onDelete: SetNull)
 
   @@unique([ifcFileVersionId, pdfFileId, pageIndex])
   @@index([projectId])

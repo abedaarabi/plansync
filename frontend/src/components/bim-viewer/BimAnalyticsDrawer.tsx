@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { BarChart3, Layers3, Shapes, X } from "lucide-react";
 import type { BimQuantityIndex } from "@/lib/bim/types";
+import { bimIndexBlockingLoad } from "@/lib/bim/indexStatus";
 import {
   buildAnalyticsSnapshot,
   formatQuantity,
@@ -23,11 +24,7 @@ export function BimAnalyticsDrawer(props: {
   const [tab, setTab] = useState<AnalyticsTab>("overview");
   const snapshot = useMemo(() => buildAnalyticsSnapshot(props.index), [props.index]);
 
-  const indexing =
-    !snapshot &&
-    (props.conversionStatus === "pending" ||
-      props.conversionStatus === "running" ||
-      props.conversionStatus === "");
+  const blocking = bimIndexBlockingLoad(props.conversionStatus, props.index, null);
 
   return (
     <div
@@ -59,7 +56,7 @@ export function BimAnalyticsDrawer(props: {
 
       {!snapshot ? (
         <p className="bim-bottom-search-panel__hint">
-          {indexing
+          {blocking
             ? "Quantity index is building… charts appear when metadata is ready."
             : "No index data yet."}
         </p>

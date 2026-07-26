@@ -3,10 +3,7 @@ import type { Env } from "../env.js";
 import { gzipSync } from "node:zlib";
 import { getObjectStream, putObjectBuffer } from "../s3.js";
 import { webStreamToBuffer } from "./streamUtils.js";
-import {
-  buildQuantityIndexFullFromIfc,
-  buildQuantityIndexSummaryFromIfc,
-} from "./quantityIndexBuilder.js";
+import { buildQuantityIndexPhased } from "./quantityIndexBuilder.js";
 import { bimFragmentsKey, bimQuantityIndexKey } from "./s3Keys.js";
 import type { BimLoqReport } from "./types.js";
 import { createUserNotifications } from "../userNotifications.js";
@@ -47,7 +44,7 @@ export async function processBimConversion(
 
   const { workspaceId, id: projectId } = fv.file.project;
   const { id: fileId, name: fileName } = fv.file;
-  const skipSummary = fv.bimConversionStatus === "summary_ready" && Boolean(fv.quantityIndexS3Key);
+  const skipSummary = Boolean(fv.quantityIndexS3Key) && fv.bimConversionStatus !== "ready";
 
   await prisma.fileVersion.update({
     where: { id: fileVersionId },
@@ -81,39 +78,27 @@ export async function processBimConversion(
     const buf = await webStreamToBuffer(obj.stream);
     const ifcBytes = new Uint8Array(buf);
 
-    if (!skipSummary) {
-      let lastSummaryPct = -1;
-      const summary = await buildQuantityIndexSummaryFromIfc(
-        ifcBytes,
-        fileVersionId,
-        (fraction) => {
-          if (!jobRunId) return;
-          const pct = Math.min(40, Math.floor(fraction * 40));
-          if (pct === lastSummaryPct || pct % 5 !== 0) return;
-          lastSummaryPct = pct;
-          void updateJobProgress(jobRunId, pct, "summary");
-        },
-      );
-
-      await uploadQuantityIndex(env, indexKey, summary);
-
-      await prisma.fileVersion.update({
-        where: { id: fileVersionId },
-        data: {
-          quantityIndexS3Key: indexKey,
-          bimLoqReport: summary.loq as object,
-          bimConversionStatus: "summary_ready",
-        },
-      });
-    }
-
-    let lastFullPct = -1;
-    const index = await buildQuantityIndexFullFromIfc(ifcBytes, fileVersionId, (fraction) => {
-      if (!jobRunId) return;
-      const pct = Math.min(100, 40 + Math.floor(fraction * 60));
-      if (pct === lastFullPct || pct % 5 !== 0) return;
-      lastFullPct = pct;
-      void updateJobProgress(jobRunId, pct, "full");
+    let lastProgressPct = -1;
+    const index = await buildQuantityIndexPhased(ifcBytes, fileVersionId, {
+      skipSummary,
+      onSummaryReady: async (summary) => {
+        await uploadQuantityIndex(env, indexKey, summary);
+        await prisma.fileVersion.update({
+          where: { id: fileVersionId },
+          data: {
+            quantityIndexS3Key: indexKey,
+            bimLoqReport: summary.loq as object,
+            bimConversionStatus: "summary_ready",
+          },
+        });
+      },
+      onProgress: (fraction, phase) => {
+        if (!jobRunId) return;
+        const pct = Math.min(100, Math.floor(fraction * 100));
+        if (pct <= lastProgressPct) return;
+        lastProgressPct = pct;
+        void updateJobProgress(jobRunId, pct, phase);
+      },
     });
 
     await uploadQuantityIndex(env, indexKey, index);

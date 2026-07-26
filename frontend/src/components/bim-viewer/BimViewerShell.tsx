@@ -399,7 +399,8 @@ export function BimViewerShell(props: {
               ? "Quantity index build failed for one or more models. Open Quality to rebuild."
               : null,
           );
-          timer = window.setTimeout(poll, anyFailed ? 4000 : 2500);
+          const enrichingOnly = sources.length > 0 && anyPending;
+          timer = window.setTimeout(poll, enrichingOnly ? 12_000 : anyFailed ? 4000 : 2500);
           return;
         }
 

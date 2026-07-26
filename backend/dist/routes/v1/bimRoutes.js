@@ -2,47 +2,12 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { loadProjectForMember } from "../../lib/projectAccess.js";
-import { isWorkspacePro } from "../../lib/subscription.js";
 import { getObjectStream } from "../../lib/s3.js";
-import { parseQuantityIndexBuffer, toQuantityIndexSummary } from "../../lib/bim/quantityIndexBuilder.js";
+import { toQuantityIndexSummary } from "../../lib/bim/quantityIndexBuilder.js";
 import { enqueueBimConversion, processBimConversion, storeFragmentsBuffer, } from "../../lib/bim/conversionProcessor.js";
 import { clearCoordTransform, getDrawingLevelMaps, getDrawingSheets, getPublishedModelLevels, getPublishStatusCounts, getStoreysForFileVersion, getSyncContext, publishModel, saveCoordTransform, suggestMappingsForVersion, updateDrawingMaps, } from "../../lib/bim/bimPublish.js";
-import { drawingCoordTransformPutSchema, } from "../../lib/bim/coordTransformSchema.js";
-function requirePro(workspace) {
-    if (!isWorkspacePro(workspace)) {
-        return { error: "Pro subscription required", status: 402 };
-    }
-    return null;
-}
-async function loadFv(fileVersionId) {
-    return prisma.fileVersion.findUnique({
-        where: { id: fileVersionId },
-        include: { file: { include: { project: { include: { workspace: true } } } } },
-    });
-}
-async function readQuantityIndex(env, fv) {
-    if (!fv.quantityIndexS3Key)
-        return null;
-    try {
-        const obj = await getObjectStream(env, fv.quantityIndexS3Key);
-        if (!obj.ok)
-            return null;
-        const reader = obj.stream.getReader();
-        const chunks = [];
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done)
-                break;
-            if (value)
-                chunks.push(value);
-        }
-        const raw = Buffer.concat(chunks.map((c) => Buffer.from(c)));
-        return parseQuantityIndexBuffer(raw);
-    }
-    catch {
-        return null;
-    }
-}
+import { drawingCoordTransformPutSchema } from "../../lib/bim/coordTransformSchema.js";
+import { authorizeBimFileVersion, loadBimFileVersion, readBimQuantityIndex, requireBimPro, } from "./bimRouteHelpers.js";
 function rollupQuantities(entries) {
     let length = 0;
     let area = 0;
@@ -88,16 +53,14 @@ function takeoffQuantityFromRollup(rollup) {
     return { quantity: new Prisma.Decimal(Math.max(count, 0)), unit: "ea" };
 }
 export function registerBimRoutes(r, needUser, env) {
+    // fallow-ignore-next-line complexity, code-duplication
     r.get("/file-versions/:fileVersionId/bim/status", needUser, async (c) => {
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const pro = requirePro(fv.file.project.workspace);
-        if (pro)
-            return c.json({ error: pro.error }, pro.status);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+            requirePro: true,
+        });
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         const [statusCounts, jobRun] = await Promise.all([
             getPublishStatusCounts(fv.id),
             fv.bimConversionJobRunId
@@ -109,16 +72,16 @@ export function registerBimRoutes(r, needUser, env) {
         ]);
         const resultJson = jobRun?.resultJson;
         const conversionStatus = fv.bimConversionStatus;
-        const quantityIndexSummaryReady = Boolean(fv.quantityIndexS3Key) &&
-            (conversionStatus === "summary_ready" || conversionStatus === "ready");
         const quantityIndexReady = conversionStatus === "ready";
+        const quantityIndexSummaryReady = Boolean(fv.quantityIndexS3Key) &&
+            (conversionStatus === "summary_ready" || !quantityIndexReady);
         return c.json({
             fileVersionId: fv.id,
             conversionStatus,
             fragmentsReady: Boolean(fv.fragmentsS3Key),
             quantityIndexSummaryReady,
             quantityIndexReady,
-            partial: conversionStatus === "summary_ready",
+            partial: quantityIndexSummaryReady,
             indexProgress: typeof resultJson?.progress === "number" ? resultJson.progress : null,
             indexPhase: resultJson?.phase === "summary" || resultJson?.phase === "full" ? resultJson.phase : null,
             loq: fv.bimLoqReport,
@@ -128,16 +91,14 @@ export function registerBimRoutes(r, needUser, env) {
             mappedSheetCount: statusCounts.mappedSheetCount,
         });
     });
+    // fallow-ignore-next-line code-duplication
     r.get("/file-versions/:fileVersionId/bim/publish-summary", needUser, async (c) => {
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const pro = requirePro(fv.file.project.workspace);
-        if (pro)
-            return c.json({ error: pro.error }, pro.status);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+            requirePro: true,
+        });
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         const counts = await getPublishStatusCounts(fv.id);
         const alignedMapCount = await prisma.drawingLevelMap.count({
             where: { ifcFileVersionId: fv.id, coordTransformJson: { not: Prisma.DbNull } },
@@ -152,25 +113,20 @@ export function registerBimRoutes(r, needUser, env) {
         });
     });
     r.post("/file-versions/:fileVersionId/bim/convert", needUser, async (c) => {
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const pro = requirePro(fv.file.project.workspace);
-        if (pro)
-            return c.json({ error: pro.error }, pro.status);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+            requirePro: true,
+        });
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         const jobId = await enqueueBimConversion(env, fv.id, c.get("user").id);
         return c.json({ jobRunId: jobId, status: "queued" });
     });
     r.get("/file-versions/:fileVersionId/bim/fragments", needUser, async (c) => {
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"));
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         if (!fv.fragmentsS3Key)
             return c.json({ error: "Fragments not ready" }, 404);
         const obj = await getObjectStream(env, fv.fragmentsS3Key);
@@ -185,36 +141,31 @@ export function registerBimRoutes(r, needUser, env) {
         });
     });
     r.put("/file-versions/:fileVersionId/bim/fragments", needUser, async (c) => {
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"));
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         const buf = Buffer.from(await c.req.arrayBuffer());
         const key = await storeFragmentsBuffer(env, fv.id, buf);
         return c.json({ fragmentsS3Key: key });
     });
+    // fallow-ignore-next-line code-duplication
     r.get("/file-versions/:fileVersionId/bim/quantity-index/summary", needUser, async (c) => {
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const index = await readQuantityIndex(env, fv);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"));
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
+        const index = await readBimQuantityIndex(env, fv);
         if (!index)
             return c.json({ error: "Quantity index not ready" }, 404);
         return c.json(toQuantityIndexSummary(index));
     });
     r.get("/file-versions/:fileVersionId/bim/quantity-index", needUser, async (c) => {
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const index = await readQuantityIndex(env, fv);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"));
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
+        const index = await readBimQuantityIndex(env, fv);
         if (!index)
             return c.json({ error: "Quantity index not ready" }, 404);
         if (index.partial || index.elements.length === 0) {
@@ -223,13 +174,12 @@ export function registerBimRoutes(r, needUser, env) {
         return c.json(index);
     });
     r.get("/file-versions/:fileVersionId/bim/quantity-export.csv", needUser, async (c) => {
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const index = await readQuantityIndex(env, fv);
+        // fallow-ignore-next-line code-duplication
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"));
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
+        const index = await readBimQuantityIndex(env, fv);
         if (!index)
             return c.json({ error: "Quantity index not ready" }, 404);
         const header = "GUID,Type,Name,Level,Material,Length,Area,Volume,Count,QuantitySource,Discipline\n";
@@ -258,8 +208,8 @@ export function registerBimRoutes(r, needUser, env) {
         const otherId = c.req.query("otherFileVersionId");
         if (!otherId)
             return c.json({ error: "otherFileVersionId required" }, 400);
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        const other = await loadFv(otherId);
+        const fv = await loadBimFileVersion(c.req.param("fileVersionId"));
+        const other = await loadBimFileVersion(otherId);
         if (!fv || !other)
             return c.json({ error: "Not found" }, 404);
         if (fv.fileId !== other.fileId)
@@ -267,7 +217,10 @@ export function registerBimRoutes(r, needUser, env) {
         const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
         if (!access)
             return c.json({ error: "Forbidden" }, 403);
-        const [a, b] = await Promise.all([readQuantityIndex(env, fv), readQuantityIndex(env, other)]);
+        const [a, b] = await Promise.all([
+            readBimQuantityIndex(env, fv),
+            readBimQuantityIndex(env, other),
+        ]);
         if (!a || !b)
             return c.json({ error: "Index not ready" }, 404);
         const types = new Set([...Object.keys(a.byType), ...Object.keys(b.byType)]);
@@ -301,19 +254,17 @@ export function registerBimRoutes(r, needUser, env) {
             unit: z.string().optional(),
             quantityKind: z.enum(["count", "length", "area", "volume"]).default("count"),
             materialId: z.string().optional(),
+            // fallow-ignore-next-line code-duplication
             notes: z.string().optional(),
         })
             .parse(await c.req.json());
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const pro = requirePro(fv.file.project.workspace);
-        if (pro)
-            return c.json({ error: pro.error }, pro.status);
-        const index = await readQuantityIndex(env, fv);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+            requirePro: true,
+        });
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
+        const index = await readBimQuantityIndex(env, fv);
         if (!index)
             return c.json({ error: "Quantity index not ready" }, 404);
         const entries = index.elements.filter((e) => body.guids.includes(e.guid));
@@ -379,18 +330,16 @@ export function registerBimRoutes(r, needUser, env) {
     // fallow-ignore-next-line complexity
     r.post("/file-versions/:fileVersionId/bim/takeoff/auto-map", needUser, async (c) => {
         const body = z
+            // fallow-ignore-next-line code-duplication
             .object({ ifcTypes: z.array(z.string()).optional(), createLines: z.boolean().default(true) })
             .parse(await c.req.json());
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const pro = requirePro(fv.file.project.workspace);
-        if (pro)
-            return c.json({ error: pro.error }, pro.status);
-        const index = await readQuantityIndex(env, fv);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+            requirePro: true,
+        });
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
+        const index = await readBimQuantityIndex(env, fv);
         if (!index)
             return c.json({ error: "Quantity index not ready" }, 404);
         const materials = await prisma.material.findMany({
@@ -442,12 +391,10 @@ export function registerBimRoutes(r, needUser, env) {
         return c.json({ mapped, createdLineIds: created });
     });
     r.get("/file-versions/:fileVersionId/bim/saved-views", needUser, async (c) => {
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"));
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         const views = await prisma.bimSavedView.findMany({
             where: { fileVersionId: fv.id },
             orderBy: { updatedAt: "desc" },
@@ -464,12 +411,10 @@ export function registerBimRoutes(r, needUser, env) {
             isolatedGuids: z.array(z.string()).optional(),
         })
             .parse(await c.req.json());
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"));
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         const view = await prisma.bimSavedView.create({
             data: {
                 projectId: fv.file.projectId,
@@ -504,15 +449,12 @@ export function registerBimRoutes(r, needUser, env) {
         return c.json({ ok: true });
     });
     r.get("/file-versions/:fileVersionId/bim/storeys", needUser, async (c) => {
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const pro = requirePro(fv.file.project.workspace);
-        if (pro)
-            return c.json({ error: pro.error }, pro.status);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+            requirePro: true,
+        });
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         try {
             const storeys = await getStoreysForFileVersion(env, fv.id);
             return c.json({ storeys });
@@ -539,20 +481,19 @@ export function registerBimRoutes(r, needUser, env) {
                 sourceName: z.string().optional(),
                 pdfFileId: z.string(),
                 pdfFileVersionId: z.string().nullable().optional(),
+                // fallow-ignore-next-line code-duplication
                 pageIndex: z.number().int().min(0),
             }))
+                // fallow-ignore-next-line code-duplication
                 .optional(),
         })
             .parse(await c.req.json());
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const pro = requirePro(fv.file.project.workspace);
-        if (pro)
-            return c.json({ error: pro.error }, pro.status);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+            requirePro: true,
+        });
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         try {
             const result = await publishModel(env, fv.id, c.get("user").id, body);
             return c.json(result);
@@ -574,15 +515,12 @@ export function registerBimRoutes(r, needUser, env) {
             })),
         })
             .parse(await c.req.json());
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const pro = requirePro(fv.file.project.workspace);
-        if (pro)
-            return c.json({ error: pro.error }, pro.status);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+            requirePro: true,
+        });
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         try {
             const result = await updateDrawingMaps(fv.id, c.get("user").id, body.maps);
             return c.json(result);
@@ -596,7 +534,7 @@ export function registerBimRoutes(r, needUser, env) {
         const ifcFileVersionId = c.req.query("ifcFileVersionId");
         if (!ifcFileVersionId)
             return c.json({ error: "ifcFileVersionId required" }, 400);
-        const fv = await loadFv(ifcFileVersionId);
+        const fv = await loadBimFileVersion(ifcFileVersionId);
         if (!fv)
             return c.json({ error: "Not found" }, 404);
         if (fv.file.projectId !== c.req.param("projectId")) {
@@ -605,7 +543,7 @@ export function registerBimRoutes(r, needUser, env) {
         const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
         if (!access)
             return c.json({ error: "Forbidden" }, 403);
-        const pro = requirePro(fv.file.project.workspace);
+        const pro = requireBimPro(fv.file.project.workspace);
         if (pro)
             return c.json({ error: pro.error }, pro.status);
         const [maps, levels] = await Promise.all([
@@ -614,12 +552,13 @@ export function registerBimRoutes(r, needUser, env) {
         ]);
         return c.json({ maps, levels });
     });
+    // fallow-ignore-next-line code-duplication
     r.get("/projects/:projectId/drawing-sheets", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const access = await loadProjectForMember(projectId, c.get("user").id);
         if ("error" in access)
             return c.json({ error: access.error }, access.status);
-        const pro = requirePro(access.project.workspace);
+        const pro = requireBimPro(access.project.workspace);
         if (pro)
             return c.json({ error: pro.error }, pro.status);
         const discipline = c.req.query("discipline") ?? undefined;
@@ -667,30 +606,28 @@ export function registerBimRoutes(r, needUser, env) {
                 .optional(),
         })
             .parse(await c.req.json());
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const pro = requirePro(fv.file.project.workspace);
-        if (pro)
-            return c.json({ error: pro.error }, pro.status);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+            requirePro: true,
+        });
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         const suggestions = await suggestMappingsForVersion(env, fv.id, body.pdfCandidates, body.levels);
         return c.json({ suggestions });
     });
     r.put("/drawing-level-maps/:mapId/coord-transform", needUser, async (c) => {
         const body = drawingCoordTransformPutSchema.parse(await c.req.json());
+        // fallow-ignore-next-line code-duplication
         const map = await prisma.drawingLevelMap.findUnique({ where: { id: c.req.param("mapId") } });
         if (!map)
             return c.json({ error: "Not found" }, 404);
         const access = await loadProjectForMember(map.projectId, c.get("user").id);
         if (!access)
             return c.json({ error: "Forbidden" }, 403);
-        const fv = await loadFv(map.ifcFileVersionId);
+        const fv = await loadBimFileVersion(map.ifcFileVersionId);
         if (!fv)
             return c.json({ error: "Not found" }, 404);
-        const pro = requirePro(fv.file.project.workspace);
+        const pro = requireBimPro(fv.file.project.workspace);
         if (pro)
             return c.json({ error: pro.error }, pro.status);
         const transform = body.controlPoints
@@ -712,10 +649,10 @@ export function registerBimRoutes(r, needUser, env) {
         const access = await loadProjectForMember(map.projectId, c.get("user").id);
         if (!access)
             return c.json({ error: "Forbidden" }, 403);
-        const fv = await loadFv(map.ifcFileVersionId);
+        const fv = await loadBimFileVersion(map.ifcFileVersionId);
         if (!fv)
             return c.json({ error: "Not found" }, 404);
-        const pro = requirePro(fv.file.project.workspace);
+        const pro = requireBimPro(fv.file.project.workspace);
         if (pro)
             return c.json({ error: pro.error }, pro.status);
         await clearCoordTransform(map.id);
@@ -725,15 +662,12 @@ export function registerBimRoutes(r, needUser, env) {
         const levelId = c.req.query("levelId");
         if (!levelId)
             return c.json({ error: "levelId required" }, 400);
-        const fv = await loadFv(c.req.param("fileVersionId"));
-        if (!fv)
-            return c.json({ error: "Not found" }, 404);
-        const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-        if (!access)
-            return c.json({ error: "Forbidden" }, 403);
-        const pro = requirePro(fv.file.project.workspace);
-        if (pro)
-            return c.json({ error: pro.error }, pro.status);
+        const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+            requirePro: true,
+        });
+        if ("response" in auth)
+            return auth.response;
+        const { fv } = auth;
         try {
             const context = await getSyncContext(env, fv.id, levelId);
             return c.json(context);

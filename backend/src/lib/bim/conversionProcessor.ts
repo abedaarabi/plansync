@@ -72,12 +72,19 @@ export async function enqueueBimConversion(
   });
   if (!fv) throw new Error("File version not found");
 
-  if (fv.bimConversionStatus === "running") {
+  if (fv.bimConversionStatus === "ready" && fv.quantityIndexS3Key) {
     return fv.bimConversionJobRunId ?? fileVersionId;
   }
 
-  if (fv.bimConversionStatus === "ready" && fv.quantityIndexS3Key) {
-    return fv.bimConversionJobRunId ?? fileVersionId;
+  if (fv.bimConversionJobRunId) {
+    const activeJob = await prisma.jobRun.findFirst({
+      where: {
+        id: fv.bimConversionJobRunId,
+        status: { in: ["QUEUED", "RUNNING"] },
+      },
+      select: { id: true },
+    });
+    if (activeJob) return activeJob.id;
   }
 
   await prisma.fileVersion.update({

@@ -1,47 +1,15 @@
-import { existsSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import * as WebIFC from "web-ifc";
 import { disciplineForIfcType } from "./discipline.js";
-import { extractSurfaceColorFromMaterials, hasAuthoredSurfaceStyle } from "./surfaceColor.js";
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { ifcNumVal, ifcStrVal, webIfcWasmDir } from "./ifcParseUtils.js";
 function wasmDir() {
-    const candidates = [
-        join(__dirname, "../../../../node_modules/web-ifc"),
-        join(__dirname, "../../../node_modules/web-ifc"),
-        join(process.cwd(), "node_modules/web-ifc"),
-        join(process.cwd(), "../node_modules/web-ifc"),
-    ];
-    for (const p of candidates) {
-        if (existsSync(join(p, "web-ifc-node.wasm")) || existsSync(join(p, "web-ifc.wasm"))) {
-            // web-ifc concatenates the filename onto this path — trailing slash is required.
-            return p.endsWith("/") ? p : `${p}/`;
-        }
-    }
-    const fallback = candidates[0];
-    return fallback.endsWith("/") ? fallback : `${fallback}/`;
+    return webIfcWasmDir();
 }
 function strVal(v) {
-    if (v == null)
-        return null;
-    if (typeof v === "string") {
-        const s = v.trim();
-        return s === "" ? null : s;
-    }
-    if (typeof v === "object" && v !== null && "value" in v) {
-        return strVal(v.value);
-    }
-    return String(v);
+    return ifcStrVal(v);
 }
 function numVal(v) {
-    if (typeof v === "number" && Number.isFinite(v))
-        return v;
-    if (typeof v === "object" && v !== null && "value" in v) {
-        const n = Number(v.value);
-        return Number.isFinite(n) ? n : undefined;
-    }
-    return undefined;
+    return ifcNumVal(v);
 }
 // fallow-ignore-next-line complexity
 function parseQuantitiesFromPsets(psets) {
@@ -82,16 +50,6 @@ function parseQuantitiesFromPsets(psets) {
         }
     }
     return { quantities: out, source };
-}
-function materialFromPsets(materials) {
-    for (const m of materials) {
-        if (!m || typeof m !== "object")
-            continue;
-        const name = strVal(m.Name);
-        if (name)
-            return name;
-    }
-    return null;
 }
 // fallow-ignore-next-line complexity
 function buildLoq(elements) {
@@ -197,10 +155,8 @@ async function buildElementStoreyMap(ifcApi, modelId) {
     for (let i = 0; i < storeyIds.size(); i++) {
         const id = storeyIds.get(i);
         try {
-            const props = await ifcApi.properties.getItemProperties(modelId, id, false, false);
-            storeyNames.set(id, strVal(props.Name) ??
-                strVal(props.LongName) ??
-                `Level ${id}`);
+            const line = ifcApi.GetLine(modelId, id);
+            storeyNames.set(id, strVal(line.Name) ?? strVal(line.LongName) ?? `Level ${id}`);
         }
         catch {
             storeyNames.set(id, `Level ${id}`);
@@ -254,6 +210,15 @@ function buildLoqFromLightEntries(entries) {
         recommendedExportHints: [],
     };
 }
+/** Below this size, skip the two-phase summary upload and do one full pass. */
+const SINGLE_PASS_MAX_PRODUCTS = 500;
+function readProductLineFields(ifcApi, modelId, expressId) {
+    const line = ifcApi.GetLine(modelId, expressId);
+    return {
+        guid: strVal(line.GlobalId) ?? `express-${expressId}`,
+        name: strVal(line.Name),
+    };
+}
 async function openIfcSession(ifcBytes) {
     const ifcApi = new WebIFC.IfcAPI();
     ifcApi.SetWasmPath(wasmDir(), true);
@@ -274,12 +239,10 @@ function collectProductIds(ifcApi, modelId) {
         allIds.push(productIds.get(i));
     return allIds;
 }
-async function processSummaryExpressId(ifcApi, modelId, expressId, storeyMap) {
+function processSummaryExpressIdSync(ifcApi, modelId, expressId, storeyMap) {
     try {
         const ifcType = resolveIfcTypeName(ifcApi, modelId, expressId);
-        const props = await ifcApi.properties.getItemProperties(modelId, expressId, false, false);
-        const guid = strVal(props.GlobalId) ?? `express-${expressId}`;
-        const name = strVal(props.Name);
+        const { guid, name } = readProductLineFields(ifcApi, modelId, expressId);
         const lodFlags = {
             identity: Boolean(guid && ifcType),
             dimensions: false,
@@ -308,32 +271,25 @@ async function processSummaryExpressId(ifcApi, modelId, expressId, storeyMap) {
 async function processFullExpressId(ifcApi, modelId, expressId, storeyMap) {
     try {
         const ifcType = resolveIfcTypeName(ifcApi, modelId, expressId);
-        const props = await ifcApi.properties.getItemProperties(modelId, expressId, false, false);
-        const guid = strVal(props.GlobalId) ?? `express-${expressId}`;
-        const name = strVal(props.Name);
+        const { guid, name } = readProductLineFields(ifcApi, modelId, expressId);
         let psets = [];
-        let materials = [];
         try {
-            psets = await ifcApi.properties.getPropertySets(modelId, expressId, true, true);
-        }
-        catch {
-            /* optional */
-        }
-        try {
-            materials = await ifcApi.properties.getMaterialsProperties(modelId, expressId, true, true);
+            psets = await withTimeout(ifcApi.properties
+                .getPropertySets(modelId, expressId, true, true)
+                .catch(() => []), 4000, []);
         }
         catch {
             /* optional */
         }
         const { quantities, source } = parseQuantitiesFromPsets(psets);
-        const material = materialFromPsets(materials);
-        const surfaceColor = extractSurfaceColorFromMaterials(materials);
+        const material = null;
+        const surfaceColor = null;
         const lodFlags = {
             identity: Boolean(guid && ifcType),
             dimensions: Boolean(quantities.length || quantities.area || quantities.volume),
             quantities: source !== "missing",
-            material: Boolean(material),
-            color: hasAuthoredSurfaceStyle(materials, surfaceColor),
+            material: false,
+            color: false,
         };
         return {
             expressId,
@@ -353,84 +309,97 @@ async function processFullExpressId(ifcApi, modelId, expressId, storeyMap) {
         return null;
     }
 }
-async function processExpressIdsParallel(allIds, worker, onProgress) {
+async function processExpressIdsSequential(allIds, worker, onProgress) {
     const results = [];
     const total = allIds.length;
-    const concurrency = Math.min(48, Math.max(1, total));
-    let nextIndex = 0;
-    let completed = 0;
-    const workers = Array.from({ length: concurrency }, async () => {
-        while (true) {
-            const i = nextIndex++;
-            if (i >= total)
-                break;
-            const entry = await worker(allIds[i]);
-            if (entry)
-                results.push(entry);
-            completed += 1;
-            if (completed % 200 === 0 || completed === total) {
-                onProgress?.(completed / Math.max(total, 1));
-            }
+    for (let i = 0; i < total; i++) {
+        const entry = await worker(allIds[i]);
+        if (entry)
+            results.push(entry);
+        if (i === 0 || i === total - 1 || (i + 1) % 100 === 0) {
+            onProgress?.((i + 1) / Math.max(total, 1));
         }
-    });
-    await Promise.all(workers);
+    }
     onProgress?.(1);
     return results;
 }
-/** Fast pass — types, levels, and GUID lists without property-set walks. */
-export async function buildQuantityIndexSummaryFromIfc(ifcBytes, fileVersionId, onProgress) {
+async function withTimeout(promise, ms, fallback) {
+    let timer;
+    try {
+        return await Promise.race([
+            promise,
+            new Promise((resolve) => {
+                timer = setTimeout(() => resolve(fallback), ms);
+            }),
+        ]);
+    }
+    finally {
+        if (timer)
+            clearTimeout(timer);
+    }
+}
+function finalizeSummaryIndex(fileVersionId, lightEntries) {
+    return {
+        version: 1,
+        fileVersionId,
+        generatedAt: new Date().toISOString(),
+        loq: buildLoqFromLightEntries(lightEntries),
+        elements: [],
+        byType: aggregateByType(lightEntries),
+        byLevel: aggregateByLevel(lightEntries),
+        partial: true,
+    };
+}
+function finalizeFullIndex(fileVersionId, elements) {
+    return {
+        version: 1,
+        fileVersionId,
+        generatedAt: new Date().toISOString(),
+        loq: buildLoq(elements),
+        elements,
+        byType: aggregateByType(elements),
+        byLevel: aggregateByLevel(elements),
+        partial: false,
+    };
+}
+/**
+ * Single IFC read: optional fast summary (sync GetLine scan), then one full property pass.
+ * Small models skip the summary phase entirely.
+ */
+export async function buildQuantityIndexPhased(ifcBytes, fileVersionId, opts) {
     const session = await openIfcSession(ifcBytes);
     try {
         const storeyMap = await buildElementStoreyMap(session.ifcApi, session.modelId);
-        onProgress?.(0.05);
         const allIds = collectProductIds(session.ifcApi, session.modelId);
-        const lightEntries = await processExpressIdsParallel(allIds, (id) => processSummaryExpressId(session.ifcApi, session.modelId, id, storeyMap), (fraction) => onProgress?.(0.05 + fraction * 0.95));
-        const loq = buildLoqFromLightEntries(lightEntries);
-        return {
-            version: 1,
-            fileVersionId,
-            generatedAt: new Date().toISOString(),
-            loq,
-            elements: [],
-            byType: aggregateByType(lightEntries),
-            byLevel: aggregateByLevel(lightEntries),
-            partial: true,
-        };
+        const total = allIds.length;
+        opts?.onProgress?.(0.02, total <= SINGLE_PASS_MAX_PRODUCTS ? "full" : "summary");
+        if (total <= SINGLE_PASS_MAX_PRODUCTS) {
+            const elements = await processExpressIdsSequential(allIds, (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap), (fraction) => opts?.onProgress?.(0.02 + fraction * 0.98, "full"));
+            return finalizeFullIndex(fileVersionId, elements);
+        }
+        if (!opts?.skipSummary) {
+            const lightEntries = [];
+            for (let i = 0; i < total; i++) {
+                const entry = processSummaryExpressIdSync(session.ifcApi, session.modelId, allIds[i], storeyMap);
+                if (entry)
+                    lightEntries.push(entry);
+                if (i === 0 || i === total - 1 || (i + 1) % 500 === 0) {
+                    opts?.onProgress?.(0.02 + ((i + 1) / total) * 0.33, "summary");
+                }
+            }
+            const summary = finalizeSummaryIndex(fileVersionId, lightEntries);
+            await opts?.onSummaryReady?.(summary);
+        }
+        opts?.onProgress?.(0.35, "full");
+        const elements = await processExpressIdsSequential(allIds, (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap), (fraction) => opts?.onProgress?.(0.35 + fraction * 0.65, "full"));
+        return finalizeFullIndex(fileVersionId, elements);
     }
     finally {
         session.close();
     }
-}
-/** Full pass — property sets, materials, and per-element quantities. */
-export async function buildQuantityIndexFullFromIfc(ifcBytes, fileVersionId, onProgress) {
-    const session = await openIfcSession(ifcBytes);
-    try {
-        const storeyMap = await buildElementStoreyMap(session.ifcApi, session.modelId);
-        onProgress?.(0.02);
-        const allIds = collectProductIds(session.ifcApi, session.modelId);
-        const elements = await processExpressIdsParallel(allIds, (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap), (fraction) => onProgress?.(0.02 + fraction * 0.98));
-        const loq = buildLoq(elements);
-        return {
-            version: 1,
-            fileVersionId,
-            generatedAt: new Date().toISOString(),
-            loq,
-            elements,
-            byType: aggregateByType(elements),
-            byLevel: aggregateByLevel(elements),
-            partial: false,
-        };
-    }
-    finally {
-        session.close();
-    }
-}
-/** Builds a quantity index from raw IFC bytes using web-ifc. */
-export async function buildQuantityIndexFromIfc(ifcBytes, fileVersionId, onProgress) {
-    return buildQuantityIndexFullFromIfc(ifcBytes, fileVersionId, onProgress);
 }
 /** Parse stored quantity index JSON safely. */
-export function parseQuantityIndex(raw) {
+function parseQuantityIndex(raw) {
     if (!raw || typeof raw !== "object")
         return null;
     const o = raw;
