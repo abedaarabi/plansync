@@ -1,0 +1,51 @@
+---
+description: Keep the repo fallow dead-code clean so pre-commit does not fail
+alwaysApply: true
+---
+
+# Fallow compliance
+
+Pre-commit runs `npm run fallow:precommit` (`scripts/fallow-precommit.mjs`):
+
+1. Full-repo `fallow dead-code --fail-on-issues`
+2. Staged-diff `fallow audit --fail-on-issues` (new issues only)
+
+## When writing or moving code
+
+- **Wire new modules from a reachable entry** (page, route, layout, barrel imported by those, worker, test). A file that nothing imports is an unused file and fails the hook.
+- **Do not leave orphan refactors.** If you move/rename a component (e.g. `UploadModelWizard` → `upload-model-wizard/`), update every consumer in the same change or delete the old path and unused siblings.
+- **Export only what callers need.** Prefer `function` / `type` over `export function` / `export type` until a second module imports it. Re-export barrels (`index.ts`) must not re-export unused symbols.
+- **Delete superseded duplicates** instead of keeping parallel helpers (e.g. old `mapNavigatorStyle` after `bimMapNavigator`).
+- **Do not add unused API wrappers** “for later.” Add the client helper when the UI/route calls it.
+- **Class members:** if fallow false-positives a public method that is called (common with optional chaining), suppress with `// fallow-ignore-next-line unused-class-member` (or combine: `complexity, unused-class-member`). Prefer real usage over suppressions.
+- **Suppressions are last resort.** Prefer delete, un-export, or wire-up. Never suppress an entire unfinished feature folder to ship dead code.
+
+## Config notes (`.fallowrc.json`)
+
+- `health.maxCrap: 400` — without coverage, estimated CRAP ≈ cyclomatic²; keep this ≥ `maxCyclomatic²` so CRAP does not fail every small branchy function.
+- `duplicates.minLines: 20` — ignore tiny/boilerplate clones; still extract real shared logic above that size.
+- Pre-commit also runs `fallow audit` on the staged diff (`gate: new-only`).
+
+## Complexity suppressions
+
+Prefer extracting helpers. When a function must stay complex, place the ignore **immediately above the function/arrow**:
+
+```ts
+// fallow-ignore-next-line complexity
+export function BigComponent() { ... }
+
+{items.map(
+  // fallow-ignore-next-line complexity
+  (item) => { ... },
+)}
+```
+
+Never put `// fallow-ignore-…` as a raw JSX child (it renders as text and does not suppress).
+
+## Before finishing a change that adds TS/TSX
+
+```bash
+npx fallow dead-code --quiet --fail-on-issues
+# with staged changes:
+npm run fallow:precommit
+```

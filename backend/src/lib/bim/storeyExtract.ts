@@ -6,6 +6,7 @@ export type StoreyPreview = {
   displayName: string;
   elevationMeters: number | null;
   elementCount: number;
+  sourceIfcGuid?: string | null;
 };
 
 /** Fast IFCBUILDINGSTOREY-only parse — no element walk. */
@@ -29,11 +30,13 @@ export async function extractStoreysFromIfc(ifcBytes: Uint8Array): Promise<Store
         ifcStrVal(rec.Description) ??
         `Level ${id}`;
       const elevation = ifcNumVal(rec.Elevation);
+      const globalId = ifcStrVal(rec.GlobalId);
       storeys.push({
         sourceName: name,
         displayName: name,
         elevationMeters: elevation ?? null,
         elementCount: 0,
+        sourceIfcGuid: globalId ?? null,
       });
     } catch {
       storeys.push({

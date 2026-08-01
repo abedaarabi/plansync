@@ -114,4 +114,13 @@ export const qk = {
     ["proposals", "documentVersions", projectId, proposalId] as const,
   projectProposalComments: (projectId: string, proposalId: string) =>
     ["proposals", "comments", projectId, proposalId] as const,
+  locations: (projectId: string) => ["locations", projectId] as const,
+  building: (buildingId: string) => ["building", buildingId] as const,
+  buildingLevels: (buildingId: string) => ["buildingLevels", buildingId] as const,
+  buildingAssets: (buildingId: string, filters?: string) =>
+    ["buildingAssets", buildingId, filters ?? "all"] as const,
+  buildingAssetsRoot: (buildingId: string) => ["buildingAssets", buildingId] as const,
+  levelMappings: (levelId: string) => ["levelMappings", levelId] as const,
+  assetStatus: (fileVersionId: string) => ["assetStatus", fileVersionId] as const,
+  locationDetail: (locationId: string) => ["locationDetail", locationId] as const,
 };

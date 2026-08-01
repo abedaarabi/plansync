@@ -6,7 +6,7 @@ import { isIfcFile, isImageThumbnailFile, isPdfFile } from "@/lib/isPdfFile";
 import { buildFederationViewerUrl, type BimFederationMember } from "@/lib/bim/federation";
 import { openBimViewer } from "@/lib/bim/openBimViewer";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FolderPlus, Globe2, ShieldCheck, Users } from "lucide-react";
 import { X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -40,9 +40,23 @@ import {
 import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
 import { ProjectFileImageLightbox } from "./ProjectFileImageLightbox";
 import { UploadDrawingsWizard } from "./UploadDrawingsWizard";
-import { UploadModelWizard } from "./UploadModelWizard";
+import { BimActiveJobsBanner } from "@/components/enterprise/BimActiveJobsBanner";
 import { MapDrawingsSlideOver } from "./MapDrawingsSlideOver";
-import { fetchBimPublishSummary, type BimPublishSummary } from "@/lib/api-client/bim-publish";
+import {
+  fetchBimPublishSummary,
+  fetchBimStatus,
+  triggerBimConversion,
+  type BimPublishSummary,
+} from "@/lib/api-client/bim-publish";
+import {
+  canOpenBimViewer,
+  ifcModelUiStatus,
+  needsBimStatusPolling,
+  type IfcModelUiStatus,
+} from "@/lib/bim/ifcModelStatus";
+import { useBimJobPoller } from "@/lib/bim/useBimJobPoller";
+import { useBimJobTracker } from "@/lib/bim/bimJobTracker";
+import type { BimConversionStatus } from "@/lib/bim/types";
 import { CloudImportModal } from "./CloudImportModal";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import {
@@ -200,19 +214,19 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   const [uploadWizardOpen, setUploadWizardOpen] = useState(false);
   const [uploadWizardInitialFiles, setUploadWizardInitialFiles] = useState<File[]>([]);
   const [uploadWizardFolderId, setUploadWizardFolderId] = useState<string | null>(folderId);
-  const [modelWizardOpen, setModelWizardOpen] = useState(false);
-  const [modelWizardInitialFile, setModelWizardInitialFile] = useState<File | null>(null);
-  const [modelWizardFolderId, setModelWizardFolderId] = useState<string | null>(folderId);
-  const [modelWizardRetroactive, setModelWizardRetroactive] = useState<{
-    file: CloudFile;
-    fileVersionId: string;
-    startAtStep?: 3 | 5;
-  } | null>(null);
   const [mapDrawingsTarget, setMapDrawingsTarget] = useState<{
     file: CloudFile;
     fileVersionId: string;
   } | null>(null);
   const [bimPublishCache, setBimPublishCache] = useState<Record<string, BimPublishSummary>>({});
+  const [bimStatusCache, setBimStatusCache] = useState<Record<string, BimConversionStatus>>({});
+  /** Versions that returned no BIM status (404) — don't keep refetching. */
+  const bimStatusMissingRef = useRef<Set<string>>(new Set());
+  const bimStatusCacheRef = useRef(bimStatusCache);
+  bimStatusCacheRef.current = bimStatusCache;
+  const bimJobs = useBimJobTracker((s) => s.jobs);
+  const removeBimJob = useBimJobTracker((s) => s.removeJob);
+  useBimJobPoller();
   const [imageLightbox, setImageLightbox] = useState<{
     fileId: string;
     fileName: string;
@@ -461,13 +475,14 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     }
 
     if (ifcs.length > 0) {
-      if (ifcs.length > 1) {
-        toast.message("Publish one IFC model at a time.");
-      }
-      setModelWizardRetroactive(null);
-      setModelWizardInitialFile(ifcs[0]!);
-      setModelWizardFolderId(targetFolderId);
-      setModelWizardOpen(true);
+      toast.message("Upload IFC models from Locations", {
+        description:
+          "Add or open a building under Locations, then use Upload IFC to run extraction.",
+        action: {
+          label: "Go to Locations",
+          onClick: () => router.push(`/projects/${projectId}/locations`),
+        },
+      });
     }
 
     if (pdfs.length === 0) return;
@@ -496,18 +511,6 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     return sorted.find((x) => x.version === v) ?? sorted[0] ?? null;
   }
 
-  function openPublishModel(file: CloudFile) {
-    const verRow = selectedFileVersionRow(file);
-    if (!verRow) {
-      toast.error("No file version available.");
-      return;
-    }
-    setModelWizardInitialFile(null);
-    setModelWizardRetroactive({ file, fileVersionId: verRow.id, startAtStep: 3 });
-    setModelWizardFolderId(file.folderId);
-    setModelWizardOpen(true);
-  }
-
   function openMapDrawings(file: CloudFile) {
     const verRow = selectedFileVersionRow(file);
     if (!verRow) return;
@@ -527,9 +530,27 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     openBimViewer(`/bim-viewer?${q.toString()}`);
   }
 
+  async function loadBimStatus(fileVersionId: string) {
+    if (bimStatusCache[fileVersionId] || bimStatusMissingRef.current.has(fileVersionId)) return;
+    try {
+      const status = await fetchBimStatus(fileVersionId);
+      setBimStatusCache((prev) => ({ ...prev, [fileVersionId]: status }));
+    } catch {
+      bimStatusMissingRef.current.add(fileVersionId);
+    }
+  }
+
   async function loadIfcPublishBadge(file: CloudFile) {
     const verRow = selectedFileVersionRow(file);
-    if (!verRow || bimPublishCache[verRow.id]) return;
+    if (!verRow) return;
+    const tracked = bimJobs[verRow.id];
+    // Only hydrate status for published models or active tracked jobs —
+    // idle uploaded IFCs do not need continuous /bim/status traffic.
+    if (verRow.bimPublishedAt || tracked) {
+      void loadBimStatus(verRow.id);
+    }
+    if (!verRow.bimPublishedAt) return;
+    if (bimPublishCache[verRow.id]) return;
     try {
       const summary = await fetchBimPublishSummary(verRow.id);
       setBimPublishCache((prev) => ({ ...prev, [verRow.id]: summary }));
@@ -538,26 +559,104 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     }
   }
 
-  // fallow-ignore-next-line complexity
-  function ifcPublishBadgeLabel(file: CloudFile): string | null {
+  function ifcModelStatusForFile(file: CloudFile): IfcModelUiStatus | null {
     const verRow = selectedFileVersionRow(file);
     if (!verRow) return null;
-    const cached = bimPublishCache[verRow.id];
-    if (cached?.published) {
-      return `${cached.levelCount} levels · ${cached.mapCount} sheets`;
-    }
-    if (verRow.bimPublishedAt) {
-      return "Published";
-    }
+    const tracked = bimJobs[verRow.id];
+    const status = bimStatusCache[verRow.id] ?? null;
+    const summary = bimPublishCache[verRow.id];
+    if (!status && !tracked && !verRow.bimPublishedAt) return null;
+    return ifcModelUiStatus(
+      status ??
+        (verRow.bimPublishedAt
+          ? {
+              fileVersionId: verRow.id,
+              conversionStatus: "running",
+              fragmentsReady: false,
+              quantityIndexSummaryReady: false,
+              quantityIndexReady: false,
+              partial: true,
+              indexProgress: null,
+              indexPhase: null,
+              loq: null,
+              jobRunId: null,
+              bimPublishedAt: verRow.bimPublishedAt,
+              levelCount: summary?.levelCount ?? 0,
+              mappedSheetCount: summary?.mapCount ?? 0,
+            }
+          : null),
+      tracked,
+      summary,
+    );
+  }
+
+  /** @deprecated use ifcModelStatusForFile */
+  function ifcPublishBadgeLabel(file: CloudFile): string | null {
+    const ui = ifcModelStatusForFile(file);
+    if (!ui) return null;
+    if (ui.kind === "ready") return ui.label;
+    if (ui.kind === "processing" || ui.kind === "published_processing") return ui.label;
+    if (ui.kind === "ready_to_publish") return ui.label;
+    if (ui.kind === "failed") return ui.label;
+    if (ui.kind === "uploaded") return ui.label;
     return null;
   }
+
+  useEffect(() => {
+    if (!project) return;
+    // Drop tracked jobs that no longer belong to this project (stale sessionStorage).
+    const knownVersionIds = new Set<string>();
+    for (const f of project.files) {
+      for (const v of f.versions ?? []) knownVersionIds.add(v.id);
+    }
+    for (const job of Object.values(bimJobs)) {
+      if (job.projectId !== projectId || !knownVersionIds.has(job.fileVersionId)) {
+        removeBimJob(job.fileVersionId);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- prune when project file set changes
+  }, [project, projectId, removeBimJob]);
 
   useEffect(() => {
     if (!project) return;
     for (const f of project.files) {
       if (isIfcFile(f)) void loadIfcPublishBadge(f);
     }
-  }, [project, fileVersionPick]);
+    // Intentionally omit loadIfcPublishBadge identity — hydrate from project/jobs/version picks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, fileVersionPick, bimJobs]);
+
+  useEffect(() => {
+    if (!project) return;
+
+    const tick = () => {
+      const cache = bimStatusCacheRef.current;
+      const jobs = useBimJobTracker.getState().jobs;
+      for (const f of project.files) {
+        if (!isIfcFile(f)) continue;
+        const verRow = selectedFileVersionRow(f);
+        if (!verRow) continue;
+        if (bimStatusMissingRef.current.has(verRow.id)) continue;
+        if (!needsBimStatusPolling(verRow, cache[verRow.id], jobs[verRow.id])) continue;
+        void fetchBimStatus(verRow.id)
+          .then((s) => {
+            bimStatusMissingRef.current.delete(verRow.id);
+            setBimStatusCache((prev) => ({ ...prev, [verRow.id]: s }));
+          })
+          .catch(() => {
+            bimStatusMissingRef.current.add(verRow.id);
+            // Stop zombie polls for deleted / missing versions.
+            if (jobs[verRow.id]) removeBimJob(verRow.id);
+          });
+      }
+    };
+
+    void tick();
+    const interval = window.setInterval(tick, 5000);
+    return () => window.clearInterval(interval);
+    // selectedFileVersionRow closes over fileVersionPick
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, fileVersionPick, removeBimJob]);
 
   function toggleFederationIfc(f: CloudFile) {
     if (!isIfcFile(f)) return;
@@ -597,7 +696,8 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     openBimViewer(buildFederationViewerUrl(projectId, members));
   }
 
-  function openFileInViewer(f: CloudFile) {
+  // fallow-ignore-next-line complexity
+  async function openFileInViewer(f: CloudFile) {
     const sorted = sortedVersions(f);
     const fallback = sorted[0]?.version ?? 1;
     const pick = fileVersionPick[f.id];
@@ -612,12 +712,55 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     }
 
     if (isIfcFile(f)) {
+      if (!verRow) {
+        toast.error("No file version available.");
+        return;
+      }
+      let status: BimConversionStatus | undefined = bimStatusCache[verRow.id];
+      if (!status) {
+        try {
+          status = await fetchBimStatus(verRow.id);
+          setBimStatusCache((prev) => ({ ...prev, [verRow.id]: status! }));
+          bimStatusMissingRef.current.delete(verRow.id);
+        } catch {
+          // No BIM status yet — still try the viewer (it can kick off conversion).
+          status = undefined;
+        }
+      }
+
+      if (status?.conversionStatus === "failed") {
+        toast.error("Model processing failed. Re-upload the IFC from Locations → Buildings.", {
+          action: {
+            label: "Go to Locations",
+            onClick: () => router.push(`/projects/${projectId}/locations`),
+          },
+        });
+        return;
+      }
+
+      // Geometry not ready yet → start conversion if needed, then still open viewer.
+      if (status && !canOpenBimViewer(status)) {
+        const shouldKickConversion =
+          !status.fragmentsReady &&
+          status.conversionStatus !== "running" &&
+          status.conversionStatus !== "queued";
+        if (shouldKickConversion) {
+          void triggerBimConversion(verRow.id).catch(() => undefined);
+        }
+        toast.message("Opening viewer while model is still processing", {
+          description: "3D will appear as conversion continues in the background.",
+        });
+      }
+
+      // No status yet — open viewer (it will convert) rather than a stuck dialog.
+      if (!status) {
+        void triggerBimConversion(verRow.id).catch(() => undefined);
+      }
+
       const q = new URLSearchParams({ fileId: f.id, name: f.name });
       q.set("projectId", projectId);
-      if (verRow) {
-        q.set("version", String(verRow.version));
-        q.set("fileVersionId", verRow.id);
-      }
+      q.set("version", String(verRow.version));
+      q.set("fileVersionId", verRow.id);
       openBimViewer(`/bim-viewer?${q.toString()}`);
       return;
     }
@@ -975,6 +1118,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <BimActiveJobsBanner />
       <input
         id={UPLOAD_INPUT_ID}
         type="file"
@@ -1071,7 +1215,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             federationIfcIds={federationIfcIds}
             onToggleFederationIfc={toggleFederationIfc}
             ifcPublishBadge={ifcPublishBadgeLabel}
-            onPublishIfcModel={canUpload ? openPublishModel : undefined}
+            ifcModelStatus={ifcModelStatusForFile}
             onMapIfcDrawings={canUpload ? openMapDrawings : undefined}
             onAlignIfcCoordinates={openAlignCoordinates}
             onLoadIfcPublishMeta={loadIfcPublishBadge}
@@ -1507,26 +1651,6 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           projectId={projectId}
           folderId={uploadWizardFolderId}
           existingFiles={project.files.filter((f) => f.folderId === uploadWizardFolderId)}
-        />
-      ) : null}
-      {wid && canUpload && project ? (
-        <UploadModelWizard
-          open={modelWizardOpen}
-          onClose={() => {
-            setModelWizardOpen(false);
-            setModelWizardRetroactive(null);
-            setModelWizardInitialFile(null);
-            void invalidate();
-          }}
-          initialFile={modelWizardInitialFile}
-          existingFileVersionId={modelWizardRetroactive?.fileVersionId ?? null}
-          existingFile={modelWizardRetroactive?.file ?? null}
-          startAtStep={modelWizardRetroactive?.startAtStep}
-          workspaceId={wid}
-          projectId={projectId}
-          folderId={modelWizardFolderId}
-          existingFiles={project.files.filter((f) => f.folderId === modelWizardFolderId)}
-          folders={project.folders}
         />
       ) : null}
       {wid && project && mapDrawingsTarget ? (

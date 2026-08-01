@@ -70,14 +70,16 @@ export function fitSimilarityTransform(pairs: Array<{ src: CoordPoint2; dst: Coo
     dz: p.dst.z - dstCz,
   }));
 
-  let num = 0;
-  let den = 0;
+  // θ = atan2(Σ(sx·dz − sz·dx), Σ(sx·dx + sz·dz)) for R that maps centered src → dst.
+  // (Using Σ||src||² as the atan2 denominator incorrectly under-rotates non-zero angles.)
+  let cross = 0;
+  let dot = 0;
   for (const { sx, sz, dx, dz } of centered) {
-    num += sx * dz - sz * dx;
-    den += sx * sx + sz * sz;
+    cross += sx * dz - sz * dx;
+    dot += sx * dx + sz * dz;
   }
 
-  const rotationRad = den > 1e-12 ? Math.atan2(num, den) : 0;
+  const rotationRad = Math.atan2(cross, dot);
   const cosR = Math.cos(rotationRad);
   const sinR = Math.sin(rotationRad);
 

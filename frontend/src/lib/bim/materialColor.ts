@@ -62,11 +62,11 @@ const DISCIPLINE_COLORS: Record<string, string> = {
 const IFC_TYPE_COLORS: Record<string, string> = {
   IfcWall: M.wall,
   IfcWallStandardCase: M.wall,
-  IfcSlab: M.floor,
-  IfcColumn: M.column,
-  IfcBeam: M.column,
-  IfcMember: M.column,
-  IfcPlate: M.column,
+  IfcSlab: M.concrete,
+  IfcColumn: M.steel,
+  IfcBeam: M.steel,
+  IfcMember: M.steel,
+  IfcPlate: M.steel,
   IfcDoor: M.door,
   IfcWindow: M.glass,
   IfcCurtainWall: M.glass,
@@ -93,8 +93,8 @@ const IFC_TYPE_COLORS: Record<string, string> = {
   IfcAudioVisualAppliance: MEP.communication,
   IfcFlowTerminal: MEP.hvac,
   IfcFurnishingElement: M.door,
-  IfcFooting: M.column,
-  IfcPile: M.column,
+  IfcFooting: M.concrete,
+  IfcPile: M.concrete,
   IfcBuildingElementProxy: M.wall,
   IfcOpeningElement: UI.border,
 };
@@ -320,15 +320,20 @@ function pbr(
 function derivePbrParams(ifcType: string, alpha: number, doubleSided: boolean): BimPbrParams {
   const t = normalizeIfcType(ifcType);
   const kind = surfaceKindFromIfcType(t);
-  // Keep env/clearcoat low — strong IBL reads as white shine on BIM solids.
   if (isGlassType(t) || alpha < 180) {
-    return pbr(0.18, 0, 0.35, "glass");
+    return pbr(0.14, 0.02, 0.55, "glass", 0.35, 0.18);
+  }
+  if (kind === "aluminum") {
+    return pbr(0.34, 0.62, 0.52, kind, 0.12, 0.3);
+  }
+  if (kind === "wood") {
+    return pbr(0.7, 0.01, 0.24, kind, 0.04, 0.55);
   }
   if (/column|beam|member|plate|reinfor|steel|metal/i.test(t)) {
-    return pbr(0.45, 0.35, 0.4, "metal");
+    return pbr(0.42, 0.5, 0.45, "metal");
   }
   if (/pipe|duct|terminal|flow|fitting|cable|conduit|electric|light|lamp/i.test(t)) {
-    return pbr(0.5, 0.22, 0.35, "metal");
+    return pbr(0.5, 0.32, 0.38, "metal");
   }
   if (/door|furnish/i.test(t)) {
     return pbr(0.68, 0.04, 0.28, "plastic");
@@ -342,12 +347,12 @@ function derivePbrParams(ifcType: string, alpha: number, doubleSided: boolean): 
   return pbr(0.78, 0.02, 0.25, kind);
 }
 
-/** Lift midtones / saturation so materials stay readable on the dark cinematic stage. */
+/** Keep authored/fallback colors readable without turning discipline colors into debug colors. */
 function boostColorForVisibility(color: THREE.Color): THREE.Color {
   const hsl = { h: 0, s: 0, l: 0 };
   color.getHSL(hsl);
-  const l = clamp01(0.22 + hsl.l * 0.78);
-  const s = clamp01(hsl.s * 1.12 + (hsl.s > 0.04 ? 0.04 : 0));
+  const l = clamp01(0.16 + hsl.l * 0.82);
+  const s = clamp01(hsl.s * 0.88);
   color.setHSL(hsl.h, s, l);
   return color;
 }
@@ -377,7 +382,7 @@ export function resolveSpaceColor(
     };
   }
 
-  let base = new THREE.Color(fallbackHex);
+  const base = new THREE.Color(fallbackHex);
   const hasIfc = src != null && !isDefaultGrayColor(src.r, src.g, src.b, src.a);
 
   if (mode === "uniform_blue") {

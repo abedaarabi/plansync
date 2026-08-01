@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { Worker } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
 import { prisma } from "../prisma.js";
@@ -17,52 +18,92 @@ function attachWorkerHandlers(worker: Worker, fileVersionId: string): void {
   });
 }
 
+function workerEntryCandidates(): string[] {
+  return [
+    fileURLToPath(new URL("./bimConversionWorker.js", import.meta.url)),
+    fileURLToPath(new URL("../../../dist/lib/bim/bimConversionWorker.js", import.meta.url)),
+  ];
+}
+
+/** Spawn a detached tsx child so IFC parsing never blocks the API event loop. */
+function spawnConversionChild(fileVersionId: string, jobRunId: string): void {
+  const runner = fileURLToPath(new URL("./bimConversionRunner.ts", import.meta.url));
+  const child = spawn(process.execPath, ["--import", "tsx", runner, fileVersionId, jobRunId], {
+    detached: true,
+    stdio: "ignore",
+    env: process.env,
+  });
+  child.unref();
+  child.on("error", (err) => {
+    console.error("[bim.convert] child spawn failed", fileVersionId, err);
+  });
+}
+
 /**
- * Runs IFC index build off the API event loop when a compiled worker exists.
- * In tsx/dev, Node's type-stripping can load `.ts` but not resolve `.js` → `.ts`,
- * so we either run via `tsx/cli` or fall back in-process.
+ * Runs IFC index build off the API event loop (worker thread or detached child process).
+ * Never run conversion on the main thread — it blocks all HTTP handlers in dev.
  */
 function startBimConversionWorker(fileVersionId: string, jobRunId: string): void {
   const workerData = { fileVersionId, jobRunId };
-  const jsEntry = new URL("./bimConversionWorker.js", import.meta.url);
-  if (existsSync(fileURLToPath(jsEntry))) {
-    attachWorkerHandlers(new Worker(jsEntry, { workerData }), fileVersionId);
+  for (const entry of workerEntryCandidates()) {
+    if (!existsSync(entry)) continue;
+    attachWorkerHandlers(new Worker(entry, { workerData }), fileVersionId);
     return;
   }
 
-  const tsPath = fileURLToPath(new URL("./bimConversionWorker.ts", import.meta.url));
-  try {
-    const tsxCli = new URL(import.meta.resolve("tsx/cli"));
-    attachWorkerHandlers(
-      new Worker(tsxCli, {
-        argv: [tsPath],
-        workerData,
-      }),
-      fileVersionId,
-    );
-    return;
-  } catch {
-    /* fall through — in-process */
-  }
+  spawnConversionChild(fileVersionId, jobRunId);
+}
 
+const recentlyRecovered = new Map<string, number>();
+const RECOVER_COOLDOWN_MS = 60_000;
+
+/** Re-kick conversions stuck in QUEUED (e.g. worker failed to start). */
+export function recoverStuckBimConversions(fileVersionIds: string[]): void {
   void (async () => {
-    try {
-      const { loadEnv } = await import("../env.js");
-      const { processBimConversion } = await import("./runBimConversion.js");
-      await processBimConversion(loadEnv(), fileVersionId, jobRunId);
-    } catch (err) {
-      console.error(
-        "[bim.convert] failed",
-        fileVersionId,
-        err instanceof Error ? err.message : err,
-      );
+    const now = Date.now();
+    for (const fileVersionId of fileVersionIds) {
+      const last = recentlyRecovered.get(fileVersionId) ?? 0;
+      if (now - last < RECOVER_COOLDOWN_MS) continue;
+
+      const fv = await prisma.fileVersion.findUnique({
+        where: { id: fileVersionId },
+        select: { bimConversionStatus: true },
+      });
+      if (!fv || fv.bimConversionStatus === "running" || fv.bimConversionStatus === "ready") {
+        continue;
+      }
+
+      const running = await prisma.jobRun.findFirst({
+        where: {
+          kind: "bim.convert",
+          status: "RUNNING",
+          payloadJson: { path: ["fileVersionId"], equals: fileVersionId },
+        },
+        select: { id: true },
+      });
+      if (running) continue;
+
+      const job = await prisma.jobRun.findFirst({
+        where: {
+          kind: "bim.convert",
+          status: "QUEUED",
+          payloadJson: { path: ["fileVersionId"], equals: fileVersionId },
+          createdAt: { lt: new Date(now - 15_000) },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
+      if (!job) continue;
+
+      recentlyRecovered.set(fileVersionId, now);
+      startBimConversionWorker(fileVersionId, job.id);
     }
   })();
 }
 
-/** Enqueue conversion as async in-process job (returns JobRun id). */
+/** Enqueue conversion as async background job (returns JobRun id). */
 export async function enqueueBimConversion(
-  env: Env,
+  _env: Env,
   fileVersionId: string,
   userId: string | null,
 ): Promise<string> {
@@ -76,15 +117,25 @@ export async function enqueueBimConversion(
     return fv.bimConversionJobRunId ?? fileVersionId;
   }
 
-  if (fv.bimConversionJobRunId) {
-    const activeJob = await prisma.jobRun.findFirst({
-      where: {
-        id: fv.bimConversionJobRunId,
-        status: { in: ["QUEUED", "RUNNING"] },
-      },
-      select: { id: true },
+  const activeJob = await prisma.jobRun.findFirst({
+    where: {
+      kind: "bim.convert",
+      status: { in: ["QUEUED", "RUNNING"] },
+      payloadJson: { path: ["fileVersionId"], equals: fileVersionId },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, status: true },
+  });
+
+  if (activeJob) {
+    await prisma.fileVersion.update({
+      where: { id: fileVersionId },
+      data: { bimConversionJobRunId: activeJob.id },
     });
-    if (activeJob) return activeJob.id;
+    if (activeJob.status === "QUEUED") {
+      startBimConversionWorker(fileVersionId, activeJob.id);
+    }
+    return activeJob.id;
   }
 
   await prisma.fileVersion.update({
@@ -101,6 +152,11 @@ export async function enqueueBimConversion(
       createdById: userId,
       payloadJson: { fileVersionId },
     },
+  });
+
+  await prisma.fileVersion.update({
+    where: { id: fileVersionId },
+    data: { bimConversionJobRunId: job.id },
   });
 
   startBimConversionWorker(fileVersionId, job.id);

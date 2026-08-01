@@ -279,6 +279,7 @@ async function rasterizeElements(
   pass: "fill" | "stroke",
 ): Promise<number> {
   const { fragments, elementsByModel, bounds, units } = args;
+  const px = Math.max(256, Math.round(args.bakePx ?? PLAN_BAKE_PX));
   let processed = 0;
 
   for (const [modelId, localIds] of elementsByModel) {
@@ -298,9 +299,9 @@ async function rasterizeElements(
           for (const mesh of meshes) {
             const matrix = new THREE.Matrix4().multiplyMatrices(modelMatrix, mesh.transform);
             if (pass === "fill") {
-              processMeshFills(mesh, matrix, sliceY, sliceBand, ctx, bounds, PLAN_BAKE_PX);
+              processMeshFills(mesh, matrix, sliceY, sliceBand, ctx, bounds, px);
             } else {
-              processMeshStrokes(mesh, matrix, sliceY, sliceBand, ctx, bounds, PLAN_BAKE_PX, units);
+              processMeshStrokes(mesh, matrix, sliceY, sliceBand, ctx, bounds, px, units);
             }
           }
         }
@@ -319,6 +320,8 @@ export type PlanSliceBakeArgs = {
   bounds: PlanMinimapBounds;
   worldBounds: THREE.Box3;
   units: "m" | "mm";
+  /** Output resolution in px; defaults to PLAN_BAKE_PX (512). Higher = crisper full-pane plans. */
+  bakePx?: number;
 };
 
 /** Slice fragment geometry at floor height and draw walls / room fills. */
@@ -327,14 +330,16 @@ export async function bakePlanFromSlice(args: PlanSliceBakeArgs): Promise<ImageB
   const { fragments, elementsByModel, bounds, worldBounds, units } = args;
   if (worldBounds.isEmpty()) return null;
 
+  const px = Math.max(256, Math.round(args.bakePx ?? PLAN_BAKE_PX));
+
   const canvas = document.createElement("canvas");
-  canvas.width = PLAN_BAKE_PX;
-  canvas.height = PLAN_BAKE_PX;
+  canvas.width = px;
+  canvas.height = px;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
   ctx.fillStyle = SHEET_BG;
-  ctx.fillRect(0, 0, PLAN_BAKE_PX, PLAN_BAKE_PX);
+  ctx.fillRect(0, 0, px, px);
 
   const sliceY = planSliceHeight(worldBounds, units);
   const sliceBand = planSliceBand(worldBounds, units);
@@ -347,14 +352,14 @@ export async function bakePlanFromSlice(args: PlanSliceBakeArgs): Promise<ImageB
   ctx.lineJoin = "round";
   await rasterizeElements(ctx, args, sliceY, sliceBand, "stroke");
 
-  if (!canvasHasInk(ctx, PLAN_BAKE_PX)) {
-    await drawBoxOutlines(ctx, fragments, elementsByModel, bounds, PLAN_BAKE_PX);
+  if (!canvasHasInk(ctx, px)) {
+    await drawBoxOutlines(ctx, fragments, elementsByModel, bounds, px);
   }
 
   ctx.strokeStyle = ROOM_STROKE;
   ctx.lineWidth = 0.75;
-  const tl = worldToMap(bounds.minX, bounds.maxZ, bounds, PLAN_BAKE_PX);
-  const br = worldToMap(bounds.maxX, bounds.minZ, bounds, PLAN_BAKE_PX);
+  const tl = worldToMap(bounds.minX, bounds.maxZ, bounds, px);
+  const br = worldToMap(bounds.maxX, bounds.minZ, bounds, px);
   ctx.strokeRect(tl.x + 0.5, tl.y + 0.5, br.x - tl.x - 1, br.y - tl.y - 1);
 
   if (typeof createImageBitmap === "function") {

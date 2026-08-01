@@ -230,6 +230,7 @@ export function EnterpriseSidebar({
     const projectItems: NavItem[] = [
       { href: `/projects/${projectId}/home`, label: t("home"), icon: House },
       { href: `/projects/${projectId}/files`, label: t("filesDrawings"), icon: FileStack },
+      { href: `/projects/${projectId}/locations`, label: t("locations"), icon: Building2 },
     ];
     if (mod.schedule)
       projectItems.push({
@@ -614,7 +615,7 @@ export function EnterpriseSidebar({
         }`}
         aria-label={t("mainNav")}
       >
-        {isProjectContext && !railCollapsed ? (
+        {isProjectContext ? (
           <Link
             href="/projects"
             onClick={() => {
@@ -622,9 +623,18 @@ export function EnterpriseSidebar({
               afterNav();
             }}
             title={t("jumpToProjects")}
-            className="mb-0.5 flex shrink-0 items-center rounded-md px-3 py-1.5 text-[13px] font-medium text-[var(--enterprise-sidebar-muted)] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[var(--enterprise-sidebar-active)]"
+            className={`mb-0.5 flex shrink-0 items-center rounded-md text-[13px] font-medium text-[var(--enterprise-sidebar-muted)] transition hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[var(--enterprise-sidebar-active)] ${
+              railCollapsed ? "justify-center px-2 py-2" : "px-3 py-1.5"
+            }`}
           >
-            <span>{t("projects")}</span>
+            {railCollapsed ? (
+              <>
+                <LayoutGrid className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden />
+                <span className="sr-only">{t("projects")}</span>
+              </>
+            ) : (
+              <span>{t("projects")}</span>
+            )}
           </Link>
         ) : null}
         {!isProjectContext && !railCollapsed && lastProjectPath ? (

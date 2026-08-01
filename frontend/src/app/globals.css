@@ -263,6 +263,106 @@ button:active:not(:disabled),
   background-size: 20px 20px;
 }
 
+/* Drawing registration — light enterprise workspace (inside app shell) */
+.registration-workspace {
+  background:
+    radial-gradient(ellipse 100% 55% at 50% -18%, rgba(37, 99, 235, 0.07), transparent 52%),
+    var(--enterprise-bg);
+  color: var(--enterprise-text);
+}
+
+.registration-pane {
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid var(--enterprise-border);
+  background: var(--enterprise-surface);
+  box-shadow: var(--enterprise-shadow-xs);
+}
+
+.registration-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--enterprise-border);
+  padding: 0.25rem 0.5rem;
+  background: color-mix(in srgb, var(--enterprise-surface) 94%, var(--enterprise-primary-soft));
+}
+
+.registration-canvas {
+  background-color: #eef2f7;
+  background-image: radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.2) 1px, transparent 0);
+  background-size: 18px 18px;
+}
+
+.registration-preview-viewport {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  background: #eef2f7;
+}
+
+.registration-preview-viewport--model {
+  background: #0f172a;
+}
+
+.registration-toolbar-btn {
+  display: flex;
+  shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  border: 1px solid var(--enterprise-border);
+  background: var(--enterprise-surface);
+  color: var(--enterprise-primary);
+  transition:
+    background 150ms,
+    border-color 150ms,
+    transform 150ms;
+}
+
+.registration-toolbar-btn:hover {
+  border-color: color-mix(in srgb, var(--enterprise-primary) 28%, var(--enterprise-border));
+  background: var(--enterprise-primary-soft);
+}
+
+.registration-toolbar-btn:active {
+  transform: scale(0.97);
+}
+
+.registration-toolbar-btn:disabled {
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+.registration-input {
+  border-radius: 0.375rem;
+  border: 1px solid var(--enterprise-border);
+  background: var(--enterprise-surface);
+  padding: 0.25rem 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--enterprise-text);
+  outline: none;
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.registration-input:focus {
+  border-color: var(--enterprise-primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.registration-zoom-panel {
+  border: 1px solid var(--enterprise-border);
+  background: color-mix(in srgb, var(--enterprise-surface) 96%, transparent);
+  box-shadow: var(--enterprise-shadow-sm);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
 /* Shared viewer UI — sections, cards, keyboard hints (SaaS-style density) */
 @layer components {
   .enterprise-type-label {
@@ -320,6 +420,8 @@ button:active:not(:disabled),
 
   /* BIM viewer — canvas-first hybrid (scoped under .bim-viewer) */
   .bim-viewer {
+    /* Shared by tree + canvas offset (must live on .bim-viewer, not the tree alone). */
+    --bim-workspace-tree-w: min(360px, 34%);
     --bim-shell: #0f172a;
     --bim-shell-deep: #111827;
     --bim-canvas: #0f172a;
@@ -579,6 +681,36 @@ button:active:not(:disabled),
   .bim-select:focus-visible {
     border-color: color-mix(in srgb, var(--bim-accent) 35%, var(--bim-border));
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--bim-accent) 15%, transparent);
+  }
+
+  .bim-quality-badge {
+    @apply rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em];
+    border: 1px solid color-mix(in srgb, var(--bim-accent) 28%, var(--bim-border));
+    background: var(--bim-accent-muted);
+    color: var(--bim-accent-hover);
+  }
+
+  .bim-render-toggle {
+    @apply relative h-6 w-10 shrink-0 rounded-full border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--bim-accent)];
+    border-color: var(--bim-border-strong);
+    background: var(--bim-hover);
+  }
+
+  .bim-render-toggle[data-state="on"] {
+    border-color: color-mix(in srgb, var(--bim-accent) 65%, var(--bim-border));
+    background: color-mix(in srgb, var(--bim-accent) 78%, var(--bim-panel));
+  }
+
+  .bim-render-toggle__thumb {
+    @apply absolute left-0.5 top-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full transition-transform duration-150;
+    background: var(--bim-text-muted);
+    color: var(--bim-panel);
+  }
+
+  .bim-render-toggle[data-state="on"] .bim-render-toggle__thumb {
+    transform: translateX(1rem);
+    background: var(--bim-text);
+    color: var(--bim-accent);
   }
 
   .bim-panel-header {
@@ -1430,6 +1562,34 @@ button:active:not(:disabled),
   .bim-canvas-full {
     @apply absolute inset-0 overflow-hidden;
     background: var(--bim-shell);
+  }
+
+  .bim-workspace-tree {
+    position: absolute;
+    inset: 0 auto 0 0;
+    display: none;
+    width: var(--bim-workspace-tree-w);
+    z-index: 25;
+    flex-direction: column;
+    border-right: 1px solid var(--enterprise-border);
+    background: var(--enterprise-bg);
+    overflow: hidden;
+    color: var(--enterprise-text);
+    box-shadow: var(--enterprise-shadow-xs);
+  }
+
+  @media (min-width: 768px) {
+    .bim-workspace-tree {
+      display: flex;
+    }
+
+    .bim-canvas-full--workspace {
+      left: var(--bim-workspace-tree-w);
+    }
+  }
+
+  .bim-workspace-align {
+    background: var(--enterprise-bg, #f8fafc);
   }
 
   .bim-loading-overlay {
@@ -2284,6 +2444,35 @@ button:active:not(:disabled),
     0 0 0 1px rgba(37, 99, 235, 0.05);
 }
 
+/* Primary / secondary actions (blue accent) */
+.enterprise-btn-primary {
+  background: var(--enterprise-primary);
+  color: #fff;
+  transition:
+    background-color 150ms ease,
+    opacity 150ms ease;
+}
+.enterprise-btn-primary:hover:not(:disabled) {
+  background: var(--enterprise-primary-deep);
+}
+.enterprise-btn-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.enterprise-btn-secondary {
+  border: 1px solid color-mix(in srgb, var(--enterprise-primary) 28%, var(--enterprise-border));
+  background: var(--enterprise-primary-soft);
+  color: var(--enterprise-primary);
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+.enterprise-btn-secondary:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--enterprise-primary) 45%, var(--enterprise-border));
+  background: color-mix(in srgb, var(--enterprise-primary-soft) 70%, var(--enterprise-surface));
+}
+
 /* Solid white cards (dashboard, projects) */
 .enterprise-card {
   border-radius: 1.125rem;
@@ -2344,6 +2533,12 @@ button:active:not(:disabled),
   border: 1px solid var(--enterprise-semantic-warning-border);
   background: var(--enterprise-semantic-warning-bg);
   color: var(--enterprise-semantic-warning-text);
+}
+.enterprise-badge-danger {
+  border-radius: 0.375rem;
+  border: 1px solid var(--enterprise-semantic-danger-border);
+  background: var(--enterprise-semantic-danger-bg);
+  color: var(--enterprise-semantic-danger-text);
 }
 .enterprise-badge-neutral {
   border-radius: 0.375rem;
@@ -2678,6 +2873,32 @@ button:active:not(:disabled),
   );
   background-size: 220% 100%;
   animation: enterprise-shimmer 1.75s ease-in-out infinite;
+}
+
+/** Pipeline timeline — Stripe-style step spinner */
+@keyframes enterprise-timeline-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.enterprise-timeline-spinner {
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  border: 2px solid color-mix(in srgb, var(--enterprise-primary) 16%, transparent);
+  border-top-color: var(--enterprise-primary);
+  border-right-color: color-mix(in srgb, var(--enterprise-primary) 55%, transparent);
+  animation: enterprise-timeline-spin 0.72s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enterprise-timeline-spinner {
+    animation: none;
+    border-color: color-mix(in srgb, var(--enterprise-primary) 35%, var(--enterprise-border));
+    border-top-color: var(--enterprise-primary);
+  }
 }
 
 /** Indeterminate bar for PDF load overlay */

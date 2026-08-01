@@ -11,7 +11,7 @@ import {
   storedProjectMissing,
   type RestorePhase,
 } from "@/lib/projectRestoreLogic";
-import { isProjectRestoreEntryPath } from "@/lib/lastProject";
+import { clearSkipProjectRestore, isProjectRestoreEntryPath } from "@/lib/lastProject";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import type { Project } from "@/types/projects";
@@ -52,6 +52,10 @@ export function useProjectRestoreEntry() {
     setPhase(result.phase);
     if (result.target) router.replace(result.target);
   }, [isEntry, pathname, ctxLoading, wid, router]);
+
+  useEffect(() => {
+    if (!isEntry) clearSkipProjectRestore();
+  }, [isEntry]);
 
   useEffect(() => {
     syncRestoreAfterProjectsLoad(phase, projectsPending, wid, projects, setPhase);

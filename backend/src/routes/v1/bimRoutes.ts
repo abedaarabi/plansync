@@ -6,6 +6,8 @@ import { prisma } from "../../lib/prisma.js";
 import { loadProjectForMember } from "../../lib/projectAccess.js";
 import type { Env } from "../../lib/env.js";
 import { getObjectStream } from "../../lib/s3.js";
+import { webStreamToBuffer } from "../../lib/bim/streamUtils.js";
+import { notifyBimJobEvent } from "../../lib/bim/bimJobNotify.js";
 import { toQuantityIndexSummary } from "../../lib/bim/quantityIndexBuilder.js";
 import {
   enqueueBimConversion,
@@ -19,7 +21,7 @@ import {
   getDrawingSheets,
   getPublishedModelLevels,
   getPublishStatusCounts,
-  getStoreysForFileVersion,
+  getStoreysResponseForFileVersion,
   getSyncContext,
   publishModel,
   saveCoordTransform,
@@ -113,7 +115,9 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     return c.json({
       fileVersionId: fv.id,
       conversionStatus,
+      pipelinePhase: resultJson?.phase ?? null,
       fragmentsReady: Boolean(fv.fragmentsS3Key),
+      geometryManifestReady: Boolean(fv.geometryManifestS3Key),
       quantityIndexSummaryReady,
       quantityIndexReady,
       partial: quantityIndexSummaryReady,
@@ -125,6 +129,128 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
       bimPublishedAt: statusCounts.bimPublishedAt,
       levelCount: statusCounts.levelCount,
       mappedSheetCount: statusCounts.mappedSheetCount,
+    });
+  });
+
+  r.get("/file-versions/:fileVersionId/bim/geometry-manifest", needUser, async (c) => {
+    const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"));
+    if ("response" in auth) return auth.response;
+    const { fv } = auth;
+    if (!fv.geometryManifestS3Key) return c.json({ error: "Geometry manifest not ready" }, 404);
+    const obj = await getObjectStream(env, fv.geometryManifestS3Key);
+    if (!obj.ok) return c.json({ error: obj.error }, 502);
+    const buf = await webStreamToBuffer(obj.stream);
+    return new Response(new Uint8Array(buf), {
+      headers: { "Content-Type": "application/json", "Cache-Control": "private, max-age=300" },
+    });
+  });
+
+  r.get("/file-versions/:fileVersionId/bim/element-index", needUser, async (c) => {
+    const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"));
+    if ("response" in auth) return auth.response;
+    const { fv } = auth;
+
+    const limit = Math.min(500, Math.max(1, Number(c.req.query("limit")) || 100));
+    const cursor = c.req.query("cursor") ?? undefined;
+    const filterType = c.req.query("ifcType") ?? undefined;
+
+    const rows = await prisma.bimElementVersion.findMany({
+      where: {
+        fileVersionId: fv.id,
+        changeType: { not: "DELETED" },
+        ...(filterType ? { element: { ifcType: filterType } } : {}),
+        ...(cursor ? { elementId: { gt: cursor } } : {}),
+      },
+      take: limit + 1,
+      orderBy: { elementId: "asc" },
+      include: {
+        element: { select: { id: true, ifcGuid: true, ifcType: true, name: true } },
+      },
+    });
+
+    const page = rows.slice(0, limit);
+    const nextCursor = rows.length > limit ? page[page.length - 1]?.elementId : null;
+
+    const attrs =
+      page.length > 0
+        ? await prisma.bimElementAttribute.findMany({
+            where: {
+              fileVersionId: fv.id,
+              elementId: { in: page.map((r) => r.elementId) },
+              key: { in: ["level", "material", "discipline"] },
+            },
+          })
+        : [];
+
+    const attrByElement = new Map<string, Record<string, string>>();
+    for (const a of attrs) {
+      let m = attrByElement.get(a.elementId);
+      if (!m) {
+        m = {};
+        attrByElement.set(a.elementId, m);
+      }
+      m[a.key] = a.value;
+    }
+
+    return c.json({
+      fileVersionId: fv.id,
+      items: page.map((r) => ({
+        elementId: r.elementId,
+        guid: r.element.ifcGuid,
+        ifcType: r.element.ifcType,
+        name: r.element.name,
+        changeType: r.changeType,
+        level: attrByElement.get(r.elementId)?.level ?? null,
+        material: attrByElement.get(r.elementId)?.material ?? null,
+        discipline: attrByElement.get(r.elementId)?.discipline ?? null,
+      })),
+      nextCursor,
+    });
+  });
+
+  r.get("/file-versions/:fileVersionId/bim/changes", needUser, async (c) => {
+    const baseId = c.req.query("baseFileVersionId");
+    if (!baseId) return c.json({ error: "baseFileVersionId required" }, 400);
+
+    const fv = await loadBimFileVersion(c.req.param("fileVersionId"));
+    const base = await loadBimFileVersion(baseId);
+    if (!fv || !base) return c.json({ error: "Not found" }, 404);
+    if (fv.fileId !== base.fileId) return c.json({ error: "Versions must be same file" }, 400);
+
+    const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
+    if (!access) return c.json({ error: "Forbidden" }, 403);
+
+    const [currentRows, baseRows] = await Promise.all([
+      prisma.bimElementVersion.findMany({
+        where: { fileVersionId: fv.id },
+        include: { element: { select: { ifcGuid: true } } },
+      }),
+      prisma.bimElementVersion.findMany({
+        where: { fileVersionId: base.id, changeType: { not: "DELETED" } },
+        include: { element: { select: { ifcGuid: true } } },
+      }),
+    ]);
+
+    const added = currentRows.filter((r) => r.changeType === "ADDED").map((r) => r.element.ifcGuid);
+    const modified = currentRows
+      .filter((r) => r.changeType === "MODIFIED")
+      .map((r) => r.element.ifcGuid);
+    const deleted = currentRows
+      .filter((r) => r.changeType === "DELETED")
+      .map((r) => r.element.ifcGuid);
+    const unchanged = currentRows
+      .filter((r) => r.changeType === "UNCHANGED")
+      .map((r) => r.element.ifcGuid);
+
+    return c.json({
+      baseVersion: base.version,
+      compareVersion: fv.version,
+      added,
+      modified,
+      deleted,
+      unchanged,
+      baseElementCount: baseRows.length,
+      compareElementCount: currentRows.filter((r) => r.changeType !== "DELETED").length,
     });
   });
 
@@ -520,8 +646,8 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     const { fv } = auth;
 
     try {
-      const storeys = await getStoreysForFileVersion(env, fv.id);
-      return c.json({ storeys });
+      const { storeys, ready } = await getStoreysResponseForFileVersion(env, fv.id);
+      return c.json({ storeys, ready });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to extract storeys";
       return c.json({ error: msg }, 400);
@@ -565,6 +691,18 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
 
     try {
       const result = await publishModel(env, fv.id, c.get("user").id, body);
+      await notifyBimJobEvent("bim.publish_complete", {
+        env,
+        workspaceId: fv.file.project.workspaceId,
+        projectId: fv.file.projectId,
+        projectName: fv.file.project.name,
+        fileId: fv.fileId,
+        fileVersionId: fv.id,
+        fileName: fv.file.name,
+        versionNumber: fv.version,
+        userId: c.get("user").id,
+        jobStartedAt: null,
+      });
       return c.json(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Publish failed";

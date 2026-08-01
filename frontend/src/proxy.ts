@@ -250,7 +250,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // All HTML/API paths except Next internals (auth gating below; locale on every pass)
-    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico).*)",
+    // All HTML/API paths except Next internals and static assets (auth gating below; locale on every pass)
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|pdf\\.worker\\.mjs).*)",
   ],
 };

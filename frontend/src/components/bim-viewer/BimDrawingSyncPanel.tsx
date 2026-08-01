@@ -9,29 +9,32 @@ import {
   worldXZToPdfNorm,
   type DrawingCoordTransform,
 } from "@/lib/bim/drawingCoordBridge";
+import { hitTestMapNavigator } from "@/lib/bim/bimMapNavigator";
 import { BimPdfPageEmbed } from "./BimPdfPageEmbed";
+import { BimMapNavigatorMarker } from "./BimMapNavigatorMarker";
 
 type SyncSource = "pdf" | "3d" | null;
 
-function NavigatorCone(props: {
-  norm: { x: number; y: number };
-  headingRad: number;
-  canvasWidth: number;
-  canvasHeight: number;
-}) {
-  const size = Math.min(props.canvasWidth, props.canvasHeight);
-  const x = props.norm.x * props.canvasWidth;
-  const y = props.norm.y * props.canvasHeight;
-  const r = size * 0.04;
-  const len = size * 0.08;
-  const hx = x + Math.sin(props.headingRad) * len;
-  const hy = y - Math.cos(props.headingRad) * len;
-  return (
-    <svg className="absolute inset-0 h-full w-full overflow-visible" aria-hidden>
-      <circle cx={x} cy={y} r={r} fill="rgba(59,130,246,0.35)" stroke="#2563eb" strokeWidth={2} />
-      <line x1={x} y1={y} x2={hx} y2={hy} stroke="#2563eb" strokeWidth={2} />
-    </svg>
-  );
+type DragMode =
+  | { kind: "pan" }
+  | { kind: "rotate"; startPointerAngle: number; baseHeading: number };
+
+function pointerToCanvasPx(
+  clientX: number,
+  clientY: number,
+  rect: DOMRect,
+  canvasW: number,
+  canvasH: number,
+): { px: number; py: number; norm: { x: number; y: number } } {
+  const norm = {
+    x: Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)),
+    y: Math.min(1, Math.max(0, (clientY - rect.top) / rect.height)),
+  };
+  return {
+    px: norm.x * canvasW,
+    py: norm.y * canvasH,
+    norm,
+  };
 }
 
 export function BimDrawingSyncPanel(props: {
@@ -41,23 +44,39 @@ export function BimDrawingSyncPanel(props: {
   className?: string;
 }) {
   const syncSourceRef = useRef<SyncSource>(null);
+  const dragRef = useRef<DragMode | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef(0);
   const [navNorm, setNavNorm] = useState({ x: 0.5, y: 0.5 });
   const [heading, setHeading] = useState(0);
   const [scrollCenter, setScrollCenter] = useState<{ x: number; y: number } | null>(null);
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
 
-  const applyPdfTo3d = useCallback(
-    (norm: { x: number; y: number }) => {
-      if (syncSourceRef.current === "3d") return;
+  headingRef.current = heading;
+
+  const applyPoseFromNorm = useCallback(
+    (norm: { x: number; y: number }, opts?: { heading?: number; animate?: boolean }) => {
+      const engine = props.engine;
+      if (!engine) return;
+      const h = opts?.heading ?? headingRef.current;
       syncSourceRef.current = "pdf";
       setNavNorm(norm);
+      if (opts?.heading !== undefined) {
+        setHeading(opts.heading);
+        headingRef.current = opts.heading;
+      }
       const { x, z } = pdfNormToWorldXZ(norm, props.transform);
-      props.engine?.applyPlanMinimapPose({ x, z, heading, animate: false });
+      void engine.applyPlanMinimapPose({
+        x,
+        z,
+        heading: h,
+        animate: opts?.animate ?? false,
+      });
       requestAnimationFrame(() => {
         syncSourceRef.current = null;
       });
     },
-    [props.engine, props.transform, heading],
+    [props.engine, props.transform],
   );
 
   useEffect(() => {
@@ -66,7 +85,7 @@ export function BimDrawingSyncPanel(props: {
 
     let raf = 0;
     const tick = () => {
-      if (syncSourceRef.current === "pdf") {
+      if (syncSourceRef.current === "pdf" || dragRef.current) {
         raf = requestAnimationFrame(tick);
         return;
       }
@@ -76,6 +95,7 @@ export function BimDrawingSyncPanel(props: {
         const norm = worldXZToPdfNorm(state.anchorX, state.anchorZ, props.transform);
         setNavNorm(norm);
         setHeading(state.heading);
+        headingRef.current = state.heading;
         setScrollCenter({ x: norm.x, y: norm.y });
         requestAnimationFrame(() => {
           syncSourceRef.current = null;
@@ -92,6 +112,82 @@ export function BimDrawingSyncPanel(props: {
     void props.engine?.setPlanMinimapStorey(storey);
   }, [props.engine, props.syncContext.levelSourceName, props.syncContext.levelDisplayName]);
 
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const overlay = overlayRef.current;
+    const engine = props.engine;
+    if (!overlay || !engine) return;
+
+    const rect = overlay.getBoundingClientRect();
+    const { px, py, norm } = pointerToCanvasPx(
+      e.clientX,
+      e.clientY,
+      rect,
+      canvasSize.w,
+      canvasSize.h,
+    );
+    const anchorPx = navNorm.x * canvasSize.w;
+    const anchorPy = navNorm.y * canvasSize.h;
+    const hit = hitTestMapNavigator(px, py, anchorPx, anchorPy, canvasSize.w, canvasSize.h);
+
+    if (hit.kind === "pan") {
+      dragRef.current = { kind: "pan" };
+      overlay.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+
+    if (hit.kind === "rotate") {
+      const dx = px - anchorPx;
+      const dy = py - anchorPy;
+      dragRef.current = {
+        kind: "rotate",
+        startPointerAngle: Math.atan2(dy, dx),
+        baseHeading: headingRef.current,
+      };
+      overlay.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+
+    applyPoseFromNorm(norm, { animate: true });
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const overlay = overlayRef.current;
+    const drag = dragRef.current;
+    if (!overlay || !drag) return;
+
+    const rect = overlay.getBoundingClientRect();
+    const { px, py, norm } = pointerToCanvasPx(
+      e.clientX,
+      e.clientY,
+      rect,
+      canvasSize.w,
+      canvasSize.h,
+    );
+
+    if (drag.kind === "pan") {
+      applyPoseFromNorm(norm);
+      return;
+    }
+
+    const anchorPx = navNorm.x * canvasSize.w;
+    const anchorPy = navNorm.y * canvasSize.h;
+    const dx = px - anchorPx;
+    const dy = py - anchorPy;
+    const pointerAngle = Math.atan2(dy, dx);
+    const nextHeading = drag.baseHeading + (pointerAngle - drag.startPointerAngle);
+    applyPoseFromNorm(navNorm, { heading: nextHeading });
+  };
+
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const overlay = overlayRef.current;
+    if (overlay?.hasPointerCapture(e.pointerId)) {
+      overlay.releasePointerCapture(e.pointerId);
+    }
+    dragRef.current = null;
+  };
+
   return (
     <div
       className={`flex h-full min-h-0 flex-col overflow-hidden bg-white ${props.className ?? ""}`}
@@ -106,22 +202,28 @@ export function BimDrawingSyncPanel(props: {
           fileVersionId={props.syncContext.pdfFileVersionId}
           pageIndex={props.syncContext.pageIndex}
           className="h-full min-h-[200px] w-full"
-          onPointerNorm={applyPdfTo3d}
           scrollToCenterNorm={scrollCenter}
           onCanvasSize={(w, h) => setCanvasSize({ w, h })}
+          overlayInteractive
           overlay={
-            <NavigatorCone
-              norm={navNorm}
-              headingRad={heading}
-              canvasWidth={canvasSize.w}
-              canvasHeight={canvasSize.h}
-            />
+            <div
+              ref={overlayRef}
+              className="absolute inset-0"
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+            >
+              <BimMapNavigatorMarker
+                norm={navNorm}
+                headingRad={heading}
+                canvasWidth={canvasSize.w}
+                canvasHeight={canvasSize.h}
+              />
+            </div>
           }
         />
       </div>
-      <p className="shrink-0 border-t border-slate-100 px-3 py-2 text-[10px] text-slate-500">
-        Click the sheet to move the 3D camera · walk mode recommended
-      </p>
     </div>
   );
 }

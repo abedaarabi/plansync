@@ -1,8 +1,13 @@
 import type * as PdfjsModule from "pdfjs-dist";
 
+/** Synced from pdfjs-dist on dev/build — see scripts/copy-pdf-worker.mjs */
+const PDF_WORKER_PATH = "/pdf.worker.mjs";
+
 export function setupPdfWorker(pdfjs: typeof PdfjsModule) {
   if (typeof window === "undefined") return;
-  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
+  if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+    pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER_PATH;
+  }
 }
 
 /**

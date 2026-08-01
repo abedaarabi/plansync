@@ -13,8 +13,17 @@ export async function apiJsonFetch<T>(url: string, init?: RequestInit): Promise<
   if (!res.ok) {
     let msg = `Request failed (${res.status})`;
     try {
-      const j = (await res.json()) as { error?: string };
-      if (j.error) msg = j.error;
+      const j = (await res.json()) as { error?: string | Record<string, unknown> };
+      if (typeof j.error === "string" && j.error.trim()) {
+        msg = j.error;
+      } else if (j.error && typeof j.error === "object") {
+        const flat = j.error as { formErrors?: string[]; fieldErrors?: Record<string, string[]> };
+        const parts = [
+          ...(flat.formErrors ?? []),
+          ...Object.entries(flat.fieldErrors ?? {}).flatMap(([k, v]) => v.map((e) => `${k}: ${e}`)),
+        ];
+        if (parts.length > 0) msg = parts.join("; ");
+      }
     } catch {
       /* ignore */
     }

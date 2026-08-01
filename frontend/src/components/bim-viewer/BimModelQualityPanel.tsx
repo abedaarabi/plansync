@@ -4,8 +4,12 @@ import { useState } from "react";
 import {
   AlertCircle,
   BarChart3,
+  Check,
+  Gauge,
+  Grid3X3,
   Keyboard,
   Loader2,
+  Navigation2,
   Palette,
   RefreshCw,
   SlidersHorizontal,
@@ -16,13 +20,19 @@ import { bimIndexBlockingLoad, bimIndexEnriching } from "@/lib/bim/indexStatus";
 import type { BimLoqReport, BimQuantityIndex } from "@/lib/bim/types";
 import { BIM_GEOMETRY_PROFILE } from "@/lib/bim/renderingProfile";
 import {
+  BIM_BACKGROUND_THEME_OPTIONS,
   BIM_COLOR_MODE_OPTIONS,
+  BIM_EDGE_MODE_OPTIONS,
   BIM_ENVIRONMENT_OPTIONS,
   BIM_FOG_MODE_OPTIONS,
   BIM_GRID_MODE_OPTIONS,
+  BIM_GRID_SPACING_OPTIONS,
+  BIM_NAVIGATION_SPEED_OPTIONS,
+  BIM_QUALITY_PRESET_OPTIONS,
   BIM_SPACE_DISPLAY_OPTIONS,
   type BimViewportAppearance,
 } from "@/lib/bim/viewportAppearance";
+import type { BimQualityState } from "@/lib/bim/renderQuality";
 
 // fallow-ignore-next-line complexity
 export function BimModelQualityPanel(props: {
@@ -30,6 +40,7 @@ export function BimModelQualityPanel(props: {
   quantityIndex: BimQuantityIndex | null;
   conversionStatus: string;
   appearance: BimViewportAppearance;
+  qualityState: BimQualityState | null;
   onAppearanceChange: (patch: Partial<BimViewportAppearance>) => void;
   onRebuildIndex?: () => void;
 }) {
@@ -72,49 +83,126 @@ export function BimModelQualityPanel(props: {
         </div>
 
         {qualityTab === "appearance" ? (
-          <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] p-3">
-            <div className="mb-3 flex items-center gap-2">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
-              <p className="text-[11px] font-semibold text-[var(--bim-text)]">
-                Viewport appearance
-              </p>
+          <div className="space-y-3">
+            <div className="rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)] p-3">
+              <div className="mb-3 flex items-center gap-2">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+                <p className="text-[11px] font-semibold text-[var(--bim-text)]">Appearance</p>
+              </div>
+              <div className="space-y-3">
+                <AppearanceSelect
+                  label="Background"
+                  value={props.appearance.backgroundTheme}
+                  options={BIM_BACKGROUND_THEME_OPTIONS}
+                  onChange={(backgroundTheme) => props.onAppearanceChange({ backgroundTheme })}
+                />
+                <AppearanceSelect
+                  label="Lighting environment"
+                  value={props.appearance.environment}
+                  options={BIM_ENVIRONMENT_OPTIONS}
+                  onChange={(environment) => props.onAppearanceChange({ environment })}
+                />
+                <AppearanceSelect
+                  label="Element colors"
+                  value={props.appearance.colorMode}
+                  options={BIM_COLOR_MODE_OPTIONS}
+                  onChange={(colorMode) => props.onAppearanceChange({ colorMode })}
+                />
+                <AppearanceSelect
+                  label="Space display"
+                  value={props.appearance.spaceDisplay}
+                  options={BIM_SPACE_DISPLAY_OPTIONS}
+                  onChange={(spaceDisplay) => props.onAppearanceChange({ spaceDisplay })}
+                />
+              </div>
             </div>
 
-            <p className="mb-3 text-[10px] leading-relaxed text-[var(--bim-text-muted)]">
-              Settings are saved in this browser and restored when you reopen the viewer.
-            </p>
-            <div className="space-y-3">
+            <div className="rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)] p-3">
+              <div className="mb-3 flex items-center gap-2">
+                <Navigation2 className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+                <p className="text-[11px] font-semibold text-[var(--bim-text)]">Navigation</p>
+              </div>
               <AppearanceSelect
-                label="Environment"
-                value={props.appearance.environment}
-                options={BIM_ENVIRONMENT_OPTIONS}
-                onChange={(environment) => props.onAppearanceChange({ environment })}
-              />
-              <AppearanceSelect
-                label="Element colors"
-                value={props.appearance.colorMode}
-                options={BIM_COLOR_MODE_OPTIONS}
-                onChange={(colorMode) => props.onAppearanceChange({ colorMode })}
-              />
-              <AppearanceSelect
-                label="Space display"
-                value={props.appearance.spaceDisplay}
-                options={BIM_SPACE_DISPLAY_OPTIONS}
-                onChange={(spaceDisplay) => props.onAppearanceChange({ spaceDisplay })}
-              />
-              <AppearanceSelect
-                label="Atmospheric fog"
-                value={props.appearance.fogMode}
-                options={BIM_FOG_MODE_OPTIONS}
-                onChange={(fogMode) => props.onAppearanceChange({ fogMode })}
-              />
-              <AppearanceSelect
-                label="Ground grid"
-                value={props.appearance.gridMode}
-                options={BIM_GRID_MODE_OPTIONS}
-                onChange={(gridMode) => props.onAppearanceChange({ gridMode })}
+                label="Camera speed"
+                value={props.appearance.navigationSpeed}
+                options={BIM_NAVIGATION_SPEED_OPTIONS}
+                onChange={(navigationSpeed) => props.onAppearanceChange({ navigationSpeed })}
               />
             </div>
+
+            <div className="rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)] p-3">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Gauge className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+                  <p className="text-[11px] font-semibold text-[var(--bim-text)]">Rendering</p>
+                </div>
+                {props.qualityState ? (
+                  <span className="bim-quality-badge">{props.qualityState.effective}</span>
+                ) : null}
+              </div>
+              {props.qualityState ? (
+                <p className="mb-3 text-[10px] leading-relaxed text-[var(--bim-text-subtle)]">
+                  {props.qualityState.reason}
+                </p>
+              ) : null}
+              <div className="space-y-3">
+                <AppearanceSelect
+                  label="Quality preset"
+                  value={props.appearance.qualityPreset}
+                  options={BIM_QUALITY_PRESET_OPTIONS}
+                  onChange={(qualityPreset) => props.onAppearanceChange({ qualityPreset })}
+                />
+                <ToggleRow
+                  label="Ambient occlusion"
+                  hint="Adds contact depth at intersections"
+                  checked={props.appearance.ssaoEnabled}
+                  onChange={(ssaoEnabled) => props.onAppearanceChange({ ssaoEnabled })}
+                />
+                <AppearanceSelect
+                  label="Edge mode"
+                  value={props.appearance.edgeMode}
+                  options={BIM_EDGE_MODE_OPTIONS}
+                  onChange={(edgeMode) => props.onAppearanceChange({ edgeMode })}
+                />
+                <AppearanceSelect
+                  label="Atmospheric fog"
+                  value={props.appearance.fogMode}
+                  options={BIM_FOG_MODE_OPTIONS}
+                  onChange={(fogMode) => props.onAppearanceChange({ fogMode })}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)] p-3">
+              <div className="mb-3 flex items-center gap-2">
+                <Grid3X3 className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+                <p className="text-[11px] font-semibold text-[var(--bim-text)]">Engineering grid</p>
+              </div>
+              <div className="space-y-3">
+                <AppearanceSelect
+                  label="Visibility"
+                  value={props.appearance.gridMode}
+                  options={BIM_GRID_MODE_OPTIONS}
+                  onChange={(gridMode) => props.onAppearanceChange({ gridMode })}
+                />
+                <AppearanceSelect
+                  label="Spacing"
+                  value={props.appearance.gridSpacing}
+                  options={BIM_GRID_SPACING_OPTIONS}
+                  onChange={(gridSpacing) => props.onAppearanceChange({ gridSpacing })}
+                />
+                <ToggleRow
+                  label="Axis colors"
+                  hint="Show restrained X and Z origin axes"
+                  checked={props.appearance.gridAxes}
+                  onChange={(gridAxes) => props.onAppearanceChange({ gridAxes })}
+                />
+              </div>
+            </div>
+
+            <p className="px-1 text-[10px] leading-relaxed text-[var(--bim-text-subtle)]">
+              Viewport settings are saved in this browser.
+            </p>
           </div>
         ) : (
           <BimKeyboardShortcutsPanel />
@@ -270,6 +358,37 @@ function AppearanceSelect<T extends string>(props: {
         </p>
       ) : null}
     </label>
+  );
+}
+
+function ToggleRow(props: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-[10px] font-medium text-[var(--bim-text-muted)]">{props.label}</p>
+        <p className="mt-0.5 text-[10px] leading-relaxed text-[var(--bim-text-subtle)]">
+          {props.hint}
+        </p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={props.checked}
+        aria-label={props.label}
+        data-state={props.checked ? "on" : "off"}
+        onClick={() => props.onChange(!props.checked)}
+        className="bim-render-toggle"
+      >
+        <span className="bim-render-toggle__thumb">
+          {props.checked ? <Check className="h-2.5 w-2.5" aria-hidden /> : null}
+        </span>
+      </button>
+    </div>
   );
 }
 

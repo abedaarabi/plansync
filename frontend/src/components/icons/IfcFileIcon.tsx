@@ -15,7 +15,7 @@ export function IfcFileIcon({ className, ...rest }: Props) {
       aria-hidden
       {...rest}
     >
-      <rect width="24" height="24" rx="4" fill="#3949AB" />
+      <rect width="24" height="24" rx="4" fill="#2563EB" />
       <path fill="#fff" fillOpacity={0.22} d="M14 2v6h6L14 2z" />
       <text
         x="12"

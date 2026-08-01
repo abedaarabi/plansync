@@ -1,11 +1,11 @@
 import { apiUrl } from "@/lib/api-url";
 import { fetchResolvedFileRevision } from "@/lib/api-client";
 import {
-  fetchBimFragmentsBuffer,
   fetchBimStatus,
   triggerBimConversion,
   uploadBimFragments,
 } from "@/lib/api-client/bim-viewer";
+import { fetchFragmentsForVersion } from "@/lib/bim/progressiveTileLoader";
 import type { BimEngine } from "@/components/bim-viewer/bimEngine";
 import { buildModelId, type BimFederationMember } from "@/lib/bim/federation";
 import {
@@ -46,24 +46,30 @@ export async function loadFederationMember(
   const cacheKey = buildFragmentsCacheKey(resolved.fileId, resolved.fileVersionId);
 
   const status = await fetchBimStatus(resolved.fileVersionId).catch(() => null);
+  const conversionActive =
+    status?.conversionStatus === "running" ||
+    status?.conversionStatus === "summary_ready" ||
+    status?.conversionStatus === "pending" ||
+    status?.conversionStatus === "queued";
   if (
     !status ||
     status.conversionStatus === "failed" ||
-    (!status.quantityIndexReady &&
-      status.conversionStatus !== "running" &&
-      status.conversionStatus !== "summary_ready")
+    (!status.quantityIndexReady && !conversionActive)
   ) {
     void triggerBimConversion(resolved.fileVersionId).catch(() => undefined);
   }
 
-  try {
-    const serverBuf = await fetchBimFragmentsBuffer(resolved.fileVersionId);
-    if (serverBuf && serverBuf.byteLength > 0) {
-      await engine.addFragments(serverBuf, resolved, { fitView: opts?.fitView ?? false });
-      return;
+  // Server fragments only exist after a prior viewer session uploaded them.
+  if (status?.fragmentsReady) {
+    try {
+      const serverBuf = await fetchFragmentsForVersion(resolved.fileVersionId);
+      if (serverBuf && serverBuf.byteLength > 0) {
+        await engine.addFragments(serverBuf, resolved, { fitView: opts?.fitView ?? false });
+        return;
+      }
+    } catch {
+      /* fall through to client IFC conversion */
     }
-  } catch {
-    /* fall through */
   }
 
   const cached = await readCachedFragments(cacheKey);

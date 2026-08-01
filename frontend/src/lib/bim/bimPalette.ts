@@ -9,21 +9,25 @@ export const BIM_PALETTE = {
   },
 
   materials: {
-    wall: "#D4D4D8",
-    floor: "#BFC5CC",
-    column: "#C8CDD4",
-    ceiling: "#E5E7EB",
-    door: "#A8B1BB",
-    glass: "#7DD3FC",
-    glassOpacity: 0.2,
+    concrete: "#C8CDD2",
+    steel: "#737B84",
+    aluminum: "#AAB2B9",
+    wood: "#9A7658",
+    wall: "#D0D3D6",
+    floor: "#B8BEC4",
+    column: "#858D95",
+    ceiling: "#DADDE0",
+    door: "#9A7658",
+    glass: "#A9C7D2",
+    glassOpacity: 0.24,
   },
 
   mep: {
-    hvac: "#60A5FA",
-    plumbing: "#22C55E",
-    electrical: "#FACC15",
-    fire: "#EF4444",
-    communication: "#A78BFA",
+    hvac: "#6F95AC",
+    plumbing: "#668E78",
+    electrical: "#C8874A",
+    fire: "#B95252",
+    communication: "#817A9C",
   },
 
   viewer: {
@@ -35,10 +39,10 @@ export const BIM_PALETTE = {
   },
 
   interaction: {
-    selectedOutline: "#3B82F6",
+    selectedOutline: "#4F8FD7",
     selectedGlow: "rgba(59,130,246,0.35)",
     selectedGlowOpacity: 0.35,
-    hoveredOutline: "#60A5FA",
+    hoveredOutline: "#78A9D8",
     hiddenOpacity: 0.08,
     nonSelectedOpacity: 0.12,
     sectionPlane: "#06B6D4",
@@ -65,7 +69,7 @@ export const BIM_PALETTE = {
   },
 
   lighting: {
-    ambient: 0.9,
-    directional: 1.2,
+    ambient: 0.62,
+    directional: 2.2,
   },
 } as const;

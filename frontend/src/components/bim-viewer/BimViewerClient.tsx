@@ -5,11 +5,13 @@ import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { parseFederationMembers, type BimFederationMember } from "@/lib/bim/federation";
+import { parseBuildingWorkspaceMode } from "@/lib/locations/workspaceHref";
 import { QueryProvider } from "@/providers/QueryProvider";
 
 /**
  * Client bootstrap for `/bim-viewer?fileId=…&projectId=…` (optional `version`,
- * `fileVersionId`, `name`, `guid`, `issueId`, `compareFileVersionId`, `models`). The shell is client-only.
+ * `fileVersionId`, `name`, `guid`, `issueId`, `compareFileVersionId`, `models`,
+ * `buildingId` + `mode=work|edit`). The shell is client-only.
  */
 function BimBootLoading({ message = "Loading 3D viewer…" }: { message?: string }) {
   return (
@@ -54,6 +56,18 @@ export function BimViewerClient() {
   const compareFileVersionId = searchParams.get("compareFileVersionId");
   const modelsParam = searchParams.get("models");
   const issueId = searchParams.get("issueId");
+  const buildingId = searchParams.get("buildingId");
+  const locationId = searchParams.get("locationId");
+  const levelId = searchParams.get("levelId");
+  const viewParam = searchParams.get("view");
+  const initialView = viewParam === "plan" || viewParam === "3d" ? viewParam : null;
+  const alignLevelId = searchParams.get("alignLevelId");
+  const alignAssetId = searchParams.get("alignAssetId");
+  const workspaceMode = buildingId
+    ? parseBuildingWorkspaceMode(searchParams.get("mode"), {
+        alignActive: Boolean(alignLevelId && alignAssetId),
+      })
+    : null;
 
   const federationMembers = useMemo((): BimFederationMember[] => {
     if (!fileId) return [];
@@ -95,6 +109,13 @@ export function BimViewerClient() {
         compareFileVersionId={compareFileVersionId}
         federationMembers={federationMembers}
         collabEnabled={false}
+        buildingId={buildingId}
+        locationId={locationId}
+        workspaceMode={workspaceMode}
+        initialLevelId={levelId}
+        initialView={initialView}
+        alignLevelId={alignLevelId}
+        alignAssetId={alignAssetId}
       />
     </QueryProvider>
   );

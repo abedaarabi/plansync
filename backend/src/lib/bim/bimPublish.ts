@@ -125,10 +125,48 @@ function mergeElementCounts(
   }));
 }
 
-export async function getStoreysForFileVersion(
+function storeysFromByLevel(
+  byLevel: Record<string, { count: number; level?: string }>,
+): StoreyPreview[] {
+  return Object.entries(byLevel)
+    .filter(([name]) => name.trim().length > 0 && name !== "Unassigned")
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+    .map(([name, agg]) => ({
+      sourceName: name,
+      displayName: name,
+      elevationMeters: null,
+      elementCount: agg.count ?? 0,
+    }));
+}
+
+function conversionStoreysReady(status: string | null | undefined): boolean {
+  return status === "summary_ready" || status === "ready";
+}
+
+async function readQuantityIndexFromS3(
+  env: Env,
+  s3Key: string,
+): Promise<ReturnType<typeof parseQuantityIndexBuffer>> {
+  try {
+    const obj = await getObjectStream(env, s3Key);
+    if (!obj.ok) return null;
+    const buf = await webStreamToBuffer(obj.stream);
+    return parseQuantityIndexBuffer(buf);
+  } catch {
+    return null;
+  }
+}
+
+export type StoreysResponse = {
+  storeys: StoreyPreview[];
+  ready: boolean;
+};
+
+/** Storeys for publish/review — avoids IFC re-parse while conversion is still running. */
+export async function getStoreysResponseForFileVersion(
   env: Env,
   fileVersionId: string,
-): Promise<StoreyPreview[]> {
+): Promise<StoreysResponse> {
   const fv = await assertIfcFileVersion(fileVersionId);
 
   const published = await prisma.bimModelLevel.findMany({
@@ -136,31 +174,58 @@ export async function getStoreysForFileVersion(
     orderBy: { sortOrder: "asc" },
   });
   if (published.length > 0) {
-    return published.map((l) => ({
-      sourceName: l.sourceName,
-      displayName: l.displayName,
-      elevationMeters: l.elevationMeters,
-      elementCount: l.elementCount,
-    }));
+    return {
+      ready: true,
+      storeys: published.map((l) => ({
+        sourceName: l.sourceName,
+        displayName: l.displayName,
+        elevationMeters: l.elevationMeters,
+        elementCount: l.elementCount,
+      })),
+    };
   }
 
-  const ifcBytes = await readIfcBytes(env, fv.s3Key);
-  // fallow-ignore-next-line code-duplication
-  let storeys = await extractStoreysFromIfc(ifcBytes);
+  const conversionStatus = fv.bimConversionStatus;
+  if (conversionStatus === "failed") {
+    const ifcBytes = await readIfcBytes(env, fv.s3Key);
+    const storeys = await extractStoreysFromIfc(ifcBytes);
+    return { storeys, ready: true };
+  }
 
-  if (fv.quantityIndexS3Key) {
-    try {
-      const obj = await getObjectStream(env, fv.quantityIndexS3Key);
-      if (obj.ok) {
-        const buf = await webStreamToBuffer(obj.stream);
-        const index = parseQuantityIndexBuffer(buf);
-        if (index) storeys = mergeElementCounts(storeys, index.byLevel);
+  if (fv.quantityIndexS3Key && conversionStoreysReady(conversionStatus)) {
+    const index = await readQuantityIndexFromS3(env, fv.quantityIndexS3Key);
+    if (index?.byLevel) {
+      let storeys = storeysFromByLevel(index.byLevel);
+      if (storeys.length === 0) {
+        const ifcBytes = await readIfcBytes(env, fv.s3Key);
+        storeys = await extractStoreysFromIfc(ifcBytes);
+        storeys = mergeElementCounts(storeys, index.byLevel);
       }
-    } catch {
-      /* optional */
+      return { storeys, ready: true };
     }
   }
 
+  if (
+    conversionStatus === "pending" ||
+    conversionStatus === "queued" ||
+    conversionStatus === "running"
+  ) {
+    return { storeys: [], ready: false };
+  }
+
+  const ifcBytes = await readIfcBytes(env, fv.s3Key);
+  let storeys = await extractStoreysFromIfc(ifcBytes);
+
+  if (fv.quantityIndexS3Key) {
+    const index = await readQuantityIndexFromS3(env, fv.quantityIndexS3Key);
+    if (index?.byLevel) storeys = mergeElementCounts(storeys, index.byLevel);
+  }
+
+  return { storeys, ready: true };
+}
+
+async function getStoreysForFileVersion(env: Env, fileVersionId: string): Promise<StoreyPreview[]> {
+  const { storeys } = await getStoreysResponseForFileVersion(env, fileVersionId);
   return storeys;
 }
 
@@ -235,6 +300,7 @@ export async function publishModel(
 ): Promise<{ levelCount: number; mappedSheetCount: number }> {
   const fv = await assertIfcFileVersion(fileVersionId);
   const projectId = fv.file.projectId;
+  const buildingId = fv.file.buildingId ?? null;
 
   if (input.levels.length === 0) throw new Error("At least one level required");
 
@@ -265,6 +331,7 @@ export async function publishModel(
       const row = await tx.bimModelLevel.create({
         data: {
           projectId,
+          buildingId,
           ifcFileVersionId: fileVersionId,
           sourceName: level.sourceName,
           displayName: level.displayName,
@@ -328,6 +395,11 @@ export type ResolvedDrawingLevelMap = {
   pageIndex: number;
   coordTransformJson: unknown;
   coordAlignedAt: string | null;
+  calibrationJson: unknown;
+  offsetX: number | null;
+  offsetY: number | null;
+  scale: number | null;
+  rotationDeg: number | null;
   level: {
     id: string;
     sourceName: string;
@@ -385,6 +457,11 @@ export async function getDrawingLevelMaps(
       pageIndex: map.pageIndex,
       coordTransformJson: map.coordTransformJson,
       coordAlignedAt: map.coordAlignedAt?.toISOString() ?? null,
+      calibrationJson: map.calibrationJson,
+      offsetX: map.offsetX,
+      offsetY: map.offsetY,
+      scale: map.scale,
+      rotationDeg: map.rotationDeg,
       level: {
         id: map.bimModelLevel.id,
         sourceName: map.bimModelLevel.sourceName,
@@ -574,11 +651,15 @@ export async function suggestMappingsForVersion(
     id: s.sourceName,
     projectId: "",
     ifcFileVersionId,
+    buildingId: null,
+    sourceIfcGuid: null,
     sourceName: s.sourceName,
     displayName: s.displayName,
     elevationMeters: s.elevationMeters ?? null,
     sortOrder: s.sortOrder ?? i,
     elementCount: 0,
+    thumbnailS3Key: null,
+    displaySource: "IFC_CUT" as const,
     createdAt: new Date(),
   }));
   return computeSuggestions(synthetic, pdfCandidates);

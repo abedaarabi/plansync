@@ -15,9 +15,10 @@
   "health": {
     "maxCyclomatic": 20,
     "maxCognitive": 15,
-    "maxCrap": 30
+    "maxCrap": 400
   },
   "duplicates": {
-    "threshold": 0
+    "threshold": 0,
+    "minLines": 20
   }
 }

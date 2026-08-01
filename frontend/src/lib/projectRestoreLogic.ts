@@ -1,5 +1,4 @@
 import {
-  clearSkipProjectRestore,
   getLastProjectContext,
   isProjectRestoreEntryPath,
   normalizeProjectPath,
@@ -20,11 +19,6 @@ export function initialRestorePhase(): RestorePhase {
   return "checking";
 }
 
-function skipRestoreEntry(): RestoreLayoutResult {
-  clearSkipProjectRestore();
-  return { phase: "show" };
-}
-
 function restoreTargetForWorkspace(wid: string, pathname: string): RestoreLayoutResult {
   const ctx = getLastProjectContext(wid);
   if (!ctx) return { phase: "show" };
@@ -33,6 +27,12 @@ function restoreTargetForWorkspace(wid: string, pathname: string): RestoreLayout
   return { phase: "redirecting", target };
 }
 
+/**
+ * Keep `skipProjectRestore` set while the user stays on hub/dashboard.
+ * Clearing it on first resolve races React Strict Mode remounts and immediately
+ * redirects back into the last project (sidebar "Projects" appears broken).
+ * Cleared when leaving entry paths (see `useProjectRestoreEntry`) or entering a project.
+ */
 // fallow-ignore-next-line complexity
 export function resolveRestoreOnEntry(
   isEntry: boolean,
@@ -41,7 +41,7 @@ export function resolveRestoreOnEntry(
   pathname: string,
 ): RestoreLayoutResult | null {
   if (!isEntry) return { phase: "show" };
-  if (shouldSkipProjectRestore()) return skipRestoreEntry();
+  if (shouldSkipProjectRestore()) return { phase: "show" };
   if (ctxLoading || !wid) return null;
   return restoreTargetForWorkspace(wid, pathname);
 }

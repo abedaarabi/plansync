@@ -41,6 +41,13 @@ import {
 
 import { BimWalkChrome } from "./BimWalkChrome";
 import { BimSplitViewPane } from "./BimSplitViewPane";
+import { BimBuildingTreePanel } from "./BimBuildingTreePanel";
+import { BimLevelPlanView } from "./BimLevelPlanView";
+import type { BuildingLevel } from "@/lib/api-client/locations";
+import { useBuildingLevelsQuery } from "@/lib/locations/useBuildingQueries";
+import { writeBuildingLastView } from "@/lib/locations/buildingPublish";
+import { buildWorkspaceHref, type BuildingWorkspaceMode } from "@/lib/locations/workspaceHref";
+import dynamic from "next/dynamic";
 import { AlignCoordinatesPanel } from "./AlignCoordinatesPanel";
 import { BimContextMenu } from "./BimContextMenu";
 import { BimIssueMarkersOverlay } from "./BimIssueMarkersOverlay";
@@ -58,6 +65,7 @@ import { fetchIssue } from "@/lib/api-client";
 import { compareBimQuantities } from "@/lib/api-client/bim-viewer";
 import { rollupBimQuantities, type BimModelQuantityRollup } from "@/lib/bim/modelQuantity";
 import { mergeViewportAppearance, type BimViewportAppearance } from "@/lib/bim/viewportAppearance";
+import type { BimQualityState } from "@/lib/bim/renderQuality";
 import {
   readSavedViewportAppearance,
   writeSavedViewportAppearance,
@@ -102,7 +110,19 @@ import {
   type DrawingMapRecord,
 } from "@/lib/api-client/bim-publish";
 import type { DrawingCoordTransform } from "@/lib/bim/drawingCoordBridge";
+import {
+  buildCoordTransformFromLocationCalibration,
+  isLocationCalibration,
+} from "@/lib/locations/locationMappingCoordBridge";
 import type { BimChartSegment } from "@/lib/bim/chartStats";
+
+const MatchingWindowClient = dynamic(
+  () =>
+    import("@/components/enterprise/locations/MatchingWindowClient").then(
+      (m) => m.MatchingWindowClient,
+    ),
+  { ssr: false },
+);
 
 type PlanPanelMode = "minimap" | "drawingSync";
 
@@ -136,6 +156,15 @@ export function BimViewerShell(props: {
   compareFileVersionId?: string | null;
   federationMembers: BimFederationMember[];
   collabEnabled?: boolean;
+  /** When set with a workspace mode, opens the building BIM workspace. */
+  buildingId?: string | null;
+  locationId?: string | null;
+  /** `edit` = mapping setup; `work` = full tools (default when buildingId is set). */
+  workspaceMode?: BuildingWorkspaceMode | null;
+  initialLevelId?: string | null;
+  initialView?: "3d" | "plan" | null;
+  alignLevelId?: string | null;
+  alignAssetId?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -154,7 +183,7 @@ export function BimViewerShell(props: {
   const [inspectTab, setInspectTab] = useState<BimInspectTab>("properties");
   const [activeFlyout, setActiveFlyout] = useState<BimBottomFlyout>(null);
 
-  const [fps, setFps] = useState<number | null>(null);
+  const [qualityState, setQualityState] = useState<BimQualityState | null>(null);
   const [resolvedFileVersionId, setResolvedFileVersionId] = useState<string | null>(
     props.fileVersionId,
   );
@@ -195,6 +224,136 @@ export function BimViewerShell(props: {
   const [alignOpen, setAlignOpen] = useState(false);
   const [clusterByType, setClusterByType] = useState(false);
   const [planMinimapStorey, setPlanMinimapStorey] = useState<string | null>(null);
+  const workspaceActive = Boolean(props.buildingId);
+  const [workspaceView, setWorkspaceView] = useState<"3d" | "plan">("3d");
+  const [workspaceLevel, setWorkspaceLevel] = useState<BuildingLevel | null>(null);
+  const [treeMobileOpen, setTreeMobileOpen] = useState(false);
+
+  const alignActive = Boolean(
+    props.alignLevelId && props.alignAssetId && props.buildingId && props.locationId,
+  );
+  /** Mapping setup: levels tree + cut/PDF; no rail / bottom tools. */
+  const mappingEditActive = workspaceActive && (props.workspaceMode === "edit" || alignActive);
+
+  const { data: buildingLevels = [] } = useBuildingLevelsQuery(
+    props.buildingId ?? "",
+    workspaceActive && phase.kind === "ready",
+  );
+
+  const syncWorkspaceUrl = useCallback(
+    (patch: {
+      levelId?: string | null;
+      view?: "3d" | "plan" | null;
+      mode?: BuildingWorkspaceMode | null;
+      alignLevelId?: string | null;
+      alignAssetId?: string | null;
+    }) => {
+      if (!props.buildingId || !props.locationId || !resolvedProjectId) return;
+      const href = buildWorkspaceHref({
+        fileId: props.fileId,
+        fileName: props.fileName,
+        projectId: resolvedProjectId,
+        buildingId: props.buildingId,
+        locationId: props.locationId,
+        fileVersionId: resolvedFileVersionId,
+        levelId: patch.levelId === undefined ? props.initialLevelId : patch.levelId,
+        view:
+          patch.view === undefined ? (props.initialView ?? undefined) : (patch.view ?? undefined),
+        mode:
+          patch.mode === undefined ? (props.workspaceMode ?? undefined) : (patch.mode ?? undefined),
+        alignLevelId: patch.alignLevelId === undefined ? props.alignLevelId : patch.alignLevelId,
+        alignAssetId: patch.alignAssetId === undefined ? props.alignAssetId : patch.alignAssetId,
+      });
+      router.replace(href, { scroll: false });
+    },
+    [
+      props.fileId,
+      props.fileName,
+      props.buildingId,
+      props.locationId,
+      props.workspaceMode,
+      props.initialLevelId,
+      props.initialView,
+      props.alignLevelId,
+      props.alignAssetId,
+      resolvedProjectId,
+      resolvedFileVersionId,
+      router,
+    ],
+  );
+
+  const onMatchDrawing = useCallback(
+    (levelId: string, assetId: string) => {
+      syncWorkspaceUrl({ alignLevelId: levelId, alignAssetId: assetId });
+    },
+    [syncWorkspaceUrl],
+  );
+
+  const onAlignSaved = useCallback(
+    (ctx: { levelId: string; levelName: string; assetId: string; remainingUnmapped: number }) => {
+      const level = buildingLevels.find((l) => l.id === ctx.levelId) ?? null;
+      if (level) {
+        setWorkspaceLevel(level);
+        setWorkspaceView("plan");
+      }
+      if (props.buildingId) {
+        writeBuildingLastView(props.buildingId, { levelId: ctx.levelId, view: "plan" });
+      }
+      syncWorkspaceUrl({
+        alignLevelId: null,
+        alignAssetId: null,
+        levelId: ctx.levelId,
+        view: "plan",
+      });
+      if (ctx.remainingUnmapped > 0) {
+        toast.message(`Mapped to ${ctx.levelName}`, {
+          description: `${ctx.remainingUnmapped} drawing${ctx.remainingUnmapped === 1 ? "" : "s"} still unmapped — drag the next PDF onto a level.`,
+        });
+      } else {
+        toast.success(`All drawings mapped — publish from the building page when ready.`);
+      }
+    },
+    [buildingLevels, syncWorkspaceUrl, props.buildingId],
+  );
+
+  const onAlignCancel = useCallback(() => {
+    syncWorkspaceUrl({ alignLevelId: null, alignAssetId: null });
+  }, [syncWorkspaceUrl]);
+
+  const onSelectWorkspaceLevel = useCallback(
+    (level: BuildingLevel) => {
+      setWorkspaceLevel(level);
+      setWorkspaceView("plan");
+      setTreeMobileOpen(false);
+      if (props.buildingId) {
+        writeBuildingLastView(props.buildingId, { levelId: level.id, view: "plan" });
+      }
+      syncWorkspaceUrl({
+        levelId: level.id,
+        view: "plan",
+        alignLevelId: null,
+        alignAssetId: null,
+      });
+    },
+    [syncWorkspaceUrl, props.buildingId],
+  );
+
+  const onShowWorkspaceModel = useCallback(() => {
+    setWorkspaceView("3d");
+    setWorkspaceLevel(null);
+    if (props.buildingId) {
+      writeBuildingLastView(props.buildingId, { levelId: null, view: "3d" });
+    }
+    syncWorkspaceUrl({ levelId: null, view: "3d", alignLevelId: null, alignAssetId: null });
+  }, [syncWorkspaceUrl, props.buildingId]);
+
+  useEffect(() => {
+    if (!props.initialLevelId || buildingLevels.length === 0 || alignActive) return;
+    const level = buildingLevels.find((l) => l.id === props.initialLevelId);
+    if (!level) return;
+    setWorkspaceLevel(level);
+    setWorkspaceView(props.initialView ?? "plan");
+  }, [props.initialLevelId, props.initialView, buildingLevels, alignActive]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [compareDeltas, setCompareDeltas] = useState<{
     baseVersion: number;
@@ -271,6 +430,9 @@ export function BimViewerShell(props: {
         setTool(next);
         if (next === "markup") setActiveFlyout("markup");
         else setActiveFlyout(null);
+      },
+      onQualityChanged: (state) => {
+        if (!cancelled) setQualityState(state);
       },
     });
     engineRef.current = engine;
@@ -591,14 +753,80 @@ export function BimViewerShell(props: {
     );
   }, [drawingMaps, planMinimapStorey, activeEngine]);
 
-  const canDrawingSync = Boolean(
-    activeLevelMap?.coordTransformJson &&
-    (activeLevelMap.coordTransformJson as DrawingCoordTransform).version === 1,
-  );
+  const locationCalibration = isLocationCalibration(activeLevelMap?.calibrationJson)
+    ? activeLevelMap.calibrationJson
+    : null;
+
+  const alignedCoordTransform =
+    activeLevelMap?.coordTransformJson?.version === 1
+      ? (activeLevelMap.coordTransformJson as DrawingCoordTransform)
+      : null;
+
+  const derivedCoordTransform = useMemo((): DrawingCoordTransform | null => {
+    if (alignedCoordTransform || !locationCalibration || !activeEngine) return null;
+    const state = activeEngine.getPlanMinimapState();
+    if (!state?.bounds) return null;
+    const pageWidthPt = syncContext?.pageWidthPt ?? locationCalibration.pageWidth ?? 612;
+    const pageHeightPt = syncContext?.pageHeightPt ?? locationCalibration.pageHeight ?? 792;
+    try {
+      return buildCoordTransformFromLocationCalibration(
+        locationCalibration,
+        state.bounds,
+        pageWidthPt,
+        pageHeightPt,
+      );
+    } catch {
+      return null;
+    }
+  }, [
+    alignedCoordTransform,
+    locationCalibration,
+    activeEngine,
+    syncContext?.pageWidthPt,
+    syncContext?.pageHeightPt,
+    planMinimapStorey,
+  ]);
+
+  const effectiveCoordTransform = alignedCoordTransform ?? derivedCoordTransform;
+
+  const canDrawingSync = Boolean(effectiveCoordTransform && activeLevelMap);
+
+  const effectiveSyncContext = useMemo((): BimSyncContext | null => {
+    if (!effectiveCoordTransform || !activeLevelMap) return null;
+    if (syncContext) {
+      return { ...syncContext, coordTransform: effectiveCoordTransform };
+    }
+    const pdfFv =
+      activeLevelMap.resolvedPdfFileVersionId ??
+      activeLevelMap.pdfFileVersionId ??
+      activeLevelMap.latestPdfFileVersionId ??
+      null;
+    if (!pdfFv) return null;
+    return {
+      levelId: activeLevelMap.bimModelLevelId,
+      levelDisplayName: activeLevelMap.level?.displayName ?? "Level",
+      levelSourceName: activeLevelMap.level?.sourceName ?? "",
+      elevationMeters: activeLevelMap.level?.elevationMeters ?? null,
+      pdfFileId: activeLevelMap.pdfFileId,
+      pdfFileVersionId: pdfFv,
+      pageIndex: activeLevelMap.pageIndex,
+      pageWidthPt: locationCalibration?.pageWidth ?? 612,
+      pageHeightPt: locationCalibration?.pageHeight ?? 792,
+      mmPerPdfUnit: effectiveCoordTransform.mmPerPdfUnit,
+      coordTransform: effectiveCoordTransform,
+      drawingMapId: activeLevelMap.id,
+    };
+  }, [
+    syncContext,
+    effectiveCoordTransform,
+    activeLevelMap,
+    locationCalibration?.pageWidth,
+    locationCalibration?.pageHeight,
+  ]);
 
   useEffect(() => {
     const fvId = resolvedFileVersionId;
-    if (!fvId || !activeLevelMap || !canDrawingSync) {
+    if (!fvId || !activeLevelMap) {
       setSyncContext(null);
       return;
     }
@@ -610,12 +838,17 @@ export function BimViewerShell(props: {
           toast.error("Could not load drawing sync for this level.");
         }
       });
-  }, [resolvedFileVersionId, activeLevelMap, canDrawingSync, planPanelMode]);
+  }, [resolvedFileVersionId, activeLevelMap, planPanelMode]);
 
   useEffect(() => {
-    if (canDrawingSync && planPanelMode === "drawingSync") return;
-    if (!canDrawingSync) setPlanPanelMode("minimap");
-  }, [canDrawingSync, planPanelMode]);
+    if (!canDrawingSync) {
+      if (planPanelMode === "drawingSync") setPlanPanelMode("minimap");
+      return;
+    }
+    if (cameraMode === "walk" && locationCalibration && !alignedCoordTransform) {
+      setPlanPanelMode("drawingSync");
+    }
+  }, [canDrawingSync, planPanelMode, cameraMode, locationCalibration, alignedCoordTransform]);
 
   useEffect(() => {
     const guid = props.initialGuid;
@@ -1426,7 +1659,12 @@ export function BimViewerShell(props: {
       .catch((e) => toast.error(e instanceof Error ? e.message : "Could not rebuild index."));
   }, [federationMembers]);
 
-  const backHref = resolvedProjectId ? `/projects/${resolvedProjectId}/files` : "/projects";
+  const backHref =
+    props.buildingId && props.locationId && resolvedProjectId
+      ? `/projects/${resolvedProjectId}/locations/${props.locationId}/buildings/${props.buildingId}`
+      : resolvedProjectId
+        ? `/projects/${resolvedProjectId}/files`
+        : "/projects";
   const loading = phase.kind !== "ready" && phase.kind !== "error";
   const hint = TOOL_HINTS[tool];
   const toolNeedsPoint =
@@ -1625,17 +1863,82 @@ export function BimViewerShell(props: {
   const isBrowserDock = (dock: BimDockId): dock is BimLeftDockId =>
     dock === "objects" || dock === "models" || dock === "visibility" || dock === "quality";
 
-  const splitViewActive = cameraMode === "walk" && showPlanMinimap && phase.kind === "ready";
+  const splitViewActive =
+    !mappingEditActive && cameraMode === "walk" && showPlanMinimap && phase.kind === "ready";
+  const workspaceReady = workspaceActive && phase.kind === "ready";
+  const mappingUiReady =
+    mappingEditActive && phase.kind === "ready" && Boolean(props.locationId && resolvedProjectId);
+  const workChromeReady = phase.kind === "ready" && !mappingEditActive;
+  const workspaceStorey = workspaceLevel
+    ? (activeEngine?.resolveStoreyName(workspaceLevel.sourceName) ??
+      activeEngine?.resolveStoreyName(workspaceLevel.name) ??
+      workspaceLevel.sourceName)
+    : null;
 
   return (
     <div ref={shellRef} className="bim-viewer fixed inset-0 z-40 overflow-hidden">
-      <div className={`bim-canvas-full${splitViewActive ? " bim-canvas-full--split" : ""}`}>
+      {mappingUiReady && props.buildingId && props.locationId && resolvedProjectId ? (
+        <>
+          <aside className="bim-workspace-tree">
+            <BimBuildingTreePanel
+              projectId={resolvedProjectId}
+              locationId={props.locationId}
+              buildingId={props.buildingId}
+              activeLevelId={workspaceView === "plan" ? (workspaceLevel?.id ?? null) : null}
+              onSelectLevel={onSelectWorkspaceLevel}
+              onShowModel={onShowWorkspaceModel}
+              onMatchDrawing={onMatchDrawing}
+            />
+          </aside>
+
+          <button
+            type="button"
+            className="bim-glass-surface absolute left-3 top-1/2 z-[26] flex -translate-y-1/2 items-center justify-center rounded-full p-2.5 text-[var(--bim-text)] md:hidden"
+            aria-label="Open building tree"
+            onClick={() => setTreeMobileOpen(true)}
+          >
+            <TableProperties className="h-5 w-5" aria-hidden />
+          </button>
+
+          {treeMobileOpen ? (
+            <div className="absolute inset-0 z-[40] md:hidden">
+              <button
+                type="button"
+                className="absolute inset-0 bg-black/50"
+                aria-label="Close building tree"
+                onClick={() => setTreeMobileOpen(false)}
+              />
+              <div className="absolute inset-y-0 left-0 w-[min(360px,85%)] shadow-xl">
+                <BimBuildingTreePanel
+                  projectId={resolvedProjectId}
+                  locationId={props.locationId}
+                  buildingId={props.buildingId}
+                  activeLevelId={workspaceView === "plan" ? (workspaceLevel?.id ?? null) : null}
+                  onSelectLevel={onSelectWorkspaceLevel}
+                  onShowModel={() => {
+                    onShowWorkspaceModel();
+                    setTreeMobileOpen(false);
+                  }}
+                  onMatchDrawing={(levelId, assetId) => {
+                    onMatchDrawing(levelId, assetId);
+                    setTreeMobileOpen(false);
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      <div
+        className={`bim-canvas-full${splitViewActive ? " bim-canvas-full--split" : ""}${mappingUiReady ? " bim-canvas-full--workspace" : ""}`}
+      >
         <div
           ref={onViewportRef}
           data-issue-placement={issuePlacementActive ? "true" : undefined}
           className={`touch-none${splitViewActive ? " bim-viewport-pane" : " relative h-full w-full"}${issuePlacementActive ? " bim-viewport--issue-placement" : ""}`}
         >
-          {phase.kind === "ready" ? (
+          {workChromeReady ? (
             <BimMarkupOverlay
               interactive={tool === "markup" && markupHydrated}
               engine={activeEngine}
@@ -1643,7 +1946,7 @@ export function BimViewerShell(props: {
             />
           ) : null}
 
-          {cameraMode === "walk" && phase.kind === "ready" ? (
+          {workChromeReady && cameraMode === "walk" ? (
             <BimWalkChrome
               onJoystickChange={(forward, strafe) =>
                 engineRef.current?.setWalkInput(forward, strafe)
@@ -1652,14 +1955,40 @@ export function BimViewerShell(props: {
           ) : null}
         </div>
 
+        {workspaceReady && workspaceView === "plan" && workspaceLevel && !alignActive ? (
+          <BimLevelPlanView
+            engine={activeEngine}
+            storey={workspaceStorey}
+            level={workspaceLevel}
+            onShowModel={onShowWorkspaceModel}
+          />
+        ) : null}
+
+        {mappingUiReady && alignActive ? (
+          <div className="bim-workspace-align absolute inset-0 z-[30] overflow-hidden">
+            <MatchingWindowClient
+              shell="workspace"
+              projectId={resolvedProjectId!}
+              locationId={props.locationId!}
+              buildingId={props.buildingId!}
+              levelId={props.alignLevelId!}
+              assetId={props.alignAssetId!}
+              onSaved={onAlignSaved}
+              onCancel={onAlignCancel}
+            />
+          </div>
+        ) : null}
+
         <BimBreadcrumbChip
           backHref={backHref}
           onBack={() => router.push(backHref)}
           fileName={props.fileName}
-          federatedLabel={isFederated ? `Federated · ${federationMembers.length} models` : null}
+          federatedLabel={
+            workChromeReady && isFederated ? `Federated · ${federationMembers.length} models` : null
+          }
         />
 
-        {phase.kind === "ready" ? (
+        {workChromeReady ? (
           <BimIconRail
             side="right"
             sections={railSections}
@@ -1680,7 +2009,7 @@ export function BimViewerShell(props: {
           />
         ) : null}
 
-        {phase.kind === "ready" && activeDock && isBrowserDock(activeDock) ? (
+        {workChromeReady && activeDock && isBrowserDock(activeDock) ? (
           <BimGlassDock
             side="right"
             open
@@ -1704,6 +2033,7 @@ export function BimViewerShell(props: {
               loq={loq}
               onRebuildIndex={rebuildIndex}
               appearance={appearance}
+              qualityState={qualityState}
               onAppearanceChange={onAppearanceChange}
               projectId={resolvedProjectId}
               federationMembers={federationMembers}
@@ -1716,7 +2046,7 @@ export function BimViewerShell(props: {
           </BimGlassDock>
         ) : null}
 
-        {phase.kind === "ready" && activeDock === "properties" ? (
+        {workChromeReady && activeDock === "properties" ? (
           <BimGlassDock
             side="right"
             open
@@ -1743,7 +2073,7 @@ export function BimViewerShell(props: {
           </BimGlassDock>
         ) : null}
 
-        {phase.kind === "ready" && activeDock === "filters" ? (
+        {workChromeReady && activeDock === "filters" ? (
           <BimGlassDock
             side="right"
             open
@@ -1765,7 +2095,7 @@ export function BimViewerShell(props: {
           </BimGlassDock>
         ) : null}
 
-        {phase.kind === "ready" && activeDock === "takeoffViews" ? (
+        {workChromeReady && activeDock === "takeoffViews" ? (
           <BimGlassDock
             side="right"
             open
@@ -1792,7 +2122,7 @@ export function BimViewerShell(props: {
           </BimGlassDock>
         ) : null}
 
-        {phase.kind === "ready" && activeDock === "issues" ? (
+        {workChromeReady && activeDock === "issues" ? (
           <BimGlassDock
             side="right"
             open
@@ -1815,7 +2145,7 @@ export function BimViewerShell(props: {
           </BimGlassDock>
         ) : null}
 
-        {phase.kind === "ready" ? (
+        {workChromeReady ? (
           <BimIssueMarkersOverlay
             engine={activeEngine}
             issues={issues}
@@ -1830,13 +2160,13 @@ export function BimViewerShell(props: {
           />
         ) : null}
 
-        {issuePlacementActive && phase.kind === "ready" ? (
+        {issuePlacementActive && workChromeReady ? (
           <div className="bim-placement-hint bim-glass-surface pointer-events-none absolute left-1/2 z-[8] -translate-x-1/2 rounded-full px-4 py-2 text-[11px] font-medium text-[var(--bim-text)]">
             Tap or click the model to place an issue · Esc to cancel
           </div>
         ) : null}
 
-        {phase.kind === "ready" && contextMenu ? (
+        {workChromeReady && contextMenu ? (
           <BimContextMenu
             x={contextMenu.x}
             y={contextMenu.y}
@@ -1866,7 +2196,7 @@ export function BimViewerShell(props: {
           </div>
         ) : null}
 
-        {phase.kind === "ready" ? (
+        {workChromeReady ? (
           <BimBottomToolBar
             tool={tool}
             cameraMode={cameraMode}
@@ -1912,7 +2242,7 @@ export function BimViewerShell(props: {
           />
         ) : null}
 
-        {issueCreateDraft && resolvedFileVersionId && resolvedProjectId ? (
+        {workChromeReady && issueCreateDraft && resolvedFileVersionId && resolvedProjectId ? (
           <IssueFormSlider
             variant="create"
             open
@@ -1947,7 +2277,7 @@ export function BimViewerShell(props: {
           />
         ) : null}
 
-        {editIssue ? (
+        {workChromeReady && editIssue ? (
           <IssueFormSlider
             variant="edit"
             open
@@ -1979,8 +2309,9 @@ export function BimViewerShell(props: {
             storeyOptions={planStoreyOptions}
             planMinimapStorey={planMinimapStorey}
             onSelectStorey={setPlanMinimapStorey}
-            syncContext={syncContext}
+            syncContext={effectiveSyncContext}
             activeLevelMap={activeLevelMap}
+            drawingTransform={effectiveCoordTransform}
             onAlign={() => {
               setAlignMap(activeLevelMap);
               setAlignOpen(true);
@@ -1989,7 +2320,7 @@ export function BimViewerShell(props: {
           />
         ) : null}
 
-        {alignOpen && alignMap && activeEngine && resolvedFileVersionId ? (
+        {workChromeReady && alignOpen && alignMap && activeEngine && resolvedFileVersionId ? (
           <AlignCoordinatesPanel
             open={alignOpen}
             onClose={() => setAlignOpen(false)}

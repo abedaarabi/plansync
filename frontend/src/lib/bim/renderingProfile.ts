@@ -1,7 +1,11 @@
 import * as FRAGS from "@thatopen/fragments";
 import * as THREE from "three";
 import { BIM_PALETTE } from "@/lib/bim/bimPalette";
-import type { BimEnvironmentPreset, BimFogMode } from "@/lib/bim/viewportAppearance";
+import type {
+  BimBackgroundTheme,
+  BimEnvironmentPreset,
+  BimFogMode,
+} from "@/lib/bim/viewportAppearance";
 
 /** Bump when IFC → Fragments conversion settings change (invalidates IndexedDB cache). */
 export const BIM_RENDER_PROFILE_VERSION = 2;
@@ -41,6 +45,14 @@ export type BimViewportPreset = {
   exposure: number;
   fogNearScale: number;
   fogFarScale: number;
+  horizonGlow: [number, number, number];
+};
+
+export type BimBackgroundProfile = {
+  top: string;
+  middle: string;
+  bottom: string;
+  container: string;
   horizonGlow: [number, number, number];
 };
 
@@ -260,33 +272,67 @@ export const BIM_ACCENT = STATUS.primary;
 /** Selection / hover — outline + soft glow from the interaction palette. */
 export const BIM_SELECTION = {
   fill: INTERACTION.selectedOutline,
-  // Keep Fragments-safe opacities (high values + wire overlays previously crashed tiles).
-  fillOpacity: 0.48,
+  fillOpacity: 0.2,
   hover: INTERACTION.hoveredOutline,
-  hoverOpacity: 0.26,
+  hoverOpacity: 0.16,
   glow: INTERACTION.selectedGlow,
 } as const;
+
+const BIM_BACKGROUND_PROFILES: Record<BimBackgroundTheme, BimBackgroundProfile> = {
+  professional_dark: {
+    top: CANVAS.background,
+    middle: UI.panel,
+    bottom: UI.panelSecondary,
+    container: CANVAS.background,
+    horizonGlow: [17, 24, 39],
+  },
+  professional_light: {
+    top: MAT.ceiling,
+    middle: MAT.wall,
+    bottom: MAT.floor,
+    container: MAT.wall,
+    horizonGlow: [200, 205, 210],
+  },
+  white: {
+    top: UI.textPrimary,
+    middle: UI.textPrimary,
+    bottom: MAT.ceiling,
+    container: UI.textPrimary,
+    horizonGlow: [229, 231, 235],
+  },
+  transparent: {
+    top: CANVAS.background,
+    middle: CANVAS.background,
+    bottom: CANVAS.background,
+    container: CANVAS.background,
+    horizonGlow: [15, 23, 42],
+  },
+};
 
 export function getViewportColors(preset: BimEnvironmentPreset = "cinematic"): BimViewportPreset {
   return BIM_SKY_PRESETS[preset];
 }
 
-/** Procedural sky gradient with a soft warm horizon band. */
+export function getBimBackgroundProfile(
+  theme: BimBackgroundTheme = "professional_dark",
+): BimBackgroundProfile {
+  return BIM_BACKGROUND_PROFILES[theme];
+}
+
+/** Procedural neutral viewport gradient; lighting remains controlled by the environment preset. */
 export function createBimSkyTexture(
-  preset: BimEnvironmentPreset = "cinematic",
+  theme: BimBackgroundTheme = "professional_dark",
 ): THREE.CanvasTexture {
-  const colors = getViewportColors(preset);
+  const colors = getBimBackgroundProfile(theme);
   const canvas = document.createElement("canvas");
   canvas.width = 4;
   canvas.height = 1024;
   const ctx = canvas.getContext("2d");
   if (ctx) {
     const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    sky.addColorStop(0, colors.bgZenith);
-    sky.addColorStop(0.28, colors.bgUpper);
-    sky.addColorStop(0.52, colors.bgMid);
-    sky.addColorStop(0.78, colors.bgHorizon);
-    sky.addColorStop(1, colors.bgHaze);
+    sky.addColorStop(0, colors.top);
+    sky.addColorStop(0.48, colors.middle);
+    sky.addColorStop(1, colors.bottom);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 

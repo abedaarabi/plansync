@@ -19,6 +19,7 @@ import {
   upgradeLambertToStandard,
 } from "@/lib/bim/materialColor";
 import { COLORIZE_HIGHLIGHT_OPACITY } from "@/lib/bim/colorizePalette";
+import { BIM_PALETTE } from "@/lib/bim/bimPalette";
 import {
   BIM_ACCENT,
   BIM_SELECTION,
@@ -27,18 +28,26 @@ import {
   configureLod500Importer,
   createBimSkyTexture,
   fogDistanceScales,
+  getBimBackgroundProfile,
   getViewportColors,
   resolveFogColor,
 } from "@/lib/bim/renderingProfile";
+import type { BimQualityState } from "@/lib/bim/renderQuality";
 import {
   DEFAULT_BIM_VIEWPORT_APPEARANCE,
   mergeViewportAppearance,
   type BimViewportAppearance,
 } from "@/lib/bim/viewportAppearance";
 import { buildModelId, type BimFederationMember } from "@/lib/bim/federation";
+import { getBimCameraNavigationProfile } from "@/lib/bim/cameraNavigation";
 import { bimViewportPixelRatio } from "@/lib/bim/viewportPixelRatio";
-import { ROTATE_SENSITIVITY, ViewCubeOverlay } from "@/lib/bim/viewCube";
-import type { PlanMinimapBounds, PlanMinimapPose, PlanMinimapState } from "@/lib/bim/planMinimap";
+import { ViewCubeOverlay } from "@/lib/bim/viewCube";
+import {
+  PLAN_BAKE_PX,
+  type PlanMinimapBounds,
+  type PlanMinimapPose,
+  type PlanMinimapState,
+} from "@/lib/bim/planMinimap";
 import {
   bakePlanFromSlice,
   boundsFromBox3,
@@ -62,6 +71,7 @@ import {
   hideClipPlaneFace,
   SectionBoxController,
 } from "@/components/bim-viewer/sectionBoxController";
+import { BimRenderEffects } from "@/components/bim-viewer/bimRenderEffects";
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import * as OBC from "@thatopen/components";
@@ -78,7 +88,6 @@ const MIN_CANVAS_PX = 2;
 const POINTER_CLICK_THRESHOLD_PX = 8;
 /** Forward collision distance for walk mode (metres). */
 const WALK_COLLISION_DISTANCE = 0.9;
-const WALK_SPEED = 2.4; // m/s
 const WALK_COLLISION_POLL_MS = 120;
 /** Light engineering viewport — matches `--bim-canvas-*` tokens. */
 const VIEWPORT_BG = BIM_VIEWPORT.container;
@@ -145,6 +154,7 @@ export type BimEngineEvents = {
   onMultiSelection?: (guids: string[]) => void;
   onContextMenu?: (pos: { x: number; y: number; hasSelection: boolean }) => void;
   onToolChange?: (tool: BimTool) => void;
+  onQualityChanged?: (state: BimQualityState) => void;
 };
 
 const STOREY_CLASSIFICATION = "PlanSyncLevels";
@@ -240,7 +250,7 @@ export class BimEngine {
   private world: OBC.SimpleWorld<
     OBC.SimpleScene,
     OBC.OrthoPerspectiveCamera,
-    OBF.RendererWith2D
+    OBF.PostproductionRenderer
   > | null = null;
   private container: HTMLElement | null = null;
   private model: FRAGS.FragmentsModel | null = null;
@@ -278,7 +288,10 @@ export class BimEngine {
   private disposed = false;
   private rimLight: THREE.DirectionalLight | null = null;
   private hemiLight: THREE.HemisphereLight | null = null;
+  private renderEffects: BimRenderEffects | null = null;
+  private effectiveQuality: BimQualityState | null = null;
   private viewportBackground: THREE.Texture | null = null;
+  private gridAxesHelper: THREE.Group | null = null;
   private appearance: BimViewportAppearance = { ...DEFAULT_BIM_VIEWPORT_APPEARANCE };
   /** Cancels stale property loads when the user clicks another element quickly. */
   private selectionLoadId = 0;
@@ -331,6 +344,8 @@ export class BimEngine {
   private planMinimapStorey: string | null = null;
   private planMinimapBoundsCache: PlanMinimapBounds | null = null;
   private planMinimapStoreyFloorY: number | null = null;
+  /** Silhouette bake resolution; raised for full-pane 2D plan views. */
+  private planBakePx = PLAN_BAKE_PX;
   /** Autodesk-style visual clusters (elements grouped by IFC type). */
   private clusterByTypeActive = false;
   private clusterTransformBackup: ClusterTransformBackup = new Map();
@@ -394,6 +409,7 @@ export class BimEngine {
     }
 
     this.modelRegistry.delete(modelId);
+    this.renderEffects?.setModelCount(this.modelRegistry.size);
     await this.buildClassifications();
     await fragments.core.update(true);
     this.applyViewportAtmosphere(this.getModelBoundingSphere());
@@ -404,7 +420,9 @@ export class BimEngine {
   // fallow-ignore-next-line complexity
   async setViewportAppearance(patch: Partial<BimViewportAppearance>): Promise<void> {
     this.appearance = mergeViewportAppearance(this.appearance, patch);
+    this.renderEffects?.updateAppearance(this.appearance);
     this.applySkyEnvironment();
+    if (patch.navigationSpeed != null) this.applyCameraNavigation();
     const needsMaterials = patch.colorMode != null || patch.spaceDisplay != null;
     if (needsMaterials) await this.syncViewportMaterials();
     this.applyViewportAtmosphere(this.getModelBoundingSphere());
@@ -429,14 +447,19 @@ export class BimEngine {
     this.components = components;
 
     const worlds = components.get(OBC.Worlds);
-    const world = worlds.create<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBF.RendererWith2D>();
+    const world = worlds.create<
+      OBC.SimpleScene,
+      OBC.OrthoPerspectiveCamera,
+      OBF.PostproductionRenderer
+    >();
     this.world = world;
 
     world.scene = new OBC.SimpleScene(components);
-    world.renderer = new OBF.RendererWith2D(components, container, {
+    world.renderer = new OBF.PostproductionRenderer(components, container, {
       antialias: true,
       alpha: true,
       preserveDrawingBuffer: true,
+      powerPreference: "high-performance",
     });
     world.camera = new OBC.OrthoPerspectiveCamera(components);
     this.configureRendererContainer(world.renderer, container);
@@ -469,6 +492,8 @@ export class BimEngine {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = sky.exposure;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = false;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     const grids = components.get(OBC.Grids);
     const grid = grids.create(world);
@@ -478,12 +503,21 @@ export class BimEngine {
     // Fragments engine — worker served from public/ (same-origin, offline-safe).
     const fragments = components.get(OBC.FragmentsManager);
     fragments.init(FRAGMENTS_WORKER_URL);
+    this.renderEffects = new BimRenderEffects(components, world, this.appearance, (state) => {
+      this.applyRenderQuality(state);
+      this.events.onQualityChanged?.(state);
+    });
+    this.renderEffects.isolateMaterial(grid.material);
     world.camera.controls.addEventListener("rest", () => {
+      this.renderEffects?.endInteraction();
+      if (this.effectiveQuality) this.applyRenderQuality(this.effectiveQuality);
       fragments.core.update(true);
       this.applyViewportAtmosphere(this.getModelBoundingSphere());
       void this.refreshIssueAnchorWorld();
     });
     world.camera.controls.addEventListener("update", () => {
+      this.renderEffects?.beginInteraction();
+      if (world.renderer) world.renderer.three.shadowMap.enabled = false;
       fragments.core.update();
       this.scheduleIssueAnchorRefresh();
       this.refreshAtmosphereIfNeeded();
@@ -515,6 +549,7 @@ export class BimEngine {
     this.setupMarkupTools(world);
     this.setupViewportOverlays(container, world);
     this.applyBim360Navigation();
+    this.applyCameraNavigation();
 
     // Selection highlighting (single select) — click picking is handled in
     // onCanvasPointerUp so we always raycast from the actual pointer coords.
@@ -545,7 +580,8 @@ export class BimEngine {
 
     const hoverer = components.get(OBF.Hoverer);
     hoverer.world = world;
-    hoverer.fade = false;
+    hoverer.fade = true;
+    hoverer.fadeDuration = 140;
     hoverer.mode = OBF.HovererMode.MOUSE_MOVE;
     hoverer.material = new THREE.MeshBasicMaterial({
       color: new THREE.Color(HOVER_ACCENT),
@@ -649,6 +685,7 @@ export class BimEngine {
   private registerModel(model: FRAGS.FragmentsModel, member: BimFederationMember): void {
     const modelId = buildModelId(member);
     this.modelRegistry.set(modelId, { ...member, model, visible: true });
+    this.renderEffects?.setModelCount(this.modelRegistry.size);
     if (!this.primaryModelId) {
       this.primaryModelId = modelId;
     }
@@ -727,18 +764,25 @@ export class BimEngine {
     controls.maxDistance = radius * 80;
   }
 
-  /** Always render full geometry — no distance-based wireframe LOD. */
+  /** Prefer visible LOD so spatial tiles can stream; fall back to full geometry on error. */
   // fallow-ignore-next-line complexity
   private async applyLod500RuntimeSettings(): Promise<void> {
     const fragments = this.components?.get(OBC.FragmentsManager);
     if (!fragments?.initialized) return;
     try {
       for (const [, model] of fragments.list) {
-        await model.setLodMode(FRAGS.LodMode.ALL_GEOMETRY);
+        await model.setLodMode(FRAGS.LodMode.ALL_VISIBLE);
       }
       await fragments.core.update(true);
     } catch {
-      /* Best-effort — older fragment buffers may omit LOD metadata. */
+      try {
+        for (const [, model] of fragments.list) {
+          await model.setLodMode(FRAGS.LodMode.ALL_GEOMETRY);
+        }
+        await fragments.core.update(true);
+      } catch {
+        /* Best-effort — older fragment buffers may omit LOD metadata. */
+      }
     }
   }
 
@@ -1146,6 +1190,126 @@ export class BimEngine {
     threeMat.needsUpdate = true;
   }
 
+  private applyRenderQuality(state: BimQualityState): void {
+    this.effectiveQuality = state;
+    const world = this.world;
+    if (!world?.renderer) return;
+    const shadows =
+      (state.effective === "high" || state.effective === "ultra") &&
+      this.modelRegistry.size <= 2 &&
+      !state.interactionReduced;
+    const renderer = world.renderer.three;
+    renderer.shadowMap.enabled = shadows;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+
+    const sun = world.scene.directionalLights.values().next().value;
+    if (sun) {
+      sun.castShadow = shadows;
+      sun.shadow.mapSize.set(
+        state.effective === "ultra" ? 2048 : 1024,
+        state.effective === "ultra" ? 2048 : 1024,
+      );
+      sun.shadow.bias = -0.0002;
+      sun.shadow.normalBias = 0.02;
+      sun.shadow.radius = 3;
+      const sphere = this.getModelBoundingSphere();
+      if (sphere && sphere.radius > 0) {
+        const extent = sphere.radius * 1.25;
+        sun.position
+          .set(0.55, 1, 0.42)
+          .normalize()
+          .multiplyScalar(sphere.radius * 3)
+          .add(sphere.center);
+        sun.target.position.copy(sphere.center);
+        if (!sun.target.parent) world.scene.three.add(sun.target);
+        const camera = sun.shadow.camera;
+        camera.left = -extent;
+        camera.right = extent;
+        camera.top = extent;
+        camera.bottom = -extent;
+        camera.near = Math.max(sphere.radius * 0.05, 0.01);
+        camera.far = sphere.radius * 8;
+        camera.updateProjectionMatrix();
+      }
+    }
+
+    for (const entry of this.modelRegistry.values()) {
+      entry.model.object.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        child.castShadow = shadows;
+        child.receiveShadow = shadows;
+      });
+    }
+  }
+
+  private resolveGridSpacing(): { minor: number; major: number } {
+    const unit = this.detectModelUnits() === "mm" ? 1000 : 1;
+    switch (this.appearance.gridSpacing) {
+      case "fine":
+        return { minor: unit * 0.5, major: unit * 5 };
+      case "coarse":
+        return { minor: unit * 5, major: unit * 25 };
+      case "standard":
+        return { minor: unit, major: unit * 5 };
+      default: {
+        const radius = this.getModelBoundingSphere()?.radius ?? unit * 25;
+        if (radius > unit * 500) return { minor: unit * 10, major: unit * 50 };
+        if (radius < unit * 15) return { minor: unit * 0.25, major: unit * 2.5 };
+        return { minor: unit, major: unit * 5 };
+      }
+    }
+  }
+
+  private applyGridAxes(): void {
+    this.gridAxesHelper?.removeFromParent();
+    if (this.gridAxesHelper) {
+      this.gridAxesHelper.traverse((child) => {
+        if (!(child instanceof THREE.Line)) return;
+        child.geometry.dispose();
+        if (child.material instanceof THREE.Material) child.material.dispose();
+      });
+      this.gridAxesHelper = null;
+    }
+    const world = this.world;
+    if (
+      !world ||
+      !this.appearance.gridAxes ||
+      this.appearance.gridMode === "hide" ||
+      this.modelRegistry.size === 0
+    ) {
+      return;
+    }
+
+    const radius = Math.max(this.getModelBoundingSphere()?.radius ?? 50, 1);
+    const length = radius * 1.5;
+    const group = new THREE.Group();
+    group.name = "bim-grid-axes";
+    const makeAxis = (start: THREE.Vector3, finish: THREE.Vector3, color: string): THREE.Line => {
+      const geometry = new THREE.BufferGeometry().setFromPoints([start, finish]);
+      const material = new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.72,
+        depthWrite: false,
+      });
+      return new THREE.Line(geometry, material);
+    };
+    group.add(
+      makeAxis(
+        new THREE.Vector3(-length, 0.002, 0),
+        new THREE.Vector3(length, 0.002, 0),
+        BIM_PALETTE.viewer.axisX,
+      ),
+      makeAxis(
+        new THREE.Vector3(0, 0.002, -length),
+        new THREE.Vector3(0, 0.002, length),
+        BIM_PALETTE.viewer.axisZ,
+      ),
+    );
+    world.scene.three.add(group);
+    this.gridAxesHelper = group;
+  }
+
   // fallow-ignore-next-line complexity
   private applySkyEnvironment(): void {
     const world = this.world;
@@ -1153,7 +1317,10 @@ export class BimEngine {
     const sky = getViewportColors(this.appearance.environment);
 
     this.viewportBackground?.dispose();
-    this.viewportBackground = createBimSkyTexture(this.appearance.environment);
+    this.viewportBackground =
+      this.appearance.backgroundTheme === "transparent"
+        ? null
+        : createBimSkyTexture(this.appearance.backgroundTheme);
     world.scene.three.background = this.viewportBackground;
 
     world.scene.config.directionalLight.color = new THREE.Color(sky.sun);
@@ -1171,13 +1338,17 @@ export class BimEngine {
       this.rimLight.intensity = sky.rimIntensity;
     }
 
-    world.renderer?.three && (world.renderer.three.toneMappingExposure = sky.exposure);
+    if (world.renderer) world.renderer.three.toneMappingExposure = sky.exposure;
 
     const grid = this.components?.get(OBC.Grids).list.get(world.uuid);
     if (grid) {
       const sky = getViewportColors(this.appearance.environment);
       grid.config.visible = this.appearance.gridMode !== "hide";
       grid.config.color = new THREE.Color(sky.grid);
+      grid.fade = this.appearance.gridMode !== "show";
+      const spacing = this.resolveGridSpacing();
+      grid.config.primarySize = spacing.major;
+      grid.config.secondarySize = spacing.minor;
       if (this.appearance.gridMode === "fade_far") {
         grid.config.distance = 900;
       } else if (this.appearance.gridMode === "subtle") {
@@ -1187,8 +1358,11 @@ export class BimEngine {
         grid.config.distance = 650;
       }
     }
+    this.applyGridAxes();
     if (this.container) {
-      this.container.style.background = sky.container;
+      const background = getBimBackgroundProfile(this.appearance.backgroundTheme);
+      this.container.style.background =
+        this.appearance.backgroundTheme === "transparent" ? "transparent" : background.container;
     }
   }
 
@@ -1205,6 +1379,7 @@ export class BimEngine {
       controls.mouseButtons.wheel = CAM_DOLLY;
       controls.touches.one = CAM_NONE;
       controls.touches.two = CAM_TOUCH_DOLLY_TRUCK;
+      this.applyCameraNavigation();
       return;
     }
     controls.mouseButtons.left = CAM_ROTATE;
@@ -1213,6 +1388,24 @@ export class BimEngine {
     controls.mouseButtons.wheel = CAM_DOLLY;
     controls.touches.one = CAM_TOUCH_ROTATE;
     controls.touches.two = CAM_TOUCH_DOLLY_TRUCK;
+    this.applyCameraNavigation();
+  }
+
+  private applyCameraNavigation(): void {
+    const controls = this.world?.camera?.controls;
+    if (!controls) return;
+    const profile = getBimCameraNavigationProfile(this.appearance.navigationSpeed);
+    controls.smoothTime = profile.smoothTime;
+    controls.draggingSmoothTime = profile.draggingSmoothTime;
+    controls.azimuthRotateSpeed = profile.azimuthRotateSpeed;
+    controls.polarRotateSpeed = profile.polarRotateSpeed;
+    if (this.cameraMode === "walk") {
+      controls.dollySpeed = profile.walkDollySpeed;
+      controls.truckSpeed = profile.walkTruckSpeed;
+    } else {
+      controls.dollySpeed = profile.dollySpeed;
+      controls.truckSpeed = profile.truckSpeed;
+    }
   }
 
   /** First-person look + keyboard / joystick movement. */
@@ -1229,7 +1422,7 @@ export class BimEngine {
     controls.mouseButtons.wheel = CAM_DOLLY;
     controls.touches.one = CAM_TOUCH_ROTATE;
     controls.touches.two = CAM_TOUCH_DOLLY_TRUCK;
-    controls.truckSpeed = 50;
+    this.applyCameraNavigation();
   }
 
   // fallow-ignore-next-line complexity
@@ -1368,7 +1561,7 @@ export class BimEngine {
 
   /** Section planes + measure tools — colors, units, snapping (BIM 360 style). */
   private setupMarkupTools(
-    world: OBC.SimpleWorld<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBF.RendererWith2D>,
+    world: OBC.SimpleWorld<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBF.PostproductionRenderer>,
   ): void {
     const components = this.mustComponents();
     const accent = new THREE.Color(MARKUP_ACCENT);
@@ -1414,7 +1607,7 @@ export class BimEngine {
 
   /** Pass live clip planes to fragment worker meshes + refresh on plane changes. */
   private setupFragmentClipping(
-    world: OBC.SimpleWorld<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBF.RendererWith2D>,
+    world: OBC.SimpleWorld<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBF.PostproductionRenderer>,
   ): void {
     const fragments = this.mustComponents().get(OBC.FragmentsManager);
     const clipper = this.mustComponents().get(OBC.Clipper);
@@ -1450,7 +1643,7 @@ export class BimEngine {
   /** View cube (orbit) + plan minimap (walk) — isolated from the main viewport. */
   private setupViewportOverlays(
     container: HTMLElement,
-    world: OBC.SimpleWorld<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBF.RendererWith2D>,
+    world: OBC.SimpleWorld<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBF.PostproductionRenderer>,
   ): void {
     const renderer = world.renderer;
     if (!renderer) return;
@@ -1570,6 +1763,7 @@ export class BimEngine {
         bounds,
         worldBounds,
         units: this.detectModelUnits(),
+        bakePx: this.planBakePx,
       });
 
       if (bakeGen !== this.planSilhouetteBakeGen || storeyAtStart !== this.planMinimapStorey) {
@@ -1633,7 +1827,9 @@ export class BimEngine {
     const targetStoreys = (): string[] => {
       if (storeyName) {
         const resolved = this.resolveStoreyName(storeyName);
-        return resolved ? [resolved] : [];
+        if (resolved) return [resolved];
+        if (this.storeyMaps.has(storeyName)) return [storeyName];
+        return [];
       }
       return [...this.storeyMaps.keys()].filter((name) => this.storeyVisible.get(name) ?? true);
     };
@@ -1825,14 +2021,25 @@ export class BimEngine {
       fovHalfRad,
       bounds,
       silhouette: this.planSilhouette,
+      silhouetteBakePx: this.planBakePx,
       baking: this.planSilhouetteBaking || this.planSilhouetteDirty,
       activeStorey: this.planMinimapStorey,
     };
   }
 
+  /** Raise/lower the plan silhouette bake resolution (px). Rebakes if changed. */
+  setPlanBakeResolution(px: number): void {
+    const next = Math.max(256, Math.round(px));
+    if (this.planBakePx === next) return;
+    this.planBakePx = next;
+    this.planSilhouetteDirty = true;
+    this.schedulePlanSilhouetteBake();
+  }
+
   // fallow-ignore-next-line complexity
   async setPlanMinimapStorey(name: string | null): Promise<void> {
-    const next = this.resolveStoreyName(name);
+    const resolved = name ? this.resolveStoreyName(name) : null;
+    const next = resolved ?? name;
     if (this.planMinimapStorey === next && !this.planSilhouetteDirty) return;
     this.planMinimapStorey = next;
     this.planSilhouetteDirty = true;
@@ -1849,7 +2056,7 @@ export class BimEngine {
     await this.bakePlanSilhouetteNow();
   }
 
-  // fallow-ignore-next-line complexity
+  // fallow-ignore-next-line complexity, unused-class-member
   async applyPlanMinimapPose(pose: PlanMinimapPose): Promise<void> {
     const world = this.world;
     if (!world) return;
@@ -1932,7 +2139,12 @@ export class BimEngine {
     if (this.cameraMode !== "orbit") return;
     const controls = this.world?.camera.controls;
     if (!controls) return;
-    void controls.rotate(-dx * ROTATE_SENSITIVITY, -dy * ROTATE_SENSITIVITY, false);
+    const profile = getBimCameraNavigationProfile(this.appearance.navigationSpeed);
+    void controls.rotate(
+      -dx * profile.viewCubeRotateSensitivity,
+      -dy * profile.viewCubeRotateSensitivity,
+      false,
+    );
     void this.mustComponents().get(OBC.FragmentsManager).core.update(true);
     this.bumpRender();
   }
@@ -2074,7 +2286,8 @@ export class BimEngine {
   private bumpRender(): void {
     const world = this.world;
     if (world?.renderer && "update" in world.renderer) {
-      (world.renderer as OBF.RendererWith2D & { update: () => void }).update();
+      world.renderer.needsUpdate = true;
+      world.renderer.update();
     }
   }
 
@@ -2147,8 +2360,8 @@ export class BimEngine {
     const world = this.world;
     if (!world) return;
 
-    if (!this.viewportBackground) {
-      this.viewportBackground = createBimSkyTexture(this.appearance.environment);
+    if (!this.viewportBackground && this.appearance.backgroundTheme !== "transparent") {
+      this.viewportBackground = createBimSkyTexture(this.appearance.backgroundTheme);
       world.scene.three.background = this.viewportBackground;
     }
 
@@ -2173,7 +2386,10 @@ export class BimEngine {
     }
   }
 
-  private configureRendererContainer(renderer: OBF.RendererWith2D, container: HTMLElement): void {
+  private configureRendererContainer(
+    renderer: OBF.PostproductionRenderer,
+    container: HTMLElement,
+  ): void {
     renderer.showLogo = false;
     container.style.position = "relative";
     container.style.width = "100%";
@@ -2212,7 +2428,7 @@ export class BimEngine {
 
   /** Match WebGL + CSS2D renderers to the container's laid-out pixel size. */
   // fallow-ignore-next-line complexity
-  private syncRendererSize(renderer: OBF.RendererWith2D): void {
+  private syncRendererSize(renderer: OBF.PostproductionRenderer): void {
     const container = this.container;
     if (!container) return;
     const w = Math.floor(container.clientWidth);
@@ -2221,6 +2437,7 @@ export class BimEngine {
 
     renderer.resize(new THREE.Vector2(w, h));
     renderer.three.setPixelRatio(bimViewportPixelRatio());
+    this.renderEffects?.resize();
 
     const canvas = renderer.three.domElement;
     canvas.style.width = "100%";
@@ -2468,8 +2685,10 @@ export class BimEngine {
     }
 
     const prevSmooth = controls.smoothTime;
-    // Slightly longer ease for a cinematic reveal / restore.
-    controls.smoothTime = Math.max(prevSmooth, 0.55);
+    const flyToSmooth = getBimCameraNavigationProfile(
+      this.appearance.navigationSpeed,
+    ).flyToSmoothTime;
+    controls.smoothTime = Math.max(prevSmooth, flyToSmooth);
 
     try {
       if (!clustered) {
@@ -2552,6 +2771,7 @@ export class BimEngine {
 
   // fallow-ignore-next-line complexity
   private async handleHighlight(map: OBC.ModelIdMap, preferModelId?: string | null): Promise<void> {
+    void this.renderEffects?.setSelection(map);
     const preferred =
       preferModelId && map[preferModelId] instanceof Set && map[preferModelId]!.size > 0
         ? preferModelId
@@ -2644,6 +2864,7 @@ export class BimEngine {
     this.lastPickMap = null;
     this.lastPickedModelId = null;
     void this.requestFragmentHighlights();
+    void this.renderEffects?.setSelection(null);
     this.events.onSelection(null);
     this.events.onMultiSelection?.([]);
   }
@@ -3016,7 +3237,6 @@ export class BimEngine {
         } catch {
           /* orbit camera still supports forward/truck walk controls */
         }
-        world.camera.controls.dollySpeed = 1.2;
         this.applyWalkNavigation();
         await this.enterWalkCamera(walkPivot);
         this.startWalkLoop();
@@ -3028,6 +3248,7 @@ export class BimEngine {
         this.applyBim360Navigation();
       }
     } finally {
+      this.renderEffects?.updateCamera();
       this.syncHoverEnabled();
       this.syncViewportOverlays();
       this.bumpRender();
@@ -3039,6 +3260,8 @@ export class BimEngine {
     const world = this.mustWorld();
     if (this.cameraMode === "walk") return;
     await world.camera.projection.toggle();
+    this.renderEffects?.updateCamera();
+    this.bumpRender();
   }
 
   /** Builds a bounding box from all loaded fragment models (world space). */
@@ -3158,8 +3381,9 @@ export class BimEngine {
     }
 
     const controls = world.camera.controls;
-    if (forward !== 0) controls.forward(forward * WALK_SPEED * dt, false);
-    if (strafe !== 0) controls.truck(strafe * WALK_SPEED * dt, 0, false);
+    const walkSpeed = getBimCameraNavigationProfile(this.appearance.navigationSpeed).walkSpeed;
+    if (forward !== 0) controls.forward(forward * walkSpeed * dt, false);
+    if (strafe !== 0) controls.truck(strafe * walkSpeed * dt, 0, false);
     if (forward !== 0 || strafe !== 0) this.bumpRender();
   }
 
@@ -3955,6 +4179,7 @@ export class BimEngine {
     }
     if (state.projection === "Orthographic" || state.projection === "Perspective") {
       await world.camera.projection.set(state.projection);
+      this.renderEffects?.updateCamera();
     }
     this.bumpRender();
   }
@@ -4119,8 +4344,12 @@ export class BimEngine {
     this.onViewportOverlayAfterUpdate = null;
     this.viewCube?.dispose();
     this.viewCube = null;
+    this.renderEffects?.dispose();
+    this.renderEffects = null;
     this.viewportBackground?.dispose();
     this.viewportBackground = null;
+    this.gridAxesHelper?.removeFromParent();
+    this.gridAxesHelper = null;
     if (this.issueAnchorRefreshTimer != null) {
       window.clearTimeout(this.issueAnchorRefreshTimer);
       this.issueAnchorRefreshTimer = null;

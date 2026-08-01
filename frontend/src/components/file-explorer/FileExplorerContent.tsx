@@ -20,6 +20,7 @@ import type { CloudFile, Folder as ProjectFolder, Project } from "@/types/projec
 import { PdfFileIcon } from "@/components/icons/PdfFileIcon";
 import { IfcFileIcon } from "@/components/icons/IfcFileIcon";
 import { isIfcFile, isPdfFile } from "@/lib/isPdfFile";
+import { ifcStatusSpinning, type IfcModelUiStatus } from "@/lib/bim/ifcModelStatus";
 import { PdfFileThumbnail } from "@/components/enterprise/PdfFileThumbnail";
 import {
   countDirectChildren,
@@ -72,6 +73,8 @@ export type FileExplorerContentProps = {
   onToggleFederationIfc?: (file: CloudFile) => void;
   /** Published IFC badge label, e.g. "3 levels · 12 sheets". */
   ifcPublishBadge?: (file: CloudFile) => string | null;
+  /** Rich IFC processing / publish status for badges and spinners. */
+  ifcModelStatus?: (file: CloudFile) => IfcModelUiStatus | null;
   onPublishIfcModel?: (file: CloudFile) => void;
   onMapIfcDrawings?: (file: CloudFile) => void;
   onAlignIfcCoordinates?: (file: CloudFile) => void;
@@ -124,10 +127,11 @@ export function FileExplorerContent({
   federationIfcIds,
   onToggleFederationIfc,
   ifcPublishBadge,
+  ifcModelStatus,
   onPublishIfcModel,
   onMapIfcDrawings,
   onAlignIfcCoordinates,
-  onLoadIfcPublishMeta,
+  onLoadIfcPublishMeta: _onLoadIfcPublishMeta,
 }: FileExplorerContentProps) {
   const versionUi = Boolean(onFileVersionPick);
 
@@ -152,18 +156,32 @@ export function FileExplorerContent({
   // fallow-ignore-next-line complexity
   function renderIfcActions(f: CloudFile, compact?: boolean) {
     if (!isIfcFile(f)) return null;
-    void onLoadIfcPublishMeta?.(f);
-    const badge = ifcPublishBadge?.(f);
+    const uiStatus = ifcModelStatus?.(f);
+    const badge = uiStatus?.label ?? ifcPublishBadge?.(f);
+    const spinning = ifcStatusSpinning(uiStatus);
+    const isPublishedReady = uiStatus?.kind === "ready";
     const btnClass = compact
       ? "rounded-md border border-slate-200 px-1.5 py-1 text-[10px] font-normal text-[var(--enterprise-text)] hover:bg-slate-50"
       : "inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-normal text-[var(--enterprise-text)] hover:bg-slate-50";
+    const badgeClass =
+      uiStatus?.kind === "failed"
+        ? "enterprise-badge-danger"
+        : uiStatus?.kind === "ready_to_publish"
+          ? "enterprise-badge-warning"
+          : spinning
+            ? "enterprise-badge-info"
+            : "enterprise-badge-info";
     return (
       <div className={`flex flex-wrap items-center gap-1 ${compact ? "mt-1.5" : ""}`}>
         {badge ? (
-          <span className="enterprise-badge-info rounded-md px-1.5 py-0.5 text-[9px] sm:text-[10px]">
+          <span
+            className={`${badgeClass} inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] sm:text-[10px]`}
+          >
+            {spinning ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
             {badge}
           </span>
-        ) : onPublishIfcModel ? (
+        ) : null}
+        {onPublishIfcModel && (uiStatus?.kind === "ready_to_publish" || !badge) ? (
           <button
             type="button"
             className={btnClass}
@@ -175,7 +193,7 @@ export function FileExplorerContent({
             Publish model
           </button>
         ) : null}
-        {onMapIfcDrawings && badge ? (
+        {onMapIfcDrawings && isPublishedReady ? (
           <button
             type="button"
             className={btnClass}
@@ -187,7 +205,7 @@ export function FileExplorerContent({
             Map drawings
           </button>
         ) : null}
-        {onAlignIfcCoordinates && badge ? (
+        {onAlignIfcCoordinates && isPublishedReady ? (
           <button
             type="button"
             className={btnClass}
@@ -425,171 +443,183 @@ export function FileExplorerContent({
                 </div>
               );
             })}
-            {files.map((f) => {
-              const sv = sortedVersions(f);
-              const latest = sv[0];
-              const displayVer = sv.find((x) => x.version === selectedVersionForFile(f)) ?? latest;
-              const size = displayVer ? formatBytes(displayVer.sizeBytes) : "—";
-              const selected = fileRowSelected(f);
-              return (
-                <div
-                  key={f.id}
-                  className={`group relative flex flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all duration-200 sm:rounded-xl sm:hover:-translate-y-0.5 sm:hover:shadow-md ${
-                    selected
-                      ? federationIfcIds?.has(f.id)
-                        ? "border-emerald-500/40 ring-2 ring-emerald-500/25"
-                        : "border-[var(--enterprise-primary)]/40 ring-2 ring-[var(--enterprise-primary)]/25"
-                      : "border-slate-200/90 hover:border-slate-300/90"
-                  }`}
-                >
+            {files.map(
+              // fallow-ignore-next-line complexity, code-duplication
+              (f) => {
+                const sv = sortedVersions(f);
+                const latest = sv[0];
+                const displayVer =
+                  sv.find((x) => x.version === selectedVersionForFile(f)) ?? latest;
+                const size = displayVer ? formatBytes(displayVer.sizeBytes) : "—";
+                const selected = fileRowSelected(f);
+                return (
                   <div
-                    role="button"
-                    tabIndex={0}
-                    draggable={Boolean(onDragStartMove)}
-                    onDragStart={(e) => onDragStartMove?.(e, { kind: "file", id: f.id })}
-                    onClick={(e) => handleFileSelect(f, e)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        handleFileSelect(f, e);
-                      }
-                    }}
-                    className="flex cursor-pointer flex-col text-left"
+                    key={f.id}
+                    className={`group relative flex flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all duration-200 sm:rounded-xl sm:hover:-translate-y-0.5 sm:hover:shadow-md ${
+                      selected
+                        ? federationIfcIds?.has(f.id)
+                          ? "border-emerald-500/40 ring-2 ring-emerald-500/25"
+                          : "border-[var(--enterprise-primary)]/40 ring-2 ring-[var(--enterprise-primary)]/25"
+                        : "border-slate-200/90 hover:border-slate-300/90"
+                    }`}
                   >
-                    <div className="relative aspect-square w-full overflow-hidden bg-slate-50 sm:aspect-[5/3]">
-                      <PdfFileThumbnail
-                        fileId={f.id}
-                        fileName={f.name}
-                        mimeType={f.mimeType}
-                        fileVersionId={displayVer?.id ?? null}
-                        isPdf={isPdfFile(f)}
-                        className="h-full w-full"
-                      />
-                      {(f.commentCount ?? 0) > 0 ? (
-                        <div className="pointer-events-none absolute left-1 top-1 z-10 sm:left-1.5 sm:top-1.5">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary)] px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-sm ring-1 ring-white/85 sm:text-[10px]">
-                            <MessageSquare className="h-3 w-3" aria-hidden />
-                            {f.commentCount}
-                          </span>
-                        </div>
-                      ) : null}
-                      {isPdfFile(f) || isIfcFile(f) ? (
-                        <div className="pointer-events-none absolute bottom-1 left-1 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/95 shadow-md ring-1 ring-slate-200/80 sm:bottom-1.5 sm:left-1.5 sm:h-7 sm:w-7">
-                          {isPdfFile(f) ? (
-                            <PdfFileIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      draggable={Boolean(onDragStartMove)}
+                      onDragStart={(e) => onDragStartMove?.(e, { kind: "file", id: f.id })}
+                      onClick={(e) => handleFileSelect(f, e)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleFileSelect(f, e);
+                        }
+                      }}
+                      className="flex cursor-pointer flex-col text-left"
+                    >
+                      <div className="relative aspect-square w-full overflow-hidden bg-slate-50 sm:aspect-[5/3]">
+                        <PdfFileThumbnail
+                          fileId={f.id}
+                          fileName={f.name}
+                          mimeType={f.mimeType}
+                          fileVersionId={displayVer?.id ?? null}
+                          isPdf={isPdfFile(f)}
+                          className="h-full w-full"
+                        />
+                        {(f.commentCount ?? 0) > 0 ? (
+                          <div className="pointer-events-none absolute left-1 top-1 z-10 sm:left-1.5 sm:top-1.5">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary)] px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-sm ring-1 ring-white/85 sm:text-[10px]">
+                              <MessageSquare className="h-3 w-3" aria-hidden />
+                              {f.commentCount}
+                            </span>
+                          </div>
+                        ) : null}
+                        {isPdfFile(f) || isIfcFile(f) ? (
+                          <div className="pointer-events-none absolute bottom-1 left-1 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/95 shadow-md ring-1 ring-slate-200/80 sm:bottom-1.5 sm:left-1.5 sm:h-7 sm:w-7">
+                            {isPdfFile(f) ? (
+                              <PdfFileIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            ) : (
+                              <span className="relative inline-flex">
+                                <IfcFileIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                {ifcStatusSpinning(ifcModelStatus?.(f)) ? (
+                                  <Loader2
+                                    className="absolute -right-1 -top-1 h-2.5 w-2.5 animate-spin text-[var(--enterprise-primary)] sm:h-3 sm:w-3"
+                                    aria-hidden
+                                  />
+                                ) : null}
+                              </span>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="border-t border-slate-100 bg-slate-50/50 p-1.5 sm:p-2.5">
+                        <p className="truncate text-[10px] font-normal leading-tight text-[var(--enterprise-text)] sm:text-[13px] sm:leading-tight">
+                          {fileExplorerDisplayName(f)}
+                        </p>
+                        <p className="mt-0.5 truncate text-[8px] text-slate-500 sm:mt-1 sm:text-[10px]">
+                          {displayVer ? (
+                            <>
+                              <span className="font-medium text-slate-600">
+                                {`Rev ${displayVer.version} · v${displayVer.version}`}
+                              </span>
+                              <span className="text-slate-300"> · </span>
+                              <span>{size}</span>
+                            </>
                           ) : (
-                            <IfcFileIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            "—"
                           )}
+                        </p>
+                        {(f.disciplines ?? []).length > 0 ? (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {(f.disciplines ?? []).slice(0, 2).map((discipline) => (
+                              <span
+                                key={`${f.id}-${discipline}`}
+                                className="enterprise-badge-info rounded-md px-1.5 py-0.5 text-[9px]"
+                              >
+                                {discipline}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                        {renderIfcActions(f, true)}
+                        <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-slate-100/90 pt-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!onOpenViewer) return;
+                              onOpenViewer(f);
+                            }}
+                            className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-normal text-[var(--enterprise-text)] transition hover:bg-slate-50 disabled:opacity-50 sm:text-[11px]"
+                            disabled={!onOpenViewer}
+                          >
+                            <Eye className="h-3.5 w-3.5" aria-hidden />
+                            Open file
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenFile(f);
+                            }}
+                            className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-normal text-[var(--enterprise-text)] transition hover:bg-slate-50 sm:text-[11px]"
+                          >
+                            <FileText className="h-3.5 w-3.5" aria-hidden />
+                            Details
+                          </button>
                         </div>
-                      ) : null}
-                    </div>
-                    <div className="border-t border-slate-100 bg-slate-50/50 p-1.5 sm:p-2.5">
-                      <p className="truncate text-[10px] font-normal leading-tight text-[var(--enterprise-text)] sm:text-[13px] sm:leading-tight">
-                        {fileExplorerDisplayName(f)}
-                      </p>
-                      <p className="mt-0.5 truncate text-[8px] text-slate-500 sm:mt-1 sm:text-[10px]">
-                        {displayVer ? (
-                          <>
-                            <span className="font-medium text-slate-600">
-                              {`Rev ${displayVer.version} · v${displayVer.version}`}
-                            </span>
-                            <span className="text-slate-300"> · </span>
-                            <span>{size}</span>
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </p>
-                      {(f.disciplines ?? []).length > 0 ? (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {(f.disciplines ?? []).slice(0, 2).map((discipline) => (
-                            <span
-                              key={`${f.id}-${discipline}`}
-                              className="enterprise-badge-info rounded-md px-1.5 py-0.5 text-[9px]"
-                            >
-                              {discipline}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                      {renderIfcActions(f, true)}
-                      <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-slate-100/90 pt-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!onOpenViewer) return;
-                            onOpenViewer(f);
-                          }}
-                          className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-normal text-[var(--enterprise-text)] transition hover:bg-slate-50 disabled:opacity-50 sm:text-[11px]"
-                          disabled={!onOpenViewer}
-                        >
-                          <Eye className="h-3.5 w-3.5" aria-hidden />
-                          Open file
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenFile(f);
-                          }}
-                          className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-normal text-[var(--enterprise-text)] transition hover:bg-slate-50 sm:text-[11px]"
-                        >
-                          <FileText className="h-3.5 w-3.5" aria-hidden />
-                          Details
-                        </button>
                       </div>
                     </div>
-                  </div>
-                  {versionUi && sv.length > 1 && onFileVersionPick ? (
-                    <div
-                      className="border-t border-slate-100 px-1.5 pb-1.5 pt-1 sm:px-2 sm:pb-2"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <label
-                        htmlFor={`file-version-${f.id}`}
-                        className="mb-0.5 block text-[8px] font-medium uppercase tracking-wide text-slate-400 sm:text-[9px]"
+                    {versionUi && sv.length > 1 && onFileVersionPick ? (
+                      <div
+                        className="border-t border-slate-100 px-1.5 pb-1.5 pt-1 sm:px-2 sm:pb-2"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        Open revision
-                      </label>
-                      <select
-                        id={`file-version-${f.id}`}
-                        className="w-full rounded-md border border-slate-200/90 bg-white py-0.5 pl-1 pr-5 text-[9px] text-[var(--enterprise-text)] shadow-sm sm:py-1 sm:pl-1.5 sm:pr-6 sm:text-[10px]"
-                        value={String(selectedVersionForFile(f))}
-                        onChange={(e) => {
-                          onFileVersionPick(f.id, Number(e.target.value));
+                        <label
+                          htmlFor={`file-version-${f.id}`}
+                          className="mb-0.5 block text-[8px] font-medium uppercase tracking-wide text-slate-400 sm:text-[9px]"
+                        >
+                          Open revision
+                        </label>
+                        <select
+                          id={`file-version-${f.id}`}
+                          className="w-full rounded-md border border-slate-200/90 bg-white py-0.5 pl-1 pr-5 text-[9px] text-[var(--enterprise-text)] shadow-sm sm:py-1 sm:pl-1.5 sm:pr-6 sm:text-[10px]"
+                          value={String(selectedVersionForFile(f))}
+                          onChange={(e) => {
+                            onFileVersionPick(f.id, Number(e.target.value));
+                          }}
+                          aria-label={`Revision for ${f.name}`}
+                        >
+                          {sv.map((ver) => (
+                            <option key={ver.id} value={String(ver.version)}>
+                              v{ver.version} ({formatBytes(ver.sizeBytes)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+                    <div className="absolute right-1 top-1 z-20 sm:right-1.5 sm:top-1.5">
+                      <button
+                        type="button"
+                        className="rounded-md bg-white/95 p-1 text-slate-500 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-red-50 hover:text-red-600"
+                        disabled={deletingKey === `file:${f.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void onDeleteFile(f);
                         }}
-                        aria-label={`Revision for ${f.name}`}
+                        aria-label={`Delete ${f.name}`}
                       >
-                        {sv.map((ver) => (
-                          <option key={ver.id} value={String(ver.version)}>
-                            v{ver.version} ({formatBytes(ver.sizeBytes)})
-                          </option>
-                        ))}
-                      </select>
+                        {deletingKey === `file:${f.id}` ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
-                  ) : null}
-                  <div className="absolute right-1 top-1 z-20 sm:right-1.5 sm:top-1.5">
-                    <button
-                      type="button"
-                      className="rounded-md bg-white/95 p-1 text-slate-500 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-red-50 hover:text-red-600"
-                      disabled={deletingKey === `file:${f.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void onDeleteFile(f);
-                      }}
-                      aria-label={`Delete ${f.name}`}
-                    >
-                      {deletingKey === `file:${f.id}` ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </button>
                   </div>
-                </div>
-              );
-            })}
+                );
+              },
+            )}
           </div>
         ) : (
           <>
@@ -940,167 +970,178 @@ export function FileExplorerContent({
                       </tr>
                     );
                   })}
-                  {files.map((f) => {
-                    const sv = sortedVersions(f);
-                    const latest = sv[0];
-                    const displayVer =
-                      sv.find((x) => x.version === selectedVersionForFile(f)) ?? latest;
-                    const selected = fileRowSelected(f);
-                    return (
-                      <tr
-                        key={f.id}
-                        draggable={Boolean(onDragStartMove)}
-                        onDragStart={(e) => {
-                          if (
-                            (e.target as HTMLElement).closest(
-                              'button[aria-label^="Delete"], button[aria-label^="Download"]',
-                            )
-                          ) {
-                            e.preventDefault();
-                            return;
-                          }
-                          onDragStartMove?.(e, { kind: "file", id: f.id });
-                        }}
-                        className={`cursor-pointer border-b border-slate-50 transition-colors last:border-b-0 ${
-                          selected
-                            ? federationIfcIds?.has(f.id)
-                              ? "bg-emerald-50/90"
-                              : "bg-[var(--enterprise-primary-soft)]/80"
-                            : "hover:bg-slate-50/90"
-                        }`}
-                        onClick={(e) => {
-                          const federationToggle =
-                            isIfcFile(f) && onToggleFederationIfc && (e.metaKey || e.ctrlKey);
-                          handleFileSelect(f, e);
-                          if (!federationToggle) onOpenFile(f);
-                        }}
-                      >
-                        <td className="py-2.5 pl-4">
-                          <span className="inline-flex items-center gap-1.5 font-normal text-[var(--enterprise-text)]">
-                            {isPdfFile(f) ? (
-                              <PdfFileIcon className="h-3.5 w-3.5 shrink-0" />
-                            ) : isIfcFile(f) ? (
-                              <IfcFileIcon className="h-3.5 w-3.5 shrink-0" />
+                  {files.map(
+                    // fallow-ignore-next-line complexity, code-duplication
+                    (f) => {
+                      const sv = sortedVersions(f);
+                      const latest = sv[0];
+                      const displayVer =
+                        sv.find((x) => x.version === selectedVersionForFile(f)) ?? latest;
+                      const selected = fileRowSelected(f);
+                      return (
+                        <tr
+                          key={f.id}
+                          draggable={Boolean(onDragStartMove)}
+                          onDragStart={(e) => {
+                            if (
+                              (e.target as HTMLElement).closest(
+                                'button[aria-label^="Delete"], button[aria-label^="Download"]',
+                              )
+                            ) {
+                              e.preventDefault();
+                              return;
+                            }
+                            onDragStartMove?.(e, { kind: "file", id: f.id });
+                          }}
+                          className={`cursor-pointer border-b border-slate-50 transition-colors last:border-b-0 ${
+                            selected
+                              ? federationIfcIds?.has(f.id)
+                                ? "bg-emerald-50/90"
+                                : "bg-[var(--enterprise-primary-soft)]/80"
+                              : "hover:bg-slate-50/90"
+                          }`}
+                          onClick={(e) => {
+                            const federationToggle =
+                              isIfcFile(f) && onToggleFederationIfc && (e.metaKey || e.ctrlKey);
+                            handleFileSelect(f, e);
+                            if (!federationToggle) onOpenFile(f);
+                          }}
+                        >
+                          <td className="py-2.5 pl-4">
+                            <span className="inline-flex items-center gap-1.5 font-normal text-[var(--enterprise-text)]">
+                              {isPdfFile(f) ? (
+                                <PdfFileIcon className="h-3.5 w-3.5 shrink-0" />
+                              ) : isIfcFile(f) ? (
+                                <span className="relative inline-flex shrink-0">
+                                  <IfcFileIcon className="h-3.5 w-3.5" />
+                                  {ifcStatusSpinning(ifcModelStatus?.(f)) ? (
+                                    <Loader2
+                                      className="absolute -right-1.5 -top-1.5 h-3 w-3 animate-spin text-[var(--enterprise-primary)]"
+                                      aria-hidden
+                                    />
+                                  ) : null}
+                                </span>
+                              ) : (
+                                <FileText
+                                  className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-primary)]"
+                                  strokeWidth={1.75}
+                                  aria-hidden
+                                />
+                              )}
+                              <span className="truncate">{f.name}</span>
+                              {(f.commentCount ?? 0) > 0 ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)]">
+                                  <MessageSquare className="h-3 w-3" aria-hidden />
+                                  {f.commentCount}
+                                </span>
+                              ) : null}
+                            </span>
+                            {renderIfcActions(f)}
+                          </td>
+                          <td className="py-2.5 text-slate-500">
+                            {isPdfFile(f) ? "PDF" : isIfcFile(f) ? "IFC" : "File"}
+                          </td>
+                          <td className="py-2.5 text-slate-600">
+                            {versionUi && sv.length > 1 && onFileVersionPick ? (
+                              <select
+                                className="max-w-[140px] rounded-md border border-slate-200/90 bg-white px-1.5 py-1 text-[11px] text-[var(--enterprise-text)]"
+                                value={String(selectedVersionForFile(f))}
+                                onClick={(ev) => ev.stopPropagation()}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  onFileVersionPick(f.id, Number(e.target.value));
+                                }}
+                                aria-label={`Revision for ${f.name}`}
+                              >
+                                {sv.map((ver) => (
+                                  <option key={ver.id} value={String(ver.version)}>
+                                    v{ver.version}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : latest ? (
+                              <span className="text-slate-500">v{latest.version}</span>
                             ) : (
-                              <FileText
-                                className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-primary)]"
-                                strokeWidth={1.75}
-                                aria-hidden
-                              />
+                              "—"
                             )}
-                            <span className="truncate">{f.name}</span>
-                            {(f.commentCount ?? 0) > 0 ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)]">
-                                <MessageSquare className="h-3 w-3" aria-hidden />
-                                {f.commentCount}
-                              </span>
-                            ) : null}
-                          </span>
-                          {renderIfcActions(f)}
-                        </td>
-                        <td className="py-2.5 text-slate-500">
-                          {isPdfFile(f) ? "PDF" : isIfcFile(f) ? "IFC" : "File"}
-                        </td>
-                        <td className="py-2.5 text-slate-600">
-                          {versionUi && sv.length > 1 && onFileVersionPick ? (
-                            <select
-                              className="max-w-[140px] rounded-md border border-slate-200/90 bg-white px-1.5 py-1 text-[11px] text-[var(--enterprise-text)]"
-                              value={String(selectedVersionForFile(f))}
-                              onClick={(ev) => ev.stopPropagation()}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                onFileVersionPick(f.id, Number(e.target.value));
-                              }}
-                              aria-label={`Revision for ${f.name}`}
-                            >
-                              {sv.map((ver) => (
-                                <option key={ver.id} value={String(ver.version)}>
-                                  v{ver.version}
-                                </option>
-                              ))}
-                            </select>
-                          ) : latest ? (
-                            <span className="text-slate-500">v{latest.version}</span>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td className="py-2.5 text-slate-600">
-                          {formatItemDateOrDash(displayVer?.createdAt ?? f.updatedAt)}
-                        </td>
-                        <td className="py-2.5 text-slate-600">
-                          {formatItemDateOrDash(f.lastOpenedAt)}
-                        </td>
-                        <td className="py-2.5 text-slate-500">
-                          {displayVer ? formatBytes(displayVer.sizeBytes) : "—"}
-                        </td>
-                        <td className="py-2">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-normal text-[var(--enterprise-text)] hover:bg-slate-50 disabled:opacity-50"
-                              onClick={(ev) => {
-                                ev.stopPropagation();
-                                if (!onOpenViewer) return;
-                                onOpenViewer(f);
-                              }}
-                              disabled={!onOpenViewer}
-                              aria-label={`Open ${f.name}`}
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                              Open
-                            </button>
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-normal text-[var(--enterprise-text)] hover:bg-slate-50"
-                              onClick={(ev) => {
-                                ev.stopPropagation();
-                                onOpenFile(f);
-                              }}
-                              aria-label={`Open details for ${f.name}`}
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                              Details
-                            </button>
-                            {onDownloadFile ? (
+                          </td>
+                          <td className="py-2.5 text-slate-600">
+                            {formatItemDateOrDash(displayVer?.createdAt ?? f.updatedAt)}
+                          </td>
+                          <td className="py-2.5 text-slate-600">
+                            {formatItemDateOrDash(f.lastOpenedAt)}
+                          </td>
+                          <td className="py-2.5 text-slate-500">
+                            {displayVer ? formatBytes(displayVer.sizeBytes) : "—"}
+                          </td>
+                          <td className="py-2">
+                            <div className="flex items-center justify-end gap-1">
                               <button
                                 type="button"
-                                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                                disabled={downloadingKey === `file:${f.id}`}
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-normal text-[var(--enterprise-text)] hover:bg-slate-50 disabled:opacity-50"
                                 onClick={(ev) => {
                                   ev.stopPropagation();
-                                  void onDownloadFile(f);
+                                  if (!onOpenViewer) return;
+                                  onOpenViewer(f);
                                 }}
-                                aria-label={`Download ${f.name}`}
+                                disabled={!onOpenViewer}
+                                aria-label={`Open ${f.name}`}
                               >
-                                {downloadingKey === `file:${f.id}` ? (
+                                <Eye className="h-3.5 w-3.5" />
+                                Open
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-normal text-[var(--enterprise-text)] hover:bg-slate-50"
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  onOpenFile(f);
+                                }}
+                                aria-label={`Open details for ${f.name}`}
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                                Details
+                              </button>
+                              {onDownloadFile ? (
+                                <button
+                                  type="button"
+                                  className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                  disabled={downloadingKey === `file:${f.id}`}
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    void onDownloadFile(f);
+                                  }}
+                                  aria-label={`Download ${f.name}`}
+                                >
+                                  {downloadingKey === `file:${f.id}` ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Download className="h-4 w-4" />
+                                  )}
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                disabled={deletingKey === `file:${f.id}`}
+                                onClick={(ev) => {
+                                  ev.stopPropagation();
+                                  void onDeleteFile(f);
+                                }}
+                                aria-label={`Delete ${f.name}`}
+                              >
+                                {deletingKey === `file:${f.id}` ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                  <Download className="h-4 w-4" />
+                                  <Trash2 className="h-4 w-4" />
                                 )}
                               </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                              disabled={deletingKey === `file:${f.id}`}
-                              onClick={(ev) => {
-                                ev.stopPropagation();
-                                void onDeleteFile(f);
-                              }}
-                              aria-label={`Delete ${f.name}`}
-                            >
-                              {deletingKey === `file:${f.id}` ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    },
+                  )}
                 </tbody>
               </table>
             </div>

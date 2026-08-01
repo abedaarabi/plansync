@@ -1,26 +1,8 @@
-import { apiUrl } from "@/lib/api-url";
-import type { BimConversionStatus, BimLoqReport } from "@/lib/bim/types";
 import type { DrawingCoordTransform } from "@/lib/bim/drawingCoordBridge";
-import type { CloudFile, FileVersion } from "@/types/projects";
-import { fetchBimStatus } from "./bim-viewer";
+import type { CalibrationInput } from "@/lib/api-client/locations";
 import { apiJsonFetch, jsonHeaders } from "./shared";
-import { uploadFileViaXHR } from "./uploadFileXHR";
 
 const JSON_HEADERS = jsonHeaders;
-
-/** Direct upload limit before presigned path (20 MB safety margin vs backend body limit). */
-const IFC_PRESIGN_THRESHOLD_BYTES = 20 * 1024 * 1024;
-
-/** Skip client-side SHA-256 for very large IFC files (already verified by S3 PUT). */
-const IFC_SHA256_SKIP_BYTES = 100 * 1024 * 1024;
-
-export type BimStoreyPreview = {
-  sourceName: string;
-  displayName: string;
-  elevationMeters: number | null;
-  elementCount: number;
-  sortOrder: number;
-};
 
 export type BimModelLevelDraft = {
   /** Client-side id before publish (sourceName) or DB id after publish. */
@@ -45,6 +27,11 @@ export type DrawingMapRecord = DrawingMapDraft & {
   id: string;
   coordTransformJson: DrawingCoordTransform | null;
   coordAlignedAt: string | null;
+  calibrationJson?: CalibrationInput | null;
+  offsetX?: number | null;
+  offsetY?: number | null;
+  scale?: number | null;
+  rotationDeg?: number | null;
   level?: {
     id: string;
     sourceName: string;
@@ -105,6 +92,7 @@ export type BimSyncContext = {
 type RawDrawingLevelMap = DrawingMapRecord & {
   level?: DrawingMapRecord["level"];
   pdfFile?: { id: string; name: string; folderId: string | null };
+  calibrationJson?: CalibrationInput | null;
 };
 
 type RawBimSyncContext = {
@@ -137,6 +125,11 @@ function normalizeDrawingMap(raw: RawDrawingLevelMap): DrawingMapRecord {
     pageIndex: raw.pageIndex,
     coordTransformJson: raw.coordTransformJson,
     coordAlignedAt: raw.coordAlignedAt,
+    calibrationJson: raw.calibrationJson ?? null,
+    offsetX: raw.offsetX ?? null,
+    offsetY: raw.offsetY ?? null,
+    scale: raw.scale ?? null,
+    rotationDeg: raw.rotationDeg ?? null,
     level: raw.level,
     pdfFileName: raw.pdfFileName ?? raw.pdfFile?.name,
     pdfFolderPath: raw.pdfFolderPath ?? null,
@@ -164,35 +157,10 @@ function normalizeBimSyncContext(raw: RawBimSyncContext): BimSyncContext {
   };
 }
 
-async function fetchBimStoreys(fileVersionId: string): Promise<{
-  storeys: BimStoreyPreview[];
-  ready: boolean;
-}> {
-  return apiJsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/storeys`);
-}
-
 export async function fetchBimPublishSummary(fileVersionId: string): Promise<BimPublishSummary> {
   return apiJsonFetch(
     `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/publish-summary`,
   );
-}
-
-export async function publishBimModel(
-  fileVersionId: string,
-  body: {
-    levels: BimModelLevelDraft[];
-    maps?: DrawingMapDraft[];
-  },
-): Promise<{
-  publishedAt: string;
-  levelCount: number;
-  mapCount: number;
-}> {
-  return apiJsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/publish`, {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(body),
-  });
 }
 
 export async function saveBimDrawingMaps(
@@ -326,158 +294,6 @@ export async function fetchBimSyncContext(
     `/api/v1/file-versions/${encodeURIComponent(ifcFileVersionId)}/bim/sync-context?${q}`,
   );
   return normalizeBimSyncContext(raw);
-}
-
-export type IfcUploadResult = {
-  file: CloudFile;
-  fileVersion: FileVersion;
-};
-
-function uploadIfcDirect(input: {
-  file: File;
-  workspaceId: string;
-  projectId: string;
-  folderId: string | null;
-  fileName: string;
-  onProgress: (pct: number) => void;
-}): Promise<IfcUploadResult> {
-  return uploadFileViaXHR<IfcUploadResult>(input);
-}
-
-async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
-  const hash = await crypto.subtle.digest("SHA-256", buffer);
-  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-// fallow-ignore-next-line complexity
-async function uploadIfcPresigned(input: {
-  file: File;
-  workspaceId: string;
-  projectId: string;
-  folderId: string | null;
-  fileName: string;
-  onProgress: (pct: number) => void;
-}): Promise<IfcUploadResult> {
-  const presign = await apiJsonFetch<{
-    uploadUrl: string;
-    key: string;
-    fileId: string;
-  }>("/api/v1/files/presign-upload", {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify({
-      workspaceId: input.workspaceId,
-      projectId: input.projectId,
-      folderId: input.folderId ?? undefined,
-      fileName: input.fileName,
-      contentType: input.file.type || "model/ifc",
-      sizeBytes: String(input.file.size),
-    }),
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    // fallow-ignore-next-line code-duplication
-    xhr.open("PUT", presign.uploadUrl);
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        input.onProgress(Math.round((e.loaded / e.total) * 100));
-      }
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error(`S3 upload failed (${xhr.status}).`));
-    };
-    xhr.onerror = () => reject(new Error("S3 upload network error."));
-    xhr.setRequestHeader("Content-Type", input.file.type || "model/ifc");
-    xhr.send(input.file);
-  });
-
-  let digest: string | undefined;
-  if (input.file.size <= IFC_SHA256_SKIP_BYTES) {
-    const buf = await input.file.arrayBuffer();
-    digest = await sha256Hex(buf);
-  }
-
-  return apiJsonFetch<IfcUploadResult>("/api/v1/files/complete-upload", {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify({
-      workspaceId: input.workspaceId,
-      projectId: input.projectId,
-      folderId: input.folderId ?? undefined,
-      fileName: input.fileName,
-      fileId: presign.fileId,
-      s3Key: presign.key,
-      sizeBytes: String(input.file.size),
-      ...(digest ? { sha256: digest } : {}),
-      mimeType: input.file.type || "model/ifc",
-    }),
-  });
-}
-
-/** Upload IFC via presigned S3 (falls back to direct upload when S3 is unavailable). */
-// fallow-ignore-next-line complexity
-export async function uploadIfcFile(input: {
-  file: File;
-  workspaceId: string;
-  projectId: string;
-  folderId: string | null;
-  fileName: string;
-  onProgress: (pct: number) => void;
-}): Promise<IfcUploadResult> {
-  try {
-    return await uploadIfcPresigned(input);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    const s3Unavailable =
-      msg.includes("S3 not configured") ||
-      msg.includes("Could not create upload URL") ||
-      msg.includes("(503)");
-    if (s3Unavailable && input.file.size <= IFC_PRESIGN_THRESHOLD_BYTES) {
-      return uploadIfcDirect(input);
-    }
-    throw e;
-  }
-}
-
-// fallow-ignore-next-line complexity
-export async function pollBimStoreysUntilReady(
-  fileVersionId: string,
-  opts?: { intervalMs?: number; timeoutMs?: number },
-): Promise<BimStoreyPreview[]> {
-  const intervalMs = opts?.intervalMs ?? 1500;
-  const timeoutMs = opts?.timeoutMs ?? 120_000;
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    const data = await fetchBimStoreys(fileVersionId);
-    if (data.ready && data.storeys.length > 0) return data.storeys;
-    if (data.ready) return data.storeys;
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  const last = await fetchBimStoreys(fileVersionId);
-  return last.storeys;
-}
-
-export type BimLoqHints = {
-  loq: BimLoqReport | null;
-  conversionStatus: string;
-  quantityIndexSummaryReady: boolean;
-  quantityIndexReady: boolean;
-  indexProgress: number | null;
-  indexPhase: "summary" | "full" | null;
-};
-
-export async function fetchBimLoqHints(fileVersionId: string): Promise<BimLoqHints> {
-  const status = await fetchBimStatus(fileVersionId);
-  return {
-    loq: status.loq,
-    conversionStatus: status.conversionStatus,
-    quantityIndexSummaryReady: status.quantityIndexSummaryReady,
-    quantityIndexReady: status.quantityIndexReady,
-    indexProgress: status.indexProgress,
-    indexPhase: status.indexPhase,
-  };
 }
 
 export { fetchBimStatus, triggerBimConversion } from "./bim-viewer";

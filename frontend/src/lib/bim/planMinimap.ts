@@ -16,6 +16,8 @@ export type PlanMinimapState = {
   fovHalfRad: number;
   bounds: PlanMinimapBounds | null;
   silhouette: ImageBitmap | null;
+  /** Pixel size the silhouette was baked at (defaults to PLAN_BAKE_PX). */
+  silhouetteBakePx?: number;
   baking: boolean;
   activeStorey: string | null;
 };
@@ -41,8 +43,7 @@ export type PlanMinimapHit =
   | { kind: "rotate" }
   | { kind: "jump"; worldX: number; worldZ: number };
 
-const NAV_CENTER_R = PLAN_MINIMAP_PX * 0.085;
-const NAV_ROTATE_R = PLAN_MINIMAP_PX * 0.048;
+import { drawMapNavigatorCanvas, hitTestMapNavigator } from "@/lib/bim/bimMapNavigator";
 
 /** BIM token-aligned plan colors (see .bim-viewer in globals.css). */
 const PLAN_COLORS = {
@@ -107,18 +108,8 @@ export function hitTestPlanMinimap(
   if (!state.bounds) return { kind: "none" };
 
   const anchor = worldToMap(state.anchorX, state.anchorZ, state.bounds, mapPx);
-  const dx = mapX - anchor.x;
-  const dy = mapY - anchor.y;
-  const dist = Math.hypot(dx, dy);
-
-  if (dist <= NAV_CENTER_R) {
-    return { kind: "pan" };
-  }
-
-  const coneLen = Math.min(mapPx * 0.24, 52);
-  if (dist >= NAV_ROTATE_R && dist <= coneLen + 10) {
-    return { kind: "rotate" };
-  }
+  const hit = hitTestMapNavigator(mapX, mapY, anchor.x, anchor.y, mapPx, mapPx);
+  if (hit.kind !== "none") return hit;
 
   const t = getPlanMinimapTransform(state.bounds, mapPx);
   const inFootprint =
@@ -174,51 +165,11 @@ function drawPlanSheetFrame(
   ctx.stroke();
 }
 
-function drawNavigator(
-  ctx: CanvasRenderingContext2D,
-  anchor: { x: number; y: number },
-  heading: number,
-  fovHalfRad: number,
-  mapPx: number,
-): void {
-  const coneLen = Math.min(mapPx * 0.24, 52);
-
-  ctx.save();
-  ctx.translate(anchor.x, anchor.y);
-  ctx.rotate(heading);
-
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(-Math.sin(fovHalfRad) * coneLen, -Math.cos(fovHalfRad) * coneLen);
-  ctx.arc(0, 0, coneLen, -Math.PI / 2 - fovHalfRad, -Math.PI / 2 + fovHalfRad, false);
-  ctx.closePath();
-  ctx.fillStyle = PLAN_COLORS.accentSoft;
-  ctx.fill();
-  ctx.strokeStyle = PLAN_COLORS.accentLine;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(0, -coneLen);
-  ctx.strokeStyle = PLAN_COLORS.accent;
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.arc(0, 0, 6, 0, Math.PI * 2);
-  ctx.fillStyle = PLAN_COLORS.accent;
-  ctx.fill();
-  ctx.strokeStyle = PLAN_COLORS.sheet;
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
-  ctx.restore();
-}
-
 export function drawPlanMinimap(
   ctx: CanvasRenderingContext2D,
   mapPx: number,
   state: PlanMinimapState,
+  options?: { hideNavigator?: boolean },
 ): void {
   ctx.clearRect(0, 0, mapPx, mapPx);
   ctx.fillStyle = PLAN_COLORS.shell;
@@ -252,8 +203,11 @@ export function drawPlanMinimap(
   };
 
   if (state.silhouette) {
-    const src = getPlanMinimapTransform(bounds, PLAN_BAKE_PX);
+    const bakePx = state.silhouetteBakePx ?? PLAN_BAKE_PX;
+    const src = getPlanMinimapTransform(bounds, bakePx);
     clipSheet(() => {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       ctx.drawImage(
         state.silhouette!,
         src.offsetX,
@@ -286,6 +240,8 @@ export function drawPlanMinimap(
     ctx.fillText("Updating plan…", tl.x + t.drawW / 2, tl.y + t.drawH / 2);
   }
 
-  const anchor = worldToMap(state.anchorX, state.anchorZ, bounds, mapPx);
-  drawNavigator(ctx, anchor, state.heading, state.fovHalfRad, mapPx);
+  if (!options?.hideNavigator) {
+    const anchor = worldToMap(state.anchorX, state.anchorZ, bounds, mapPx);
+    drawMapNavigatorCanvas(ctx, anchor.x, anchor.y, state.heading, state.fovHalfRad, mapPx, mapPx);
+  }
 }

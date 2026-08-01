@@ -1,0 +1,17 @@
+-- CreateEnum
+CREATE TYPE "BuildingType" AS ENUM ('OFFICE', 'RESIDENTIAL', 'MIXED', 'INDUSTRIAL', 'OTHER');
+
+-- AlterTable
+ALTER TABLE "Location" ADD COLUMN "code" TEXT;
+ALTER TABLE "Location" ADD COLUMN "address" TEXT;
+ALTER TABLE "Location" ADD COLUMN "city" TEXT;
+ALTER TABLE "Location" ADD COLUMN "country" TEXT;
+ALTER TABLE "Location" ADD COLUMN "notes" TEXT;
+ALTER TABLE "Location" ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "Building" ADD COLUMN "code" TEXT;
+ALTER TABLE "Building" ADD COLUMN "buildingType" "BuildingType";
+ALTER TABLE "Building" ADD COLUMN "floorsApprox" INTEGER;
+ALTER TABLE "Building" ADD COLUMN "notes" TEXT;
+ALTER TABLE "Building" ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

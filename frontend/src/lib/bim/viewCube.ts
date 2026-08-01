@@ -615,5 +615,3 @@ export class ViewCubeOverlay {
     this.renderer.dispose();
   }
 }
-
-export { ROTATE_SENSITIVITY };

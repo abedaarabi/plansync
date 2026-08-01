@@ -23,10 +23,11 @@ export function BimSplitViewPane(props: {
   onSelectStorey: (name: string | null) => void;
   syncContext: BimSyncContext | null;
   activeLevelMap: DrawingMapRecord | null;
+  drawingTransform: DrawingCoordTransform | null;
   onAlign: () => void;
   hasDrawingMaps: boolean;
 }) {
-  const transform = props.activeLevelMap?.coordTransformJson as DrawingCoordTransform | null;
+  const transform = props.drawingTransform;
 
   return (
     <aside className="bim-split-pane" aria-label="2D plan and drawing view">
@@ -64,7 +65,11 @@ export function BimSplitViewPane(props: {
           <button
             type="button"
             disabled={!props.canDrawingSync}
-            title={props.canDrawingSync ? "Synced PDF navigation" : "Align a mapped sheet first"}
+            title={
+              props.canDrawingSync
+                ? "Synced PDF navigation"
+                : "Register or align a mapped sheet first"
+            }
             className={`rounded-full px-2.5 py-1 font-medium transition disabled:opacity-40 ${props.planPanelMode === "drawingSync" ? "bg-[var(--bim-accent)] text-white" : "text-[var(--bim-text-muted)]"}`}
             onClick={() => props.onPlanPanelModeChange("drawingSync")}
           >
@@ -94,7 +99,7 @@ export function BimSplitViewPane(props: {
           <div className="flex h-full items-center justify-center px-4 text-center text-xs text-[var(--bim-text-muted)]">
             {props.canDrawingSync
               ? "Loading drawing sync for this level…"
-              : "Align a mapped sheet to enable drawing sync."}
+              : "Register a drawing to this level, or align a mapped sheet, to enable drawing sync."}
           </div>
         ) : (
           <BimPlanMinimap
@@ -109,7 +114,12 @@ export function BimSplitViewPane(props: {
       {props.planPanelMode === "minimap" ? (
         <p className="bim-split-pane__hint">
           <Map className="mr-1 inline h-3 w-3" aria-hidden />
-          Click the plan to move · drag the cone to rotate
+          Drag the blue dot to move · outer beam to rotate · tap plan to jump
+        </p>
+      ) : props.planPanelMode === "drawingSync" && props.canDrawingSync ? (
+        <p className="bim-split-pane__hint">
+          <Map className="mr-1 inline h-3 w-3" aria-hidden />
+          Drag the blue dot to move · outer beam to rotate · tap sheet to jump
         </p>
       ) : null}
     </aside>

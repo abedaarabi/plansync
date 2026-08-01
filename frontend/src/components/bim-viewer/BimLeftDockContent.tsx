@@ -2,6 +2,7 @@
 
 import type { BimLoqReport, BimQuantityIndex } from "@/lib/bim/types";
 import type { BimViewportAppearance } from "@/lib/bim/viewportAppearance";
+import type { BimQualityState } from "@/lib/bim/renderQuality";
 import type { BimVisibilityGroup, BimLoadedModel } from "./bimEngine";
 import type { BimFederationMember } from "@/lib/bim/federation";
 import type { CloudFile } from "@/types/projects";
@@ -28,6 +29,7 @@ export function BimLeftDockContent(props: {
   loq: BimLoqReport | null;
   onRebuildIndex?: () => void;
   appearance: BimViewportAppearance;
+  qualityState: BimQualityState | null;
   onAppearanceChange: (patch: Partial<BimViewportAppearance>) => void;
   projectId: string | null;
   anchorFileId: string;
@@ -45,6 +47,7 @@ export function BimLeftDockContent(props: {
         quantityIndex={props.quantityIndex}
         conversionStatus={props.conversionStatus ?? "pending"}
         appearance={props.appearance}
+        qualityState={props.qualityState}
         onAppearanceChange={props.onAppearanceChange}
         onRebuildIndex={props.onRebuildIndex}
       />

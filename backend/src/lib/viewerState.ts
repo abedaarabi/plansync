@@ -41,9 +41,13 @@ export const fileVersionPublicSelect = {
   annotationBlobRevision: true,
   fragmentsS3Key: true,
   quantityIndexS3Key: true,
+  geometryManifestS3Key: true,
   bimConversionStatus: true,
   bimLoqReport: true,
   bimConversionJobRunId: true,
   bimPublishedAt: true,
   bimPublishedById: true,
+  thumbnailS3Key: true,
+  assetProcessingStatus: true,
+  assetProcessingError: true,
 } as const;

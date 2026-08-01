@@ -8,7 +8,9 @@ export type {
 export type BimConversionStatus = {
   fileVersionId: string;
   conversionStatus: string;
+  pipelinePhase?: string | null;
   fragmentsReady: boolean;
+  geometryManifestReady?: boolean;
   quantityIndexSummaryReady: boolean;
   quantityIndexReady: boolean;
   partial: boolean;

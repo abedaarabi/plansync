@@ -1,6 +1,13 @@
 import * as THREE from "three";
 
-export type BimSurfaceKind = "concrete" | "metal" | "glass" | "plastic" | "default";
+export type BimSurfaceKind =
+  | "concrete"
+  | "metal"
+  | "aluminum"
+  | "wood"
+  | "glass"
+  | "plastic"
+  | "default";
 
 /** Shared procedural maps — IFC rarely ships image textures; these add subtle surface break-up. */
 let roughnessMap: THREE.CanvasTexture | null = null;
@@ -11,6 +18,8 @@ const MAP_REPEAT = 3.5;
 
 const NORMAL_SCALE: Record<Exclude<BimSurfaceKind, "glass">, number> = {
   metal: 0.22,
+  aluminum: 0.16,
+  wood: 0.32,
   plastic: 0.16,
   concrete: 0.38,
   default: 0.28,
@@ -101,6 +110,8 @@ function createNormalMap(): THREE.CanvasTexture {
 
 const SURFACE_KIND_RULES: { kind: BimSurfaceKind; re: RegExp }[] = [
   { kind: "glass", re: /window|curtain|glass|glazing|skylight|plate/ },
+  { kind: "aluminum", re: /aluminium|aluminum|mullion|frame/ },
+  { kind: "wood", re: /wood|timber|door|furnish/ },
   {
     kind: "metal",
     re: /column|beam|member|plate|reinfor|steel|metal|railing|pipe|duct|fitting|cable/,

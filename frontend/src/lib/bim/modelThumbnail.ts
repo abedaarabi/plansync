@@ -1,4 +1,8 @@
-import { fetchBimFragmentsBuffer, triggerBimConversion } from "@/lib/api-client/bim-viewer";
+import {
+  fetchBimFragmentsBuffer,
+  fetchBimStatus,
+  triggerBimConversion,
+} from "@/lib/api-client/bim-viewer";
 import {
   buildThumbnailCacheKey,
   readCachedThumbnail,
@@ -72,9 +76,11 @@ class ModelThumbnailService {
     }
 
     const fragKey = buildFragmentsCacheKey(fileId, fileVersionId);
-    let buffer =
-      (await readCachedFragments(fragKey)) ??
-      (await fetchBimFragmentsBuffer(fileVersionId).catch(() => null));
+    const status = await fetchBimStatus(fileVersionId).catch(() => null);
+    let buffer = await readCachedFragments(fragKey);
+    if (!buffer?.byteLength && status?.fragmentsReady) {
+      buffer = await fetchBimFragmentsBuffer(fileVersionId).catch(() => null);
+    }
     if (gen !== this.generation) return null;
 
     if (!buffer?.byteLength) {

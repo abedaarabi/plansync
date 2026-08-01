@@ -481,11 +481,87 @@ model Project {
   bimSavedViews             BimSavedView[]
   bimModelLevels            BimModelLevel[]
   drawingLevelMaps          DrawingLevelMap[]
+  locations                 Location[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([workspaceId])
+}
+
+enum AssetType {
+  IFC
+  PDF
+  OTHER
+}
+
+enum BuildingDiscipline {
+  ARCHITECTURAL
+  STRUCTURAL
+  MEP
+  CIVIL
+  OTHER
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum LevelDisplaySource {
+  IFC_CUT
+  DRAWING
+}
+
+enum BuildingType {
+  OFFICE
+  RESIDENTIAL
+  MIXED
+  INDUSTRIAL
+  OTHER
+}
+
+model Location {
+  id        String     @id @default(cuid())
+  projectId String
+  name      String
+  /// Short site code for owners (e.g. HQ, SITE-01).
+  code      String?
+  address   String?
+  city      String?
+  country   String?
+  notes     String?
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  buildings Building[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([projectId])
+}
+
+model Building {
+  id                  String          @id @default(cuid())
+  locationId          String
+  name                String
+  /// Short building code (e.g. A, Tower B).
+  code                String?
+  buildingType        BuildingType?
+  /// Approximate floor count for owner context (IFC levels remain source of truth for BIM).
+  floorsApprox        Int?
+  notes               String?
+  /// When mappings were last published for field / Open 3D handoff.
+  mappingsPublishedAt DateTime?
+  /// True after mapping/level edits until the next publish.
+  mappingsDirty       Boolean         @default(true)
+  location            Location        @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  files               File[]
+  levels              BimModelLevel[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([locationId])
 }
 
 /// Project-scoped integration API key (plaintext shown only at creation; DB stores hash).
@@ -828,8 +904,14 @@ model File {
   /// Discipline tags for contractor filtering (e.g. Electrical, Plumbing). Empty = not tagged.
   disciplines String[] @default([])
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  folder  Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  /// Locations module: optional building scope for IFC/PDF assets.
+  buildingId          String?
+  buildingAssetType   AssetType?
+  buildingDiscipline  BuildingDiscipline?
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder   Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  building Building? @relation(fields: [buildingId], references: [id], onDelete: SetNull)
 
   versions         FileVersion[]
   comments         FileComment[]
@@ -840,6 +922,7 @@ model File {
   assets           Asset[]
   inspectionRuns   InspectionRun[]
   drawingLevelMaps DrawingLevelMap[]
+  bimElements        BimElement[]
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -848,6 +931,7 @@ model File {
 
   @@unique([projectId, name, folderKey])
   @@index([projectId])
+  @@index([buildingId])
 }
 
 model FileVersion {
@@ -873,11 +957,17 @@ model FileVersion {
   lockExpiresAt          DateTime?
 
   /// Server-side IFC → fragments conversion artifacts (S3).
-  fragmentsS3Key        String?
-  quantityIndexS3Key    String?
-  bimConversionStatus   String  @default("pending")
+  fragmentsS3Key         String?
+  quantityIndexS3Key     String?
+  geometryManifestS3Key  String?
+  bimConversionStatus    String  @default("pending")
   bimLoqReport          Json?
   bimConversionJobRunId String?
+
+  /// Generic thumbnail (PDF page-1 raster, level plan-view PNG, etc.).
+  thumbnailS3Key         String?
+  assetProcessingStatus  ProcessingStatus?
+  assetProcessingError   String?
 
   createdAt              DateTime                @default(now())
   issues                 Issue[]
@@ -896,6 +986,9 @@ model FileVersion {
   bimModelLevels         BimModelLevel[]
   ifcDrawingMaps         DrawingLevelMap[]       @relation("IfcDrawingMaps")
   pdfDrawingMaps         DrawingLevelMap[]       @relation("PdfDrawingMaps")
+  bimElementVersions     BimElementVersion[]
+  bimElementAttributes   BimElementAttribute[]
+  bimVersionTiles        BimVersionTile[]
 
   @@unique([fileId, version])
   @@index([fileId])
@@ -1410,20 +1503,104 @@ model BimSavedView {
 model BimModelLevel {
   id               String   @id @default(cuid())
   projectId        String
-  ifcFileVersionId String
+  ifcFileVersionId String?
+  buildingId       String?
+  sourceIfcGuid    String?
   sourceName       String
   displayName      String
   elevationMeters  Float?
   sortOrder        Int
   elementCount     Int      @default(0)
+  thumbnailS3Key   String?
+  displaySource    LevelDisplaySource @default(IFC_CUT)
   createdAt        DateTime @default(now())
 
   project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  ifcFileVersion FileVersion       @relation(fields: [ifcFileVersionId], references: [id], onDelete: Cascade)
+  ifcFileVersion FileVersion?      @relation(fields: [ifcFileVersionId], references: [id], onDelete: Cascade)
+  building       Building?         @relation(fields: [buildingId], references: [id], onDelete: Cascade)
   drawingMaps    DrawingLevelMap[]
 
   @@unique([ifcFileVersionId, sourceName])
+  @@unique([buildingId, sourceName])
   @@index([projectId])
+  @@index([buildingId])
+}
+
+enum BimElementChangeType {
+  ADDED
+  UNCHANGED
+  MODIFIED
+  DELETED
+}
+
+/// Stable IFC element identity across file versions.
+model BimElement {
+  id       String  @id @default(cuid())
+  fileId   String
+  ifcGuid  String
+  ifcType  String?
+  name     String?
+
+  file       File                  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  versions   BimElementVersion[]
+  attributes BimElementAttribute[]
+
+  @@unique([fileId, ifcGuid])
+  @@index([fileId])
+}
+
+/// Per-version element metadata pointer and diff state.
+model BimElementVersion {
+  elementId     String
+  fileVersionId String
+  metadataS3Key String
+  metadataHash  String
+  changeType    BimElementChangeType @default(UNCHANGED)
+
+  element     BimElement  @relation(fields: [elementId], references: [id], onDelete: Cascade)
+  fileVersion FileVersion @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
+
+  @@id([elementId, fileVersionId])
+  @@index([fileVersionId, changeType])
+}
+
+/// Searchable/filterable attrs only — not full property sets.
+model BimElementAttribute {
+  elementId     String
+  fileVersionId String
+  key           String
+  value         String
+
+  element     BimElement  @relation(fields: [elementId], references: [id], onDelete: Cascade)
+  fileVersion FileVersion @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
+
+  @@id([elementId, fileVersionId, key])
+  @@index([key, value])
+}
+
+/// Content-addressable geometry tile blob (dedup across versions).
+model BimGeometryTile {
+  contentHash String   @id
+  s3Key       String
+  byteLength  BigInt
+  bounds      Json
+  refCount    Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  versionTiles BimVersionTile[]
+}
+
+/// Maps a file version to spatial tiles in the manifest.
+model BimVersionTile {
+  fileVersionId String
+  tileId        String
+  contentHash   String
+
+  fileVersion FileVersion     @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
+  geometryTile BimGeometryTile @relation(fields: [contentHash], references: [contentHash], onDelete: Restrict)
+
+  @@id([fileVersionId, tileId])
+  @@index([fileVersionId])
 }
 
 model DrawingLevelMap {
@@ -1437,6 +1614,11 @@ model DrawingLevelMap {
   coordTransformJson Json?
   coordAlignedAt     DateTime?
   coordAlignedById   String?
+  offsetX            Float?
+  offsetY            Float?
+  scale              Float?
+  rotationDeg        Float?
+  calibrationJson    Json?
   createdAt          DateTime  @default(now())
 
   project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
