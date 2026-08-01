@@ -1,11 +1,12 @@
 "use client";
 
-import type { CalibrationInput, OverlayTransform } from "@plansync/shared/calibrationTransform";
+import type { CalibrationInput } from "@/lib/api-client/locations";
+import type { OverlayTransform } from "@/lib/bim/drawingCoordBridge";
 
 export {
   computeTransformFromCalibration,
   type OverlayTransform,
-} from "@plansync/shared/calibrationTransform";
+} from "@/lib/bim/drawingCoordBridge";
 
 /** Map a PDF norm point → plan norm using the same similarity as the backend fit. */
 export function applyTransformToPoint(

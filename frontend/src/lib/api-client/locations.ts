@@ -95,8 +95,8 @@ export type BuildingAsset = {
   createdAt: string;
 };
 
-export type { CalibrationInput } from "@plansync/shared/calibrationTransform";
-import type { CalibrationInput } from "@plansync/shared/calibrationTransform";
+export type { CalibrationInput } from "@plansync/shared/drawingCoordBridge";
+import type { CalibrationInput } from "@plansync/shared/drawingCoordBridge";
 
 export type DrawingMapping = {
   id: string;

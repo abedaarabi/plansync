@@ -905,9 +905,9 @@ model File {
   disciplines String[] @default([])
 
   /// Locations module: optional building scope for IFC/PDF assets.
-  buildingId          String?
-  buildingAssetType   AssetType?
-  buildingDiscipline  BuildingDiscipline?
+  buildingId         String?
+  buildingAssetType  AssetType?
+  buildingDiscipline BuildingDiscipline?
 
   project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   folder   Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
@@ -922,7 +922,7 @@ model File {
   assets           Asset[]
   inspectionRuns   InspectionRun[]
   drawingLevelMaps DrawingLevelMap[]
-  bimElements        BimElement[]
+  bimElements      BimElement[]
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -957,17 +957,17 @@ model FileVersion {
   lockExpiresAt          DateTime?
 
   /// Server-side IFC → fragments conversion artifacts (S3).
-  fragmentsS3Key         String?
-  quantityIndexS3Key     String?
-  geometryManifestS3Key  String?
-  bimConversionStatus    String  @default("pending")
+  fragmentsS3Key        String?
+  quantityIndexS3Key    String?
+  geometryManifestS3Key String?
+  bimConversionStatus   String  @default("pending")
   bimLoqReport          Json?
   bimConversionJobRunId String?
 
   /// Generic thumbnail (PDF page-1 raster, level plan-view PNG, etc.).
-  thumbnailS3Key         String?
-  assetProcessingStatus  ProcessingStatus?
-  assetProcessingError   String?
+  thumbnailS3Key        String?
+  assetProcessingStatus ProcessingStatus?
+  assetProcessingError  String?
 
   createdAt              DateTime                @default(now())
   issues                 Issue[]
@@ -1501,7 +1501,7 @@ model BimSavedView {
 }
 
 model BimModelLevel {
-  id               String   @id @default(cuid())
+  id               String             @id @default(cuid())
   projectId        String
   ifcFileVersionId String?
   buildingId       String?
@@ -1510,10 +1510,10 @@ model BimModelLevel {
   displayName      String
   elevationMeters  Float?
   sortOrder        Int
-  elementCount     Int      @default(0)
+  elementCount     Int                @default(0)
   thumbnailS3Key   String?
   displaySource    LevelDisplaySource @default(IFC_CUT)
-  createdAt        DateTime @default(now())
+  createdAt        DateTime           @default(now())
 
   project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   ifcFileVersion FileVersion?      @relation(fields: [ifcFileVersionId], references: [id], onDelete: Cascade)
@@ -1535,11 +1535,11 @@ enum BimElementChangeType {
 
 /// Stable IFC element identity across file versions.
 model BimElement {
-  id       String  @id @default(cuid())
-  fileId   String
-  ifcGuid  String
-  ifcType  String?
-  name     String?
+  id      String  @id @default(cuid())
+  fileId  String
+  ifcGuid String
+  ifcType String?
+  name    String?
 
   file       File                  @relation(fields: [fileId], references: [id], onDelete: Cascade)
   versions   BimElementVersion[]
@@ -1596,7 +1596,7 @@ model BimVersionTile {
   tileId        String
   contentHash   String
 
-  fileVersion FileVersion     @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
+  fileVersion  FileVersion     @relation(fields: [fileVersionId], references: [id], onDelete: Cascade)
   geometryTile BimGeometryTile @relation(fields: [contentHash], references: [contentHash], onDelete: Restrict)
 
   @@id([fileVersionId, tileId])

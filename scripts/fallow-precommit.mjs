@@ -13,7 +13,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 function run(cmd, args) {
-  execFileSync(cmd, args, { stdio: "inherit" });
+  // Husky sets GIT_INDEX_FILE during commit; fallow audit creates a temporary
+  // worktree and fails if that env var leaks into the child process.
+  const { GIT_INDEX_FILE: _gitIndexFile, ...env } = process.env;
+  execFileSync(cmd, args, { stdio: "inherit", env });
 }
 
 run("npx", ["fallow", "dead-code", "--quiet", "--fail-on-issues"]);

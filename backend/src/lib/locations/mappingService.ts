@@ -2,10 +2,10 @@ import type { Prisma } from "@prisma/client";
 import {
   computeTransformFromCalibration,
   type CalibrationInput,
-} from "../../shared/calibrationTransform.js";
+} from "../../shared/drawingCoordBridge.js";
 import { prisma } from "../prisma.js";
 
-export type { CalibrationInput } from "../../shared/calibrationTransform.js";
+export type { CalibrationInput } from "../../shared/drawingCoordBridge.js";
 
 export async function createLevelMapping(params: {
   levelId: string;
