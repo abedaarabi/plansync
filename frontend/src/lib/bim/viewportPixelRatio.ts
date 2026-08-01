@@ -14,7 +14,19 @@ export function bimViewportPixelRatio(): number {
   return Math.min(dpr, 2);
 }
 
-export function isCoarsePointer(): boolean {
+function isCoarsePointer(): boolean {
   if (typeof window === "undefined") return false;
   return window.matchMedia("(pointer: coarse)").matches;
+}
+
+/**
+ * Walk joystick / touch HUD: phones, iPads, and other touch-primary devices.
+ * Includes iPads that report a fine pointer when a trackpad is attached.
+ */
+export function isTouchPrimaryDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  if (isCoarsePointer()) return true;
+  if (window.matchMedia("(hover: none)").matches) return true;
+  // iPad-class: multi-touch + tablet-ish width (even with Magic Keyboard).
+  return navigator.maxTouchPoints > 1 && window.matchMedia("(max-width: 1366px)").matches;
 }

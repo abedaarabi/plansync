@@ -11,6 +11,7 @@ import { persistElementVersionDiff } from "./elementVersionDiff.js";
 import { findPriorFileVersionId, tryAliasIdenticalIfcVersion } from "./ifcVersionAlias.js";
 import { registerMonolithicGeometryTile } from "./geometryManifest.js";
 import { hashBufferSha256 } from "./metadataHash.js";
+import { assertIfcBytesIntact } from "./ifcBytes.js";
 
 type JobPhase = "summary" | "full" | "diff" | "fragments";
 
@@ -126,6 +127,7 @@ export async function processBimConversion(
     if (!obj.ok) throw new Error(obj.error);
     const buf = await webStreamToBuffer(obj.stream);
     const ifcBytes = new Uint8Array(buf);
+    assertIfcBytesIntact(ifcBytes, fv.file.name);
 
     if (!fv.sha256) {
       await prisma.fileVersion.update({

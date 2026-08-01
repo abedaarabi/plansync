@@ -13,6 +13,7 @@ import {
   readCachedFragments,
   writeCachedFragments,
 } from "@/lib/bimFragmentsCache";
+import { assertIfcBytesIntact } from "@/lib/bim/ifcBytes";
 
 // fallow-ignore-next-line complexity
 export async function resolveFederationMember(
@@ -89,6 +90,7 @@ export async function loadFederationMember(
   );
   if (!res.ok) throw new Error(`Could not download ${resolved.name} (${res.status}).`);
   const bytes = new Uint8Array(await res.arrayBuffer());
+  assertIfcBytesIntact(bytes, resolved.name);
   const buffer = await engine.addIfc(bytes, resolved, {
     fitView: opts?.fitView ?? false,
     onProgress: opts?.onConverting,

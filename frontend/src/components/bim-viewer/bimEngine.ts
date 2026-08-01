@@ -39,6 +39,7 @@ import {
   type BimViewportAppearance,
 } from "@/lib/bim/viewportAppearance";
 import { buildModelId, type BimFederationMember } from "@/lib/bim/federation";
+import { assertIfcBytesIntact } from "@/lib/bim/ifcBytes";
 import { getBimCameraNavigationProfile } from "@/lib/bim/cameraNavigation";
 import { bimViewportPixelRatio } from "@/lib/bim/viewportPixelRatio";
 import { ViewCubeOverlay } from "@/lib/bim/viewCube";
@@ -89,6 +90,15 @@ const POINTER_CLICK_THRESHOLD_PX = 8;
 /** Forward collision distance for walk mode (metres). */
 const WALK_COLLISION_DISTANCE = 0.9;
 const WALK_COLLISION_POLL_MS = 120;
+/** Hold Shift in walk mode to multiply horizontal/vertical speed. */
+const WALK_SPRINT_MULTIPLIER = 2;
+/** Vertical (Q/E) speed relative to walk speed — slightly slower than run. */
+const WALK_VERTICAL_FACTOR = 0.72;
+/** How quickly walk velocity eases toward the target (1/s). */
+const WALK_ACCEL = 10;
+const WALK_DECEL = 12;
+/** Radians per pixel for pointer-lock look (scaled by nav rotate speed). */
+const WALK_LOOK_SENS = 0.0022;
 /** Light engineering viewport — matches `--bim-canvas-*` tokens. */
 const VIEWPORT_BG = BIM_VIEWPORT.container;
 /** App accent — markup tools and element selection. */
@@ -155,6 +165,8 @@ export type BimEngineEvents = {
   onContextMenu?: (pos: { x: number; y: number; hasSelection: boolean }) => void;
   onToolChange?: (tool: BimTool) => void;
   onQualityChanged?: (state: BimQualityState) => void;
+  /** Ctrl/Cmd+L — host should copy the current view URL. */
+  onCopyViewLink?: () => void;
 };
 
 const STOREY_CLASSIFICATION = "PlanSyncLevels";
@@ -278,10 +290,13 @@ export class BimEngine {
 
   private walkKeys = new Set<string>();
   private walkJoystick = { forward: 0, strafe: 0 };
+  private walkVelocity = { forward: 0, strafe: 0, vertical: 0 };
   private walkRaf: number | null = null;
   private walkLastTime = 0;
   private walkBlockedUntilDistance: number | null = null;
   private walkLastCollisionPoll = 0;
+  private walkPointerLocked = false;
+  private walkShiftHeld = false;
   private resizeObserver: ResizeObserver | null = null;
   private pointerDown = { x: 0, y: 0 };
   private pointerMoved = false;
@@ -616,6 +631,9 @@ export class BimEngine {
     // Walk-mode keyboard state.
     window.addEventListener("keydown", this.onWalkKeyDown);
     window.addEventListener("keyup", this.onWalkKeyUp);
+    window.addEventListener("blur", this.onWalkWindowBlur);
+    document.addEventListener("pointerlockchange", this.onPointerLockChange);
+    document.addEventListener("mousemove", this.onPointerLockMouseMove);
   }
 
   /**
@@ -650,6 +668,7 @@ export class BimEngine {
       const existing = this.modelRegistry.get(modelId);
       return existing ? existing.model.getBuffer(false) : new ArrayBuffer(0);
     }
+    assertIfcBytesIntact(bytes, member.name);
     await this.prepareFederationLoad();
     const components = this.mustComponents();
     const ifcLoader = components.get(OBC.IfcLoader);
@@ -657,12 +676,23 @@ export class BimEngine {
       autoSetWasm: false,
       wasm: { path: WEB_IFC_WASM_PATH, absolute: true },
     });
-    const model = await ifcLoader.load(bytes, true, modelId, {
-      instanceCallback: configureLod500Importer,
-      processData: {
-        progressCallback: (progress: number) => opts?.onProgress?.(progress),
-      },
-    });
+    let model: FRAGS.FragmentsModel;
+    try {
+      model = await ifcLoader.load(bytes, true, modelId, {
+        instanceCallback: configureLod500Importer,
+        processData: {
+          progressCallback: (progress: number) => opts?.onProgress?.(progress),
+        },
+      });
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : String(err);
+      if (/bad_alloc|Aborted|abort\(/i.test(raw)) {
+        throw new Error(
+          `${member.name} could not be parsed (web-ifc aborted). The IFC may be corrupted — re-upload the full file.`,
+        );
+      }
+      throw err;
+    }
     this.registerModel(model, member);
     const buffer = await model.getBuffer(false);
     await this.afterModelAdded(opts?.fitView ?? false);
@@ -1416,7 +1446,8 @@ export class BimEngine {
     const controls = world?.camera?.controls;
     if (!world || !controls) return;
     world.camera.enabled = true;
-    controls.mouseButtons.left = CAM_ROTATE;
+    // When pointer-locked, look is driven by movementX/Y — disable drag-rotate.
+    controls.mouseButtons.left = this.walkPointerLocked ? CAM_NONE : CAM_ROTATE;
     controls.mouseButtons.right = CAM_NONE;
     controls.mouseButtons.middle = CAM_TRUCK;
     controls.mouseButtons.wheel = CAM_DOLLY;
@@ -1949,7 +1980,11 @@ export class BimEngine {
   }
 
   // fallow-ignore-next-line complexity
-  private async placeWalkOnStorey(storeyName: string, animate: boolean): Promise<void> {
+  private async placeWalkOnStorey(
+    storeyName: string,
+    animate: boolean,
+    anchor?: { x: number; z: number },
+  ): Promise<void> {
     const world = this.world;
     if (!world || this.cameraMode !== "walk") return;
     try {
@@ -1957,14 +1992,17 @@ export class BimEngine {
       const box = this.getModelBoundingBox();
       if (!hint || !this.isValidBox3(box)) return;
 
+      this.planMinimapStoreyFloorY = hint.floorY;
       const cam = world.camera.three.position;
       const inset = this.walkFeetInset(hint.bounds);
       const loX = Math.min(hint.bounds.min.x + inset, hint.bounds.max.x - inset);
       const hiX = Math.max(hint.bounds.min.x + inset, hint.bounds.max.x - inset);
       const loZ = Math.min(hint.bounds.min.z + inset, hint.bounds.max.z - inset);
       const hiZ = Math.max(hint.bounds.min.z + inset, hint.bounds.max.z - inset);
-      const x = THREE.MathUtils.clamp(cam.x, loX, hiX);
-      const z = THREE.MathUtils.clamp(cam.z, loZ, hiZ);
+      const preferX = anchor?.x ?? cam.x;
+      const preferZ = anchor?.z ?? cam.z;
+      const x = THREE.MathUtils.clamp(preferX, loX, hiX);
+      const z = THREE.MathUtils.clamp(preferZ, loZ, hiZ);
       const eyeHeight = this.walkEyeHeight(box);
       const pivot = new THREE.Vector3(x, hint.floorY, z);
       const eye = this.clampWalkEyePosition(pivot, box, eyeHeight, hint.bounds);
@@ -1985,6 +2023,55 @@ export class BimEngine {
     } catch {
       /* Walk placement is best-effort when fragment bounds are unavailable. */
     }
+  }
+
+  getPlanMinimapStorey(): string | null {
+    return this.planMinimapStorey;
+  }
+
+  /**
+   * Pick the storey to land on when entering walk:
+   * preferred plan floor → sole visible storey → nearest to camera/target Y → first storey.
+   */
+  // fallow-ignore-next-line complexity
+  async resolveWalkEntryStorey(preferred?: string | null): Promise<string | null> {
+    const names = [...this.storeyMaps.keys()];
+    if (names.length === 0) return null;
+
+    const pref =
+      this.resolveStoreyName(preferred) ?? this.resolveStoreyName(this.planMinimapStorey);
+    if (pref && this.storeyMaps.has(pref)) return pref;
+
+    const visible = names.filter((name) => this.storeyVisible.get(name) ?? true);
+    if (visible.length === 1 && visible.length < names.length) return visible[0]!;
+
+    const world = this.world;
+    const hintY = world ? world.camera.controls.getTarget(new THREE.Vector3()).y : Number.NaN;
+    const camY = world?.camera.three.position.y;
+    const refY = Number.isFinite(hintY)
+      ? hintY
+      : Number.isFinite(camY)
+        ? (camY as number)
+        : Number.NaN;
+
+    if (Number.isFinite(refY)) {
+      const hints = await Promise.all(
+        names.map(async (name) => ({ name, hint: await this.getStoreyWalkHint(name) })),
+      );
+      let best: string | null = null;
+      let bestDist = Infinity;
+      for (const { name, hint } of hints) {
+        if (!hint) continue;
+        const dist = Math.abs(hint.floorY - refY);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = name;
+        }
+      }
+      if (best) return best;
+    }
+
+    return visible[0] ?? names[0] ?? null;
   }
 
   // fallow-ignore-next-line complexity
@@ -2040,20 +2127,28 @@ export class BimEngine {
   async setPlanMinimapStorey(name: string | null): Promise<void> {
     const resolved = name ? this.resolveStoreyName(name) : null;
     const next = resolved ?? name;
-    if (this.planMinimapStorey === next && !this.planSilhouetteDirty) return;
+    const storeyChanged = this.planMinimapStorey !== next;
+    if (!storeyChanged && !this.planSilhouetteDirty) return;
     this.planMinimapStorey = next;
-    this.planSilhouetteDirty = true;
-    this.cancelPlanSilhouetteBakeTimer();
+    if (storeyChanged) {
+      this.planSilhouetteDirty = true;
+      this.cancelPlanSilhouetteBakeTimer();
+    }
 
-    if (this.cameraMode === "walk" && next) {
+    // Only teleport when the floor selection changes (not on silhouette re-sync).
+    if (this.cameraMode === "walk" && next && storeyChanged) {
       try {
         await this.placeWalkOnStorey(next, true);
       } catch {
         /* Floor teleport is best-effort. */
       }
+    } else if (!next) {
+      this.planMinimapStoreyFloorY = null;
     }
 
-    await this.bakePlanSilhouetteNow();
+    if (storeyChanged || this.planSilhouetteDirty) {
+      await this.bakePlanSilhouetteNow();
+    }
   }
 
   // fallow-ignore-next-line complexity, unused-class-member
@@ -2912,8 +3007,7 @@ export class BimEngine {
     return null;
   }
 
-  /** Confirms the in-progress measurement point (mobile button). */
-  // fallow-ignore-next-line unused-class-member
+  /** Confirms the in-progress measurement point (mobile button / P / Enter). */
   measureConfirmPoint(): void {
     const m = this.activeMeasurement();
     if (m) void m.create();
@@ -2935,10 +3029,16 @@ export class BimEngine {
 
   // fallow-ignore-next-line complexity
   private onGlobalKeyDown = (e: KeyboardEvent): void => {
-    const tag = (e.target as HTMLElement | null)?.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (this.isTypingTarget(e.target)) return;
+
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const mod = e.ctrlKey || e.metaKey;
 
     if (e.key === "Escape") {
+      if (this.walkPointerLocked) {
+        this.exitWalkPointerLock();
+        return;
+      }
       if (this.tool === "clip") {
         this.deleteClippingPlanes();
         this.setTool("select");
@@ -2949,6 +3049,43 @@ export class BimEngine {
       this.events.onSelection(null);
       return;
     }
+
+    if (mod && key === "l") {
+      e.preventDefault();
+      this.events.onCopyViewLink?.();
+      return;
+    }
+
+    if (mod && key === "z") {
+      if (this.activeMeasurement()) {
+        e.preventDefault();
+        this.undoActiveMeasurement();
+      }
+      return;
+    }
+
+    if (key === " " || e.code === "Space") {
+      e.preventDefault();
+      void this.zoomToSelection();
+      return;
+    }
+
+    if (key === "h") {
+      if (this.tool === "select" && this.selectedGuids.size > 0) {
+        e.preventDefault();
+        void this.hideSelection();
+      }
+      return;
+    }
+
+    if (key === "p" || e.key === "Enter") {
+      if (this.activeMeasurement()) {
+        e.preventDefault();
+        this.measureConfirmPoint();
+      }
+      return;
+    }
+
     if (e.key === "Delete" || e.key === "Backspace") {
       if (this.tool === "select" && this.selectedGuids.size > 0) {
         void this.hideSelection();
@@ -2968,6 +3105,22 @@ export class BimEngine {
       this.bumpRender();
     }
   };
+
+  private isTypingTarget(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null;
+    if (!el) return false;
+    const tag = el.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    return el.isContentEditable === true;
+  }
+
+  private undoActiveMeasurement(): void {
+    const m = this.activeMeasurement();
+    if (!m) return;
+    m.cancelCreation();
+    m.delete();
+    this.bumpRender();
+  }
 
   // fallow-ignore-next-line complexity
   private onCanvasContextMenu = (e: MouseEvent): void => {
@@ -3086,7 +3239,12 @@ export class BimEngine {
 
     if (this.tool === "markup") return;
 
-    if (this.cameraMode === "walk") return;
+    if (this.cameraMode === "walk") {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest(".bim-plan-minimap, .bim-walk-chrome, .bim-split-pane")) return;
+      if (!this.walkPointerLocked) this.requestWalkPointerLock();
+      return;
+    }
 
     const now = Date.now();
     if (now - this.lastClickTime < 350) {
@@ -3221,7 +3379,11 @@ export class BimEngine {
 
   // --------------------------------------------------------------- camera
 
-  async setCameraMode(mode: BimCameraMode): Promise<void> {
+  // fallow-ignore-next-line complexity
+  async setCameraMode(
+    mode: BimCameraMode,
+    opts?: { preferredStorey?: string | null },
+  ): Promise<void> {
     const world = this.mustWorld();
     this.cameraMode = mode;
     try {
@@ -3238,12 +3400,22 @@ export class BimEngine {
           /* orbit camera still supports forward/truck walk controls */
         }
         this.applyWalkNavigation();
-        await this.enterWalkCamera(walkPivot);
+
+        const storey = await this.resolveWalkEntryStorey(opts?.preferredStorey);
+        if (storey) {
+          this.planMinimapStorey = storey;
+          this.planSilhouetteDirty = true;
+          await this.placeWalkOnStorey(storey, false, { x: walkPivot.x, z: walkPivot.z });
+          this.schedulePlanSilhouetteBake();
+        } else {
+          await this.enterWalkCamera(walkPivot);
+          this.planSilhouetteDirty = true;
+          this.schedulePlanSilhouetteBake();
+        }
         this.startWalkLoop();
-        this.planSilhouetteDirty = true;
-        this.schedulePlanSilhouetteBake();
       } else {
         world.camera.set("Orbit");
+        this.exitWalkPointerLock();
         this.stopWalkLoop();
         this.applyBim360Navigation();
       }
@@ -3318,18 +3490,83 @@ export class BimEngine {
   // fallow-ignore-next-line complexity
   private onWalkKeyDown = (e: KeyboardEvent): void => {
     if (this.cameraMode !== "walk") return;
-    const tag = (e.target as HTMLElement | null)?.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA") return;
-    this.walkKeys.add(e.key.toLowerCase());
+    if (this.isTypingTarget(e.target)) return;
+    this.walkShiftHeld = e.shiftKey;
+    const k = e.key.toLowerCase();
+    this.walkKeys.add(k);
+    if (
+      k === "w" ||
+      k === "a" ||
+      k === "s" ||
+      k === "d" ||
+      k === "q" ||
+      k === "e" ||
+      k === "r" ||
+      k === "f" ||
+      k === "arrowup" ||
+      k === "arrowdown" ||
+      k === "arrowleft" ||
+      k === "arrowright"
+    ) {
+      e.preventDefault();
+    }
   };
 
   private onWalkKeyUp = (e: KeyboardEvent): void => {
+    this.walkShiftHeld = e.shiftKey;
     this.walkKeys.delete(e.key.toLowerCase());
+  };
+
+  private onWalkWindowBlur = (): void => {
+    this.walkKeys.clear();
+    this.walkShiftHeld = false;
+    this.walkVelocity = { forward: 0, strafe: 0, vertical: 0 };
+  };
+
+  private getWalkPointerLockElement(): Element | null {
+    return this.world?.renderer?.three.domElement ?? this.container;
+  }
+
+  private requestWalkPointerLock(): void {
+    if (this.cameraMode !== "walk" || this.disposed) return;
+    const el = this.getWalkPointerLockElement();
+    if (!el || document.pointerLockElement === el) return;
+    void (el as HTMLElement).requestPointerLock?.();
+  }
+
+  private exitWalkPointerLock(): void {
+    if (document.pointerLockElement) {
+      document.exitPointerLock?.();
+    }
+    if (this.walkPointerLocked) {
+      this.walkPointerLocked = false;
+      this.applyWalkNavigation();
+    }
+  }
+
+  private onPointerLockChange = (): void => {
+    const el = this.getWalkPointerLockElement();
+    const locked = !!el && document.pointerLockElement === el;
+    if (this.walkPointerLocked === locked) return;
+    this.walkPointerLocked = locked;
+    if (this.cameraMode === "walk") this.applyWalkNavigation();
+  };
+
+  private onPointerLockMouseMove = (e: MouseEvent): void => {
+    if (!this.walkPointerLocked || this.cameraMode !== "walk" || this.disposed) return;
+    const controls = this.world?.camera?.controls;
+    if (!controls) return;
+    if (e.movementX === 0 && e.movementY === 0) return;
+    const profile = getBimCameraNavigationProfile(this.appearance.navigationSpeed);
+    const sens = WALK_LOOK_SENS * profile.azimuthRotateSpeed;
+    void controls.rotate(-e.movementX * sens, -e.movementY * sens, false);
+    this.bumpRender();
   };
 
   private startWalkLoop(): void {
     if (this.walkRaf != null) return;
     this.walkLastTime = performance.now();
+    this.walkVelocity = { forward: 0, strafe: 0, vertical: 0 };
     const step = (now: number) => {
       if (this.disposed || this.cameraMode !== "walk") {
         this.walkRaf = null;
@@ -3348,26 +3585,48 @@ export class BimEngine {
     if (this.walkRaf != null) cancelAnimationFrame(this.walkRaf);
     this.walkRaf = null;
     this.walkKeys.clear();
+    this.walkShiftHeld = false;
     this.walkJoystick = { forward: 0, strafe: 0 };
+    this.walkVelocity = { forward: 0, strafe: 0, vertical: 0 };
+  }
+
+  private approachWalkAxis(current: number, target: number, dt: number): number {
+    const rate = (Math.abs(target) < 1e-4 ? WALK_DECEL : WALK_ACCEL) * dt;
+    const delta = target - current;
+    if (Math.abs(delta) <= rate) return target;
+    return current + Math.sign(delta) * rate;
   }
 
   // fallow-ignore-next-line complexity
   private applyWalkStep(dt: number, now: number): void {
     const world = this.world;
     if (!world) return;
-    let forward = this.walkJoystick.forward;
-    let strafe = this.walkJoystick.strafe;
-    if (this.walkKeys.has("w") || this.walkKeys.has("arrowup")) forward += 1;
-    if (this.walkKeys.has("s") || this.walkKeys.has("arrowdown")) forward -= 1;
-    if (this.walkKeys.has("d") || this.walkKeys.has("arrowright")) strafe += 1;
-    if (this.walkKeys.has("a") || this.walkKeys.has("arrowleft")) strafe -= 1;
-    forward = Math.max(-1, Math.min(1, forward));
-    strafe = Math.max(-1, Math.min(1, strafe));
-    if (forward === 0 && strafe === 0) return;
 
-    // Collision: poll the distance to whatever is dead-ahead (screen centre)
-    // and stop forward motion when a wall is within reach.
-    if (forward > 0) {
+    let targetForward = this.walkJoystick.forward;
+    let targetStrafe = this.walkJoystick.strafe;
+    let targetVertical = 0;
+
+    if (this.walkKeys.has("w") || this.walkKeys.has("arrowup")) targetForward += 1;
+    if (this.walkKeys.has("s") || this.walkKeys.has("arrowdown")) targetForward -= 1;
+    if (this.walkKeys.has("d") || this.walkKeys.has("arrowright")) targetStrafe += 1;
+    if (this.walkKeys.has("a") || this.walkKeys.has("arrowleft")) targetStrafe -= 1;
+    // E/R up, Q/F down (game fly + CAD-style aliases).
+    if (this.walkKeys.has("e") || this.walkKeys.has("r")) targetVertical += 1;
+    if (this.walkKeys.has("q") || this.walkKeys.has("f")) targetVertical -= 1;
+
+    targetForward = Math.max(-1, Math.min(1, targetForward));
+    targetStrafe = Math.max(-1, Math.min(1, targetStrafe));
+    targetVertical = Math.max(-1, Math.min(1, targetVertical));
+
+    // Normalize horizontal diagonals so W+A is not faster than W.
+    const horizLen = Math.hypot(targetForward, targetStrafe);
+    if (horizLen > 1) {
+      targetForward /= horizLen;
+      targetStrafe /= horizLen;
+    }
+
+    // Collision only gates forward; vertical stays free-fly.
+    if (targetForward > 0) {
       if (now - this.walkLastCollisionPoll > WALK_COLLISION_POLL_MS) {
         this.walkLastCollisionPoll = now;
         void this.pollForwardCollision();
@@ -3376,15 +3635,34 @@ export class BimEngine {
         this.walkBlockedUntilDistance != null &&
         this.walkBlockedUntilDistance < WALK_COLLISION_DISTANCE
       ) {
-        forward = 0;
+        targetForward = 0;
       }
     }
 
+    this.walkVelocity.forward = this.approachWalkAxis(this.walkVelocity.forward, targetForward, dt);
+    this.walkVelocity.strafe = this.approachWalkAxis(this.walkVelocity.strafe, targetStrafe, dt);
+    this.walkVelocity.vertical = this.approachWalkAxis(
+      this.walkVelocity.vertical,
+      targetVertical,
+      dt,
+    );
+
+    const { forward, strafe, vertical } = this.walkVelocity;
+    if (Math.abs(forward) < 1e-4 && Math.abs(strafe) < 1e-4 && Math.abs(vertical) < 1e-4) {
+      this.walkVelocity = { forward: 0, strafe: 0, vertical: 0 };
+      return;
+    }
+
+    const sprint = this.walkShiftHeld || this.walkKeys.has("shift");
+    const baseSpeed = getBimCameraNavigationProfile(this.appearance.navigationSpeed).walkSpeed;
+    const speed = baseSpeed * (sprint ? WALK_SPRINT_MULTIPLIER : 1);
+    const vertSpeed = speed * WALK_VERTICAL_FACTOR;
     const controls = world.camera.controls;
-    const walkSpeed = getBimCameraNavigationProfile(this.appearance.navigationSpeed).walkSpeed;
-    if (forward !== 0) controls.forward(forward * walkSpeed * dt, false);
-    if (strafe !== 0) controls.truck(strafe * walkSpeed * dt, 0, false);
-    if (forward !== 0 || strafe !== 0) this.bumpRender();
+
+    if (Math.abs(forward) >= 1e-4) controls.forward(forward * speed * dt, false);
+    if (Math.abs(strafe) >= 1e-4) controls.truck(strafe * speed * dt, 0, false);
+    if (Math.abs(vertical) >= 1e-4) controls.elevate(vertical * vertSpeed * dt, false);
+    this.bumpRender();
   }
 
   // fallow-ignore-next-line complexity
@@ -4325,10 +4603,14 @@ export class BimEngine {
   // fallow-ignore-next-line complexity
   dispose(): void {
     this.disposed = true;
+    this.exitWalkPointerLock();
     this.stopWalkLoop();
     window.removeEventListener("keydown", this.onGlobalKeyDown);
     window.removeEventListener("keydown", this.onWalkKeyDown);
     window.removeEventListener("keyup", this.onWalkKeyUp);
+    window.removeEventListener("blur", this.onWalkWindowBlur);
+    document.removeEventListener("pointerlockchange", this.onPointerLockChange);
+    document.removeEventListener("mousemove", this.onPointerLockMouseMove);
     const container = this.container;
     if (container) {
       container.removeEventListener("pointerdown", this.onCanvasPointerDown);

@@ -7,6 +7,7 @@ import {
   DraftingCompass,
   Eraser,
   Expand,
+  Keyboard,
   Layers,
   LayoutGrid,
   Map,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import type { BimCameraMode, BimTool } from "./bimEngine";
 import type { BimQuantityIndex } from "@/lib/bim/types";
+import type { BimWalkPlanSize } from "@/lib/bim/walkPlanSize";
 import { BimElementSearchPanel } from "./BimElementSearchPanel";
 import { BimAnalyticsDrawer } from "./BimAnalyticsDrawer";
 import { BimMarkupFlyoutPanel } from "./BimMarkupFlyoutPanel";
@@ -60,8 +62,8 @@ export function BimBottomToolBar(props: {
   onSnapshot: () => void;
   onToggleFullscreen: () => void;
   onPlacePoint: () => void;
-  showPlanMinimap: boolean;
-  onTogglePlanMinimap: () => void;
+  walkPlanSize: BimWalkPlanSize;
+  onToggleWalkPlan: () => void;
   clusterByType: boolean;
   onToggleClusterByType: () => void;
   onSelectElement: (guid: string) => void;
@@ -79,6 +81,7 @@ export function BimBottomToolBar(props: {
   onSetStrokeWidth: (width: number) => void;
   onDeleteSelectedMarkups: () => void;
   onCreateIssueFromMarkup: () => void;
+  onOpenShortcuts: () => void;
 }) {
   const measureActive = props.tool === "length" || props.tool === "area" || props.tool === "angle";
   return (
@@ -161,7 +164,7 @@ export function BimBottomToolBar(props: {
         <button
           type="button"
           aria-label="Select"
-          title="Select · Ctrl/Shift+click to multi-select"
+          title="Select"
           data-active={props.tool === "select"}
           onClick={() => props.onSelectTool("select")}
           className="bim-bottom-bar-btn mobile-touch-target"
@@ -290,16 +293,21 @@ export function BimBottomToolBar(props: {
             />
             <FlyoutBtn label="Fit" active={false} onClick={props.onFitToView} icon={Maximize2} />
             <FlyoutBtn label="Show all" active={false} onClick={props.onShowAll} icon={Layers} />
-            {props.cameraMode === "walk" ? (
-              <FlyoutBtn
-                label="Plan"
-                active={props.showPlanMinimap}
-                onClick={props.onTogglePlanMinimap}
-                icon={Map}
-              />
-            ) : null}
           </div>
         </div>
+
+        {props.cameraMode === "walk" ? (
+          <button
+            type="button"
+            aria-label={props.walkPlanSize === "off" ? "Show 2D plan" : "Hide 2D plan"}
+            title={props.walkPlanSize === "off" ? "Show 2D plan" : "Hide 2D plan"}
+            data-active={props.walkPlanSize !== "off"}
+            onClick={props.onToggleWalkPlan}
+            className="bim-bottom-bar-btn mobile-touch-target"
+          >
+            <Map className="h-[18px] w-[18px]" aria-hidden />
+          </button>
+        ) : null}
 
         <div className="flex items-center">
           <button
@@ -330,6 +338,16 @@ export function BimBottomToolBar(props: {
             />
           </div>
         </div>
+
+        <button
+          type="button"
+          aria-label="Keyboard shortcuts"
+          title="Keyboard shortcuts (?)"
+          onClick={props.onOpenShortcuts}
+          className="bim-bottom-bar-btn mobile-touch-target"
+        >
+          <Keyboard className="h-[18px] w-[18px]" aria-hidden />
+        </button>
 
         {props.showPlacePoint ? (
           <>

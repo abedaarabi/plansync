@@ -2,45 +2,27 @@
 
 import { ArrowLeft } from "lucide-react";
 
+/** Compact back control — model name lives in the tooltip / document title. */
 export function BimBreadcrumbChip(props: {
-  backHref: string;
   onBack: () => void;
   fileName: string;
-  projectLabel?: string | null;
   federatedLabel?: string | null;
 }) {
+  const title = props.federatedLabel
+    ? `${props.fileName} · ${props.federatedLabel}`
+    : props.fileName;
+
   return (
-    <nav aria-label="Model navigation" className="bim-breadcrumb-chip bim-glass-surface">
+    <nav aria-label="Model navigation" className="bim-breadcrumb-chip">
       <button
         type="button"
         onClick={props.onBack}
-        aria-label="Back to files"
-        className="bim-breadcrumb-chip__back bim-focus-ring"
+        aria-label={`Back to files — ${title}`}
+        title={title}
+        className="bim-breadcrumb-chip__back bim-glass-surface bim-focus-ring"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
       </button>
-      {props.federatedLabel ? (
-        <>
-          <span className="bim-breadcrumb-chip__text hidden min-w-0 truncate sm:inline">
-            {props.federatedLabel}
-          </span>
-          <span className="bim-breadcrumb-chip__sep hidden sm:inline" aria-hidden>
-            ·
-          </span>
-        </>
-      ) : props.projectLabel ? (
-        <>
-          <span className="bim-breadcrumb-chip__text hidden min-w-0 truncate sm:inline">
-            {props.projectLabel}
-          </span>
-          <span className="bim-breadcrumb-chip__sep hidden sm:inline" aria-hidden>
-            ·
-          </span>
-        </>
-      ) : null}
-      <span className="bim-breadcrumb-chip__text min-w-0 truncate" title={props.fileName}>
-        {props.fileName}
-      </span>
     </nav>
   );
 }

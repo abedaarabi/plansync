@@ -3,6 +3,9 @@
 import { ChevronDown, Map } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { BimEngine } from "./bimEngine";
+import type { PlanStoreyOption } from "./BimSplitViewPane";
+import { BimWalkPlanSizeControl } from "./BimWalkPlanSizeControl";
+import type { BimWalkPlanSize } from "@/lib/bim/walkPlanSize";
 import {
   drawPlanMinimap,
   hitTestPlanMinimap,
@@ -29,9 +32,12 @@ function mapPointer(canvas: HTMLCanvasElement, clientX: number, clientY: number)
 export function BimPlanMinimap(props: {
   engine: BimEngine | null;
   storeys: string[];
+  storeyOptions?: PlanStoreyOption[];
   selectedStorey: string | null;
   onSelectStorey: (storey: string | null) => void;
   variant?: "floating" | "split";
+  planSize?: BimWalkPlanSize;
+  onPlanSizeChange?: (size: BimWalkPlanSize) => void;
 }) {
   const variant = props.variant ?? "floating";
   const isSplit = variant === "split";
@@ -40,6 +46,10 @@ export function BimPlanMinimap(props: {
   const dragRef = useRef<DragMode | null>(null);
   const mapPxRef = useRef(PLAN_MINIMAP_PX);
   const [mapPx, setMapPx] = useState(PLAN_MINIMAP_PX);
+  const floorOptions =
+    props.storeyOptions && props.storeyOptions.length > 0
+      ? props.storeyOptions
+      : props.storeys.map((storey) => ({ value: storey, label: storey }));
 
   useEffect(() => {
     if (!isSplit) {
@@ -181,7 +191,7 @@ export function BimPlanMinimap(props: {
             <Map className="bim-plan-minimap__icon" aria-hidden />
             <span className="bim-plan-minimap__label">Plan</span>
           </div>
-          {props.storeys.length > 0 ? (
+          {floorOptions.length > 0 ? (
             <div className="bim-plan-minimap__floor-wrap">
               <select
                 className="bim-plan-minimap__floor bim-focus-ring"
@@ -195,14 +205,21 @@ export function BimPlanMinimap(props: {
                 onClick={(e) => e.stopPropagation()}
               >
                 <option value="">All levels</option>
-                {props.storeys.map((storey) => (
-                  <option key={storey} value={storey}>
-                    {storey}
+                {floorOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>
               <ChevronDown className="bim-plan-minimap__floor-icon" aria-hidden />
             </div>
+          ) : null}
+          {props.planSize && props.onPlanSizeChange ? (
+            <BimWalkPlanSizeControl
+              className="bim-plan-minimap__size"
+              size={props.planSize}
+              onChange={props.onPlanSizeChange}
+            />
           ) : null}
         </div>
       ) : null}

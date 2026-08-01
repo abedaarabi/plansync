@@ -1,6 +1,7 @@
 export const PLAN_MINIMAP_PX = 260;
 export const PLAN_BAKE_PX = 512;
-const PLAN_MINIMAP_PAD = 12;
+/** Inset around the plan drawing inside the canvas (keep tight for mini). */
+const PLAN_MINIMAP_PAD = 6;
 
 export type PlanMinimapBounds = {
   minX: number;

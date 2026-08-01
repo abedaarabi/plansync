@@ -56,6 +56,13 @@ import { BimBreadcrumbChip } from "./BimBreadcrumbChip";
 import { BimIconRail } from "./BimIconRail";
 import { BimGlassDock } from "./BimGlassDock";
 import { BimBottomToolBar, type BimBottomFlyout } from "./BimBottomToolBar";
+import { BimPlanMinimap } from "./BimPlanMinimap";
+import { BimShortcutsOverlay } from "./BimShortcutsOverlay";
+import {
+  readSavedWalkPlanSize,
+  writeSavedWalkPlanSize,
+  type BimWalkPlanSize,
+} from "@/lib/bim/walkPlanSize";
 import { BimLeftDockContent, type BimLeftDockId } from "./BimLeftDockContent";
 import { BimInspectDockContent, type BimInspectTab } from "./BimInspectDockContent";
 import { BimTakeoffViewsDockContent } from "./BimTakeoffViewsDockContent";
@@ -136,7 +143,7 @@ type Phase =
   | { kind: "error"; message: string };
 
 const TOOL_HINTS: Record<BimTool, string | null> = {
-  select: "Click to select · Ctrl/Shift+click to multi-select · Right-click → Section box",
+  select: null,
   clip: "Drag green (top) or blue (side) arrow inward · Fits selection when elements are selected · Esc exits",
   length: "Click two points to measure length · Esc cancels",
   area: "Click corners, double-click to finish · Esc cancels",
@@ -182,6 +189,7 @@ export function BimViewerShell(props: {
   const [activeDock, setActiveDock] = useState<BimDockId | null>(null);
   const [inspectTab, setInspectTab] = useState<BimInspectTab>("properties");
   const [activeFlyout, setActiveFlyout] = useState<BimBottomFlyout>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const [qualityState, setQualityState] = useState<BimQualityState | null>(null);
   const [resolvedFileVersionId, setResolvedFileVersionId] = useState<string | null>(
@@ -215,7 +223,10 @@ export function BimViewerShell(props: {
     hasSelection: boolean;
   } | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
-  const [showPlanMinimap, setShowPlanMinimap] = useState(true);
+  const [walkPlanSize, setWalkPlanSize] = useState<BimWalkPlanSize>(() => readSavedWalkPlanSize());
+  const lastWalkPlanSizeRef = useRef<Exclude<BimWalkPlanSize, "off">>(
+    readSavedWalkPlanSize() === "big" ? "big" : "mini",
+  );
   const [planPanelMode, setPlanPanelMode] = useState<PlanPanelMode>("minimap");
   const [drawingMaps, setDrawingMaps] = useState<DrawingMapRecord[]>([]);
   const [publishedLevels, setPublishedLevels] = useState<BimModelLevelDraft[]>([]);
@@ -354,6 +365,16 @@ export function BimViewerShell(props: {
     setWorkspaceLevel(level);
     setWorkspaceView(props.initialView ?? "plan");
   }, [props.initialLevelId, props.initialView, buildingLevels, alignActive]);
+
+  useEffect(() => {
+    const prev = document.title;
+    const federated = federationMembers.length > 1 ? ` · ${federationMembers.length} models` : "";
+    document.title = `${props.fileName}${federated} · PlanSync`;
+    return () => {
+      document.title = prev;
+    };
+  }, [props.fileName, federationMembers.length]);
+
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [compareDeltas, setCompareDeltas] = useState<{
     baseVersion: number;
@@ -433,6 +454,12 @@ export function BimViewerShell(props: {
       },
       onQualityChanged: (state) => {
         if (!cancelled) setQualityState(state);
+      },
+      onCopyViewLink: () => {
+        void navigator.clipboard.writeText(window.location.href).then(
+          () => toast.success("View link copied"),
+          () => toast.error("Could not copy link"),
+        );
       },
     });
     engineRef.current = engine;
@@ -845,10 +872,43 @@ export function BimViewerShell(props: {
       if (planPanelMode === "drawingSync") setPlanPanelMode("minimap");
       return;
     }
-    if (cameraMode === "walk" && locationCalibration && !alignedCoordTransform) {
+    // Drawing sync lives in the big split pane only.
+    if (
+      cameraMode === "walk" &&
+      walkPlanSize === "big" &&
+      locationCalibration &&
+      !alignedCoordTransform
+    ) {
       setPlanPanelMode("drawingSync");
     }
-  }, [canDrawingSync, planPanelMode, cameraMode, locationCalibration, alignedCoordTransform]);
+  }, [
+    canDrawingSync,
+    planPanelMode,
+    cameraMode,
+    walkPlanSize,
+    locationCalibration,
+    alignedCoordTransform,
+  ]);
+
+  useEffect(() => {
+    if (!activeEngine) return;
+    void activeEngine.setPlanMinimapStorey(planMinimapStorey);
+  }, [activeEngine, planMinimapStorey]);
+
+  const onWalkPlanSizeChange = useCallback((size: BimWalkPlanSize) => {
+    if (size !== "off") lastWalkPlanSizeRef.current = size;
+    setWalkPlanSize(size);
+    writeSavedWalkPlanSize(size);
+  }, []);
+
+  const onToggleWalkPlan = useCallback(() => {
+    setWalkPlanSize((current) => {
+      const next = current === "off" ? lastWalkPlanSizeRef.current : ("off" as const);
+      if (next !== "off") lastWalkPlanSizeRef.current = next;
+      writeSavedWalkPlanSize(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const guid = props.initialGuid;
@@ -967,21 +1027,27 @@ export function BimViewerShell(props: {
     engineRef.current?.setTool(next);
   }, []);
 
-  const selectCameraMode = useCallback(async (next: BimCameraMode) => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    setActiveFlyout(null);
-    try {
-      await engine.setCameraMode(next);
-      setCameraMode(engine.getCameraMode());
-      if (next === "walk") {
-        toast.info("Walk mode: drag to look, WASD to move.", { duration: 3000 });
+  const selectCameraMode = useCallback(
+    async (next: BimCameraMode) => {
+      const engine = engineRef.current;
+      if (!engine) return;
+      setActiveFlyout(null);
+      try {
+        await engine.setCameraMode(next, {
+          preferredStorey: planMinimapStorey,
+        });
+        setCameraMode(engine.getCameraMode());
+        if (next === "walk") {
+          const landed = engine.getPlanMinimapStorey();
+          if (landed) setPlanMinimapStorey(landed);
+        }
+      } catch {
+        toast.error("Could not switch camera mode.");
+        setCameraMode(engine.getCameraMode());
       }
-    } catch {
-      toast.error("Could not switch camera mode.");
-      setCameraMode(engine.getCameraMode());
-    }
-  }, []);
+    },
+    [planMinimapStorey],
+  );
 
   const fitToView = useCallback(() => {
     setActiveFlyout(null);
@@ -1863,8 +1929,9 @@ export function BimViewerShell(props: {
   const isBrowserDock = (dock: BimDockId): dock is BimLeftDockId =>
     dock === "objects" || dock === "models" || dock === "visibility" || dock === "quality";
 
-  const splitViewActive =
-    !mappingEditActive && cameraMode === "walk" && showPlanMinimap && phase.kind === "ready";
+  const walkPlanReady = !mappingEditActive && cameraMode === "walk" && phase.kind === "ready";
+  const splitViewActive = walkPlanReady && walkPlanSize === "big";
+  const miniPlanActive = walkPlanReady && walkPlanSize === "mini";
   const workspaceReady = workspaceActive && phase.kind === "ready";
   const mappingUiReady =
     mappingEditActive && phase.kind === "ready" && Boolean(props.locationId && resolvedProjectId);
@@ -1874,6 +1941,22 @@ export function BimViewerShell(props: {
       activeEngine?.resolveStoreyName(workspaceLevel.name) ??
       workspaceLevel.sourceName)
     : null;
+
+  useEffect(() => {
+    if (!workChromeReady) return;
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((e.target as HTMLElement | null)?.isContentEditable) return;
+      // "?" is Shift+/ on US keyboards; also accept explicit "?".
+      if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
+        e.preventDefault();
+        setShortcutsOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [workChromeReady]);
 
   return (
     <div ref={shellRef} className="bim-viewer fixed inset-0 z-40 overflow-hidden">
@@ -1953,6 +2036,19 @@ export function BimViewerShell(props: {
               }
             />
           ) : null}
+
+          {miniPlanActive ? (
+            <BimPlanMinimap
+              variant="floating"
+              engine={activeEngine}
+              storeys={planStoreyOptions.map((o) => o.value)}
+              storeyOptions={planStoreyOptions}
+              selectedStorey={planMinimapStorey}
+              onSelectStorey={setPlanMinimapStorey}
+              planSize={walkPlanSize}
+              onPlanSizeChange={onWalkPlanSizeChange}
+            />
+          ) : null}
         </div>
 
         {workspaceReady && workspaceView === "plan" && workspaceLevel && !alignActive ? (
@@ -1980,7 +2076,6 @@ export function BimViewerShell(props: {
         ) : null}
 
         <BimBreadcrumbChip
-          backHref={backHref}
           onBack={() => router.push(backHref)}
           fileName={props.fileName}
           federatedLabel={
@@ -2220,8 +2315,8 @@ export function BimViewerShell(props: {
             onSnapshot={captureSnapshot}
             onToggleFullscreen={toggleFullscreen}
             onPlacePoint={() => engineRef.current?.measureConfirmPoint()}
-            showPlanMinimap={showPlanMinimap}
-            onTogglePlanMinimap={() => setShowPlanMinimap((v) => !v)}
+            walkPlanSize={walkPlanSize}
+            onToggleWalkPlan={onToggleWalkPlan}
             clusterByType={clusterByType}
             onToggleClusterByType={onToggleClusterByType}
             onSelectElement={onSelectElementFromSearch}
@@ -2239,7 +2334,12 @@ export function BimViewerShell(props: {
             onSetStrokeWidth={setStrokeWidth}
             onDeleteSelectedMarkups={deleteSelectedMarkups}
             onCreateIssueFromMarkup={onCreateIssueFromMarkup}
+            onOpenShortcuts={() => setShortcutsOpen(true)}
           />
+        ) : null}
+
+        {workChromeReady ? (
+          <BimShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         ) : null}
 
         {workChromeReady && issueCreateDraft && resolvedFileVersionId && resolvedProjectId ? (
@@ -2317,6 +2417,8 @@ export function BimViewerShell(props: {
               setAlignOpen(true);
             }}
             hasDrawingMaps={drawingMaps.length > 0}
+            walkPlanSize={walkPlanSize}
+            onWalkPlanSizeChange={onWalkPlanSizeChange}
           />
         ) : null}
 

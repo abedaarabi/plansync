@@ -1,79 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
+import { Keyboard } from "lucide-react";
 import {
-  ArrowLeftRight,
-  ArrowUpDown,
-  EyeOff,
-  Keyboard,
-  Link2,
-  MousePointerClick,
-  Move3d,
-  Navigation,
-  Redo2,
-  RotateCw,
-  Ruler,
-  ScanSearch,
-  Undo2,
-  X,
-} from "lucide-react";
-
-type ShortcutRow = {
-  action: string;
-  icon: LucideIcon;
-  keys: string[];
-  keyJoin?: "combo" | "or";
-};
-
-type ShortcutSection = {
-  title: string;
-  icon: LucideIcon;
-  rows: ShortcutRow[];
-};
-
-const SHORTCUT_SECTIONS: ShortcutSection[] = [
-  {
-    title: "Selection",
-    icon: MousePointerClick,
-    rows: [
-      { keys: ["H"], action: "Hide selected object", icon: EyeOff },
-      {
-        keys: ["Shift", "Click"],
-        keyJoin: "combo",
-        action: "Select multiple objects",
-        icon: MousePointerClick,
-      },
-      { keys: ["Ctrl", "L"], keyJoin: "combo", action: "Copy link to current view", icon: Link2 },
-    ],
-  },
-  {
-    title: "Navigation",
-    icon: Navigation,
-    rows: [
-      { keys: ["W", "S"], keyJoin: "or", action: "Move forward / backward", icon: Move3d },
-      { keys: ["A", "D"], keyJoin: "or", action: "Move left / right", icon: ArrowLeftRight },
-      { keys: ["R", "F"], keyJoin: "or", action: "Move up / down", icon: ArrowUpDown },
-      {
-        keys: ["Arrow Keys", "Q", "E"],
-        keyJoin: "or",
-        action: "Rotate camera",
-        icon: RotateCw,
-      },
-      { keys: ["Space"], action: "Zoom to selected object", icon: ScanSearch },
-    ],
-  },
-  {
-    title: "Measurements",
-    icon: Ruler,
-    rows: [
-      { keys: ["Ctrl", "Z"], keyJoin: "combo", action: "Undo last measurement", icon: Undo2 },
-      { keys: ["Enter"], action: "Redo last measurement", icon: Redo2 },
-      { keys: ["Esc"], action: "Remove all measurements", icon: X },
-      { keys: ["P"], action: "Place position measurement", icon: Ruler },
-    ],
-  },
-];
+  BIM_SHORTCUT_SECTIONS,
+  type BimShortcutRow,
+  type BimShortcutSection,
+} from "@/lib/bim/keyboardShortcuts";
 
 export function BimKeyboardShortcutsPanel() {
   return (
@@ -85,13 +18,14 @@ export function BimKeyboardShortcutsPanel() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--bim-text)]">Keyboard shortcuts</p>
           <p className="mt-0.5 text-[10px] leading-relaxed text-[var(--bim-text-muted)]">
-            3D viewer — on macOS, use <KbdKey>⌘</KbdKey> where Ctrl is listed.
+            3D viewer — on macOS, use <KbdKey>⌘</KbdKey> where Ctrl is listed. Press{" "}
+            <KbdKey>?</KbdKey> anytime for this list.
           </p>
         </div>
       </div>
 
       <div className="space-y-4">
-        {SHORTCUT_SECTIONS.map((section) => (
+        {BIM_SHORTCUT_SECTIONS.map((section) => (
           <ShortcutSectionBlock key={section.title} section={section} />
         ))}
       </div>
@@ -99,7 +33,7 @@ export function BimKeyboardShortcutsPanel() {
   );
 }
 
-function ShortcutSectionBlock(props: { section: ShortcutSection }) {
+function ShortcutSectionBlock(props: { section: BimShortcutSection }) {
   const SectionIcon = props.section.icon;
 
   return (
@@ -126,7 +60,7 @@ function ShortcutSectionBlock(props: { section: ShortcutSection }) {
   );
 }
 
-function ShortcutRowItem(props: { row: ShortcutRow; isLast: boolean }) {
+function ShortcutRowItem(props: { row: BimShortcutRow; isLast: boolean }) {
   const RowIcon = props.row.icon;
 
   return (

@@ -4,8 +4,10 @@ import { ChevronDown, Layers3, Map } from "lucide-react";
 import type { BimEngine } from "./bimEngine";
 import type { BimSyncContext, DrawingMapRecord } from "@/lib/api-client/bim-publish";
 import type { DrawingCoordTransform } from "@/lib/bim/drawingCoordBridge";
+import type { BimWalkPlanSize } from "@/lib/bim/walkPlanSize";
 import { BimDrawingSyncPanel } from "./BimDrawingSyncPanel";
 import { BimPlanMinimap } from "./BimPlanMinimap";
+import { BimWalkPlanSizeControl } from "./BimWalkPlanSizeControl";
 
 export type BimPlanPanelMode = "minimap" | "drawingSync";
 
@@ -26,6 +28,8 @@ export function BimSplitViewPane(props: {
   drawingTransform: DrawingCoordTransform | null;
   onAlign: () => void;
   hasDrawingMaps: boolean;
+  walkPlanSize: BimWalkPlanSize;
+  onWalkPlanSizeChange: (size: BimWalkPlanSize) => void;
 }) {
   const transform = props.drawingTransform;
 
@@ -33,6 +37,7 @@ export function BimSplitViewPane(props: {
     <aside className="bim-split-pane" aria-label="2D plan and drawing view">
       <div className="bim-split-pane__toolbar">
         <span className="bim-split-pane__label">2D</span>
+        <BimWalkPlanSizeControl size={props.walkPlanSize} onChange={props.onWalkPlanSizeChange} />
         {props.storeyOptions.length > 0 ? (
           <div className="bim-split-pane__floor-wrap">
             <select
@@ -106,6 +111,7 @@ export function BimSplitViewPane(props: {
             variant="split"
             engine={props.engine}
             storeys={props.storeys}
+            storeyOptions={props.storeyOptions}
             selectedStorey={props.planMinimapStorey}
             onSelectStorey={props.onSelectStorey}
           />
