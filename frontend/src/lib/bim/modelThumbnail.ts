@@ -28,6 +28,10 @@ class ModelThumbnailService {
   private readonly memory = new Map<string, string>();
   private generation = 0;
 
+  peek(fileVersionId: string): string | null {
+    return this.memory.get(fileVersionId) ?? null;
+  }
+
   request(fileVersionId: string, fileId: string): Promise<string | null> {
     const cached = this.memory.get(fileVersionId);
     if (cached) return Promise.resolve(cached);
@@ -214,6 +218,11 @@ export function requestModelThumbnail(
   fileId: string,
 ): Promise<string | null> {
   return service.request(fileVersionId, fileId);
+}
+
+/** In-memory thumb from a recent file-list render (survives dispose of the WebGL world). */
+export function peekModelThumbnail(fileVersionId: string): string | null {
+  return service.peek(fileVersionId);
 }
 
 /** Free thumbnail WebGL/worker before opening the full BIM viewer. */

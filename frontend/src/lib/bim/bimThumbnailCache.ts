@@ -15,6 +15,17 @@ export function buildThumbnailCacheKey(fileVersionId: string): string {
   return `thumb:v2:${fileVersionId}`;
 }
 
+function legacyThumbnailCacheKey(fileVersionId: string): string {
+  return `thumb:v1:${fileVersionId}`;
+}
+
+/** Prefer dark v2 thumbs; fall back to older cached previews so the loader still shows one. */
+export async function readModelThumbnailDataUrl(fileVersionId: string): Promise<string | null> {
+  const current = await readCachedThumbnail(buildThumbnailCacheKey(fileVersionId));
+  if (current) return current;
+  return readCachedThumbnail(legacyThumbnailCacheKey(fileVersionId));
+}
+
 export async function readCachedThumbnail(key: string): Promise<string | null> {
   try {
     const db = await openIndexedDb(DB_NAME, STORE, DB_VERSION);

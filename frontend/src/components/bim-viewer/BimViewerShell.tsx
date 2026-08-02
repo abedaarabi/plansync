@@ -117,7 +117,8 @@ import {
 } from "@/lib/bim/bimFilters";
 import { BimFiltersPanel, useBimFilterPreview } from "./BimFiltersPanel";
 import { BimLoadingOverlay } from "./BimLoadingOverlay";
-import { disposeModelThumbnailService } from "@/lib/bim/modelThumbnail";
+import { readModelThumbnailDataUrl } from "@/lib/bim/bimThumbnailCache";
+import { disposeModelThumbnailService, requestModelThumbnail } from "@/lib/bim/modelThumbnail";
 import {
   fetchBimSyncContext,
   fetchDrawingLevelMaps,
@@ -198,6 +199,7 @@ export function BimViewerShell(props: {
 
   const [phase, setPhase] = useState<Phase>({ kind: "resolving" });
   const [loadExiting, setLoadExiting] = useState(false);
+  const [loadPreviewUrl, setLoadPreviewUrl] = useState<string | null>(null);
   const lastLoadPhaseRef = useRef<Exclude<Phase, { kind: "ready" } | { kind: "error" }>>({
     kind: "resolving",
   });
@@ -495,51 +497,75 @@ export function BimViewerShell(props: {
   }, [phase.kind]);
 
   useEffect(() => {
+    if (loadPreviewUrl || !resolvedFileVersionId) return;
+    if (phase.kind === "ready" || phase.kind === "error") return;
+    let cancelled = false;
+    void readModelThumbnailDataUrl(resolvedFileVersionId).then((url) => {
+      if (!cancelled && url) setLoadPreviewUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadPreviewUrl, resolvedFileVersionId, phase.kind]);
+
+  useEffect(() => {
     if (!viewportEl) return;
 
     let cancelled = false;
     disposeModelThumbnailService();
     setPhase({ kind: "resolving" });
-
-    const engine = new BimEngine({
-      onSelection: (sel) => {
-        if (cancelled) return;
-        setSelection(sel);
-      },
-      onGroupsChanged: (groups) => {
-        if (cancelled) return;
-        setStoreys(groups.storeys);
-        setCategories(groups.categories);
-      },
-      onContextMenu: (pos) => {
-        setContextMenu(pos);
-      },
-      onMultiSelection: (guids) => {
-        if (cancelled) return;
-        setSelectedGuids(new Set(guids));
-      },
-      onToolChange: (next) => {
-        if (cancelled) return;
-        setTool(next);
-        if (next === "markup") setActiveFlyout("markup");
-        else setActiveFlyout(null);
-      },
-      onQualityChanged: (state) => {
-        if (!cancelled) setQualityState(state);
-      },
-      onCopyViewLink: () => {
-        void navigator.clipboard.writeText(window.location.href).then(
-          () => toast.success("View link copied"),
-          () => toast.error("Could not copy link"),
-        );
-      },
-    });
-    engineRef.current = engine;
-    setActiveEngine(engine);
+    setLoadPreviewUrl(null);
 
     // fallow-ignore-next-line complexity
     void (async () => {
       try {
+        const fvId = props.fileVersionId;
+        if (fvId) {
+          let preview = await readModelThumbnailDataUrl(fvId);
+          if (!preview) {
+            preview = await requestModelThumbnail(fvId, props.fileId);
+          }
+          if (!cancelled && preview) setLoadPreviewUrl(preview);
+        }
+        disposeModelThumbnailService();
+        if (cancelled) return;
+
+        const engine = new BimEngine({
+          onSelection: (sel) => {
+            if (cancelled) return;
+            setSelection(sel);
+          },
+          onGroupsChanged: (groups) => {
+            if (cancelled) return;
+            setStoreys(groups.storeys);
+            setCategories(groups.categories);
+          },
+          onContextMenu: (pos) => {
+            setContextMenu(pos);
+          },
+          onMultiSelection: (guids) => {
+            if (cancelled) return;
+            setSelectedGuids(new Set(guids));
+          },
+          onToolChange: (next) => {
+            if (cancelled) return;
+            setTool(next);
+            if (next === "markup") setActiveFlyout("markup");
+            else setActiveFlyout(null);
+          },
+          onQualityChanged: (state) => {
+            if (!cancelled) setQualityState(state);
+          },
+          onCopyViewLink: () => {
+            void navigator.clipboard.writeText(window.location.href).then(
+              () => toast.success("View link copied"),
+              () => toast.error("Could not copy link"),
+            );
+          },
+        });
+        engineRef.current = engine;
+        setActiveEngine(engine);
+
         await engine.init(viewportEl);
         if (cancelled) return;
         await engine.setViewportAppearance(readSavedViewportAppearance());
@@ -604,10 +630,11 @@ export function BimViewerShell(props: {
 
     return () => {
       cancelled = true;
+      const engine = engineRef.current;
       engineRef.current = null;
       setActiveEngine(null);
       setClusterByType(false);
-      engine.dispose();
+      engine?.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one engine per primary model session
   }, [viewportEl, props.fileId, props.fileVersionId, props.fileName, props.projectId]);
@@ -2550,6 +2577,7 @@ export function BimViewerShell(props: {
             fileVersionId={resolvedFileVersionId ?? props.fileVersionId}
             modelName={props.fileName}
             version={props.version}
+            previewUrl={loadPreviewUrl}
             exiting={loadExiting}
           />
         ) : null}

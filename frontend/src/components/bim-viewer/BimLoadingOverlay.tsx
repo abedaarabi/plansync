@@ -4,7 +4,8 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check } from "lucide-react";
-import { buildThumbnailCacheKey, readCachedThumbnail } from "@/lib/bim/bimThumbnailCache";
+import { readModelThumbnailDataUrl } from "@/lib/bim/bimThumbnailCache";
+import { peekModelThumbnail } from "@/lib/bim/modelThumbnail";
 import {
   buildLoadSteps,
   buildModelMetaLine,
@@ -18,22 +19,33 @@ import {
 
 export type { BimLoadPhase };
 
-function useCachedModelThumbnail(fileVersionId?: string | null) {
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+function useCachedModelThumbnail(fileVersionId?: string | null, previewUrl?: string | null) {
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(
+    () => previewUrl ?? (fileVersionId ? peekModelThumbnail(fileVersionId) : null),
+  );
 
   useEffect(() => {
+    if (previewUrl) {
+      setThumbnailUrl(previewUrl);
+      return;
+    }
     if (!fileVersionId) {
       setThumbnailUrl(null);
       return;
     }
+
+    const fromMemory = peekModelThumbnail(fileVersionId);
+    if (fromMemory) setThumbnailUrl(fromMemory);
+
     let cancelled = false;
-    void readCachedThumbnail(buildThumbnailCacheKey(fileVersionId)).then((url) => {
-      if (!cancelled) setThumbnailUrl(url);
+    void readModelThumbnailDataUrl(fileVersionId).then((stored) => {
+      if (!cancelled && stored) setThumbnailUrl(stored);
     });
+
     return () => {
       cancelled = true;
     };
-  }, [fileVersionId]);
+  }, [fileVersionId, previewUrl]);
 
   return thumbnailUrl;
 }
@@ -113,14 +125,15 @@ type LoadingShellProps = {
   fileVersionId?: string | null;
   modelName?: string | null;
   version?: string | number | null;
+  previewUrl?: string | null;
   exiting?: boolean;
   className?: string;
 };
 
 // fallow-ignore-next-line complexity
 function BimLoadingShell(props: LoadingShellProps) {
-  const { phase, fileVersionId, modelName, version, exiting, className } = props;
-  const thumbnailUrl = useCachedModelThumbnail(fileVersionId);
+  const { phase, fileVersionId, modelName, version, previewUrl, exiting, className } = props;
+  const thumbnailUrl = useCachedModelThumbnail(fileVersionId, previewUrl);
   const displayName = phaseModelLabel(phase, modelName);
   const rawName = phase.kind === "resolving" ? modelName : (phase.label ?? modelName ?? null);
   const bytesTotal = phase.kind === "downloading" ? (phase.bytesTotal ?? null) : null;
@@ -221,12 +234,14 @@ export function BimLoadingOverlay({
   fileVersionId,
   modelName,
   version,
+  previewUrl,
   exiting,
 }: {
   phase: BimLoadPhase;
   fileVersionId?: string | null;
   modelName?: string | null;
   version?: string | number | null;
+  previewUrl?: string | null;
   exiting?: boolean;
 }) {
   return (
@@ -235,6 +250,7 @@ export function BimLoadingOverlay({
       fileVersionId={fileVersionId}
       modelName={modelName}
       version={version}
+      previewUrl={previewUrl}
       exiting={exiting}
       className="absolute inset-0 z-10"
     />
