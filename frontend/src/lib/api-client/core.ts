@@ -7,3 +7,4 @@ export * from "./core-members-viewer-rfi";
 export * from "./core-punch-materials";
 export * from "./core-issues-takeoff";
 export * from "./files-comments";
+export * from "./bim-clash";

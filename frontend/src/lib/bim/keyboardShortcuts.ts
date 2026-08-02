@@ -2,9 +2,11 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeftRight,
   ArrowUpDown,
+  Crosshair,
   EyeOff,
   HelpCircle,
   Link2,
+  MessageSquare,
   MousePointerClick,
   Move3d,
   Navigation,
@@ -88,6 +90,21 @@ export const BIM_SHORTCUT_SECTIONS: BimShortcutSection[] = [
       },
       { keys: ["Esc"], action: "Cancel measurement / clear selection", icon: X },
       { keys: ["Delete"], action: "Delete active measurement", icon: Ruler },
+    ],
+  },
+  {
+    title: "Clash review",
+    icon: Crosshair,
+    rows: [
+      { keys: ["J", "K"], keyJoin: "or", action: "Next / previous clash", icon: ArrowUpDown },
+      {
+        keys: ["1", "2", "3", "4"],
+        keyJoin: "or",
+        action: "Set status New / Active / Resolved / Ignored",
+        icon: Crosshair,
+      },
+      { keys: ["C"], action: "Focus clash comment field", icon: MessageSquare },
+      { keys: ["Esc"], action: "Exit clash focus mode", icon: X },
     ],
   },
   {

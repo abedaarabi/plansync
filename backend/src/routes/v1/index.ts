@@ -129,6 +129,7 @@ import { registerPunchRoutes } from "./punchRoutes.js";
 import { registerScheduleRoutes } from "./scheduleRoutes.js";
 import { registerOrchestrationRoutes } from "./orchestrationRoutes.js";
 import { registerBimRoutes } from "./bimRoutes.js";
+import { registerClashRoutes } from "./clashRoutes.js";
 import { registerLocationsRoutes } from "./locationsRoutes.js";
 import { enqueueBimConversion } from "../../lib/bim/conversionProcessor.js";
 import {
@@ -5018,6 +5019,7 @@ export function v1Routes(
   registerScheduleRoutes(r, needUser);
   registerOrchestrationRoutes(r, needUser);
   registerBimRoutes(r, needUser, env);
+  registerClashRoutes(r, needUser, env);
   registerLocationsRoutes(r, needUser, env);
 
   return r;

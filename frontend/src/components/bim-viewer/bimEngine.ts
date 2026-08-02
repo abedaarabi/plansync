@@ -19,6 +19,11 @@ import {
   upgradeLambertToStandard,
 } from "@/lib/bim/materialColor";
 import { COLORIZE_HIGHLIGHT_OPACITY } from "@/lib/bim/colorizePalette";
+import {
+  CLASH_ITEM1_COLOR,
+  CLASH_ITEM2_COLOR,
+  CLASH_SCENE_GHOST_OPACITY,
+} from "@/lib/bim/clash/clashStatusStyle";
 import { BIM_PALETTE } from "@/lib/bim/bimPalette";
 import {
   BIM_ACCENT,
@@ -345,6 +350,28 @@ export class BimEngine {
   private activeFilterGhostMap: OBC.ModelIdMap | null = null;
   private activeFilterGhostOpacity = 0.18;
   private activeColorizeGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
+  /**
+   * Clash review owns viewport presentation (ghost + Item 1/2 colors). While set,
+   * skip default select tint and block the filter-dock idle clear from wiping it.
+   */
+  private clashReviewSuppressSelectPaint = false;
+  /** Fast Navisworks-style context: fade whole-scene materials instead of per-element ghost maps. */
+  private clashSceneGhostOpacity: number | null = null;
+  private clashGhostMatBackup = new Map<
+    THREE.Material,
+    {
+      opacity: number;
+      transparent: boolean;
+      depthWrite: boolean;
+      color?: THREE.Color;
+      emissive?: THREE.Color;
+    }
+  >();
+  private static readonly CLASH_GHOST_TINT = new THREE.Color(0x6a6e74);
+  /** Bumps on every presentClashPartners call so stale async mode switches are ignored. */
+  private clashPresentSeq = 0;
+  private clashGhostRefreshTimer: number | null = null;
+  private highlightRepaintTimer: number | null = null;
   private materialSyncInProgress = false;
   /** Serialize fragment highlight paints — parallel reset/highlight races wipe tints. */
   private highlightPaintInFlight: Promise<void> | null = null;
@@ -383,6 +410,115 @@ export class BimEngine {
       name: entry.name,
       visible: entry.visible,
     }));
+  }
+
+  /**
+   * Resolve IFC GUIDs to runtime localIds via the quantity-index guid map.
+   * Used by clash detection without exposing FragmentsModel.
+   */
+  // fallow-ignore-next-line unused-class-member
+  resolveGuidsToLocalIds(
+    guids: string[],
+  ): Map<string, { modelId: string; localId: number; fileVersionId: string | null }> {
+    const out = new Map<
+      string,
+      { modelId: string; localId: number; fileVersionId: string | null }
+    >();
+    for (const guid of guids) {
+      const hit = this.guidIndex.get(guid);
+      if (!hit) continue;
+      out.set(guid, {
+        modelId: hit.modelId,
+        localId: hit.localId,
+        fileVersionId: hit.fileVersionId,
+      });
+    }
+    return out;
+  }
+
+  /** Flat AABB buffer: 6 floats per localId (minXYZ, maxXYZ), world space. */
+  // fallow-ignore-next-line unused-class-member
+  async getElementBoxes(modelId: string, localIds: number[]): Promise<Float32Array> {
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    const model = fragments?.list.get(modelId);
+    const out = new Float32Array(localIds.length * 6);
+    if (!model || localIds.length === 0) return out;
+    const CHUNK = 200;
+    for (let i = 0; i < localIds.length; i += CHUNK) {
+      const chunk = localIds.slice(i, i + CHUNK);
+      let boxes: THREE.Box3[] = [];
+      try {
+        boxes = await model.getBoxes(chunk);
+      } catch {
+        boxes = [];
+      }
+      for (let j = 0; j < chunk.length; j++) {
+        const box = boxes[j];
+        const offset = (i + j) * 6;
+        if (!box || !this.isValidBox3(box)) {
+          out[offset] = 0;
+          out[offset + 1] = 0;
+          out[offset + 2] = 0;
+          out[offset + 3] = 0;
+          out[offset + 4] = 0;
+          out[offset + 5] = 0;
+          continue;
+        }
+        out[offset] = box.min.x;
+        out[offset + 1] = box.min.y;
+        out[offset + 2] = box.min.z;
+        out[offset + 3] = box.max.x;
+        out[offset + 4] = box.max.y;
+        out[offset + 5] = box.max.z;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Per-element triangle soup in world space (model matrix × mesh transform applied).
+   * Order matches input localIds; missing items are omitted.
+   */
+  // fallow-ignore-next-line unused-class-member, complexity
+  async getElementGeometry(
+    modelId: string,
+    localIds: number[],
+  ): Promise<{ localId: number; positions: Float32Array; indices: Uint32Array | null }[]> {
+    const { mergeItemMeshesWorld } = await import("@/lib/bim/clash/mergeItemMeshes");
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    const model = fragments?.list.get(modelId);
+    if (!model || localIds.length === 0) return [];
+    model.object.updateMatrixWorld(true);
+    const modelMatrix = model.object.matrixWorld;
+    const CHUNK = 24;
+    const out: { localId: number; positions: Float32Array; indices: Uint32Array | null }[] = [];
+
+    for (let i = 0; i < localIds.length; i += CHUNK) {
+      const chunk = localIds.slice(i, i + CHUNK);
+      let groups: unknown[] = [];
+      try {
+        groups = await model.getItemsGeometry(chunk);
+      } catch {
+        continue;
+      }
+      for (let j = 0; j < chunk.length; j++) {
+        const localId = chunk[j]!;
+        const group = groups[j];
+        const meshes = Array.isArray(group) ? group : group ? [group] : [];
+        if (meshes.length === 0) continue;
+        const merged = mergeItemMeshesWorld(
+          meshes as {
+            positions?: ArrayLike<number>;
+            indices?: ArrayLike<number>;
+            transform: THREE.Matrix4;
+          }[],
+          modelMatrix,
+        );
+        if (!merged) continue;
+        out.push({ localId, positions: merged.positions, indices: merged.indices });
+      }
+    }
+    return out;
   }
 
   // fallow-ignore-next-line unused-class-member
@@ -527,6 +663,7 @@ export class BimEngine {
       this.renderEffects?.endInteraction();
       if (this.effectiveQuality) this.applyRenderQuality(this.effectiveQuality);
       fragments.core.update(true);
+      this.scheduleClashSceneGhostRefresh();
       this.applyViewportAtmosphere(this.getModelBoundingSphere());
       void this.refreshIssueAnchorWorld();
     });
@@ -544,8 +681,28 @@ export class BimEngine {
 
     // fallow-ignore-next-line complexity
     fragments.core.models.materials.list.onItemSet.add(({ value: material }) => {
+      const isLod = "isLodMaterial" in material && material.isLodMaterial;
+      // Clash review must ghost every new material (including LOD). Fragment
+      // updates otherwise restore solid materials and the building "unghosts".
+      if (this.clashSceneGhostOpacity != null) {
+        const threeMat = material as unknown as THREE.Material;
+        if (this.isClashItemMaterial(threeMat)) {
+          this.solidifyClashItemMaterial(threeMat);
+          return;
+        }
+        this.ghostClashMaterial(threeMat, this.clashSceneGhostOpacity);
+        if (!isLod) {
+          material.polygonOffset = true;
+          material.polygonOffsetUnits = 1;
+          material.polygonOffsetFactor = Math.random();
+          if ("side" in material) material.side = THREE.DoubleSide;
+          if ("fog" in material) material.fog = true;
+        }
+        this.scheduleClashSceneGhostRefresh();
+        return;
+      }
       if (this.materialSyncInProgress) return;
-      if (!("isLodMaterial" in material && material.isLodMaterial)) {
+      if (!isLod) {
         material.polygonOffset = true;
         material.polygonOffsetUnits = 1;
         material.polygonOffsetFactor = Math.random();
@@ -821,7 +978,8 @@ export class BimEngine {
   private async syncViewportMaterials(): Promise<void> {
     const fragments = this.components?.get(OBC.FragmentsManager);
     if (!fragments?.initialized || this.materialSyncInProgress) return;
-    if (this.hasActiveFragmentHighlights()) {
+    // Never recolor while clash review is ghosting — PBR sync restores solid mats.
+    if (this.shouldDeferMaterialSync()) {
       this.pendingMaterialSync = true;
       return;
     }
@@ -968,6 +1126,11 @@ export class BimEngine {
     guarded.__planSyncFilterGuard = true;
   }
 
+  /** True while clash review owns viewport ghost/colorize presentation. */
+  isClashReviewActive(): boolean {
+    return this.clashReviewSuppressSelectPaint;
+  }
+
   /** Re-apply ghost / colorize tints after fragment material or tile updates. */
   private hasActiveFilterHighlights(): boolean {
     return this.activeFilterGhostMap != null || this.activeColorizeGroups.length > 0;
@@ -975,6 +1138,8 @@ export class BimEngine {
 
   // fallow-ignore-next-line complexity
   private hasActiveSelectionHighlight(): boolean {
+    // Clash review keeps guids for inspect/UI but must not paint select tint.
+    if (this.clashReviewSuppressSelectPaint) return false;
     if (this.selectedGuids.size > 0 || this.lastPickMap != null) return true;
     const highlighter = this.components?.get(OBF.Highlighter);
     if (!highlighter) return false;
@@ -1127,15 +1292,17 @@ export class BimEngine {
       }
 
       for (const group of this.activeColorizeGroups) {
+        const clashSolid = group.styleId.startsWith("clash-item");
         await paint(
           group.styleId,
           {
             color: new THREE.Color(group.color),
-            opacity: COLORIZE_HIGHLIGHT_OPACITY,
-            transparent: true,
+            opacity: clashSolid ? 1 : COLORIZE_HIGHLIGHT_OPACITY,
+            // Clash Item 1/2 must be truly opaque (Navisworks solid red/green).
+            transparent: !clashSolid,
             renderedFaces: 0,
             depthTest: true,
-            depthWrite: false,
+            depthWrite: clashSolid,
           },
           group.map,
         );
@@ -1143,8 +1310,10 @@ export class BimEngine {
 
       if (!this.readyFragments()) return;
 
-      // Keep selection tint on top when present.
-      const selectMap = this.sanitizeHighlightMap(this.getActiveSelectionMap(), fragments);
+      // Keep selection tint on top when present (never over clash Item 1/2 colors).
+      const selectMap = this.clashReviewSuppressSelectPaint
+        ? null
+        : this.sanitizeHighlightMap(this.getActiveSelectionMap(), fragments);
       if (selectMap && highlighter) {
         const selectName = highlighter.config.selectName;
         const selectDef = highlighter.styles.get(selectName);
@@ -1167,6 +1336,12 @@ export class BimEngine {
       } catch {
         /* worker may reject update while tiles are rebuilding or engine is disposing */
       }
+      // Fragment update restores tile materials — repaint the pair first, then
+      // re-fade context while forcing Item 1/2 back to solid opaque colors.
+      await this.paintClashItemHighlights();
+      if (this.clashSceneGhostOpacity != null) {
+        this.applyClashSceneGhost(this.clashSceneGhostOpacity);
+      }
       if (!this.disposed) this.bumpRender();
     } finally {
       this.maybeScheduleDeferredMaterialSync();
@@ -1181,8 +1356,12 @@ export class BimEngine {
     await this.requestFragmentHighlights();
   }
 
+  private shouldDeferMaterialSync(): boolean {
+    return this.hasActiveFragmentHighlights() || this.clashSceneGhostOpacity != null;
+  }
+
   private maybeScheduleDeferredMaterialSync(): void {
-    if (!this.pendingMaterialSync || this.hasActiveFragmentHighlights()) return;
+    if (!this.pendingMaterialSync || this.shouldDeferMaterialSync()) return;
     this.pendingMaterialSync = false;
     this.scheduleMaterialSync();
   }
@@ -2386,13 +2565,25 @@ export class BimEngine {
     }
   }
 
+  /** Coalesce highlight re-apply after tile/material stream (avoids ghost flicker). */
+  private scheduleHighlightRepaint(): void {
+    if (this.disposed || !this.hasActiveFragmentHighlights()) return;
+    if (this.highlightRepaintTimer != null) window.clearTimeout(this.highlightRepaintTimer);
+    this.highlightRepaintTimer = window.setTimeout(() => {
+      this.highlightRepaintTimer = null;
+      if (this.hasActiveFragmentHighlights()) void this.requestFragmentHighlights();
+    }, 280);
+  }
+
   /** Re-apply PBR + space colors when fragments stream in new tile materials. */
   // fallow-ignore-next-line complexity
   private scheduleMaterialSync(): void {
     if (this.disposed || this.modelRegistry.size === 0 || this.materialSyncInProgress) return;
-    // PBR recolor fights fragment highlights — defer until overlays are cleared.
-    if (this.hasActiveFragmentHighlights()) {
+    // PBR recolor fights fragment highlights / clash scene ghost — defer.
+    if (this.shouldDeferMaterialSync()) {
       this.pendingMaterialSync = true;
+      if (this.hasActiveFragmentHighlights()) this.scheduleHighlightRepaint();
+      if (this.clashSceneGhostOpacity != null) this.scheduleClashSceneGhostRefresh();
       return;
     }
     if (this.materialSyncTimer != null) window.clearTimeout(this.materialSyncTimer);
@@ -2865,8 +3056,12 @@ export class BimEngine {
   }
 
   // fallow-ignore-next-line complexity
-  private async handleHighlight(map: OBC.ModelIdMap, preferModelId?: string | null): Promise<void> {
-    void this.renderEffects?.setSelection(map);
+  private async handleHighlight(
+    map: OBC.ModelIdMap,
+    preferModelId?: string | null,
+    showSelectionOutline = true,
+  ): Promise<void> {
+    if (showSelectionOutline) void this.renderEffects?.setSelection(map);
     const preferred =
       preferModelId && map[preferModelId] instanceof Set && map[preferModelId]!.size > 0
         ? preferModelId
@@ -3289,6 +3484,8 @@ export class BimEngine {
     const components = this.components;
     if (!components || !this.model) return false;
     if (this.tool !== "select" && !opts.forContextMenu) return false;
+    // Clash review uses its own Item 1/2 presentation and never normal selection.
+    if (this.clashReviewSuppressSelectPaint && !opts.forContextMenu) return false;
 
     const hit = await this.fastPickElement(e);
     if (!hit) {
@@ -3312,6 +3509,16 @@ export class BimEngine {
     }
 
     const pickMap: OBC.ModelIdMap | null = hit ? { [hit.modelId]: new Set([hit.localId]) } : null;
+
+    if (guid && hit) {
+      const meta = this.modelRegistry.get(hit.modelId);
+      this.guidIndex.set(guid, {
+        modelId: hit.modelId,
+        localId: hit.localId,
+        fileVersionId: meta?.fileVersionId ?? "",
+        sourceLabel: meta?.name ?? "Model",
+      });
+    }
 
     const additive = opts.additive ?? false;
     if (opts.forContextMenu) {
@@ -3340,16 +3547,6 @@ export class BimEngine {
       }
     } else if (!additive) {
       this.selectedGuids.clear();
-    }
-
-    if (guid && hit) {
-      const meta = this.modelRegistry.get(hit.modelId);
-      this.guidIndex.set(guid, {
-        modelId: hit.modelId,
-        localId: hit.localId,
-        fileVersionId: meta?.fileVersionId ?? "",
-        sourceLabel: meta?.name ?? "Model",
-      });
     }
 
     let map: OBC.ModelIdMap | null = null;
@@ -3792,26 +3989,88 @@ export class BimEngine {
 
   // fallow-ignore-next-line complexity
   private async resolveModelIdMapFromGuids(guids: string[]): Promise<OBC.ModelIdMap | null> {
-    if (guids.length === 0) return null;
-    const map = this.buildModelIdMapFromGuids(guids) ?? {};
-    const missing = guids.filter((g) => !this.guidIndex.has(g));
-    if (missing.length > 0) {
-      const fragments = this.components?.get(OBC.FragmentsManager);
-      if (fragments?.initialized) {
+    return this.resolveGuidRefsToModelIdMap(guids.map((guid) => ({ guid })));
+  }
+
+  /**
+   * Resolve IFC guids to fragment local ids, preferring a fileVersion when set
+   * so federated models with colliding GlobalIds still map correctly.
+   */
+  // fallow-ignore-next-line complexity
+  private async resolveGuidRefsToModelIdMap(
+    refs: { guid: string; fileVersionId?: string | null }[],
+  ): Promise<OBC.ModelIdMap | null> {
+    if (refs.length === 0) return null;
+    const map: OBC.ModelIdMap = {};
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    if (!fragments?.initialized) return null;
+
+    const unresolved: { guid: string; fileVersionId?: string | null }[] = [];
+
+    for (const ref of refs) {
+      const guid = ref.guid?.trim();
+      if (!guid) continue;
+      const indexed = this.guidIndex.get(guid);
+      if (
+        indexed &&
+        (!ref.fileVersionId || indexed.fileVersionId === ref.fileVersionId) &&
+        fragments.list.has(indexed.modelId)
+      ) {
+        if (!map[indexed.modelId]) map[indexed.modelId] = new Set<number>();
+        (map[indexed.modelId] as Set<number>).add(indexed.localId);
+        continue;
+      }
+      unresolved.push({ guid, fileVersionId: ref.fileVersionId });
+    }
+
+    for (const ref of unresolved) {
+      const candidates = [...this.modelRegistry.entries()].filter(([, entry]) =>
+        ref.fileVersionId ? entry.fileVersionId === ref.fileVersionId : true,
+      );
+      let found = false;
+      for (const [modelId, entry] of candidates) {
+        const model = fragments.list.get(modelId);
+        if (!model) continue;
         try {
-          const fallback = await fragments.guidsToModelIdMap(missing);
-          if (fallback) {
-            for (const [modelId, ids] of Object.entries(fallback)) {
-              if (!(ids instanceof Set) || ids.size === 0) continue;
-              if (!map[modelId]) map[modelId] = new Set<number>();
-              for (const id of ids) (map[modelId] as Set<number>).add(id);
-            }
-          }
+          const [localId] = await model.getLocalIdsByGuids([ref.guid]);
+          if (localId == null) continue;
+          if (!map[modelId]) map[modelId] = new Set<number>();
+          (map[modelId] as Set<number>).add(localId);
+          this.guidIndex.set(ref.guid, {
+            modelId,
+            localId,
+            fileVersionId: entry.fileVersionId,
+            sourceLabel: entry.name,
+          });
+          found = true;
+          break;
         } catch {
-          /* optional */
+          /* try next model */
         }
       }
+      if (found || ref.fileVersionId) continue;
+      try {
+        const fallback = await fragments.guidsToModelIdMap([ref.guid]);
+        if (!fallback) continue;
+        for (const [modelId, ids] of Object.entries(fallback)) {
+          if (!(ids instanceof Set) || ids.size === 0) continue;
+          if (!map[modelId]) map[modelId] = new Set<number>();
+          for (const id of ids) {
+            (map[modelId] as Set<number>).add(id);
+            const meta = this.modelRegistry.get(modelId);
+            this.guidIndex.set(ref.guid, {
+              modelId,
+              localId: id,
+              fileVersionId: meta?.fileVersionId ?? "",
+              sourceLabel: meta?.name ?? "Model",
+            });
+          }
+        }
+      } catch {
+        /* optional */
+      }
     }
+
     return Object.keys(map).length > 0 ? map : null;
   }
 
@@ -3859,6 +4118,348 @@ export class BimEngine {
     this.events.onMultiSelection?.([...this.selectedGuids]);
   }
 
+  /**
+   * Remember guids as the active selection without painting the default select
+   * style (used by clash review so red/green item colors stay visible).
+   */
+  // fallow-ignore-next-line unused-class-member
+  rememberSelectionGuids(guids: string[]): void {
+    this.selectedGuids.clear();
+    for (const g of guids) this.selectedGuids.add(g);
+    this.lastPickMap = this.buildModelIdMapFromGuids(guids);
+    this.events.onMultiSelection?.([...this.selectedGuids]);
+  }
+
+  private isClashItemMaterial(mat: THREE.Material): boolean {
+    const customId = mat.userData?.customId;
+    return typeof customId === "string" && customId.startsWith("clash-item");
+  }
+
+  /** Fade + desaturate a fragment material for clash scene ghost (O(1) per material). */
+  private ghostClashMaterial(mat: THREE.Material, opacity: number): void {
+    if (!("opacity" in mat)) return;
+    if (this.isClashItemMaterial(mat)) {
+      this.solidifyClashItemMaterial(mat);
+      return;
+    }
+    const m = mat as THREE.Material & {
+      opacity: number;
+      transparent: boolean;
+      depthWrite: boolean;
+      needsUpdate: boolean;
+      color?: THREE.Color;
+      emissive?: THREE.Color;
+    };
+    if (!this.clashGhostMatBackup.has(m)) {
+      this.clashGhostMatBackup.set(m, {
+        opacity: m.opacity,
+        transparent: m.transparent,
+        depthWrite: m.depthWrite,
+        color: m.color ? m.color.clone() : undefined,
+        emissive: m.emissive ? m.emissive.clone() : undefined,
+      });
+    }
+    // Ghost context must not write depth or it will occlude the clash pair and
+    // make federated models look like disconnected opaque patches.
+    const pipelineChanged = !m.transparent || m.depthWrite;
+    m.transparent = true;
+    m.opacity = opacity;
+    m.depthWrite = false;
+    // Strip material color so the building reads as a faint silhouette, not painted BIM.
+    if (m.color) m.color.copy(BimEngine.CLASH_GHOST_TINT);
+    if (m.emissive) m.emissive.setRGB(0, 0, 0);
+    if ("highlightOpacity" in m) {
+      (m as THREE.Material & { highlightOpacity: number }).highlightOpacity = opacity;
+    }
+    if (pipelineChanged) m.needsUpdate = true;
+  }
+
+  /** Force Item 1/2 overlays back to opaque solid colors (Navisworks style). */
+  private solidifyClashItemMaterial(mat: THREE.Material): void {
+    if (!("opacity" in mat)) return;
+    const m = mat as THREE.Material & {
+      opacity: number;
+      transparent: boolean;
+      depthWrite: boolean;
+      depthTest: boolean;
+      needsUpdate: boolean;
+    };
+    // If this material was previously ghosted by mistake, drop the backup so
+    // clearing review doesn't restore a faded opacity onto a clash color.
+    this.clashGhostMatBackup.delete(m);
+    const pipelineChanged = m.transparent || !m.depthWrite || m.opacity < 1;
+    m.opacity = 1;
+    m.transparent = false;
+    m.depthWrite = true;
+    m.depthTest = true;
+    if ("highlightOpacity" in m) {
+      (m as THREE.Material & { highlightOpacity: number }).highlightOpacity = 1;
+    }
+    if (pipelineChanged) m.needsUpdate = true;
+  }
+
+  private collectFragmentMaterials(): Set<THREE.Material> {
+    const materials = new Set<THREE.Material>();
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    if (!fragments?.initialized) return materials;
+    for (const [, mat] of fragments.core.models.materials.list) {
+      materials.add(mat as unknown as THREE.Material);
+    }
+    // Federated/streamed meshes may expose materials on the scene graph before
+    // they appear in the shared registry.
+    for (const [, model] of fragments.list) {
+      model.object.traverse((object) => {
+        if (!("material" in object)) return;
+        const material = (object as THREE.Mesh).material;
+        if (Array.isArray(material)) {
+          for (const item of material) {
+            if (item instanceof THREE.Material) materials.add(item);
+          }
+        } else if (material instanceof THREE.Material) {
+          materials.add(material);
+        }
+      });
+    }
+    return materials;
+  }
+
+  /** Keep clash Item 1/2 materials opaque after any scene ghost pass. */
+  private solidifyClashItemMaterials(): void {
+    for (const material of this.collectFragmentMaterials()) {
+      if (this.isClashItemMaterial(material)) this.solidifyClashItemMaterial(material);
+    }
+  }
+
+  /**
+   * Navisworks-style context: fade loaded model materials (but not Item 1/2
+   * overlays) instead of highlighting hundreds of thousands of element ids.
+   */
+  // fallow-ignore-next-line complexity
+  private applyClashSceneGhost(opacity: number): void {
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    if (!fragments?.initialized) return;
+    this.clashSceneGhostOpacity = opacity;
+    for (const material of this.collectFragmentMaterials()) {
+      this.ghostClashMaterial(material, opacity);
+    }
+    this.solidifyClashItemMaterials();
+    this.bumpRender();
+  }
+
+  /** Fragment/LOD updates wipe material opacity — coalesce a full re-fade. */
+  private scheduleClashSceneGhostRefresh(): void {
+    if (this.disposed || this.clashSceneGhostOpacity == null) return;
+    if (this.clashGhostRefreshTimer != null) window.clearTimeout(this.clashGhostRefreshTimer);
+    this.clashGhostRefreshTimer = window.setTimeout(() => {
+      this.clashGhostRefreshTimer = null;
+      if (this.clashSceneGhostOpacity == null) return;
+      void this.paintClashItemHighlights().then(() => {
+        if (this.clashSceneGhostOpacity == null) return;
+        this.applyClashSceneGhost(this.clashSceneGhostOpacity);
+      });
+    }, 240);
+  }
+
+  /**
+   * Re-apply Item 1/2 colors without resetHighlight / core.update.
+   * Avoids fragment updates that would wipe the scene ghost again.
+   */
+  // fallow-ignore-next-line complexity
+  private async paintClashItemHighlights(): Promise<void> {
+    const fragments = this.readyFragments();
+    if (!fragments || this.disposed) return;
+    const groups = this.activeColorizeGroups.filter((g) => g.styleId.startsWith("clash-item"));
+    if (groups.length === 0) return;
+    for (const group of groups) {
+      const safeMap = this.sanitizeHighlightMap(group.map, fragments);
+      if (!safeMap) continue;
+      try {
+        await fragments.highlight(
+          {
+            color: new THREE.Color(group.color),
+            opacity: 1,
+            transparent: false,
+            renderedFaces: 0,
+            depthTest: true,
+            depthWrite: true,
+            customId: group.styleId,
+          },
+          safeMap,
+        );
+      } catch {
+        /* stale maps during tile churn */
+      }
+    }
+    this.solidifyClashItemMaterials();
+    this.bumpRender();
+  }
+
+  private clearClashSceneGhost(): void {
+    if (this.clashGhostRefreshTimer != null) {
+      window.clearTimeout(this.clashGhostRefreshTimer);
+      this.clashGhostRefreshTimer = null;
+    }
+    this.clashSceneGhostOpacity = null;
+    for (const [mat, prev] of this.clashGhostMatBackup) {
+      try {
+        const m = mat as THREE.Material & {
+          opacity: number;
+          transparent: boolean;
+          depthWrite: boolean;
+          needsUpdate: boolean;
+          color?: THREE.Color;
+          emissive?: THREE.Color;
+        };
+        m.opacity = prev.opacity;
+        m.transparent = prev.transparent;
+        m.depthWrite = prev.depthWrite;
+        if (prev.color && m.color) m.color.copy(prev.color);
+        if (prev.emissive && m.emissive) m.emissive.copy(prev.emissive);
+        m.needsUpdate = true;
+      } catch {
+        /* material may already be disposed with unloaded tiles */
+      }
+    }
+    this.clashGhostMatBackup.clear();
+  }
+
+  /**
+   * Clash focus presentation:
+   * - color: full federation opaque + Item 1 green / Item 2 red
+   * - ghost: fade all models + solid clash pair
+   * - hide: isolate only the clash pair
+   */
+  // fallow-ignore-next-line unused-class-member, complexity
+  async presentClashPartners(opts: {
+    a: { guid: string; fileVersionId?: string | null };
+    b: { guid: string; fileVersionId?: string | null };
+    /** World-space clash contact point — preferred camera focus. */
+    point?: { x: number; y: number; z: number } | null;
+    context?: "color" | "ghost" | "hide";
+    ghostOpacity?: number;
+    /** When false, re-paint only (e.g. Color/Ghost/Hide toggle). Default true. */
+    refocusCamera?: boolean;
+  }): Promise<void> {
+    const refs = [opts.a, opts.b].filter((r) => r.guid);
+    if (refs.length === 0) return;
+    const context = opts.context ?? "color";
+    const refocusCamera = opts.refocusCamera !== false;
+    const seq = ++this.clashPresentSeq;
+    const stillCurrent = () => !this.disposed && this.clashPresentSeq === seq;
+
+    this.clashReviewSuppressSelectPaint = true;
+    this.selectedGuids.clear();
+    this.lastPickMap = null;
+    this.lastPickedModelId = null;
+    this.activeFilterGhostMap = null;
+    // Always drop prior ghost/hide so Color/Ghost/Hide toggles start from a clean baseline.
+    this.clearClashSceneGhost();
+    await this.renderEffects?.setSelection(null);
+    if (!stillCurrent()) return;
+    this.events.onSelection(null);
+    this.events.onMultiSelection?.([]);
+
+    const [itemAMap, itemBMap] = await Promise.all([
+      this.resolveGuidRefsToModelIdMap([opts.a]),
+      this.resolveGuidRefsToModelIdMap([opts.b]),
+    ]);
+    if (!stillCurrent()) return;
+    const partnerMap = this.mergeModelIdMaps(itemAMap, itemBMap);
+    this.colorizeStyleIds = [];
+    this.activeColorizeGroups = [];
+    if (itemAMap) {
+      this.colorizeStyleIds.push("clash-item-1");
+      this.activeColorizeGroups.push({
+        styleId: "clash-item-1",
+        color: CLASH_ITEM1_COLOR,
+        map: itemAMap,
+      });
+    }
+    if (itemBMap) {
+      this.colorizeStyleIds.push("clash-item-2");
+      this.activeColorizeGroups.push({
+        styleId: "clash-item-2",
+        color: CLASH_ITEM2_COLOR,
+        map: itemBMap,
+      });
+    }
+
+    // Restore full visibility before Color/Ghost; Hide isolates after.
+    await this.ensureBaseVisibilityForFilter();
+    if (!stillCurrent()) return;
+    if (context !== "hide") this.invalidatePlanSilhouette();
+
+    if (context === "hide") {
+      if (partnerMap) {
+        await this.mustComponents().get(OBC.Hider).isolate(partnerMap);
+        this.invalidatePlanSilhouette();
+      }
+      if (!stillCurrent()) return;
+      await this.requestFragmentHighlights();
+    } else if (context === "ghost") {
+      const ghostOpacity = opts.ghostOpacity ?? CLASH_SCENE_GHOST_OPACITY;
+      this.clashSceneGhostOpacity = ghostOpacity;
+      await this.requestFragmentHighlights();
+      if (!stillCurrent()) return;
+      // Re-apply even if highlight paint already ghosted — guarantees latest opacity/tint.
+      this.applyClashSceneGhost(ghostOpacity);
+      this.solidifyClashItemMaterials();
+      this.scheduleClashSceneGhostRefresh();
+    } else {
+      // Color: materials already un-ghosted above; paint solid pair on full federation.
+      await this.requestFragmentHighlights();
+      if (!stillCurrent()) return;
+      // Highlight update can recreate materials — ensure no leftover ghost opacity.
+      this.clearClashSceneGhost();
+      this.solidifyClashItemMaterials();
+    }
+
+    if (!stillCurrent()) return;
+    if (refocusCamera) {
+      await this.zoomToClashFocus({
+        point: opts.point,
+        partnerMap,
+        fallbackGuids: refs.map((r) => r.guid),
+      });
+    }
+  }
+
+  /** Inspect one clash partner in the properties panel without changing colors. */
+  // fallow-ignore-next-line unused-class-member
+  async inspectClashPartner(ref: { guid: string; fileVersionId?: string | null }): Promise<void> {
+    if (!ref.guid) return;
+    this.clashReviewSuppressSelectPaint = true;
+    const map = await this.resolveGuidRefsToModelIdMap([ref]);
+    if (!map) return;
+    this.selectedGuids.clear();
+    this.lastPickMap = null;
+    const modelId = Object.keys(map)[0] ?? null;
+    this.lastPickedModelId = modelId;
+    await this.handleHighlight(map, modelId, false);
+    this.events.onMultiSelection?.([]);
+    this.bumpRender();
+  }
+
+  /** Exit clash review presentation (pair colors + ghost + suppress flag). */
+  // fallow-ignore-next-line unused-class-member
+  async clearClashReviewPresentation(): Promise<void> {
+    this.clashPresentSeq += 1;
+    this.clashReviewSuppressSelectPaint = false;
+    if (this.highlightRepaintTimer != null) {
+      window.clearTimeout(this.highlightRepaintTimer);
+      this.highlightRepaintTimer = null;
+    }
+    this.clearClashSceneGhost();
+    await this.applyFilterPresentation({
+      filterActive: false,
+      visualize: "none",
+      matchGuids: [],
+      colorizeGroups: [],
+      force: true,
+    });
+    await this.showAllElements();
+  }
+
   async isolateSelection(): Promise<void> {
     const map = await this.getActiveSelectionMapAsync();
     if (!map) return;
@@ -3876,6 +4477,8 @@ export class BimEngine {
   }
 
   async showAllElements(): Promise<void> {
+    this.clashReviewSuppressSelectPaint = false;
+    this.clearClashSceneGhost();
     await this.clearColorize();
     await this.clearFilterGhost();
     const hider = this.mustComponents().get(OBC.Hider);
@@ -3926,31 +4529,62 @@ export class BimEngine {
     filterActive: boolean;
     visualize: "isolate" | "ghost" | "none";
     matchGuids: string[];
-    colorizeGroups: { styleId: string; color: string; guids: string[] }[];
+    /** Optional fileVersion-aware refs for federated isolate/ghost match sets. */
+    matchRefs?: { guid: string; fileVersionId?: string | null }[];
+    colorizeGroups: {
+      styleId: string;
+      color: string;
+      guids: string[];
+      fileVersionId?: string | null;
+    }[];
+    /** Ghost opacity for surrounding context (clash review). Default 0.18. */
+    ghostOpacity?: number;
+    /**
+     * When true, allow clearing even during clash review (used by clash exit).
+     * Filter-dock calls omit this so they cannot wipe clash ghost mid-review.
+     */
+    force?: boolean;
   }): Promise<void> {
+    // Filter-dock idle clears must not wipe an active clash review presentation.
+    const idleClear =
+      !opts.filterActive && opts.visualize === "none" && opts.colorizeGroups.length === 0;
+    if (idleClear && this.clashReviewSuppressSelectPaint && !opts.force) return;
+
+    if (!opts.filterActive) {
+      await this.resetFilterVisibility();
+      // Clash review may have started while we awaited — do not wipe it.
+      if (this.clashReviewSuppressSelectPaint && !opts.force) return;
+      this.activeFilterGhostMap = null;
+      this.activeColorizeGroups = [];
+      this.colorizeStyleIds = [];
+      await this.requestFragmentHighlights();
+      this.maybeScheduleDeferredMaterialSync();
+      return;
+    }
+
     this.activeFilterGhostMap = null;
 
-    if (opts.filterActive) {
-      if (opts.visualize === "none") {
-        await this.resetFilterVisibility();
-      } else if (opts.visualize === "isolate") {
-        const map = await this.resolveModelIdMapFromGuids(opts.matchGuids);
-        if (map) {
-          const hider = this.mustComponents().get(OBC.Hider);
-          await hider.isolate(map);
-          this.invalidatePlanSilhouette();
-        }
-      } else {
-        await this.applyFilterGhostState(opts.matchGuids);
+    if (opts.visualize === "none") {
+      await this.resetFilterVisibility();
+    } else if (opts.visualize === "isolate") {
+      const map = opts.matchRefs?.length
+        ? await this.resolveGuidRefsToModelIdMap(opts.matchRefs)
+        : await this.resolveModelIdMapFromGuids(opts.matchGuids);
+      if (map) {
+        const hider = this.mustComponents().get(OBC.Hider);
+        await hider.isolate(map);
+        this.invalidatePlanSilhouette();
       }
     } else {
-      await this.resetFilterVisibility();
+      await this.applyFilterGhostState(opts.matchGuids, opts.ghostOpacity ?? 0.18);
     }
 
     const nextGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
     this.colorizeStyleIds = [];
     for (const group of opts.colorizeGroups) {
-      const map = await this.resolveModelIdMapFromGuids(group.guids);
+      const map = await this.resolveGuidRefsToModelIdMap(
+        group.guids.map((guid) => ({ guid, fileVersionId: group.fileVersionId })),
+      );
       if (!map) continue;
       this.colorizeStyleIds.push(group.styleId);
       nextGroups.push({ styleId: group.styleId, color: group.color, map });
@@ -4247,11 +4881,12 @@ export class BimEngine {
     return { x: hit.x, y: hit.y, z: hit.z };
   }
 
-  private async focusCameraOnSphere(sphere: THREE.Sphere): Promise<void> {
+  private async focusCameraOnSphere(sphere: THREE.Sphere, fitScale = 0.82): Promise<void> {
     const world = this.mustWorld();
     this.adjustCameraClipping(sphere);
     const fitSphere = sphere.clone();
-    fitSphere.radius *= 0.82;
+    // Smaller fitScale → camera moves closer (sphere fills more of the viewport).
+    fitSphere.radius *= fitScale;
     await world.camera.controls.fitToSphere(fitSphere, true);
     world.camera.controls.setOrbitPoint(sphere.center.x, sphere.center.y, sphere.center.z);
   }
@@ -4420,6 +5055,64 @@ export class BimEngine {
       sphere.radius = this.detectModelUnits() === "mm" ? 2000 : 2;
     }
     await this.focusCameraOnSphere(sphere);
+  }
+
+  /**
+   * Frame the clash contact tightly — stay close so ghosted context does not
+   * dominate the view. Prefer the stored clash point; fall back to partners
+   * only when the point is missing.
+   */
+  // fallow-ignore-next-line complexity
+  private async zoomToClashFocus(opts: {
+    point?: { x: number; y: number; z: number } | null;
+    partnerMap?: OBC.ModelIdMap | null;
+    fallbackGuids?: string[];
+  }): Promise<void> {
+    const mm = this.detectModelUnits() === "mm";
+    // Tight local frame (~1 m) so the camera sits on the collision.
+    const defaultRadius = mm ? 1000 : 1;
+    const maxRadius = mm ? 2500 : 2.5;
+    const minRadius = mm ? 500 : 0.5;
+    const point = opts.point;
+    const hasPoint =
+      point != null &&
+      Number.isFinite(point.x) &&
+      Number.isFinite(point.y) &&
+      Number.isFinite(point.z);
+
+    if (hasPoint && point) {
+      const center = new THREE.Vector3(point.x, point.y, point.z);
+      let radius = defaultRadius;
+      if (opts.partnerMap) {
+        const box = await this.getModelIdMapBoundingBox(opts.partnerMap);
+        if (box) {
+          const partnerSphere = new THREE.Sphere();
+          box.getBoundingSphere(partnerSphere);
+          // Only nudge outward for tiny local pairs — never pull back to large elements.
+          if (
+            Number.isFinite(partnerSphere.radius) &&
+            partnerSphere.radius > 0 &&
+            partnerSphere.radius <= maxRadius &&
+            partnerSphere.center.distanceTo(center) <= maxRadius
+          ) {
+            radius = Math.max(minRadius, Math.min(maxRadius, partnerSphere.radius * 0.85));
+          }
+        }
+      }
+      // fitScale 0.45 → closer than the generic 0.82 framing used elsewhere.
+      await this.focusCameraOnSphere(new THREE.Sphere(center, radius), 0.45);
+      return;
+    }
+
+    if (opts.partnerMap) {
+      await this.zoomToModelIdMap(opts.partnerMap);
+      return;
+    }
+    if (opts.fallbackGuids && opts.fallbackGuids.length > 0) {
+      await this.zoomToGuids(opts.fallbackGuids);
+      return;
+    }
+    await this.fitToView();
   }
 
   getCameraState(): Record<string, unknown> {

@@ -181,15 +181,18 @@ class ModelThumbnailService {
     world.camera = new OBC.OrthoPerspectiveCamera(components);
     components.init();
 
-    const sky = getViewportColors("clear");
+    const sky = getViewportColors("cinematic");
     world.scene.setup({
       backgroundColor: new THREE.Color(sky.bgHaze),
       directionalLight: {
         color: new THREE.Color(sky.sun),
-        intensity: sky.sunIntensity,
+        intensity: sky.sunIntensity * 1.05,
         position: new THREE.Vector3(48, 88, 42),
       },
-      ambientLight: { color: new THREE.Color(sky.ambient), intensity: sky.ambientIntensity },
+      ambientLight: {
+        color: new THREE.Color(sky.ambient),
+        intensity: Math.min(0.55, sky.ambientIntensity + 0.12),
+      },
     });
 
     const renderer = world.renderer.three;

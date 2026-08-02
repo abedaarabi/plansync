@@ -11,7 +11,8 @@ type ThumbRow = {
 };
 
 export function buildThumbnailCacheKey(fileVersionId: string): string {
-  return `thumb:v1:${fileVersionId}`;
+  // v2: dark cinematic backdrop (v1 used a light “clear” sky and looked washed out)
+  return `thumb:v2:${fileVersionId}`;
 }
 
 export async function readCachedThumbnail(key: string): Promise<string | null> {

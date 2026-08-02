@@ -3,46 +3,19 @@
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import Image from "next/image";
 import { parseFederationMembers, type BimFederationMember } from "@/lib/bim/federation";
 import { parseBuildingWorkspaceMode } from "@/lib/locations/workspaceHref";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { BimBootLoadingFromUrl } from "./BimLoadingOverlay";
 
 /**
  * Client bootstrap for `/bim-viewer?fileId=…&projectId=…` (optional `version`,
  * `fileVersionId`, `name`, `guid`, `issueId`, `compareFileVersionId`, `models`,
  * `buildingId` + `mode=work|edit`). The shell is client-only.
  */
-function BimBootLoading({ message = "Loading 3D viewer…" }: { message?: string }) {
-  return (
-    <div className="bim-viewer flex h-dvh items-center justify-center">
-      <div className="bim-loading-card flex flex-col items-center px-8 py-9 text-center">
-        <div className="bim-loading-logo relative flex h-[4.5rem] w-[4.5rem] items-center justify-center">
-          <span className="bim-loading-logo__ring" aria-hidden />
-          <span className="bim-loading-logo__glow" aria-hidden />
-          <Image
-            src="/logo.svg"
-            alt=""
-            width={40}
-            height={40}
-            className="relative"
-            style={{ width: 40, height: 40 }}
-            priority
-          />
-        </div>
-        <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--bim-text-subtle)]">
-          <span className="text-[var(--bim-text)]">Plan</span>
-          <span className="text-[var(--bim-accent)]">Sync</span>
-        </p>
-        <p className="mt-3 text-[14px] font-semibold text-[var(--bim-text)]">{message}</p>
-      </div>
-    </div>
-  );
-}
-
 const BimViewerShell = dynamic(() => import("./BimViewerShell").then((m) => m.BimViewerShell), {
   ssr: false,
-  loading: () => <BimBootLoading />,
+  loading: () => <BimBootLoadingFromUrl />,
 });
 
 export function BimViewerClient() {

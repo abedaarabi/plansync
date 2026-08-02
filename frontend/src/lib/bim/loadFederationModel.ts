@@ -7,7 +7,7 @@ import {
 } from "@/lib/api-client/bim-viewer";
 import { fetchFragmentsForVersion } from "@/lib/bim/progressiveTileLoader";
 import type { BimEngine } from "@/components/bim-viewer/bimEngine";
-import { buildModelId, type BimFederationMember } from "@/lib/bim/federation";
+import type { BimFederationMember } from "@/lib/bim/federation";
 import {
   buildFragmentsCacheKey,
   readCachedFragments,
@@ -33,6 +33,45 @@ export async function resolveFederationMember(
   };
 }
 
+async function readResponseBytes(
+  res: Response,
+  onDownloading?: (fraction: number, bytesTotal: number | null) => void,
+): Promise<Uint8Array> {
+  const totalHeader = Number(res.headers.get("content-length"));
+  const total = Number.isFinite(totalHeader) && totalHeader > 0 ? totalHeader : null;
+  if (!res.body || !onDownloading) {
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  onDownloading(0, total);
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value?.byteLength) {
+      chunks.push(value);
+      received += value.byteLength;
+      if (total != null) {
+        onDownloading(Math.min(0.99, received / total), total);
+      } else {
+        onDownloading(Math.min(0.9, received / (received + 2_000_000)), null);
+      }
+    }
+  }
+
+  const out = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  onDownloading(1, total ?? received);
+  return out;
+}
+
 // fallow-ignore-next-line complexity
 export async function loadFederationMember(
   engine: BimEngine,
@@ -40,10 +79,10 @@ export async function loadFederationMember(
   opts?: {
     fitView?: boolean;
     onConverting?: (fraction: number) => void;
+    onDownloading?: (fraction: number, bytesTotal: number | null) => void;
   },
 ): Promise<void> {
   const resolved = member.fileVersionId ? member : await resolveFederationMember(member, null);
-  const modelId = buildModelId(resolved);
   const cacheKey = buildFragmentsCacheKey(resolved.fileId, resolved.fileVersionId);
 
   const status = await fetchBimStatus(resolved.fileVersionId).catch(() => null);
@@ -63,8 +102,10 @@ export async function loadFederationMember(
   // Server fragments only exist after a prior viewer session uploaded them.
   if (status?.fragmentsReady) {
     try {
+      opts?.onDownloading?.(0.15, null);
       const serverBuf = await fetchFragmentsForVersion(resolved.fileVersionId);
       if (serverBuf && serverBuf.byteLength > 0) {
+        opts?.onDownloading?.(1, serverBuf.byteLength);
         await engine.addFragments(serverBuf, resolved, { fitView: opts?.fitView ?? false });
         return;
       }
@@ -75,6 +116,7 @@ export async function loadFederationMember(
 
   const cached = await readCachedFragments(cacheKey);
   if (cached) {
+    opts?.onDownloading?.(1, cached.byteLength);
     await engine.addFragments(cached, resolved, { fitView: opts?.fitView ?? false });
     void uploadBimFragments(resolved.fileVersionId, cached).catch(() => undefined);
     return;
@@ -89,7 +131,7 @@ export async function loadFederationMember(
     { credentials: "include" },
   );
   if (!res.ok) throw new Error(`Could not download ${resolved.name} (${res.status}).`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
+  const bytes = await readResponseBytes(res, opts?.onDownloading);
   assertIfcBytesIntact(bytes, resolved.name);
   const buffer = await engine.addIfc(bytes, resolved, {
     fitView: opts?.fitView ?? false,

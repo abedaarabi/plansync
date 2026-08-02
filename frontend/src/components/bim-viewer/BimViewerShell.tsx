@@ -6,6 +6,7 @@ import {
   Boxes,
   CircleAlert,
   ClipboardList,
+  Crosshair,
   Eye,
   Filter,
   Home,
@@ -51,6 +52,9 @@ import dynamic from "next/dynamic";
 import { AlignCoordinatesPanel } from "./AlignCoordinatesPanel";
 import { BimContextMenu } from "./BimContextMenu";
 import { BimIssueMarkersOverlay } from "./BimIssueMarkersOverlay";
+import { BimClashReviewHud } from "./BimClashReviewHud";
+import { BimClashDockContent } from "./BimClashDockContent";
+import { ifcTypeCountsForModel, modelIdFromSet } from "@/lib/bim/clash/clashSets";
 import { BimIssueCommentDialog } from "./BimIssueCommentDialog";
 import { BimBreadcrumbChip } from "./BimBreadcrumbChip";
 import { BimIconRail } from "./BimIconRail";
@@ -58,6 +62,11 @@ import { BimGlassDock } from "./BimGlassDock";
 import { BimBottomToolBar, type BimBottomFlyout } from "./BimBottomToolBar";
 import { BimPlanMinimap } from "./BimPlanMinimap";
 import { BimShortcutsOverlay } from "./BimShortcutsOverlay";
+import { useBimClashSession } from "@/lib/bim/clash/useBimClashSession";
+import { patchClash } from "@/lib/api-client/bim-clash";
+import { authClient } from "@/lib/auth-client";
+import { EnterpriseBottomSheet } from "@/components/mobile/EnterpriseBottomSheet";
+import type { BimClashStatus } from "@plansync/shared/bimClashTypes";
 import {
   readSavedWalkPlanSize,
   writeSavedWalkPlanSize,
@@ -133,11 +142,18 @@ const MatchingWindowClient = dynamic(
 
 type PlanPanelMode = "minimap" | "drawingSync";
 
-type BimDockId = BimLeftDockId | "properties" | "takeoffViews" | "issues" | "filters";
+type BimDockId = BimLeftDockId | "properties" | "takeoffViews" | "issues" | "filters" | "clashes";
 
 type Phase =
   | { kind: "resolving" }
-  | { kind: "downloading"; label?: string; index?: number; total?: number }
+  | {
+      kind: "downloading";
+      label?: string;
+      index?: number;
+      total?: number;
+      fraction?: number;
+      bytesTotal?: number;
+    }
   | { kind: "converting"; fraction: number; label?: string }
   | { kind: "ready" }
   | { kind: "error"; message: string };
@@ -181,6 +197,13 @@ export function BimViewerShell(props: {
   const [activeEngine, setActiveEngine] = useState<BimEngine | null>(null);
 
   const [phase, setPhase] = useState<Phase>({ kind: "resolving" });
+  const [loadExiting, setLoadExiting] = useState(false);
+  const lastLoadPhaseRef = useRef<Exclude<Phase, { kind: "ready" } | { kind: "error" }>>({
+    kind: "resolving",
+  });
+  if (phase.kind !== "ready" && phase.kind !== "error") {
+    lastLoadPhaseRef.current = phase;
+  }
   const [tool, setTool] = useState<BimTool>("select");
   const [cameraMode, setCameraMode] = useState<BimCameraMode>("orbit");
   const [selection, setSelection] = useState<BimSelection | null>(null);
@@ -197,6 +220,10 @@ export function BimViewerShell(props: {
   );
   const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(props.projectId);
   const [quantityIndex, setQuantityIndex] = useState<BimQuantityIndex | null>(null);
+  const [clashDockOpen, setClashDockOpen] = useState(false);
+  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
+  const { data: session } = authClient.useSession();
+  const currentUserId = session?.user?.id ?? null;
   const [loq, setLoq] = useState<BimLoqReport | null>(null);
   const [conversionStatus, setConversionStatus] = useState("pending");
   const [quantityIndexError, setQuantityIndexError] = useState<string | null>(null);
@@ -217,6 +244,41 @@ export function BimViewerShell(props: {
     quantityIndex,
     filterState,
   );
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => setIsNarrowViewport(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    setClashDockOpen(activeDock === "clashes");
+  }, [activeDock]);
+
+  const clashModels = useMemo(
+    () => loadedModels.map((m) => ({ modelId: m.modelId, name: m.name })),
+    [loadedModels],
+  );
+
+  const clash = useBimClashSession({
+    projectId: resolvedProjectId,
+    fileId: props.fileId,
+    fileVersionId: resolvedFileVersionId,
+    quantityIndex,
+    engine: activeEngine,
+    active: clashDockOpen || activeDock === "clashes",
+    models: clashModels,
+  });
+
+  const mobileAssigneeDefaulted = useRef(false);
+  useEffect(() => {
+    if (activeDock !== "clashes" || !isNarrowViewport || mobileAssigneeDefaulted.current) return;
+    mobileAssigneeDefaulted.current = true;
+    clash.setAssigneeMe(true);
+  }, [activeDock, isNarrowViewport, clash.setAssigneeMe]);
+
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -423,11 +485,21 @@ export function BimViewerShell(props: {
   }, []);
 
   useEffect(() => {
+    if (phase.kind !== "ready") {
+      setLoadExiting(false);
+      return;
+    }
+    setLoadExiting(true);
+    const timer = window.setTimeout(() => setLoadExiting(false), 300);
+    return () => window.clearTimeout(timer);
+  }, [phase.kind]);
+
+  useEffect(() => {
     if (!viewportEl) return;
 
     let cancelled = false;
     disposeModelThumbnailService();
-    setPhase({ kind: "downloading", label: props.fileName, index: 0, total: 1 });
+    setPhase({ kind: "resolving" });
 
     const engine = new BimEngine({
       onSelection: (sel) => {
@@ -497,6 +569,18 @@ export function BimViewerShell(props: {
           });
           await loadFederationMember(engine, member, {
             fitView: false,
+            onDownloading: (fraction, bytesTotal) => {
+              if (!cancelled) {
+                setPhase({
+                  kind: "downloading",
+                  label: member.name,
+                  index: i,
+                  total: resolvedMembers.length,
+                  fraction,
+                  bytesTotal: bytesTotal ?? undefined,
+                });
+              }
+            },
             onConverting: (fraction) => {
               if (!cancelled) setPhase({ kind: "converting", fraction, label: member.name });
             },
@@ -1113,6 +1197,8 @@ export function BimViewerShell(props: {
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine || phase.kind !== "ready") return;
+    // Clash review owns ghost/colorize — filter dock must not overwrite it.
+    if (engine.isClashReviewActive()) return;
 
     const filterActive = hasActiveFilter(filterState);
     const colorizeActive = Boolean(filterState.colorize?.enabled);
@@ -1143,6 +1229,7 @@ export function BimViewerShell(props: {
       // fallow-ignore-next-line complexity
       void (async () => {
         if (applyGen !== filterApplyGenRef.current) return;
+        if (engine.isClashReviewActive()) return;
 
         await engine.applyFilterPresentation({
           filterActive,
@@ -1158,6 +1245,7 @@ export function BimViewerShell(props: {
               : [],
         });
         if (applyGen !== filterApplyGenRef.current) return;
+        if (engine.isClashReviewActive()) return;
 
         if (filterActive && guids.length > 0) {
           await engine.zoomToGuids(guids);
@@ -1732,6 +1820,8 @@ export function BimViewerShell(props: {
         ? `/projects/${resolvedProjectId}/files`
         : "/projects";
   const loading = phase.kind !== "ready" && phase.kind !== "error";
+  const showLoadOverlay = loading || loadExiting;
+
   const hint = TOOL_HINTS[tool];
   const toolNeedsPoint =
     tool !== "select" && tool !== "clip" && tool !== "markup" && phase.kind === "ready";
@@ -1862,6 +1952,12 @@ export function BimViewerShell(props: {
           badge: issues.length > 0 ? issues.length : undefined,
         },
         {
+          id: "clashes",
+          label: "Clashes",
+          icon: Crosshair,
+          badge: clash.openCount > 0 ? clash.openCount : undefined,
+        },
+        {
           id: "properties",
           label: "Properties",
           icon: TableProperties,
@@ -1893,6 +1989,7 @@ export function BimViewerShell(props: {
     [
       isFederated,
       issues.length,
+      clash.openCount,
       federationMembers.length,
       selectionCount,
       filterState,
@@ -1924,6 +2021,12 @@ export function BimViewerShell(props: {
       subtitle: "Quantities, export, and saved cameras",
     },
     issues: { title: "Issues", subtitle: `${issues.length} on this model` },
+    clashes: {
+      title: "Clash detection",
+      subtitle: clash.activeTest
+        ? `${clash.openCount} open · ${clash.activeTest.name}`
+        : "Setup sets, run tests, review results",
+    },
   };
 
   const isBrowserDock = (dock: BimDockId): dock is BimLeftDockId =>
@@ -1936,6 +2039,69 @@ export function BimViewerShell(props: {
   const mappingUiReady =
     mappingEditActive && phase.kind === "ready" && Boolean(props.locationId && resolvedProjectId);
   const workChromeReady = phase.kind === "ready" && !mappingEditActive;
+
+  const clashTypeOptionsA = useMemo(
+    () => ifcTypeCountsForModel(quantityIndex, modelIdFromSet(clash.setA)),
+    [quantityIndex, clash.setA],
+  );
+  const clashTypeOptionsB = useMemo(
+    () => ifcTypeCountsForModel(quantityIndex, modelIdFromSet(clash.setB)),
+    [quantityIndex, clash.setB],
+  );
+
+  const clashDockBody =
+    workChromeReady && activeDock === "clashes" ? (
+      <BimClashDockContent
+        test={clash.activeTest}
+        clashes={clash.clashes}
+        selectedClashId={clash.selectedClashId}
+        statusFilter={clash.statusFilter}
+        assigneeMe={clash.assigneeMe}
+        grouped={clash.grouped}
+        contextMode={clash.contextMode}
+        runStats={clash.runStats}
+        currentUserId={currentUserId}
+        creatingIssue={clash.creatingIssue}
+        setup={{
+          setA: clash.setA,
+          setB: clash.setB,
+          setACount: clash.setCounts.a,
+          setBCount: clash.setCounts.b,
+          models: loadedModels.map((m) => ({
+            modelId: m.modelId,
+            name: m.name,
+            visible: m.visible,
+          })),
+          typeOptionsA: clashTypeOptionsA,
+          typeOptionsB: clashTypeOptionsB,
+          levels: clash.levels,
+          clearanceEnabled: clash.clearanceEnabled,
+          clearanceMm: clash.clearanceMm,
+          running: clash.running,
+          progress: clash.progress,
+          onChangeSetA: clash.setSetA,
+          onChangeSetB: clash.setSetB,
+          onToggleModelVisible: onToggleModelVisible,
+          onClearanceEnabledChange: clash.setClearanceEnabled,
+          onClearanceMmChange: clash.setClearanceMm,
+          onRun: () => void clash.runTest(),
+          onCancel: clash.cancelRun,
+        }}
+        onStatusFilterChange={clash.setStatusFilter}
+        onAssigneeMeChange={clash.setAssigneeMe}
+        onGroupedChange={clash.setGrouped}
+        onContextModeChange={clash.setContextMode}
+        onSelectClash={(c) => void clash.focusClash(c)}
+        onClashesChange={clash.setClashes}
+        onCreateIssue={(c) => void clash.createIssueFromClash(c)}
+        onBulkCreateIssue={(rows) => void clash.bulkCreateIssueFromGroup(rows)}
+      />
+    ) : null;
+
+  const closeClashDock = () => {
+    setActiveDock(null);
+    void clash.clearFocusMode();
+  };
   const workspaceStorey = workspaceLevel
     ? (activeEngine?.resolveStoreyName(workspaceLevel.sourceName) ??
       activeEngine?.resolveStoreyName(workspaceLevel.name) ??
@@ -1944,6 +2110,7 @@ export function BimViewerShell(props: {
 
   useEffect(() => {
     if (!workChromeReady) return;
+    // fallow-ignore-next-line complexity
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
@@ -1952,11 +2119,47 @@ export function BimViewerShell(props: {
       if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
         e.preventDefault();
         setShortcutsOpen((open) => !open);
+        return;
+      }
+
+      if (activeDock !== "clashes") return;
+      const list = clash.clashes.filter((c) => clash.filteredIds.has(c.id));
+      const idx = list.findIndex((c) => c.id === clash.selectedClashId);
+
+      if (e.key === "j" || e.key === "J") {
+        e.preventDefault();
+        const next = list[Math.min(list.length - 1, Math.max(0, idx + 1))];
+        if (next) void clash.focusClash(next);
+        return;
+      }
+      if (e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        const prev = list[Math.max(0, idx <= 0 ? 0 : idx - 1)];
+        if (prev) void clash.focusClash(prev);
+        return;
+      }
+      if (e.key === "Escape" && clash.selectedClashId) {
+        e.preventDefault();
+        void clash.clearFocusMode();
+        return;
+      }
+      const statusMap: Record<string, BimClashStatus> = {
+        "1": "NEW",
+        "2": "ACTIVE",
+        "3": "RESOLVED",
+        "4": "IGNORED",
+      };
+      const status = statusMap[e.key];
+      if (status && clash.selectedClash) {
+        e.preventDefault();
+        void patchClash(clash.selectedClash.id, { status }).then((updated) => {
+          clash.setClashes(clash.clashes.map((c) => (c.id === updated.id ? updated : c)));
+        });
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [workChromeReady]);
+  }, [workChromeReady, activeDock, clash]);
 
   return (
     <div ref={shellRef} className="bim-viewer fixed inset-0 z-40 overflow-hidden">
@@ -2240,6 +2443,31 @@ export function BimViewerShell(props: {
           </BimGlassDock>
         ) : null}
 
+        {clashDockBody && isNarrowViewport ? (
+          <EnterpriseBottomSheet
+            open
+            onClose={closeClashDock}
+            ariaLabel="Clash detection"
+            maxHeightClass="max-h-[min(78dvh,720px)]"
+            panelClassName="bg-[var(--bim-shell)] text-[var(--bim-text)]"
+          >
+            {clashDockBody}
+          </EnterpriseBottomSheet>
+        ) : null}
+
+        {clashDockBody && !isNarrowViewport ? (
+          <BimGlassDock
+            side="right"
+            open
+            title={dockMeta.clashes.title}
+            subtitle={dockMeta.clashes.subtitle}
+            closeOnOutsideClick={false}
+            onClose={closeClashDock}
+          >
+            {clashDockBody}
+          </BimGlassDock>
+        ) : null}
+
         {workChromeReady ? (
           <BimIssueMarkersOverlay
             engine={activeEngine}
@@ -2252,6 +2480,51 @@ export function BimViewerShell(props: {
             onOpenDocuments={onMarkerOpenDocuments}
             onAddComment={onMarkerAddComment}
             onResolveIssue={onMarkerResolveIssue}
+          />
+        ) : null}
+
+        {workChromeReady &&
+        activeDock === "clashes" &&
+        clash.selectedClash &&
+        clash.clashes.length > 0 ? (
+          <BimClashReviewHud
+            clash={clash.selectedClash}
+            engine={activeEngine}
+            modelLabelA={
+              loadedModels.find((m) => m.fileVersionId === clash.selectedClash?.fileVersionAId)
+                ?.name ?? null
+            }
+            modelLabelB={
+              loadedModels.find((m) => m.fileVersionId === clash.selectedClash?.fileVersionBId)
+                ?.name ?? null
+            }
+            index={Math.max(
+              0,
+              clash.clashes
+                .filter((c) => clash.filteredIds.has(c.id))
+                .findIndex((c) => c.id === clash.selectedClashId),
+            )}
+            total={clash.clashes.filter((c) => clash.filteredIds.has(c.id)).length}
+            onPrev={() => {
+              const list = clash.clashes.filter((c) => clash.filteredIds.has(c.id));
+              const idx = list.findIndex((c) => c.id === clash.selectedClashId);
+              const prev = list[idx <= 0 ? list.length - 1 : idx - 1];
+              if (prev) void clash.focusClash(prev);
+            }}
+            onNext={() => {
+              const list = clash.clashes.filter((c) => clash.filteredIds.has(c.id));
+              const idx = list.findIndex((c) => c.id === clash.selectedClashId);
+              const next = list[idx < 0 || idx >= list.length - 1 ? 0 : idx + 1];
+              if (next) void clash.focusClash(next);
+            }}
+            onExit={() => void clash.clearFocusMode()}
+            onInspectItem={(item) => {
+              if (clash.selectedClash) void clash.inspectClashItem(clash.selectedClash, item);
+            }}
+            creatingIssue={clash.creatingIssue}
+            onCreateIssue={(c) => void clash.createIssueFromClash(c)}
+            contextMode={clash.contextMode}
+            onContextModeChange={clash.setContextMode}
           />
         ) : null}
 
@@ -2271,7 +2544,15 @@ export function BimViewerShell(props: {
           />
         ) : null}
 
-        {loading ? <BimLoadingOverlay phase={phase} /> : null}
+        {showLoadOverlay ? (
+          <BimLoadingOverlay
+            phase={lastLoadPhaseRef.current}
+            fileVersionId={resolvedFileVersionId ?? props.fileVersionId}
+            modelName={props.fileName}
+            version={props.version}
+            exiting={loadExiting}
+          />
+        ) : null}
 
         {phase.kind === "error" ? (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--bim-shell)]">

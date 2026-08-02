@@ -67,6 +67,9 @@ model User {
   bimPublishedVersions         FileVersion[]             @relation("BimPublishedBy")
   coordAlignedDrawingMaps      DrawingLevelMap[]         @relation("CoordAlignedBy")
   issueComments                IssueComment[]            @relation("IssueCommentAuthor")
+  bimClashTestsRun             BimClashTest[]            @relation("BimClashTestRunner")
+  bimClashesAssigned           BimClash[]                @relation("BimClashAssignee")
+  bimClashComments             BimClashComment[]         @relation("BimClashCommentAuthor")
 
   /// When true, omit this user from PDF viewer presence / collaborator lists (still can edit).
   hideViewerPresence Boolean @default(false)
@@ -482,6 +485,8 @@ model Project {
   bimModelLevels            BimModelLevel[]
   drawingLevelMaps          DrawingLevelMap[]
   locations                 Location[]
+  bimClashTests             BimClashTest[]
+  bimClashes                BimClash[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -989,6 +994,9 @@ model FileVersion {
   bimElementVersions     BimElementVersion[]
   bimElementAttributes   BimElementAttribute[]
   bimVersionTiles        BimVersionTile[]
+  bimClashesAsA          BimClash[]              @relation("BimClashFileVersionA")
+  bimClashesAsB          BimClash[]              @relation("BimClashFileVersionB")
+  bimClashesMissingSince BimClash[]              @relation("BimClashMissingSince")
 
   @@unique([fileId, version])
   @@index([fileId])
@@ -1130,8 +1138,9 @@ model Issue {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  rfiLinks RfiIssueLink[]
-  comments IssueComment[]
+  rfiLinks   RfiIssueLink[]
+  comments   IssueComment[]
+  bimClashes BimClash[]
 
   @@unique([maintenanceScheduleId, maintenanceDueAt])
   @@index([workspaceId])
@@ -1544,9 +1553,107 @@ model BimElement {
   file       File                  @relation(fields: [fileId], references: [id], onDelete: Cascade)
   versions   BimElementVersion[]
   attributes BimElementAttribute[]
+  clashesAsA BimClash[]            @relation("BimClashElementA")
+  clashesAsB BimClash[]            @relation("BimClashElementB")
 
   @@unique([fileId, ifcGuid])
   @@index([fileId])
+}
+
+enum BimClashType {
+  HARD
+  CLEARANCE
+  DUPLICATE
+}
+
+enum BimClashStatus {
+  NEW
+  ACTIVE
+  RESOLVED
+  IGNORED
+}
+
+/// Saved clash test configuration (selection sets + clearance).
+model BimClashTest {
+  id               String    @id @default(cuid())
+  projectId        String
+  name             String
+  setAJson         Json
+  setBJson         Json
+  clearanceEnabled Boolean   @default(true)
+  clearanceMm      Float     @default(25)
+  lastRunAt        DateTime?
+  lastRunById      String?
+  lastRunStats     Json?
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lastRunBy User?      @relation("BimClashTestRunner", fields: [lastRunById], references: [id], onDelete: SetNull)
+  clashes   BimClash[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+/// Persistent clash between two IFC elements, matched across re-runs by element pair.
+model BimClash {
+  id                    String         @id @default(cuid())
+  testId                String
+  projectId             String
+  fileVersionAId        String
+  fileVersionBId        String
+  elementAId            String
+  elementBId            String
+  guidA                 String
+  guidB                 String
+  clashType             BimClashType
+  distanceMm            Float
+  pointJson             Json
+  contactCount          Int            @default(1)
+  status                BimClashStatus @default(NEW)
+  statusChangedAt       DateTime?
+  statusDistanceMm      Float?
+  assigneeId            String?
+  groupId               String?
+  elementMissingSinceId String?
+  issueId               String?
+  firstSeenAt           DateTime       @default(now())
+  lastSeenAt            DateTime       @default(now())
+
+  test                BimClashTest      @relation(fields: [testId], references: [id], onDelete: Cascade)
+  project             Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileVersionA        FileVersion       @relation("BimClashFileVersionA", fields: [fileVersionAId], references: [id], onDelete: Cascade)
+  fileVersionB        FileVersion       @relation("BimClashFileVersionB", fields: [fileVersionBId], references: [id], onDelete: Cascade)
+  elementA            BimElement        @relation("BimClashElementA", fields: [elementAId], references: [id], onDelete: Cascade)
+  elementB            BimElement        @relation("BimClashElementB", fields: [elementBId], references: [id], onDelete: Cascade)
+  assignee            User?             @relation("BimClashAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  elementMissingSince FileVersion?      @relation("BimClashMissingSince", fields: [elementMissingSinceId], references: [id], onDelete: SetNull)
+  issue               Issue?            @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  comments            BimClashComment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([testId, elementAId, elementBId])
+  @@index([projectId, status])
+  @@index([testId])
+  @@index([groupId])
+  @@index([assigneeId])
+  @@index([issueId])
+}
+
+model BimClashComment {
+  id        String   @id @default(cuid())
+  clashId   String
+  clash     BimClash @relation(fields: [clashId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation("BimClashCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clashId])
 }
 
 /// Per-version element metadata pointer and diff state.

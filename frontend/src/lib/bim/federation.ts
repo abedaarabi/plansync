@@ -1,4 +1,5 @@
 import type { BimQuantityEntry, BimQuantityIndex } from "@/lib/bim/types";
+import { disciplineForIfcType } from "@/lib/bim/discipline";
 
 /** One IFC revision in a federated viewer session. */
 export type BimFederationMember = {
@@ -143,15 +144,42 @@ export function mergeFederatedQuantityIndices(
       continue;
     }
 
+    // Summary indexes strip `elements` but keep guid lists in byType/byLevel.
+    // Rebuild stubs so clash sets (and other guid-driven tools) still resolve.
+    const levelByGuid = new Map<string, string>();
+    for (const agg of Object.values(src.index.byLevel)) {
+      mergeLevelAgg(agg.level, agg.count, agg.guids);
+      for (const guid of agg.guids) levelByGuid.set(guid, agg.level);
+    }
     for (const agg of Object.values(src.index.byType)) {
       mergeTypeAgg(agg.ifcType, agg.count, agg.guids, {
         totalLength: agg.totalLength,
         totalArea: agg.totalArea,
         totalVolume: agg.totalVolume,
       });
-    }
-    for (const agg of Object.values(src.index.byLevel)) {
-      mergeLevelAgg(agg.level, agg.count, agg.guids);
+      for (const guid of agg.guids) {
+        elements.push({
+          expressId: 0,
+          guid,
+          ifcType: agg.ifcType,
+          name: null,
+          level: levelByGuid.get(guid) ?? null,
+          material: null,
+          discipline: disciplineForIfcType(agg.ifcType),
+          quantities: {},
+          quantitySource: "missing",
+          lodFlags: {
+            identity: true,
+            dimensions: false,
+            quantities: false,
+            material: false,
+            color: false,
+          },
+          sourceFileVersionId: src.fileVersionId,
+          sourceModelId: src.modelId,
+          sourceLabel: src.label,
+        });
+      }
     }
   }
 
@@ -164,6 +192,6 @@ export function mergeFederatedQuantityIndices(
     elements,
     byType,
     byLevel,
-    partial: anyPartial && elements.length === 0 ? true : undefined,
+    partial: anyPartial ? true : undefined,
   };
 }

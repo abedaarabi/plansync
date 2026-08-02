@@ -12,7 +12,7 @@ import { PlanPickPane } from "./matching/PlanPickPane";
 import { OverlayPreviewPane } from "./matching/OverlayPreviewPane";
 
 type Phase =
-  | { kind: "loading"; label: string }
+  | { kind: "loading"; label: string; fraction?: number; bytesTotal?: number }
   | { kind: "converting"; fraction: number; label: string }
   | { kind: "ready" }
   | { kind: "error"; message: string };
@@ -118,6 +118,16 @@ export function RegistrationWorkspace({
           { fileId, fileVersionId, name: fileName },
           {
             fitView: false,
+            onDownloading: (fraction, bytesTotal) => {
+              if (!cancelled) {
+                setPhase({
+                  kind: "loading",
+                  label: fileName,
+                  fraction,
+                  bytesTotal: bytesTotal ?? undefined,
+                });
+              }
+            },
             onConverting: (fraction) => {
               if (!cancelled) setPhase({ kind: "converting", fraction, label: fileName });
             },
@@ -255,8 +265,15 @@ export function RegistrationWorkspace({
               phase={
                 phase.kind === "converting"
                   ? { kind: "converting", fraction: phase.fraction, label: phase.label }
-                  : { kind: "downloading", label: phase.label }
+                  : {
+                      kind: "downloading",
+                      label: phase.label,
+                      fraction: phase.fraction,
+                      bytesTotal: phase.bytesTotal,
+                    }
               }
+              fileVersionId={fileVersionId}
+              modelName={fileName}
             />
           ) : null}
 
