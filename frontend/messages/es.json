@@ -46,6 +46,27 @@
     "extra": "Órdenes de trabajo, inspecciones, portal de inquilinos",
     "cta": "Explorar herramientas de operaciones"
   },
+  "bimShowcase": {
+    "eyebrow": "BIM en el navegador",
+    "title": "Modelos IFC que el equipo sí puede usar",
+    "body": "Abre modelos complejos, inspecciona activos para O&M y detecta interferencias — sin salir de PlanSync.",
+    "viewerLabel": "Visor IFC 3D",
+    "viewerTitle": "Hecho para modelos reales, no demos",
+    "viewerBody": "Abre modelos IFC directamente en el navegador. Recorre el edificio en 3D, filtra por sistema o nivel, y mantén el modelo útil para coordinación, revisión de activos y O&M diario — sin quedar atrapado en una herramienta de escritorio especializada.",
+    "viewerBullet1": "Abre y navega modelos IFC grandes en el navegador",
+    "viewerBullet2": "Filtra por categoría, nivel y modelo para vistas claras",
+    "viewerBullet3": "Diseñado para gestión de activos y operaciones, no solo revisión de diseño",
+    "viewerImageAlt": "Visor IFC 3D de PlanSync mostrando un modelo MEP filtrado con más de diez mil elementos",
+    "clashLabel": "Detección de interferencias",
+    "clashTitle": "Encuentra conflictos donde ya vive el modelo",
+    "clashBody": "Ejecuta interferencias duras, holguras y duplicados en el visor. Resalta colisiones en contexto, asigna seguimiento y conviértelas en incidencias — sin otra herramienta.",
+    "clashBullet1": "Comprobaciones de interferencia dura, holgura y duplicados",
+    "clashBullet2": "Filtra por modelo, disciplina, tipo IFC o nivel",
+    "clashBullet3": "Asigna, sigue y resuelve interferencias en un solo flujo",
+    "clashImageAlt": "Detección de interferencias de PlanSync resaltando un conflicto espacial entre dos elementos",
+    "cta": "Empezar prueba gratis",
+    "ctaHint": "Abre modelos IFC y ejecuta interferencias con tu equipo"
+  },
   "howItWorks": {
     "eyebrow": "Cómo funciona",
     "title": "Del PDF a la claridad del proyecto",

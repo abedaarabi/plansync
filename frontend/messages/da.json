@@ -46,6 +46,27 @@
     "extra": "Arbejdsordrer, inspektioner, lejerportal",
     "cta": "Udforsk driftsværktøjer"
   },
+  "bimShowcase": {
+    "eyebrow": "BIM i browseren",
+    "title": "IFC-modeller dit team faktisk kan bruge",
+    "body": "Åbn komplekse bygningsmodeller, inspicer aktiver til O&M, og fang kollisioner — uden at forlade PlanSync.",
+    "viewerLabel": "3D IFC-fremviser",
+    "viewerTitle": "Bygget til rigtige modeller, ikke demoer",
+    "viewerBody": "Åbn IFC-modeller direkte i browseren. Gå gennem bygningen i 3D, filtrer efter system eller niveau, og hold modellen nyttig til koordinering, aktivtjek og daglig O&M — uden et specialiseret desktop-værktøj.",
+    "viewerBullet1": "Åbn og naviger store IFC-modeller i browseren",
+    "viewerBullet2": "Filtrer efter kategori, niveau og model for klare aktiver",
+    "viewerBullet3": "Bygget til ejendomsdrift og O&M — ikke kun design review",
+    "viewerImageAlt": "PlanSync 3D IFC-fremviser med et filtreret MEP-model med over ti tusinde elementer",
+    "clashLabel": "Kollisionsdetektion",
+    "clashTitle": "Find konflikter dér hvor modellen allerede er",
+    "clashBody": "Kør hårde kollisioner, frigangschecks og dubletter i fremviseren. Fremhæv konflikter i kontekst, tildel opfølgning, og gør dem til sager — uden et separat værktøj.",
+    "clashBullet1": "Hårde, frigangs- og dubletkollisioner",
+    "clashBullet2": "Filtrer efter model, disciplin, IFC-type eller niveau",
+    "clashBullet3": "Tildel, spor og løs kollisioner i ét workflow",
+    "clashImageAlt": "PlanSync kollisionsdetektion der fremhæver en rumlig konflikt mellem to bygningsdele",
+    "cta": "Start gratis prøveperiode",
+    "ctaHint": "Åbn IFC-modeller og kør kollisionschecks med dit team"
+  },
   "howItWorks": {
     "eyebrow": "Sådan virker det",
     "title": "Fra PDF til projektklarhed",

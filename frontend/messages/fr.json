@@ -46,6 +46,27 @@
     "extra": "Ordres de travail, inspections, portail occupants",
     "cta": "Découvrir l’exploitation"
   },
+  "bimShowcase": {
+    "eyebrow": "BIM dans le navigateur",
+    "title": "Des modèles IFC vraiment utilisables",
+    "body": "Ouvrez des modèles complexes, inspectez les actifs pour l’E&M, et détectez les collisions — sans quitter PlanSync.",
+    "viewerLabel": "Visionneuse IFC 3D",
+    "viewerTitle": "Conçue pour les vrais modèles, pas les démos",
+    "viewerBody": "Ouvrez vos modèles IFC directement dans le navigateur. Parcourez le bâtiment en 3D, filtrez par système ou niveau, et gardez le modèle utile pour la coordination, les contrôles d’actifs et l’E&M au quotidien — sans outil de bureau spécialisé.",
+    "viewerBullet1": "Ouvrez et explorez de grands modèles IFC dans le navigateur",
+    "viewerBullet2": "Filtrez par catégorie, niveau et modèle pour des vues claires",
+    "viewerBullet3": "Pensé pour la gestion d’actifs et l’exploitation, pas seulement la revue de conception",
+    "viewerImageAlt": "Visionneuse IFC 3D PlanSync avec un modèle MEP filtré de plus de dix mille éléments",
+    "clashLabel": "Détection de collisions",
+    "clashTitle": "Trouvez les conflits là où vit déjà le modèle",
+    "clashBody": "Lancez collisions dures, contrôles de dégagement et doublons dans la visionneuse. Mettez en évidence les conflits, assignez le suivi, et transformez-les en anomalies — sans outil séparé.",
+    "clashBullet1": "Contrôles de collision dure, de dégagement et de doublons",
+    "clashBullet2": "Filtrez par modèle, discipline, type IFC ou niveau",
+    "clashBullet3": "Assignez, suivez et résolvez les collisions dans un seul flux",
+    "clashImageAlt": "Détection de collisions PlanSync mettant en évidence un conflit spatial entre deux éléments",
+    "cta": "Démarrer l’essai gratuit",
+    "ctaHint": "Ouvrez des modèles IFC et lancez des contrôles de collision avec votre équipe"
+  },
   "howItWorks": {
     "eyebrow": "Comment ça marche",
     "title": "Du PDF à la clarté projet",

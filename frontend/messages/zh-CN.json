@@ -46,6 +46,27 @@
     "extra": "工单、检查、租户门户",
     "cta": "探索运营工具"
   },
+  "bimShowcase": {
+    "eyebrow": "浏览器内 BIM",
+    "title": "团队真正能用的 IFC 模型",
+    "body": "打开复杂建筑模型，检查运维资产，并发现碰撞 — 无需离开 PlanSync。",
+    "viewerLabel": "3D IFC 查看器",
+    "viewerTitle": "为真实模型而建，而非演示",
+    "viewerBody": "直接在浏览器中打开 IFC 模型。以三维方式浏览建筑、按系统或楼层筛选，并让模型持续用于协调、资产检查与日常运维 — 而不是锁在专业桌面软件里。",
+    "viewerBullet1": "在浏览器中打开并浏览大型 IFC 模型",
+    "viewerBullet2": "按类别、楼层与模型筛选，获得清晰资产视图",
+    "viewerBullet3": "面向资产管理与运维，而不只是设计评审",
+    "viewerImageAlt": "PlanSync 3D IFC 查看器展示已筛选的机电模型，包含逾一万个构件",
+    "clashLabel": "碰撞检测",
+    "clashTitle": "在模型所在处发现冲突",
+    "clashBody": "在查看器中运行硬碰撞、净空与重复检查。在上下文中高亮冲突、指派跟进，并转为问题 — 无需单独协调工具。",
+    "clashBullet1": "硬碰撞、净空与重复检查",
+    "clashBullet2": "按模型、专业、IFC 类型或楼层筛选",
+    "clashBullet3": "在同一工作流中指派、跟踪并解决碰撞",
+    "clashImageAlt": "PlanSync 碰撞检测高亮两个建筑构件之间的空间冲突",
+    "cta": "开始免费试用",
+    "ctaHint": "与团队一起打开 IFC 模型并运行碰撞检查"
+  },
   "howItWorks": {
     "eyebrow": "工作原理",
     "title": "从 PDF 到项目清晰透明",

@@ -84,6 +84,27 @@
     "extra": "Work orders, inspections, tenant portal, orchestration",
     "cta": "Explore Operations tools"
   },
+  "bimShowcase": {
+    "eyebrow": "BIM in the browser",
+    "title": "IFC models your team can actually use",
+    "body": "Open complex building models, inspect assets for O&M, and catch clashes — without leaving PlanSync.",
+    "viewerLabel": "3D IFC viewer",
+    "viewerTitle": "Built for real models, not demos",
+    "viewerBody": "Open IFC models right in the browser. Walk the building in 3D, filter by system or level, and keep the model useful for coordination, asset checks, and day-to-day O&M — not locked in a specialist desktop tool.",
+    "viewerBullet1": "Open and navigate large IFC models in the browser",
+    "viewerBullet2": "Filter by category, level, and model for clear asset views",
+    "viewerBullet3": "Built for property management and operations, not just design review",
+    "viewerImageAlt": "PlanSync 3D IFC viewer showing a filtered MEP model with over ten thousand elements",
+    "clashLabel": "Clash detection",
+    "clashTitle": "Find conflicts where the model already lives",
+    "clashBody": "Run hard clashes, clearance checks, and duplicates in the viewer. Highlight collisions in context, assign follow-ups, and turn them into issues — no separate coordination tool.",
+    "clashBullet1": "Hard, clearance, and duplicate clash checks",
+    "clashBullet2": "Filter by model, discipline, IFC type, or level",
+    "clashBullet3": "Assign, track, and resolve clashes in one workflow",
+    "clashImageAlt": "PlanSync clash detection highlighting a spatial conflict between two building elements",
+    "cta": "Start free trial",
+    "ctaHint": "Open IFC models and run clash checks with your team"
+  },
   "howItWorks": {
     "eyebrow": "How it works",
     "title": "From PDF to project clarity",

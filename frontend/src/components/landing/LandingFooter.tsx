@@ -52,7 +52,7 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               </li>
               <li>
                 <Link
-                  href="/#features"
+                  href="/#bim"
                   className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   {t("features")}

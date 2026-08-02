@@ -67,7 +67,7 @@ export function LandingNav({
 
         <div className="hidden items-center gap-1.5 md:flex">
           <SolutionsDropdown />
-          <Link href="/#features" className={desktopLinkClass("/#features")}>
+          <Link href="/#bim" className={desktopLinkClass("/#bim")}>
             {t("features")}
           </Link>
           <Link href="/pricing" className={desktopLinkClass("/pricing")}>
@@ -186,7 +186,7 @@ export function LandingNav({
               </div>
             </div>
             <Link
-              href="/#features"
+              href="/#bim"
               className="landing-type-nav text-slate-600"
               onClick={() => setMobileOpen(false)}
             >
