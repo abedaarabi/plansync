@@ -107,6 +107,7 @@ import {
   bimAnchorFromSelection,
   BIM_ASSET_SOFT_FIT_SCALE,
 } from "@/lib/bim/omAssetFromSelection";
+import { findOmAssetByGuid } from "@/lib/bim/findOmAssetByGuid";
 import type { AssetFormDraft } from "@/components/enterprise/OmAssetFormFields";
 import {
   fetchOmAssets,
@@ -335,12 +336,19 @@ export function BimViewerShell(props: {
     projectSession.settings.modules.omAssets,
   );
 
-  const { data: omAssetsForFocus } = useQuery({
+  const { data: omAssetsList, refetch: refetchOmAssets } = useQuery({
     queryKey: qk.omAssets(resolvedProjectId ?? ""),
     queryFn: () => fetchOmAssets(resolvedProjectId!),
-    enabled: Boolean(resolvedProjectId && props.omAssetId?.trim() && phase.kind === "ready"),
+    enabled: Boolean(
+      resolvedProjectId && phase.kind === "ready" && (canCreateOmAsset || props.omAssetId?.trim()),
+    ),
     staleTime: 30_000,
   });
+
+  const linkedAssetForSelection = useMemo(
+    () => findOmAssetByGuid(omAssetsList, selection?.ifcGuid),
+    [omAssetsList, selection?.ifcGuid],
+  );
 
   const mobileAssigneeDefaulted = useRef(false);
   useEffect(() => {
@@ -1165,13 +1173,9 @@ export function BimViewerShell(props: {
 
   useEffect(() => {
     const id = props.omAssetId?.trim();
-    if (!id || !omAssetsForFocus) {
-      if (!id) setFocusedOmAsset(null);
-      return;
-    }
-    const row = omAssetsForFocus.find((a) => a.id === id) ?? null;
-    setFocusedOmAsset(row);
-  }, [props.omAssetId, omAssetsForFocus]);
+    if (!id || !omAssetsList) return;
+    setFocusedOmAsset(omAssetsList.find((a) => a.id === id) ?? null);
+  }, [props.omAssetId, omAssetsList]);
 
   useEffect(() => {
     issueFocusConsumedRef.current = null;
@@ -1515,6 +1519,9 @@ export function BimViewerShell(props: {
       setIssuePlacementActive(false);
       engineRef.current?.setIssuePlacementPick(null);
       setEditIssue(null);
+      setFocusedOmAsset(null);
+      setAssetCreateDraft(null);
+      setActiveDock(null);
       setIssueCreateDraft(draft);
     },
     [resolvedFileVersionId, resolvedProjectId],
@@ -1718,6 +1725,11 @@ export function BimViewerShell(props: {
         toast.error("Select an element in the model first.");
         return;
       }
+      const existing = findOmAssetByGuid(omAssetsList, selection.ifcGuid);
+      if (existing) {
+        setFocusedOmAsset(existing);
+        return;
+      }
       const bimAnchor = bimAnchorFromSelection(selection);
       if (!bimAnchor) {
         toast.error("Select a model element with an IFC GUID to create an asset.");
@@ -1734,6 +1746,8 @@ export function BimViewerShell(props: {
       const pendingPhoto = issueAnchor
         ? await captureIssueSnapshotFile({ anchor: issueAnchor })
         : await captureIssueSnapshotFile();
+      setActiveDock(null);
+      setFocusedOmAsset(null);
       setAssetCreateDraft({
         bimAnchor,
         initialDraft: assetDraftFromBimSelection(selection),
@@ -1743,10 +1757,28 @@ export function BimViewerShell(props: {
   }, [
     canCreateOmAsset,
     captureIssueSnapshotFile,
+    omAssetsList,
     resolvedFileVersionId,
     resolvedProjectId,
     selection,
   ]);
+
+  const viewAssetFromSelection = useCallback(() => {
+    void (async () => {
+      const asset = linkedAssetForSelection ?? findOmAssetByGuid(omAssetsList, selection?.ifcGuid);
+      if (!asset) {
+        toast.error("No asset linked to this element.");
+        return;
+      }
+      const engine = engineRef.current;
+      if (engine) {
+        await engine.zoomToSelection({ fitScale: BIM_ASSET_SOFT_FIT_SCALE });
+      }
+      setAssetCreateDraft(null);
+      setActiveDock(null);
+      setFocusedOmAsset(asset);
+    })();
+  }, [linkedAssetForSelection, omAssetsList, selection?.ifcGuid]);
 
   // fallow-ignore-next-line complexity
   const buildMarkupBimAnchor = useCallback((): IssueBimAnchor | undefined => {
@@ -1930,13 +1962,21 @@ export function BimViewerShell(props: {
           case "createAsset":
             startAssetCreateFromSelection();
             break;
+          case "viewAsset":
+            viewAssetFromSelection();
+            break;
           case "showAll":
             await engine.showAllElements();
             break;
         }
       })();
     },
-    [openPropertiesDock, startAssetCreateFromSelection, startIssueCreateFromSelection],
+    [
+      openPropertiesDock,
+      startAssetCreateFromSelection,
+      startIssueCreateFromSelection,
+      viewAssetFromSelection,
+    ],
   );
 
   useEffect(() => {
@@ -2858,6 +2898,7 @@ export function BimViewerShell(props: {
             y={contextMenu.y}
             hasSelection={contextMenu.hasSelection}
             canCreateAsset={canCreateOmAsset}
+            linkedAssetTag={linkedAssetForSelection?.tag ?? null}
             onAction={onContextAction}
             onClose={() => setContextMenu(null)}
           />
@@ -2958,88 +2999,118 @@ export function BimViewerShell(props: {
             onCreated={(asset) => {
               setAssetCreateDraft(null);
               setFocusedOmAsset(asset);
+              void refetchOmAssets();
             }}
           />
         ) : null}
 
         {workChromeReady &&
         focusedOmAsset &&
+        resolvedProjectId &&
         !assetCreateDraft &&
         !issueCreateDraft &&
         !editIssue ? (
           <BimAssetInfoPanel
             asset={focusedOmAsset}
+            projectId={resolvedProjectId}
             modelName={props.fileName}
             onClose={() => setFocusedOmAsset(null)}
           />
         ) : null}
 
         {workChromeReady && issueCreateDraft && resolvedFileVersionId && resolvedProjectId ? (
-          <IssueFormSlider
-            variant="create"
+          <BimGlassDock
+            side="right"
             open
-            annotationId={null}
-            layout="overlay"
-            bimContext={{
-              fileId: props.fileId,
-              fileVersionId: resolvedFileVersionId,
-              projectId: resolvedProjectId,
-              bimAnchor: issueCreateDraft.bimAnchor,
-              modelName: props.fileName,
-            }}
-            initialLinkedMarkupIds={issueCreateDraft.initialLinkedMarkupIds}
-            pendingReferencePhoto={issueCreateDraft.pendingReferencePhoto}
-            initialTitle={issueCreateDraft.initialTitle}
-            initialDescription={issueCreateDraft.initialDescription}
-            initialPriority={issueCreateDraft.initialPriority}
+            title={projectSession?.operationsMode ? "New work order" : "New issue"}
+            subtitle={
+              issueCreateDraft.bimAnchor?.name ||
+              issueCreateDraft.bimAnchor?.ifcType ||
+              props.fileName
+            }
             onClose={() => setIssueCreateDraft(null)}
-            onCreated={(issue) => {
-              const markupIds = issueCreateDraft.initialLinkedMarkupIds ?? [];
-              if (markupIds.length > 0) {
-                linkMarkupsToIssue(markupIds, {
-                  id: issue.id,
-                  title: issue.title,
-                  status: issue.status,
-                });
-                scheduleBimMarkupPersist();
-              }
-              const clashIds = issueCreateDraft.sourceClashIds ?? [];
-              if (clashIds.length > 0) {
-                void linkClashesToIssue(clashIds, issue.id).catch((err) => {
-                  toast.error(
-                    err instanceof Error ? err.message : "Issue created but could not link clash",
-                  );
-                });
-              }
-              setIssueCreateDraft(null);
-              setSelectedIssueId(issue.id);
-              setActiveDock("issues");
-              setEditIssue(issue);
-              reloadIssues();
-            }}
-          />
+            closeOnOutsideClick={false}
+          >
+            <IssueFormSlider
+              variant="create"
+              open
+              annotationId={null}
+              layout="docked"
+              embedded
+              bimContext={{
+                fileId: props.fileId,
+                fileVersionId: resolvedFileVersionId,
+                projectId: resolvedProjectId,
+                bimAnchor: issueCreateDraft.bimAnchor,
+                modelName: props.fileName,
+              }}
+              initialLinkedMarkupIds={issueCreateDraft.initialLinkedMarkupIds}
+              pendingReferencePhoto={issueCreateDraft.pendingReferencePhoto}
+              initialTitle={issueCreateDraft.initialTitle}
+              initialDescription={issueCreateDraft.initialDescription}
+              initialPriority={issueCreateDraft.initialPriority}
+              onClose={() => setIssueCreateDraft(null)}
+              onCreated={(issue) => {
+                const markupIds = issueCreateDraft.initialLinkedMarkupIds ?? [];
+                if (markupIds.length > 0) {
+                  linkMarkupsToIssue(markupIds, {
+                    id: issue.id,
+                    title: issue.title,
+                    status: issue.status,
+                  });
+                  scheduleBimMarkupPersist();
+                }
+                const clashIds = issueCreateDraft.sourceClashIds ?? [];
+                if (clashIds.length > 0) {
+                  void linkClashesToIssue(clashIds, issue.id).catch((err) => {
+                    toast.error(
+                      err instanceof Error ? err.message : "Issue created but could not link clash",
+                    );
+                  });
+                }
+                setIssueCreateDraft(null);
+                setSelectedIssueId(issue.id);
+                setActiveDock("issues");
+                setEditIssue(issue);
+                reloadIssues();
+              }}
+            />
+          </BimGlassDock>
         ) : null}
 
         {workChromeReady && editIssue ? (
-          <IssueFormSlider
-            variant="edit"
+          <BimGlassDock
+            side="right"
             open
-            issue={editIssue}
-            layout="overlay"
-            bimContext={
-              resolvedFileVersionId && resolvedProjectId
-                ? {
-                    fileId: editIssue.fileId ?? props.fileId,
-                    fileVersionId: editIssue.fileVersionId ?? resolvedFileVersionId,
-                    projectId: resolvedProjectId,
-                  }
-                : undefined
-            }
+            title={projectSession?.operationsMode ? "Edit work order" : "Edit issue"}
+            subtitle={editIssue.title}
             onClose={() => {
               setEditIssue(null);
               reloadIssues();
             }}
-          />
+            closeOnOutsideClick={false}
+          >
+            <IssueFormSlider
+              variant="edit"
+              open
+              issue={editIssue}
+              layout="docked"
+              embedded
+              bimContext={
+                resolvedFileVersionId && resolvedProjectId
+                  ? {
+                      fileId: editIssue.fileId ?? props.fileId,
+                      fileVersionId: editIssue.fileVersionId ?? resolvedFileVersionId,
+                      projectId: resolvedProjectId,
+                    }
+                  : undefined
+              }
+              onClose={() => {
+                setEditIssue(null);
+                reloadIssues();
+              }}
+            />
+          </BimGlassDock>
         ) : null}
 
         {splitViewActive ? (

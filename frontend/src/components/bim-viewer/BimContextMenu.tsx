@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 
 const MENU_WIDTH = 192;
-const MENU_HEIGHT = 360;
+const MENU_HEIGHT = 400;
 
 function clampMenuPosition(x: number, y: number) {
   const pad = 8;
@@ -22,12 +22,20 @@ export function BimContextMenu(props: {
   hasSelection: boolean;
   /** When true, show “Add asset” (O&M assets module enabled). */
   canCreateAsset?: boolean;
+  /** Linked O&M asset tag for the current selection, if any. */
+  linkedAssetTag?: string | null;
   onAction: (action: string) => void;
   onClose: () => void;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const position = useMemo(() => clampMenuPosition(props.x, props.y), [props.x, props.y]);
   const ranAction = useRef(false);
+
+  const assetItem = props.linkedAssetTag
+    ? { id: "viewAsset", label: `View asset (${props.linkedAssetTag})` }
+    : props.canCreateAsset
+      ? { id: "createAsset", label: "Add asset" }
+      : null;
 
   const items = props.hasSelection
     ? [
@@ -38,7 +46,7 @@ export function BimContextMenu(props: {
         { id: "hide", label: "Hide" },
         { id: "properties", label: "Properties" },
         { id: "createIssue", label: "Create issue" },
-        ...(props.canCreateAsset ? [{ id: "createAsset", label: "Add asset" }] : []),
+        ...(assetItem ? [assetItem] : []),
         { id: "showAll", label: "Show all objects", muted: true },
       ]
     : [{ id: "showAll", label: "Show all objects" }];

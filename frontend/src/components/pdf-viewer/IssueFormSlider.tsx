@@ -78,6 +78,11 @@ type CreateProps = {
   annotationId: string | null;
   onClose: () => void;
   layout?: PanelLayout;
+  /**
+   * With `layout="docked"`, omit the panel header/close chrome so the form can sit
+   * inside `BimGlassDock` (BIM properties-style glass panel).
+   */
+  embedded?: boolean;
   /** BIM viewer: link issue to a 3D element instead of a sheet pin. */
   bimContext?: IssueFormBimContext;
   initialLinkedMarkupIds?: string[];
@@ -95,6 +100,8 @@ type EditProps = {
   issue: IssueRow;
   onClose: () => void;
   layout?: PanelLayout;
+  /** See create `embedded`. */
+  embedded?: boolean;
   /** BIM viewer: supply file context when URL/store lack sheet viewer ids. */
   bimContext?: IssueFormBimContext;
 };
@@ -178,6 +185,7 @@ export function IssueFormSlider(props: Props) {
   const { open, onClose, layout = "overlay" } = props;
   const variant = props.variant;
   const isDocked = layout === "docked";
+  const embedded = Boolean(props.embedded && isDocked);
   const bimContext = props.bimContext;
   const isBimCreate = variant === "create" && Boolean(bimContext);
   const searchParams = useSearchParams();
@@ -942,78 +950,99 @@ export function IssueFormSlider(props: Props) {
       ? `Page ${sheetContext.pageNumber}`
       : "Page —";
 
-  const fieldClass =
-    "w-full rounded-lg border border-slate-600/70 bg-slate-900/60 px-2.5 py-2 text-[12px] leading-snug text-slate-100 shadow-sm placeholder:text-slate-500 outline-none transition focus:border-[var(--viewer-primary)]/55 focus:ring-2 focus:ring-[var(--viewer-primary)]/20";
+  const fieldClass = embedded
+    ? "bim-focus-ring w-full rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_55%,transparent)] px-2.5 py-2 text-[12px] leading-snug text-[var(--bim-text)] shadow-sm placeholder:text-[var(--bim-text-muted)] outline-none transition focus:border-[var(--bim-accent)]/55"
+    : "w-full rounded-lg border border-slate-600/70 bg-slate-900/60 px-2.5 py-2 text-[12px] leading-snug text-slate-100 shadow-sm placeholder:text-slate-500 outline-none transition focus:border-[var(--viewer-primary)]/55 focus:ring-2 focus:ring-[var(--viewer-primary)]/20";
   /** Native date picker icon: align with dark chrome (WebKit + `color-scheme`). */
   /** Calendar glyph → solid white (WebKit); `color-scheme: dark` helps Firefox/native chrome. */
-  const dateFieldClass = `${fieldClass} tabular-nums text-slate-100 [color-scheme:dark] [&::-webkit-datetime-edit]:text-slate-100 [&::-webkit-datetime-edit-fields-wrapper]:text-slate-100 [&::-webkit-datetime-edit-month-field]:text-slate-100 [&::-webkit-datetime-edit-day-field]:text-slate-100 [&::-webkit-datetime-edit-year-field]:text-slate-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:[filter:brightness(0)_invert(1)]`;
-  const labelClass = "mb-1 block text-[10px] font-medium text-slate-400";
-  const sectionTitleClass = viewerOperationsMode
-    ? "text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-300/80"
-    : "text-[10px] font-semibold uppercase tracking-wider text-slate-500";
-  const sectionBlockClass = viewerOperationsMode
-    ? "space-y-2.5 rounded-xl border border-slate-800/80 bg-slate-900/35 p-2.5 ring-1 ring-white/[0.025]"
-    : "space-y-3";
-  const sectionCompactCardClass = viewerOperationsMode
-    ? "space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/25 p-2.5"
-    : "space-y-2";
+  const dateFieldClass = `${fieldClass} tabular-nums ${embedded ? "text-[var(--bim-text)]" : "text-slate-100"} [color-scheme:dark] [&::-webkit-datetime-edit]:text-inherit [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:[filter:brightness(0)_invert(1)]`;
+  const labelClass = embedded
+    ? "mb-1 block text-[10px] font-medium text-[var(--bim-text-muted)]"
+    : "mb-1 block text-[10px] font-medium text-slate-400";
+  const sectionTitleClass = embedded
+    ? "text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]"
+    : viewerOperationsMode
+      ? "text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-300/80"
+      : "text-[10px] font-semibold uppercase tracking-wider text-slate-500";
+  const sectionBlockClass = embedded
+    ? "space-y-2.5 rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_35%,transparent)] p-2.5"
+    : viewerOperationsMode
+      ? "space-y-2.5 rounded-xl border border-slate-800/80 bg-slate-900/35 p-2.5 ring-1 ring-white/[0.025]"
+      : "space-y-3";
+  const sectionCompactCardClass = embedded
+    ? "space-y-2 rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_25%,transparent)] p-2.5"
+    : viewerOperationsMode
+      ? "space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/25 p-2.5"
+      : "space-y-2";
   const entityLabel = viewerOperationsMode ? "work order" : "issue";
+  const focusRingClass = embedded ? "bim-focus-ring" : "viewer-focus-ring";
+  const primaryBtnClass = embedded
+    ? `${focusRingClass} rounded-lg bg-[var(--bim-accent)] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40`
+    : `${focusRingClass} rounded-lg bg-[var(--viewer-primary)] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-[var(--viewer-primary-hover)] disabled:opacity-40`;
 
   const refPhotoPickDisabled = uploadRefPhotoMut.isPending || saveEditMut.isPending;
-  const refPhotoLabelClass =
-    "viewer-focus-ring relative inline-flex min-h-[2.5rem] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/60 px-2.5 py-2 text-[12px] text-slate-200 transition hover:bg-slate-800/80";
+  const refPhotoLabelClass = embedded
+    ? `${focusRingClass} relative inline-flex min-h-[2.5rem] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_55%,transparent)] px-2.5 py-2 text-[12px] text-[var(--bim-text)] transition hover:bg-[color-mix(in_srgb,var(--bim-panel)_70%,transparent)]`
+    : "viewer-focus-ring relative inline-flex min-h-[2.5rem] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/60 px-2.5 py-2 text-[12px] text-slate-200 transition hover:bg-slate-800/80";
 
-  const asideClass = isDocked
-    ? "flex h-full min-h-0 w-full flex-col overflow-x-hidden bg-slate-950"
-    : "absolute right-0 top-0 flex h-full w-full min-w-0 max-w-[min(640px,calc(100dvw-1rem))] flex-col overflow-x-hidden border-l border-slate-700/80 bg-slate-950 shadow-[-16px_0_48px_-12px_rgba(0,0,0,0.55)]";
+  const asideClass = embedded
+    ? "flex h-full min-h-0 w-full flex-col overflow-x-hidden bg-transparent text-[var(--bim-text)]"
+    : isDocked
+      ? "flex h-full min-h-0 w-full flex-col overflow-x-hidden bg-slate-950"
+      : "absolute right-0 top-0 flex h-full w-full min-w-0 max-w-[min(640px,calc(100dvw-1rem))] flex-col overflow-x-hidden border-l border-slate-700/80 bg-slate-950 shadow-[-16px_0_48px_-12px_rgba(0,0,0,0.55)]";
 
   const panelBody = (
     <aside
-      role="dialog"
-      aria-modal={!isDocked}
-      aria-labelledby="issue-form-title"
+      role={embedded ? "presentation" : "dialog"}
+      aria-modal={embedded ? undefined : !isDocked}
+      aria-labelledby={embedded ? undefined : "issue-form-title"}
       className={asideClass}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <header
-        className={`flex shrink-0 items-start justify-between gap-3 border-b border-slate-800/90 bg-slate-950 ${isDocked ? "px-3 py-2.5" : "px-5 py-3.5"}`}
-      >
-        <div className="min-w-0 space-y-0.5 pr-2">
-          <h2 id="issue-form-title" className="text-[15px] font-semibold tracking-tight text-white">
-            {variant === "create" ? `New ${entityLabel}` : `Edit ${entityLabel}`}
-          </h2>
-          <p className="text-[11px] leading-relaxed text-slate-500">
-            {viewerOperationsMode
-              ? variant === "create"
-                ? "Capture the task scope, assignment, and schedule for field execution."
-                : "Update execution details, assignment, and dates before saving."
-              : variant === "create"
-                ? isBimCreate
-                  ? "Add a title and any details below. This issue will be linked to the selected 3D element."
-                  : "Add a title and any details below. A sheet pin and linked markups are optional."
-                : "Update this issue and save your changes."}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={
-            createMut.isPending ||
-            saveEditMut.isPending ||
-            deleteMut.isPending ||
-            uploadRefPhotoMut.isPending ||
-            removeRefPhotoMut.isPending
-          }
-          className="viewer-focus-ring shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40"
-          aria-label="Close"
+      {embedded ? null : (
+        <header
+          className={`flex shrink-0 items-start justify-between gap-3 border-b border-slate-800/90 bg-slate-950 ${isDocked ? "px-3 py-2.5" : "px-5 py-3.5"}`}
         >
-          <X className="h-4 w-4" strokeWidth={2} />
-        </button>
-      </header>
+          <div className="min-w-0 space-y-0.5 pr-2">
+            <h2
+              id="issue-form-title"
+              className="text-[15px] font-semibold tracking-tight text-white"
+            >
+              {variant === "create" ? `New ${entityLabel}` : `Edit ${entityLabel}`}
+            </h2>
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              {viewerOperationsMode
+                ? variant === "create"
+                  ? "Capture the task scope, assignment, and schedule for field execution."
+                  : "Update execution details, assignment, and dates before saving."
+                : variant === "create"
+                  ? isBimCreate
+                    ? "Add a title and any details below. This issue will be linked to the selected 3D element."
+                    : "Add a title and any details below. A sheet pin and linked markups are optional."
+                  : "Update this issue and save your changes."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={
+              createMut.isPending ||
+              saveEditMut.isPending ||
+              deleteMut.isPending ||
+              uploadRefPhotoMut.isPending ||
+              removeRefPhotoMut.isPending
+            }
+            className="viewer-focus-ring shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </header>
+      )}
 
       <div
         className={`min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-x-none [scrollbar-color:rgba(71,85,105,0.5)_transparent] [scrollbar-width:thin] ${
-          isDocked ? "px-3 py-2.5" : viewerOperationsMode ? "px-4 py-3" : "px-5 py-4"
+          embedded || isDocked ? "px-3 py-2.5" : viewerOperationsMode ? "px-4 py-3" : "px-5 py-4"
         }`}
       >
         <IssueGuide
@@ -1618,18 +1647,24 @@ export function IssueFormSlider(props: Props) {
       </div>
 
       <footer
-        className={`flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-sm supports-[backdrop-filter]:bg-slate-950/80 ${isDocked ? "px-3 py-2.5" : "px-5 py-3.5"}`}
+        className={
+          embedded
+            ? "flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--bim-chrome-border)] bg-transparent px-3 py-2.5"
+            : `flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-sm supports-[backdrop-filter]:bg-slate-950/80 ${isDocked ? "px-3 py-2.5" : "px-5 py-3.5"}`
+        }
       >
         {variant === "edit" ? (
           <button
             type="button"
             disabled={deleteMut.isPending}
             onClick={() => setDeleteDialogOpen(true)}
-            className="viewer-focus-ring inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-950/40 px-2.5 py-1.5 text-[11px] font-semibold text-red-100 transition hover:bg-red-950/65 disabled:opacity-40"
+            className={`${focusRingClass} inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-950/40 px-2.5 py-1.5 text-[11px] font-semibold text-red-100 transition hover:bg-red-950/65 disabled:opacity-40`}
           >
             <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
             Delete
           </button>
+        ) : embedded ? (
+          <span />
         ) : (
           <span className="hidden min-[480px]:inline text-[10px] text-slate-600">
             Click outside to close
@@ -1645,7 +1680,11 @@ export function IssueFormSlider(props: Props) {
               uploadRefPhotoMut.isPending ||
               removeRefPhotoMut.isPending
             }
-            className="viewer-focus-ring rounded-lg border border-slate-600/80 bg-transparent px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-slate-800/80 disabled:opacity-40"
+            className={
+              embedded
+                ? `${focusRingClass} rounded-lg border border-[var(--bim-chrome-border)] bg-transparent px-3 py-1.5 text-[11px] font-medium text-[var(--bim-text-muted)] transition hover:bg-[color-mix(in_srgb,var(--bim-panel)_70%,transparent)] hover:text-[var(--bim-text)] disabled:opacity-40`
+                : "viewer-focus-ring rounded-lg border border-slate-600/80 bg-transparent px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-slate-800/80 disabled:opacity-40"
+            }
           >
             Cancel
           </button>
@@ -1662,7 +1701,11 @@ export function IssueFormSlider(props: Props) {
                 saveAndNextRef.current = true;
                 createMut.mutate();
               }}
-              className="viewer-focus-ring rounded-lg border border-slate-600/80 bg-slate-800/80 px-3 py-1.5 text-[11px] font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-40"
+              className={
+                embedded
+                  ? `${focusRingClass} rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_55%,transparent)] px-3 py-1.5 text-[11px] font-medium text-[var(--bim-text)] transition hover:bg-[color-mix(in_srgb,var(--bim-panel)_70%,transparent)] disabled:opacity-40`
+                  : "viewer-focus-ring rounded-lg border border-slate-600/80 bg-slate-800/80 px-3 py-1.5 text-[11px] font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-40"
+              }
             >
               {createMut.isPending ? "Saving…" : "Save & next"}
             </button>
@@ -1681,7 +1724,7 @@ export function IssueFormSlider(props: Props) {
               if (variant === "create") createMut.mutate();
               else if (variant === "edit") saveEditMut.mutate(props.issue.id);
             }}
-            className="viewer-focus-ring rounded-lg bg-[var(--viewer-primary)] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-[var(--viewer-primary-hover)] disabled:opacity-40"
+            className={primaryBtnClass}
           >
             {createMut.isPending || saveEditMut.isPending
               ? "Saving…"

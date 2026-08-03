@@ -1,59 +1,215 @@
 "use client";
 
-import { Package, X } from "lucide-react";
-import type { OmAssetRow } from "@/lib/api-client/operations-maintenance-assets";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { FileText, Loader2, Trash2, Upload } from "lucide-react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+import { OmAssetImageThumb } from "@/components/enterprise/OmAssetImageThumb";
+import {
+  completeOmAssetDocumentUpload,
+  deleteOmAssetDocument,
+  fetchOmAssetDocumentReadUrl,
+  fetchOmAssetDocuments,
+  presignOmAssetDocumentUpload,
+  type OmAssetDocumentRow,
+  type OmAssetRow,
+  ProRequiredError,
+} from "@/lib/api-client";
+import { qk } from "@/lib/queryKeys";
+import { BimGlassDock } from "./BimGlassDock";
+
+const MAX_ASSET_DOC_BYTES = 25 * 1024 * 1024;
 
 function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
   const v = value?.trim();
   if (!v) return null;
   return (
     <div>
-      <dt className="text-[10px] font-medium text-slate-500">{label}</dt>
-      <dd className="mt-0.5 text-[12px] font-medium text-slate-200">{v}</dd>
+      <dt className="text-[10px] font-medium text-[var(--bim-text-muted)]">{label}</dt>
+      <dd className="mt-0.5 break-words text-[12px] font-medium text-[var(--bim-text)]">{v}</dd>
     </div>
+  );
+}
+
+function DocumentsSection(props: { projectId: string; assetId: string }) {
+  const { projectId, assetId } = props;
+  const qc = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
+
+  const { data: documents = [], isPending } = useQuery({
+    queryKey: qk.omAssetDocuments(projectId, assetId),
+    queryFn: () => fetchOmAssetDocuments(projectId, assetId),
+    enabled: Boolean(projectId && assetId),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (docId: string) => deleteOmAssetDocument(projectId, assetId, docId),
+    onSuccess: async (_, docId) => {
+      await qc.invalidateQueries({ queryKey: qk.omAssetDocuments(projectId, assetId) });
+      qc.removeQueries({ queryKey: qk.omAssetDocumentReadUrl(projectId, assetId, docId) });
+      toast.success("Document removed.");
+    },
+    onError: (e: Error) => {
+      toast.error(e instanceof ProRequiredError ? "Pro required." : e.message);
+    },
+  });
+
+  async function onPickFile(file: File) {
+    if (file.size > MAX_ASSET_DOC_BYTES) {
+      toast.error("File too large (max 25 MB).");
+      return;
+    }
+    setUploadBusy(true);
+    const contentType = file.type || "application/octet-stream";
+    try {
+      const { uploadUrl, key } = await presignOmAssetDocumentUpload(projectId, assetId, {
+        fileName: file.name,
+        contentType,
+        sizeBytes: file.size,
+      });
+      const put = await fetch(uploadUrl, {
+        method: "PUT",
+        mode: "cors",
+        cache: "no-store",
+        headers: { "Content-Type": contentType },
+        body: file,
+      });
+      if (!put.ok) throw new Error(`Upload failed (${put.status}).`);
+      await completeOmAssetDocumentUpload(projectId, assetId, {
+        key,
+        fileName: file.name,
+        mimeType: contentType,
+        sizeBytes: file.size,
+      });
+      await qc.invalidateQueries({ queryKey: qk.omAssetDocuments(projectId, assetId) });
+      toast.success("Document uploaded.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setUploadBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function openDoc(doc: OmAssetDocumentRow) {
+    try {
+      const url = await fetchOmAssetDocumentReadUrl(projectId, assetId, doc.id);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not open document.");
+    }
+  }
+
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]">
+          Documents
+        </p>
+        <button
+          type="button"
+          disabled={uploadBusy}
+          onClick={() => fileInputRef.current?.click()}
+          className="bim-focus-ring inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-[var(--bim-accent)] hover:bg-[color-mix(in_srgb,var(--bim-panel)_70%,transparent)] disabled:opacity-40"
+        >
+          {uploadBusy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+          ) : (
+            <Upload className="h-3.5 w-3.5" strokeWidth={2} />
+          )}
+          Upload
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="*/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void onPickFile(f);
+          }}
+        />
+      </div>
+
+      {isPending ? (
+        <p className="text-[11px] text-[var(--bim-text-muted)]">Loading…</p>
+      ) : documents.length === 0 ? (
+        <p className="text-[11px] text-[var(--bim-text-muted)]">
+          No documents yet. Upload manuals or certificates.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {documents.map((doc) => (
+            <li
+              key={doc.id}
+              className="flex items-start gap-2 rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_40%,transparent)] px-2 py-1.5"
+            >
+              <FileText
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--bim-text-muted)]"
+                strokeWidth={2}
+              />
+              <button
+                type="button"
+                onClick={() => void openDoc(doc)}
+                className="min-w-0 flex-1 break-words text-left text-[12px] font-medium leading-snug text-[var(--bim-accent)] hover:underline"
+              >
+                {doc.label?.trim() || doc.fileName}
+              </button>
+              <button
+                type="button"
+                disabled={deleteMut.isPending}
+                onClick={() => {
+                  if (confirm("Remove this document?")) deleteMut.mutate(doc.id);
+                }}
+                className="mt-0.5 shrink-0 rounded p-1 text-[var(--bim-text-muted)] hover:bg-[color-mix(in_srgb,var(--bim-panel)_70%,transparent)] hover:text-red-400"
+                aria-label="Delete document"
+              >
+                <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
 export function BimAssetInfoPanel(props: {
   asset: OmAssetRow;
+  projectId: string;
   modelName: string;
   onClose: () => void;
 }) {
-  const { asset } = props;
+  const { asset, projectId } = props;
   const level = asset.bimAnchor?.spatialPath?.[0]?.trim() || asset.locationLabel?.trim() || null;
   const guid = asset.bimAnchor?.ifcGuid?.trim() || null;
 
   return (
-    <aside
-      role="dialog"
-      aria-label={`Asset ${asset.tag}`}
-      className="absolute left-0 top-0 z-40 flex h-full w-full min-w-0 max-w-[min(360px,calc(100dvw-1rem))] flex-col overflow-x-hidden border-r border-slate-700/80 bg-slate-950 shadow-[16px_0_48px_-12px_rgba(0,0,0,0.55)]"
-      onMouseDown={(e) => e.stopPropagation()}
+    <BimGlassDock
+      side="right"
+      open
+      title={asset.tag}
+      subtitle={asset.name}
+      onClose={props.onClose}
+      closeOnOutsideClick={false}
     >
-      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-800/90 px-5 py-3.5">
-        <div className="min-w-0 space-y-0.5 pr-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-teal-300/80">
-            Asset
-          </p>
-          <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-white">
-            <Package className="h-4 w-4 shrink-0 text-teal-400" strokeWidth={2} aria-hidden />
-            <span className="truncate font-mono">{asset.tag}</span>
-          </h2>
-          <p className="truncate text-[12px] text-slate-400">{asset.name}</p>
-        </div>
-        <button
-          type="button"
-          onClick={props.onClose}
-          className="viewer-focus-ring shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
-          aria-label="Close"
-        >
-          <X className="h-4 w-4" strokeWidth={2} />
-        </button>
-      </header>
+      <div className="space-y-3 px-3 py-2.5">
+        {asset.hasImage ? (
+          <div className="overflow-hidden rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_40%,transparent)]">
+            <OmAssetImageThumb
+              projectId={projectId}
+              assetId={asset.id}
+              hasImage={asset.hasImage}
+              alt={asset.name}
+              className="max-h-36 w-full object-cover object-center"
+              fallbackClassName="flex h-24 w-full items-center justify-center bg-[color-mix(in_srgb,var(--bim-panel)_50%,transparent)]"
+            />
+          </div>
+        ) : null}
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 [scrollbar-color:rgba(71,85,105,0.5)_transparent] [scrollbar-width:thin]">
-        <section className="space-y-2.5 rounded-xl border border-slate-800/80 bg-slate-900/35 p-3 ring-1 ring-white/[0.025]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+        <section className="space-y-2 rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_35%,transparent)] p-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]">
             Location & model
           </p>
           <dl className="grid grid-cols-2 gap-3">
@@ -64,44 +220,39 @@ export function BimAssetInfoPanel(props: {
           </dl>
         </section>
 
-        <section className="space-y-2.5 rounded-xl border border-slate-800/80 bg-slate-900/35 p-3 ring-1 ring-white/[0.025]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+        <section className="space-y-2 rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_35%,transparent)] p-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]">
             Equipment
           </p>
           <dl className="grid grid-cols-2 gap-3">
             <InfoRow label="Manufacturer" value={asset.manufacturer} />
             <InfoRow label="Model" value={asset.model} />
             <InfoRow label="Serial" value={asset.serialNumber} />
-            <InfoRow
-              label="Hall / row / rack"
-              value={[asset.hall, asset.rowLabel, asset.rack].filter(Boolean).join(" · ") || null}
-            />
           </dl>
         </section>
 
+        <DocumentsSection projectId={projectId} assetId={asset.id} />
+
         {guid ? (
-          <section className="space-y-1.5 rounded-xl border border-slate-800/80 bg-slate-900/25 p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+          <section className="space-y-1.5 rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_25%,transparent)] p-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]">
               Linked element
             </p>
-            <p className="break-all font-mono text-[10px] text-slate-300">{guid}</p>
-            {asset.bimAnchor?.name ? (
-              <p className="text-[12px] text-slate-400">{asset.bimAnchor.name}</p>
-            ) : null}
+            <p className="break-all font-mono text-[10px] text-[var(--bim-text)]">{guid}</p>
           </section>
         ) : null}
 
         {asset.notes?.trim() ? (
           <section className="space-y-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]">
               Notes
             </p>
-            <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-slate-300">
+            <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-[var(--bim-text)]">
               {asset.notes}
             </p>
           </section>
         ) : null}
       </div>
-    </aside>
+    </BimGlassDock>
   );
 }
