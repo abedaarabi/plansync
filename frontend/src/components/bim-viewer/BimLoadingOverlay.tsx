@@ -157,8 +157,10 @@ function BimLoadingShell(props: LoadingShellProps) {
   const displayName = phaseModelLabel(phase, modelName);
   const rawName = phase.kind === "resolving" ? modelName : (phase.label ?? modelName ?? null);
   const bytesTotal = phase.kind === "downloading" ? (phase.bytesTotal ?? null) : null;
-  const modelIndex = phase.kind === "downloading" ? (phase.index ?? null) : null;
-  const modelTotal = phase.kind === "downloading" ? (phase.total ?? null) : null;
+  const modelIndex =
+    phase.kind === "downloading" || phase.kind === "converting" ? (phase.index ?? null) : null;
+  const modelTotal =
+    phase.kind === "downloading" || phase.kind === "converting" ? (phase.total ?? null) : null;
   const meta = buildModelMetaLine({
     fileName: rawName ?? modelName,
     version,

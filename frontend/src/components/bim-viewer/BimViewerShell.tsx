@@ -141,6 +141,7 @@ import {
 } from "@/lib/bim/bimFilters";
 import { BimFiltersPanel, useBimFilterPreview } from "./BimFiltersPanel";
 import { BimLoadingOverlay } from "./BimLoadingOverlay";
+import { overallLoadFraction } from "@/lib/bim/bimLoadingSteps";
 import { readModelThumbnailDataUrl } from "@/lib/bim/bimThumbnailCache";
 import { disposeModelThumbnailService, requestModelThumbnail } from "@/lib/bim/modelThumbnail";
 import {
@@ -187,9 +188,23 @@ type Phase =
       fraction?: number;
       bytesTotal?: number;
     }
-  | { kind: "converting"; fraction: number; label?: string }
+  | {
+      kind: "converting";
+      fraction: number;
+      label?: string;
+      index?: number;
+      total?: number;
+    }
   | { kind: "ready" }
   | { kind: "error"; message: string };
+
+type GeometryStreamProgress = {
+  label?: string;
+  index: number;
+  total: number;
+  /** 0–1 progress within the current model. */
+  fraction: number;
+};
 
 const TOOL_HINTS: Record<BimTool, string | null> = {
   select: null,
@@ -241,7 +256,7 @@ export function BimViewerShell(props: {
   /** `convert` only after client IFC conversion starts; reopen uses fast fragments path. */
   const [loadPath, setLoadPath] = useState<"fast" | "convert">("fast");
   const [loadRetryNonce, setLoadRetryNonce] = useState(0);
-  const [geometryStreaming, setGeometryStreaming] = useState(false);
+  const [geometryStream, setGeometryStream] = useState<GeometryStreamProgress | null>(null);
   const lastLoadPhaseRef = useRef<Exclude<Phase, { kind: "ready" } | { kind: "error" }>>({
     kind: "resolving",
   });
@@ -647,7 +662,7 @@ export function BimViewerShell(props: {
     setPhase({ kind: "resolving" });
     setLoadPath("fast");
     setLoadPreviewUrl(null);
-    setGeometryStreaming(false);
+    setGeometryStream(null);
 
     // fallow-ignore-next-line complexity
     void (async () => {
@@ -723,6 +738,7 @@ export function BimViewerShell(props: {
         setResolvedFileVersionId(primary?.fileVersionId ?? null);
         setResolvedProjectId(props.projectId);
 
+        const memberTotal = resolvedMembers.length;
         let becameReady = false;
         const markReadySoon = async () => {
           if (cancelled || becameReady) return;
@@ -732,41 +748,101 @@ export function BimViewerShell(props: {
           if (!cancelled) setPhase({ kind: "ready" });
         };
 
+        const reportProgress = (
+          kind: "downloading" | "converting",
+          i: number,
+          member: BimFederationMember,
+          fraction: number | null,
+          bytesTotal?: number | null,
+        ) => {
+          if (cancelled) return;
+          const local = fraction != null && Number.isFinite(fraction) ? fraction : null;
+          if (becameReady) {
+            setGeometryStream({
+              label: member.name,
+              index: i,
+              total: memberTotal,
+              fraction: local ?? 0,
+            });
+            return;
+          }
+          if (kind === "converting") {
+            setLoadPath("convert");
+            setPhase({
+              kind: "converting",
+              fraction: local ?? 0,
+              label: member.name,
+              index: i,
+              total: memberTotal,
+            });
+            return;
+          }
+          setPhase({
+            kind: "downloading",
+            label: member.name,
+            index: i,
+            total: memberTotal,
+            ...(local != null ? { fraction: local } : {}),
+            ...(bytesTotal != null ? { bytesTotal } : {}),
+          });
+        };
+
         for (let i = 0; i < resolvedMembers.length; i++) {
           const member = resolvedMembers[i]!;
           if (cancelled) return;
+          let lastLocalFraction = 0;
+          const trackAndReport = (
+            kind: "downloading" | "converting",
+            fraction: number | null,
+            bytesTotal?: number | null,
+          ) => {
+            if (fraction != null && Number.isFinite(fraction)) {
+              lastLocalFraction = Math.min(1, Math.max(0, fraction));
+            }
+            reportProgress(kind, i, member, fraction, bytesTotal);
+          };
           if (!becameReady) {
             setPhase({
               kind: "downloading",
               label: member.name,
               index: i,
-              total: resolvedMembers.length,
+              total: memberTotal,
             });
           } else {
-            setGeometryStreaming(true);
+            setGeometryStream({
+              label: member.name,
+              index: i,
+              total: memberTotal,
+              fraction: 0,
+            });
           }
           await loadFederationMember(engine, member, {
             fitView: false,
             signal: abort.signal,
+            onPreparing: (fraction) => {
+              trackAndReport("downloading", fraction);
+            },
             onDownloading: (fraction, bytesTotal) => {
-              if (cancelled || becameReady) return;
-              setPhase({
-                kind: "downloading",
-                label: member.name,
-                index: i,
-                total: resolvedMembers.length,
-                fraction,
-                bytesTotal: bytesTotal ?? undefined,
-              });
+              trackAndReport("downloading", fraction, bytesTotal);
             },
             onConverting: (fraction) => {
-              if (cancelled || becameReady) return;
-              setLoadPath("convert");
-              setPhase({ kind: "converting", fraction, label: member.name });
+              trackAndReport("converting", fraction);
             },
             onFirstGeometry: async () => {
-              if (i === 0) await markReadySoon();
-              else if (!cancelled) setLoadedModels(engine.getLoadedModels());
+              if (i === 0) {
+                await markReadySoon();
+                // Keep a percent chip while remaining tiles / federated models stream.
+                if (!cancelled) {
+                  setGeometryStream({
+                    label: member.name,
+                    index: i,
+                    total: memberTotal,
+                    fraction: Math.max(lastLocalFraction, 0.05),
+                  });
+                }
+              } else if (!cancelled) {
+                setLoadedModels(engine.getLoadedModels());
+              }
             },
           });
           if (!cancelled) setLoadedModels(engine.getLoadedModels());
@@ -778,10 +854,10 @@ export function BimViewerShell(props: {
           await engine.resizeViewport();
           setPhase({ kind: "ready" });
         }
-        setGeometryStreaming(false);
+        setGeometryStream(null);
       } catch (e) {
         if (!cancelled) {
-          setGeometryStreaming(false);
+          setGeometryStream(null);
           setPhase({
             kind: "error",
             message: e instanceof Error ? e.message : "Could not load the model.",
@@ -793,7 +869,7 @@ export function BimViewerShell(props: {
     return () => {
       cancelled = true;
       abort.abort();
-      setGeometryStreaming(false);
+      setGeometryStream(null);
       const engine = engineRef.current;
       engineRef.current = null;
       setActiveEngine(null);
@@ -2239,6 +2315,22 @@ export function BimViewerShell(props: {
         : "/projects";
   const loading = phase.kind !== "ready" && phase.kind !== "error";
   const showLoadOverlay = loading || loadExiting;
+  const geometryStreamPct =
+    geometryStream != null
+      ? Math.max(
+          1,
+          Math.min(
+            99,
+            Math.round(
+              overallLoadFraction(
+                geometryStream.index,
+                geometryStream.total,
+                geometryStream.fraction,
+              ) * 100,
+            ),
+          ),
+        )
+      : null;
 
   const hint = TOOL_HINTS[tool];
   const toolNeedsPoint =
@@ -2981,9 +3073,29 @@ export function BimViewerShell(props: {
           </div>
         ) : null}
 
-        {geometryStreaming && phase.kind === "ready" ? (
-          <div className="pointer-events-none absolute bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-1/2 z-10 -translate-x-1/2 rounded-full border border-[var(--bim-border)] bg-[var(--bim-panel)]/95 px-3 py-1.5 text-[11px] text-[var(--bim-text-muted)] shadow-sm backdrop-blur-sm">
-            Loading remaining geometry…
+        {geometryStream && geometryStreamPct != null && phase.kind === "ready" ? (
+          <div
+            className="pointer-events-none absolute bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-1/2 z-10 w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)]/95 px-3 py-2 shadow-sm backdrop-blur-sm"
+            role="status"
+            aria-live="polite"
+            aria-label={`Loading remaining geometry ${geometryStreamPct}%`}
+          >
+            <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px] text-[var(--bim-text-muted)]">
+              <span className="min-w-0 truncate">
+                {geometryStream.total > 1
+                  ? `Loading model ${geometryStream.index + 1} of ${geometryStream.total}`
+                  : "Loading remaining geometry"}
+              </span>
+              <span className="shrink-0 tabular-nums text-[var(--bim-text)]">
+                {geometryStreamPct}%
+              </span>
+            </div>
+            <div className="bim-loading-progress__track">
+              <div
+                className="bim-loading-progress__fill"
+                style={{ width: `${geometryStreamPct}%` }}
+              />
+            </div>
           </div>
         ) : null}
 

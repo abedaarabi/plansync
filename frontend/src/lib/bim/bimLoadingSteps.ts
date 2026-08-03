@@ -5,10 +5,30 @@ export type BimLoadPhase =
       label?: string;
       index?: number;
       total?: number;
+      /** 0–1 progress within the current model (or overall when already aggregated). */
       fraction?: number;
       bytesTotal?: number;
     }
-  | { kind: "converting"; fraction: number; label?: string };
+  | {
+      kind: "converting";
+      fraction: number;
+      label?: string;
+      index?: number;
+      total?: number;
+    };
+
+/** Combine per-model 0–1 progress with federation index into an overall 0–1 fraction. */
+export function overallLoadFraction(
+  index: number | undefined,
+  total: number | undefined,
+  localFraction: number,
+): number {
+  const local = Math.min(1, Math.max(0, localFraction));
+  if (total != null && total > 1) {
+    return Math.min(1, (Math.max(0, index ?? 0) + local) / total);
+  }
+  return local;
+}
 
 /** `fast` = fragments/cache reopen; `convert` = client IFC conversion. */
 export type BimLoadPath = "fast" | "convert";
@@ -109,11 +129,13 @@ export function buildLoadSteps(
 /** 0–100 for the active step, or null when indeterminate. */
 export function stepProgressPercent(phase: BimLoadPhase): number | null {
   if (phase.kind === "converting") {
-    return Math.max(4, Math.min(100, Math.round(phase.fraction * 100)));
+    const overall = overallLoadFraction(phase.index, phase.total, phase.fraction);
+    return Math.max(4, Math.min(99, Math.round(overall * 100)));
   }
   if (phase.kind === "downloading") {
     if (phase.fraction != null && Number.isFinite(phase.fraction)) {
-      return Math.max(2, Math.min(99, Math.round(phase.fraction * 100)));
+      const overall = overallLoadFraction(phase.index, phase.total, phase.fraction);
+      return Math.max(2, Math.min(99, Math.round(overall * 100)));
     }
     if (phase.total != null && phase.total > 1) {
       const done = phase.index ?? 0;
@@ -126,7 +148,12 @@ export function stepProgressPercent(phase: BimLoadPhase): number | null {
 
 export function phaseHeadline(phase: BimLoadPhase, path: BimLoadPath = "fast"): string {
   if (phase.kind === "resolving") return "Preparing workspace";
-  if (phase.kind === "converting") return "Converting model";
+  if (phase.kind === "converting") {
+    if (phase.total != null && phase.total > 1) {
+      return `Converting model ${(phase.index ?? 0) + 1} of ${phase.total}`;
+    }
+    return "Converting model";
+  }
   if (phase.total != null && phase.total > 1) {
     return path === "convert"
       ? `Downloading model ${(phase.index ?? 0) + 1} of ${phase.total}`

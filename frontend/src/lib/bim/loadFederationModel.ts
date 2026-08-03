@@ -49,9 +49,23 @@ function conversionActive(status: BimConversionStatus | null): boolean {
   return s === "running" || s === "summary_ready" || s === "pending" || s === "queued";
 }
 
+function statusToPrepareFraction(status: BimConversionStatus | null): number | null {
+  if (!status) return null;
+  if (status.fragmentsReady) return 1;
+  const progress = status.indexProgress;
+  if (progress != null && Number.isFinite(progress)) {
+    // Server reports 0–100; cap under 1 so download phase can still advance.
+    return Math.min(0.95, Math.max(0.02, progress / 100));
+  }
+  return null;
+}
+
 async function waitForServerFragments(
   fileVersionId: string,
-  signal?: AbortSignal,
+  opts?: {
+    signal?: AbortSignal;
+    onPreparing?: (fraction: number | null) => void;
+  },
 ): Promise<BimConversionStatus | null> {
   let status = await fetchBimStatus(fileVersionId).catch(() => null);
   if (status?.fragmentsReady) return status;
@@ -64,6 +78,19 @@ async function waitForServerFragments(
     void triggerBimConversion(fileVersionId).catch(() => undefined);
   }
 
+  const waitStarted = Date.now();
+  const emitPreparing = (s: BimConversionStatus | null) => {
+    const fromStatus = statusToPrepareFraction(s);
+    if (fromStatus != null) {
+      opts?.onPreparing?.(fromStatus);
+      return;
+    }
+    // Soft estimate so large models aren't stuck with an indeterminate bar.
+    const soft = Math.min(0.45, 0.04 + (Date.now() - waitStarted) / (10 * 60_000));
+    opts?.onPreparing?.(soft);
+  };
+  emitPreparing(status);
+
   status = await pollUntil(
     () => fetchBimStatus(fileVersionId).catch(() => status),
     (s) => {
@@ -75,7 +102,12 @@ async function waitForServerFragments(
       // Index finished and geometry phase is not running — fall back to client convert.
       return s.conversionStatus === "ready";
     },
-    { intervalMs: 2_500, timeoutMs: FRAGMENTS_WAIT_MS, signal },
+    {
+      intervalMs: 2_500,
+      timeoutMs: FRAGMENTS_WAIT_MS,
+      signal: opts?.signal,
+      onValue: emitPreparing,
+    },
   );
   return status;
 }
@@ -127,6 +159,8 @@ export async function loadFederationMember(
     fitView?: boolean;
     onConverting?: (fraction: number) => void;
     onDownloading?: (fraction: number, bytesTotal: number | null) => void;
+    /** Server is still building fragments — fraction 0–1 when known. */
+    onPreparing?: (fraction: number | null) => void;
     onFirstGeometry?: () => void | Promise<void>;
     signal?: AbortSignal;
   },
@@ -138,7 +172,10 @@ export async function loadFederationMember(
 
   let status = await fetchBimStatus(resolved.fileVersionId).catch(() => null);
   if (!status?.fragmentsReady) {
-    status = await waitForServerFragments(resolved.fileVersionId!, opts?.signal);
+    status = await waitForServerFragments(resolved.fileVersionId!, {
+      signal: opts?.signal,
+      onPreparing: opts?.onPreparing,
+    });
   }
 
   if (status?.fragmentsReady) {

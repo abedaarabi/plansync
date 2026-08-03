@@ -3,6 +3,7 @@ import {
   buildLoadSteps,
   buildModelMetaLine,
   formatByteSize,
+  overallLoadFraction,
   phaseHeadline,
   stepProgressPercent,
   stripModelExtension,
@@ -46,5 +47,35 @@ describe("bimLoadingSteps", () => {
     expect(steps.map((s) => s.state)).toEqual(["done", "done", "active", "pending"]);
     expect(phaseHeadline({ kind: "resolving" })).toBe("Preparing workspace");
     expect(stepProgressPercent({ kind: "converting", fraction: 0.42 })).toBe(42);
+  });
+
+  it("aggregates federated download progress across models", () => {
+    expect(overallLoadFraction(1, 4, 0.5)).toBeCloseTo(0.375);
+    expect(
+      stepProgressPercent({
+        kind: "downloading",
+        index: 1,
+        total: 4,
+        fraction: 0.5,
+      }),
+    ).toBe(38);
+    expect(phaseHeadline({ kind: "downloading", index: 1, total: 4 }, "fast")).toBe(
+      "Loading model 2 of 4",
+    );
+  });
+
+  it("aggregates federated convert progress across models", () => {
+    expect(
+      stepProgressPercent({
+        kind: "converting",
+        index: 2,
+        total: 3,
+        fraction: 0.5,
+        label: "C.ifc",
+      }),
+    ).toBe(83);
+    expect(
+      phaseHeadline({ kind: "converting", index: 2, total: 3, fraction: 0.5 }, "convert"),
+    ).toBe("Converting model 3 of 3");
   });
 });

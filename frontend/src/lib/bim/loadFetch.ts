@@ -174,16 +174,23 @@ async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 export async function pollUntil<T>(
   fetchValue: () => Promise<T>,
   isDone: (value: T) => boolean,
-  opts?: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal },
+  opts?: {
+    intervalMs?: number;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    onValue?: (value: T) => void;
+  },
 ): Promise<T> {
   const intervalMs = opts?.intervalMs ?? 2_000;
   const timeoutMs = opts?.timeoutMs ?? 10 * 60_000;
   const started = Date.now();
   let last = await fetchValue();
+  opts?.onValue?.(last);
   if (isDone(last)) return last;
   while (Date.now() - started < timeoutMs) {
     await sleep(intervalMs, opts?.signal);
     last = await fetchValue();
+    opts?.onValue?.(last);
     if (isDone(last)) return last;
   }
   return last;
