@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import type { IssueRow } from "@/lib/api-client";
+import { EnterpriseOverviewKpiTile } from "@/components/enterprise/EnterpriseOverviewKpiTile";
 import {
   computeIssuesOverview,
   isIssueOverdue,
@@ -23,53 +24,12 @@ import { ISSUE_STATUS_LABEL, issueStatusBadgeClassLight } from "@/lib/issueStatu
 import { useTickNowMs } from "@/lib/useTickNowMs";
 import { userInitials } from "@/lib/user-initials";
 
-type KpiTone = "neutral" | "red" | "amber" | "emerald";
-
-const KPI_BORDER: Record<KpiTone, string> = {
+const KPI_BORDER = {
   neutral: "border-l-slate-400",
   red: "border-l-red-500",
   amber: "border-l-amber-500",
   emerald: "border-l-emerald-500",
-};
-
-function KpiTile({
-  label,
-  value,
-  hint,
-  tone = "neutral",
-  active,
-  onClick,
-}: {
-  label: string;
-  value: number;
-  hint?: string;
-  tone?: KpiTone;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  const cls = `enterprise-card rounded-xl border-l-4 p-3 text-left ${KPI_BORDER[tone]} ${
-    active ? "ring-2 ring-[var(--enterprise-primary)]/45" : ""
-  } ${onClick ? "transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]" : ""}`;
-  const body = (
-    <>
-      <p className="text-xl font-bold tabular-nums tracking-tight text-[var(--enterprise-text)]">
-        {value}
-      </p>
-      <p className="mt-0.5 text-[11px] font-semibold leading-snug text-[var(--enterprise-text-muted)]">
-        {label}
-      </p>
-      {hint ? (
-        <p className="mt-1 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">{hint}</p>
-      ) : null}
-    </>
-  );
-  if (!onClick) return <div className={cls}>{body}</div>;
-  return (
-    <button type="button" onClick={onClick} aria-pressed={active} className={cls}>
-      {body}
-    </button>
-  );
-}
+} as const;
 
 function OverviewCard({
   title,
@@ -332,37 +292,38 @@ function KpiRow({
   onSelect: (key: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-      <KpiTile
+    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
+      <EnterpriseOverviewKpiTile
         label="Total"
         value={stats.total}
+        borderClass={KPI_BORDER.neutral}
         active={statusFilter === "ALL"}
         onClick={() => onSelect("ALL")}
       />
-      <KpiTile
+      <EnterpriseOverviewKpiTile
         label="Open"
         value={stats.open}
-        tone="red"
+        borderClass={KPI_BORDER.red}
         active={statusFilter === "OPEN"}
         onClick={() => onSelect("OPEN")}
       />
-      <KpiTile
+      <EnterpriseOverviewKpiTile
         label="In progress"
         value={stats.inProgress}
-        tone="amber"
+        borderClass={KPI_BORDER.amber}
         active={statusFilter === "IN_PROGRESS"}
         onClick={() => onSelect("IN_PROGRESS")}
       />
-      <KpiTile
+      <EnterpriseOverviewKpiTile
         label="Overdue"
         value={stats.overdue}
-        tone={stats.overdue > 0 ? "red" : "neutral"}
+        borderClass={stats.overdue > 0 ? KPI_BORDER.red : KPI_BORDER.neutral}
         hint="Open past due date"
       />
-      <KpiTile
+      <EnterpriseOverviewKpiTile
         label="Resolved"
         value={stats.resolved}
-        tone="emerald"
+        borderClass={KPI_BORDER.emerald}
         active={statusFilter === "RESOLVED"}
         onClick={() => onSelect("RESOLVED")}
       />

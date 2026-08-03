@@ -41,7 +41,7 @@ function isoToDateInput(iso: string | null | undefined): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : "";
 }
 
-export function dateInputToIsoNullable(s: string): string | null {
+function dateInputToIsoNullable(s: string): string | null {
   const t = s.trim();
   if (!t) return null;
   return `${t}T12:00:00.000Z`;
@@ -91,8 +91,8 @@ export function assetDraftFromRow(a: OmAssetRow): AssetFormDraft {
   };
 }
 
-export function assetDraftToCreateBody(d: AssetFormDraft): Parameters<typeof createOmAsset>[1] {
-  const hasFile = d.attachFileId.trim().length > 0 && d.attachFileVersionId.trim().length > 0;
+/** Shared create/patch fields from the asset form draft (excludes drawing link). */
+function assetDraftCoreFields(d: AssetFormDraft) {
   return {
     tag: d.tag.trim(),
     name: d.name.trim(),
@@ -109,6 +109,13 @@ export function assetDraftToCreateBody(d: AssetFormDraft): Parameters<typeof cre
     warrantyExpires: dateInputToIsoNullable(d.warrantyExpires),
     lastServiceAt: dateInputToIsoNullable(d.lastServiceAt),
     notes: d.notes.trim() || null,
+  };
+}
+
+export function assetDraftToCreateBody(d: AssetFormDraft): Parameters<typeof createOmAsset>[1] {
+  const hasFile = d.attachFileId.trim().length > 0 && d.attachFileVersionId.trim().length > 0;
+  return {
+    ...assetDraftCoreFields(d),
     ...(hasFile
       ? {
           fileId: d.attachFileId.trim(),
@@ -117,6 +124,26 @@ export function assetDraftToCreateBody(d: AssetFormDraft): Parameters<typeof cre
           annotationId: null,
         }
       : {}),
+  };
+}
+
+/** Patch body for edit — clears drawing link when no file is attached. */
+export function assetDraftToPatchBody(d: AssetFormDraft) {
+  const hasFile = d.attachFileId.trim().length > 0 && d.attachFileVersionId.trim().length > 0;
+  return {
+    ...assetDraftCoreFields(d),
+    ...(hasFile
+      ? {
+          fileId: d.attachFileId.trim(),
+          fileVersionId: d.attachFileVersionId.trim(),
+        }
+      : {
+          fileId: null,
+          fileVersionId: null,
+          pageNumber: null,
+          annotationId: null,
+          pinJson: null,
+        }),
   };
 }
 

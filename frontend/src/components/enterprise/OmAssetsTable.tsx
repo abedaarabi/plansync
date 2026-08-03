@@ -1,49 +1,16 @@
 "use client";
 
-import { Boxes, Link2, MapPin, Package, PanelRightOpen, Pencil } from "lucide-react";
+import { MapPin } from "lucide-react";
 import type { OmAssetRow } from "@/lib/api-client";
-import { assetHasSheetPin } from "@/lib/assetPinFocus";
-import { omAssetHasBimLink } from "@/lib/omAssetViewerNavigation";
 import { OmAssetImageThumb } from "@/components/enterprise/OmAssetImageThumb";
+import {
+  AssetRowActions,
+  DrawingStatusBadge,
+  type OmAssetsListActions,
+} from "@/components/enterprise/omAssetsListShared";
 
-function DrawingStatusBadge({ asset }: { asset: OmAssetRow }) {
-  if (omAssetHasBimLink(asset)) {
-    return (
-      <span className="inline-flex items-center rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:text-sky-200">
-        3D model
-      </span>
-    );
-  }
-  if (assetHasSheetPin(asset)) {
-    return (
-      <span className="inline-flex items-center rounded-full border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-200">
-        Pin on sheet
-      </span>
-    );
-  }
-  if (asset.file) {
-    return (
-      <span className="enterprise-badge-neutral inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold">
-        Sheet linked
-      </span>
-    );
-  }
-  return <span className="text-xs text-[var(--enterprise-text-muted)]">—</span>;
-}
-
-const actionBtn =
-  "inline-flex min-h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 text-xs font-medium text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-ring-focus)]";
-
-type Props = {
-  projectId: string;
+type Props = OmAssetsListActions & {
   rows: OmAssetRow[];
-  formatLocation: (a: OmAssetRow) => string;
-  onOpenDetail: (asset: OmAssetRow) => void;
-  onEdit: (asset: OmAssetRow) => void;
-  onLink: (asset: OmAssetRow) => void;
-  onViewDrawing: (asset: OmAssetRow) => void;
-  onClearLink: (assetId: string) => void;
-  clearLinkPending: boolean;
 };
 
 export function OmAssetsTable({
@@ -58,37 +25,32 @@ export function OmAssetsTable({
   clearLinkPending,
 }: Props) {
   return (
-    <div className="w-full min-w-0 overflow-x-auto">
-      <table className="w-full table-fixed border-collapse text-left text-sm">
-        <colgroup>
-          <col className="w-16" />
-          <col className="w-[9%]" />
-          <col className="w-[18%]" />
-          <col className="w-[12%]" />
-          <col className="w-[16%]" />
-          <col className="w-[11%]" />
-          <col />
-        </colgroup>
+    <div className="enterprise-scrollbar w-full min-w-0 overflow-x-auto">
+      <table className="w-full min-w-[640px] border-collapse text-left text-sm">
         <thead className="sticky top-0 z-[3]">
           <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
-            <th className="sticky left-0 z-[4] bg-[var(--enterprise-surface)] px-3 py-3">Photo</th>
-            <th className="sticky left-16 z-[4] bg-[var(--enterprise-surface)] px-3 py-3">Tag</th>
-            <th className="px-3 py-3">Name</th>
-            <th className="px-3 py-3">Category</th>
-            <th className="px-3 py-3">Location</th>
-            <th className="px-3 py-3">Link</th>
-            <th className="whitespace-nowrap px-3 py-3 text-right">Actions</th>
+            <th className="sticky left-0 z-[4] hidden w-16 bg-[var(--enterprise-surface)] px-3 py-3 md:table-cell">
+              Photo
+            </th>
+            <th className="sticky left-0 z-[4] w-[7.5rem] bg-[var(--enterprise-surface)] px-3 py-3 md:left-16">
+              Tag
+            </th>
+            <th className="min-w-[8rem] px-3 py-3">Name</th>
+            <th className="hidden w-[7rem] px-3 py-3 lg:table-cell">Category</th>
+            <th className="hidden min-w-[8rem] px-3 py-3 sm:table-cell">Location</th>
+            <th className="w-[6.5rem] px-3 py-3">Link</th>
+            <th className="w-[9.5rem] px-3 py-3 text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map(
-            // fallow-ignore-next-line complexity
-            (a) => (
+          {rows.map((a) => {
+            const location = formatLocation(a);
+            return (
               <tr
                 key={a.id}
-                className="group border-b border-[var(--enterprise-border)]/70 whitespace-nowrap transition hover:bg-[var(--enterprise-hover-surface)]/50"
+                className="group border-b border-[var(--enterprise-border)]/70 transition hover:bg-[var(--enterprise-hover-surface)]/50"
               >
-                <td className="sticky left-0 z-[2] cursor-pointer bg-[var(--enterprise-surface)] px-3 py-2.5 group-hover:bg-[var(--enterprise-hover-surface)]/50">
+                <td className="sticky left-0 z-[2] hidden cursor-pointer bg-[var(--enterprise-surface)] px-3 py-2.5 group-hover:bg-[var(--enterprise-hover-surface)]/50 md:table-cell">
                   <button
                     type="button"
                     className="block h-11 w-11 overflow-hidden rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]"
@@ -105,7 +67,7 @@ export function OmAssetsTable({
                   </button>
                 </td>
                 <td
-                  className="sticky left-16 z-[2] cursor-pointer bg-[var(--enterprise-surface)] px-3 py-2.5 group-hover:bg-[var(--enterprise-hover-surface)]/50"
+                  className="sticky left-0 z-[2] cursor-pointer bg-[var(--enterprise-surface)] px-3 py-2.5 group-hover:bg-[var(--enterprise-hover-surface)]/50 md:left-16"
                   onClick={() => onOpenDetail(a)}
                 >
                   <span className="font-mono text-xs font-bold text-[var(--enterprise-primary)]">
@@ -113,103 +75,120 @@ export function OmAssetsTable({
                   </span>
                 </td>
                 <td
-                  className="cursor-pointer truncate px-3 py-2.5 font-medium text-[var(--enterprise-text)]"
+                  className="max-w-[12rem] cursor-pointer truncate px-3 py-2.5 font-medium text-[var(--enterprise-text)]"
+                  title={a.name}
                   onClick={() => onOpenDetail(a)}
                 >
                   {a.name}
                 </td>
                 <td
-                  className="cursor-pointer truncate px-3 py-2.5 text-[var(--enterprise-text-muted)]"
+                  className="hidden max-w-[8rem] cursor-pointer truncate px-3 py-2.5 text-[var(--enterprise-text-muted)] lg:table-cell"
+                  title={a.category?.trim() || undefined}
                   onClick={() => onOpenDetail(a)}
                 >
                   {a.category?.trim() || "—"}
                 </td>
                 <td
-                  className="cursor-pointer truncate px-3 py-2.5 text-[var(--enterprise-text-muted)]"
+                  className="hidden max-w-[10rem] cursor-pointer truncate px-3 py-2.5 text-[var(--enterprise-text-muted)] sm:table-cell"
+                  title={location}
                   onClick={() => onOpenDetail(a)}
                 >
                   <span className="inline-flex max-w-full items-center gap-1">
                     <MapPin className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
-                    <span className="truncate">{formatLocation(a)}</span>
+                    <span className="truncate">{location}</span>
                   </span>
                 </td>
                 <td className="cursor-pointer px-3 py-2.5" onClick={() => onOpenDetail(a)}>
                   <DrawingStatusBadge asset={a} />
                 </td>
-                <td className="px-3 py-2.5 text-right">
-                  <div className="inline-flex flex-nowrap items-center justify-end gap-1">
-                    <button
-                      type="button"
-                      aria-label={`Details for ${a.tag}`}
-                      onClick={() => onOpenDetail(a)}
-                      className={actionBtn}
-                    >
-                      <PanelRightOpen className="h-3.5 w-3.5" strokeWidth={2} />
-                      <span className="hidden sm:inline">Details</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Edit ${a.tag}`}
-                      onClick={() => onEdit(a)}
-                      className={actionBtn}
-                    >
-                      <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
-                      <span className="hidden sm:inline">Edit</span>
-                    </button>
-                    {a.fileId ? (
-                      <button
-                        type="button"
-                        aria-label={
-                          omAssetHasBimLink(a)
-                            ? `Open 3D for ${a.tag}`
-                            : assetHasSheetPin(a)
-                              ? `View pin for ${a.tag}`
-                              : `Open drawing for ${a.tag}`
-                        }
-                        onClick={() => onViewDrawing(a)}
-                        className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg border border-teal-200/80 bg-teal-500/5 px-2.5 text-xs font-medium text-teal-800 hover:bg-teal-50 dark:border-teal-900/50 dark:text-teal-200 dark:hover:bg-teal-950/40"
-                      >
-                        {omAssetHasBimLink(a) ? (
-                          <Boxes className="h-3.5 w-3.5" strokeWidth={2} />
-                        ) : (
-                          <Package className="h-3.5 w-3.5" strokeWidth={2} />
-                        )}
-                        <span className="hidden md:inline">
-                          {omAssetHasBimLink(a) ? "3D" : assetHasSheetPin(a) ? "Pin" : "Drawing"}
-                        </span>
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      aria-label={`Link drawing for ${a.tag}`}
-                      onClick={() => onLink(a)}
-                      className={actionBtn}
-                    >
-                      <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
-                      <span className="hidden sm:inline">Link</span>
-                    </button>
-                    {a.fileId ? (
-                      <button
-                        type="button"
-                        aria-label={
-                          omAssetHasBimLink(a)
-                            ? `Clear 3D link for ${a.tag}`
-                            : `Clear drawing link for ${a.tag}`
-                        }
-                        disabled={clearLinkPending}
-                        onClick={() => onClearLink(a.id)}
-                        className="inline-flex min-h-9 shrink-0 items-center rounded-lg px-2 text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
-                      >
-                        Clear
-                      </button>
-                    ) : null}
-                  </div>
+                <td className="px-2 py-2.5 text-right">
+                  <AssetRowActions
+                    asset={a}
+                    onOpenDetail={onOpenDetail}
+                    onEdit={onEdit}
+                    onLink={onLink}
+                    onViewDrawing={onViewDrawing}
+                    onClearLink={onClearLink}
+                    clearLinkPending={clearLinkPending}
+                  />
                 </td>
               </tr>
-            ),
-          )}
+            );
+          })}
         </tbody>
       </table>
     </div>
+  );
+}
+
+export function OmAssetsMobileList({
+  projectId,
+  rows,
+  formatLocation,
+  onOpenDetail,
+  onEdit,
+  onLink,
+  onViewDrawing,
+  onClearLink,
+  clearLinkPending,
+}: Props) {
+  return (
+    <ul className="divide-y divide-[var(--enterprise-border)]/70">
+      {rows.map((a) => {
+        const location = formatLocation(a);
+        return (
+          <li key={a.id} className="mobile-list-row px-3 py-3 sm:px-4">
+            <div className="flex gap-3">
+              <button
+                type="button"
+                className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]"
+                aria-label={`Open ${a.tag}`}
+                onClick={() => onOpenDetail(a)}
+              >
+                <OmAssetImageThumb
+                  projectId={projectId}
+                  assetId={a.id}
+                  hasImage={a.hasImage}
+                  alt={a.name}
+                  fallbackClassName="flex h-12 w-12 items-center justify-center bg-[var(--enterprise-bg)]"
+                />
+              </button>
+              <button
+                type="button"
+                className="min-w-0 flex-1 text-left"
+                onClick={() => onOpenDetail(a)}
+              >
+                <p className="font-mono text-xs font-bold text-[var(--enterprise-primary)]">
+                  {a.tag}
+                </p>
+                <p className="mt-0.5 truncate text-sm font-medium text-[var(--enterprise-text)]">
+                  {a.name}
+                </p>
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--enterprise-text-muted)]">
+                  <span className="truncate">{a.category?.trim() || "Uncategorized"}</span>
+                  <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                    <MapPin className="h-3 w-3 shrink-0 opacity-60" aria-hidden />
+                    <span className="truncate">{location}</span>
+                  </span>
+                </p>
+                <div className="mt-1.5">
+                  <DrawingStatusBadge asset={a} />
+                </div>
+              </button>
+            </div>
+            <AssetRowActions
+              asset={a}
+              className="mt-2 flex items-center justify-end gap-0.5"
+              onOpenDetail={onOpenDetail}
+              onEdit={onEdit}
+              onLink={onLink}
+              onViewDrawing={onViewDrawing}
+              onClearLink={onClearLink}
+              clearLinkPending={clearLinkPending}
+            />
+          </li>
+        );
+      })}
+    </ul>
   );
 }

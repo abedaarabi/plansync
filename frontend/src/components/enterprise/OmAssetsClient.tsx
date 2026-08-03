@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { ImageIcon, Link2, MapPin, Package, Plus, Search, Trash2, Download } from "lucide-react";
+import { Package, Plus, Search, Trash2, Download } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -12,12 +12,15 @@ import {
   fetchOmAssets,
   fetchProjectSession,
   fetchProjects,
+  omAssetRegisterCsvUrl,
   omOccupantAssetQrCsvUrl,
   patchOmAsset,
   uploadOmAssetImageFile,
   type OmAssetRow,
   ProRequiredError,
 } from "@/lib/api-client";
+import { filterOmAssets, type OmAssetsListFilter } from "@/lib/omAssetsOverviewStats";
+import { useTickNowMs } from "@/lib/useTickNowMs";
 import { sortedVersions } from "@/components/file-explorer/fileExplorerUtils";
 import { assetHasSheetPin } from "@/lib/assetPinFocus";
 import { isPdfFile } from "@/lib/isPdfFile";
@@ -38,12 +41,13 @@ import { OmAssetDocumentsBlock } from "@/components/enterprise/OmAssetDocumentsB
 import {
   assetDraftFromRow,
   assetDraftToCreateBody,
-  dateInputToIsoNullable,
+  assetDraftToPatchBody,
   emptyAssetDraft,
   OmAssetFormFields,
   type AssetFormDraft,
 } from "@/components/enterprise/OmAssetFormFields";
-import { OmAssetsTable } from "@/components/enterprise/OmAssetsTable";
+import { OmAssetsOverview } from "@/components/enterprise/OmAssetsOverview";
+import { OmAssetsMobileList, OmAssetsTable } from "@/components/enterprise/OmAssetsTable";
 import { OmMaintenanceScheduleSlideOver } from "@/components/enterprise/OmMaintenanceScheduleSlideOver";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { OM_COMPACT_INPUT, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
@@ -60,34 +64,8 @@ function formatAssetLocation(a: OmAssetRow): string {
   return a.locationLabel?.trim() || "—";
 }
 
-function StatPill({
-  icon: Icon,
-  label,
-  value,
-  accent,
-}: {
-  icon: typeof Package;
-  label: string;
-  value: number;
-  accent?: boolean;
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 px-2.5 py-1.5 lg:min-w-[6.5rem]">
-      <Icon
-        className={`h-4 w-4 shrink-0 ${accent ? "text-teal-600 dark:text-teal-400" : "text-[var(--enterprise-primary)]"}`}
-        aria-hidden
-      />
-      <div className="min-w-0">
-        <p className="truncate text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--enterprise-text-muted)]">
-          {label}
-        </p>
-        <p className="text-sm font-semibold tabular-nums leading-tight text-[var(--enterprise-text)]">
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
+const exportLinkClass =
+  "inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]";
 
 // fallow-ignore-next-line complexity
 export function OmAssetsClient({ projectId }: Props) {
@@ -114,6 +92,8 @@ export function OmAssetsClient({ projectId }: Props) {
 
   const [listSearchInput, setListSearchInput] = useState("");
   const [debouncedListQ, setDebouncedListQ] = useState("");
+  const [listFilter, setListFilter] = useState<OmAssetsListFilter>("ALL");
+  const nowMs = useTickNowMs();
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedListQ(listSearchInput.trim()), 300);
     return () => window.clearTimeout(t);
@@ -222,37 +202,7 @@ export function OmAssetsClient({ projectId }: Props) {
   const updateMut = useMutation({
     mutationFn: async () => {
       if (!editingAsset) throw new Error("No asset");
-      const d = editDraft;
-      const hasFile = d.attachFileId.trim().length > 0 && d.attachFileVersionId.trim().length > 0;
-      let row = await patchOmAsset(projectId, editingAsset.id, {
-        tag: d.tag.trim(),
-        name: d.name.trim(),
-        category: d.category.trim() || null,
-        manufacturer: d.manufacturer.trim() || null,
-        model: d.model.trim() || null,
-        serialNumber: d.serialNumber.trim() || null,
-        locationLabel: d.locationLabel.trim() || null,
-        hall: d.hall.trim() || null,
-        rowLabel: d.rowLabel.trim() || null,
-        rack: d.rack.trim() || null,
-        positionU: d.positionU.trim() || null,
-        installDate: dateInputToIsoNullable(d.installDate),
-        warrantyExpires: dateInputToIsoNullable(d.warrantyExpires),
-        lastServiceAt: dateInputToIsoNullable(d.lastServiceAt),
-        notes: d.notes.trim() || null,
-        ...(hasFile
-          ? {
-              fileId: d.attachFileId.trim(),
-              fileVersionId: d.attachFileVersionId.trim(),
-            }
-          : {
-              fileId: null,
-              fileVersionId: null,
-              pageNumber: null,
-              annotationId: null,
-              pinJson: null,
-            }),
-      });
+      let row = await patchOmAsset(projectId, editingAsset.id, assetDraftToPatchBody(editDraft));
       if (editRemoveImage && editingAsset.hasImage) {
         row = await deleteOmAssetImage(projectId, editingAsset.id);
       }
@@ -401,14 +351,35 @@ export function OmAssetsClient({ projectId }: Props) {
     return sorted[0]?.id ?? "";
   }
 
-  const registerStats = useMemo(() => {
-    return {
-      total: rows.length,
-      withPhoto: rows.filter((r) => r.hasImage).length,
-      onDrawing: rows.filter((r) => assetHasSheetPin(r)).length,
-      linked: rows.filter((r) => Boolean(r.fileId)).length,
-    };
-  }, [rows]);
+  const filteredRows = useMemo(
+    () => filterOmAssets(rows, listFilter, nowMs),
+    [rows, listFilter, nowMs],
+  );
+
+  const canExportRegisterCsv =
+    Boolean(projectSession?.operationsMode) &&
+    Boolean(projectSession?.settings.modules.omAssets) &&
+    (projectSession?.workspaceRole === "SUPER_ADMIN" || projectSession?.workspaceRole === "ADMIN");
+
+  const canExportQrCsv =
+    canExportRegisterCsv && Boolean(projectSession?.settings.modules.omTenantPortal);
+
+  function handleEditAsset(a: OmAssetRow) {
+    setEditingAsset(a);
+    setEditDrawingSearch("");
+  }
+
+  function handleLinkAsset(a: OmAssetRow) {
+    setLinkAsset(a);
+    setLinkDrawingSearch("");
+    setLinkExpandedFileId(null);
+  }
+
+  function handleClearLink(id: string) {
+    if (confirm("Clear the model / drawing link for this asset?")) {
+      clearLinkMut.mutate(id);
+    }
+  }
 
   if (ctxLoading || isPending) {
     return (
@@ -434,16 +405,14 @@ export function OmAssetsClient({ projectId }: Props) {
         description="Equipment register — photos, documents, and drawing pins."
         action={
           <>
-            {projectSession &&
-            projectSession.operationsMode &&
-            projectSession.settings.modules.omTenantPortal &&
-            projectSession.settings.modules.omAssets &&
-            (projectSession.workspaceRole === "SUPER_ADMIN" ||
-              projectSession.workspaceRole === "ADMIN") ? (
-              <a
-                href={omOccupantAssetQrCsvUrl(projectId)}
-                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
-              >
+            {canExportRegisterCsv ? (
+              <a href={omAssetRegisterCsvUrl(projectId)} className={exportLinkClass}>
+                <Download className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                Asset CSV
+              </a>
+            ) : null}
+            {canExportQrCsv ? (
+              <a href={omOccupantAssetQrCsvUrl(projectId)} className={exportLinkClass}>
                 <Download className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 QR CSV
               </a>
@@ -465,39 +434,39 @@ export function OmAssetsClient({ projectId }: Props) {
         }
       />
 
+      {rows.length > 0 ? (
+        <OmAssetsOverview
+          rows={rows}
+          filter={listFilter}
+          onFilterChange={setListFilter}
+          searchActive={Boolean(debouncedListQ)}
+        />
+      ) : null}
+
       <section className="enterprise-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div className="shrink-0 border-b border-[var(--enterprise-border)] px-3 py-2.5 sm:px-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-            <div className="relative min-w-0 flex-1">
-              <label className="sr-only" htmlFor="asset-list-search">
-                Search assets
-              </label>
-              <Search
-                className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--enterprise-text-muted)]"
-                strokeWidth={2}
-                aria-hidden
-              />
-              <input
-                id="asset-list-search"
-                value={listSearchInput}
-                onChange={(e) => setListSearchInput(e.target.value)}
-                placeholder="Search tag, name, location…"
-                className={`${OM_COMPACT_INPUT} pl-8`}
-              />
-            </div>
-            {rows.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:flex lg:shrink-0 lg:gap-3">
-                <StatPill icon={Package} label="Total" value={registerStats.total} />
-                <StatPill icon={ImageIcon} label="Photos" value={registerStats.withPhoto} />
-                <StatPill icon={MapPin} label="On drawing" value={registerStats.onDrawing} accent />
-                <StatPill icon={Link2} label="Linked" value={registerStats.linked} />
-              </div>
-            ) : null}
+          <div className="relative min-w-0">
+            <label className="sr-only" htmlFor="asset-list-search">
+              Search assets
+            </label>
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--enterprise-text-muted)]"
+              strokeWidth={2}
+              aria-hidden
+            />
+            <input
+              id="asset-list-search"
+              value={listSearchInput}
+              onChange={(e) => setListSearchInput(e.target.value)}
+              placeholder="Search tag, name, location…"
+              className={`${OM_COMPACT_INPUT} pl-8`}
+            />
           </div>
           {rows.length > 0 ? (
             <p className="mt-2 text-xs text-[var(--enterprise-text-muted)]">
-              {rows.length === 1 ? "1 asset" : `${rows.length} assets`}
-              {debouncedListQ ? " matching search" : ""} · Click a row for details
+              {filteredRows.length === 1 ? "1 asset" : `${filteredRows.length} assets`}
+              {debouncedListQ ? " matching search" : ""}
+              {listFilter !== "ALL" ? " · filtered" : ""} · Click a row for details
             </p>
           ) : null}
         </div>
@@ -535,30 +504,46 @@ export function OmAssetsClient({ projectId }: Props) {
               </EnterpriseButton>
             ) : null}
           </div>
+        ) : filteredRows.length === 0 ? (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 py-10 text-center">
+            <p className="text-base font-semibold text-[var(--enterprise-text)]">
+              No assets match this filter
+            </p>
+            <p className="text-sm text-[var(--enterprise-text-muted)]">
+              Clear the overview filter or adjust search.
+            </p>
+            <EnterpriseButton size="sm" variant="secondary" onClick={() => setListFilter("ALL")}>
+              Clear filter
+            </EnterpriseButton>
+          </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-auto">
-            <OmAssetsTable
-              projectId={projectId}
-              rows={rows}
-              formatLocation={formatAssetLocation}
-              onOpenDetail={setDetailAsset}
-              onEdit={(a) => {
-                setEditingAsset(a);
-                setEditDrawingSearch("");
-              }}
-              onLink={(a) => {
-                setLinkAsset(a);
-                setLinkDrawingSearch("");
-                setLinkExpandedFileId(null);
-              }}
-              onViewDrawing={openViewerForLinkedAsset}
-              onClearLink={(id) => {
-                if (confirm("Clear the model / drawing link for this asset?")) {
-                  clearLinkMut.mutate(id);
-                }
-              }}
-              clearLinkPending={clearLinkMut.isPending}
-            />
+          <div className="enterprise-scrollbar min-h-0 flex-1 overflow-auto">
+            <div className="hidden md:block">
+              <OmAssetsTable
+                projectId={projectId}
+                rows={filteredRows}
+                formatLocation={formatAssetLocation}
+                onOpenDetail={setDetailAsset}
+                onEdit={handleEditAsset}
+                onLink={handleLinkAsset}
+                onViewDrawing={openViewerForLinkedAsset}
+                onClearLink={handleClearLink}
+                clearLinkPending={clearLinkMut.isPending}
+              />
+            </div>
+            <div className="md:hidden">
+              <OmAssetsMobileList
+                projectId={projectId}
+                rows={filteredRows}
+                formatLocation={formatAssetLocation}
+                onOpenDetail={setDetailAsset}
+                onEdit={handleEditAsset}
+                onLink={handleLinkAsset}
+                onViewDrawing={openViewerForLinkedAsset}
+                onClearLink={handleClearLink}
+                clearLinkPending={clearLinkMut.isPending}
+              />
+            </div>
           </div>
         )}
       </section>
