@@ -359,6 +359,12 @@ export class BimEngine {
   private clashReviewSuppressSelectPaint = false;
   /** Fast Navisworks-style context: fade whole-scene materials instead of per-element ghost maps. */
   private clashSceneGhostOpacity: number | null = null;
+  /**
+   * Clash Ghost context is look-only: faded federation must not be selectable.
+   * Picks are restricted to {@link clashPickAllowMap} (Item 1/2) and pierce occluders.
+   */
+  private clashGhostPickOnly = false;
+  private clashPickAllowMap: OBC.ModelIdMap | null = null;
   private clashGhostMatBackup = new Map<
     THREE.Material,
     {
@@ -1160,11 +1166,12 @@ export class BimEngine {
     return this.hasActiveFilterHighlights() || this.hasActiveSelectionHighlight();
   }
 
-  /** Hover preview is only useful in orbit select mode. */
+  /** Hover preview is only useful in orbit select mode — not over look-only ghosts. */
   private syncHoverEnabled(): void {
     const hoverer = this.components?.get(OBF.Hoverer);
     if (!hoverer) return;
-    hoverer.enabled = this.tool === "select" && this.cameraMode !== "walk";
+    const ghostLookOnly = this.clashGhostPickOnly || this.activeFilterGhostMap != null;
+    hoverer.enabled = this.tool === "select" && this.cameraMode !== "walk" && !ghostLookOnly;
   }
 
   /** Queue a single coalesced repaint of selection + filter overlays. */
@@ -2537,6 +2544,115 @@ export class BimEngine {
     };
   }
 
+  private modelIdMapHas(
+    map: OBC.ModelIdMap | null | undefined,
+    modelId: string,
+    localId: number,
+  ): boolean {
+    const ids = map?.[modelId];
+    return ids instanceof Set && ids.has(localId);
+  }
+
+  private isFilterGhostLocalId(modelId: string, localId: number): boolean {
+    return this.modelIdMapHas(this.activeFilterGhostMap, modelId, localId);
+  }
+
+  /** All fragment hits under the pointer, nearest first — used to pierce ghosts. */
+  private async raycastAllAtPointer(
+    e: PointerEvent,
+  ): Promise<Array<{ modelId: string; localId: number; distance: number }>> {
+    const world = this.world;
+    const components = this.components;
+    if (!world?.renderer || !components) return [];
+    const fragments = components.get(OBC.FragmentsManager);
+    if (!fragments.initialized || fragments.list.size === 0) return [];
+
+    const data = {
+      camera: world.camera.three as THREE.PerspectiveCamera,
+      mouse: new THREE.Vector2(e.clientX, e.clientY),
+      dom: world.renderer.three.domElement,
+    };
+    const hits: Array<{ modelId: string; localId: number; distance: number }> = [];
+    for (const model of fragments.list.values()) {
+      try {
+        const results = await model.raycastAll(data);
+        if (!results) continue;
+        for (const hit of results) {
+          if (hit.localId == null) continue;
+          hits.push({
+            modelId: hit.fragments.modelId,
+            localId: hit.localId,
+            distance: hit.distance,
+          });
+        }
+      } catch {
+        /* model may dispose mid-pick */
+      }
+    }
+    hits.sort((a, b) => a.distance - b.distance);
+    return hits;
+  }
+
+  /**
+   * When worker hits only return the front occluder, fall back to ray ∩ allow-list
+   * AABBs so clash Item 1/2 remain clickable through faded context.
+   */
+  // fallow-ignore-next-line complexity
+  private async pickAllowMapByBounds(
+    e: PointerEvent,
+    allowMap: OBC.ModelIdMap,
+  ): Promise<{ modelId: string; localId: number } | null> {
+    const world = this.world;
+    const components = this.components;
+    if (!world?.renderer || !components) return null;
+    const fragments = components.get(OBC.FragmentsManager);
+    if (!fragments.initialized) return null;
+
+    const ndc = this.pointerNdc(e);
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, world.camera.three);
+    const ray = raycaster.ray;
+    const hitPoint = new THREE.Vector3();
+    let best: { modelId: string; localId: number; distance: number } | null = null;
+
+    for (const [modelId, idSet] of Object.entries(allowMap)) {
+      if (!(idSet instanceof Set) || idSet.size === 0) continue;
+      const model = fragments.list.get(modelId);
+      if (!model) continue;
+      const localIds = [...idSet];
+      let boxes: THREE.Box3[] = [];
+      try {
+        boxes = await model.getBoxes(localIds);
+      } catch {
+        continue;
+      }
+      for (let i = 0; i < localIds.length; i++) {
+        const box = boxes[i];
+        const localId = localIds[i]!;
+        if (!box || !this.isValidBox3(box)) continue;
+        if (!ray.intersectBox(box, hitPoint)) continue;
+        const distance = ray.origin.distanceTo(hitPoint);
+        if (!best || distance < best.distance) {
+          best = { modelId, localId, distance };
+        }
+      }
+    }
+    return best ? { modelId: best.modelId, localId: best.localId } : null;
+  }
+
+  /** Pick only allow-listed items; pierces any geometry not in the map. */
+  private async pickFromAllowMap(
+    e: PointerEvent,
+    allowMap: OBC.ModelIdMap,
+  ): Promise<{ modelId: string; localId: number } | null> {
+    for (const hit of await this.raycastAllAtPointer(e)) {
+      if (this.modelIdMapHas(allowMap, hit.modelId, hit.localId)) {
+        return { modelId: hit.modelId, localId: hit.localId };
+      }
+    }
+    return this.pickAllowMapByBounds(e, allowMap);
+  }
+
   /** Fast element pick for select — one GPU id pass, no worker fence or snapping. */
   // fallow-ignore-next-line complexity
   private async fastPickElement(
@@ -2548,6 +2664,22 @@ export class BimEngine {
 
     const fragments = components.get(OBC.FragmentsManager);
     if (!fragments.initialized || fragments.list.size === 0) return null;
+
+    // Clash Ghost: faded context is look-only — only Item 1/2 are selectable.
+    if (this.clashGhostPickOnly) {
+      if (!this.clashPickAllowMap) return null;
+      return this.pickFromAllowMap(e, this.clashPickAllowMap);
+    }
+
+    // Filter Ghost: skip dimmed ids and pierce through to visible matches.
+    if (this.activeFilterGhostMap) {
+      for (const hit of await this.raycastAllAtPointer(e)) {
+        if (!this.isFilterGhostLocalId(hit.modelId, hit.localId)) {
+          return { modelId: hit.modelId, localId: hit.localId };
+        }
+      }
+      return null;
+    }
 
     const ndc = this.pointerNdc(e);
     const item = await components.get(OBC.FastModelPickers).get(world).getItemAt(ndc);
@@ -4366,6 +4498,8 @@ export class BimEngine {
     const stillCurrent = () => !this.disposed && this.clashPresentSeq === seq;
 
     this.clashReviewSuppressSelectPaint = true;
+    this.clashGhostPickOnly = false;
+    this.clashPickAllowMap = null;
     this.selectedGuids.clear();
     this.lastPickMap = null;
     this.lastPickedModelId = null;
@@ -4383,6 +4517,10 @@ export class BimEngine {
     ]);
     if (!stillCurrent()) return;
     const partnerMap = this.mergeModelIdMaps(itemAMap, itemBMap);
+    // Ghost context: federation is visual-only; picks may only hit the clash pair.
+    this.clashPickAllowMap = partnerMap;
+    this.clashGhostPickOnly = context === "ghost";
+    this.syncHoverEnabled();
     this.colorizeStyleIds = [];
     this.activeColorizeGroups = [];
     if (itemAMap) {
@@ -4464,6 +4602,9 @@ export class BimEngine {
   async clearClashReviewPresentation(): Promise<void> {
     this.clashPresentSeq += 1;
     this.clashReviewSuppressSelectPaint = false;
+    this.clashGhostPickOnly = false;
+    this.clashPickAllowMap = null;
+    this.syncHoverEnabled();
     if (this.highlightRepaintTimer != null) {
       window.clearTimeout(this.highlightRepaintTimer);
       this.highlightRepaintTimer = null;
@@ -4497,9 +4638,12 @@ export class BimEngine {
 
   async showAllElements(): Promise<void> {
     this.clashReviewSuppressSelectPaint = false;
+    this.clashGhostPickOnly = false;
+    this.clashPickAllowMap = null;
     this.clearClashSceneGhost();
     await this.clearColorize();
     await this.clearFilterGhost();
+    this.syncHoverEnabled();
     // Section / clip planes also hide geometry — clear them with visibility.
     const wasClip = this.tool === "clip";
     this.deleteClippingPlanes();
@@ -4629,6 +4773,7 @@ export class BimEngine {
   async clearFilterGhost(): Promise<void> {
     const hadGhost = this.activeFilterGhostMap != null;
     this.activeFilterGhostMap = null;
+    if (hadGhost) this.syncHoverEnabled();
     if (!hadGhost && this.activeColorizeGroups.length === 0) return;
     await this.requestFragmentHighlights();
     if (!this.hasActiveFragmentHighlights()) {
@@ -4648,6 +4793,7 @@ export class BimEngine {
     const ghostGuids = index.elements.filter((el) => !matchSet.has(el.guid)).map((el) => el.guid);
     if (ghostGuids.length === 0) {
       this.activeFilterGhostMap = null;
+      this.syncHoverEnabled();
       return;
     }
 
@@ -4656,6 +4802,7 @@ export class BimEngine {
 
     this.activeFilterGhostMap = map;
     this.activeFilterGhostOpacity = opacity;
+    this.syncHoverEnabled();
   }
 
   async clearColorize(): Promise<void> {
