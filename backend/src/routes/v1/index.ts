@@ -2052,17 +2052,27 @@ export function v1Routes(
           take: 500,
           select: {
             createdAt: true,
+            entityId: true,
             metadata: true,
             actor: { select: { name: true, email: true } },
           },
         });
+        const fileFolderById = new Map(
+          project.files.map((file) => [file.id, file.folderId] as const),
+        );
         const folderLastOpenById = new Map<string, { openedAt: string; openedBy: string | null }>();
         for (const row of folderOpenRows) {
-          const folderId = folderIdFromActivityMeta(row.metadata);
+          const fromMeta = folderIdFromActivityMeta(row.metadata);
+          const fromFile =
+            row.entityId && fileFolderById.has(row.entityId)
+              ? fileFolderById.get(row.entityId)
+              : null;
+          const folderId = fromMeta ?? fromFile ?? null;
           if (!folderId || folderLastOpenById.has(folderId)) continue;
+          const openedBy = row.actor?.name?.trim() || row.actor?.email?.trim() || null;
           folderLastOpenById.set(folderId, {
             openedAt: row.createdAt.toISOString(),
-            openedBy: row.actor?.name || row.actor?.email || null,
+            openedBy,
           });
         }
         const visibleFolderIds = filterFolderTreeForUser(
