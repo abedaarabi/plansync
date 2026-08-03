@@ -18,10 +18,15 @@ export default {
   // Canonical schema before validate / format --check in the pre-commit hook
   "backend/prisma/schema.prisma": () => "cd backend && npx prisma format",
   "frontend/**/*.{js,jsx,mjs,cjs,ts,tsx}": (files) => {
-    if (!files.length) return [];
+    // Vendored bundles (e.g. pdf.js worker) must not be eslint/prettier'd —
+    // formatting them can wipe the staged content and yield an empty commit.
+    const sourceFiles = files.filter(
+      (f) => !/[\\/]public[\\/].*\.worker\.(m?js|cjs)$/.test(f),
+    );
+    if (!sourceFiles.length) return [];
     return [
-      eslintInPackage("frontend", files),
-      `prettier --write ${files.map((f) => JSON.stringify(f)).join(" ")}`,
+      eslintInPackage("frontend", sourceFiles),
+      `prettier --write ${sourceFiles.map((f) => JSON.stringify(f)).join(" ")}`,
     ];
   },
   "backend/**/*.ts": (files) => {
