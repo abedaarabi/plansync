@@ -10,8 +10,8 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default async function Image() {
-  const screenshot = await readFile(join(process.cwd(), "public/images/measure.png"));
-  const screenshotSrc = `data:image/png;base64,${screenshot.toString("base64")}`;
+  const screenshot = await readFile(join(process.cwd(), "public/images/3dviewer-og.jpg"));
+  const screenshotSrc = `data:image/jpeg;base64,${screenshot.toString("base64")}`;
 
   return new ImageResponse(
     <div
@@ -249,7 +249,7 @@ export default async function Image() {
               width: "100%",
               height: "100%",
               objectFit: "cover",
-              objectPosition: "left top",
+              objectPosition: "center",
             }}
           />
         </div>
