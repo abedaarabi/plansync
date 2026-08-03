@@ -1,13 +1,8 @@
-import type { Project, Workspace } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import {
   isWorkspaceAdmin as isWorkspaceAdminFromPermissions,
   loadProjectForMember as loadProjectForMemberFromPermissions,
 } from "./permissions.js";
-
-type ProjectForMemberLegacy =
-  | { project: Project & { workspace: Workspace } }
-  | { error: string; status: 403 | 404 };
 
 /** @deprecated Prefer loadProjectWithAuth from permissions.js for full RBAC context. */
 export const loadProjectForMember = loadProjectForMemberFromPermissions;

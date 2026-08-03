@@ -68,24 +68,6 @@ function rollupQuantities(entries: BimQuantityEntry[]) {
   };
 }
 
-function cleanIfcTypeLabel(ifcType: string): string {
-  return ifcType.replace(/^Ifc/i, "").replace(/^IFC/i, "");
-}
-
-function takeoffQuantityFromRollup(rollup: ReturnType<typeof rollupQuantities>): {
-  quantity: Prisma.Decimal;
-  unit: string;
-} {
-  if (rollup.volume != null && Number.isFinite(rollup.volume)) {
-    return { quantity: new Prisma.Decimal(rollup.volume), unit: "m³" };
-  }
-  if (rollup.area != null && Number.isFinite(rollup.area)) {
-    return { quantity: new Prisma.Decimal(rollup.area), unit: "m²" };
-  }
-  const count = Number.isFinite(rollup.count) ? rollup.count : 0;
-  return { quantity: new Prisma.Decimal(Math.max(count, 0)), unit: "ea" };
-}
-
 export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env): void {
   // fallow-ignore-next-line complexity, code-duplication
   r.get("/file-versions/:fileVersionId/bim/status", needUser, async (c) => {

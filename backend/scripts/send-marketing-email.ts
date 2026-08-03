@@ -249,7 +249,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  let filePath = resolveRecipientsFilePath(opts.file);
+  const filePath = resolveRecipientsFilePath(opts.file);
   let rows = loadRowsFromFile(filePath);
   const { recipients, skipped, alreadySent } = parseMarketingRecipients(rows);
   let toSend = recipients;

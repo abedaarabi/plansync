@@ -159,7 +159,7 @@ function matchesAnyField(el: BimQuantityEntry, op: BimFilterOp, expected: string
 // fallow-ignore-next-line complexity
 function matchesRule(el: BimQuantityEntry, rule: BimFilterRule): boolean {
   if (rule.field === "any") return matchesAnyField(el, rule.op, rule.value);
-  let raw = fieldValue(el, rule.field);
+  const raw = fieldValue(el, rule.field);
   if (rule.field === "ifcType" && raw && rule.op === "eq") {
     const normalized = normalizeIfcType(rule.value);
     return compareField(raw, "eq", normalized) || compareField(raw, "eq", rule.value);

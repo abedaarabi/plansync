@@ -372,9 +372,6 @@ function toOmAssetJson(a: OmAssetRowDb) {
   const {
     occupantScanSecret,
     imageS3Key,
-    imageMimeType,
-    imageFileName,
-    imageSizeBytes,
     installDate,
     warrantyExpires,
     lastServiceAt,

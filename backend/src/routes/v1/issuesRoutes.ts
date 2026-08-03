@@ -65,8 +65,6 @@ import {
   procedureResultsToJsonValue,
   procedureToJsonValue,
   type WorkOrderChecklistItem,
-  type WorkOrderChecklistResult,
-  type WorkOrderPartUsed,
 } from "../../lib/workOrderChecklist.js";
 
 function requirePro(workspace: { subscriptionStatus: string | null }) {

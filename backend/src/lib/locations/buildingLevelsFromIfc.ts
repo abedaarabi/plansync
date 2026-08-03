@@ -12,16 +12,6 @@ async function readIfcBytes(env: Env, s3Key: string): Promise<Uint8Array> {
   return new Uint8Array(buf);
 }
 
-function mergeElementCounts(
-  storeys: StoreyPreview[],
-  byLevel: Record<string, { count: number }>,
-): StoreyPreview[] {
-  return storeys.map((s) => ({
-    ...s,
-    elementCount: byLevel[s.sourceName]?.count ?? s.elementCount,
-  }));
-}
-
 /** Upsert BimModelLevel rows for a building-scoped IFC after conversion summary is ready. */
 export async function syncBuildingLevelsFromIfc(env: Env, fileVersionId: string): Promise<number> {
   const fv = await prisma.fileVersion.findUnique({

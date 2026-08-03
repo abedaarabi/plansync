@@ -5,12 +5,6 @@ export type FolderTemplateNode = {
   children?: FolderTemplateNode[];
 };
 
-type FolderStructureTemplateMeta = {
-  id: string;
-  name: string;
-  description: string;
-};
-
 const treeNodeSchema: z.ZodType<FolderTemplateNode> = z.lazy(() =>
   z.object({
     name: z.string(),

@@ -43,48 +43,6 @@ function resolveUiMode(isExternal: boolean, projectRole: ProjectMemberRole): UiM
   }
 }
 
-function isInternalWorkspaceRole(role: WorkspaceRole): boolean {
-  return (
-    role === WorkspaceRole.SUPER_ADMIN ||
-    role === WorkspaceRole.ADMIN ||
-    role === WorkspaceRole.MEMBER
-  );
-}
-
-function canManageBilling(role: WorkspaceRole): boolean {
-  return role === WorkspaceRole.SUPER_ADMIN;
-}
-
-function canEditWorkspaceOrg(role: WorkspaceRole): boolean {
-  return role === WorkspaceRole.SUPER_ADMIN;
-}
-
-function canEditProjectFeatureToggles(role: WorkspaceRole): boolean {
-  return role === WorkspaceRole.SUPER_ADMIN;
-}
-
-/** Internal users who may invite others (Admin or Super Admin). */
-function canInviteInternal(role: WorkspaceRole): boolean {
-  return role === WorkspaceRole.SUPER_ADMIN || role === WorkspaceRole.ADMIN;
-}
-
-function canManageWorkspaceMembers(role: WorkspaceRole): boolean {
-  return role === WorkspaceRole.SUPER_ADMIN || role === WorkspaceRole.ADMIN;
-}
-
-/** Proposals: create/send — Members cannot. */
-function canCreateProposals(ctx: ProjectAuthContext): boolean {
-  if (ctx.workspaceMember.isExternal) return false;
-  const r = ctx.workspaceMember.role;
-  return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN;
-}
-
-function canViewProposalsInternal(ctx: ProjectAuthContext): boolean {
-  if (ctx.workspaceMember.isExternal) return false;
-  const r = ctx.workspaceMember.role;
-  return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN;
-}
-
 export function canUploadDrawings(ctx: ProjectAuthContext): boolean {
   if (ctx.workspaceMember.isExternal) return false;
   const r = ctx.workspaceMember.role;
@@ -111,53 +69,11 @@ export function canCreateIssues(ctx: ProjectAuthContext): boolean {
   );
 }
 
-function canCloseIssues(ctx: ProjectAuthContext): boolean {
-  if (ctx.uiMode === "client") return false;
-  if (ctx.uiMode === "sub") {
-    return true; /* assigned-only list; closing own assigned handled in route */
-  }
-  if (ctx.uiMode === "contractor") return true;
-  if (ctx.workspaceMember.isExternal) return false;
-  return true;
-}
-
 export function canCreateRfis(ctx: ProjectAuthContext): boolean {
   if (!ctx.settings.modules.rfis) return false;
   if (ctx.uiMode !== "internal") return false;
   const r = ctx.workspaceMember.role;
   return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN || r === WorkspaceRole.MEMBER;
-}
-
-function canEditTakeoff(ctx: ProjectAuthContext): boolean {
-  if (ctx.uiMode !== "internal") return false;
-  const r = ctx.workspaceMember.role;
-  return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN;
-}
-
-function canViewTakeoff(ctx: ProjectAuthContext): boolean {
-  if (!ctx.settings.modules.takeoff) return false;
-  return ctx.uiMode === "internal";
-}
-
-function canViewFieldReports(ctx: ProjectAuthContext): boolean {
-  if (!ctx.settings.modules.fieldReports) return false;
-  if (ctx.uiMode === "client") return ctx.settings.clientVisibility.showFieldReports;
-  if (ctx.uiMode === "contractor" || ctx.uiMode === "sub") return false;
-  return ctx.uiMode === "internal";
-}
-
-function canViewPunch(ctx: ProjectAuthContext): boolean {
-  if (!ctx.settings.modules.punch) return false;
-  if (ctx.uiMode === "client") return ctx.settings.clientVisibility.showPunchList;
-  return true;
-}
-
-function canViewIssuesForClient(ctx: ProjectAuthContext): boolean {
-  return ctx.settings.clientVisibility.showIssues;
-}
-
-function canViewRfisForClient(ctx: ProjectAuthContext): boolean {
-  return ctx.settings.clientVisibility.showRfis;
 }
 
 /** List/detail RFI API access (internal team, or client when module + visibility allow). */
@@ -195,20 +111,6 @@ export function canViewFolderForUser(
   if (canManageFiles(ctx)) return true;
   if (folder.accessMode === FolderAccessMode.ALL) return true;
   return folder.allowedUserIds.includes(userId);
-}
-
-function filesWhereForAuth(ctx: ProjectAuthContext): Prisma.FileWhereInput {
-  if (ctx.uiMode === "internal") return {};
-  if (ctx.uiMode === "client") {
-    return canViewDrawingsForClient(ctx) ? {} : { id: { in: [] } };
-  }
-  const tr = normalizeTrade(ctx.projectMember?.trade ?? null);
-  if (!tr) return { id: { in: [] } };
-  return {
-    disciplines: {
-      hasSome: [tr, tr.toLowerCase(), tr.toUpperCase()],
-    },
-  };
 }
 
 /**
@@ -291,14 +193,6 @@ export async function loadProjectForMember(
   const r = await loadProjectWithAuth(projectId, userId);
   if ("error" in r) return r;
   return { project: r.ctx.project };
-}
-
-async function isWorkspaceSuperAdmin(workspaceId: string, userId: string): Promise<boolean> {
-  const m = await prisma.workspaceMember.findUnique({
-    where: { workspaceId_userId: { workspaceId, userId } },
-    select: { role: true },
-  });
-  return m?.role === WorkspaceRole.SUPER_ADMIN;
 }
 
 /** Admin or Super Admin (internal management). */

@@ -1,7 +1,6 @@
 import type { FieldReport } from "@prisma/client";
 import type { Env } from "./env.js";
 import { buildTransactionalEmailHtml, escapeHtml } from "./transactionalEmailLayout.js";
-import { workWeekFridayKey } from "./workWeekFridayKey.js";
 
 export function buildFieldReportsPageUrl(env: Env, projectId: string, reportQuery?: string | null) {
   const base = env.PUBLIC_APP_URL.replace(/\/$/, "");

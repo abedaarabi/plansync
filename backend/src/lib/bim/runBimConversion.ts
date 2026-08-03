@@ -86,7 +86,7 @@ export async function processBimConversion(
   }
 
   const { workspaceId, id: projectId, name: projectName } = fv.file.project;
-  const { id: fileId, name: fileName } = fv.file;
+  const { id: fileId } = fv.file;
   const skipSummary = Boolean(fv.quantityIndexS3Key) && fv.bimConversionStatus !== "ready";
 
   const jobStartedAt =

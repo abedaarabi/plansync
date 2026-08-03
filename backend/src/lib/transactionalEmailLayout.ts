@@ -24,12 +24,6 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** API origin for `/api/v1/public/*` assets (email images); falls back to app URL. */
-function publicApiBaseFromEnv(env: Env): string {
-  const app = env.PUBLIC_APP_URL.replace(/\/$/, "");
-  return env.PUBLIC_API_URL?.replace(/\/$/, "") || app;
-}
-
 /** Same icon as `frontend/public/icons/icon-180.png` — must be an absolute app URL for email clients. */
 export function planSyncEmailIconPublicUrl(publicAppUrl: string): string {
   return `${publicAppUrl.replace(/\/$/, "")}/icons/icon-180.png`;

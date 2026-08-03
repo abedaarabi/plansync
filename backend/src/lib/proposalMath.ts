@@ -1,10 +1,5 @@
 import { Prisma } from "@prisma/client";
 
-type ProposalItemInput = {
-  quantity: Prisma.Decimal | string | number;
-  rate: Prisma.Decimal | string | number;
-};
-
 export function toDec(v: Prisma.Decimal | string | number): Prisma.Decimal {
   if (v instanceof Prisma.Decimal) return v;
   return new Prisma.Decimal(String(v));
