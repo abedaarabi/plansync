@@ -19,7 +19,7 @@ export function OmCmmsHubLayout({ projectId, children }: Props) {
   if (isAssets) {
     return (
       <div className="mobile-app-page mobile-viewport-pane flex min-h-0 w-full max-w-full flex-1 flex-col overflow-hidden">
-        <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col px-4 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4 lg:px-8">
+        <div className="mx-auto flex min-h-0 w-full max-w-full flex-1 flex-col px-4 pb-4 pt-3 sm:px-5 sm:pb-6 sm:pt-4 lg:max-w-6xl lg:px-8">
           {children}
         </div>
       </div>
@@ -27,8 +27,8 @@ export function OmCmmsHubLayout({ projectId, children }: Props) {
   }
 
   return (
-    <div className="min-w-0 px-4 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-4 lg:px-8">
-      <div className="mx-auto w-full max-w-6xl pb-[env(safe-area-inset-bottom,0px)]">
+    <div className="mobile-app-page w-full min-w-0 max-w-full px-4 pb-6 pt-3 sm:px-5 sm:pb-8 sm:pt-4 lg:px-8">
+      <div className="mx-auto w-full max-w-full pb-[env(safe-area-inset-bottom,0px)] lg:max-w-6xl">
         {isHub ? (
           <div className="mb-3 border-b border-[var(--enterprise-border)] pb-3">
             <OmWorkOrdersHubNav projectId={projectId} />

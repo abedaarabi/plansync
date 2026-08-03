@@ -39,8 +39,8 @@ export function EnterpriseMobileBottomNav({ onOpenMore }: EnterpriseMobileBottom
                   }}
                   className="flex min-h-[44px] w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[var(--enterprise-text-muted)] transition-all duration-150 active:scale-[0.97] active:bg-[var(--enterprise-hover-surface)]"
                 >
-                  <Icon className="h-[22px] w-[22px] shrink-0" strokeWidth={1.75} aria-hidden />
-                  <span className="max-w-full truncate text-[11px] font-medium leading-tight">
+                  <Icon className="h-6 w-6 shrink-0" strokeWidth={1.75} aria-hidden />
+                  <span className="max-w-full truncate text-[10px] font-medium leading-tight tracking-tight">
                     {tab.label}
                   </span>
                 </button>
@@ -73,12 +73,12 @@ export function EnterpriseMobileBottomNav({ onOpenMore }: EnterpriseMobileBottom
                 } ${tab.disabled ? "pointer-events-none opacity-40" : ""}`}
               >
                 <Icon
-                  className={`h-[22px] w-[22px] shrink-0 ${active ? "scale-105" : ""}`}
+                  className={`h-6 w-6 shrink-0 ${active ? "scale-105" : ""}`}
                   strokeWidth={active ? 2.25 : 1.75}
                   aria-hidden
                 />
                 <span
-                  className={`max-w-full truncate text-[11px] leading-tight ${active ? "font-semibold" : "font-medium opacity-80"}`}
+                  className={`max-w-full truncate text-[10px] leading-tight tracking-tight ${active ? "font-semibold" : "font-medium opacity-80"}`}
                 >
                   {tab.label}
                 </span>

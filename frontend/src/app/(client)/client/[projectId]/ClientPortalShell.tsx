@@ -64,13 +64,13 @@ export function ClientPortalShell({
 
   return (
     <QueryProvider>
-      <div className="flex min-h-[100dvh] min-w-0 max-w-full flex-col overflow-x-hidden bg-white text-slate-900">
+      <div className="enterprise-app-shell flex min-h-[100dvh] min-w-0 max-w-full flex-col overflow-x-hidden bg-white text-slate-900">
         <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 pt-[env(safe-area-inset-top,0px)] backdrop-blur">
           <div className="flex min-h-[var(--enterprise-topbar-h)] items-center gap-2 px-4">
             {pathname !== `/client/${projectId}` && activeTab ? (
               <Link
                 href={parentHref}
-                className="flex min-h-11 shrink-0 items-center gap-0.5 rounded-xl px-1 text-sm font-semibold text-blue-600 transition-all duration-150 active:scale-[0.97] active:bg-slate-100 lg:hidden"
+                className="flex min-h-11 shrink-0 items-center gap-0.5 rounded-xl px-1 text-[17px] font-semibold text-blue-600 transition-all duration-150 active:scale-[0.97] active:bg-slate-100 lg:hidden"
               >
                 <span aria-hidden>‹</span>
                 <span className="truncate max-w-[8rem]">{activeTab.label}</span>
@@ -78,10 +78,10 @@ export function ClientPortalShell({
             ) : null}
             <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
               <div className="min-w-0">
-                <span className="text-base font-semibold tracking-tight text-blue-600">
+                <span className="text-[17px] font-semibold tracking-tight text-blue-600">
                   PlanSync
                 </span>
-                <p className="truncate text-sm text-slate-500">
+                <p className="truncate text-[15px] text-slate-500">
                   {activeTab?.label ?? "Client portal"}
                 </p>
               </div>

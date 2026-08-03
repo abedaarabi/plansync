@@ -86,9 +86,9 @@ function MetaPill({
         : "border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]";
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${toneClass}`}
+      className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium ${toneClass}`}
     >
-      <Icon className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
+      <Icon className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
       <span className="truncate">{label}</span>
     </span>
   );
@@ -134,52 +134,52 @@ export function WorkOrderCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${issueStatusBadgeClassLight(wo.status)}`}
+              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${issueStatusBadgeClassLight(wo.status)}`}
             >
               {ISSUE_STATUS_LABEL[wo.status] ?? wo.status}
             </span>
             {wo.workOrderType ? (
-              <span className="inline-flex rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--enterprise-text-muted)]">
+              <span className="inline-flex rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2.5 py-1 text-xs font-medium text-[var(--enterprise-text-muted)]">
                 {WO_TYPE_LABEL[wo.workOrderType] ?? wo.workOrderType}
               </span>
             ) : null}
             {isOverdue ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--enterprise-semantic-danger-text)]">
-                <AlertTriangle className="h-3 w-3" aria-hidden />
+              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--enterprise-semantic-danger-text)]">
+                <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
                 Overdue
               </span>
             ) : null}
             <span
               className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold sm:ml-0 ${priorityBadgeClassLight(pri)}`}
             >
-              <Flag className="h-3 w-3 opacity-80" strokeWidth={2} aria-hidden />
+              <Flag className="h-3.5 w-3.5 opacity-80" strokeWidth={2} aria-hidden />
               {ISSUE_PRIORITY_LABEL[pri]}
             </span>
           </div>
 
-          <h2 className="mt-2 text-sm font-semibold leading-snug text-[var(--enterprise-text)] sm:text-base">
+          <h2 className="mt-2 text-base font-semibold leading-snug tracking-tight text-[var(--enterprise-text)]">
             {wo.title}
           </h2>
 
           {description ? (
-            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--enterprise-text-muted)] sm:text-sm">
+            <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
               {description}
             </p>
           ) : null}
 
           {wo.asset ? (
             <div className="mt-2 flex min-w-0 items-center gap-2 text-sm text-[var(--enterprise-text)]">
-              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]">
-                <Package className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" aria-hidden />
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]">
+                <Package className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
+                <span className="font-mono text-sm font-semibold text-[var(--enterprise-primary)]">
                   {wo.asset.tag}
                 </span>
                 <span className="text-[var(--enterprise-text-muted)]"> · </span>
                 <span className="font-medium">{wo.asset.name}</span>
                 {wo.location?.trim() ? (
-                  <span className="mt-0.5 block truncate text-xs text-[var(--enterprise-text-muted)]">
+                  <span className="mt-0.5 block truncate text-sm text-[var(--enterprise-text-muted)]">
                     {wo.location.trim()}
                   </span>
                 ) : null}

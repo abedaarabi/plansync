@@ -43,13 +43,9 @@ export function ClientMobileBottomNav({ tabs }: { tabs: Tab[] }) {
                   active ? "text-blue-600" : "text-slate-500 active:bg-slate-100"
                 }`}
               >
-                <Icon
-                  className="h-[22px] w-[22px]"
-                  strokeWidth={active ? 2.25 : 1.75}
-                  aria-hidden
-                />
+                <Icon className="h-6 w-6" strokeWidth={active ? 2.25 : 1.75} aria-hidden />
                 <span
-                  className={`max-w-full truncate text-[11px] leading-tight ${active ? "font-semibold" : "font-medium"}`}
+                  className={`max-w-full truncate text-[10px] leading-tight tracking-tight ${active ? "font-semibold" : "font-medium"}`}
                 >
                   {tab.label}
                 </span>
