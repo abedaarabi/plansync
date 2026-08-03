@@ -36,9 +36,11 @@ export function BimViewerClient() {
   const initialView = viewParam === "plan" || viewParam === "3d" ? viewParam : null;
   const alignLevelId = searchParams.get("alignLevelId");
   const alignAssetId = searchParams.get("alignAssetId");
+  const previewAssetId = searchParams.get("previewAssetId");
+  const panel = searchParams.get("panel");
   const workspaceMode = buildingId
     ? parseBuildingWorkspaceMode(searchParams.get("mode"), {
-        alignActive: Boolean(alignLevelId && alignAssetId),
+        alignActive: Boolean(alignLevelId && alignAssetId) || Boolean(previewAssetId),
       })
     : null;
 
@@ -89,6 +91,8 @@ export function BimViewerClient() {
         initialView={initialView}
         alignLevelId={alignLevelId}
         alignAssetId={alignAssetId}
+        previewAssetId={previewAssetId}
+        initialPanel={panel}
       />
     </QueryProvider>
   );

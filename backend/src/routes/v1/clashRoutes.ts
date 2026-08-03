@@ -1,9 +1,10 @@
 import type { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
-import { BimClashStatus, BimClashType, Prisma } from "@prisma/client";
+import { AssetType, BimClashStatus, BimClashType, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { loadProjectWithAuth } from "../../lib/permissions.js";
+import { loadBuildingForUser } from "../../lib/locations/locationsAccess.js";
 import { requireBimPro } from "./bimRouteHelpers.js";
 import { parseRunStats, parseSetDef, reconcileClashRun } from "../../lib/bim/clashPersistence.js";
 import { commentAuthorInclude, simpleCommentJson } from "../../lib/userCommentJson.js";
@@ -502,5 +503,200 @@ export function registerClashRoutes(
       where: { clashId: loaded.clash.id },
     });
     return c.json({ ...simpleCommentJson(comment), commentCount }, 201);
+  });
+
+  /** Aggregated clash health for a building (persisted results; no re-run). */
+  // fallow-ignore-next-line complexity
+  r.get("/buildings/:buildingId/clash-summary", needUser, async (c) => {
+    const loaded = await loadBuildingForUser(c, c.req.param("buildingId"));
+    if ("response" in loaded) return loaded.response;
+
+    const projectId = loaded.location.projectId;
+    const pro = requireBimPro(loaded.ctx.project.workspace);
+    if (pro) return c.json({ error: pro.error }, pro.status);
+
+    const ifcFiles = await prisma.file.findMany({
+      where: { buildingId: loaded.building.id, buildingAssetType: AssetType.IFC },
+      include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+    });
+    const fileVersionIds = ifcFiles
+      .map((f) => f.versions[0]?.id)
+      .filter((id): id is string => Boolean(id));
+    const newestModelAt = ifcFiles.reduce<Date | null>((acc, f) => {
+      const v = f.versions[0];
+      if (!v) return acc;
+      const t = v.createdAt;
+      if (!acc || t > acc) return t;
+      return acc;
+    }, null);
+
+    const empty = {
+      openCount: 0,
+      resolvedCount: 0,
+      ignoredCount: 0,
+      byType: { HARD: 0, CLEARANCE: 0, DUPLICATE: 0 },
+      lastRunAt: null as string | null,
+      stale: false,
+      tests: [] as Array<{
+        id: string;
+        name: string;
+        openCount: number;
+        clashCount: number;
+        lastRunAt: string | null;
+        lastRunStats: ReturnType<typeof parseRunStats>;
+      }>,
+    };
+
+    if (fileVersionIds.length === 0) {
+      return c.json({ summary: empty });
+    }
+
+    const buildingClashWhere: Prisma.BimClashWhereInput = {
+      projectId,
+      OR: [{ fileVersionAId: { in: fileVersionIds } }, { fileVersionBId: { in: fileVersionIds } }],
+    };
+
+    const [statusGroups, typeGroups, testGroups, lastSeen] = await Promise.all([
+      prisma.bimClash.groupBy({
+        by: ["status"],
+        where: buildingClashWhere,
+        _count: { _all: true },
+      }),
+      prisma.bimClash.groupBy({
+        by: ["clashType"],
+        where: buildingClashWhere,
+        _count: { _all: true },
+      }),
+      prisma.bimClash.groupBy({
+        by: ["testId", "status"],
+        where: buildingClashWhere,
+        _count: { _all: true },
+      }),
+      prisma.bimClash.aggregate({
+        where: buildingClashWhere,
+        _max: { lastSeenAt: true },
+      }),
+    ]);
+
+    let openCount = 0;
+    let resolvedCount = 0;
+    let ignoredCount = 0;
+    for (const g of statusGroups) {
+      if (g.status === BimClashStatus.NEW || g.status === BimClashStatus.ACTIVE) {
+        openCount += g._count._all;
+      } else if (g.status === BimClashStatus.RESOLVED) {
+        resolvedCount += g._count._all;
+      } else if (g.status === BimClashStatus.IGNORED) {
+        ignoredCount += g._count._all;
+      }
+    }
+
+    const byType = { HARD: 0, CLEARANCE: 0, DUPLICATE: 0 };
+    for (const g of typeGroups) {
+      if (g.clashType in byType) {
+        byType[g.clashType as keyof typeof byType] = g._count._all;
+      }
+    }
+
+    const testIds = [...new Set(testGroups.map((g) => g.testId))];
+    const tests =
+      testIds.length === 0
+        ? []
+        : await prisma.bimClashTest.findMany({
+            where: { id: { in: testIds } },
+            orderBy: { updatedAt: "desc" },
+          });
+
+    const openByTest = new Map<string, number>();
+    const totalByTest = new Map<string, number>();
+    for (const g of testGroups) {
+      totalByTest.set(g.testId, (totalByTest.get(g.testId) ?? 0) + g._count._all);
+      if (g.status === BimClashStatus.NEW || g.status === BimClashStatus.ACTIVE) {
+        openByTest.set(g.testId, (openByTest.get(g.testId) ?? 0) + g._count._all);
+      }
+    }
+
+    let lastRunAt: Date | null = null;
+    for (const t of tests) {
+      if (t.lastRunAt && (!lastRunAt || t.lastRunAt > lastRunAt)) lastRunAt = t.lastRunAt;
+    }
+    if (!lastRunAt && lastSeen._max.lastSeenAt) lastRunAt = lastSeen._max.lastSeenAt;
+
+    const stale = Boolean(
+      newestModelAt && lastRunAt && newestModelAt.getTime() > lastRunAt.getTime(),
+    );
+
+    return c.json({
+      summary: {
+        openCount,
+        resolvedCount,
+        ignoredCount,
+        byType,
+        lastRunAt: lastRunAt?.toISOString() ?? null,
+        stale,
+        tests: tests.map((t) => ({
+          id: t.id,
+          name: t.name,
+          openCount: openByTest.get(t.id) ?? 0,
+          clashCount: totalByTest.get(t.id) ?? 0,
+          lastRunAt: t.lastRunAt?.toISOString() ?? null,
+          lastRunStats: parseRunStats(t.lastRunStats),
+        })),
+      },
+    });
+  });
+
+  /** Delete persisted clashes involving this building's IFC versions (keeps test configs). */
+  r.delete("/buildings/:buildingId/clashes", needUser, async (c) => {
+    const loaded = await loadBuildingForUser(c, c.req.param("buildingId"));
+    if ("response" in loaded) return loaded.response;
+
+    const projectId = loaded.location.projectId;
+    const pro = requireBimPro(loaded.ctx.project.workspace);
+    if (pro) return c.json({ error: pro.error }, pro.status);
+
+    const ifcFiles = await prisma.file.findMany({
+      where: { buildingId: loaded.building.id, buildingAssetType: AssetType.IFC },
+      include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+    });
+    const fileVersionIds = ifcFiles
+      .map((f) => f.versions[0]?.id)
+      .filter((id): id is string => Boolean(id));
+
+    if (fileVersionIds.length === 0) {
+      return c.json({ ok: true, deletedCount: 0 });
+    }
+
+    const buildingClashWhere: Prisma.BimClashWhereInput = {
+      projectId,
+      OR: [{ fileVersionAId: { in: fileVersionIds } }, { fileVersionBId: { in: fileVersionIds } }],
+    };
+
+    const affected = await prisma.bimClash.findMany({
+      where: buildingClashWhere,
+      select: { testId: true },
+      distinct: ["testId"],
+    });
+    const testIds = affected.map((r) => r.testId);
+
+    const deleted = await prisma.bimClash.deleteMany({ where: buildingClashWhere });
+
+    if (testIds.length > 0) {
+      const remaining = await prisma.bimClash.groupBy({
+        by: ["testId"],
+        where: { testId: { in: testIds } },
+        _count: { _all: true },
+      });
+      const stillHas = new Set(remaining.map((r) => r.testId));
+      const clearIds = testIds.filter((id) => !stillHas.has(id));
+      if (clearIds.length > 0) {
+        await prisma.bimClashTest.updateMany({
+          where: { id: { in: clearIds } },
+          data: { lastRunAt: null, lastRunById: null, lastRunStats: Prisma.DbNull },
+        });
+      }
+    }
+
+    return c.json({ ok: true, deletedCount: deleted.count });
   });
 }

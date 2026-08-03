@@ -92,6 +92,8 @@ export type BuildingAsset = {
   version: number | null;
   thumbnailUrl: string | null;
   mappingId: string | null;
+  /** Level this PDF is registered to (when mapped). */
+  mappedLevelId: string | null;
   createdAt: string;
 };
 
@@ -166,8 +168,12 @@ export type LocationBuildingRow = {
   floorsApprox: number | null;
   notes: string | null;
   ifcCount: number;
+  readyIfcCount: number;
   pdfCount: number;
+  unmappedPdfCount: number;
   levelCount: number;
+  mappedLevelCount: number;
+  openClashCount: number;
   hasProcessing: boolean;
   hasFailed: boolean;
   publishStatus: BuildingPublishStatus;
@@ -424,4 +430,20 @@ export async function createLevelMapping(
     body: JSON.stringify(input),
   });
   return res.mapping;
+}
+
+export async function updateLevelMapping(
+  mappingId: string,
+  input: { calibration: CalibrationInput },
+): Promise<DrawingMapping> {
+  const res = await apiJsonFetch<{ mapping: DrawingMapping }>(`/api/v1/mappings/${mappingId}`, {
+    method: "PATCH",
+    headers: jsonHeaders,
+    body: JSON.stringify(input),
+  });
+  return res.mapping;
+}
+
+export async function deleteLevelMapping(mappingId: string): Promise<{ ok: true }> {
+  return apiJsonFetch(`/api/v1/mappings/${mappingId}`, { method: "DELETE" });
 }

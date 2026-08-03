@@ -45,7 +45,7 @@ import { BimSplitViewPane } from "./BimSplitViewPane";
 import { BimBuildingTreePanel } from "./BimBuildingTreePanel";
 import { BimLevelPlanView } from "./BimLevelPlanView";
 import type { BuildingLevel } from "@/lib/api-client/locations";
-import { useBuildingLevelsQuery } from "@/lib/locations/useBuildingQueries";
+import { useBuildingAssetsQuery, useBuildingLevelsQuery } from "@/lib/locations/useBuildingQueries";
 import { writeBuildingLastView } from "@/lib/locations/buildingPublish";
 import { buildWorkspaceHref, type BuildingWorkspaceMode } from "@/lib/locations/workspaceHref";
 import dynamic from "next/dynamic";
@@ -140,6 +140,14 @@ const MatchingWindowClient = dynamic(
   { ssr: false },
 );
 
+const UnmappedDrawingPreview = dynamic(
+  () =>
+    import("@/components/enterprise/locations/UnmappedDrawingPreview").then(
+      (m) => m.UnmappedDrawingPreview,
+    ),
+  { ssr: false },
+);
+
 type PlanPanelMode = "minimap" | "drawingSync";
 
 type BimDockId = BimLeftDockId | "properties" | "takeoffViews" | "issues" | "filters" | "clashes";
@@ -188,6 +196,10 @@ export function BimViewerShell(props: {
   initialView?: "3d" | "plan" | null;
   alignLevelId?: string | null;
   alignAssetId?: string | null;
+  /** Preview an unmapped PDF before matching (`previewAssetId` query). */
+  previewAssetId?: string | null;
+  /** Open a dock on first ready (e.g. `clashes` from building hub). */
+  initialPanel?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -199,6 +211,8 @@ export function BimViewerShell(props: {
   const [phase, setPhase] = useState<Phase>({ kind: "resolving" });
   const [loadExiting, setLoadExiting] = useState(false);
   const [loadPreviewUrl, setLoadPreviewUrl] = useState<string | null>(null);
+  /** `convert` only after client IFC conversion starts; reopen uses fast fragments path. */
+  const [loadPath, setLoadPath] = useState<"fast" | "convert">("fast");
   const lastLoadPhaseRef = useRef<Exclude<Phase, { kind: "ready" } | { kind: "error" }>>({
     kind: "resolving",
   });
@@ -211,6 +225,7 @@ export function BimViewerShell(props: {
   const [storeys, setStoreys] = useState<BimVisibilityGroup[]>([]);
   const [categories, setCategories] = useState<BimVisibilityGroup[]>([]);
   const [activeDock, setActiveDock] = useState<BimDockId | null>(null);
+  const initialPanelApplied = useRef(false);
   const [inspectTab, setInspectTab] = useState<BimInspectTab>("properties");
   const [activeFlyout, setActiveFlyout] = useState<BimBottomFlyout>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -257,6 +272,15 @@ export function BimViewerShell(props: {
   useEffect(() => {
     setClashDockOpen(activeDock === "clashes");
   }, [activeDock]);
+
+  useEffect(() => {
+    if (initialPanelApplied.current) return;
+    if (phase.kind !== "ready") return;
+    if (props.initialPanel !== "clashes") return;
+    if (props.workspaceMode === "edit") return;
+    initialPanelApplied.current = true;
+    setActiveDock("clashes");
+  }, [phase.kind, props.initialPanel, props.workspaceMode]);
 
   const clashModels = useMemo(
     () => loadedModels.map((m) => ({ modelId: m.modelId, name: m.name })),
@@ -308,11 +332,22 @@ export function BimViewerShell(props: {
   );
   /** Mapping setup: levels tree + cut/PDF; no rail / bottom tools. */
   const mappingEditActive = workspaceActive && (props.workspaceMode === "edit" || alignActive);
+  const previewActive = Boolean(
+    props.previewAssetId && props.buildingId && props.locationId && !alignActive,
+  );
 
   const { data: buildingLevels = [] } = useBuildingLevelsQuery(
     props.buildingId ?? "",
     workspaceActive && phase.kind === "ready",
   );
+  const { data: buildingAssetsData } = useBuildingAssetsQuery(props.buildingId ?? "", {
+    typeFilter: "ALL",
+    disciplineFilter: "ALL",
+  });
+  const previewAsset = previewActive
+    ? (buildingAssetsData?.assets.find((a) => a.id === props.previewAssetId && a.type === "PDF") ??
+      null)
+    : null;
 
   const syncWorkspaceUrl = useCallback(
     (patch: {
@@ -321,8 +356,10 @@ export function BimViewerShell(props: {
       mode?: BuildingWorkspaceMode | null;
       alignLevelId?: string | null;
       alignAssetId?: string | null;
+      previewAssetId?: string | null;
     }) => {
       if (!props.buildingId || !props.locationId || !resolvedProjectId) return;
+      const extraModels = federationMembers.slice(1);
       const href = buildWorkspaceHref({
         fileId: props.fileId,
         fileName: props.fileName,
@@ -337,6 +374,10 @@ export function BimViewerShell(props: {
           patch.mode === undefined ? (props.workspaceMode ?? undefined) : (patch.mode ?? undefined),
         alignLevelId: patch.alignLevelId === undefined ? props.alignLevelId : patch.alignLevelId,
         alignAssetId: patch.alignAssetId === undefined ? props.alignAssetId : patch.alignAssetId,
+        previewAssetId:
+          patch.previewAssetId === undefined ? props.previewAssetId : patch.previewAssetId,
+        models: extraModels.length > 0 ? extraModels : null,
+        panel: searchParams.get("panel"),
       });
       router.replace(href, { scroll: false });
     },
@@ -350,18 +391,41 @@ export function BimViewerShell(props: {
       props.initialView,
       props.alignLevelId,
       props.alignAssetId,
+      props.previewAssetId,
       resolvedProjectId,
       resolvedFileVersionId,
+      federationMembers,
+      searchParams,
       router,
     ],
   );
 
   const onMatchDrawing = useCallback(
     (levelId: string, assetId: string) => {
-      syncWorkspaceUrl({ alignLevelId: levelId, alignAssetId: assetId });
+      syncWorkspaceUrl({
+        alignLevelId: levelId,
+        alignAssetId: assetId,
+        previewAssetId: null,
+      });
     },
     [syncWorkspaceUrl],
   );
+
+  const onPreviewDrawing = useCallback(
+    (assetId: string) => {
+      syncWorkspaceUrl({
+        previewAssetId: assetId,
+        alignLevelId: null,
+        alignAssetId: null,
+      });
+      setTreeMobileOpen(false);
+    },
+    [syncWorkspaceUrl],
+  );
+
+  const onPreviewClose = useCallback(() => {
+    syncWorkspaceUrl({ previewAssetId: null });
+  }, [syncWorkspaceUrl]);
 
   const onAlignSaved = useCallback(
     (ctx: { levelId: string; levelName: string; assetId: string; remainingUnmapped: number }) => {
@@ -376,6 +440,7 @@ export function BimViewerShell(props: {
       syncWorkspaceUrl({
         alignLevelId: null,
         alignAssetId: null,
+        previewAssetId: null,
         levelId: ctx.levelId,
         view: "plan",
       });
@@ -391,7 +456,7 @@ export function BimViewerShell(props: {
   );
 
   const onAlignCancel = useCallback(() => {
-    syncWorkspaceUrl({ alignLevelId: null, alignAssetId: null });
+    syncWorkspaceUrl({ alignLevelId: null, alignAssetId: null, previewAssetId: null });
   }, [syncWorkspaceUrl]);
 
   const onSelectWorkspaceLevel = useCallback(
@@ -513,6 +578,7 @@ export function BimViewerShell(props: {
     let cancelled = false;
     disposeModelThumbnailService();
     setPhase({ kind: "resolving" });
+    setLoadPath("fast");
     setLoadPreviewUrl(null);
 
     // fallow-ignore-next-line complexity
@@ -612,7 +678,10 @@ export function BimViewerShell(props: {
               }
             },
             onConverting: (fraction) => {
-              if (!cancelled) setPhase({ kind: "converting", fraction, label: member.name });
+              if (!cancelled) {
+                setLoadPath("convert");
+                setPhase({ kind: "converting", fraction, label: member.name });
+              }
             },
           });
           if (!cancelled) setLoadedModels(engine.getLoadedModels());
@@ -2208,6 +2277,7 @@ export function BimViewerShell(props: {
               onSelectLevel={onSelectWorkspaceLevel}
               onShowModel={onShowWorkspaceModel}
               onMatchDrawing={onMatchDrawing}
+              onPreviewDrawing={onPreviewDrawing}
             />
           </aside>
 
@@ -2243,6 +2313,7 @@ export function BimViewerShell(props: {
                     onMatchDrawing(levelId, assetId);
                     setTreeMobileOpen(false);
                   }}
+                  onPreviewDrawing={onPreviewDrawing}
                 />
               </div>
             </div>
@@ -2310,6 +2381,15 @@ export function BimViewerShell(props: {
               onCancel={onAlignCancel}
             />
           </div>
+        ) : null}
+
+        {mappingUiReady && previewActive && previewAsset ? (
+          <UnmappedDrawingPreview
+            asset={previewAsset}
+            levels={buildingLevels}
+            onClose={onPreviewClose}
+            onMatchToLevel={(levelId) => onMatchDrawing(levelId, previewAsset.id)}
+          />
         ) : null}
 
         <BimBreadcrumbChip
@@ -2541,6 +2621,7 @@ export function BimViewerShell(props: {
             version={props.version}
             previewUrl={loadPreviewUrl}
             exiting={loadExiting}
+            path={loadPath}
           />
         ) : null}
 

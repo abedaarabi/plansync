@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Boxes, Building2, FileText, Layers, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, MapPin, Plus } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { LocationBuildingRow } from "@/lib/api-client/locations";
-import { buildingTypeLabel, formatLocationPlace } from "@/lib/locations/buildingLabels";
+import { formatLocationPlace } from "@/lib/locations/buildingLabels";
 import {
   useCreateBuildingMutation,
   useDeleteBuildingMutation,
@@ -16,7 +15,7 @@ import {
 } from "@/lib/locations/useBuildingQueries";
 import { useEnterpriseWorkspace } from "../EnterpriseWorkspaceContext";
 import { EnterpriseLoadingState } from "../EnterpriseLoadingState";
-import { BuildingCardStatus } from "./BuildingCardStatus";
+import { BuildingCard } from "./BuildingCard";
 import { BuildingFormDialog } from "./BuildingFormDialog";
 import { TypeDeleteConfirmDialog } from "./TypeDeleteConfirmDialog";
 
@@ -134,89 +133,23 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {buildings.map((b) => {
-            const typeLabel = buildingTypeLabel(b.buildingType);
-            const metaLine =
-              [typeLabel, b.floorsApprox != null ? `~${b.floorsApprox} floors` : null]
-                .filter(Boolean)
-                .join(" · ") || "No type yet";
-            return (
-              <div
-                key={b.id}
-                className="enterprise-card enterprise-card-hover group flex flex-col overflow-hidden"
-              >
-                <Link
-                  href={`/projects/${projectId}/locations/${locationId}/buildings/${b.id}`}
-                  className="flex flex-1 flex-col p-4 transition-colors hover:bg-[var(--enterprise-hover-surface)]/50"
-                >
-                  <div className="flex gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)]">
-                      <Building2 className="h-5 w-5 text-[var(--enterprise-primary)]" aria-hidden />
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                          <h2 className="truncate text-sm font-semibold leading-snug text-[var(--enterprise-text)] group-hover:text-[var(--enterprise-primary)]">
-                            {b.name}
-                          </h2>
-                          {b.code ? (
-                            <span className="rounded-md bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)]">
-                              {b.code}
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="shrink-0">
-                          <BuildingCardStatus building={b} />
-                        </div>
-                      </div>
-                      <p className="text-[13px] leading-relaxed text-[var(--enterprise-text-muted)]">
-                        {metaLine}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[var(--enterprise-border)] pt-2.5 text-[11px] text-[var(--enterprise-text-muted)]">
-                    <span className="inline-flex items-center gap-1">
-                      <Boxes className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
-                      {b.ifcCount} IFC
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <FileText className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
-                      {b.pdfCount} PDF
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Layers className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
-                      {b.levelCount} level{b.levelCount === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                </Link>
-                <div className="flex items-center justify-end gap-0.5 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 px-2 py-1.5">
-                  <button
-                    type="button"
-                    className="mobile-touch-target inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
-                    aria-label={`Edit ${b.name}`}
-                    onClick={() => {
-                      setEditing(b);
-                      setFormOpen(true);
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className="mobile-touch-target inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
-                    aria-label={`Delete ${b.name}`}
-                    onClick={() => setDeleteTarget({ id: b.id, name: b.name })}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          {buildings.map((b) => (
+            <BuildingCard
+              key={b.id}
+              building={b}
+              projectId={projectId}
+              locationId={locationId}
+              onEdit={() => {
+                setEditing(b);
+                setFormOpen(true);
+              }}
+              onDelete={() => setDeleteTarget({ id: b.id, name: b.name })}
+            />
+          ))}
 
           <button
             type="button"
-            className="enterprise-dashed-add flex h-full min-h-[168px] flex-col items-center justify-center gap-1.5 rounded-2xl p-5 text-center"
+            className="enterprise-dashed-add flex h-full min-h-[200px] flex-col items-center justify-center gap-1.5 rounded-2xl p-5 text-center"
             onClick={() => {
               setEditing(null);
               setFormOpen(true);

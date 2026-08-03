@@ -98,6 +98,45 @@ export async function fetchClashTests(projectId: string): Promise<BimClashTestRo
   return j.tests ?? [];
 }
 
+export type BuildingClashSummary = {
+  openCount: number;
+  resolvedCount: number;
+  ignoredCount: number;
+  byType: { HARD: number; CLEARANCE: number; DUPLICATE: number };
+  lastRunAt: string | null;
+  stale: boolean;
+  tests: Array<{
+    id: string;
+    name: string;
+    openCount: number;
+    clashCount: number;
+    lastRunAt: string | null;
+    lastRunStats: BimClashRunStats | null;
+  }>;
+};
+
+export async function fetchBuildingClashSummary(buildingId: string): Promise<BuildingClashSummary> {
+  const res = await fetch(
+    apiUrl(`/api/v1/buildings/${encodeURIComponent(buildingId)}/clash-summary`),
+    { credentials: "include" },
+  );
+  if (!res.ok) await parseClashError(res, "Could not load clash summary.");
+  const j = (await res.json()) as { summary: BuildingClashSummary };
+  return j.summary;
+}
+
+/** Delete persisted clashes for a building's IFC versions (keeps clash test configs). */
+export async function clearBuildingClashResults(
+  buildingId: string,
+): Promise<{ deletedCount: number }> {
+  const res = await fetch(apiUrl(`/api/v1/buildings/${encodeURIComponent(buildingId)}/clashes`), {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) await parseClashError(res, "Could not clear clash results.");
+  return (await res.json()) as { deletedCount: number };
+}
+
 export async function createClashTest(
   projectId: string,
   body: {

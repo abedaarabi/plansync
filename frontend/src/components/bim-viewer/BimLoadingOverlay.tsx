@@ -14,10 +14,11 @@ import {
   phaseModelLabel,
   shouldShowFirstConvertTip,
   stepProgressPercent,
+  type BimLoadPath,
   type BimLoadPhase,
 } from "@/lib/bim/bimLoadingSteps";
 
-export type { BimLoadPhase };
+export type { BimLoadPath, BimLoadPhase };
 
 function useCachedModelThumbnail(fileVersionId?: string | null, previewUrl?: string | null) {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(
@@ -73,8 +74,16 @@ function BimLoadingBrandMark() {
   );
 }
 
-function BimLoadingSteps({ phase, complete }: { phase: BimLoadPhase; complete?: boolean }) {
-  const steps = buildLoadSteps(phase, { complete });
+function BimLoadingSteps({
+  phase,
+  complete,
+  path,
+}: {
+  phase: BimLoadPhase;
+  complete?: boolean;
+  path: BimLoadPath;
+}) {
+  const steps = buildLoadSteps(phase, { complete, path });
   return (
     <ol className="bim-loading-steps">
       {steps.map((step) => (
@@ -127,12 +136,23 @@ type LoadingShellProps = {
   version?: string | number | null;
   previewUrl?: string | null;
   exiting?: boolean;
+  /** `fast` when loading cached/server fragments; `convert` only on real IFC conversion. */
+  path?: BimLoadPath;
   className?: string;
 };
 
 // fallow-ignore-next-line complexity
 function BimLoadingShell(props: LoadingShellProps) {
-  const { phase, fileVersionId, modelName, version, previewUrl, exiting, className } = props;
+  const {
+    phase,
+    fileVersionId,
+    modelName,
+    version,
+    previewUrl,
+    exiting,
+    path = "fast",
+    className,
+  } = props;
   const thumbnailUrl = useCachedModelThumbnail(fileVersionId, previewUrl);
   const displayName = phaseModelLabel(phase, modelName);
   const rawName = phase.kind === "resolving" ? modelName : (phase.label ?? modelName ?? null);
@@ -146,8 +166,8 @@ function BimLoadingShell(props: LoadingShellProps) {
     modelIndex,
     modelTotal,
   });
-  const headline = phaseHeadline(phase);
-  const showTip = useFirstConvertTip(phase);
+  const headline = phaseHeadline(phase, path);
+  const showTip = useFirstConvertTip(phase) && path === "convert";
 
   return (
     <div
@@ -179,8 +199,16 @@ function BimLoadingShell(props: LoadingShellProps) {
         <p className="bim-loading-meta">{meta}</p>
         <p className="bim-loading-headline">{headline}</p>
 
-        <BimLoadingSteps phase={phase} complete={exiting} />
-        <BimLoadingProgress phase={exiting ? { kind: "converting", fraction: 1 } : phase} />
+        <BimLoadingSteps phase={phase} complete={exiting} path={path} />
+        <BimLoadingProgress
+          phase={
+            exiting
+              ? path === "convert"
+                ? { kind: "converting", fraction: 1 }
+                : { kind: "downloading", fraction: 1 }
+              : phase
+          }
+        />
 
         {showTip ? (
           <p className="bim-loading-tip">
@@ -236,6 +264,7 @@ export function BimLoadingOverlay({
   version,
   previewUrl,
   exiting,
+  path = "fast",
 }: {
   phase: BimLoadPhase;
   fileVersionId?: string | null;
@@ -243,6 +272,7 @@ export function BimLoadingOverlay({
   version?: string | number | null;
   previewUrl?: string | null;
   exiting?: boolean;
+  path?: BimLoadPath;
 }) {
   return (
     <BimLoadingShell
@@ -252,6 +282,7 @@ export function BimLoadingOverlay({
       version={version}
       previewUrl={previewUrl}
       exiting={exiting}
+      path={path}
       className="absolute inset-0 z-10"
     />
   );

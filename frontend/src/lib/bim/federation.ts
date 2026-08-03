@@ -48,16 +48,42 @@ function serializeFederationMembers(members: BimFederationMember[]): string {
   return encodeURIComponent(JSON.stringify(members.slice(1)));
 }
 
+/** Workspace query keys preserved when federation membership changes in-viewer. */
+const WORKSPACE_PRESERVE_KEYS = [
+  "buildingId",
+  "locationId",
+  "mode",
+  "view",
+  "levelId",
+  "alignLevelId",
+  "alignAssetId",
+  "previewAssetId",
+  "panel",
+] as const;
+
+function applyPreservedWorkspaceParams(
+  q: URLSearchParams,
+  from: URLSearchParams | null | undefined,
+): void {
+  if (!from) return;
+  for (const key of WORKSPACE_PRESERVE_KEYS) {
+    const v = from.get(key);
+    if (v) q.set(key, v);
+  }
+}
+
 /** Update the browser URL without navigation (keeps the viewer session alive). */
 export function syncFederationViewerUrl(projectId: string, members: BimFederationMember[]): void {
   if (typeof window === "undefined") return;
-  const url = buildFederationViewerUrl(projectId, members);
+  const current = new URLSearchParams(window.location.search);
+  const url = buildFederationViewerUrl(projectId, members, { preserveFrom: current });
   window.history.replaceState(window.history.state, "", url);
 }
 
 export function buildFederationViewerUrl(
   projectId: string,
   members: BimFederationMember[],
+  opts?: { preserveFrom?: URLSearchParams | null },
 ): string {
   const primary = members[0];
   if (!primary) return "/bim-viewer";
@@ -70,6 +96,7 @@ export function buildFederationViewerUrl(
   if (primary.version) q.set("version", primary.version);
   const extra = serializeFederationMembers(members);
   if (extra) q.set("models", extra);
+  applyPreservedWorkspaceParams(q, opts?.preserveFrom);
   return `/bim-viewer?${q.toString()}`;
 }
 

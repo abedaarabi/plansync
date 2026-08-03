@@ -24,6 +24,8 @@ type Props = {
   onSelectLevel: (level: BuildingLevel) => void;
   onShowModel: () => void;
   onMatchDrawing: (levelId: string, assetId: string) => void;
+  /** Preview an unmapped PDF before choosing a level to match. */
+  onPreviewDrawing?: (assetId: string) => void;
 };
 
 function formatElevation(e: number | null): string {
@@ -44,6 +46,7 @@ export function BimBuildingTreePanel({
   onSelectLevel,
   onShowModel,
   onMatchDrawing,
+  onPreviewDrawing,
 }: Props) {
   const [drawingsOpen, setDrawingsOpen] = useState(true);
   const [modelOpen, setModelOpen] = useState(true);
@@ -166,12 +169,16 @@ export function BimBuildingTreePanel({
                 <>
                   {unmappedCount > 0 ? (
                     <p className="px-2 pb-1 pt-0.5 text-[10px] leading-snug text-[var(--enterprise-text-muted)]">
-                      Drag an unmapped drawing onto a level below.
+                      Click a drawing to preview, or drag it onto a level.
                     </p>
                   ) : null}
                   <ul className="space-y-0.5 pb-1">
                     {pdfAssets.map((asset) => {
                       const isUnmapped = unmappedIds.has(asset.id);
+                      const mappedLevelId = asset.mappedLevelId;
+                      const clickable =
+                        (!isUnmapped && Boolean(mappedLevelId)) ||
+                        (isUnmapped && Boolean(onPreviewDrawing));
                       return (
                         <li
                           key={asset.id}
@@ -194,13 +201,36 @@ export function BimBuildingTreePanel({
                                 }
                               : undefined
                           }
+                          onClick={
+                            clickable
+                              ? () => {
+                                  if (isUnmapped) onPreviewDrawing?.(asset.id);
+                                  else if (mappedLevelId) onMatchDrawing(mappedLevelId, asset.id);
+                                }
+                              : undefined
+                          }
+                          onKeyDown={
+                            clickable
+                              ? (e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    if (isUnmapped) onPreviewDrawing?.(asset.id);
+                                    else if (mappedLevelId) onMatchDrawing(mappedLevelId, asset.id);
+                                  }
+                                }
+                              : undefined
+                          }
+                          role={clickable ? "button" : undefined}
+                          tabIndex={clickable ? 0 : undefined}
                           className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] transition ${
                             isUnmapped
-                              ? "cursor-grab hover:bg-[var(--enterprise-hover-surface)] active:cursor-grabbing"
-                              : "opacity-80"
+                              ? "cursor-pointer hover:bg-[var(--enterprise-hover-surface)] active:cursor-grabbing"
+                              : "cursor-pointer opacity-90 hover:bg-[var(--enterprise-hover-surface)]"
                           }`}
                           title={
-                            isUnmapped ? "Drag onto a level to match" : "Already matched to a level"
+                            isUnmapped
+                              ? "Click to preview, or drag onto a level"
+                              : "Click to edit mapping"
                           }
                         >
                           <PdfFileIcon className="h-4 w-4 shrink-0" />

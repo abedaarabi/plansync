@@ -5294,9 +5294,9 @@ export class BimEngine {
   }
 
   /**
-   * Frame the clash contact tightly — stay close so ghosted context does not
-   * dominate the view. Prefer the stored clash point; fall back to partners
-   * only when the point is missing.
+   * Frame both clash partners around the contact point.
+   * Prefers a comfortable neighborhood that keeps Item 1 + Item 2 visible;
+   * clamps extreme pull-back for very large hosts (long walls, slabs).
    */
   // fallow-ignore-next-line complexity
   private async zoomToClashFocus(opts: {
@@ -5305,43 +5305,41 @@ export class BimEngine {
     fallbackGuids?: string[];
   }): Promise<void> {
     const mm = this.detectModelUnits() === "mm";
-    // Tight local frame (~1 m) so the camera sits on the collision.
-    const defaultRadius = mm ? 1000 : 1;
-    const maxRadius = mm ? 2500 : 2.5;
-    const minRadius = mm ? 500 : 0.5;
+    const minRadius = mm ? 2500 : 2.5;
+    const maxRadius = mm ? 14000 : 14;
+    // Larger than default 0.82 → more padding / farther camera.
+    const fitScale = 1.08;
     const point = opts.point;
     const hasPoint =
       point != null &&
       Number.isFinite(point.x) &&
       Number.isFinite(point.y) &&
       Number.isFinite(point.z);
-
-    if (hasPoint && point) {
-      const center = new THREE.Vector3(point.x, point.y, point.z);
-      let radius = defaultRadius;
-      if (opts.partnerMap) {
-        const box = await this.getModelIdMapBoundingBox(opts.partnerMap);
-        if (box) {
-          const partnerSphere = new THREE.Sphere();
-          box.getBoundingSphere(partnerSphere);
-          // Only nudge outward for tiny local pairs — never pull back to large elements.
-          if (
-            Number.isFinite(partnerSphere.radius) &&
-            partnerSphere.radius > 0 &&
-            partnerSphere.radius <= maxRadius &&
-            partnerSphere.center.distanceTo(center) <= maxRadius
-          ) {
-            radius = Math.max(minRadius, Math.min(maxRadius, partnerSphere.radius * 0.85));
-          }
-        }
-      }
-      // fitScale 0.45 → closer than the generic 0.82 framing used elsewhere.
-      await this.focusCameraOnSphere(new THREE.Sphere(center, radius), 0.45);
-      return;
-    }
+    const clashCenter = hasPoint && point ? new THREE.Vector3(point.x, point.y, point.z) : null;
 
     if (opts.partnerMap) {
-      await this.zoomToModelIdMap(opts.partnerMap);
+      const box = await this.getModelIdMapBoundingBox(opts.partnerMap);
+      if (box) {
+        if (clashCenter) box.expandByPoint(clashCenter);
+        const partnerSphere = new THREE.Sphere();
+        box.getBoundingSphere(partnerSphere);
+        if (Number.isFinite(partnerSphere.radius) && partnerSphere.radius > 0) {
+          // Orbit on the clash contact when available; otherwise the pair centroid.
+          const center = clashCenter?.clone() ?? partnerSphere.center.clone();
+          // Radius must reach both partners from the orbit center.
+          let radius = partnerSphere.center.distanceTo(center) + partnerSphere.radius * 1.15;
+          radius = Math.max(minRadius, Math.min(maxRadius, radius));
+          await this.focusCameraOnSphere(new THREE.Sphere(center, radius), fitScale);
+          if (clashCenter) {
+            this.world?.camera.controls.setOrbitPoint(clashCenter.x, clashCenter.y, clashCenter.z);
+          }
+          return;
+        }
+      }
+    }
+
+    if (clashCenter) {
+      await this.focusCameraOnSphere(new THREE.Sphere(clashCenter, minRadius * 1.6), fitScale);
       return;
     }
     if (opts.fallbackGuids && opts.fallbackGuids.length > 0) {

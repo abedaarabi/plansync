@@ -10,6 +10,9 @@ export type BimLoadPhase =
     }
   | { kind: "converting"; fraction: number; label?: string };
 
+/** `fast` = fragments/cache reopen; `convert` = client IFC conversion. */
+export type BimLoadPath = "fast" | "convert";
+
 export type BimLoadStepId = "resolve" | "download" | "convert" | "ready";
 export type BimLoadStepState = "done" | "active" | "pending";
 
@@ -19,11 +22,12 @@ export type BimLoadStep = {
   state: BimLoadStepState;
 };
 
-const STEP_ORDER: BimLoadStepId[] = ["resolve", "download", "convert", "ready"];
+const FAST_STEPS: BimLoadStepId[] = ["resolve", "download", "ready"];
+const CONVERT_STEPS: BimLoadStepId[] = ["resolve", "download", "convert", "ready"];
 
 const STEP_LABELS: Record<BimLoadStepId, string> = {
-  resolve: "Resolve",
-  download: "Download",
+  resolve: "Prepare",
+  download: "Load",
   convert: "Convert",
   ready: "Ready",
 };
@@ -68,23 +72,34 @@ export function buildModelMetaLine(opts: {
   return parts.join(" · ");
 }
 
-function activeStepId(phase: BimLoadPhase): BimLoadStepId {
-  if (phase.kind === "resolving") return "resolve";
-  if (phase.kind === "downloading") return "download";
-  return "convert";
+function stepOrder(path: BimLoadPath): BimLoadStepId[] {
+  return path === "convert" ? CONVERT_STEPS : FAST_STEPS;
 }
 
-export function buildLoadSteps(phase: BimLoadPhase, opts?: { complete?: boolean }): BimLoadStep[] {
+function activeStepId(phase: BimLoadPhase, path: BimLoadPath): BimLoadStepId {
+  if (phase.kind === "resolving") return "resolve";
+  if (phase.kind === "converting") return "convert";
+  if (phase.kind === "downloading") return "download";
+  // Fallback — converting path without a convert phase still lands on load.
+  return path === "convert" ? "download" : "download";
+}
+
+export function buildLoadSteps(
+  phase: BimLoadPhase,
+  opts?: { complete?: boolean; path?: BimLoadPath },
+): BimLoadStep[] {
+  const path = opts?.path ?? "fast";
+  const order = stepOrder(path);
   if (opts?.complete) {
-    return STEP_ORDER.map((id) => ({
+    return order.map((id) => ({
       id,
       label: STEP_LABELS[id],
       state: "done" as const,
     }));
   }
-  const active = activeStepId(phase);
-  const activeIndex = STEP_ORDER.indexOf(active);
-  return STEP_ORDER.map((id, index) => ({
+  const active = activeStepId(phase, path);
+  const activeIndex = order.indexOf(active);
+  return order.map((id, index) => ({
     id,
     label: STEP_LABELS[id],
     state: index < activeIndex ? "done" : index === activeIndex ? "active" : "pending",
@@ -109,13 +124,15 @@ export function stepProgressPercent(phase: BimLoadPhase): number | null {
   return null;
 }
 
-export function phaseHeadline(phase: BimLoadPhase): string {
+export function phaseHeadline(phase: BimLoadPhase, path: BimLoadPath = "fast"): string {
   if (phase.kind === "resolving") return "Preparing workspace";
   if (phase.kind === "converting") return "Converting model";
   if (phase.total != null && phase.total > 1) {
-    return `Downloading model ${(phase.index ?? 0) + 1} of ${phase.total}`;
+    return path === "convert"
+      ? `Downloading model ${(phase.index ?? 0) + 1} of ${phase.total}`
+      : `Loading model ${(phase.index ?? 0) + 1} of ${phase.total}`;
   }
-  return "Downloading model";
+  return path === "convert" ? "Downloading model" : "Loading model";
 }
 
 export function shouldShowFirstConvertTip(): boolean {

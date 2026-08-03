@@ -16,9 +16,11 @@ import {
 import { toast } from "sonner";
 import {
   createLevelMapping,
+  deleteLevelMapping,
   fetchBuildingAssets,
   fetchBuildingLevels,
   fetchLevelMappings,
+  updateLevelMapping,
   type CalibrationInput,
 } from "@/lib/api-client/locations";
 import { openBimViewer } from "@/lib/bim/openBimViewer";
@@ -162,8 +164,11 @@ export function MatchingWindowClient({
     return ifcs[0] ?? null;
   }, [assetsData?.assets, level?.ifcFileVersionId]);
 
+  const existingMappingId = levelMapping?.id ?? null;
+  const isUpdate = Boolean(existingMappingId);
+
   useEffect(() => {
-    if (mode !== "view" || !levelMapping) return;
+    if (!levelMapping) return;
     const cal = levelMapping.calibrationJson;
     if (cal?.pointPairs) {
       setPdfPoints(cal.pointPairs.map((p) => p.pdf));
@@ -186,7 +191,7 @@ export function MatchingWindowClient({
     } else if (cal) {
       setTransform(computeTransformFromCalibration(cal));
     }
-  }, [mode, levelMapping]);
+  }, [levelMapping]);
 
   const pageExtras = useMemo(
     () => ({
@@ -226,7 +231,7 @@ export function MatchingWindowClient({
     }
   }, [pointCalibration, manualTransform]);
 
-  const handleSaveSuccess = async () => {
+  const handleSaveSuccess = async (updated: boolean) => {
     invalidateBuildingQueries(qc, buildingId, locationId);
     void qc.invalidateQueries({ queryKey: qk.levelMappings(levelId) });
 
@@ -238,7 +243,11 @@ export function MatchingWindowClient({
       remainingUnmapped: unmapped.length,
     };
 
-    toast.success(`Drawing registered to ${ctx.levelName}`);
+    toast.success(
+      updated
+        ? `Registration updated for ${ctx.levelName}`
+        : `Drawing registered to ${ctx.levelName}`,
+    );
 
     if (shell === "workspace") {
       onSaved?.(ctx);
@@ -251,6 +260,9 @@ export function MatchingWindowClient({
   const saveMut = useMutation({
     mutationFn: () => {
       if (!calibration) throw new Error("Complete calibration first");
+      if (existingMappingId) {
+        return updateLevelMapping(existingMappingId, { calibration });
+      }
       return createLevelMapping(levelId, {
         fileAssetId: pdfSource?.fileId ?? assetId,
         calibration,
@@ -258,7 +270,25 @@ export function MatchingWindowClient({
         pageIndex: pdfSource?.pageIndex,
       });
     },
-    onSuccess: () => void handleSaveSuccess(),
+    onSuccess: () => void handleSaveSuccess(isUpdate),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const unmapMut = useMutation({
+    mutationFn: () => {
+      if (!existingMappingId) throw new Error("No mapping to remove");
+      return deleteLevelMapping(existingMappingId);
+    },
+    onSuccess: () => {
+      invalidateBuildingQueries(qc, buildingId, locationId);
+      void qc.invalidateQueries({ queryKey: qk.levelMappings(levelId) });
+      toast.success("Drawing unmapped from level");
+      setPdfPoints([]);
+      setPlanPoints([]);
+      setStep("pdf1");
+      setManualTransform(false);
+      onCancel?.();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -555,6 +585,16 @@ export function MatchingWindowClient({
             </label>
 
             <div className="flex shrink-0 justify-end gap-1.5">
+              {existingMappingId ? (
+                <button
+                  type="button"
+                  className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-[10px] font-medium text-[var(--enterprise-semantic-danger-text)] hover:bg-[var(--enterprise-semantic-danger-bg)] disabled:opacity-50"
+                  disabled={unmapMut.isPending || saveMut.isPending}
+                  onClick={() => unmapMut.mutate()}
+                >
+                  {unmapMut.isPending ? "Unmapping…" : "Unmap"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-[10px] font-medium text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
@@ -570,10 +610,10 @@ export function MatchingWindowClient({
               <button
                 type="button"
                 className="enterprise-btn-primary rounded-md px-2.5 py-1 text-[10px] disabled:opacity-50"
-                disabled={!calibration || saveMut.isPending}
+                disabled={!calibration || saveMut.isPending || unmapMut.isPending}
                 onClick={() => saveMut.mutate()}
               >
-                {saveMut.isPending ? "Saving…" : "Save registration"}
+                {saveMut.isPending ? "Saving…" : isUpdate ? "Save updates" : "Save registration"}
               </button>
             </div>
           </div>

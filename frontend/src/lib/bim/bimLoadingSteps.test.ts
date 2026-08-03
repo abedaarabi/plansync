@@ -32,8 +32,17 @@ describe("bimLoadingSteps", () => {
     ).toBe("IFC · v3 · 48 MB · 2 of 4");
   });
 
-  it("maps phase to step ladder", () => {
-    const steps = buildLoadSteps({ kind: "converting", fraction: 0.4 });
+  it("uses a short ladder for fast reopen (no Convert)", () => {
+    const steps = buildLoadSteps({ kind: "downloading", fraction: 0.4 }, { path: "fast" });
+    expect(steps.map((s) => s.id)).toEqual(["resolve", "download", "ready"]);
+    expect(steps.map((s) => s.label)).toEqual(["Prepare", "Load", "Ready"]);
+    expect(steps.map((s) => s.state)).toEqual(["done", "active", "pending"]);
+    expect(phaseHeadline({ kind: "downloading" }, "fast")).toBe("Loading model");
+  });
+
+  it("includes Convert only on the convert path", () => {
+    const steps = buildLoadSteps({ kind: "converting", fraction: 0.4 }, { path: "convert" });
+    expect(steps.map((s) => s.id)).toEqual(["resolve", "download", "convert", "ready"]);
     expect(steps.map((s) => s.state)).toEqual(["done", "done", "active", "pending"]);
     expect(phaseHeadline({ kind: "resolving" })).toBe("Preparing workspace");
     expect(stepProgressPercent({ kind: "converting", fraction: 0.42 })).toBe(42);

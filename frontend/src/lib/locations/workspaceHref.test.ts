@@ -32,4 +32,21 @@ describe("buildWorkspaceHref", () => {
     expect(href).toContain("mode=edit");
     expect(href).toContain("view=3d");
   });
+
+  it("includes federation models and panel", () => {
+    const href = buildWorkspaceHref({
+      fileId: "f1",
+      fileName: "A.ifc",
+      projectId: "p1",
+      buildingId: "b1",
+      locationId: "l1",
+      fileVersionId: "v1",
+      mode: "work",
+      panel: "clashes",
+      models: [{ fileId: "f2", fileVersionId: "v2", name: "B.ifc", version: "1" }],
+    });
+    expect(href).toContain("panel=clashes");
+    expect(href).toContain("models=");
+    expect(href).toContain("buildingId=b1");
+  });
 });

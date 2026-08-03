@@ -1,7 +1,13 @@
 import type { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
-import { AssetType, BuildingDiscipline, BuildingType, ProcessingStatus } from "@prisma/client";
+import {
+  AssetType,
+  BimClashStatus,
+  BuildingDiscipline,
+  BuildingType,
+  ProcessingStatus,
+} from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import type { Env } from "../../lib/env.js";
 import { loadProjectWithAuth, canUploadDrawings, canManageFiles } from "../../lib/permissions.js";
@@ -154,6 +160,7 @@ function assetJson(
     thumbnailS3Key: string | null;
   } | null,
   mappingId: string | null,
+  mappedLevelId: string | null = null,
 ) {
   const status = latestVersion
     ? resolveFileVersionProcessingStatus({
@@ -175,6 +182,7 @@ function assetJson(
     version: latestVersion?.version ?? null,
     thumbnailUrl: latestVersion?.thumbnailS3Key ?? null,
     mappingId,
+    mappedLevelId,
     createdAt: file.createdAt.toISOString(),
   };
 }
@@ -222,6 +230,7 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
     return c.json({ location: locationJson({ ...location, buildingCount: 0 }) }, 201);
   });
 
+  // fallow-ignore-next-line complexity
   r.get("/locations/:id", needUser, async (c) => {
     const loaded = await loadLocationForUser(c, c.req.param("id"));
     if ("response" in loaded) return loaded.response;
@@ -232,15 +241,24 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
         files: {
           where: { buildingAssetType: { in: [AssetType.IFC, AssetType.PDF] } },
           select: {
+            id: true,
             buildingAssetType: true,
             versions: {
               orderBy: { version: "desc" },
               take: 1,
               select: {
+                id: true,
                 bimConversionStatus: true,
                 assetProcessingStatus: true,
               },
             },
+            drawingLevelMaps: { select: { id: true }, take: 1 },
+          },
+        },
+        levels: {
+          select: {
+            id: true,
+            _count: { select: { drawingMaps: true } },
           },
         },
         _count: {
@@ -250,11 +268,47 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
       orderBy: { createdAt: "asc" },
     });
 
+    const versionToBuilding = new Map<string, string>();
+    for (const b of buildings) {
+      for (const file of b.files) {
+        if (file.buildingAssetType !== AssetType.IFC) continue;
+        const fvId = file.versions[0]?.id;
+        if (fvId) versionToBuilding.set(fvId, b.id);
+      }
+    }
+    const versionIds = [...versionToBuilding.keys()];
+
+    const openClashByBuilding = new Map<string, number>();
+    if (versionIds.length > 0) {
+      const openClashes = await prisma.bimClash.findMany({
+        where: {
+          projectId: loaded.location.projectId,
+          status: { in: [BimClashStatus.NEW, BimClashStatus.ACTIVE] },
+          OR: [{ fileVersionAId: { in: versionIds } }, { fileVersionBId: { in: versionIds } }],
+        },
+        select: { id: true, fileVersionAId: true, fileVersionBId: true },
+      });
+      const seen = new Set<string>();
+      for (const clash of openClashes) {
+        if (seen.has(clash.id)) continue;
+        seen.add(clash.id);
+        const buildingId =
+          versionToBuilding.get(clash.fileVersionAId) ??
+          versionToBuilding.get(clash.fileVersionBId);
+        if (!buildingId) continue;
+        openClashByBuilding.set(buildingId, (openClashByBuilding.get(buildingId) ?? 0) + 1);
+      }
+    }
+
     const buildingRows = buildings.map((b) => {
       const ifcCount = b.files.filter((f) => f.buildingAssetType === "IFC").length;
-      const pdfCount = b.files.filter((f) => f.buildingAssetType === "PDF").length;
+      const pdfFiles = b.files.filter((f) => f.buildingAssetType === "PDF");
+      const pdfCount = pdfFiles.length;
+      const unmappedPdfCount = pdfFiles.filter((f) => f.drawingLevelMaps.length === 0).length;
+      const mappedLevelCount = b.levels.filter((l) => l._count.drawingMaps > 0).length;
 
       let ifcReady = false;
+      let readyIfcCount = 0;
       let hasProcessing = false;
       let hasFailed = false;
 
@@ -271,7 +325,10 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
         });
         if (status === "PENDING" || status === "PROCESSING") hasProcessing = true;
         if (status === "FAILED") hasFailed = true;
-        if (file.buildingAssetType === "IFC" && status === "READY") ifcReady = true;
+        if (file.buildingAssetType === "IFC" && status === "READY") {
+          ifcReady = true;
+          readyIfcCount += 1;
+        }
       }
 
       const publishStatus = deriveBuildingPublishStatus({
@@ -284,8 +341,12 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
       return {
         ...buildingMetaJson(b),
         ifcCount,
+        readyIfcCount,
         pdfCount,
+        unmappedPdfCount,
         levelCount: b._count.levels,
+        mappedLevelCount,
+        openClashCount: openClashByBuilding.get(b.id) ?? 0,
         hasProcessing,
         hasFailed,
         publishStatus,
@@ -583,13 +644,18 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
       },
       include: {
         versions: { orderBy: { version: "desc" }, take: 1 },
-        drawingLevelMaps: { select: { id: true }, take: 1 },
+        drawingLevelMaps: { select: { id: true, bimModelLevelId: true }, take: 1 },
       },
       orderBy: { updatedAt: "desc" },
     });
 
     let assets = files.map((f) =>
-      assetJson(f, f.versions[0] ?? null, f.drawingLevelMaps[0]?.id ?? null),
+      assetJson(
+        f,
+        f.versions[0] ?? null,
+        f.drawingLevelMaps[0]?.id ?? null,
+        f.drawingLevelMaps[0]?.bimModelLevelId ?? null,
+      ),
     );
 
     if (statusFilter) {
@@ -780,7 +846,7 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
       },
       include: {
         versions: { orderBy: { version: "desc" }, take: 1 },
-        drawingLevelMaps: { select: { id: true }, take: 1 },
+        drawingLevelMaps: { select: { id: true, bimModelLevelId: true }, take: 1 },
       },
     });
 
@@ -789,6 +855,7 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
         updated,
         updated.versions[0] ?? null,
         updated.drawingLevelMaps[0]?.id ?? null,
+        updated.drawingLevelMaps[0]?.bimModelLevelId ?? null,
       ),
     });
   });
