@@ -12,7 +12,6 @@ import {
   RfiStatus,
   WorkOrderType,
 } from "@prisma/client";
-import { Resend } from "resend";
 import { prisma } from "../../lib/prisma.js";
 import { fileVersionWriteBlocked } from "../../lib/fileVersionLock.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
@@ -30,19 +29,16 @@ import {
   newUploadId,
   s3KeyMatchesIssueReferencePhoto,
 } from "../../lib/fileUpload.js";
-import { inviteFromAddress } from "../../lib/inviteEmail.js";
 import {
   deleteObject,
   presignGetDownloadResponse,
   presignPutUploadResponse,
 } from "../../lib/s3.js";
 import {
-  buildIssueAssignedEmailHtml,
-  buildIssueAssignedEmailText,
-  buildViewerIssuePath,
-  buildViewerIssueUrl,
-} from "../../lib/issueAssignEmail.js";
-import { createUserNotifications } from "../../lib/userNotifications.js";
+  deliverIssueAssignedNotify,
+  flushPendingIssueAssignedNotify,
+  scheduleIssueAssignedNotify,
+} from "../../lib/notifyIssueAssigned.js";
 import { broadcastViewerState } from "../../lib/viewerCollabHub.js";
 import { collaborationGloballyEnabled } from "../../lib/viewerCollabPolicy.js";
 import {
@@ -412,37 +408,6 @@ function stripIssueLinkedAnnotationsFromViewerBlob(
   return { ...blobObj, annotations: nextAnnotations } as Prisma.InputJsonValue;
 }
 
-async function sendIssueAssignedEmail(
-  env: Env,
-  input: {
-    assigneeEmail: string;
-    assignerName: string;
-    issueTitle: string;
-    fileName: string;
-    viewerUrl: string;
-  },
-): Promise<void> {
-  const key = env.RESEND_API_KEY?.trim();
-  const from = inviteFromAddress(env);
-  if (!key || !from) return;
-
-  const resend = new Resend(key);
-  const payload = {
-    to: input.assigneeEmail,
-    assignerName: input.assignerName,
-    issueTitle: input.issueTitle,
-    fileName: input.fileName,
-    viewerUrl: input.viewerUrl,
-  };
-  await resend.emails.send({
-    from,
-    to: input.assigneeEmail,
-    subject: `PlanSync: assigned — ${input.issueTitle.slice(0, 60)}${input.issueTitle.length > 60 ? "…" : ""}`,
-    html: buildIssueAssignedEmailHtml(env, payload),
-    text: buildIssueAssignedEmailText(payload),
-  });
-}
-
 export function registerIssuesRoutes(
   r: Hono,
   needUser: MiddlewareHandler,
@@ -743,6 +708,11 @@ export function registerIssuesRoutes(
       });
     });
 
+    // First photo after create: send deferred assign notify now so email/push include the snapshot.
+    if (existing.length === 0) {
+      flushPendingIssueAssignedNotify(env, issue.id, c.get("user").id);
+    }
+
     if (updated.fileVersionId) notifyIssues(updated.fileVersionId);
     return c.json(
       await issueRowJsonWithDisplay(updated, {
@@ -851,6 +821,12 @@ export function registerIssuesRoutes(
             ifcType: z.string().max(120).optional(),
             spatialPath: z.array(z.string().max(300)).max(20).optional(),
             position: z.object({ x: z.number(), y: z.number(), z: z.number() }).optional(),
+            fileVersionId: z.string().max(64).optional(),
+            /** Clash partner (item 2) — enables ghost + green/red on open. */
+            ifcGuidB: z.string().min(1).max(64).optional(),
+            nameB: z.string().max(300).optional(),
+            ifcTypeB: z.string().max(120).optional(),
+            fileVersionIdB: z.string().max(64).optional(),
           })
           .optional(),
         /** Link new issue to one or more project RFIs (merged with `rfiId` if both sent). */
@@ -1106,65 +1082,15 @@ export function registerIssuesRoutes(
       metadata: { title: issue.title },
     });
 
-    const actor = await prisma.user.findUnique({
-      where: { id: c.get("user").id },
-      select: { name: true },
-    });
-    const assignerName = actor?.name?.trim() || "Someone";
-
-    if (
-      issue.assigneeId &&
-      issue.assignee?.email &&
-      issue.fileId &&
-      issue.fileVersionId &&
-      issue.file &&
-      issue.fileVersion
-    ) {
-      const viewerParams = {
-        issueId: issue.id,
-        fileId: issue.fileId,
-        fileVersionId: issue.fileVersionId,
-        projectId: issue.projectId,
-        fileName: issue.file.name,
-        version: issue.fileVersion.version,
-      };
-      const viewerUrl = buildViewerIssueUrl(env, viewerParams);
-      void sendIssueAssignedEmail(env, {
-        assigneeEmail: issue.assignee.email,
-        assignerName,
-        issueTitle: issue.title,
-        fileName: issue.file.name,
-        viewerUrl,
-      }).catch((e) => console.error("[issue-email]", e));
-      void createUserNotifications({
-        workspaceId: issue.workspaceId,
-        projectId: issue.projectId,
-        recipientUserIds: [issue.assigneeId],
-        kind: "ISSUE_ASSIGNED",
-        title: `Assigned: ${issue.title.length > 120 ? `${issue.title.slice(0, 120)}…` : issue.title}`,
-        body: issue.file.name,
-        href: buildViewerIssuePath(viewerParams),
-        actorUserId: c.get("user").id,
-      }).catch((e) => console.error("[issue-notification]", e));
-    }
-
-    if (extEmail && issue.fileId && issue.fileVersionId && issue.file && issue.fileVersion) {
-      const viewerParams = {
-        issueId: issue.id,
-        fileId: issue.fileId,
-        fileVersionId: issue.fileVersionId,
-        projectId: issue.projectId,
-        fileName: issue.file.name,
-        version: issue.fileVersion.version,
-      };
-      const viewerUrl = buildViewerIssueUrl(env, viewerParams);
-      void sendIssueAssignedEmail(env, {
-        assigneeEmail: extEmail,
-        assignerName,
-        issueTitle: issue.title,
-        fileName: issue.file.name,
-        viewerUrl,
-      }).catch((e) => console.error("[issue-email-external]", e));
+    if (issue.fileId && issue.fileVersionId && issue.file && issue.fileVersion) {
+      const notifyInternal = Boolean(issue.assigneeId && issue.assignee?.email);
+      const notifyExternal = Boolean(extEmail);
+      if (notifyInternal || notifyExternal) {
+        scheduleIssueAssignedNotify(env, issue.id, c.get("user").id, {
+          internal: notifyInternal,
+          external: notifyExternal,
+        });
+      }
     }
 
     if (issue.fileVersionId) notifyIssues(issue.fileVersionId);
@@ -1795,37 +1721,10 @@ export function registerIssuesRoutes(
       updated.file &&
       updated.fileVersion
     ) {
-      const actor = await prisma.user.findUnique({
-        where: { id: c.get("user").id },
-        select: { name: true },
-      });
-      const assignerName = actor?.name?.trim() || "Someone";
-      const viewerParams = {
-        issueId: updated.id,
-        fileId: updated.fileId,
-        fileVersionId: updated.fileVersionId,
-        projectId: updated.projectId,
-        fileName: updated.file.name,
-        version: updated.fileVersion.version,
-      };
-      const viewerUrl = buildViewerIssueUrl(env, viewerParams);
-      void sendIssueAssignedEmail(env, {
-        assigneeEmail: updated.assignee.email,
-        assignerName,
-        issueTitle: updated.title,
-        fileName: updated.file.name,
-        viewerUrl,
-      }).catch((e) => console.error("[issue-email]", e));
-      void createUserNotifications({
-        workspaceId: updated.workspaceId,
-        projectId: updated.projectId,
-        recipientUserIds: [updated.assigneeId],
-        kind: "ISSUE_ASSIGNED",
-        title: `Assigned: ${updated.title.length > 120 ? `${updated.title.slice(0, 120)}…` : updated.title}`,
-        body: updated.file.name,
-        href: buildViewerIssuePath(viewerParams),
-        actorUserId: c.get("user").id,
-      }).catch((e) => console.error("[issue-notification]", e));
+      void deliverIssueAssignedNotify(env, updated.id, c.get("user").id, {
+        internal: true,
+        external: false,
+      }).catch((e) => console.error("[issue-assign-notify]", e));
     }
 
     const prevExt = issue.externalAssigneeEmail?.trim() ?? "";
@@ -1838,27 +1737,10 @@ export function registerIssuesRoutes(
       updated.file &&
       updated.fileVersion
     ) {
-      const actor = await prisma.user.findUnique({
-        where: { id: c.get("user").id },
-        select: { name: true },
-      });
-      const assignerName = actor?.name?.trim() || "Someone";
-      const viewerParams = {
-        issueId: updated.id,
-        fileId: updated.fileId,
-        fileVersionId: updated.fileVersionId,
-        projectId: updated.projectId,
-        fileName: updated.file.name,
-        version: updated.fileVersion.version,
-      };
-      const viewerUrl = buildViewerIssueUrl(env, viewerParams);
-      void sendIssueAssignedEmail(env, {
-        assigneeEmail: nextExt,
-        assignerName,
-        issueTitle: updated.title,
-        fileName: updated.file.name,
-        viewerUrl,
-      }).catch((e) => console.error("[issue-email-external]", e));
+      void deliverIssueAssignedNotify(env, updated.id, c.get("user").id, {
+        internal: false,
+        external: true,
+      }).catch((e) => console.error("[issue-assign-notify-external]", e));
     }
 
     for (const p of photosToDeleteFromS3) {

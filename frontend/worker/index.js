@@ -27,6 +27,13 @@ self.addEventListener("push", (event) => {
       ? data.timestamp
       : Date.now();
 
+  const rawImage = data.image;
+  const image =
+    typeof rawImage === "string" &&
+    (rawImage.startsWith("https://") || rawImage.startsWith("http://"))
+      ? rawImage
+      : undefined;
+
   const options = {
     body: body || "Open in PlanSync",
     tag,
@@ -39,6 +46,7 @@ self.addEventListener("push", (event) => {
     silent: false,
     renotify: true,
     dir: "auto",
+    ...(image ? { image } : {}),
   };
 
   event.waitUntil(self.registration.showNotification(title, options));

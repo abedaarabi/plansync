@@ -99,6 +99,14 @@ import { IssueFormSlider } from "@/components/pdf-viewer/IssueFormSlider";
 import { focusBimIssueInViewer } from "@/lib/bim/focusBimIssue";
 import type { IssueBimAnchor } from "@/lib/api-client/core-issues-takeoff";
 import { selectionToBimAnchor } from "@/lib/bim/bimIssueAnchor";
+import {
+  clashGroupIssueDescription,
+  clashGroupIssueTitle,
+  clashIssueDescription,
+  clashIssuePriority,
+  clashIssueTitle,
+} from "@/lib/bim/clash/clashLabels";
+import type { BimClashRow } from "@/lib/api-client/bim-clash";
 import { compositeBimMarkupSnapshot, dataUrlToFile } from "@/lib/bim/bimMarkupSnapshot";
 import { projectAnnotationsForDisplay } from "@/lib/bim/bimMarkupWorld";
 import {
@@ -289,14 +297,12 @@ export function BimViewerShell(props: {
 
   const clash = useBimClashSession({
     projectId: resolvedProjectId,
-    fileId: props.fileId,
     fileVersionId: resolvedFileVersionId,
     quantityIndex,
     engine: activeEngine,
     active: clashDockOpen || activeDock === "clashes",
     models: clashModels,
   });
-
   const mobileAssigneeDefaulted = useRef(false);
   useEffect(() => {
     if (activeDock !== "clashes" || !isNarrowViewport || mobileAssigneeDefaulted.current) return;
@@ -538,7 +544,12 @@ export function BimViewerShell(props: {
     bimAnchor?: IssueBimAnchor;
     initialLinkedMarkupIds?: string[];
     pendingReferencePhoto?: File;
+    initialTitle?: string;
+    initialDescription?: string;
+    initialPriority?: string;
+    sourceClashIds?: string[];
   } | null>(null);
+  const [clashIssuePreparing, setClashIssuePreparing] = useState(false);
   const [issuePlacementActive, setIssuePlacementActive] = useState(false);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [editIssue, setEditIssue] = useState<IssueRow | null>(null);
@@ -599,10 +610,11 @@ export function BimViewerShell(props: {
           onSelection: (sel) => {
             if (cancelled) return;
             setSelection(sel);
-            // Clash review keeps green/red colors; still open properties for the pick.
+            // Clash review keeps green/red colors. Don't steal the Clashes dock
+            // (issue deep-links and clash results live there); inspect via the clash panel.
             if (sel && engineRef.current?.isClashReviewActive()) {
               setInspectTab("properties");
-              setActiveDock("properties");
+              setActiveDock((prev) => (prev === "clashes" ? prev : "properties"));
             }
           },
           onGroupsChanged: (groups) => {
@@ -1136,6 +1148,7 @@ export function BimViewerShell(props: {
         const engine = engineRef.current;
         if (!engine) return;
 
+        // Clash issues store both guids on bimAnchor → ghost + green/red (no clash-test fetch).
         const focused = await focusBimIssueInViewer(engine, issue, { retryMs: 15_000 });
         if (!focused && !cancelled) {
           toast.info("Could not locate the linked element — showing the full model.");
@@ -1158,14 +1171,7 @@ export function BimViewerShell(props: {
     return () => {
       cancelled = true;
     };
-  }, [
-    props.issueId,
-    props.fileVersionId,
-    federationMembers,
-    phase.kind,
-    resolvedFileVersionId,
-    quantityIndex,
-  ]);
+  }, [props.issueId, props.fileVersionId, federationMembers, phase.kind, resolvedFileVersionId]);
 
   useEffect(() => {
     const onFs = () => setFullscreen(Boolean(document.fullscreenElement));
@@ -1390,13 +1396,14 @@ export function BimViewerShell(props: {
   }, []);
 
   const openIssueDetail = useCallback(
-    // fallow-ignore-next-line complexity
     async (issue: IssueRow, opts?: { fly?: boolean; openForm?: boolean }) => {
       setSelectedIssueId(issue.id);
       setActiveDock("issues");
-      if (opts?.fly !== false) {
+      // Clash pairs (ifcGuid + ifcGuidB) → ghost + green/red from bimAnchor alone.
+      const shouldFocus = opts?.fly !== false || Boolean(issue.bimAnchor?.ifcGuidB);
+      if (shouldFocus) {
         const engine = engineRef.current;
-        if (engine) await focusBimIssueInViewer(engine, issue);
+        if (engine) await focusBimIssueInViewer(engine, issue, { retryMs: 8_000 });
       }
       if (opts?.openForm !== false) {
         setEditIssue(issue);
@@ -1409,7 +1416,7 @@ export function BimViewerShell(props: {
     setSelectedIssueId(issue.id);
     setActiveDock("issues");
     const engine = engineRef.current;
-    if (engine) await focusBimIssueInViewer(engine, issue);
+    if (engine) await focusBimIssueInViewer(engine, issue, { retryMs: 8_000 });
   }, []);
 
   const toggleFlyout = useCallback((flyout: Exclude<BimBottomFlyout, null>) => {
@@ -1436,6 +1443,10 @@ export function BimViewerShell(props: {
       bimAnchor?: IssueBimAnchor;
       initialLinkedMarkupIds?: string[];
       pendingReferencePhoto?: File;
+      initialTitle?: string;
+      initialDescription?: string;
+      initialPriority?: string;
+      sourceClashIds?: string[];
     }) => {
       if (!resolvedFileVersionId || !resolvedProjectId) {
         toast.error(
@@ -1485,6 +1496,136 @@ export function BimViewerShell(props: {
       return dataUrlToFile(dataUrl, `${props.fileName.replace(/\.[^.]+$/, "")}-issue.png`);
     },
     [props.fileName],
+  );
+
+  const clashToBimAnchor = useCallback((row: BimClashRow): IssueBimAnchor => {
+    return {
+      ifcGuid: row.guidA,
+      name: row.elementA?.name ?? undefined,
+      ifcType: row.elementA?.ifcType ?? undefined,
+      position: row.point,
+      fileVersionId: row.fileVersionAId || undefined,
+      ifcGuidB: row.guidB,
+      nameB: row.elementB?.name ?? undefined,
+      ifcTypeB: row.elementB?.ifcType ?? undefined,
+      fileVersionIdB: row.fileVersionBId || undefined,
+    };
+  }, []);
+
+  const openLinkedClashIssue = useCallback(async (issueId: string) => {
+    try {
+      const issue = await fetchIssue(issueId);
+      setSelectedIssueId(issue.id);
+      setActiveDock("issues");
+      setEditIssue(issue);
+      const engine = engineRef.current;
+      if (engine) void focusBimIssueInViewer(engine, issue, { retryMs: 8_000 });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not open linked issue");
+    }
+  }, []);
+
+  const focusClash = clash.focusClash;
+  const linkClashesToIssue = clash.linkClashesToIssue;
+
+  const startIssueCreateFromClash = useCallback(
+    (row: BimClashRow) => {
+      void (async () => {
+        if (row.issueId) {
+          await openLinkedClashIssue(row.issueId);
+          return;
+        }
+        if (!resolvedFileVersionId || !resolvedProjectId) {
+          toast.error(
+            "Missing project or file version. Reopen this model from the project Files tab.",
+          );
+          return;
+        }
+        setClashIssuePreparing(true);
+        try {
+          await focusClash(row);
+          await new Promise<void>((resolve) => {
+            window.setTimeout(resolve, 220);
+          });
+          const anchor = clashToBimAnchor(row);
+          const pendingReferencePhoto = await captureIssueSnapshotFile({ anchor });
+          startIssueCreate({
+            bimAnchor: anchor,
+            pendingReferencePhoto,
+            initialTitle: clashIssueTitle(row),
+            initialDescription: clashIssueDescription(row),
+            initialPriority: clashIssuePriority(row),
+            sourceClashIds: [row.id],
+          });
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Could not prepare issue from clash");
+        } finally {
+          setClashIssuePreparing(false);
+        }
+      })();
+    },
+    [
+      captureIssueSnapshotFile,
+      clashToBimAnchor,
+      focusClash,
+      openLinkedClashIssue,
+      resolvedFileVersionId,
+      resolvedProjectId,
+      startIssueCreate,
+    ],
+  );
+
+  const startIssueCreateFromClashGroup = useCallback(
+    (rows: BimClashRow[]) => {
+      void (async () => {
+        const unlinkeds = rows.filter((c) => !c.issueId);
+        if (unlinkeds.length === 0) {
+          const linkedId = rows.find((c) => c.issueId)?.issueId;
+          if (linkedId) await openLinkedClashIssue(linkedId);
+          else toast.message("No clashes to promote.");
+          return;
+        }
+        if (!resolvedFileVersionId || !resolvedProjectId) {
+          toast.error(
+            "Missing project or file version. Reopen this model from the project Files tab.",
+          );
+          return;
+        }
+        const first = unlinkeds[0]!;
+        setClashIssuePreparing(true);
+        try {
+          await focusClash(first);
+          await new Promise<void>((resolve) => {
+            window.setTimeout(resolve, 220);
+          });
+          const anchor = clashToBimAnchor(first);
+          const pendingReferencePhoto = await captureIssueSnapshotFile({ anchor });
+          startIssueCreate({
+            bimAnchor: anchor,
+            pendingReferencePhoto,
+            initialTitle: clashGroupIssueTitle(unlinkeds),
+            initialDescription: clashGroupIssueDescription(unlinkeds),
+            initialPriority: "HIGH",
+            sourceClashIds: unlinkeds.map((c) => c.id),
+          });
+        } catch (err) {
+          toast.error(
+            err instanceof Error ? err.message : "Could not prepare group issue from clashes",
+          );
+        } finally {
+          setClashIssuePreparing(false);
+        }
+      })();
+    },
+    [
+      captureIssueSnapshotFile,
+      clashToBimAnchor,
+      focusClash,
+      openLinkedClashIssue,
+      resolvedFileVersionId,
+      resolvedProjectId,
+      startIssueCreate,
+    ],
   );
 
   const startIssueCreateFromSelection = useCallback(() => {
@@ -2157,7 +2298,7 @@ export function BimViewerShell(props: {
         contextMode={clash.contextMode}
         runStats={clash.runStats}
         currentUserId={currentUserId}
-        creatingIssue={clash.creatingIssue}
+        creatingIssue={clashIssuePreparing}
         setup={{
           setA: clash.setA,
           setB: clash.setB,
@@ -2189,8 +2330,8 @@ export function BimViewerShell(props: {
         onContextModeChange={clash.setContextMode}
         onSelectClash={(c) => void clash.focusClash(c)}
         onClashesChange={clash.setClashes}
-        onCreateIssue={(c) => void clash.createIssueFromClash(c)}
-        onBulkCreateIssue={(rows) => void clash.bulkCreateIssueFromGroup(rows)}
+        onCreateIssue={startIssueCreateFromClash}
+        onBulkCreateIssue={startIssueCreateFromClashGroup}
         onDeleteClash={(c) => void clash.deleteClashById(c)}
         onResetResults={() => void clash.resetClashResults()}
         onInspectClashItem={(c, item) => {
@@ -2709,6 +2850,9 @@ export function BimViewerShell(props: {
             }}
             initialLinkedMarkupIds={issueCreateDraft.initialLinkedMarkupIds}
             pendingReferencePhoto={issueCreateDraft.pendingReferencePhoto}
+            initialTitle={issueCreateDraft.initialTitle}
+            initialDescription={issueCreateDraft.initialDescription}
+            initialPriority={issueCreateDraft.initialPriority}
             onClose={() => setIssueCreateDraft(null)}
             onCreated={(issue) => {
               const markupIds = issueCreateDraft.initialLinkedMarkupIds ?? [];
@@ -2719,6 +2863,14 @@ export function BimViewerShell(props: {
                   status: issue.status,
                 });
                 scheduleBimMarkupPersist();
+              }
+              const clashIds = issueCreateDraft.sourceClashIds ?? [];
+              if (clashIds.length > 0) {
+                void linkClashesToIssue(clashIds, issue.id).catch((err) => {
+                  toast.error(
+                    err instanceof Error ? err.message : "Issue created but could not link clash",
+                  );
+                });
               }
               setIssueCreateDraft(null);
               setSelectedIssueId(issue.id);

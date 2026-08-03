@@ -35,6 +35,8 @@ export async function createUserNotifications(opts: {
   body: string | null;
   href: string;
   actorUserId?: string | null;
+  /** Absolute image URL for rich push (e.g. issue snapshot). */
+  imageUrl?: string | null;
 }): Promise<void> {
   const ids = [...new Set(opts.recipientUserIds)].filter(
     (id) => Boolean(id) && id !== opts.excludeUserId,
@@ -63,6 +65,7 @@ export async function createUserNotifications(opts: {
         body: opts.body,
         href: opts.href,
         kind: opts.kind,
+        imageUrl: opts.imageUrl ?? null,
       }).catch((e) => console.error("[web-push-notify]", e));
     }
   } catch (e) {

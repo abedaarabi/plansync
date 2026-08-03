@@ -157,7 +157,7 @@ export function BimClashDetailPanel(props: {
         <button
           type="button"
           className="bim-btn-secondary bim-focus-ring flex min-h-9 w-full items-center justify-center gap-1.5 px-2.5 text-[11px]"
-          disabled={props.creatingIssue || Boolean(props.clash.issueId)}
+          disabled={props.creatingIssue}
           onClick={() => props.onCreateIssue(props.clash)}
         >
           {props.creatingIssue ? (
@@ -165,7 +165,7 @@ export function BimClashDetailPanel(props: {
           ) : (
             <TicketPlus className="h-3.5 w-3.5" />
           )}
-          {props.clash.issueId ? "Issue linked" : "Create issue"}
+          {props.clash.issueId ? "Open issue" : "Create issue"}
         </button>
         {props.onDelete ? (
           <button

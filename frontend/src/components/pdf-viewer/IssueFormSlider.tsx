@@ -82,6 +82,10 @@ type CreateProps = {
   bimContext?: IssueFormBimContext;
   initialLinkedMarkupIds?: string[];
   pendingReferencePhoto?: File | null;
+  /** Prefill create form (e.g. clash → issue). */
+  initialTitle?: string;
+  initialDescription?: string;
+  initialPriority?: string;
   onCreated?: (issue: IssueRow) => void;
 };
 
@@ -487,16 +491,16 @@ export function IssueFormSlider(props: Props) {
       setLinkedMarkupIds(i.attachedMarkupAnnotationIds ?? []);
       setReferencePhotos(i.referencePhotos ?? []);
     } else {
-      setTitle("");
-      setDescription("");
+      setTitle(props.initialTitle?.trim() || "");
+      setDescription(props.initialDescription ?? "");
       setAssigneeId("");
       setStatus("OPEN");
-      setPriority("MEDIUM");
+      setPriority(props.initialPriority?.trim() || "MEDIUM");
       setStartDate("");
       setDueDate("");
       setLocation("");
       setRfiLinkIds([]);
-      setLinkedMarkupIds(props.variant === "create" ? (props.initialLinkedMarkupIds ?? []) : []);
+      setLinkedMarkupIds(props.initialLinkedMarkupIds ?? []);
       setReferencePhotos([]);
     }
   }, [
@@ -505,6 +509,9 @@ export function IssueFormSlider(props: Props) {
     props.variant === "edit" ? props.issue.id : props.annotationId,
     props.variant === "edit" ? props.issue.updatedAt : "",
     props.variant === "create" ? (props.initialLinkedMarkupIds?.join(",") ?? "") : "",
+    props.variant === "create" ? (props.initialTitle ?? "") : "",
+    props.variant === "create" ? (props.initialDescription ?? "") : "",
+    props.variant === "create" ? (props.initialPriority ?? "") : "",
   ]);
 
   useEffect(() => {

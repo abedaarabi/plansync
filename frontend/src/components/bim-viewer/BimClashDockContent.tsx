@@ -150,9 +150,14 @@ export function BimClashDockContent(props: {
     }
   }, [props.setup.running]);
 
-  // If selection clears (exit review), return to the list.
+  // Keep the detail pane in sync when selection is driven from outside (e.g. issue → clash).
   useEffect(() => {
-    if (!props.selectedClashId) setResultsPane("list");
+    if (!props.selectedClashId) {
+      setResultsPane("list");
+      return;
+    }
+    setTab("results");
+    setResultsPane("detail");
   }, [props.selectedClashId]);
 
   const filtered = useMemo(() => {

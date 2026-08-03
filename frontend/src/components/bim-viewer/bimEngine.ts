@@ -1142,6 +1142,13 @@ export class BimEngine {
     return this.clashReviewSuppressSelectPaint;
   }
 
+  /** True when Item 1 / Item 2 clash colors are painted (guids resolved). */
+  hasClashPairColors(): boolean {
+    return this.activeColorizeGroups.some(
+      (g) => g.styleId === "clash-item-1" || g.styleId === "clash-item-2",
+    );
+  }
+
   /** Re-apply ghost / colorize tints after fragment material or tile updates. */
   private hasActiveFilterHighlights(): boolean {
     return this.activeFilterGhostMap != null || this.activeColorizeGroups.length > 0;
@@ -4479,7 +4486,7 @@ export class BimEngine {
    * - ghost: fade all models + solid clash pair
    * - hide: isolate only the clash pair
    */
-  // fallow-ignore-next-line unused-class-member, complexity
+  // fallow-ignore-next-line complexity
   async presentClashPartners(opts: {
     a: { guid: string; fileVersionId?: string | null };
     b: { guid: string; fileVersionId?: string | null };

@@ -37,6 +37,38 @@ export function clashIssueDescription(clash: BimClashRow): string {
   return lines.join("\n");
 }
 
+export function clashIssueTitle(clash: BimClashRow): string {
+  return `Clash: ${clashElementLabel(clash.elementA, clash.guidA)} × ${clashElementLabel(clash.elementB, clash.guidB)}`;
+}
+
+export function clashIssuePriority(clash: BimClashRow): "HIGH" | "MEDIUM" {
+  return clash.clashType === "HARD" ? "HIGH" : "MEDIUM";
+}
+
+export function clashGroupIssueTitle(clashes: BimClashRow[]): string {
+  return `Clash group · ${clashes.length} clash${clashes.length === 1 ? "" : "es"}`;
+}
+
+export function clashGroupIssueDescription(clashes: BimClashRow[]): string {
+  if (clashes.length === 0) return "";
+  const first = clashes[0]!;
+  return [
+    `Group of ${clashes.length} clashes`,
+    "",
+    ...clashes
+      .slice(0, 8)
+      .map(
+        (c) =>
+          `• ${clashElementLabel(c.elementA, c.guidA)} × ${clashElementLabel(c.elementB, c.guidB)} · ${formatClashDistanceDetail(c.clashType, c.distanceMm)}`,
+      ),
+    clashes.length > 8 ? `…and ${clashes.length - 8} more` : null,
+    "",
+    clashIssueDescription(first),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function mergeRef(
   existing: ClashElementRef | null,
   guid: string,

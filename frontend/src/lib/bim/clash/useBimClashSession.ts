@@ -12,20 +12,14 @@ import {
   bulkPatchClashes,
   clearClashTestResults,
   createClashTest,
-  createIssue,
   deleteClash,
   fetchClashTestClashes,
   fetchClashTests,
-  fetchProjectSession,
   patchClash,
   postClashRun,
   type BimClashRow,
   type BimClashTestRow,
 } from "@/lib/api-client";
-import {
-  uploadIssueReferencePhotoFile,
-  type IssueBimAnchor,
-} from "@/lib/api-client/core-issues-takeoff";
 import {
   buildClashSetDef,
   ifcTypesFromSet,
@@ -34,12 +28,7 @@ import {
   resolveClashSet,
   sortModelsForClashPair,
 } from "@/lib/bim/clash/clashSets";
-import {
-  clashElementLabel,
-  clashIssueDescription,
-  enrichClashRowsWithQuantityNames,
-} from "@/lib/bim/clash/clashLabels";
-import { formatClashDistanceDetail } from "@/lib/bim/clash/clashStatusStyle";
+import { enrichClashRowsWithQuantityNames } from "@/lib/bim/clash/clashLabels";
 import { runClashTest } from "@/lib/bim/clash/runClashTest";
 import {
   readClashSession,
@@ -47,18 +36,11 @@ import {
   type ClashContextMode,
   type ClashSessionState,
 } from "@/lib/bim/clash/clashSessionStorage";
-import { dataUrlToFile } from "@/lib/bim/bimMarkupSnapshot";
 import type { BimEngine } from "@/components/bim-viewer/bimEngine";
-
-async function resolveWorkspaceId(projectId: string): Promise<string> {
-  const session = await fetchProjectSession(projectId);
-  return session.workspaceId;
-}
 
 // fallow-ignore-next-line complexity
 export function useBimClashSession(args: {
   projectId: string | null;
-  fileId: string;
   fileVersionId: string | null;
   quantityIndex: BimQuantityIndex | null;
   engine: BimEngine | null;
@@ -84,7 +66,6 @@ export function useBimClashSession(args: {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [runStats, setRunStats] = useState<BimClashRunStats | null>(null);
-  const [creatingIssue, setCreatingIssue] = useState(false);
   const [previewHits, setPreviewHits] = useState<BimClashRow[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const sessionLoaded = useRef(false);
@@ -93,6 +74,12 @@ export function useBimClashSession(args: {
   setARef.current = setA;
   setBRef.current = setB;
   const selectedClashRef = useRef<BimClashRow | null>(null);
+  const selectedClashIdRef = useRef<string | null>(null);
+  selectedClashIdRef.current = selectedClashId;
+  const activeTestRef = useRef<BimClashTestRow | null>(null);
+  activeTestRef.current = activeTest;
+  const engineRef = useRef<BimEngine | null>(args.engine);
+  engineRef.current = args.engine;
   const contextModeRef = useRef<ClashContextMode>(contextMode);
   contextModeRef.current = contextMode;
 
@@ -193,32 +180,54 @@ export function useBimClashSession(args: {
     clearanceMm,
   ]);
 
+  const pickPreferredClashTest = useCallback(
+    (list: BimClashTestRow[], session: ClashSessionState): BimClashTestRow | null => {
+      const currentId = activeTestRef.current?.id;
+      const labelA = setARef.current.label;
+      const labelB = setBRef.current.label;
+      return (
+        (currentId ? list.find((t) => t.id === currentId) : null) ??
+        list.find((t) => t.id === session.testId) ??
+        list.find((t) => t.setA.label === labelA && t.setB.label === labelB) ??
+        list[0] ??
+        null
+      );
+    },
+    [],
+  );
+
   const reloadTests = useCallback(async () => {
     if (!args.projectId) return;
     try {
       const list = await fetchClashTests(args.projectId);
       setTests(list);
-      const session = readClashSession(args.projectId);
-      const labelA = setARef.current.label;
-      const labelB = setBRef.current.label;
-      const preferred =
-        list.find((t) => t.id === session.testId) ??
-        list.find((t) => t.setA.label === labelA && t.setB.label === labelB) ??
-        list[0] ??
-        null;
-      if (preferred) {
-        setActiveTest(preferred);
-        // Do not overwrite setA/setB here — that fought model binding and re-fetched in a loop.
-        const data = await fetchClashTestClashes(preferred.id);
-        setClashes(data.clashes);
-        setRunStats(data.test.lastRunStats);
+      const preferred = pickPreferredClashTest(list, readClashSession(args.projectId));
+      if (!preferred) return;
+      setActiveTest(preferred);
+      // Do not overwrite setA/setB here — that fought model binding and re-fetched in a loop.
+      const data = await fetchClashTestClashes(preferred.id);
+      setClashes(data.clashes);
+      setRunStats(data.test.lastRunStats);
+      // Keep pair presentation if a clash is already selected.
+      const row = selectedClashIdRef.current
+        ? data.clashes.find((c) => c.id === selectedClashIdRef.current)
+        : null;
+      const engine = engineRef.current;
+      if (engine && row && (row.guidA || row.guidB)) {
+        await engine.presentClashPartners({
+          a: { guid: row.guidA, fileVersionId: row.fileVersionAId },
+          b: { guid: row.guidB, fileVersionId: row.fileVersionBId },
+          point: row.point,
+          context: contextModeRef.current,
+          refocusCamera: false,
+        });
       }
     } catch (err) {
       if (args.active) {
         toast.error(err instanceof Error ? err.message : "Could not load clash tests");
       }
     }
-  }, [args.projectId, args.active]);
+  }, [args.projectId, args.active, pickPreferredClashTest]);
 
   useEffect(() => {
     if (!args.active || !args.projectId) return;
@@ -299,7 +308,7 @@ export function useBimClashSession(args: {
       contextOverride?: ClashContextMode,
       opts?: { refocusCamera?: boolean },
     ) => {
-      const engine = args.engine;
+      const engine = engineRef.current;
       if (!engine) return;
       if (!clash.guidA && !clash.guidB) return;
       await engine.presentClashPartners({
@@ -310,7 +319,7 @@ export function useBimClashSession(args: {
         refocusCamera: opts?.refocusCamera,
       });
     },
-    [args.engine],
+    [],
   );
 
   const setContextMode = useCallback(
@@ -583,123 +592,28 @@ export function useBimClashSession(args: {
     }
   }, [activeTest, args.engine]);
 
-  const attachClashSnapshotToIssue = useCallback(
-    async (issueId: string, clash: BimClashRow): Promise<boolean> => {
-      const dataUrl = args.engine ? await args.engine.captureSnapshot() : null;
-      if (!dataUrl) return false;
-      const file = dataUrlToFile(dataUrl, `clash-${clash.id.slice(0, 8)}.jpg`);
-      await uploadIssueReferencePhotoFile(issueId, file);
-      return true;
-    },
-    [args.engine],
-  );
+  /** After IssueFormSlider saves, attach the new issue to one or more clashes. */
+  const linkClashesToIssue = useCallback(
+    async (clashIds: string[], issueId: string) => {
+      const uniqueIds = [...new Set(clashIds.filter(Boolean))];
+      if (uniqueIds.length === 0) return;
 
-  const createIssueFromClash = useCallback(
-    async (clash: BimClashRow) => {
-      if (!args.projectId) {
-        toast.error("Missing project context for issue creation.");
-        return;
-      }
-      if (clash.issueId) {
-        toast.message("This clash already has a linked issue.");
-        return;
-      }
-      setCreatingIssue(true);
-      try {
-        const workspaceId = await resolveWorkspaceId(args.projectId);
-        const anchor: IssueBimAnchor = {
-          ifcGuid: clash.guidA,
-          name: clash.elementA?.name ?? undefined,
-          ifcType: clash.elementA?.ifcType ?? undefined,
-          position: clash.point,
-        };
-        const issue = await createIssue({
-          workspaceId,
-          projectId: args.projectId,
-          fileId: args.fileId,
-          fileVersionId: clash.fileVersionAId || args.fileVersionId || undefined,
-          title: `Clash: ${clashElementLabel(clash.elementA, clash.guidA)} × ${clashElementLabel(clash.elementB, clash.guidB)}`,
-          description: clashIssueDescription(clash),
-          bimAnchor: anchor,
-          priority: clash.clashType === "HARD" ? "HIGH" : "MEDIUM",
-        });
-        const updated = await patchClash(clash.id, { issueId: issue.id });
+      if (uniqueIds.length === 1) {
+        const updated = await patchClash(uniqueIds[0]!, { issueId });
         setClashes((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-
-        let photoAttached = false;
-        try {
-          photoAttached = await attachClashSnapshotToIssue(issue.id, clash);
-        } catch {
-          /* issue is created; photo is best-effort */
-        }
-        toast.success(
-          photoAttached ? "Issue created from clash with snapshot" : "Issue created from clash",
-        );
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Could not create issue");
-      } finally {
-        setCreatingIssue(false);
+        return;
       }
-    },
-    [args.projectId, args.fileId, args.fileVersionId, attachClashSnapshotToIssue],
-  );
 
-  const bulkCreateIssueFromGroup = useCallback(
-    async (groupClashes: BimClashRow[]) => {
-      if (!args.projectId || groupClashes.length === 0) return;
-      const first = groupClashes[0]!;
-      setCreatingIssue(true);
-      try {
-        const workspaceId = await resolveWorkspaceId(args.projectId);
-        const issue = await createIssue({
-          workspaceId,
-          projectId: args.projectId,
-          fileId: args.fileId,
-          fileVersionId: first.fileVersionAId || args.fileVersionId || undefined,
-          title: `Clash group · ${groupClashes.length} clashes`,
-          description: [
-            `Group of ${groupClashes.length} clashes`,
-            "",
-            ...groupClashes
-              .slice(0, 8)
-              .map(
-                (c) =>
-                  `• ${clashElementLabel(c.elementA, c.guidA)} × ${clashElementLabel(c.elementB, c.guidB)} · ${formatClashDistanceDetail(c.clashType, c.distanceMm)}`,
-              ),
-            groupClashes.length > 8 ? `…and ${groupClashes.length - 8} more` : null,
-            "",
-            clashIssueDescription(first),
-          ]
-            .filter(Boolean)
-            .join("\n"),
-          bimAnchor: {
-            ifcGuid: first.guidA,
-            name: first.elementA?.name ?? undefined,
-            ifcType: first.elementA?.ifcType ?? undefined,
-            position: first.point,
-          },
-          priority: "HIGH",
-        });
-        const updated = await bulkPatchClashes(first.testId, {
-          clashIds: groupClashes.map((c) => c.id),
-          issueId: issue.id,
-        });
-        const byId = new Map(updated.map((c) => [c.id, c]));
-        setClashes((prev) => prev.map((c) => byId.get(c.id) ?? c));
-
-        try {
-          await attachClashSnapshotToIssue(issue.id, first);
-        } catch {
-          /* best-effort photo */
-        }
-        toast.success(`Linked ${groupClashes.length} clashes to one issue`);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Could not create group issue");
-      } finally {
-        setCreatingIssue(false);
+      const testId =
+        clashes.find((c) => uniqueIds.includes(c.id))?.testId ?? activeTest?.id ?? null;
+      if (!testId) {
+        throw new Error("Could not resolve clash test for linking.");
       }
+      const updated = await bulkPatchClashes(testId, { clashIds: uniqueIds, issueId });
+      const byId = new Map(updated.map((c) => [c.id, c]));
+      setClashes((prev) => prev.map((c) => byId.get(c.id) ?? c));
     },
-    [args.projectId, args.fileId, args.fileVersionId, attachClashSnapshotToIssue],
+    [activeTest?.id, clashes],
   );
 
   const levels = useMemo(() => {
@@ -725,7 +639,6 @@ export function useBimClashSession(args: {
     running,
     progress,
     runStats,
-    creatingIssue,
     openCount,
     filteredIds,
     setCounts,
@@ -748,7 +661,6 @@ export function useBimClashSession(args: {
     clearFocusMode,
     deleteClashById,
     resetClashResults,
-    createIssueFromClash,
-    bulkCreateIssueFromGroup,
+    linkClashesToIssue,
   };
 }

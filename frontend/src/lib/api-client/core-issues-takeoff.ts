@@ -46,6 +46,16 @@ export type IssueBimAnchor = {
   ifcType?: string;
   spatialPath?: string[];
   position?: { x: number; y: number; z: number };
+  /** Federated model version for `ifcGuid` (clash item 1 / green). */
+  fileVersionId?: string;
+  /**
+   * Clash partner (item 2 / red). When set, opening the issue ghosts the model
+   * and colors this pair green/red — no clash-test reload required.
+   */
+  ifcGuidB?: string;
+  nameB?: string;
+  ifcTypeB?: string;
+  fileVersionIdB?: string;
 };
 
 export type IssueRow = {
