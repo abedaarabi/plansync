@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef } from "react";
 import {
+  ChartPie,
   ChevronLeft,
   ChevronRight,
   Cloud,
@@ -17,6 +18,12 @@ import {
 export type BreadcrumbItem = {
   id: string | null;
   label: string;
+};
+
+export type FileExplorerInsightsAction = {
+  onClick: () => void;
+  hint: string;
+  showNewBadge: boolean;
 };
 
 export type FileExplorerTopBarProps = {
@@ -36,6 +43,8 @@ export type FileExplorerTopBarProps = {
   onOpenFolderTree?: () => void;
   /** Optional compact folder-access action for the selected folder. */
   folderAccess?: { summary: string; onClick: () => void };
+  /** Optional files insights control — rendered next to Upload. */
+  insights?: FileExplorerInsightsAction;
 };
 
 const FILE_EXPLORER_SEARCH_INPUT_ID = "file-explorer-search";
@@ -66,6 +75,7 @@ export function FileExplorerTopBar({
   onImportFromCloud,
   onOpenFolderTree,
   folderAccess,
+  insights,
 }: FileExplorerTopBarProps) {
   const current = breadcrumbs[breadcrumbs.length - 1];
   const parent = breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2] : null;
@@ -213,6 +223,30 @@ export function FileExplorerTopBar({
                 aria-hidden
               />
               <span className="hidden xl:inline">Import</span>
+            </button>
+          ) : null}
+          {insights ? (
+            <button
+              type="button"
+              onClick={insights.onClick}
+              className={`relative ${actionBtn}`}
+              aria-label={`Files insights · ${insights.hint}`}
+            >
+              <ChartPie
+                className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-primary)]"
+                strokeWidth={2}
+                aria-hidden
+              />
+              <span className="hidden xl:inline">Insights</span>
+              <span className="hidden tabular-nums text-[var(--enterprise-text-muted)] xl:inline">
+                · {insights.hint}
+              </span>
+              {insights.showNewBadge ? (
+                <span
+                  className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[var(--enterprise-primary)] ring-2 ring-[var(--enterprise-bg)]"
+                  aria-label="New"
+                />
+              ) : null}
             </button>
           ) : null}
           <label

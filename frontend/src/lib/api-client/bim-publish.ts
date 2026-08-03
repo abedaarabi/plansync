@@ -47,24 +47,6 @@ export type DrawingMapRecord = DrawingMapDraft & {
   pinnedPdfFileVersionId?: string | null;
 };
 
-export type DrawingSheetOption = {
-  fileId: string;
-  name: string;
-  /** Legacy API field; prefer `name`. */
-  fileName?: string;
-  folderId: string | null;
-  folderPath: string | null;
-  disciplines: string[];
-  pageCount: number;
-  latestFileVersionId: string;
-  summaryByPage?: string[];
-};
-
-export type SuggestedDrawingMap = DrawingMapDraft & {
-  confidence: number;
-  reason: string;
-};
-
 export type BimPublishSummary = {
   fileVersionId: string;
   published: boolean;
@@ -163,20 +145,6 @@ export async function fetchBimPublishSummary(fileVersionId: string): Promise<Bim
   );
 }
 
-export async function saveBimDrawingMaps(
-  fileVersionId: string,
-  maps: DrawingMapDraft[],
-): Promise<{ mapCount: number }> {
-  return apiJsonFetch(
-    `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/drawing-maps`,
-    {
-      method: "PUT",
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ maps }),
-    },
-  );
-}
-
 // fallow-ignore-next-line complexity
 export async function fetchDrawingLevelMaps(
   projectId: string,
@@ -221,57 +189,6 @@ export async function fetchDrawingLevelMaps(
   }
   const levels = [...levelById.values()].sort((a, b) => a.sortOrder - b.sortOrder);
   return { maps, levels };
-}
-
-type RawDrawingSheet = Partial<DrawingSheetOption> & {
-  pdfFileId?: string;
-  fileName?: string;
-};
-
-// fallow-ignore-next-line complexity
-export async function fetchDrawingSheets(
-  projectId: string,
-  opts?: { discipline?: string; folderId?: string | null },
-): Promise<{ sheets: DrawingSheetOption[] }> {
-  const q = new URLSearchParams();
-  if (opts?.discipline) q.set("discipline", opts.discipline);
-  if (opts?.folderId) q.set("folderId", opts.folderId);
-  const suffix = q.size > 0 ? `?${q}` : "";
-  const data = await apiJsonFetch<{ sheets: RawDrawingSheet[] }>(
-    `/api/v1/projects/${encodeURIComponent(projectId)}/drawing-sheets${suffix}`,
-  );
-  const sheets = data.sheets
-    // fallow-ignore-next-line complexity
-    .map((s) => {
-      const fileId = s.fileId ?? s.pdfFileId;
-      if (!fileId) return null;
-      return {
-        fileId,
-        name: s.name ?? s.fileName ?? "Untitled",
-        folderId: s.folderId ?? null,
-        folderPath: s.folderPath ?? null,
-        disciplines: s.disciplines ?? [],
-        pageCount: Math.max(1, s.pageCount ?? 1),
-        latestFileVersionId: s.latestFileVersionId ?? "",
-        ...(s.summaryByPage ? { summaryByPage: s.summaryByPage } : {}),
-      };
-    })
-    .filter((s): s is DrawingSheetOption => s !== null);
-  return { sheets };
-}
-
-export async function suggestBimDrawingMappings(
-  fileVersionId: string,
-  body?: { pdfFileIds?: string[] },
-): Promise<{ suggestions: SuggestedDrawingMap[] }> {
-  return apiJsonFetch(
-    `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/suggest-mappings`,
-    {
-      method: "POST",
-      headers: JSON_HEADERS,
-      body: JSON.stringify(body ?? {}),
-    },
-  );
 }
 
 export async function saveDrawingCoordTransform(

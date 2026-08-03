@@ -1,16 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  Boxes,
-  ChartPie,
-  FileText,
-  HardDrive,
-  ImageIcon,
-  Layers,
-  MessageSquare,
-  Tags,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Boxes, FileText, HardDrive, ImageIcon, Layers, MessageSquare, Tags } from "lucide-react";
 import type { Project } from "@/types/projects";
 import { EnterpriseOverviewCard } from "@/components/enterprise/EnterpriseOverviewCard";
 import { EnterpriseOverviewKpiTile } from "@/components/enterprise/EnterpriseOverviewKpiTile";
@@ -20,6 +11,7 @@ import {
 } from "@/components/enterprise/EnterpriseOverviewSegments";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { formatBytes } from "@/components/file-explorer/fileExplorerUtils";
+import type { FileExplorerInsightsAction } from "@/components/file-explorer/FileExplorerTopBar";
 import {
   computeFilesOverview,
   type FilesOverviewFilter,
@@ -168,31 +160,6 @@ function StorageDonut({
   );
 }
 
-function QuickFilterChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`inline-flex h-7 items-center rounded-md border px-2 text-[11px] font-medium transition ${
-        active
-          ? "border-[var(--enterprise-primary)] bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]"
-          : "border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
 type Props = {
   project: Project;
   filter: FilesOverviewFilter;
@@ -200,6 +167,8 @@ type Props = {
   /** Workspace storage from `/me` — when set, shows used-space donut. */
   storageUsedBytes?: number;
   storageQuotaBytes?: number;
+  /** Provides the Insights toolbar action for the file explorer top bar. */
+  onInsightsToolbarChange?: (action: FileExplorerInsightsAction | null) => void;
 };
 
 // fallow-ignore-next-line complexity
@@ -209,11 +178,13 @@ export function FilesOverview({
   onFilterChange,
   storageUsedBytes,
   storageQuotaBytes,
+  onInsightsToolbarChange,
 }: Props) {
   const stats = useMemo(() => computeFilesOverview(project), [project]);
   const [insightsOpen, setInsightsOpen] = useState(false);
   /** null until hydrated — avoid flashing the “new” badge incorrectly. */
   const [insightsSeen, setInsightsSeen] = useState<boolean | null>(null);
+  const empty = stats.totalFiles === 0 && stats.folders === 0;
 
   useEffect(() => {
     try {
@@ -232,26 +203,6 @@ export function FilesOverview({
     }
   }, [insightsOpen]);
 
-  if (stats.totalFiles === 0 && stats.folders === 0) return null;
-
-  const openInsights = () => {
-    setInsightsOpen(true);
-    if (insightsSeen !== true) {
-      setInsightsSeen(true);
-      try {
-        localStorage.setItem(INSIGHTS_SEEN_KEY, "1");
-      } catch {
-        /* private mode */
-      }
-    }
-  };
-
-  const selectFilter = (key: string) => {
-    if (key === "DISC:__other__") return;
-    onFilterChange(key as FilesOverviewFilter);
-    setInsightsOpen(false);
-  };
-
   const showStorage =
     storageQuotaBytes != null &&
     storageQuotaBytes > 0 &&
@@ -263,63 +214,66 @@ export function FilesOverview({
     ? `${Math.round(storagePct)}% storage`
     : `${stats.totalFiles} file${stats.totalFiles === 1 ? "" : "s"}`;
 
-  return (
-    <section aria-label="Files overview" className="mb-2 shrink-0 space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {filter !== "ALL" ? (
-          <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-[var(--enterprise-text-muted)]">
-            <span className="inline-flex items-center gap-1.5">
-              <FilterHintIcon filter={filter} />
-              Filtered across project
-            </span>
-            <button
-              type="button"
-              onClick={() => onFilterChange("ALL")}
-              className="font-semibold text-[var(--enterprise-primary)] hover:underline"
-            >
-              Clear
-            </button>
-          </div>
-        ) : (
-          <span className="text-[11px] text-[var(--enterprise-text-muted)]">
-            {stats.totalFiles} file{stats.totalFiles === 1 ? "" : "s"} · {stats.folders} folder
-            {stats.folders === 1 ? "" : "s"}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={openInsights}
-          className="relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 text-xs font-medium text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-ring-focus)]"
-        >
-          <ChartPie className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" aria-hidden />
-          Insights
-          <span className="tabular-nums text-[var(--enterprise-text-muted)]">· {insightsHint}</span>
-          {insightsSeen === false ? (
-            <span
-              className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[var(--enterprise-primary)] ring-2 ring-[var(--enterprise-bg)]"
-              aria-label="New"
-            />
-          ) : null}
-        </button>
-      </div>
+  const openInsights = useCallback(() => {
+    setInsightsOpen(true);
+    setInsightsSeen((prev) => {
+      if (prev === true) return prev;
+      try {
+        localStorage.setItem(INSIGHTS_SEEN_KEY, "1");
+      } catch {
+        /* private mode */
+      }
+      return true;
+    });
+  }, []);
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        <QuickFilterChip
-          label={`PDFs · ${stats.pdfs}`}
-          active={filter === "PDF"}
-          onClick={() => onFilterChange(filter === "PDF" ? "ALL" : "PDF")}
-        />
-        <QuickFilterChip
-          label={`IFC · ${stats.ifcs}`}
-          active={filter === "IFC"}
-          onClick={() => onFilterChange(filter === "IFC" ? "ALL" : "IFC")}
-        />
-        <QuickFilterChip
-          label={`Comments · ${stats.withComments}`}
-          active={filter === "WITH_COMMENTS"}
-          onClick={() => onFilterChange(filter === "WITH_COMMENTS" ? "ALL" : "WITH_COMMENTS")}
-        />
-      </div>
+  useEffect(() => {
+    if (!onInsightsToolbarChange) return;
+    if (empty) {
+      onInsightsToolbarChange(null);
+      return;
+    }
+    onInsightsToolbarChange({
+      onClick: openInsights,
+      hint: insightsHint,
+      showNewBadge: insightsSeen === false,
+    });
+  }, [empty, insightsHint, insightsSeen, onInsightsToolbarChange, openInsights]);
+
+  useEffect(() => {
+    return () => onInsightsToolbarChange?.(null);
+  }, [onInsightsToolbarChange]);
+
+  if (empty) return null;
+
+  const selectFilter = (key: string) => {
+    if (key === "DISC:__other__") return;
+    onFilterChange(key as FilesOverviewFilter);
+    setInsightsOpen(false);
+  };
+
+  const filesFoldersLabel = `${stats.totalFiles} file${stats.totalFiles === 1 ? "" : "s"} · ${stats.folders} folder${stats.folders === 1 ? "" : "s"}`;
+
+  return (
+    <>
+      {filter !== "ALL" ? (
+        <section
+          aria-label="Files overview"
+          className="mb-2 flex min-w-0 shrink-0 flex-wrap items-center gap-2 text-xs text-[var(--enterprise-text-muted)]"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <FilterHintIcon filter={filter} />
+            Filtered across project
+          </span>
+          <button
+            type="button"
+            onClick={() => onFilterChange("ALL")}
+            className="font-semibold text-[var(--enterprise-primary)] hover:underline"
+          >
+            Clear
+          </button>
+        </section>
+      ) : null}
 
       <EnterpriseSlideOver
         open={insightsOpen}
@@ -335,7 +289,7 @@ export function FilesOverview({
               Files insights
             </h2>
             <p className="mt-0.5 truncate text-xs text-[var(--enterprise-text-muted)]">
-              Filters, charts, and storage
+              {filesFoldersLabel}
             </p>
           </div>
         }
@@ -412,7 +366,7 @@ export function FilesOverview({
           ) : null}
         </div>
       </EnterpriseSlideOver>
-    </section>
+    </>
   );
 }
 

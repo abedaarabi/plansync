@@ -8,6 +8,7 @@ import {
   Eye,
   FileText,
   Folder,
+  Info,
   LayoutGrid,
   List,
   Lock,
@@ -97,8 +98,6 @@ export type FileExplorerContentProps = {
   /** Rich IFC processing / publish status for badges and spinners. */
   ifcModelStatus?: (file: CloudFile) => IfcModelUiStatus | null;
   onPublishIfcModel?: (file: CloudFile) => void;
-  onMapIfcDrawings?: (file: CloudFile) => void;
-  onAlignIfcCoordinates?: (file: CloudFile) => void;
   onLoadIfcPublishMeta?: (file: CloudFile) => void;
 };
 
@@ -166,8 +165,6 @@ export function FileExplorerContent({
   ifcPublishBadge,
   ifcModelStatus,
   onPublishIfcModel,
-  onMapIfcDrawings,
-  onAlignIfcCoordinates,
   onLoadIfcPublishMeta: _onLoadIfcPublishMeta,
 }: FileExplorerContentProps) {
   const versionUi = Boolean(onFileVersionPick);
@@ -206,7 +203,6 @@ export function FileExplorerContent({
     const uiStatus = ifcModelStatus?.(f);
     const badge = uiStatus?.label ?? ifcPublishBadge?.(f);
     const spinning = ifcStatusSpinning(uiStatus);
-    const isPublishedReady = uiStatus?.kind === "ready";
     const btnClass = compact
       ? "rounded-md border border-[var(--enterprise-border)] px-1.5 py-1 text-[10px] font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]"
       : "inline-flex items-center gap-1 rounded-md border border-[var(--enterprise-border)] px-2 py-1 text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]";
@@ -238,30 +234,6 @@ export function FileExplorerContent({
             }}
           >
             Publish model
-          </button>
-        ) : null}
-        {onMapIfcDrawings && isPublishedReady ? (
-          <button
-            type="button"
-            className={btnClass}
-            onClick={(e) => {
-              e.stopPropagation();
-              onMapIfcDrawings(f);
-            }}
-          >
-            Map drawings
-          </button>
-        ) : null}
-        {onAlignIfcCoordinates && isPublishedReady ? (
-          <button
-            type="button"
-            className={btnClass}
-            onClick={(e) => {
-              e.stopPropagation();
-              onAlignIfcCoordinates(f);
-            }}
-          >
-            Align coordinates
           </button>
         ) : null}
       </div>
@@ -395,7 +367,7 @@ export function FileExplorerContent({
         ) : viewMode === "grid" ? (
           <div className="space-y-2.5 pb-4">
             {subfolders.length > 0 ? (
-              <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(168px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]">
+              <div className="grid grid-cols-1 gap-1.5 min-[380px]:grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(168px,1fr))]">
                 {subfolders.map((fol) => {
                   const inside = countDirectChildren(project, fol.id);
                   const selected = selectedItemKey === itemKeyForFolder(fol.id);
@@ -412,9 +384,9 @@ export function FileExplorerContent({
                         onDragLeaveFolder ? (e) => onDragLeaveFolder(e, fol.id) : undefined
                       }
                       onDrop={onDropOnFolder ? (e) => onDropOnFolder(e, fol.id) : undefined}
-                      className={`group relative overflow-hidden rounded-lg border bg-[var(--enterprise-bg)]/70 shadow-sm transition hover:border-[var(--enterprise-primary)]/35 ${
+                      className={`group relative overflow-hidden rounded-lg border bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/30 hover:shadow-sm ${
                         selected
-                          ? "border-[var(--enterprise-primary)]/40 ring-2 ring-[var(--enterprise-primary)]/25"
+                          ? "border-[var(--enterprise-primary)]/45 ring-2 ring-[var(--enterprise-primary)]/20"
                           : "border-[var(--enterprise-border)]"
                       } ${
                         dropTarget
@@ -430,16 +402,16 @@ export function FileExplorerContent({
                           onSelectItem(itemKeyForFolder(fol.id));
                           onOpenFolder(fol.id);
                         }}
-                        className="flex w-full min-h-11 cursor-pointer items-center gap-2.5 px-2.5 py-2.5 text-left"
+                        className="flex w-full min-h-11 cursor-pointer items-center gap-2 px-2 py-2 text-left"
                       >
                         <Folder
-                          className="h-8 w-8 shrink-0 fill-current text-[var(--enterprise-primary)]"
+                          className="h-7 w-7 shrink-0 fill-current text-[var(--enterprise-primary)]"
                           strokeWidth={1.4}
                           aria-hidden
                         />
                         <span className="min-w-0 flex-1">
                           <span className="flex min-w-0 items-center gap-1">
-                            <span className="truncate text-xs font-normal leading-tight text-[var(--enterprise-text)] sm:text-[13px]">
+                            <span className="truncate text-xs font-medium leading-tight text-[var(--enterprise-text)]">
                               {fol.name}
                             </span>
                             {fol.canAccess === false ? (
@@ -455,7 +427,7 @@ export function FileExplorerContent({
                           <span className="mt-0.5 block truncate text-[10px] leading-tight text-[var(--enterprise-text-muted)]">
                             {inside.total} item{inside.total !== 1 ? "s" : ""}
                             {" · "}
-                            Last open {lastOpenedLabel}
+                            {lastOpenedLabel}
                           </span>
                           <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] leading-tight text-[var(--enterprise-text-muted)]">
                             <UserRound className="h-3 w-3 shrink-0" aria-hidden />
@@ -463,7 +435,7 @@ export function FileExplorerContent({
                           </span>
                         </span>
                         <ChevronRight
-                          className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)] opacity-50"
+                          className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)] opacity-50"
                           aria-hidden
                         />
                       </button>
@@ -474,48 +446,50 @@ export function FileExplorerContent({
                           </span>
                         </div>
                       ) : null}
-                      <div className="pointer-events-none absolute right-1 top-1 z-20 hidden gap-0.5 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 lg:flex">
-                        {onDownloadFolder ? (
+                      <div className="pointer-events-none absolute right-1.5 top-1.5 z-20 hidden opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 lg:block">
+                        <div className="flex items-center gap-0.5 rounded-lg bg-[var(--enterprise-surface)]/92 p-0.5 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
+                          {onDownloadFolder ? (
+                            <button
+                              type="button"
+                              className="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+                              disabled={downloadingKey === `folder-download:${fol.id}`}
+                              onClick={(ev) => {
+                                ev.stopPropagation();
+                                onDownloadFolder(fol);
+                              }}
+                              aria-label={`Download ${fol.name}`}
+                            >
+                              {downloadingKey === `folder-download:${fol.id}` ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+                              ) : (
+                                <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                              )}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
-                            className="pointer-events-auto rounded-md bg-[var(--enterprise-surface)]/95 p-1 text-[var(--enterprise-text-muted)] shadow-sm ring-1 ring-[var(--enterprise-border)] transition hover:bg-[var(--enterprise-hover-surface)]"
-                            disabled={downloadingKey === `folder-download:${fol.id}`}
+                            className="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
+                            disabled={deletingKey === `folder:${fol.id}`}
                             onClick={(ev) => {
                               ev.stopPropagation();
-                              onDownloadFolder(fol);
+                              void onDeleteFolder(fol);
                             }}
-                            aria-label={`Download ${fol.name}`}
+                            aria-label={`Delete ${fol.name}`}
                           >
-                            {downloadingKey === `folder-download:${fol.id}` ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            {deletingKey === `folder:${fol.id}` ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
                             ) : (
-                              <Download className="h-3.5 w-3.5" />
+                              <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
                             )}
                           </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="pointer-events-auto rounded-md bg-[var(--enterprise-surface)]/95 p-1 text-[var(--enterprise-text-muted)] shadow-sm ring-1 ring-[var(--enterprise-border)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
-                          disabled={deletingKey === `folder:${fol.id}`}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            void onDeleteFolder(fol);
-                          }}
-                          aria-label={`Delete ${fol.name}`}
-                        >
-                          {deletingKey === `folder:${fol.id}` ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
-                        </button>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
             ) : null}
-            <div className="grid grid-cols-2 gap-2 min-[480px]:grid-cols-3 sm:grid-cols-[repeat(auto-fill,minmax(148px,1fr))] sm:gap-2.5 lg:grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
+            <div className="grid grid-cols-2 gap-1.5 min-[480px]:grid-cols-3 sm:grid-cols-[repeat(auto-fill,minmax(128px,1fr))] sm:gap-2 lg:grid-cols-[repeat(auto-fill,minmax(136px,1fr))]">
               {files.map(
                 // fallow-ignore-next-line complexity, code-duplication
                 (f) => {
@@ -525,15 +499,16 @@ export function FileExplorerContent({
                     sv.find((x) => x.version === selectedVersionForFile(f)) ?? latest;
                   const size = displayVer ? formatBytes(displayVer.sizeBytes) : "—";
                   const selected = fileRowSelected(f);
+                  const disciplines = (f.disciplines ?? []).slice(0, 1);
                   return (
                     <div
                       key={f.id}
-                      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all duration-200 sm:rounded-xl sm:hover:-translate-y-0.5 sm:hover:shadow-md ${
+                      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] transition duration-150 hover:border-[var(--enterprise-primary)]/30 hover:shadow-sm ${
                         selected
                           ? federationIfcIds?.has(f.id)
                             ? "border-emerald-500/40 ring-2 ring-emerald-500/25"
-                            : "border-[var(--enterprise-primary)]/40 ring-2 ring-[var(--enterprise-primary)]/25"
-                          : "border-slate-200/90 hover:border-slate-300/90"
+                            : "border-[var(--enterprise-primary)]/45 ring-2 ring-[var(--enterprise-primary)]/20"
+                          : "border-[var(--enterprise-border)]"
                       }`}
                     >
                       <div
@@ -542,6 +517,11 @@ export function FileExplorerContent({
                         draggable={canDragItems}
                         onDragStart={(e) => onDragStartMove?.(e, { kind: "file", id: f.id })}
                         onClick={(e) => handleFileSelect(f, e)}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          if (onOpenViewer) onOpenViewer(f);
+                          else onOpenFile(f);
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
@@ -550,7 +530,7 @@ export function FileExplorerContent({
                         }}
                         className="flex cursor-pointer flex-col text-left"
                       >
-                        <div className="relative aspect-square w-full overflow-hidden bg-slate-50 sm:aspect-[5/3]">
+                        <div className="relative aspect-[4/3] w-full overflow-hidden bg-[var(--enterprise-bg)]">
                           <PdfFileThumbnail
                             fileId={f.id}
                             fileName={f.name}
@@ -559,109 +539,121 @@ export function FileExplorerContent({
                             isPdf={isPdfFile(f)}
                             className="h-full w-full"
                           />
+                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10" />
                           {(f.commentCount ?? 0) > 0 ? (
-                            <div className="pointer-events-none absolute left-1 top-1 z-10 sm:left-1.5 sm:top-1.5">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary)] px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-sm ring-1 ring-white/85 sm:text-[10px]">
-                                <MessageSquare className="h-3 w-3" aria-hidden />
+                            <div className="pointer-events-none absolute left-1.5 top-1.5 z-10">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-md">
+                                <MessageSquare className="h-3 w-3" strokeWidth={2.25} aria-hidden />
                                 {f.commentCount}
                               </span>
                             </div>
                           ) : null}
                           {isPdfFile(f) || isIfcFile(f) ? (
-                            <div className="pointer-events-none absolute bottom-1 left-1 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/95 shadow-md ring-1 ring-slate-200/80 sm:bottom-1.5 sm:left-1.5 sm:h-7 sm:w-7">
+                            <div className="pointer-events-none absolute bottom-1.5 left-1.5 z-10 drop-shadow-md">
                               {isPdfFile(f) ? (
-                                <PdfFileIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                <PdfFileIcon className="h-6 w-6 rounded-[5px]" />
                               ) : (
                                 <span className="relative inline-flex">
-                                  <IfcFileIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  <IfcFileIcon className="h-6 w-6 rounded-[5px]" />
                                   {ifcStatusSpinning(ifcModelStatus?.(f)) ? (
-                                    <Loader2
-                                      className="absolute -right-1 -top-1 h-2.5 w-2.5 animate-spin text-[var(--enterprise-primary)] sm:h-3 sm:w-3"
-                                      aria-hidden
-                                    />
+                                    <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--enterprise-surface)] shadow-sm ring-1 ring-[var(--enterprise-border)]">
+                                      <Loader2
+                                        className="h-2.5 w-2.5 animate-spin text-[var(--enterprise-primary)]"
+                                        aria-hidden
+                                      />
+                                    </span>
                                   ) : null}
                                 </span>
                               )}
                             </div>
                           ) : null}
+                          <div className="absolute bottom-1.5 right-1.5 z-20 opacity-100 transition duration-150 lg:translate-y-0.5 lg:opacity-0 lg:group-hover:translate-y-0 lg:group-hover:opacity-100 lg:group-focus-within:translate-y-0 lg:group-focus-within:opacity-100">
+                            <div className="flex items-center gap-0.5 rounded-lg bg-[var(--enterprise-surface)]/92 p-0.5 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!onOpenViewer) return;
+                                  onOpenViewer(f);
+                                }}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[var(--enterprise-primary)] text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50"
+                                disabled={!onOpenViewer}
+                                title="Open"
+                                aria-label={`Open ${f.name}`}
+                              >
+                                <Eye className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenFile(f);
+                                }}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+                                title="Details"
+                                aria-label={`Open details for ${f.name}`}
+                              >
+                                <Info className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="absolute right-1.5 top-1.5 z-20 opacity-100 transition duration-150 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100">
+                            <button
+                              type="button"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--enterprise-surface)]/92 text-[var(--enterprise-text-muted)] shadow-md ring-1 ring-black/5 backdrop-blur-sm transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
+                              disabled={deletingKey === `file:${f.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void onDeleteFile(f);
+                              }}
+                              aria-label={`Delete ${f.name}`}
+                            >
+                              {deletingKey === `file:${f.id}` ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                              )}
+                            </button>
+                          </div>
                         </div>
-                        <div className="border-t border-slate-100 bg-slate-50/50 p-1.5 sm:p-2.5">
-                          <p className="truncate text-[10px] font-normal leading-tight text-[var(--enterprise-text)] sm:text-[13px] sm:leading-tight">
+                        <div className="space-y-0.5 px-2 py-1.5">
+                          <p
+                            className="truncate text-xs font-medium leading-snug text-[var(--enterprise-text)]"
+                            title={fileExplorerDisplayName(f)}
+                          >
                             {fileExplorerDisplayName(f)}
                           </p>
                           {searchActive ? (
                             <SearchPathHint path={folderPathLabel(project.folders, f.folderId)} />
                           ) : null}
-                          <p className="mt-0.5 truncate text-[8px] text-slate-500 sm:mt-1 sm:text-[10px]">
+                          <p className="truncate text-[10px] leading-tight text-[var(--enterprise-text-muted)]">
                             {displayVer ? (
                               <>
-                                <span className="font-medium text-slate-600">
-                                  {`Rev ${displayVer.version} · v${displayVer.version}`}
-                                </span>
-                                <span className="text-slate-300"> · </span>
-                                <span>{size}</span>
+                                <span className="tabular-nums">v{displayVer.version}</span>
+                                <span className="mx-0.5 text-[var(--enterprise-border)]">·</span>
+                                <span className="tabular-nums">{size}</span>
                               </>
                             ) : (
                               "—"
                             )}
+                            {disciplines.length > 0 ? (
+                              <>
+                                <span className="mx-0.5 text-[var(--enterprise-border)]">·</span>
+                                <span>{disciplines[0]}</span>
+                              </>
+                            ) : null}
                           </p>
-                          {(f.disciplines ?? []).length > 0 ? (
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {(f.disciplines ?? []).slice(0, 2).map((discipline) => (
-                                <span
-                                  key={`${f.id}-${discipline}`}
-                                  className="enterprise-badge-info rounded-md px-1.5 py-0.5 text-[9px]"
-                                >
-                                  {discipline}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
                           {renderIfcActions(f, true)}
-                          <div className="mt-2 flex items-center justify-end gap-0.5 border-t border-[var(--enterprise-border)]/60 pt-2">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!onOpenViewer) return;
-                                onOpenViewer(f);
-                              }}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] disabled:opacity-50"
-                              disabled={!onOpenViewer}
-                              title="Open"
-                              aria-label={`Open ${f.name}`}
-                            >
-                              <Eye className="h-4 w-4" aria-hidden />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenFile(f);
-                              }}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
-                              title="Details"
-                              aria-label={`Open details for ${f.name}`}
-                            >
-                              <FileText className="h-4 w-4" aria-hidden />
-                            </button>
-                          </div>
                         </div>
                       </div>
                       {versionUi && sv.length > 1 && onFileVersionPick ? (
                         <div
-                          className="border-t border-slate-100 px-1.5 pb-1.5 pt-1 sm:px-2 sm:pb-2"
+                          className="border-t border-[var(--enterprise-border)]/70 px-1.5 py-1"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <label
-                            htmlFor={`file-version-${f.id}`}
-                            className="mb-0.5 block text-[8px] font-medium uppercase tracking-wide text-slate-400 sm:text-[9px]"
-                          >
-                            Open revision
-                          </label>
                           <select
                             id={`file-version-${f.id}`}
-                            className="w-full rounded-md border border-slate-200/90 bg-white py-0.5 pl-1 pr-5 text-[9px] text-[var(--enterprise-text)] shadow-sm sm:py-1 sm:pl-1.5 sm:pr-6 sm:text-[10px]"
+                            className="w-full rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] py-0.5 pl-1.5 pr-5 text-[10px] text-[var(--enterprise-text)]"
                             value={String(selectedVersionForFile(f))}
                             onChange={(e) => {
                               onFileVersionPick(f.id, Number(e.target.value));
@@ -670,30 +662,12 @@ export function FileExplorerContent({
                           >
                             {sv.map((ver) => (
                               <option key={ver.id} value={String(ver.version)}>
-                                v{ver.version} ({formatBytes(ver.sizeBytes)})
+                                v{ver.version} · {formatBytes(ver.sizeBytes)}
                               </option>
                             ))}
                           </select>
                         </div>
                       ) : null}
-                      <div className="absolute right-1 top-1 z-20 sm:right-1.5 sm:top-1.5">
-                        <button
-                          type="button"
-                          className="rounded-md bg-white/95 p-1 text-slate-500 shadow-sm ring-1 ring-slate-200/80 transition hover:bg-red-50 hover:text-red-600"
-                          disabled={deletingKey === `file:${f.id}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void onDeleteFile(f);
-                          }}
-                          aria-label={`Delete ${f.name}`}
-                        >
-                          {deletingKey === `file:${f.id}` ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
                     </div>
                   );
                 },

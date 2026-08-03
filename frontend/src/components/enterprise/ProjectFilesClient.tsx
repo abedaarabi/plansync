@@ -41,7 +41,6 @@ import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseRespon
 import { ProjectFileImageLightbox } from "./ProjectFileImageLightbox";
 import { UploadDrawingsWizard } from "./UploadDrawingsWizard";
 import { BimActiveJobsBanner } from "@/components/enterprise/BimActiveJobsBanner";
-import { MapDrawingsSlideOver } from "./MapDrawingsSlideOver";
 import {
   fetchBimPublishSummary,
   fetchBimStatus,
@@ -69,6 +68,7 @@ import {
   filterByName,
   folderBreadcrumb,
   sortedVersions,
+  type FileExplorerInsightsAction,
 } from "@/components/file-explorer";
 import { folderSubtreeIds, isInFolderSubtree } from "@/lib/folderSubtree";
 import { FilesOverview } from "@/components/enterprise/FilesOverview";
@@ -214,6 +214,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [overviewFilter, setOverviewFilter] = useState<FilesOverviewFilter>("ALL");
+  const [insightsToolbar, setInsightsToolbar] = useState<FileExplorerInsightsAction | null>(null);
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const [federationIfcIds, setFederationIfcIds] = useState<Set<string>>(() => new Set());
   const [isDragOver, setIsDragOver] = useState(false);
@@ -223,10 +224,6 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   const [uploadWizardOpen, setUploadWizardOpen] = useState(false);
   const [uploadWizardInitialFiles, setUploadWizardInitialFiles] = useState<File[]>([]);
   const [uploadWizardFolderId, setUploadWizardFolderId] = useState<string | null>(folderId);
-  const [mapDrawingsTarget, setMapDrawingsTarget] = useState<{
-    file: CloudFile;
-    fileVersionId: string;
-  } | null>(null);
   const [bimPublishCache, setBimPublishCache] = useState<Record<string, BimPublishSummary>>({});
   const [bimStatusCache, setBimStatusCache] = useState<Record<string, BimConversionStatus>>({});
   /** Versions that returned no BIM status (404) — don't keep refetching. */
@@ -547,25 +544,6 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     const pick = fileVersionPick[file.id];
     const v = pick != null && sorted.some((x) => x.version === pick) ? pick : fallback;
     return sorted.find((x) => x.version === v) ?? sorted[0] ?? null;
-  }
-
-  function openMapDrawings(file: CloudFile) {
-    const verRow = selectedFileVersionRow(file);
-    if (!verRow) return;
-    setMapDrawingsTarget({ file, fileVersionId: verRow.id });
-  }
-
-  function openAlignCoordinates(file: CloudFile) {
-    const verRow = selectedFileVersionRow(file);
-    if (!verRow) return;
-    const q = new URLSearchParams({
-      fileId: file.id,
-      name: file.name,
-      projectId,
-      fileVersionId: verRow.id,
-      align: "1",
-    });
-    openBimViewer(`/bim-viewer?${q.toString()}`);
   }
 
   async function loadBimStatus(fileVersionId: string) {
@@ -1171,6 +1149,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         project={project}
         filter={overviewFilter}
         onFilterChange={setOverviewFilter}
+        onInsightsToolbarChange={setInsightsToolbar}
         storageUsedBytes={
           primary?.workspace.storageUsedBytes != null
             ? Number(primary.workspace.storageUsedBytes)
@@ -1209,6 +1188,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           uploadInputId={UPLOAD_INPUT_ID}
           onImportFromCloud={canUpload ? () => setCloudImportOpen(true) : undefined}
           onOpenFolderTree={() => setMobileFolderTreeOpen(true)}
+          insights={insightsToolbar ?? undefined}
         />
 
         <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -1279,8 +1259,6 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             onToggleFederationIfc={toggleFederationIfc}
             ifcPublishBadge={ifcPublishBadgeLabel}
             ifcModelStatus={ifcModelStatusForFile}
-            onMapIfcDrawings={canUpload ? openMapDrawings : undefined}
-            onAlignIfcCoordinates={openAlignCoordinates}
             onLoadIfcPublishMeta={loadIfcPublishBadge}
           />
         </div>
@@ -1714,20 +1692,6 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           projectId={projectId}
           folderId={uploadWizardFolderId}
           existingFiles={project.files.filter((f) => f.folderId === uploadWizardFolderId)}
-        />
-      ) : null}
-      {wid && project && mapDrawingsTarget ? (
-        <MapDrawingsSlideOver
-          open
-          onClose={() => {
-            setMapDrawingsTarget(null);
-            void invalidate();
-          }}
-          projectId={projectId}
-          workspaceId={wid}
-          ifcFile={mapDrawingsTarget.file}
-          ifcFileVersionId={mapDrawingsTarget.fileVersionId}
-          folders={project.folders}
         />
       ) : null}
       {imageLightbox ? (
