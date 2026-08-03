@@ -372,6 +372,10 @@ function toOmAssetJson(a: OmAssetRowDb) {
   const {
     occupantScanSecret,
     imageS3Key,
+    imageMimeType: _imageMimeType,
+    imageFileName: _imageFileName,
+    // BigInt — must not be spread into JSON (throws "Do not know how to serialize a BigInt").
+    imageSizeBytes: _imageSizeBytes,
     installDate,
     warrantyExpires,
     lastServiceAt,
