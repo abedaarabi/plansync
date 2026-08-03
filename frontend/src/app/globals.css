@@ -2964,6 +2964,16 @@ button:active:not(:disabled),
     background: color-mix(in srgb, var(--enterprise-sidebar-active-bg) 85%, transparent);
     box-shadow: none;
   }
+
+  /* Collapsed rail is only ~72px — hide scrollbar gutter; scroll still works */
+  [data-sidebar-collapsed="true"] .enterprise-sidebar-scrollbar {
+    scrollbar-width: none;
+  }
+
+  [data-sidebar-collapsed="true"] .enterprise-sidebar-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
 }
 
 .enterprise-breadcrumb-pill {

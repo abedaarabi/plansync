@@ -611,7 +611,9 @@ export function EnterpriseSidebar({
       {/* Navigation */}
       <nav
         className={`flex min-h-0 flex-1 flex-col gap-1 px-2.5 pt-0.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-3 ${
-          useTwoLevelNav ? "overflow-hidden" : "overflow-y-auto"
+          useTwoLevelNav
+            ? "overflow-hidden"
+            : "enterprise-scrollbar enterprise-sidebar-scrollbar overflow-y-auto"
         }`}
         aria-label={t("mainNav")}
       >
@@ -744,7 +746,7 @@ export function EnterpriseSidebar({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-0 overflow-y-auto">
+          <div className="flex flex-col gap-0">
             {
               // fallow-ignore-next-line complexity
               SIDEBAR_NAV_PRIMARY.map((section, sectionIndex) => (
