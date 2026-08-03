@@ -9,9 +9,10 @@ import type { BimLoqReport } from "./types.js";
 import { notifyBimJobEvent } from "./bimJobNotify.js";
 import { persistElementVersionDiff } from "./elementVersionDiff.js";
 import { findPriorFileVersionId, tryAliasIdenticalIfcVersion } from "./ifcVersionAlias.js";
-import { registerMonolithicGeometryTile } from "./geometryManifest.js";
+import { registerGeometryTiles, registerMonolithicGeometryTile } from "./geometryManifest.js";
 import { hashBufferSha256 } from "./metadataHash.js";
 import { assertIfcBytesIntact } from "./ifcBytes.js";
+import { convertIfcToFragmentsWithTiles } from "./fragmentsConvert.js";
 
 type JobPhase = "summary" | "full" | "diff" | "fragments";
 
@@ -73,7 +74,57 @@ export async function processBimConversion(
   });
   if (!fv) throw new Error("File version not found");
 
-  if (fv.bimConversionStatus === "ready" && fv.quantityIndexS3Key) {
+  if (fv.bimConversionStatus === "ready" && fv.quantityIndexS3Key && fv.fragmentsS3Key) {
+    return;
+  }
+  // Index ready but geometry missing — only run fragments phase.
+  if (fv.bimConversionStatus === "ready" && fv.quantityIndexS3Key && !fv.fragmentsS3Key) {
+    try {
+      const obj = await getObjectStream(env, fv.s3Key);
+      if (!obj.ok) throw new Error(obj.error);
+      const buf = await webStreamToBuffer(obj.stream);
+      const ifcBytes = new Uint8Array(buf);
+      assertIfcBytesIntact(ifcBytes, fv.file.name);
+      const priorFileVersionId = await findPriorFileVersionId(fv.fileId, fv.version);
+      void updateJobProgress(jobRunId, 90, "fragments");
+      const converted = await convertIfcToFragmentsWithTiles(ifcBytes, (fraction) => {
+        void updateJobProgress(jobRunId, Math.min(99, 90 + Math.floor(fraction * 9)), "fragments");
+      });
+      await storeConvertedFragments(env, {
+        fileVersionId,
+        workspaceId: fv.file.project.workspaceId,
+        projectId: fv.file.project.id,
+        fileId: fv.file.id,
+        monolithic: converted.monolithic,
+        tiles: converted.tiles,
+        priorFileVersionId,
+      });
+      if (jobRunId) {
+        await prisma.jobRun.update({
+          where: { id: jobRunId },
+          data: {
+            status: "SUCCEEDED",
+            finishedAt: new Date(),
+            resultJson: { progress: 100, phase: "fragments", fragmentsReady: true },
+          },
+        });
+      }
+      let notifyUserId: string | null = null;
+      if (jobRunId) {
+        const job = await prisma.jobRun.findUnique({
+          where: { id: jobRunId },
+          select: { createdById: true },
+        });
+        notifyUserId = job?.createdById ?? null;
+      }
+      if (notifyUserId) {
+        await notifyBimJobEvent("bim.geometry_ready", {
+          ...notifyCtx(env, fv, notifyUserId, new Date()),
+        });
+      }
+    } catch (fragErr) {
+      console.error("[bim.convert] fragments-only pass failed", fileVersionId, fragErr);
+    }
     return;
   }
   if (
@@ -235,7 +286,7 @@ export async function processBimConversion(
       elements: index.elements,
     });
 
-    void updateJobProgress(jobRunId, 95, "diff");
+    void updateJobProgress(jobRunId, 88, "diff");
 
     await prisma.fileVersion.update({
       where: { id: fileVersionId },
@@ -253,6 +304,35 @@ export async function processBimConversion(
       });
     }
 
+    let fragmentsReady = Boolean(fv.fragmentsS3Key);
+    if (!fragmentsReady) {
+      try {
+        void updateJobProgress(jobRunId, 90, "fragments");
+        const converted = await convertIfcToFragmentsWithTiles(ifcBytes, (fraction, phase) => {
+          const pct = Math.min(99, 90 + Math.floor(fraction * 9));
+          void updateJobProgress(jobRunId, pct, phase === "tiles" ? "fragments" : "fragments");
+        });
+        await storeConvertedFragments(env, {
+          fileVersionId,
+          workspaceId,
+          projectId,
+          fileId,
+          monolithic: converted.monolithic,
+          tiles: converted.tiles,
+          priorFileVersionId,
+        });
+        fragmentsReady = true;
+        if (notifyUserId) {
+          await notifyBimJobEvent("bim.geometry_ready", {
+            ...notifyCtx(env, fv, notifyUserId, jobStartedAt),
+          });
+        }
+      } catch (fragErr) {
+        console.error("[bim.convert] server fragments failed", fileVersionId, fragErr);
+        void updateJobProgress(jobRunId, 99, "full");
+      }
+    }
+
     if (jobRunId) {
       await prisma.jobRun.update({
         where: { id: jobRunId },
@@ -261,10 +341,11 @@ export async function processBimConversion(
           finishedAt: new Date(),
           resultJson: {
             progress: 100,
-            phase: "full",
+            phase: fragmentsReady ? "fragments" : "full",
             quantityIndexS3Key: indexKey,
             elementCount: index.elements.length,
             loq: loqReport,
+            fragmentsReady,
           },
         },
       });
@@ -303,6 +384,55 @@ export async function processBimConversion(
     }
     throw err;
   }
+}
+
+async function storeConvertedFragments(
+  env: Env,
+  opts: {
+    fileVersionId: string;
+    workspaceId: string;
+    projectId: string;
+    fileId: string;
+    monolithic: Buffer;
+    tiles: {
+      id: string;
+      buffer: Buffer;
+      bounds: [number, number, number, number, number, number];
+      guidCount: number;
+    }[];
+    priorFileVersionId?: string | null;
+  },
+): Promise<string> {
+  const key = bimFragmentsKey(opts.workspaceId, opts.projectId, opts.fileId, opts.fileVersionId);
+  const put = await putObjectBuffer(env, key, opts.monolithic, "application/octet-stream");
+  if (!put.ok) throw new Error(put.error);
+
+  const multi = opts.tiles.length > 1;
+  await registerGeometryTiles({
+    env,
+    workspaceId: opts.workspaceId,
+    projectId: opts.projectId,
+    fileId: opts.fileId,
+    fileVersionId: opts.fileVersionId,
+    monolithic: !multi,
+    priorFileVersionId: opts.priorFileVersionId,
+    tiles: multi
+      ? opts.tiles
+      : [
+          {
+            id: "0_0_0",
+            buffer: opts.monolithic,
+            bounds: [0, 0, 0, 0, 0, 0],
+            guidCount: 0,
+          },
+        ],
+  });
+
+  await prisma.fileVersion.update({
+    where: { id: opts.fileVersionId },
+    data: { fragmentsS3Key: key },
+  });
+  return key;
 }
 
 /** Stores client-uploaded Fragments buffer on S3. */

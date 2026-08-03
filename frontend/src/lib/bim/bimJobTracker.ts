@@ -95,13 +95,22 @@ export function jobPhaseFromStatus(status: {
   quantityIndexSummaryReady: boolean;
   quantityIndexReady: boolean;
   bimPublishedAt?: string | null;
+  pipelinePhase?: string | null;
 }): BimJobPhase {
   if (status.conversionStatus === "failed") return "failed";
   if (status.bimPublishedAt && status.fragmentsReady) return "published";
   if (status.bimPublishedAt && !status.fragmentsReady) return "converting_geometry";
 
+  // Server is actively building Fragments / tiles after the quantity index.
+  if (
+    !status.fragmentsReady &&
+    (status.pipelinePhase === "fragments" ||
+      (status.quantityIndexReady && status.conversionStatus === "running"))
+  ) {
+    return "converting_geometry";
+  }
+
   // Geometry or full index ready → processing is done (publish is optional).
-  // Previously fragmentsReady + !quantityIndexReady stayed on converting_geometry forever.
   if (status.fragmentsReady || status.quantityIndexReady || status.conversionStatus === "ready") {
     return "ready_to_publish";
   }

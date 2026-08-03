@@ -287,6 +287,33 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     });
   });
 
+  r.get("/file-versions/:fileVersionId/bim/geometry-tiles/:contentHash", needUser, async (c) => {
+    const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"));
+    if ("response" in auth) return auth.response;
+    const { fv } = auth;
+    const contentHash = c.req.param("contentHash");
+    if (!/^[a-f0-9]{64}$/i.test(contentHash)) {
+      return c.json({ error: "Invalid tile hash" }, 400);
+    }
+
+    const link = await prisma.bimVersionTile.findFirst({
+      where: { fileVersionId: fv.id, contentHash },
+      include: { geometryTile: true },
+    });
+    if (!link?.geometryTile) return c.json({ error: "Tile not found" }, 404);
+
+    const obj = await getObjectStream(env, link.geometryTile.s3Key);
+    if (!obj.ok) return c.json({ error: obj.error }, obj.error === "S3 not configured" ? 503 : 502);
+    const length = obj.contentLength ?? Number(link.geometryTile.byteLength);
+    return new Response(obj.stream, {
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "private, max-age=3600",
+        ...(Number.isFinite(length) && length > 0 ? { "Content-Length": String(length) } : {}),
+      },
+    });
+  });
+
   r.put("/file-versions/:fileVersionId/bim/fragments", needUser, async (c) => {
     const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"));
     if ("response" in auth) return auth.response;

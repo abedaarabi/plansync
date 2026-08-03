@@ -817,13 +817,33 @@ export class BimEngine {
     member: BimFederationMember,
     opts?: { fitView?: boolean },
   ): Promise<void> {
-    const modelId = buildModelId(member);
+    await this.addFragmentTile(buffer, member, undefined, opts);
+  }
+
+  /**
+   * Loads one geometry tile for a federation member (storey / partition).
+   * Tile model ids are `${memberId}__${tileId}` so GUID maps cover all tiles.
+   */
+  async addFragmentTile(
+    buffer: ArrayBuffer,
+    member: BimFederationMember,
+    tileId?: string,
+    opts?: { fitView?: boolean; skipPostProcess?: boolean },
+  ): Promise<void> {
+    const baseId = buildModelId(member);
+    const modelId = tileId ? `${baseId}__${tileId}` : baseId;
     if (this.modelRegistry.has(modelId)) return;
     await this.prepareFederationLoad();
     const fragments = this.mustComponents().get(OBC.FragmentsManager);
     const model = await fragments.core.load(buffer, { modelId });
-    this.registerModel(model, member);
-    await this.afterModelAdded(opts?.fitView ?? false);
+    this.registerModel(model, member, modelId);
+    if (!opts?.skipPostProcess) {
+      await this.afterModelAdded(opts?.fitView ?? false);
+    } else {
+      this.attachModel(model);
+      model.object.visible = true;
+      await fragments.core.update(true);
+    }
   }
 
   /**
@@ -885,12 +905,17 @@ export class BimEngine {
     fragments.core.baseCoordinates = await primary.model.getCoordinates();
   }
 
-  private registerModel(model: FRAGS.FragmentsModel, member: BimFederationMember): void {
-    const modelId = buildModelId(member);
+  private registerModel(
+    model: FRAGS.FragmentsModel,
+    member: BimFederationMember,
+    modelId = buildModelId(member),
+  ): void {
     this.modelRegistry.set(modelId, { ...member, model, visible: true });
     this.renderEffects?.setModelCount(this.modelRegistry.size);
-    if (!this.primaryModelId) {
-      this.primaryModelId = modelId;
+    const baseId = buildModelId(member);
+    if (!this.primaryModelId || this.primaryModelId === baseId) {
+      // Prefer the base (monolithic) id; first tile becomes primary until then.
+      if (!this.primaryModelId) this.primaryModelId = modelId;
     }
     this.modelId = this.primaryModelId;
     this.model = this.modelRegistry.get(this.primaryModelId)?.model ?? model;

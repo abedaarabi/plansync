@@ -22,18 +22,125 @@ type GeometryManifest = {
 
 const DEFAULT_BOUNDS: GeometryManifest["bounds"] = [0, 0, 0, 0, 0, 0];
 
-/** Register monolithic fragments as a single tile (Phase 2 migrates to spatial partition). */
-export async function registerMonolithicGeometryTile(opts: {
+async function upsertGeometryTileBlob(opts: {
+  env: Env;
+  workspaceId: string;
+  contentHash: string;
+  buffer: Buffer;
+  bounds: GeometryManifest["bounds"];
+  priorFileVersionId?: string | null;
+}): Promise<void> {
+  let reused = false;
+  if (opts.priorFileVersionId) {
+    const priorTile = await prisma.bimVersionTile.findFirst({
+      where: {
+        fileVersionId: opts.priorFileVersionId,
+        contentHash: opts.contentHash,
+      },
+    });
+    if (priorTile) {
+      await prisma.bimGeometryTile.update({
+        where: { contentHash: opts.contentHash },
+        data: { refCount: { increment: 1 } },
+      });
+      reused = true;
+    }
+  }
+
+  if (reused) return;
+
+  const existing = await prisma.bimGeometryTile.findUnique({
+    where: { contentHash: opts.contentHash },
+  });
+  if (existing) {
+    await prisma.bimGeometryTile.update({
+      where: { contentHash: opts.contentHash },
+      data: { refCount: { increment: 1 } },
+    });
+    return;
+  }
+
+  const tileKey = bimGeometryTileKey(opts.workspaceId, opts.contentHash);
+  const put = await putObjectBuffer(opts.env, tileKey, opts.buffer, "application/octet-stream");
+  if (!put.ok) throw new Error(put.error);
+  await prisma.bimGeometryTile.create({
+    data: {
+      contentHash: opts.contentHash,
+      s3Key: tileKey,
+      byteLength: BigInt(opts.buffer.byteLength),
+      bounds: opts.bounds,
+      refCount: 1,
+    },
+  });
+}
+
+/** Register one or more geometry tiles and write the version manifest. */
+export async function registerGeometryTiles(opts: {
   env: Env;
   workspaceId: string;
   projectId: string;
   fileId: string;
   fileVersionId: string;
-  fragmentsBuffer: Buffer;
+  tiles: {
+    id: string;
+    buffer: Buffer;
+    bounds?: GeometryManifest["bounds"];
+    guidCount?: number;
+  }[];
+  monolithic: boolean;
   priorFileVersionId?: string | null;
 }): Promise<string> {
-  const contentHash = hashBufferSha256(opts.fragmentsBuffer);
-  const tileKey = bimGeometryTileKey(opts.workspaceId, contentHash);
+  if (opts.tiles.length === 0) throw new Error("No geometry tiles to register");
+
+  const manifestTiles: GeometryManifestTile[] = [];
+  let unionBounds: GeometryManifest["bounds"] | null = null;
+
+  for (const tile of opts.tiles) {
+    const contentHash = hashBufferSha256(tile.buffer);
+    const bounds = tile.bounds ?? DEFAULT_BOUNDS;
+    await upsertGeometryTileBlob({
+      env: opts.env,
+      workspaceId: opts.workspaceId,
+      contentHash,
+      buffer: tile.buffer,
+      bounds,
+      priorFileVersionId: opts.priorFileVersionId,
+    });
+
+    manifestTiles.push({
+      id: tile.id,
+      bounds,
+      contentHash,
+      byteLength: tile.buffer.byteLength,
+      guidCount: tile.guidCount ?? 0,
+    });
+
+    await prisma.bimVersionTile.upsert({
+      where: {
+        fileVersionId_tileId: { fileVersionId: opts.fileVersionId, tileId: tile.id },
+      },
+      create: {
+        fileVersionId: opts.fileVersionId,
+        tileId: tile.id,
+        contentHash,
+      },
+      update: { contentHash },
+    });
+
+    if (!unionBounds) {
+      unionBounds = [...bounds];
+    } else {
+      unionBounds = [
+        Math.min(unionBounds[0], bounds[0]),
+        Math.min(unionBounds[1], bounds[1]),
+        Math.min(unionBounds[2], bounds[2]),
+        Math.max(unionBounds[3], bounds[3]),
+        Math.max(unionBounds[4], bounds[4]),
+        Math.max(unionBounds[5], bounds[5]),
+      ];
+    }
+  }
+
   const manifestKey = bimGeometryManifestKey(
     opts.workspaceId,
     opts.projectId,
@@ -41,66 +148,12 @@ export async function registerMonolithicGeometryTile(opts: {
     opts.fileVersionId,
   );
 
-  let reused = false;
-  if (opts.priorFileVersionId) {
-    const priorTile = await prisma.bimVersionTile.findFirst({
-      where: {
-        fileVersionId: opts.priorFileVersionId,
-        contentHash,
-      },
-    });
-    if (priorTile) {
-      await prisma.bimGeometryTile.update({
-        where: { contentHash },
-        data: { refCount: { increment: 1 } },
-      });
-      reused = true;
-    }
-  }
-
-  if (!reused) {
-    const existing = await prisma.bimGeometryTile.findUnique({
-      where: { contentHash },
-    });
-    if (existing) {
-      await prisma.bimGeometryTile.update({
-        where: { contentHash },
-        data: { refCount: { increment: 1 } },
-      });
-    } else {
-      const put = await putObjectBuffer(
-        opts.env,
-        tileKey,
-        opts.fragmentsBuffer,
-        "application/octet-stream",
-      );
-      if (!put.ok) throw new Error(put.error);
-      await prisma.bimGeometryTile.create({
-        data: {
-          contentHash,
-          s3Key: tileKey,
-          byteLength: BigInt(opts.fragmentsBuffer.byteLength),
-          bounds: DEFAULT_BOUNDS,
-          refCount: 1,
-        },
-      });
-    }
-  }
-
   const manifest: GeometryManifest = {
     schemaVersion: 1,
     fileVersionId: opts.fileVersionId,
-    monolithic: true,
-    bounds: DEFAULT_BOUNDS,
-    tiles: [
-      {
-        id: "0_0_0",
-        bounds: DEFAULT_BOUNDS,
-        contentHash,
-        byteLength: opts.fragmentsBuffer.byteLength,
-        guidCount: 0,
-      },
-    ],
+    monolithic: opts.monolithic,
+    bounds: opts.monolithic ? DEFAULT_BOUNDS : (unionBounds ?? DEFAULT_BOUNDS),
+    tiles: manifestTiles,
   };
 
   const manifestPut = await putObjectBuffer(
@@ -110,18 +163,6 @@ export async function registerMonolithicGeometryTile(opts: {
     "application/json",
   );
   if (!manifestPut.ok) throw new Error(manifestPut.error);
-
-  await prisma.bimVersionTile.upsert({
-    where: {
-      fileVersionId_tileId: { fileVersionId: opts.fileVersionId, tileId: "0_0_0" },
-    },
-    create: {
-      fileVersionId: opts.fileVersionId,
-      tileId: "0_0_0",
-      contentHash,
-    },
-    update: { contentHash },
-  });
 
   await prisma.fileVersion.update({
     where: { id: opts.fileVersionId },
@@ -137,4 +178,33 @@ export async function registerMonolithicGeometryTile(opts: {
   });
 
   return manifestKey;
+}
+
+/** Register monolithic fragments as a single tile (Phase 2 migrates to spatial partition). */
+export async function registerMonolithicGeometryTile(opts: {
+  env: Env;
+  workspaceId: string;
+  projectId: string;
+  fileId: string;
+  fileVersionId: string;
+  fragmentsBuffer: Buffer;
+  priorFileVersionId?: string | null;
+}): Promise<string> {
+  return registerGeometryTiles({
+    env: opts.env,
+    workspaceId: opts.workspaceId,
+    projectId: opts.projectId,
+    fileId: opts.fileId,
+    fileVersionId: opts.fileVersionId,
+    monolithic: true,
+    priorFileVersionId: opts.priorFileVersionId,
+    tiles: [
+      {
+        id: "0_0_0",
+        buffer: opts.fragmentsBuffer,
+        bounds: DEFAULT_BOUNDS,
+        guidCount: 0,
+      },
+    ],
+  });
 }

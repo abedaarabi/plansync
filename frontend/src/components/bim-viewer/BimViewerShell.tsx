@@ -240,6 +240,8 @@ export function BimViewerShell(props: {
   const [loadPreviewUrl, setLoadPreviewUrl] = useState<string | null>(null);
   /** `convert` only after client IFC conversion starts; reopen uses fast fragments path. */
   const [loadPath, setLoadPath] = useState<"fast" | "convert">("fast");
+  const [loadRetryNonce, setLoadRetryNonce] = useState(0);
+  const [geometryStreaming, setGeometryStreaming] = useState(false);
   const lastLoadPhaseRef = useRef<Exclude<Phase, { kind: "ready" } | { kind: "error" }>>({
     kind: "resolving",
   });
@@ -640,10 +642,12 @@ export function BimViewerShell(props: {
     if (!viewportEl) return;
 
     let cancelled = false;
+    const abort = new AbortController();
     disposeModelThumbnailService();
     setPhase({ kind: "resolving" });
     setLoadPath("fast");
     setLoadPreviewUrl(null);
+    setGeometryStreaming(false);
 
     // fallow-ignore-next-line complexity
     void (async () => {
@@ -719,45 +723,65 @@ export function BimViewerShell(props: {
         setResolvedFileVersionId(primary?.fileVersionId ?? null);
         setResolvedProjectId(props.projectId);
 
+        let becameReady = false;
+        const markReadySoon = async () => {
+          if (cancelled || becameReady) return;
+          becameReady = true;
+          await engine.fitToView();
+          await engine.resizeViewport();
+          if (!cancelled) setPhase({ kind: "ready" });
+        };
+
         for (let i = 0; i < resolvedMembers.length; i++) {
           const member = resolvedMembers[i]!;
           if (cancelled) return;
-          setPhase({
-            kind: "downloading",
-            label: member.name,
-            index: i,
-            total: resolvedMembers.length,
-          });
+          if (!becameReady) {
+            setPhase({
+              kind: "downloading",
+              label: member.name,
+              index: i,
+              total: resolvedMembers.length,
+            });
+          } else {
+            setGeometryStreaming(true);
+          }
           await loadFederationMember(engine, member, {
             fitView: false,
+            signal: abort.signal,
             onDownloading: (fraction, bytesTotal) => {
-              if (!cancelled) {
-                setPhase({
-                  kind: "downloading",
-                  label: member.name,
-                  index: i,
-                  total: resolvedMembers.length,
-                  fraction,
-                  bytesTotal: bytesTotal ?? undefined,
-                });
-              }
+              if (cancelled || becameReady) return;
+              setPhase({
+                kind: "downloading",
+                label: member.name,
+                index: i,
+                total: resolvedMembers.length,
+                fraction,
+                bytesTotal: bytesTotal ?? undefined,
+              });
             },
             onConverting: (fraction) => {
-              if (!cancelled) {
-                setLoadPath("convert");
-                setPhase({ kind: "converting", fraction, label: member.name });
-              }
+              if (cancelled || becameReady) return;
+              setLoadPath("convert");
+              setPhase({ kind: "converting", fraction, label: member.name });
+            },
+            onFirstGeometry: async () => {
+              if (i === 0) await markReadySoon();
+              else if (!cancelled) setLoadedModels(engine.getLoadedModels());
             },
           });
           if (!cancelled) setLoadedModels(engine.getLoadedModels());
         }
 
         if (cancelled) return;
-        await engine.fitToView();
-        await engine.resizeViewport();
-        setPhase({ kind: "ready" });
+        if (!becameReady) {
+          await engine.fitToView();
+          await engine.resizeViewport();
+          setPhase({ kind: "ready" });
+        }
+        setGeometryStreaming(false);
       } catch (e) {
         if (!cancelled) {
+          setGeometryStreaming(false);
           setPhase({
             kind: "error",
             message: e instanceof Error ? e.message : "Could not load the model.",
@@ -768,6 +792,8 @@ export function BimViewerShell(props: {
 
     return () => {
       cancelled = true;
+      abort.abort();
+      setGeometryStreaming(false);
       const engine = engineRef.current;
       engineRef.current = null;
       setActiveEngine(null);
@@ -775,7 +801,14 @@ export function BimViewerShell(props: {
       engine?.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one engine per primary model session
-  }, [viewportEl, props.fileId, props.fileVersionId, props.fileName, props.projectId]);
+  }, [
+    viewportEl,
+    props.fileId,
+    props.fileVersionId,
+    props.fileName,
+    props.projectId,
+    loadRetryNonce,
+  ]);
 
   useEffect(() => {
     const members = federationMembers.filter((m) => m.fileVersionId);
@@ -2926,13 +2959,31 @@ export function BimViewerShell(props: {
             <p className="max-w-sm text-center text-[12px] text-[var(--bim-text-muted)]">
               {phase.message}
             </p>
-            <button
-              type="button"
-              onClick={() => router.push(backHref)}
-              className="bim-focus-ring rounded-md bg-[var(--bim-accent)] px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-[var(--bim-accent-hover)]"
-            >
-              Back to files
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPhase({ kind: "resolving" });
+                  setLoadRetryNonce((n) => n + 1);
+                }}
+                className="bim-focus-ring rounded-md bg-[var(--bim-accent)] px-4 py-2 text-[13px] font-medium text-white transition-colors duration-150 hover:bg-[var(--bim-accent-hover)]"
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push(backHref)}
+                className="bim-focus-ring rounded-md border border-[var(--bim-border)] bg-transparent px-4 py-2 text-[13px] font-medium text-[var(--bim-text)] transition-colors duration-150 hover:bg-[var(--bim-panel)]"
+              >
+                Back to files
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {geometryStreaming && phase.kind === "ready" ? (
+          <div className="pointer-events-none absolute bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-1/2 z-10 -translate-x-1/2 rounded-full border border-[var(--bim-border)] bg-[var(--bim-panel)]/95 px-3 py-1.5 text-[11px] text-[var(--bim-text-muted)] shadow-sm backdrop-blur-sm">
+            Loading remaining geometry…
           </div>
         ) : null}
 

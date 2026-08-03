@@ -113,7 +113,7 @@ export async function enqueueBimConversion(
   });
   if (!fv) throw new Error("File version not found");
 
-  if (fv.bimConversionStatus === "ready" && fv.quantityIndexS3Key) {
+  if (fv.bimConversionStatus === "ready" && fv.quantityIndexS3Key && fv.fragmentsS3Key) {
     return fv.bimConversionJobRunId ?? fileVersionId;
   }
 
