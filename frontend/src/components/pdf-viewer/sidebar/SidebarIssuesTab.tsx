@@ -326,6 +326,7 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
   );
 });
 
+// fallow-ignore-next-line complexity
 export function SidebarIssuesTab() {
   const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
@@ -748,7 +749,7 @@ export function SidebarIssuesTab() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+    <div className="flex w-full flex-col gap-2">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-1">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
           Sheet issues
@@ -863,7 +864,7 @@ export function SidebarIssuesTab() {
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:thin]">
+      <div className="w-full">
         {!issueCreateDraft && issuesPending ? (
           <p className="py-6 text-center text-[11px] text-[#64748B]">Loading…</p>
         ) : issues.length === 0 && !issueCreateDraft ? (

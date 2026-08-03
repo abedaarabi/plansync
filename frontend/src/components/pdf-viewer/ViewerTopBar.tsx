@@ -17,6 +17,7 @@ import {
   Search,
   Settings,
   SquareSplitHorizontal,
+  GitCompareArrows,
   Trash2,
   Undo2,
   UserX,
@@ -29,10 +30,15 @@ import {
   FileText,
   Keyboard,
   Library,
-  PanelLeft,
-  X,
 } from "lucide-react";
-import { fetchMe, fetchProject, patchMeViewerPresence, putViewerState } from "@/lib/api-client";
+import { useSearchParams } from "next/navigation";
+import {
+  fetchMe,
+  fetchProject,
+  fetchResolvedFileRevision,
+  patchMeViewerPresence,
+  putViewerState,
+} from "@/lib/api-client";
 import {
   defaultMeasureUnitForProject,
   type ProjectMeasurementSystem,
@@ -54,6 +60,7 @@ import { toast } from "sonner";
 import { useViewerCollabDesktop } from "@/hooks/useViewerCollabDesktop";
 import { ClearPersistedMarkupDialog } from "./ClearPersistedMarkupDialog";
 import { PdfSearchPopover } from "./PdfSearchPopover";
+import { RevisionCompareDialog } from "./RevisionCompareDialog";
 import { SheetExportDialog } from "./SheetExportDialog";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 
@@ -114,6 +121,7 @@ type TopBarProps = {
   exportCanvasRef?: RefObject<HTMLCanvasElement | null>;
 };
 
+// fallow-ignore-next-line complexity
 export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {}) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -153,6 +161,8 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   );
   const compareMode = useViewerStore((s) => s.compareMode);
   const setCompareMode = useViewerStore((s) => s.setCompareMode);
+  const revisionCompareActive = useViewerStore((s) => s.revisionCompareActive);
+  const exitRevisionCompare = useViewerStore((s) => s.exitRevisionCompare);
   const rightFlyout = useViewerStore((s) => s.rightFlyout);
   const toggleRightFlyout = useViewerStore((s) => s.toggleRightFlyout);
   const deleteAllMarkupsOnPage = useViewerStore((s) => s.deleteAllMarkupsOnPage);
@@ -160,8 +170,6 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const cloudFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
   const setMeasureUnit = useViewerStore((s) => s.setMeasureUnit);
-  const mobileLeftToolsOpen = useViewerStore((s) => s.mobileLeftToolsOpen);
-  const toggleMobileLeftTools = useViewerStore((s) => s.toggleMobileLeftTools);
 
   const queryClient = useQueryClient();
   const { data: me, isPending: mePending } = useQuery({
@@ -210,7 +218,17 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
   const [helpOpen, setHelpOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [revisionCompareDialogOpen, setRevisionCompareDialogOpen] = useState(false);
   const [clearMarkupDialogOpen, setClearMarkupDialogOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const viewerFileId = searchParams.get("fileId");
+
+  const { data: fileRevisionsMeta } = useQuery({
+    queryKey: qk.fileRevisions(viewerFileId ?? ""),
+    queryFn: () => fetchResolvedFileRevision(viewerFileId!),
+    enabled: Boolean(viewerFileId) && (revisionCompareDialogOpen || revisionCompareActive),
+    staleTime: 60_000,
+  });
   const [sheetExportOpen, setSheetExportOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [zoomStr, setZoomStr] = useState("100");
@@ -302,28 +320,6 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
           >
             PS
           </div>
-          {pdfUrl ? (
-            <button
-              type="button"
-              className={`viewer-focus-ring flex min-h-8 shrink-0 items-center justify-center rounded-md border border-[#334155] bg-[#1E293B] p-1.5 text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155] active:scale-[0.98] lg:hidden ${
-                mobileLeftToolsOpen
-                  ? "border-[var(--viewer-primary)]/50 bg-[#1e3a5f] text-white"
-                  : ""
-              }`}
-              aria-label={
-                mobileLeftToolsOpen ? "Close sheet tools sidebar" : "Open sheet tools sidebar"
-              }
-              aria-expanded={mobileLeftToolsOpen}
-              title={mobileLeftToolsOpen ? "Close tools" : "Draw, measure, pages, outline"}
-              onClick={() => toggleMobileLeftTools()}
-            >
-              {mobileLeftToolsOpen ? (
-                <X className="h-4 w-4 shrink-0" strokeWidth={2} />
-              ) : (
-                <PanelLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
-              )}
-            </button>
-          ) : null}
           {mePending ? (
             <button
               type="button"
@@ -567,15 +563,17 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                 </button>
                 <button
                   type="button"
-                  disabled={!pdfUrl}
+                  disabled={!pdfUrl || revisionCompareActive}
                   onClick={() => setCompareMode(!compareMode)}
                   title={
-                    compareMode
-                      ? "Exit compare mode"
-                      : "Compare before (clean PDF) and after (with markups)"
+                    revisionCompareActive
+                      ? "Exit revision compare first"
+                      : compareMode
+                        ? "Exit compare mode"
+                        : "Compare before (clean PDF) and after (with markups)"
                   }
                   aria-pressed={compareMode}
-                  aria-label="Compare"
+                  aria-label="Compare markups"
                   className={`viewer-focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-35 ${
                     compareMode
                       ? "viewer-toolbar-btn-active"
@@ -583,6 +581,30 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   }`}
                 >
                   <SquareSplitHorizontal className="h-4 w-4" strokeWidth={1.75} />
+                </button>
+                <button
+                  type="button"
+                  disabled={!pdfUrl || !viewerFileId || !cloudFileVersionId || compareMode}
+                  onClick={() => {
+                    if (revisionCompareActive) exitRevisionCompare();
+                    else setRevisionCompareDialogOpen(true);
+                  }}
+                  title={
+                    compareMode
+                      ? "Exit markup compare first"
+                      : revisionCompareActive
+                        ? "Exit revision compare"
+                        : "Compare two file revisions (magenta / cyan)"
+                  }
+                  aria-pressed={revisionCompareActive}
+                  aria-label="Compare revisions"
+                  className={`viewer-focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-35 ${
+                    revisionCompareActive
+                      ? "viewer-toolbar-btn-active"
+                      : "border-transparent bg-transparent text-[#94A3B8] hover:border-[#475569] hover:bg-[#1E293B] hover:text-[#F8FAFC]"
+                  }`}
+                >
+                  <GitCompareArrows className="h-4 w-4" strokeWidth={1.75} />
                 </button>
               </div>
             </>
@@ -1082,6 +1104,12 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
         )}
       </div>
 
+      <RevisionCompareDialog
+        open={revisionCompareDialogOpen}
+        onClose={() => setRevisionCompareDialogOpen(false)}
+        versions={fileRevisionsMeta?.versions ?? []}
+        currentFileVersionId={cloudFileVersionId}
+      />
       <KeyboardShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       <ClearPersistedMarkupDialog

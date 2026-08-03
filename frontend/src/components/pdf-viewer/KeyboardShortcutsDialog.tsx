@@ -9,9 +9,23 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
   {
     title: "Tools & modes",
     rows: [
-      ["Draw / Measure / Select / Pan / Zoom area", "Top bar or sidebar"],
+      ["Draw / Measure / Select / Pan / Zoom area", "Top bar or icon rail"],
       ["Zoom to rectangle", "Zoom area tool — drag on the sheet"],
       ["Undo / Redo", "Ctrl+Z / Ctrl+Shift+Z"],
+    ],
+  },
+  {
+    title: "Icon rail panels",
+    rows: [
+      ["Pages", "P"],
+      ["Outline", "O"],
+      ["Draw", "D"],
+      ["Measure", "M"],
+      ["Scale / calibrate", "S"],
+      ["Issues", "I"],
+      ["Live collab", "L"],
+      ["Takeoff", "T"],
+      ["Toggle open panel", "Same key again"],
     ],
   },
   {
@@ -40,6 +54,8 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
       ["Escape", "Cancel in-progress tool"],
       ["Toggle takeoff inventory height", "Ctrl+` · ⌘+J"],
       ["Collapse inventory (when its panel is focused)", "Escape"],
+      ["Compare markups (clean vs annotated)", "Top bar — split icon"],
+      ["Compare file revisions (magenta / cyan)", "Top bar — compare-revisions icon"],
     ],
   },
   {

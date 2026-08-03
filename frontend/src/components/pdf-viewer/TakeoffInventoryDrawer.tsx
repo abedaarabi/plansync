@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, X } from "lucide-react";
 import { BottomDrawer } from "./BottomDrawer";
 import type { BottomDrawerSnap } from "@/lib/bottomDrawerSnap";
 import { fileFingerprint } from "@/lib/sessionPersistence";
@@ -34,6 +34,9 @@ function TakeoffInventoryDrawerBody({
   const bumpTakeoffInventoryExpand = useViewerStore((s) => s.bumpTakeoffInventoryExpand);
   const setTool = useViewerStore((s) => s.setTool);
   const setTakeoffMode = useViewerStore((s) => s.setTakeoffMode);
+  const setTakeoffInventoryDrawerFromSidebar = useViewerStore(
+    (s) => s.setTakeoffInventoryDrawerFromSidebar,
+  );
 
   const persisted = useMemo(
     () => (typeof window !== "undefined" ? loadInventoryDrawerState(fileFingerprintKey) : null),
@@ -231,6 +234,15 @@ function TakeoffInventoryDrawerBody({
               ) : (
                 <Maximize2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setTakeoffInventoryDrawerFromSidebar(false)}
+              title="Close inventory"
+              aria-label="Close inventory"
+              className="viewer-focus-ring inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#475569] bg-[#0f172a] text-[#e2e8f0] transition-colors hover:bg-[#1e293b]"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
             </button>
           </div>
         }

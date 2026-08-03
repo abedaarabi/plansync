@@ -6,6 +6,8 @@ export const qk = {
   folderStructureTemplates: (workspaceId: string) =>
     ["folderStructureTemplates", workspaceId] as const,
   project: (projectId: string) => ["project", projectId] as const,
+  /** File revision list for PDF revision compare picker. */
+  fileRevisions: (fileId: string) => ["file-revisions", fileId] as const,
   /** RBAC + module toggles for sidebar and shells */
   projectSession: (projectId: string) => ["projectSession", projectId] as const,
   projectApiKeys: (projectId: string) => ["projectApiKeys", projectId] as const,

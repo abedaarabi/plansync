@@ -3663,6 +3663,8 @@ export function v1Routes(
       fileVersionId: fv.id,
       version: fv.version,
       projectId: file.projectId,
+      /** Newest-first — used by PDF revision compare picker. */
+      versions: file.versions.map((x) => ({ id: x.id, version: x.version })),
     });
   });
 

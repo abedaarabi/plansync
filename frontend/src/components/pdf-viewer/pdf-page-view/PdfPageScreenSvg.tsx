@@ -30,7 +30,6 @@ export type PdfPageScreenSvgProps = {
   visibleAnnotations: Annotation[];
   selectedAnnotationIds: string[];
   screenArrowMarkerId: string;
-  screenArrowMarkerUrl: string;
   takeoffZonesForScreen: TakeoffZone[];
   takeoffItemsById: Map<string, TakeoffItem>;
   takeoffSelectedZoneIds: string[];
@@ -98,6 +97,7 @@ export type PdfPageScreenSvgProps = {
 };
 
 /** On-screen SVG overlay: snap highlights, committed markups, takeoff, selection chrome, measure/calibrate drafts. */
+// fallow-ignore-next-line complexity
 export function PdfPageScreenSvg(props: PdfPageScreenSvgProps) {
   const {
     pageIdx0,
@@ -111,7 +111,6 @@ export function PdfPageScreenSvg(props: PdfPageScreenSvgProps) {
     visibleAnnotations,
     selectedAnnotationIds,
     screenArrowMarkerId,
-    screenArrowMarkerUrl,
     takeoffZonesForScreen,
     takeoffItemsById,
     takeoffSelectedZoneIds,
@@ -175,6 +174,17 @@ export function PdfPageScreenSvg(props: PdfPageScreenSvgProps) {
       preserveAspectRatio="none"
     >
       <defs>
+        <marker
+          id={`${screenArrowMarkerId}-draft`}
+          markerWidth="10"
+          markerHeight="7"
+          refX="9"
+          refY="3.5"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <polygon points="0 0, 10 3.5, 0 7" fill={strokeColor} />
+        </marker>
         <filter
           id={`snap-pdf-path-highlight-${pageIdx0}`}
           x="-20%"
@@ -562,19 +572,17 @@ export function PdfPageScreenSvg(props: PdfPageScreenSvgProps) {
         />
       )}
       {lineMarkup && lineMarkup.b && (
-        <g style={markupShape === "arrow" ? { color: strokeColor } : undefined}>
-          <line
-            x1={lineMarkup.a.x * cssW}
-            y1={lineMarkup.a.y * cssH}
-            x2={lineMarkup.b.x * cssW}
-            y2={lineMarkup.b.y * cssH}
-            stroke={strokeColor}
-            strokeWidth={strokeWidth}
-            strokeDasharray="6 4"
-            opacity={0.9}
-            markerEnd={markupShape === "arrow" ? screenArrowMarkerUrl : undefined}
-          />
-        </g>
+        <line
+          x1={lineMarkup.a.x * cssW}
+          y1={lineMarkup.a.y * cssH}
+          x2={lineMarkup.b.x * cssW}
+          y2={lineMarkup.b.y * cssH}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeDasharray="6 4"
+          opacity={0.9}
+          markerEnd={markupShape === "arrow" ? `url(#${screenArrowMarkerId}-draft)` : undefined}
+        />
       )}
       {rectDrag &&
         markupShape === "cloud" &&

@@ -66,8 +66,8 @@ export type Tool =
   /** ACC-style quantity takeoff drawing on calibrated sheets */
   | "takeoff";
 
-/** High-level viewer intent — drives sidebar layout and tool visibility. */
-export type ViewerWorkspaceMode = "view" | "markup" | "issues" | "takeoff";
+/** High-level viewer intent — drives tool defaults when opening rail docks. */
+type ViewerWorkspaceMode = "view" | "markup" | "issues" | "takeoff";
 
 /** Active measurement geometry when Measure tool is on */
 export type MeasureKind = "line" | "area" | "angle" | "perimeter";
@@ -331,9 +331,6 @@ interface ViewerState {
   /** Primary workspace mode (View / Markup / Issues / Takeoff). */
   viewerWorkspaceMode: ViewerWorkspaceMode;
   setViewerWorkspaceMode: (mode: ViewerWorkspaceMode) => void;
-  /** Left sidebar width in px (260–360). */
-  viewerSidebarWidth: number;
-  setViewerSidebarWidth: (w: number) => void;
   /** Server issue id when the docked issue panel is in edit mode. */
   issueEditId: string | null;
   setIssueEditId: (id: string | null) => void;
@@ -364,13 +361,6 @@ interface ViewerState {
       | "sheetAi"
       | "collab",
   ) => void;
-  /**
-   * Left tools rail (Draw / Measure / Pages / …). Used below `lg` only — wide layouts always show the panel;
-   * this flag is ignored for layout at lg+.
-   */
-  mobileLeftToolsOpen: boolean;
-  setMobileLeftToolsOpen: (open: boolean) => void;
-  toggleMobileLeftTools: () => void;
   /** Side-by-side second page for plan/detail comparison */
   compareMode: boolean;
   comparePage: number;
@@ -385,6 +375,34 @@ interface ViewerState {
   /** Swipe mode: 0 = all “before”, 1 = all “after”. */
   compareSwipeRatio: number;
   setCompareSwipeRatio: (n: number) => void;
+  /**
+   * Separate from markup compare: two file versions, pixel-diff tint
+   * (Rev A magenta / Rev B cyan).
+   */
+  revisionCompareActive: boolean;
+  revisionCompareBaseFileVersionId: string | null;
+  revisionCompareTargetFileVersionId: string | null;
+  revisionCompareBaseVersion: number | null;
+  revisionCompareTargetVersion: number | null;
+  revisionCompareLayout: "diff" | "sideBySide";
+  revisionCompareTintOpacity: number;
+  revisionCompareShowTintOnSideBySide: boolean;
+  startRevisionCompare: (opts: {
+    baseFileVersionId: string;
+    targetFileVersionId: string;
+    baseVersion: number;
+    targetVersion: number;
+  }) => void;
+  setRevisionComparePair: (opts: {
+    baseFileVersionId: string;
+    targetFileVersionId: string;
+    baseVersion: number;
+    targetVersion: number;
+  }) => void;
+  setRevisionCompareLayout: (layout: "diff" | "sideBySide") => void;
+  setRevisionCompareTintOpacity: (n: number) => void;
+  setRevisionCompareShowTintOnSideBySide: (v: boolean) => void;
+  exitRevisionCompare: () => void;
   fitRequest: null | { mode: "width" | "page"; token: number };
   /** After text search: zoom and scroll to a normalized rect on a page */
   searchFocusRequest: null | {
@@ -608,15 +626,21 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   minimapOnlyWhenZoomed: false,
   rightFlyout: null,
   viewerWorkspaceMode: "markup",
-  viewerSidebarWidth: 280,
   issueEditId: null,
   leftSidebarTab: "draw",
-  mobileLeftToolsOpen: false,
   compareMode: false,
   comparePage: 1,
   compareLayout: "sideBySide",
   compareOverlayAfter: true,
   compareSwipeRatio: 0.5,
+  revisionCompareActive: false,
+  revisionCompareBaseFileVersionId: null,
+  revisionCompareTargetFileVersionId: null,
+  revisionCompareBaseVersion: null,
+  revisionCompareTargetVersion: null,
+  revisionCompareLayout: "diff",
+  revisionCompareTintOpacity: 0.85,
+  revisionCompareShowTintOnSideBySide: true,
   fitRequest: null,
   searchFocusRequest: null,
 
@@ -924,8 +948,6 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   toggleRightFlyout: () =>
     set((s) => ({ rightFlyout: s.rightFlyout === "settings" ? null : "settings" })),
   setViewerWorkspaceMode: (viewerWorkspaceMode) => set({ viewerWorkspaceMode }),
-  setViewerSidebarWidth: (viewerSidebarWidth) =>
-    set({ viewerSidebarWidth: Math.min(360, Math.max(240, viewerSidebarWidth)) }),
   setIssueEditId: (issueEditId) => set({ issueEditId }),
   closeIssueFlyout: () =>
     set({
@@ -947,7 +969,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     set({
       compareMode,
       ...(compareMode
-        ? {}
+        ? { revisionCompareActive: false }
         : {
             compareLayout: "sideBySide",
             compareOverlayAfter: true,
@@ -962,8 +984,41 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   setCompareOverlayAfter: (compareOverlayAfter) => set({ compareOverlayAfter }),
   setCompareSwipeRatio: (n) =>
     set({ compareSwipeRatio: Math.min(1, Math.max(0, Number.isFinite(n) ? n : 0.5)) }),
-  setMobileLeftToolsOpen: (open) => set({ mobileLeftToolsOpen: open }),
-  toggleMobileLeftTools: () => set((s) => ({ mobileLeftToolsOpen: !s.mobileLeftToolsOpen })),
+  startRevisionCompare: (opts) =>
+    set({
+      compareMode: false,
+      revisionCompareActive: true,
+      revisionCompareBaseFileVersionId: opts.baseFileVersionId,
+      revisionCompareTargetFileVersionId: opts.targetFileVersionId,
+      revisionCompareBaseVersion: opts.baseVersion,
+      revisionCompareTargetVersion: opts.targetVersion,
+      revisionCompareLayout: "diff",
+    }),
+  setRevisionComparePair: (opts) =>
+    set({
+      revisionCompareBaseFileVersionId: opts.baseFileVersionId,
+      revisionCompareTargetFileVersionId: opts.targetFileVersionId,
+      revisionCompareBaseVersion: opts.baseVersion,
+      revisionCompareTargetVersion: opts.targetVersion,
+    }),
+  setRevisionCompareLayout: (revisionCompareLayout) => set({ revisionCompareLayout }),
+  setRevisionCompareTintOpacity: (n) =>
+    set({
+      revisionCompareTintOpacity: Math.min(1, Math.max(0.15, Number.isFinite(n) ? n : 0.85)),
+    }),
+  setRevisionCompareShowTintOnSideBySide: (revisionCompareShowTintOnSideBySide) =>
+    set({ revisionCompareShowTintOnSideBySide }),
+  exitRevisionCompare: () =>
+    set({
+      revisionCompareActive: false,
+      revisionCompareBaseFileVersionId: null,
+      revisionCompareTargetFileVersionId: null,
+      revisionCompareBaseVersion: null,
+      revisionCompareTargetVersion: null,
+      revisionCompareLayout: "diff",
+      revisionCompareTintOpacity: 0.85,
+      revisionCompareShowTintOnSideBySide: true,
+    }),
 
   setViewerProjectId: (viewerProjectId) => set({ viewerProjectId }),
   setViewerOperationsMode: (viewerOperationsMode) => set({ viewerOperationsMode }),
@@ -1112,6 +1167,14 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       compareLayout: "sideBySide",
       compareOverlayAfter: true,
       compareSwipeRatio: 0.5,
+      revisionCompareActive: false,
+      revisionCompareBaseFileVersionId: null,
+      revisionCompareTargetFileVersionId: null,
+      revisionCompareBaseVersion: null,
+      revisionCompareTargetVersion: null,
+      revisionCompareLayout: "diff",
+      revisionCompareTintOpacity: 0.85,
+      revisionCompareShowTintOnSideBySide: true,
       leftSidebarTab: "draw",
       tool: "pan",
       takeoffMode: false,
@@ -1524,12 +1587,19 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       takeoffRedrawZoneId: null,
       takeoffMoveZoneId: null,
       takeoffVertexEditZoneId: null,
-      mobileLeftToolsOpen: false,
       compareMode: false,
       comparePage: 1,
       compareLayout: "sideBySide",
       compareOverlayAfter: true,
       compareSwipeRatio: 0.5,
+      revisionCompareActive: false,
+      revisionCompareBaseFileVersionId: null,
+      revisionCompareTargetFileVersionId: null,
+      revisionCompareBaseVersion: null,
+      revisionCompareTargetVersion: null,
+      revisionCompareLayout: "diff",
+      revisionCompareTintOpacity: 0.85,
+      revisionCompareShowTintOnSideBySide: true,
       leftSidebarTab: "draw",
     }),
 

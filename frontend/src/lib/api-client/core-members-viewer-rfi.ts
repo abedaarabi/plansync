@@ -354,11 +354,18 @@ export async function patchMeViewerPresence(hideViewerPresence: boolean): Promis
   }
 }
 
+export type FileRevisionListItem = { id: string; version: number };
+
 /** When `/viewer` has `fileId` (+ optional `version`) but no `fileVersionId`, resolve the revision row for Pro sync (takeoff publish, viewer-state). */
 export async function fetchResolvedFileRevision(
   fileId: string,
   version?: number,
-): Promise<{ fileVersionId: string; version: number; projectId: string }> {
+): Promise<{
+  fileVersionId: string;
+  version: number;
+  projectId: string;
+  versions: FileRevisionListItem[];
+}> {
   const q =
     version != null && Number.isFinite(version)
       ? `?version=${encodeURIComponent(String(version))}`
@@ -375,6 +382,7 @@ export async function fetchResolvedFileRevision(
     fileVersionId?: string;
     version?: number;
     projectId?: string;
+    versions?: FileRevisionListItem[];
   };
   if (!res.ok) {
     throw new Error(typeof j.error === "string" ? j.error : "Could not resolve sheet revision.");
@@ -386,6 +394,7 @@ export async function fetchResolvedFileRevision(
     fileVersionId: j.fileVersionId,
     version: j.version,
     projectId: j.projectId,
+    versions: Array.isArray(j.versions) ? j.versions : [],
   };
 }
 

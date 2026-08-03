@@ -12,6 +12,7 @@ import {
   fetchOmAssets,
   fetchProject,
   fetchProjectSession,
+  fetchResolvedFileRevision,
   fetchViewerState,
   putViewerState,
   ViewerStateConflictError,
@@ -35,6 +36,8 @@ import { resetViewerCollabRevision, setViewerCollabRevision } from "@/lib/viewer
 import { parseServerViewerState } from "@/lib/viewerStateCloud";
 import { computeScaleToFitNormRect, scrollViewportToNorm } from "@/lib/viewScroll";
 import { usePdfPinchZoom } from "@/hooks/usePdfPinchZoom";
+import { useRevisionComparePdf } from "@/hooks/useRevisionComparePdf";
+import { useRevisionDiffBitmap } from "@/hooks/useRevisionDiffBitmap";
 import { useSyncSheetOverlaysToViewerChrome } from "@/hooks/useSyncSheetOverlaysToViewerChrome";
 import { useViewerStore, VIEWER_SCALE_MAX, VIEWER_SCALE_MIN } from "@/store/viewerStore";
 import { CollaborationSync } from "./CollaborationSync";
@@ -43,6 +46,7 @@ import { ViewerRevisionConflictDialog } from "./ViewerRevisionConflictDialog";
 import { ViewerCanvasContext } from "./ViewerCanvasContext";
 import { PdfPageMinimap, type MinimapFocusRect } from "./PdfPageMinimap";
 import { PdfPageView } from "./PdfPageView";
+import { RevisionCompareChrome } from "./RevisionCompareChrome";
 import { ViewerOnboarding } from "./ViewerOnboarding";
 import { ViewerFlyoutStack } from "./ViewerFlyoutStack";
 import { ViewerSidebar } from "./ViewerSidebar";
@@ -55,6 +59,7 @@ import { SheetAiDrawer } from "./SheetAiDrawer";
 import { TakeoffSummaryModal } from "./TakeoffSummaryModal";
 import { ViewerTopBar } from "./ViewerTopBar";
 
+// fallow-ignore-next-line complexity
 export function PdfViewer() {
   useEffect(() => {
     useViewerStore.getState().hydrateSheetOverlayFromStorage();
@@ -88,6 +93,16 @@ export function PdfViewer() {
   const compareMode = useViewerStore((s) => s.compareMode);
   const compareLayout = useViewerStore((s) => s.compareLayout);
   const setCompareLayout = useViewerStore((s) => s.setCompareLayout);
+  const revisionCompareActive = useViewerStore((s) => s.revisionCompareActive);
+  const revisionCompareLayout = useViewerStore((s) => s.revisionCompareLayout);
+  const revisionCompareBaseFileVersionId = useViewerStore(
+    (s) => s.revisionCompareBaseFileVersionId,
+  );
+  const revisionCompareBaseVersion = useViewerStore((s) => s.revisionCompareBaseVersion);
+  const revisionCompareTintOpacity = useViewerStore((s) => s.revisionCompareTintOpacity);
+  const revisionCompareShowTintOnSideBySide = useViewerStore(
+    (s) => s.revisionCompareShowTintOnSideBySide,
+  );
   const compareOverlayAfter = useViewerStore((s) => s.compareOverlayAfter);
   const setCompareOverlayAfter = useViewerStore((s) => s.setCompareOverlayAfter);
   const compareSwipeRatio = useViewerStore((s) => s.compareSwipeRatio);
@@ -112,9 +127,6 @@ export function PdfViewer() {
   const setTakeoffVertexEditZoneId = useViewerStore((s) => s.setTakeoffVertexEditZoneId);
   const tool = useViewerStore((s) => s.tool);
   const takeoffDrawKind = useViewerStore((s) => s.takeoffDrawKind);
-  const mobileLeftToolsOpen = useViewerStore((s) => s.mobileLeftToolsOpen);
-  const setMobileLeftToolsOpen = useViewerStore((s) => s.setMobileLeftToolsOpen);
-
   const takeoffRedrawZoneKind = useMemo(() => {
     if (!takeoffRedrawZoneId) return null;
     return takeoffZones.find((z) => z.id === takeoffRedrawZoneId)?.measurementType ?? null;
@@ -128,6 +140,7 @@ export function PdfViewer() {
     [setOmAssetCreateDraft],
   );
   const searchParams = useSearchParams();
+  const viewerFileId = searchParams.get("fileId");
 
   const { data: me, isPending: mePending } = useQuery({
     queryKey: qk.me(),
@@ -183,8 +196,41 @@ export function PdfViewer() {
   const compareScrollOriginalRef = useRef<HTMLDivElement>(null);
   const compareScrollMarkupRef = useRef<HTMLDivElement>(null);
 
-  usePdfPinchZoom(pdfScrollRef, Boolean(pdfDoc) && !compareMode);
-  usePdfPinchZoom(compareScrollMarkupRef, Boolean(pdfDoc) && compareMode);
+  const { data: fileRevisionsMeta } = useQuery({
+    queryKey: qk.fileRevisions(viewerFileId ?? ""),
+    queryFn: () => fetchResolvedFileRevision(viewerFileId!),
+    enabled: Boolean(viewerFileId) && (revisionCompareActive || Boolean(cloudFileVersionId)),
+    staleTime: 60_000,
+  });
+  const fileVersions = fileRevisionsMeta?.versions ?? [];
+
+  const revisionBasePdf = useRevisionComparePdf(
+    viewerFileId,
+    revisionCompareBaseFileVersionId,
+    revisionCompareBaseVersion,
+    revisionCompareActive,
+  );
+  const revisionDiff = useRevisionDiffBitmap(
+    revisionBasePdf.doc,
+    pdfDoc,
+    currentPage,
+    revisionCompareActive && Boolean(revisionBasePdf.doc && pdfDoc),
+  );
+
+  const revisionSideBySide = revisionCompareActive && revisionCompareLayout === "sideBySide";
+  const markupSideBySide = compareMode && compareLayout === "sideBySide";
+
+  usePdfPinchZoom(
+    pdfScrollRef,
+    Boolean(pdfDoc) &&
+      ((!compareMode && !revisionCompareActive) ||
+        (revisionCompareActive && revisionCompareLayout === "diff")),
+  );
+  usePdfPinchZoom(compareScrollMarkupRef, Boolean(pdfDoc) && (compareMode || revisionSideBySide));
+  usePdfPinchZoom(
+    compareScrollOriginalRef,
+    Boolean(pdfDoc) && (markupSideBySide || revisionSideBySide),
+  );
   const pageCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const pageCanvasCompareRef = useRef<HTMLCanvasElement | null>(null);
   const pageWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -239,10 +285,6 @@ export function PdfViewer() {
   useEffect(() => {
     resetViewerCollabRevision();
   }, [cloudFileVersionId]);
-
-  useEffect(() => {
-    if (!pdfUrl) setMobileLeftToolsOpen(false);
-  }, [pdfUrl, setMobileLeftToolsOpen]);
 
   /** Deep link from Assets → “Link on sheet”: start placement once the PDF is open. */
   useEffect(() => {
@@ -789,7 +831,10 @@ export function PdfViewer() {
 
   /** Keep compare panes scrolled together (same PDF region). */
   useEffect(() => {
-    if (!compareMode || compareLayout !== "sideBySide") return;
+    const dual =
+      (compareMode && compareLayout === "sideBySide") ||
+      (revisionCompareActive && revisionCompareLayout === "sideBySide");
+    if (!dual) return;
     const left = compareScrollOriginalRef.current;
     const right = compareScrollMarkupRef.current;
     if (!left || !right) return;
@@ -813,7 +858,15 @@ export function PdfViewer() {
       left.removeEventListener("scroll", onLeft);
       right.removeEventListener("scroll", onRight);
     };
-  }, [compareMode, compareLayout, pdfDoc, currentPage]);
+  }, [
+    compareMode,
+    compareLayout,
+    revisionCompareActive,
+    revisionCompareLayout,
+    pdfDoc,
+    currentPage,
+    revisionBasePdf.doc,
+  ]);
 
   useEffect(() => {
     if (!compareMode || compareLayout !== "swipe") return;
@@ -900,10 +953,16 @@ export function PdfViewer() {
           sc.scrollTop = Math.min(maxT, Math.max(0, nextTop));
         };
 
-        if (compareMode) {
+        if (
+          (compareMode && compareLayout === "sideBySide") ||
+          (revisionCompareActive && revisionCompareLayout === "sideBySide")
+        ) {
           const o1 = compareScrollOriginalRef.current;
           const o2 = compareScrollMarkupRef.current;
-          if (compareLayout === "sideBySide" && o1) syncPair(o1);
+          if (o1) syncPair(o1);
+          if (o2) syncPair(o2);
+        } else if (compareMode) {
+          const o2 = compareScrollMarkupRef.current;
           if (o2) syncPair(o2);
         } else {
           const sc = pdfScrollRef.current;
@@ -913,17 +972,21 @@ export function PdfViewer() {
       });
     };
 
-    if (compareMode) {
+    if (
+      (compareMode && compareLayout === "sideBySide") ||
+      (revisionCompareActive && revisionCompareLayout === "sideBySide")
+    ) {
       const o1 = compareScrollOriginalRef.current;
       const o2 = compareScrollMarkupRef.current;
-      if (compareLayout === "sideBySide") {
-        o1?.addEventListener("wheel", onWheel, { passive: false });
-        o2?.addEventListener("wheel", onWheel, { passive: false });
-        return () => {
-          o1?.removeEventListener("wheel", onWheel);
-          o2?.removeEventListener("wheel", onWheel);
-        };
-      }
+      o1?.addEventListener("wheel", onWheel, { passive: false });
+      o2?.addEventListener("wheel", onWheel, { passive: false });
+      return () => {
+        o1?.removeEventListener("wheel", onWheel);
+        o2?.removeEventListener("wheel", onWheel);
+      };
+    }
+    if (compareMode) {
+      const o2 = compareScrollMarkupRef.current;
       o2?.addEventListener("wheel", onWheel, { passive: false });
       return () => o2?.removeEventListener("wheel", onWheel);
     }
@@ -932,7 +995,7 @@ export function PdfViewer() {
     if (!el) return;
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [pdfDoc, compareMode, compareLayout]);
+  }, [pdfDoc, compareMode, compareLayout, revisionCompareActive, revisionCompareLayout]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -954,34 +1017,6 @@ export function PdfViewer() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const onChange = () => {
-      if (mq.matches) setMobileLeftToolsOpen(false);
-    };
-    mq.addEventListener("change", onChange);
-    onChange();
-    return () => mq.removeEventListener("change", onChange);
-  }, [setMobileLeftToolsOpen]);
-
-  useEffect(() => {
-    if (!mobileLeftToolsOpen || !pdfUrl) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const el = e.target;
-      if (
-        el instanceof HTMLElement &&
-        (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")
-      ) {
-        return;
-      }
-      setMobileLeftToolsOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [mobileLeftToolsOpen, pdfUrl, setMobileLeftToolsOpen]);
-
   return (
     <ViewerCollabSync
       fileVersionId={cloudFileVersionId}
@@ -991,29 +1026,13 @@ export function PdfViewer() {
       currentUserId={me?.user.id}
     >
       <ViewerCanvasContext.Provider value={{ pageCanvasRef }}>
-        <div className="viewer-shell-bg relative grid min-h-0 min-w-0 flex-1 grid-cols-[0_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-x-0 gap-y-0 overflow-hidden bg-[var(--viewer-border)] lg:grid-cols-[auto_minmax(0,1fr)]">
+        <div className="viewer-shell-bg relative grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-x-0 gap-y-0 overflow-hidden bg-[var(--viewer-border)]">
           <CollaborationSync roomId={roomId} />
-          {pdfUrl && mobileLeftToolsOpen ? (
-            <button
-              type="button"
-              className="no-print fixed inset-0 top-10 z-[34] bg-black/45 lg:hidden"
-              aria-label="Close tools sidebar"
-              onClick={() => setMobileLeftToolsOpen(false)}
-            />
-          ) : null}
-          <div className="col-span-2 row-start-1 min-h-0 min-w-0 self-start overflow-visible bg-[var(--viewer-chrome-top)]">
+          <div className="row-start-1 min-h-0 min-w-0 self-start overflow-visible bg-[var(--viewer-chrome-top)]">
             <ViewerTopBar pdfDoc={pdfDoc} exportCanvasRef={pageCanvasRef} />
           </div>
-          <div className="relative z-[36] col-start-1 row-start-2 row-end-3 min-h-0 max-lg:min-w-0 max-lg:overflow-visible lg:min-w-min lg:overflow-hidden lg:self-stretch lg:bg-[var(--viewer-chrome-bottom)]">
-            <div
-              className={`h-full max-lg:fixed max-lg:top-10 max-lg:bottom-0 max-lg:left-0 max-lg:z-[36] max-lg:w-[min(280px,88vw)] max-lg:border-r max-lg:border-[#334155] max-lg:bg-[var(--viewer-chrome-bottom)] max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-200 max-lg:ease-out ${
-                mobileLeftToolsOpen ? "max-lg:translate-x-0" : "max-lg:-translate-x-full"
-              } lg:relative lg:inset-auto lg:z-auto lg:w-full lg:translate-x-0 lg:border-0 lg:shadow-none`}
-            >
-              <ViewerSidebar pdfDoc={pdfDoc} />
-            </div>
-          </div>
-          <div className="viewer-canvas-area relative col-start-2 row-start-2 row-end-3 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--viewer-canvas)] shadow-[inset_0_0_0_1px_rgba(226,232,240,0.9)] print:overflow-visible md:shadow-[inset_0_0_0_1px_rgba(51,65,85,0.08)]">
+          <div className="viewer-canvas-area relative row-start-2 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--viewer-canvas)] shadow-[inset_0_0_0_1px_rgba(226,232,240,0.9)] print:overflow-visible md:shadow-[inset_0_0_0_1px_rgba(51,65,85,0.08)]">
+            <ViewerSidebar pdfDoc={pdfDoc} />
             <ViewerStepIndicator />
             <ViewerLinkMarkupChip />
             {omAssetPlacementActive ? (
@@ -1229,7 +1248,87 @@ export function PdfViewer() {
               <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col">
                 <ViewerOnboarding />
                 <ViewerFlyoutStack />
-                {compareMode ? (
+                {revisionCompareActive ? (
+                  <>
+                    <RevisionCompareChrome
+                      versions={fileVersions}
+                      loadingDiff={revisionDiff.loading || revisionBasePdf.loading}
+                      loadError={revisionBasePdf.error ?? revisionDiff.error}
+                    />
+                    {revisionCompareLayout === "sideBySide" ? (
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col divide-y divide-slate-600/45 md:flex-row md:divide-x md:divide-y-0 print:hidden">
+                        <div
+                          ref={compareScrollOriginalRef}
+                          className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain"
+                        >
+                          <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
+                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+                              Rev A — v{revisionCompareBaseVersion ?? "—"}
+                            </p>
+                            {revisionBasePdf.doc ? (
+                              <PdfPageView
+                                pdfDoc={revisionBasePdf.doc}
+                                pageNumber={Math.min(currentPage, revisionBasePdf.doc.numPages)}
+                                compareReferenceOnly
+                                scrollContainerRef={compareScrollOriginalRef}
+                                pageCanvasRef={pageCanvasCompareRef}
+                                pageWrapperRef={pageWrapperCompareRef}
+                              />
+                            ) : (
+                              <p className="py-8 text-center text-[12px] text-[#64748b]">
+                                {revisionBasePdf.loading
+                                  ? "Loading Rev A…"
+                                  : (revisionBasePdf.error ?? "Rev A unavailable")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div
+                          ref={compareScrollMarkupRef}
+                          className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y"
+                        >
+                          <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
+                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+                              Rev B — open sheet
+                            </p>
+                            <PdfPageView
+                              pdfDoc={pdfDoc}
+                              pageNumber={currentPage}
+                              onScreenRenderComplete={handleScreenRenderComplete}
+                              scrollContainerRef={compareScrollMarkupRef}
+                              pageCanvasRef={pageCanvasRef}
+                              pageWrapperRef={pageWrapperRef}
+                              revisionDiffImageUrl={
+                                revisionCompareShowTintOnSideBySide ? revisionDiff.url : null
+                              }
+                              revisionDiffOpacity={revisionCompareTintOpacity}
+                              revisionDiffCoverPdf={false}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        ref={pdfScrollRef}
+                        className="min-h-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y print:block print:overflow-visible"
+                      >
+                        <div className="mx-auto max-w-[min(100%,1920px)] px-4 py-5 sm:px-6 sm:py-6 print:p-0 print:max-w-none">
+                          <PdfPageView
+                            pdfDoc={pdfDoc}
+                            pageNumber={currentPage}
+                            onScreenRenderComplete={handleScreenRenderComplete}
+                            scrollContainerRef={pdfScrollRef}
+                            pageCanvasRef={pageCanvasRef}
+                            pageWrapperRef={pageWrapperRef}
+                            revisionDiffImageUrl={revisionDiff.url}
+                            revisionDiffOpacity={revisionCompareTintOpacity}
+                            revisionDiffCoverPdf
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : compareMode ? (
                   <>
                     <div className="no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/95 px-2 py-1.5 text-[11px] text-slate-700 backdrop-blur-sm print:hidden">
                       <div className="flex flex-wrap items-center gap-1">

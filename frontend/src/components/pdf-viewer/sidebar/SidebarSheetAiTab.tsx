@@ -52,7 +52,7 @@ export function SidebarSheetAiTab() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 py-2 [scrollbar-width:thin]">
+    <div className="flex w-full flex-col gap-3 px-2 py-2">
       <button
         type="button"
         onClick={() => void handleClearAiDrawing()}

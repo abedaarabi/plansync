@@ -24,6 +24,7 @@ function memberRow(
   };
 }
 
+// fallow-ignore-next-line complexity
 export function SidebarCollabTab() {
   const collab = useViewerCollab();
   const desktop = useViewerCollabDesktop();
@@ -65,7 +66,7 @@ export function SidebarCollabTab() {
   const canUseTransport = collab.collabActive;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden px-0.5 [scrollbar-width:thin]">
+    <div className="flex w-full flex-col gap-3 px-0.5">
       <div className="rounded-lg border border-[#334155] bg-[#1E293B]/90 p-2.5">
         <div className="mb-1.5 flex items-center gap-2">
           <Radio

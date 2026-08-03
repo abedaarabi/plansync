@@ -76,6 +76,7 @@ function measurementDimensionXml(
 /**
  * Full SVG document (with xmlns) for overlaying PDF canvas at export resolution.
  */
+// fallow-ignore-next-line complexity
 export function buildAnnotationsSvgDocument(
   annotations: Annotation[],
   cssW: number,
@@ -86,11 +87,14 @@ export function buildAnnotationsSvgDocument(
   measureUnit: MeasureUnit,
   arrowMarkerId: string,
 ): string {
-  const defs = `<defs>
-<marker id="${arrowMarkerId}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
-<polygon points="0 0, 10 3.5, 0 7" fill="currentColor"/>
-</marker>
-</defs>`;
+  const arrowMarkerDefs = annotations
+    .filter((a) => a.type === "line" && a.arrowHead && a.points.length === 2)
+    .map(
+      (a) =>
+        `<marker id="${arrowMarkerId}-${a.id}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth"><polygon points="0 0, 10 3.5, 0 7" fill="${escapeXml(a.color)}"/></marker>`,
+    )
+    .join("");
+  const defs = `<defs>${arrowMarkerDefs}</defs>`;
 
   const parts: string[] = [];
   for (const a of annotations) {
@@ -129,8 +133,7 @@ export function buildAnnotationsSvgDocument(
       );
     } else if (a.type === "line" && a.points.length === 2) {
       const [p1, p2] = pts;
-      const marker = a.arrowHead ? ` marker-end="url(#${arrowMarkerId})"` : "";
-      const style = a.arrowHead ? ` style="color:${a.color}"` : "";
+      const marker = a.arrowHead ? ` marker-end="url(#${arrowMarkerId}-${a.id})"` : "";
       parts.push(
         wrapSvgRotation(
           a,
@@ -139,7 +142,7 @@ export function buildAnnotationsSvgDocument(
           pageW,
           pageH,
           scale,
-          `<g${style}><line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="${a.color}" stroke-width="${a.strokeWidth}"${marker}/></g>`,
+          `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="${a.color}" stroke-width="${a.strokeWidth}"${marker}/>`,
         ),
       );
     } else if (a.type === "rect" && a.points.length === 2) {

@@ -64,6 +64,16 @@ import { IssueGuide } from "./IssueGuide";
 
 type PanelLayout = "docked" | "overlay";
 
+type PendingPhoto = {
+  id: string;
+  file: File;
+  previewUrl: string;
+};
+
+function revokePendingPhotos(photos: PendingPhoto[]) {
+  for (const p of photos) URL.revokeObjectURL(p.previewUrl);
+}
+
 type IssueFormBimContext = {
   fileId: string;
   fileVersionId: string;
@@ -315,6 +325,7 @@ export function IssueFormSlider(props: Props) {
   /** Markup annotation ids on this sheet page to link to the issue (not the location pin). */
   const [linkedMarkupIds, setLinkedMarkupIds] = useState<string[]>([]);
   const [referencePhotos, setReferencePhotos] = useState<IssueReferencePhotoRow[]>([]);
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [sketchModal, setSketchModal] = useState<{
     photo: IssueReferencePhotoRow;
     imageUrl: string;
@@ -458,6 +469,14 @@ export function IssueFormSlider(props: Props) {
     if (!open) setDeleteDialogOpen(false);
   }, [open]);
 
+  useEffect(() => {
+    if (open) return;
+    setPendingPhotos((prev) => {
+      revokePendingPhotos(prev);
+      return [];
+    });
+  }, [open]);
+
   /**
    * Clear armed pin modes; switch to Select so closing the form does not leave Draw tool placing
    * markups. Sync `issueFormSliderOpen` for create flow (edit sets it synchronously in the sidebar).
@@ -498,6 +517,10 @@ export function IssueFormSlider(props: Props) {
       setRfiLinkIds(i.linkedRfis.map((r) => r.id));
       setLinkedMarkupIds(i.attachedMarkupAnnotationIds ?? []);
       setReferencePhotos(i.referencePhotos ?? []);
+      setPendingPhotos((prev) => {
+        revokePendingPhotos(prev);
+        return [];
+      });
     } else {
       setTitle(props.initialTitle?.trim() || "");
       setDescription(props.initialDescription ?? "");
@@ -510,6 +533,10 @@ export function IssueFormSlider(props: Props) {
       setRfiLinkIds([]);
       setLinkedMarkupIds(props.initialLinkedMarkupIds ?? []);
       setReferencePhotos([]);
+      setPendingPhotos((prev) => {
+        revokePendingPhotos(prev);
+        return [];
+      });
     }
   }, [
     open,
@@ -578,6 +605,7 @@ export function IssueFormSlider(props: Props) {
         ...(rfiLinkIds.length > 0 && !viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
       });
     },
+    // fallow-ignore-next-line complexity
     onSuccess: async (row) => {
       void qc.invalidateQueries({ queryKey: issuesQueryKey });
       if (cloudFileVersionId) {
@@ -590,16 +618,23 @@ export function IssueFormSlider(props: Props) {
       if (resolvedProjectId)
         void qc.invalidateQueries({ queryKey: qk.projectRfis(resolvedProjectId) });
       if (variant === "create") {
-        if (isBimCreate) {
-          const pendingPhoto = props.variant === "create" ? props.pendingReferencePhoto : null;
-          let savedRow = row;
-          if (pendingPhoto) {
-            try {
-              savedRow = await uploadIssueReferencePhotoFile(row.id, pendingPhoto);
-            } catch {
-              toast.error("Issue saved, but the snapshot photo could not be uploaded.");
-            }
+        const queued = [...pendingPhotos];
+        const snapshotPhoto = props.variant === "create" ? props.pendingReferencePhoto : null;
+        let savedRow = row;
+        try {
+          if (snapshotPhoto) {
+            savedRow = await uploadIssueReferencePhotoFile(row.id, snapshotPhoto);
           }
+          for (const p of queued) {
+            savedRow = await uploadIssueReferencePhotoFile(row.id, p.file);
+          }
+        } catch {
+          toast.error("Issue saved, but some photos could not be uploaded.");
+        } finally {
+          revokePendingPhotos(queued);
+          setPendingPhotos([]);
+        }
+        if (isBimCreate) {
           props.onCreated?.(savedRow);
         } else {
           if (props.annotationId) {
@@ -703,9 +738,26 @@ export function IssueFormSlider(props: Props) {
     onError: (e: Error) => toast.error(formatIssueLockHint(e)),
   });
 
+  const queuePendingPhoto = useCallback((file: File) => {
+    const id = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const previewUrl = URL.createObjectURL(file);
+    setPendingPhotos((prev) => [...prev, { id, file, previewUrl }]);
+  }, []);
+
+  const removePendingPhoto = useCallback((id: string) => {
+    setPendingPhotos((prev) => {
+      const hit = prev.find((p) => p.id === id);
+      if (hit) URL.revokeObjectURL(hit.previewUrl);
+      return prev.filter((p) => p.id !== id);
+    });
+  }, []);
+
   const uploadRefPhotoMut = useMutation({
     mutationFn: async (file: File) => {
-      if (props.variant !== "edit") throw new Error("Save the issue first, then add photos.");
+      if (props.variant !== "edit") {
+        queuePendingPhoto(file);
+        return null;
+      }
       const issueId = props.issue.id;
       const ct = referencePhotoContentType(file);
       const { uploadUrl, key } = await presignIssueReferencePhotoUpload(issueId, {
@@ -727,6 +779,10 @@ export function IssueFormSlider(props: Props) {
       });
     },
     onSuccess: (row) => {
+      if (!row) {
+        toast.success("Photo added — uploads when you create the issue");
+        return;
+      }
       setReferencePhotos(row.referencePhotos ?? []);
       qc.setQueryData(issuesQueryKey, (old: IssueRow[] | undefined) => {
         if (!old) return old;
@@ -980,7 +1036,8 @@ export function IssueFormSlider(props: Props) {
     ? `${focusRingClass} rounded-lg bg-[var(--bim-accent)] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40`
     : `${focusRingClass} rounded-lg bg-[var(--viewer-primary)] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-[var(--viewer-primary-hover)] disabled:opacity-40`;
 
-  const refPhotoPickDisabled = uploadRefPhotoMut.isPending || saveEditMut.isPending;
+  const refPhotoPickDisabled =
+    uploadRefPhotoMut.isPending || saveEditMut.isPending || createMut.isPending;
   const refPhotoLabelClass = embedded
     ? `${focusRingClass} relative inline-flex min-h-[2.5rem] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_55%,transparent)] px-2.5 py-2 text-[12px] text-[var(--bim-text)] transition hover:bg-[color-mix(in_srgb,var(--bim-panel)_70%,transparent)]`
     : "viewer-focus-ring relative inline-flex min-h-[2.5rem] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/60 px-2.5 py-2 text-[12px] text-slate-200 transition hover:bg-slate-800/80";
@@ -1283,125 +1340,162 @@ export function IssueFormSlider(props: Props) {
             </section>
           ) : null}
 
-          {variant === "edit" ? (
-            <section className={sectionCompactCardClass} aria-labelledby="issue-section-ref-photos">
-              <h3 id="issue-section-ref-photos" className={sectionTitleClass}>
-                {viewerOperationsMode ? "Site photos" : "Reference photos"}
-              </h3>
-              <p className="text-[11px] leading-relaxed text-slate-500">
-                Tap <span className="font-medium text-slate-400">Take photo</span> so the browser
-                opens the camera (required on many phones). If nothing happens, try{" "}
-                <span className="font-medium text-slate-400">Web camera</span> (HTTPS) or{" "}
-                <span className="font-medium text-slate-400">From library</span>. Markups stay on
-                the image only.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {refPhotoPickDisabled ? (
-                  <span
-                    className={`${refPhotoLabelClass} pointer-events-none cursor-not-allowed opacity-40`}
-                  >
+          <section className={sectionCompactCardClass} aria-labelledby="issue-section-ref-photos">
+            <h3 id="issue-section-ref-photos" className={sectionTitleClass}>
+              {viewerOperationsMode ? "Site photos" : "Reference photos"}
+            </h3>
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              {variant === "create" ? (
+                <>
+                  Add photos now — they upload when you create the {entityLabel}. Tap{" "}
+                  <span className="font-medium text-slate-400">Take photo</span>,{" "}
+                  <span className="font-medium text-slate-400">Web camera</span>, or{" "}
+                  <span className="font-medium text-slate-400">From library</span>.
+                </>
+              ) : (
+                <>
+                  Tap <span className="font-medium text-slate-400">Take photo</span> so the browser
+                  opens the camera (required on many phones). If nothing happens, try{" "}
+                  <span className="font-medium text-slate-400">Web camera</span> (HTTPS) or{" "}
+                  <span className="font-medium text-slate-400">From library</span>. Markups stay on
+                  the image only.
+                </>
+              )}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {refPhotoPickDisabled ? (
+                <span
+                  className={`${refPhotoLabelClass} pointer-events-none cursor-not-allowed opacity-40`}
+                >
+                  <Camera className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                  Take photo
+                </span>
+              ) : (
+                <label className={refPhotoLabelClass}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture
+                    className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = "";
+                      if (f) uploadRefPhotoMut.mutate(f);
+                    }}
+                  />
+                  <span className="pointer-events-none flex items-center gap-2">
                     <Camera className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
                     Take photo
                   </span>
-                ) : (
-                  <label className={refPhotoLabelClass}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture
-                      className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        e.target.value = "";
-                        if (f) uploadRefPhotoMut.mutate(f);
-                      }}
-                    />
-                    <span className="pointer-events-none flex items-center gap-2">
-                      <Camera className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
-                      Take photo
-                    </span>
-                  </label>
-                )}
-                {canLiveCapture ? (
-                  <button
-                    type="button"
-                    disabled={refPhotoPickDisabled}
-                    onClick={() => setLiveCaptureOpen(true)}
-                    className="viewer-focus-ring inline-flex items-center gap-2 rounded-lg border border-slate-700/50 bg-slate-900/40 px-2.5 py-2 text-[12px] text-slate-300 transition hover:bg-slate-800/80 disabled:opacity-40"
-                    title="Opens the camera inside the browser (needs permission)"
-                  >
-                    Web camera…
-                  </button>
-                ) : null}
-                {refPhotoPickDisabled ? (
-                  <span
-                    className={`${refPhotoLabelClass} pointer-events-none cursor-not-allowed opacity-40`}
-                  >
+                </label>
+              )}
+              {canLiveCapture ? (
+                <button
+                  type="button"
+                  disabled={refPhotoPickDisabled}
+                  onClick={() => setLiveCaptureOpen(true)}
+                  className="viewer-focus-ring inline-flex items-center gap-2 rounded-lg border border-slate-700/50 bg-slate-900/40 px-2.5 py-2 text-[12px] text-slate-300 transition hover:bg-slate-800/80 disabled:opacity-40"
+                  title="Opens the camera inside the browser (needs permission)"
+                >
+                  Web camera…
+                </button>
+              ) : null}
+              {refPhotoPickDisabled ? (
+                <span
+                  className={`${refPhotoLabelClass} pointer-events-none cursor-not-allowed opacity-40`}
+                >
+                  <ImagePlus className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                  From library…
+                </span>
+              ) : (
+                <label className={refPhotoLabelClass}>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
+                    className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = "";
+                      if (f) uploadRefPhotoMut.mutate(f);
+                    }}
+                  />
+                  <span className="pointer-events-none flex items-center gap-2">
                     <ImagePlus className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
                     From library…
                   </span>
-                ) : (
-                  <label className={refPhotoLabelClass}>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
-                      className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        e.target.value = "";
-                        if (f) uploadRefPhotoMut.mutate(f);
-                      }}
-                    />
-                    <span className="pointer-events-none flex items-center gap-2">
-                      <ImagePlus
-                        className="h-3.5 w-3.5 text-slate-400"
-                        strokeWidth={2}
-                        aria-hidden
-                      />
-                      From library…
-                    </span>
-                  </label>
-                )}
-              </div>
-              {referencePhotos.length === 0 ? (
-                <p className="text-[11px] text-slate-500">No reference photos yet.</p>
-              ) : (
-                <ul className="space-y-1 rounded-lg border border-slate-800/60 bg-slate-950/40 p-1.5">
-                  {referencePhotos.map((p) => (
-                    <li
-                      key={p.id}
-                      className="flex flex-wrap items-center gap-2.5 rounded-md px-1.5 py-1.5 text-[11px] text-slate-200"
+                </label>
+              )}
+            </div>
+            {referencePhotos.length === 0 && pendingPhotos.length === 0 ? (
+              <p className="text-[11px] text-slate-500">No reference photos yet.</p>
+            ) : (
+              <ul className="space-y-1 rounded-lg border border-slate-800/60 bg-slate-950/40 p-1.5">
+                {pendingPhotos.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex flex-wrap items-center gap-2.5 rounded-md px-1.5 py-1.5 text-[11px] text-slate-200"
+                  >
+                    <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
+                      <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
+                    </div>
+                    <span
+                      className="min-w-0 flex-1 truncate font-medium text-slate-300"
+                      title={p.file.name}
                     >
-                      <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900">
-                        {photoThumbUrls[p.id] ? (
-                          // eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL
-                          <img
-                            src={photoThumbUrls[p.id]}
-                            alt=""
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.visibility = "hidden";
-                            }}
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[9px] tabular-nums text-slate-600">
-                            …
-                          </div>
-                        )}
-                      </div>
-                      <span
-                        className="min-w-0 flex-1 truncate font-medium text-slate-300"
-                        title={p.fileName}
+                      {p.file.name}
+                    </span>
+                    <span className="shrink-0 rounded bg-sky-950/60 px-1 py-0.5 text-[9px] font-medium text-sky-200/90">
+                      Pending
+                    </span>
+                    <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={createMut.isPending}
+                        className="viewer-focus-ring rounded-md border border-red-500/30 px-2 py-0.5 text-[10px] text-red-200/90 hover:bg-red-950/40 disabled:opacity-40"
+                        onClick={() => removePendingPhoto(p.id)}
                       >
-                        {p.fileName}
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                ))}
+                {referencePhotos.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex flex-wrap items-center gap-2.5 rounded-md px-1.5 py-1.5 text-[11px] text-slate-200"
+                  >
+                    <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900">
+                      {photoThumbUrls[p.id] ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL
+                        <img
+                          src={photoThumbUrls[p.id]}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.visibility = "hidden";
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-[9px] tabular-nums text-slate-600">
+                          …
+                        </div>
+                      )}
+                    </div>
+                    <span
+                      className="min-w-0 flex-1 truncate font-medium text-slate-300"
+                      title={p.fileName}
+                    >
+                      {p.fileName}
+                    </span>
+                    {referencePhotoHasSketch(p.sketch) ? (
+                      <span className="shrink-0 rounded bg-amber-950/60 px-1 py-0.5 text-[9px] font-medium text-amber-200/90">
+                        Markup
                       </span>
-                      {referencePhotoHasSketch(p.sketch) ? (
-                        <span className="shrink-0 rounded bg-amber-950/60 px-1 py-0.5 text-[9px] font-medium text-amber-200/90">
-                          Markup
-                        </span>
-                      ) : null}
-                      <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1">
+                    ) : null}
+                    <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1">
+                      {variant === "edit" ? (
                         <button
                           type="button"
                           title="Open the photo here with any markups; tap Draw in the viewer to edit."
@@ -1411,6 +1505,8 @@ export function IssueFormSlider(props: Props) {
                           <Pencil className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
                           Open / draw
                         </button>
+                      ) : null}
+                      {variant === "edit" ? (
                         <button
                           type="button"
                           disabled={removeRefPhotoMut.isPending || saveEditMut.isPending}
@@ -1421,13 +1517,13 @@ export function IssueFormSlider(props: Props) {
                         >
                           Remove
                         </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ) : null}
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
           <CollapsibleSection
             id="issue-section-workflow"
@@ -1739,13 +1835,11 @@ export function IssueFormSlider(props: Props) {
 
   const panelDialogs = (
     <>
-      {variant === "edit" ? (
-        <IssueReferenceLiveCapture
-          open={liveCaptureOpen}
-          onClose={() => setLiveCaptureOpen(false)}
-          onCapture={(file) => uploadRefPhotoMut.mutate(file)}
-        />
-      ) : null}
+      <IssueReferenceLiveCapture
+        open={liveCaptureOpen}
+        onClose={() => setLiveCaptureOpen(false)}
+        onCapture={(file) => uploadRefPhotoMut.mutate(file)}
+      />
       {sketchModal && variant === "edit" ? (
         <IssuePhotoSketchModal
           open

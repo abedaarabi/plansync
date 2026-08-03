@@ -53,6 +53,7 @@ function PanelSection({
   );
 }
 
+// fallow-ignore-next-line complexity
 export function SidebarTakeoffTab() {
   const tool = useViewerStore((s) => s.tool);
   const setTool = useViewerStore((s) => s.setTool);
@@ -164,7 +165,7 @@ export function SidebarTakeoffTab() {
 
   if (!cloudFileVersionId || !viewerProjectId) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col justify-center p-1">
+      <div className="w-full p-1">
         <div className="rounded-xl border border-slate-600/60 bg-slate-900/50 p-4 text-[12px] leading-relaxed text-slate-400">
           <p className="font-semibold text-slate-200">Takeoff needs a project file</p>
           <p className="mt-2">
@@ -176,8 +177,8 @@ export function SidebarTakeoffTab() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] px-0.5 pb-1 pt-0.5">
+    <div className="flex w-full flex-col">
+      <div className="flex w-full flex-col gap-3 px-0.5 pb-1 pt-0.5">
         <PanelSection title="Scale">
           {!cal ? (
             <div className="flex items-start gap-2 rounded-lg border border-amber-500/35 bg-amber-950/40 px-3 py-2 text-[11px] leading-snug text-amber-100">
@@ -352,13 +353,14 @@ export function SidebarTakeoffTab() {
         <PanelSection title="Inventory panel">
           {takeoffInventoryDrawerFromSidebar ? (
             <p className="text-[10px] leading-relaxed text-slate-500">
-              Open the drawer under the sheet to manage lines, zones, and exports. Drag the handle
-              to resize.
+              Bottom inventory is open for lines, zones, and exports. Drag the handle to resize.
+              Closing this dock exits takeoff drawing; inventory stays until you close it.
             </p>
           ) : (
             <div className="space-y-2">
               <p className="text-[10px] leading-relaxed text-slate-500">
-                The bottom bar is hidden for a cleaner canvas.
+                Keep drawing with tools above, or open the bottom inventory when you need the full
+                list and exports.
               </p>
               <button
                 type="button"

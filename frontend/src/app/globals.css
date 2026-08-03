@@ -244,6 +244,385 @@ button:active:not(:disabled),
 
 .viewer-canvas-area {
   background-color: var(--viewer-canvas);
+  --viewer-rail-w: 3.25rem;
+  --viewer-dock-w: 16.25rem;
+  --viewer-rail-gap: 8px;
+  --viewer-glass-bg: color-mix(in srgb, #1e293b 88%, #94a3b8 12%);
+  --viewer-glass-blur: 18px;
+}
+
+@media (max-width: 639px) {
+  .viewer-canvas-area {
+    --viewer-rail-w: 3.5rem;
+    --viewer-dock-w: 100%;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .viewer-canvas-area {
+    --viewer-dock-w: min(22rem, 48vw);
+  }
+}
+
+/* PDF viewer — icon rail + glass docks (plain CSS; avoid @apply dropouts in @layer) */
+.viewer-glass-surface {
+  border: 1px solid var(--viewer-border);
+  background: var(--viewer-glass-bg, #1e293b);
+  backdrop-filter: blur(var(--viewer-glass-blur, 18px));
+  -webkit-backdrop-filter: blur(var(--viewer-glass-blur, 18px));
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.35),
+    0 8px 32px rgba(15, 23, 42, 0.45);
+}
+
+.viewer-icon-rail {
+  pointer-events: auto;
+  position: absolute;
+  z-index: 50;
+  box-sizing: border-box;
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--viewer-rail-w, 3.25rem);
+  height: auto;
+  max-height: calc(100% - 16px);
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 1rem;
+  overflow: visible;
+}
+
+.viewer-icon-rail[data-side="left"] {
+  left: var(--viewer-rail-gap, 8px);
+}
+
+.viewer-icon-rail[data-side="right"] {
+  right: var(--viewer-rail-gap, 8px);
+}
+
+.viewer-icon-rail__header {
+  display: flex;
+  width: 100%;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+}
+
+.viewer-icon-rail__section {
+  display: flex;
+  width: 100%;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.viewer-icon-rail__divider {
+  margin: 0.25rem auto;
+  height: 1px;
+  width: 1.5rem;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--viewer-border) 70%, transparent);
+}
+
+.viewer-rail-btn {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  max-width: 2.5rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0.75rem;
+  background: transparent;
+  transition: all 150ms ease;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.viewer-icon-rail .viewer-rail-btn.mobile-touch-target {
+  width: 2.5rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  max-width: 2.5rem;
+}
+
+.viewer-rail-btn:hover {
+  color: #ffffff;
+  background: color-mix(in srgb, var(--viewer-surface) 70%, transparent);
+}
+
+.viewer-rail-btn[data-mode="true"] {
+  color: #ffffff;
+  background: color-mix(in srgb, var(--viewer-primary) 28%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.55);
+}
+
+.viewer-rail-btn[data-active="true"] {
+  color: #ffffff;
+  background: var(--viewer-primary);
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.45);
+}
+
+.viewer-rail-btn:focus-visible {
+  outline: 2px solid var(--viewer-primary);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .viewer-icon-rail .viewer-rail-btn,
+  .viewer-icon-rail .viewer-rail-btn.mobile-touch-target {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    max-width: 2.75rem;
+  }
+}
+
+/* Phone: horizontal chip rail along the bottom edge */
+@media (max-width: 639px) {
+  .viewer-icon-rail {
+    top: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: calc(100% - 16px);
+    max-height: none;
+    flex-direction: row;
+    align-items: center;
+    padding: 0.35rem;
+    gap: 0.15rem;
+  }
+
+  .viewer-icon-rail[data-side="left"],
+  .viewer-icon-rail[data-side="right"] {
+    left: 50%;
+    right: auto;
+  }
+
+  .viewer-icon-rail__header,
+  .viewer-icon-rail__section {
+    flex-direction: row;
+    width: auto;
+    align-items: center;
+  }
+
+  .viewer-icon-rail__divider {
+    width: 1px;
+    height: 1.5rem;
+    margin: 0 0.2rem;
+  }
+
+  /* Sit above collapsed inventory / sheet-AI chrome */
+  .viewer-icon-rail[data-lift="bottom-chrome"] {
+    bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .viewer-glass-dock[data-lift="bottom-chrome"] {
+    bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.viewer-glass-dock-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  background: rgba(15, 23, 42, 0.18);
+}
+
+.viewer-glass-dock__grab {
+  display: none;
+}
+
+.viewer-glass-dock {
+  pointer-events: auto;
+  position: absolute;
+  z-index: 40;
+  top: 50%;
+  transform: translateY(-50%);
+  bottom: auto;
+  height: auto;
+  width: var(--viewer-dock-w, 16.25rem);
+  max-width: calc(100% - var(--viewer-rail-w, 3.25rem) - 24px);
+  max-height: min(72vh, 28rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 1rem;
+  color: var(--viewer-text);
+}
+
+.viewer-glass-dock[data-side="left"] {
+  left: calc(var(--viewer-rail-w, 3.25rem) + 16px);
+}
+
+.viewer-glass-dock[data-side="right"] {
+  right: calc(var(--viewer-rail-w, 3.25rem) + 16px);
+}
+
+.viewer-glass-dock__header {
+  flex-shrink: 0;
+  border-bottom: 1px solid #334155;
+  padding: 0.625rem 0.75rem 0.625rem;
+  background: color-mix(in srgb, #0f172a 55%, #1e293b 45%);
+}
+
+.viewer-glass-dock__header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.viewer-dock-header-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f8fafc;
+}
+
+.viewer-dock-header-sub {
+  margin-top: 0.125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.viewer-glass-dock__body {
+  display: flex;
+  /* auto basis so height:auto docks size to tools; shrink+scroll when max-height hits */
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: color-mix(in srgb, var(--viewer-panel) 88%, #475569 12%);
+}
+
+.viewer-dock-scroll {
+  min-height: 0;
+  flex: 1 1 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 1023px) {
+  .viewer-glass-dock.viewer-glass-surface {
+    background: var(--viewer-panel);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: var(--viewer-border);
+  }
+
+  .viewer-glass-dock__body {
+    background: var(--viewer-panel);
+  }
+}
+
+@media (max-width: 639px) {
+  .viewer-glass-dock-backdrop {
+    background: rgba(15, 23, 42, 0.42);
+  }
+
+  .viewer-glass-dock {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+    width: 100%;
+    max-width: 100%;
+    max-height: min(62dvh, 26rem);
+    border-radius: 1rem;
+    transform: none;
+  }
+
+  .viewer-glass-dock[data-side="left"],
+  .viewer-glass-dock[data-side="right"] {
+    left: 0;
+    right: 0;
+  }
+
+  .viewer-glass-dock__grab {
+    display: block;
+    width: 2.5rem;
+    height: 0.25rem;
+    margin: 0.35rem auto 0.5rem;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--viewer-border) 85%, transparent);
+  }
+
+  .viewer-glass-dock-enter[data-side="left"],
+  .viewer-glass-dock-enter[data-side="right"] {
+    animation-name: viewer-dock-in-bottom;
+  }
+}
+
+.viewer-glass-dock-enter {
+  animation: viewer-dock-in-left 180ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.viewer-glass-dock-enter[data-side="right"] {
+  animation-name: viewer-dock-in-right;
+}
+
+@keyframes viewer-dock-in-left {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+@keyframes viewer-dock-in-right {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+@keyframes viewer-dock-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewer-glass-dock-enter {
+    animation: none;
+  }
 }
 
 .viewer-empty-canvas {

@@ -101,8 +101,10 @@ import { CalibrateDialog } from "../CalibrateDialog";
 import { CalibrateNeededDialog } from "../CalibrateNeededDialog";
 import { TextCommentDialog } from "../TextCommentDialog";
 import { CommittedAnnotationsSvg } from "../CommittedAnnotationsSvg";
+import { RevisionDiffOverlay } from "../RevisionDiffOverlay";
 import { SheetContextMenu } from "../SheetContextMenu";
 import { collabColorForUser, useViewerCollab } from "../viewerCollabContext";
+// fallow-ignore-next-line complexity
 export function PdfPageView({
   pdfDoc,
   pageNumber,
@@ -111,6 +113,9 @@ export function PdfPageView({
   pageCanvasRef: pageCanvasRefProp,
   pageWrapperRef: pageWrapperRefProp,
   compareReferenceOnly = false,
+  revisionDiffImageUrl = null,
+  revisionDiffOpacity = 0.85,
+  revisionDiffCoverPdf = false,
 }: PdfPageViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const printCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -120,7 +125,6 @@ export function PdfPageView({
   const pageIdx0 = pageNumber - 1;
   const searchParams = useSearchParams();
   const screenArrowMarkerId = `markup-arrow-screen-${pageIdx0}`;
-  const screenArrowMarkerUrl = `url(#${screenArrowMarkerId})`;
 
   const tool = useViewerStore((s) => s.tool);
   const fileName = useViewerStore((s) => s.fileName);
@@ -3129,7 +3133,16 @@ export function PdfPageView({
             if (pageCanvasRefProp) pageCanvasRefProp.current = el;
           }}
           className="pointer-events-none block max-w-none"
-          style={{ width: cssW, height: cssH }}
+          style={{
+            width: cssW,
+            height: cssH,
+            opacity: revisionDiffCoverPdf && revisionDiffImageUrl ? 0 : 1,
+          }}
+        />
+        <RevisionDiffOverlay
+          imageUrl={revisionDiffImageUrl}
+          opacity={revisionDiffOpacity}
+          coverPdf={revisionDiffCoverPdf}
         />
         <div
           ref={overlayRef}
@@ -3142,24 +3155,24 @@ export function PdfPageView({
           }
           className={
             refPaneInactive
-              ? "absolute inset-0"
+              ? "absolute inset-0 z-[2]"
               : issueOrAssetPlacement
-                ? "absolute inset-0 cursor-crosshair"
+                ? "absolute inset-0 z-[2] cursor-crosshair"
                 : tool === "pan"
-                  ? "absolute inset-0 cursor-grab active:cursor-grabbing"
+                  ? "absolute inset-0 z-[2] cursor-grab active:cursor-grabbing"
                   : tool === "zoomArea"
-                    ? "absolute inset-0 cursor-crosshair"
+                    ? "absolute inset-0 z-[2] cursor-crosshair"
                     : tool === "takeoff"
-                      ? "absolute inset-0 cursor-crosshair"
+                      ? "absolute inset-0 z-[2] cursor-crosshair"
                       : tool === "select"
                         ? moveDrag || resizeActive
-                          ? "absolute inset-0 cursor-grabbing"
+                          ? "absolute inset-0 z-[2] cursor-grabbing"
                           : selectMarquee
-                            ? "absolute inset-0 cursor-crosshair"
-                            : "absolute inset-0 cursor-default"
+                            ? "absolute inset-0 z-[2] cursor-crosshair"
+                            : "absolute inset-0 z-[2] cursor-default"
                         : tool === "annotate" && markupShape === "text"
-                          ? "absolute inset-0 cursor-text"
-                          : "absolute inset-0 cursor-crosshair"
+                          ? "absolute inset-0 z-[2] cursor-text"
+                          : "absolute inset-0 z-[2] cursor-crosshair"
           }
           style={{
             width: cssW,
@@ -3250,7 +3263,6 @@ export function PdfPageView({
                 visibleAnnotations={visibleAnnotations}
                 selectedAnnotationIds={selectedAnnotationIds}
                 screenArrowMarkerId={screenArrowMarkerId}
-                screenArrowMarkerUrl={screenArrowMarkerUrl}
                 takeoffZonesForScreen={takeoffZonesForScreen}
                 takeoffItemsById={takeoffItemsById}
                 takeoffSelectedZoneIds={takeoffSelectedZoneIds}

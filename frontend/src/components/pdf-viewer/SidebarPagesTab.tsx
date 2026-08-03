@@ -170,11 +170,11 @@ export function SidebarPagesTab({ pdfDoc }: SidebarPagesTabProps) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex w-full flex-col">
       <p className="mb-1.5 shrink-0 px-0.5 text-[9px] leading-snug text-slate-500">
         Tap a thumbnail to open that page.
       </p>
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-0.5 pb-2 [scrollbar-width:thin]">
+      <div className="space-y-2 px-0.5 pb-2">
         {pageNumbers.map((pg) => {
           const idx = pg - 1;
           const sz = pageSizePtByPage[idx];

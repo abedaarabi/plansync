@@ -70,7 +70,7 @@ export function SidebarOutlineTab({ pdfDoc }: SidebarOutlineTabProps) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex w-full flex-col">
       <p className="mb-1.5 shrink-0 px-0.5 text-[9px] leading-snug text-slate-500">
         Jump to a section when the PDF has bookmarks.
       </p>
@@ -84,7 +84,7 @@ export function SidebarOutlineTab({ pdfDoc }: SidebarOutlineTabProps) {
           className="w-full rounded-md border border-slate-700/80 bg-slate-900/80 px-2 py-1 text-[10px] text-slate-200 placeholder:text-slate-600"
         />
       </label>
-      <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-0.5 pb-2 [scrollbar-width:thin]">
+      <ul className="space-y-0.5 px-0.5 pb-2">
         {filteredItems.length === 0 && items.length > 0 && (
           <li className="px-0.5 py-2 text-[9px] text-slate-500">No bookmarks match this filter.</li>
         )}

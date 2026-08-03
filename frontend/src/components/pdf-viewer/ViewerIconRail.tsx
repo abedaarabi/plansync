@@ -3,15 +3,17 @@
 import { IconRail, type ChromeRailItem } from "@/components/viewer-chrome/IconRail";
 import type { ReactNode } from "react";
 
-export type BimRailItem = ChromeRailItem;
+export type ViewerRailItem = ChromeRailItem;
 
-export function BimIconRail(props: {
+export function ViewerIconRail(props: {
   side: "left" | "right";
   header?: ReactNode;
-  sections: BimRailItem[][];
+  sections: ViewerRailItem[][];
   activeId: string | null;
+  modeId?: string | null;
   onSelect: (id: string) => void;
   ariaLabel: string;
+  liftForBottomChrome?: boolean;
 }) {
-  return <IconRail tone="bim" showTooltips={false} {...props} />;
+  return <IconRail tone="viewer" showTooltips {...props} />;
 }
