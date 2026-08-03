@@ -10,8 +10,10 @@ import type {
 import type { BimQuantityIndex } from "@plansync/shared/bimTypes";
 import {
   bulkPatchClashes,
+  clearClashTestResults,
   createClashTest,
   createIssue,
+  deleteClash,
   fetchClashTestClashes,
   fetchClashTests,
   fetchProjectSession,
@@ -37,7 +39,6 @@ import {
   clashIssueDescription,
   enrichClashRowsWithQuantityNames,
 } from "@/lib/bim/clash/clashLabels";
-import { peekClashPreview } from "@/lib/bim/clash/clashPreviewCache";
 import { formatClashDistanceDetail } from "@/lib/bim/clash/clashStatusStyle";
 import { runClashTest } from "@/lib/bim/clash/runClashTest";
 import {
@@ -523,12 +524,68 @@ export function useBimClashSession(args: {
     await engine.clearClashReviewPresentation();
   }, [args.engine]);
 
+  const deleteClashById = useCallback(
+    async (clash: BimClashRow) => {
+      try {
+        await deleteClash(clash.id);
+        setClashes((prev) => prev.filter((c) => c.id !== clash.id));
+        if (selectedClashId === clash.id) {
+          setSelectedClashId(null);
+          await args.engine?.clearClashReviewPresentation();
+        }
+        toast.success("Clash deleted");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not delete clash");
+      }
+    },
+    [args.engine, selectedClashId],
+  );
+
+  /** Wipe all saved clashes for the active test and return to a clean setup. */
+  const resetClashResults = useCallback(async () => {
+    const test = activeTest;
+    if (!test) {
+      setClashes([]);
+      setRunStats(null);
+      setSelectedClashId(null);
+      setPreviewHits([]);
+      await args.engine?.clearClashReviewPresentation();
+      return;
+    }
+    try {
+      const { deletedCount } = await clearClashTestResults(test.id);
+      setClashes([]);
+      setRunStats(null);
+      setPreviewHits([]);
+      setSelectedClashId(null);
+      setActiveTest({
+        ...test,
+        lastRunAt: null,
+        lastRunById: null,
+        lastRunStats: null,
+        clashCount: 0,
+      });
+      setTests((prev) =>
+        prev.map((t) =>
+          t.id === test.id
+            ? { ...t, lastRunAt: null, lastRunById: null, lastRunStats: null, clashCount: 0 }
+            : t,
+        ),
+      );
+      await args.engine?.clearClashReviewPresentation();
+      toast.success(
+        deletedCount > 0
+          ? `Cleared ${deletedCount.toLocaleString()} clash${deletedCount === 1 ? "" : "es"}`
+          : "Clash results cleared",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not reset clash results");
+    }
+  }, [activeTest, args.engine]);
+
   const attachClashSnapshotToIssue = useCallback(
     async (issueId: string, clash: BimClashRow): Promise<boolean> => {
-      // Prefer the HUD preview cache (already Color/Ghost/Hide framed), else live capture.
-      const dataUrl =
-        peekClashPreview(clash.id, contextModeRef.current) ??
-        (args.engine ? await args.engine.captureSnapshot() : null);
+      const dataUrl = args.engine ? await args.engine.captureSnapshot() : null;
       if (!dataUrl) return false;
       const file = dataUrlToFile(dataUrl, `clash-${clash.id.slice(0, 8)}.jpg`);
       await uploadIssueReferencePhotoFile(issueId, file);
@@ -689,6 +746,8 @@ export function useBimClashSession(args: {
     focusClash,
     inspectClashItem,
     clearFocusMode,
+    deleteClashById,
+    resetClashResults,
     createIssueFromClash,
     bulkCreateIssueFromGroup,
   };

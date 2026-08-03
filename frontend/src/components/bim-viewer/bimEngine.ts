@@ -1126,7 +1126,10 @@ export class BimEngine {
     guarded.__planSyncFilterGuard = true;
   }
 
-  /** True while clash review owns viewport ghost/colorize presentation. */
+  /**
+   * True while clash review owns viewport ghost/colorize presentation.
+   * Selection still works so properties can be read; only select tint paint is suppressed.
+   */
   isClashReviewActive(): boolean {
     return this.clashReviewSuppressSelectPaint;
   }
@@ -1310,7 +1313,7 @@ export class BimEngine {
 
       if (!this.readyFragments()) return;
 
-      // Keep selection tint on top when present (never over clash Item 1/2 colors).
+      // During clash review, keep Item 1/2 colors; selection still updates for properties.
       const selectMap = this.clashReviewSuppressSelectPaint
         ? null
         : this.sanitizeHighlightMap(this.getActiveSelectionMap(), fragments);
@@ -3484,8 +3487,6 @@ export class BimEngine {
     const components = this.components;
     if (!components || !this.model) return false;
     if (this.tool !== "select" && !opts.forContextMenu) return false;
-    // Clash review uses its own Item 1/2 presentation and never normal selection.
-    if (this.clashReviewSuppressSelectPaint && !opts.forContextMenu) return false;
 
     const hit = await this.fastPickElement(e);
     if (!hit) {
@@ -4424,7 +4425,7 @@ export class BimEngine {
     }
   }
 
-  /** Inspect one clash partner in the properties panel without changing colors. */
+  /** Inspect one clash partner in the properties panel without changing clash colors. */
   // fallow-ignore-next-line unused-class-member
   async inspectClashPartner(ref: { guid: string; fileVersionId?: string | null }): Promise<void> {
     if (!ref.guid) return;
@@ -4432,16 +4433,17 @@ export class BimEngine {
     const map = await this.resolveGuidRefsToModelIdMap([ref]);
     if (!map) return;
     this.selectedGuids.clear();
-    this.lastPickMap = null;
+    this.selectedGuids.add(ref.guid);
+    this.lastPickMap = map;
     const modelId = Object.keys(map)[0] ?? null;
     this.lastPickedModelId = modelId;
-    await this.handleHighlight(map, modelId, false);
-    this.events.onMultiSelection?.([]);
+    // Outline only — fragment select tint would cover Item 1/2 colors.
+    await this.handleHighlight(map, modelId, true);
+    this.events.onMultiSelection?.([ref.guid]);
     this.bumpRender();
   }
 
   /** Exit clash review presentation (pair colors + ghost + suppress flag). */
-  // fallow-ignore-next-line unused-class-member
   async clearClashReviewPresentation(): Promise<void> {
     this.clashPresentSeq += 1;
     this.clashReviewSuppressSelectPaint = false;

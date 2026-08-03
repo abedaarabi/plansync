@@ -167,6 +167,24 @@ export async function patchClash(
   return (await res.json()) as BimClashRow;
 }
 
+export async function deleteClash(clashId: string): Promise<void> {
+  const res = await fetch(apiUrl(`/api/v1/clashes/${encodeURIComponent(clashId)}`), {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) await parseClashError(res, "Could not delete clash.");
+}
+
+/** Delete all clashes for a test and clear last-run stats (keeps set configuration). */
+export async function clearClashTestResults(testId: string): Promise<{ deletedCount: number }> {
+  const res = await fetch(apiUrl(`/api/v1/clash-tests/${encodeURIComponent(testId)}/clashes`), {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) await parseClashError(res, "Could not clear clash results.");
+  return (await res.json()) as { deletedCount: number };
+}
+
 export async function bulkPatchClashes(
   testId: string,
   body: {

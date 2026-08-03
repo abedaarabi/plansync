@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
-import { BimClashStatus, BimClashType } from "@prisma/client";
+import { BimClashStatus, BimClashType, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { loadProjectWithAuth } from "../../lib/permissions.js";
 import { requireBimPro } from "./bimRouteHelpers.js";
@@ -337,6 +337,28 @@ export function registerClashRoutes(
       test: testRowJson(test),
       clashes: clashes.map(clashRowJson),
     });
+  });
+
+  r.delete("/clash-tests/:testId/clashes", needUser, async (c) => {
+    const testId = c.req.param("testId");
+    const test = await prisma.bimClashTest.findUnique({ where: { id: testId } });
+    if (!test) return c.json({ error: "Not found" }, 404);
+    const auth = await authorizeClashProject(test.projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+
+    const deleted = await prisma.bimClash.deleteMany({ where: { testId } });
+    await prisma.bimClashTest.update({
+      where: { id: testId },
+      data: { lastRunAt: null, lastRunById: null, lastRunStats: Prisma.DbNull },
+    });
+    return c.json({ ok: true, deletedCount: deleted.count });
+  });
+
+  r.delete("/clashes/:clashId", needUser, async (c) => {
+    const loaded = await loadClashForUser(c.req.param("clashId"), c.get("user").id);
+    if ("error" in loaded) return c.json({ error: loaded.error }, loaded.status);
+    await prisma.bimClash.delete({ where: { id: loaded.clash.id } });
+    return c.json({ ok: true });
   });
 
   r.patch("/clashes/:clashId", needUser, async (c) => {

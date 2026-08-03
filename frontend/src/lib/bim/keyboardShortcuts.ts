@@ -96,7 +96,12 @@ export const BIM_SHORTCUT_SECTIONS: BimShortcutSection[] = [
     title: "Clash review",
     icon: Crosshair,
     rows: [
-      { keys: ["J", "K"], keyJoin: "or", action: "Next / previous clash", icon: ArrowUpDown },
+      {
+        keys: ["→", "J", "←", "K"],
+        keyJoin: "or",
+        action: "Next / previous clash",
+        icon: ArrowUpDown,
+      },
       {
         keys: ["1", "2", "3", "4"],
         keyJoin: "or",

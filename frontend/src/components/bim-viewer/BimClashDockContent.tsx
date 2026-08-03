@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Layers2, List, Settings2, TicketPlus } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Layers2,
+  List,
+  RotateCcw,
+  Settings2,
+  TicketPlus,
+} from "lucide-react";
 import type {
   BimClashRunStats,
   BimClashSetDef,
@@ -32,6 +42,7 @@ const FILTERS: Array<BimClashStatus | "ALL" | "ORPHANED" | "STALE"> = [
 ];
 
 type ClashDockTab = "results" | "setup";
+type ResultsPane = "list" | "detail";
 
 export type BimClashSetupProps = {
   setA: BimClashSetDef;
@@ -112,14 +123,19 @@ export function BimClashDockContent(props: {
   onClashesChange: (clashes: ClashRow[]) => void;
   onCreateIssue: (clash: ClashRow) => void;
   onBulkCreateIssue: (clashes: ClashRow[]) => void;
+  onDeleteClash?: (clash: ClashRow) => void;
+  onResetResults?: () => void;
+  onInspectClashItem?: (clash: ClashRow, item: "a" | "b") => void;
   creatingIssue?: boolean;
   currentUserId?: string | null;
 }) {
   const [tab, setTab] = useState<ClashDockTab>(() =>
     props.clashes.length === 0 ? "setup" : "results",
   );
+  const [resultsPane, setResultsPane] = useState<ResultsPane>("list");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const wasRunning = useRef(false);
+  const listRef = useRef<HTMLUListElement | null>(null);
 
   // After a run finishes, jump to Results so the list is front-and-center.
   useEffect(() => {
@@ -130,8 +146,14 @@ export function BimClashDockContent(props: {
     if (wasRunning.current) {
       wasRunning.current = false;
       setTab("results");
+      setResultsPane("list");
     }
   }, [props.setup.running]);
+
+  // If selection clears (exit review), return to the list.
+  useEffect(() => {
+    if (!props.selectedClashId) setResultsPane("list");
+  }, [props.selectedClashId]);
 
   const filtered = useMemo(() => {
     let rows = props.clashes;
@@ -165,10 +187,26 @@ export function BimClashDockContent(props: {
   }, [filtered]);
 
   const selected = props.clashes.find((c) => c.id === props.selectedClashId) ?? null;
+  const selectedIndex = selected ? filtered.findIndex((c) => c.id === selected.id) : -1;
   const stats = props.runStats ?? props.test?.lastRunStats ?? null;
   const setupSummary = `${props.setup.setA.label} vs ${props.setup.setB.label}${
     props.setup.clearanceEnabled ? ` · ${props.setup.clearanceMm} mm` : ""
   }`;
+
+  function selectClash(clash: ClashRow, openDetail = false) {
+    props.onSelectClash(clash);
+    if (openDetail) setResultsPane("detail");
+  }
+
+  function stepClash(delta: -1 | 1) {
+    if (filtered.length === 0) return;
+    const idx = selectedIndex < 0 ? 0 : selectedIndex;
+    const next = filtered[(idx + delta + filtered.length) % filtered.length];
+    if (next) {
+      props.onSelectClash(next);
+      setResultsPane("detail");
+    }
+  }
 
   async function resolveClash(clash: ClashRow) {
     try {
@@ -182,6 +220,37 @@ export function BimClashDockContent(props: {
   async function promoteGroup(groupClashes: ClashRow[]) {
     props.onBulkCreateIssue(groupClashes);
   }
+
+  function confirmReset() {
+    if (!props.onResetResults) return;
+    const count = props.clashes.length;
+    const ok = window.confirm(
+      count > 0
+        ? `Clear all ${count.toLocaleString()} clash${count === 1 ? "" : "es"} and start over? This cannot be undone.`
+        : "Clear clash results and start over?",
+    );
+    if (!ok) return;
+    props.onResetResults();
+    setResultsPane("list");
+    setTab("setup");
+  }
+
+  function confirmDelete(clash: ClashRow) {
+    if (!props.onDeleteClash) return;
+    const ok = window.confirm("Delete this clash from the project? This cannot be undone.");
+    if (!ok) return;
+    props.onDeleteClash(clash);
+    setResultsPane("list");
+  }
+
+  // Keep the selected row visible when browsing from the HUD.
+  useEffect(() => {
+    if (resultsPane !== "list" || !props.selectedClashId || !listRef.current) return;
+    const el = listRef.current.querySelector(`[data-clash-id="${props.selectedClashId}"]`);
+    if (el instanceof HTMLElement) {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [props.selectedClashId, resultsPane]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -198,7 +267,10 @@ export function BimClashDockContent(props: {
               type="button"
               className="bim-segment-btn"
               data-active={tab === id ? "true" : undefined}
-              onClick={() => setTab(id)}
+              onClick={() => {
+                setTab(id);
+                if (id === "results") setResultsPane("list");
+              }}
             >
               {label}
               {id === "results" && props.clashes.length > 0 ? (
@@ -210,18 +282,109 @@ export function BimClashDockContent(props: {
       </div>
 
       {tab === "setup" ? (
-        <div className="min-h-0 flex-1">
-          <BimClashSetsPanel {...props.setup} />
+        <div className="flex min-h-0 flex-1 flex-col">
+          {props.onResetResults && props.clashes.length > 0 ? (
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--bim-border)] px-2.5 py-1.5">
+              <p className="text-[10px] text-[var(--bim-text-muted)]">
+                {props.clashes.length.toLocaleString()} saved result
+                {props.clashes.length === 1 ? "" : "s"}
+              </p>
+              <button
+                type="button"
+                className="bim-focus-ring inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-medium text-[var(--bim-danger)] hover:bg-[var(--bim-hover)]"
+                onClick={confirmReset}
+              >
+                <RotateCcw className="h-3 w-3" aria-hidden />
+                Clear & start over
+              </button>
+            </div>
+          ) : null}
+          <div className="min-h-0 flex-1">
+            <BimClashSetsPanel {...props.setup} />
+          </div>
+        </div>
+      ) : resultsPane === "detail" && selected && selectedIndex >= 0 ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center gap-1 border-b border-[var(--bim-border)] px-2 py-1.5">
+            <button
+              type="button"
+              className="bim-focus-ring bim-rail-btn h-8 w-8"
+              aria-label="Back to clash list"
+              onClick={() => setResultsPane("list")}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+            </button>
+            <div className="min-w-0 flex-1 px-1">
+              <p className="truncate text-[11px] font-semibold text-[var(--bim-text)]">
+                Clash detail
+              </p>
+              <p className="truncate text-[10px] tabular-nums text-[var(--bim-text-muted)]">
+                {selectedIndex + 1} of {filtered.length}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="bim-focus-ring bim-rail-btn h-8 w-8"
+              aria-label="Previous clash"
+              disabled={filtered.length <= 1}
+              onClick={() => stepClash(-1)}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              className="bim-focus-ring bim-rail-btn h-8 w-8"
+              aria-label="Next clash"
+              disabled={filtered.length <= 1}
+              onClick={() => stepClash(1)}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <BimClashDetailPanel
+              clash={selected}
+              creatingIssue={props.creatingIssue}
+              onUpdated={(updated) =>
+                props.onClashesChange(props.clashes.map((c) => (c.id === updated.id ? updated : c)))
+              }
+              onCreateIssue={props.onCreateIssue}
+              onDelete={props.onDeleteClash ? () => confirmDelete(selected) : undefined}
+              onInspectItem={
+                props.onInspectClashItem
+                  ? (item) => props.onInspectClashItem?.(selected, item)
+                  : undefined
+              }
+            />
+          </div>
         </div>
       ) : (
         <>
-          <div className="flex shrink-0 items-start gap-2 border-b border-[var(--bim-border)] px-2.5 py-1.5">
+          <div className="flex shrink-0 items-center gap-1 border-b border-[var(--bim-border)] px-2.5 py-1.5">
             <p
-              className="min-w-0 flex-1 text-[10px] leading-snug break-words [overflow-wrap:anywhere] text-[var(--bim-text-muted)]"
+              className="min-w-0 flex-1 truncate text-[10px] text-[var(--bim-text-muted)]"
               title={setupSummary}
             >
               <span className="font-medium text-[var(--bim-text)]">{setupSummary}</span>
+              {stats ? (
+                <span className="text-[var(--bim-text-subtle)]">
+                  {" "}
+                  · +{stats.newCount} new
+                  {stats.reopenedCount ? `, ${stats.reopenedCount} reopened` : ""}
+                </span>
+              ) : null}
             </p>
+            {props.onResetResults && (props.clashes.length > 0 || props.test) ? (
+              <button
+                type="button"
+                className="bim-focus-ring inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-medium text-[var(--bim-danger)] hover:bg-[var(--bim-hover)]"
+                title="Clear all results and start over"
+                onClick={confirmReset}
+              >
+                <RotateCcw className="h-3 w-3" aria-hidden />
+                Reset
+              </button>
+            ) : null}
             <button
               type="button"
               className="bim-focus-ring inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-medium text-[var(--bim-accent)] hover:bg-[var(--bim-hover)]"
@@ -232,22 +395,12 @@ export function BimClashDockContent(props: {
             </button>
           </div>
 
-          {stats ? (
-            <div className="border-b border-[var(--bim-border)] px-2.5 py-1.5 text-[10px] text-[var(--bim-text-muted)]">
-              <span className="font-medium text-[var(--bim-text)]">Last run</span>
-              {": "}+{stats.newCount} new
-              {stats.reopenedCount ? `, ${stats.reopenedCount} reopened` : ""}
-              {stats.noLongerClashing ? `, ${stats.noLongerClashing} no longer clashing` : ""}
-              {stats.orphaned ? `, ${stats.orphaned} orphaned` : ""}
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap items-center gap-1 border-b border-[var(--bim-border)] px-2.5 py-1.5">
+          <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-[var(--bim-border)] px-2.5 py-1.5">
             {FILTERS.map((f) => (
               <button
                 key={f}
                 type="button"
-                className={`bim-focus-ring rounded-full px-2 py-1 text-[10px] font-medium ${
+                className={`bim-focus-ring rounded-md px-2 py-1 text-[10px] font-medium ${
                   props.statusFilter === f
                     ? "bg-[var(--bim-accent-muted)] text-[var(--bim-text)]"
                     : "text-[var(--bim-text-muted)] hover:bg-[var(--bim-hover)]"
@@ -257,8 +410,8 @@ export function BimClashDockContent(props: {
                 {filterLabel(f)}
               </button>
             ))}
-            <div className="ml-auto flex items-center gap-1">
-              <label className="flex items-center gap-1 text-[10px] text-[var(--bim-text-muted)]">
+            <div className="ml-auto flex items-center gap-0.5">
+              <label className="flex items-center gap-1 px-1 text-[10px] text-[var(--bim-text-muted)]">
                 <input
                   type="checkbox"
                   checked={props.assigneeMe}
@@ -270,6 +423,7 @@ export function BimClashDockContent(props: {
                 type="button"
                 className="bim-focus-ring bim-rail-btn h-8 w-8"
                 aria-label={props.grouped ? "Flat list" : "Group list"}
+                title={props.grouped ? "Show flat list" : "Group clashes"}
                 onClick={() => props.onGroupedChange(!props.grouped)}
               >
                 {props.grouped ? (
@@ -281,18 +435,8 @@ export function BimClashDockContent(props: {
             </div>
           </div>
 
-          <div className="border-b border-[var(--bim-border)] px-2.5 py-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[9px] font-medium uppercase tracking-wide text-[var(--bim-text-subtle)]">
-                Context
-              </p>
-              <p className="text-[10px] text-[var(--bim-text-muted)]">
-                {props.grouped
-                  ? `${groups.length} groups · ${filtered.length}`
-                  : `${filtered.length} of ${props.clashes.length}`}
-              </p>
-            </div>
-            <div className="bim-segment bim-segment-compact mt-1">
+          <div className="flex shrink-0 items-center gap-2 border-b border-[var(--bim-border)] px-2.5 py-1.5">
+            <div className="bim-segment bim-segment-compact min-w-0 flex-1">
               {(
                 [
                   ["color", "Color"],
@@ -311,6 +455,11 @@ export function BimClashDockContent(props: {
                 </button>
               ))}
             </div>
+            <p className="shrink-0 text-[10px] tabular-nums text-[var(--bim-text-muted)]">
+              {props.grouped
+                ? `${groups.length} groups`
+                : `${filtered.length}/${props.clashes.length}`}
+            </p>
           </div>
 
           {filtered.length === 0 ? (
@@ -335,7 +484,7 @@ export function BimClashDockContent(props: {
               ) : null}
             </div>
           ) : (
-            <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
+            <ul ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
               {props.grouped
                 ? groups.map(([groupId, groupClashes]) => {
                     const open = expandedGroups.has(groupId);
@@ -354,7 +503,7 @@ export function BimClashDockContent(props: {
                                 else next.add(groupId);
                                 return next;
                               });
-                              if (groupClashes[0]) props.onSelectClash(groupClashes[0]);
+                              if (groupClashes[0]) selectClash(groupClashes[0]);
                             }}
                           >
                             {open ? (
@@ -384,7 +533,7 @@ export function BimClashDockContent(props: {
                                 </span>
                               ) : null}
                             </span>
-                            <span className="shrink-0 rounded-full bg-[var(--bim-hover)] px-1.5 text-[10px] text-[var(--bim-text-muted)]">
+                            <span className="shrink-0 rounded-md bg-[var(--bim-hover)] px-1.5 text-[10px] text-[var(--bim-text-muted)]">
                               {groupClashes.length}
                             </span>
                           </button>
@@ -407,8 +556,12 @@ export function BimClashDockContent(props: {
                                 selected={props.selectedClashId === clash.id}
                                 stale={isStale(clash, props.test)}
                                 orphaned={Boolean(clash.elementMissingSinceId)}
-                                onSelect={() => props.onSelectClash(clash)}
+                                onSelect={() => selectClash(clash)}
+                                onOpenDetail={() => selectClash(clash, true)}
                                 onResolve={() => void resolveClash(clash)}
+                                onDelete={
+                                  props.onDeleteClash ? () => confirmDelete(clash) : undefined
+                                }
                               />
                             ))}
                           </ul>
@@ -423,23 +576,14 @@ export function BimClashDockContent(props: {
                       selected={props.selectedClashId === clash.id}
                       stale={isStale(clash, props.test)}
                       orphaned={Boolean(clash.elementMissingSinceId)}
-                      onSelect={() => props.onSelectClash(clash)}
+                      onSelect={() => selectClash(clash)}
+                      onOpenDetail={() => selectClash(clash, true)}
                       onResolve={() => void resolveClash(clash)}
+                      onDelete={props.onDeleteClash ? () => confirmDelete(clash) : undefined}
                     />
                   ))}
             </ul>
           )}
-
-          {selected ? (
-            <BimClashDetailPanel
-              clash={selected}
-              creatingIssue={props.creatingIssue}
-              onUpdated={(updated) =>
-                props.onClashesChange(props.clashes.map((c) => (c.id === updated.id ? updated : c)))
-              }
-              onCreateIssue={props.onCreateIssue}
-            />
-          ) : null}
         </>
       )}
     </div>

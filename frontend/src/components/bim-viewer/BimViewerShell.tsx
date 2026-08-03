@@ -52,7 +52,6 @@ import dynamic from "next/dynamic";
 import { AlignCoordinatesPanel } from "./AlignCoordinatesPanel";
 import { BimContextMenu } from "./BimContextMenu";
 import { BimIssueMarkersOverlay } from "./BimIssueMarkersOverlay";
-import { BimClashReviewHud } from "./BimClashReviewHud";
 import { BimClashDockContent } from "./BimClashDockContent";
 import { ifcTypeCountsForModel, modelIdFromSet } from "@/lib/bim/clash/clashSets";
 import { BimIssueCommentDialog } from "./BimIssueCommentDialog";
@@ -534,6 +533,11 @@ export function BimViewerShell(props: {
           onSelection: (sel) => {
             if (cancelled) return;
             setSelection(sel);
+            // Clash review keeps green/red colors; still open properties for the pick.
+            if (sel && engineRef.current?.isClashReviewActive()) {
+              setInspectTab("properties");
+              setActiveDock("properties");
+            }
           },
           onGroupsChanged: (groups) => {
             if (cancelled) return;
@@ -2122,6 +2126,12 @@ export function BimViewerShell(props: {
         onClashesChange={clash.setClashes}
         onCreateIssue={(c) => void clash.createIssueFromClash(c)}
         onBulkCreateIssue={(rows) => void clash.bulkCreateIssueFromGroup(rows)}
+        onDeleteClash={(c) => void clash.deleteClashById(c)}
+        onResetResults={() => void clash.resetClashResults()}
+        onInspectClashItem={(c, item) => {
+          void clash.inspectClashItem(c, item);
+          openPropertiesDock("properties");
+        }}
       />
     ) : null;
 
@@ -2149,19 +2159,20 @@ export function BimViewerShell(props: {
         return;
       }
 
-      if (activeDock !== "clashes") return;
+      // Clash shortcuts stay active while reviewing, even if Properties dock is open.
+      if (activeDock !== "clashes" && !clash.selectedClashId) return;
       const list = clash.clashes.filter((c) => clash.filteredIds.has(c.id));
       const idx = list.findIndex((c) => c.id === clash.selectedClashId);
 
-      if (e.key === "j" || e.key === "J") {
+      if (e.key === "j" || e.key === "J" || e.key === "ArrowDown" || e.key === "ArrowRight") {
         e.preventDefault();
-        const next = list[Math.min(list.length - 1, Math.max(0, idx + 1))];
+        const next = list[idx < 0 || idx >= list.length - 1 ? 0 : idx + 1];
         if (next) void clash.focusClash(next);
         return;
       }
-      if (e.key === "k" || e.key === "K") {
+      if (e.key === "k" || e.key === "K" || e.key === "ArrowUp" || e.key === "ArrowLeft") {
         e.preventDefault();
-        const prev = list[Math.max(0, idx <= 0 ? 0 : idx - 1)];
+        const prev = list[idx <= 0 ? list.length - 1 : idx - 1];
         if (prev) void clash.focusClash(prev);
         return;
       }
@@ -2507,51 +2518,6 @@ export function BimViewerShell(props: {
             onOpenDocuments={onMarkerOpenDocuments}
             onAddComment={onMarkerAddComment}
             onResolveIssue={onMarkerResolveIssue}
-          />
-        ) : null}
-
-        {workChromeReady &&
-        activeDock === "clashes" &&
-        clash.selectedClash &&
-        clash.clashes.length > 0 ? (
-          <BimClashReviewHud
-            clash={clash.selectedClash}
-            engine={activeEngine}
-            modelLabelA={
-              loadedModels.find((m) => m.fileVersionId === clash.selectedClash?.fileVersionAId)
-                ?.name ?? null
-            }
-            modelLabelB={
-              loadedModels.find((m) => m.fileVersionId === clash.selectedClash?.fileVersionBId)
-                ?.name ?? null
-            }
-            index={Math.max(
-              0,
-              clash.clashes
-                .filter((c) => clash.filteredIds.has(c.id))
-                .findIndex((c) => c.id === clash.selectedClashId),
-            )}
-            total={clash.clashes.filter((c) => clash.filteredIds.has(c.id)).length}
-            onPrev={() => {
-              const list = clash.clashes.filter((c) => clash.filteredIds.has(c.id));
-              const idx = list.findIndex((c) => c.id === clash.selectedClashId);
-              const prev = list[idx <= 0 ? list.length - 1 : idx - 1];
-              if (prev) void clash.focusClash(prev);
-            }}
-            onNext={() => {
-              const list = clash.clashes.filter((c) => clash.filteredIds.has(c.id));
-              const idx = list.findIndex((c) => c.id === clash.selectedClashId);
-              const next = list[idx < 0 || idx >= list.length - 1 ? 0 : idx + 1];
-              if (next) void clash.focusClash(next);
-            }}
-            onExit={() => void clash.clearFocusMode()}
-            onInspectItem={(item) => {
-              if (clash.selectedClash) void clash.inspectClashItem(clash.selectedClash, item);
-            }}
-            creatingIssue={clash.creatingIssue}
-            onCreateIssue={(c) => void clash.createIssueFromClash(c)}
-            contextMode={clash.contextMode}
-            onContextModeChange={clash.setContextMode}
           />
         ) : null}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, MessageSquarePlus, TicketPlus } from "lucide-react";
+import { Loader2, MessageSquarePlus, TicketPlus, Trash2 } from "lucide-react";
 import type { BimClashCommentRow, BimClashRow } from "@/lib/api-client/bim-clash";
 import { createClashComment, fetchClashComments, patchClash } from "@/lib/api-client/bim-clash";
 import type { BimClashStatus } from "@plansync/shared/bimClashTypes";
@@ -10,6 +10,8 @@ import {
   CLASH_ITEM1_COLOR,
   CLASH_ITEM2_COLOR,
   clashStatusLabel,
+  clashTypeLabel,
+  formatClashDistanceDetail,
 } from "@/lib/bim/clash/clashStatusStyle";
 import { toast } from "sonner";
 
@@ -19,6 +21,8 @@ export function BimClashDetailPanel(props: {
   clash: BimClashRow;
   onUpdated: (clash: BimClashRow) => void;
   onCreateIssue: (clash: BimClashRow) => void;
+  onDelete?: () => void;
+  onInspectItem?: (item: "a" | "b") => void;
   creatingIssue?: boolean;
 }) {
   const [comments, setComments] = useState<BimClashCommentRow[]>([]);
@@ -78,11 +82,27 @@ export function BimClashDetailPanel(props: {
   const typeB = (props.clash.elementB?.ifcType ?? "Element").replace(/^Ifc/, "");
 
   return (
-    <div className="space-y-3 border-t border-[var(--bim-border)] p-2.5">
-      <div className="space-y-1.5">
-        <p className="bim-section-title">Clashing elements</p>
-        <div className="rounded-md bg-[var(--bim-hover)] px-2.5 py-2">
-          <div className="flex items-start gap-2">
+    <div className="space-y-3 p-2.5">
+      <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+        <span className="bim-clash-pill" data-status={props.clash.status}>
+          {clashStatusLabel(props.clash.status)}
+        </span>
+        <span className="rounded-md bg-[var(--bim-hover)] px-1.5 py-0.5 font-medium text-[var(--bim-text)]">
+          {clashTypeLabel(props.clash.clashType)}
+        </span>
+        <span className="tabular-nums font-medium text-[var(--bim-text)]">
+          {formatClashDistanceDetail(props.clash.clashType, props.clash.distanceMm)}
+        </span>
+      </div>
+
+      <div className="space-y-1">
+        <p className="bim-section-title">Elements</p>
+        <div className="space-y-1">
+          <button
+            type="button"
+            className="bim-focus-ring flex w-full items-start gap-2 rounded-md bg-[var(--bim-hover)] px-2 py-2 text-left hover:brightness-110"
+            onClick={() => props.onInspectItem?.("a")}
+          >
             <span
               className="mt-1 h-2 w-2 shrink-0 rounded-full"
               style={{ background: CLASH_ITEM1_COLOR }}
@@ -90,11 +110,16 @@ export function BimClashDetailPanel(props: {
             />
             <div className="min-w-0">
               <p className="truncate text-[11px] font-semibold text-[var(--bim-text)]">{nameA}</p>
-              <p className="truncate text-[10px] text-[var(--bim-text-muted)]">{typeA}</p>
+              <p className="truncate text-[10px] text-[var(--bim-text-muted)]">
+                {typeA} · View properties
+              </p>
             </div>
-          </div>
-          <p className="my-1 pl-4 text-[10px] text-[var(--bim-text-subtle)]">vs</p>
-          <div className="flex items-start gap-2">
+          </button>
+          <button
+            type="button"
+            className="bim-focus-ring flex w-full items-start gap-2 rounded-md bg-[var(--bim-hover)] px-2 py-2 text-left hover:brightness-110"
+            onClick={() => props.onInspectItem?.("b")}
+          >
             <span
               className="mt-1 h-2 w-2 shrink-0 rounded-full"
               style={{ background: CLASH_ITEM2_COLOR }}
@@ -102,9 +127,11 @@ export function BimClashDetailPanel(props: {
             />
             <div className="min-w-0">
               <p className="truncate text-[11px] font-semibold text-[var(--bim-text)]">{nameB}</p>
-              <p className="truncate text-[10px] text-[var(--bim-text-muted)]">{typeB}</p>
+              <p className="truncate text-[10px] text-[var(--bim-text-muted)]">
+                {typeB} · View properties
+              </p>
             </div>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -126,10 +153,10 @@ export function BimClashDetailPanel(props: {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-1.5">
         <button
           type="button"
-          className="bim-btn-secondary bim-focus-ring inline-flex min-h-9 items-center gap-1.5 px-2.5 text-[11px]"
+          className="bim-btn-secondary bim-focus-ring flex min-h-9 w-full items-center justify-center gap-1.5 px-2.5 text-[11px]"
           disabled={props.creatingIssue || Boolean(props.clash.issueId)}
           onClick={() => props.onCreateIssue(props.clash)}
         >
@@ -140,10 +167,16 @@ export function BimClashDetailPanel(props: {
           )}
           {props.clash.issueId ? "Issue linked" : "Create issue"}
         </button>
-        <p className="w-full text-[9px] text-[var(--bim-text-muted)]">
-          Creates a project issue with clash details and a viewport snapshot. Assign owners on the
-          issue.
-        </p>
+        {props.onDelete ? (
+          <button
+            type="button"
+            className="bim-focus-ring flex min-h-9 w-full items-center justify-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium text-[var(--bim-danger)] hover:bg-[var(--bim-hover)]"
+            onClick={props.onDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+            Delete clash
+          </button>
+        ) : null}
       </div>
 
       <div>
