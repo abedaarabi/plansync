@@ -21,10 +21,7 @@ import {
   Loader2,
   MapPin,
   Package,
-  RotateCcw,
-  SortAsc,
   UserRound,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
@@ -34,9 +31,7 @@ import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorksp
 import {
   fetchIssue,
   fetchIssuesForProject,
-  fetchProject,
   fetchProjectSession,
-  fetchWorkspaceMembers,
   formatIssueLockHint,
   patchIssue,
   postWorkOrderFromOccupant,
@@ -58,11 +53,14 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import {
-  OM_COMPACT_CHIP_ACTIVE,
-  OM_COMPACT_CHIP_IDLE,
-  OM_COMPACT_SELECT,
-  OM_PAGE_CLASS,
-} from "@/lib/omCompactStyles";
+  AssigneeFilterSelect,
+  SortSelect,
+  StatusFilterChips,
+  useProjectWorkspaceMembers,
+  type SortSelectOption,
+} from "@/components/enterprise/issueListControls";
+import { filterIssueRows, mergeIssueRowIntoLists } from "@/lib/issueListFilters";
+import { OM_COMPACT_SELECT, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 
 type StatusFilter = "ALL" | "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
 type SortKey = "newest" | "status";
@@ -74,6 +72,11 @@ const ISSUE_FILTER_DEFS: { key: StatusFilter; label: string; Icon: LucideIcon }[
   { key: "IN_PROGRESS", label: "In progress", Icon: Activity },
   { key: "RESOLVED", label: "Resolved", Icon: CheckCircle2 },
   { key: "CLOSED", label: "Closed", Icon: Archive },
+];
+
+const TENANT_SORT_OPTIONS: SortSelectOption<SortKey>[] = [
+  { value: "newest", label: "Newest first" },
+  { value: "status", label: "Status" },
 ];
 
 function tenantRequestsListPath(projectId: string, workspaceId?: string | null): string {
@@ -264,6 +267,8 @@ type Props = {
   selectedIssueId?: string;
 };
 
+// Pre-existing monolith (detail slide-over, promote flow, list). TODO: split like ProjectIssuesClient.
+// fallow-ignore-next-line complexity
 export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
   const qc = useQueryClient();
   const router = useRouter();
@@ -296,32 +301,12 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
 
   const canPromoteOccupant = Boolean(projectSession && !projectSession.isExternal);
 
-  const { data: project } = useQuery({
-    queryKey: qk.project(projectId),
-    queryFn: () => fetchProject(projectId),
-  });
-  const workspaceId = project?.workspaceId;
+  const { members } = useProjectWorkspaceMembers(projectId);
 
-  const { data: membersRes } = useQuery({
-    queryKey: qk.workspaceMembers(workspaceId ?? ""),
-    queryFn: () => fetchWorkspaceMembers(workspaceId!),
-    enabled: Boolean(workspaceId),
-  });
-  const members = membersRes?.members ?? [];
-
-  const filtered = useMemo(() => {
-    let list = filter === "ALL" ? items : items.filter((i) => i.status === filter);
-    if (assigneeFilter === "UNASSIGNED") list = list.filter((i) => !i.assigneeId);
-    else if (assigneeFilter !== "ALL") list = list.filter((i) => i.assigneeId === assigneeFilter);
-    if (sort === "newest") {
-      list = [...list].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-    } else {
-      list = [...list].sort((a, b) => a.status.localeCompare(b.status));
-    }
-    return list;
-  }, [items, filter, sort, assigneeFilter]);
+  const filtered = useMemo(
+    () => filterIssueRows(items, { status: filter, assignee: assigneeFilter, sort }),
+    [items, filter, sort, assigneeFilter],
+  );
 
   const {
     data: detailFetched,
@@ -348,21 +333,7 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
   const promotedAway = Boolean(detailFetched) && detailFetched!.issueKind !== "OCCUPANT";
 
   const mergeIssueIntoLists = useCallback(
-    (row: IssueRow) => {
-      qc.setQueryData(issuesKey, (old: IssueRow[] | undefined) => {
-        if (!old) return old;
-        return old.map((i) => (i.id === row.id ? row : i));
-      });
-      qc.setQueryData(qk.issueById(row.id), row);
-      qc.setQueriesData<IssueRow[]>(
-        { queryKey: ["issues", "fileVersion"], exact: false },
-        (old) => {
-          if (!old?.length) return old;
-          if (!old.some((i) => i.id === row.id)) return old;
-          return old.map((i) => (i.id === row.id ? row : i));
-        },
-      );
-    },
+    (row: IssueRow) => mergeIssueRowIntoLists(qc, issuesKey, row),
     [qc, issuesKey],
   );
 
@@ -509,81 +480,29 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
       />
 
       <div className="sticky top-0 z-10 flex flex-col gap-2 border-b border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)]/95 pb-3 backdrop-blur-md lg:static lg:bg-transparent">
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            className="mobile-chip-scroll flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            role="tablist"
-            aria-label="Filter by status"
-          >
-            {ISSUE_FILTER_DEFS.map((f) => {
-              const TabIcon = f.Icon;
-              const selected = filter === f.key;
-              return (
-                <button
-                  key={f.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => setFilter(f.key)}
-                  className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
-                    selected ? OM_COMPACT_CHIP_ACTIVE : OM_COMPACT_CHIP_IDLE
-                  }`}
-                  style={selected ? { backgroundColor: "var(--enterprise-primary)" } : undefined}
-                >
-                  <TabIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-                  {f.label}
-                </button>
-              );
-            })}
-          </div>
-          {filtersActive ? (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-text)]"
-            >
-              <RotateCcw className="h-3 w-3 opacity-80" strokeWidth={2} aria-hidden />
-              Reset
-            </button>
-          ) : null}
-        </div>
+        <StatusFilterChips
+          defs={ISSUE_FILTER_DEFS}
+          value={filter}
+          onChange={setFilter}
+          filtersActive={filtersActive}
+          onReset={clearFilters}
+        />
 
         <div className="grid grid-cols-2 gap-2 pt-1 lg:flex lg:flex-wrap lg:items-end lg:gap-3 lg:pt-0">
-          <label className="min-w-0 lg:min-w-[11rem]">
-            <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-[var(--enterprise-text-muted)]">
-              <Users className="h-3.5 w-3.5" aria-hidden />
-              Assignee
-            </span>
-            <select
-              id="tenant-assignee-filter"
-              value={assigneeFilter}
-              onChange={(e) => setAssigneeFilter(e.target.value as AssigneeFilter)}
-              className={OM_COMPACT_SELECT}
-            >
-              <option value="ALL">All assignees</option>
-              <option value="UNASSIGNED">Unassigned</option>
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.name || m.email || m.userId}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="min-w-0 lg:min-w-[10rem]">
-            <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-[var(--enterprise-text-muted)]">
-              <SortAsc className="h-3.5 w-3.5" aria-hidden />
-              Sort
-            </span>
-            <select
-              id="tenant-sort"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-              className={OM_COMPACT_SELECT}
-            >
-              <option value="newest">Newest first</option>
-              <option value="status">Status</option>
-            </select>
-          </label>
+          <AssigneeFilterSelect
+            id="tenant-assignee-filter"
+            value={assigneeFilter}
+            onChange={setAssigneeFilter}
+            members={members}
+            className="min-w-0 lg:min-w-[11rem]"
+          />
+          <SortSelect
+            id="tenant-sort"
+            value={sort}
+            onChange={setSort}
+            options={TENANT_SORT_OPTIONS}
+            className="min-w-0 lg:min-w-[10rem]"
+          />
         </div>
       </div>
 

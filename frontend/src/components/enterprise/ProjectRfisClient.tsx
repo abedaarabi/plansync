@@ -21,8 +21,6 @@ import {
   Lock,
   MessageSquareQuote,
   Plus,
-  RotateCcw,
-  SortAsc,
   Users,
 } from "lucide-react";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
@@ -41,11 +39,9 @@ import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorksp
 import {
   createProjectRfi,
   fetchIssuesForProject,
-  fetchProject,
   fetchProjectRfis,
   fetchProjectTeam,
   fetchProjects,
-  fetchWorkspaceMembers,
   ProRequiredError,
   type RfiRow,
 } from "@/lib/api-client";
@@ -54,12 +50,14 @@ import {
   RFI_STATUS_LABEL,
   rfiStatusBadgeClass,
 } from "@/lib/issueStatusStyle";
+import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import {
-  OM_COMPACT_CHIP_ACTIVE,
-  OM_COMPACT_CHIP_IDLE,
-  OM_COMPACT_SELECT,
-  OM_PAGE_CLASS,
-} from "@/lib/omCompactStyles";
+  AssigneeFilterSelect,
+  SortSelect,
+  StatusFilterChips,
+  useProjectWorkspaceMembers,
+  type SortSelectOption,
+} from "@/components/enterprise/issueListControls";
 import { qk } from "@/lib/queryKeys";
 import { useTickNowMs } from "@/lib/useTickNowMs";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
@@ -116,6 +114,12 @@ const FILTER_DEFS: { key: StatusFilter; label: string; Icon: LucideIcon }[] = [
   { key: "ANSWERED", label: "Answered", Icon: CheckCircle2 },
   { key: "CLOSED", label: "Closed", Icon: Archive },
   { key: "OVERDUE", label: "Overdue", Icon: AlertTriangle },
+];
+
+const RFI_SORT_OPTIONS: SortSelectOption<SortKey>[] = [
+  { value: "newest", label: "Newest first" },
+  { value: "file", label: "File name" },
+  { value: "status", label: "Status" },
 ];
 
 function rfiRespondersDisplay(r: RfiRow): string {
@@ -184,6 +188,8 @@ function RfiEmptyState({ noRows }: { noRows: boolean }) {
   );
 }
 
+// Pre-existing monolith (create slide-over, list, cards). TODO: split like ProjectIssuesClient.
+// fallow-ignore-next-line complexity
 export function ProjectRfisClient({ projectId }: { projectId: string }) {
   const router = useRouter();
   const nowMs = useTickNowMs();
@@ -214,19 +220,7 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
     enabled: Boolean(projectId),
   });
 
-  const { data: projectMeta } = useQuery({
-    queryKey: qk.project(projectId),
-    queryFn: () => fetchProject(projectId),
-    enabled: Boolean(projectId),
-  });
-  const workspaceId = projectMeta?.workspaceId;
-
-  const { data: membersRes } = useQuery({
-    queryKey: qk.workspaceMembers(workspaceId ?? ""),
-    queryFn: () => fetchWorkspaceMembers(workspaceId!),
-    enabled: Boolean(workspaceId),
-  });
-  const members = membersRes?.members ?? [];
+  const { members } = useProjectWorkspaceMembers(projectId);
 
   const { data: team } = useQuery({
     queryKey: qk.projectTeam(projectId),
@@ -399,81 +393,21 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
       ) : null}
 
       <div className="sticky top-0 z-10 flex flex-col gap-2 border-b border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)]/95 pb-3 backdrop-blur-md lg:static lg:bg-transparent">
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            className="mobile-chip-scroll flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            role="tablist"
-            aria-label="Filter by status"
-          >
-            {FILTER_DEFS.map((f) => {
-              const TabIcon = f.Icon;
-              const selected = filter === f.key;
-              return (
-                <button
-                  key={f.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => setFilter(f.key)}
-                  className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
-                    selected ? OM_COMPACT_CHIP_ACTIVE : OM_COMPACT_CHIP_IDLE
-                  }`}
-                  style={selected ? { backgroundColor: "var(--enterprise-primary)" } : undefined}
-                >
-                  <TabIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-                  {f.label}
-                </button>
-              );
-            })}
-          </div>
-          {filtersActive ? (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-text)]"
-            >
-              <RotateCcw className="h-3 w-3 opacity-80" strokeWidth={2} aria-hidden />
-              Reset
-            </button>
-          ) : null}
-        </div>
+        <StatusFilterChips
+          defs={FILTER_DEFS}
+          value={filter}
+          onChange={setFilter}
+          filtersActive={filtersActive}
+          onReset={clearFilters}
+        />
         <div className="flex flex-wrap items-end gap-2">
-          <label className="min-w-[9rem]">
-            <span className="mb-0.5 flex items-center gap-1 text-xs font-medium text-[var(--enterprise-text-muted)]">
-              <Users className="h-3.5 w-3.5" aria-hidden />
-              Assignee
-            </span>
-            <select
-              id="rfis-assignee-filter"
-              value={assigneeFilter}
-              onChange={(e) => setAssigneeFilter(e.target.value as AssigneeFilter)}
-              className={OM_COMPACT_SELECT}
-            >
-              <option value="ALL">All assignees</option>
-              <option value="UNASSIGNED">Unassigned</option>
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.name || m.email || m.userId}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="min-w-[9rem]">
-            <span className="mb-0.5 flex items-center gap-1 text-xs font-medium text-[var(--enterprise-text-muted)]">
-              <SortAsc className="h-3.5 w-3.5" aria-hidden />
-              Sort
-            </span>
-            <select
-              id="rfis-sort"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-              className={OM_COMPACT_SELECT}
-            >
-              <option value="newest">Newest first</option>
-              <option value="file">File name</option>
-              <option value="status">Status</option>
-            </select>
-          </label>
+          <AssigneeFilterSelect
+            id="rfis-assignee-filter"
+            value={assigneeFilter}
+            onChange={setAssigneeFilter}
+            members={members}
+          />
+          <SortSelect id="rfis-sort" value={sort} onChange={setSort} options={RFI_SORT_OPTIONS} />
         </div>
       </div>
 

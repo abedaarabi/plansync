@@ -62,6 +62,8 @@ export const qk = {
     ] as const,
   /** Single issue row (detail routes, cache merge after PATCH). */
   issueById: (issueId: string) => ["issues", "byId", issueId] as const,
+  /** Comment thread for one issue (enterprise detail page). */
+  issueComments: (issueId: string) => ["issues", "comments", issueId] as const,
   /** Short-lived S3 GET URL for issue reference photo. */
   issueRefPhotoReadUrl: (issueId: string, photoId: string) =>
     ["issues", "refPhotoReadUrl", issueId, photoId] as const,
