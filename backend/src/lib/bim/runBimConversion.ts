@@ -323,6 +323,7 @@ export async function storeFragmentsBuffer(
   if (!put.ok) throw new Error(put.error);
 
   const priorFileVersionId = await findPriorFileVersionId(fv.fileId, fv.version);
+  const firstFragmentsUpload = !fv.fragmentsS3Key;
 
   await registerMonolithicGeometryTile({
     env,
@@ -339,26 +340,29 @@ export async function storeFragmentsBuffer(
     data: { fragmentsS3Key: key },
   });
 
-  const job = fv.bimConversionJobRunId
-    ? await prisma.jobRun.findUnique({
-        where: { id: fv.bimConversionJobRunId },
-        select: { createdById: true, startedAt: true },
-      })
-    : null;
+  // Viewer sessions may re-upload fragments; notify only the first time.
+  if (firstFragmentsUpload) {
+    const job = fv.bimConversionJobRunId
+      ? await prisma.jobRun.findUnique({
+          where: { id: fv.bimConversionJobRunId },
+          select: { createdById: true, startedAt: true },
+        })
+      : null;
 
-  if (job?.createdById) {
-    await notifyBimJobEvent("bim.geometry_ready", {
-      env,
-      workspaceId,
-      projectId,
-      projectName: fv.file.project.name,
-      fileId: fv.fileId,
-      fileVersionId,
-      fileName: fv.file.name,
-      versionNumber: fv.version,
-      userId: job.createdById,
-      jobStartedAt: job.startedAt,
-    });
+    if (job?.createdById) {
+      await notifyBimJobEvent("bim.geometry_ready", {
+        env,
+        workspaceId,
+        projectId,
+        projectName: fv.file.project.name,
+        fileId: fv.fileId,
+        fileVersionId,
+        fileName: fv.file.name,
+        versionNumber: fv.version,
+        userId: job.createdById,
+        jobStartedAt: job.startedAt,
+      });
+    }
   }
 
   return key;

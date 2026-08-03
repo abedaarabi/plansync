@@ -118,7 +118,9 @@ export async function loadFederationMember(
   if (cached) {
     opts?.onDownloading?.(1, cached.byteLength);
     await engine.addFragments(cached, resolved, { fitView: opts?.fitView ?? false });
-    void uploadBimFragments(resolved.fileVersionId, cached).catch(() => undefined);
+    if (!status?.fragmentsReady) {
+      void uploadBimFragments(resolved.fileVersionId, cached).catch(() => undefined);
+    }
     return;
   }
 

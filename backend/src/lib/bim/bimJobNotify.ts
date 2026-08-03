@@ -152,7 +152,9 @@ export async function notifyBimJobEvent(kind: BimNotifyKind, ctx: NotifyContext)
     return;
   }
 
-  if (kind === "bim.index_ready" || kind === "bim.geometry_ready") {
+  // Email only when server conversion finishes after upload — not when the
+  // viewer later uploads/re-uploads client-side fragments (geometry_ready).
+  if (kind === "bim.index_ready") {
     if (!shouldEmailCompletion(ctx.jobStartedAt)) return;
     await sendBimEmail(
       ctx.env,
