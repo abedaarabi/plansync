@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Package, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { EnterpriseOverviewKpiTile } from "@/components/enterprise/EnterpriseOverviewKpiTile";
 import { OmEmptyState } from "@/components/enterprise/OmEmptyState";
 import { OmSectionCard } from "@/components/enterprise/OmSectionCard";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
@@ -21,6 +22,8 @@ import { qk } from "@/lib/queryKeys";
 import { OM_COMPACT_INPUT, OM_COMPACT_LABEL, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 
 type Props = { projectId: string };
+
+type PartsFilter = "ALL" | "LOW" | "OUT" | "OK";
 
 function stockTone(item: OmPartsInventoryRow): "success" | "warning" | "danger" {
   if (item.quantity <= 0) return "danger";
@@ -98,12 +101,14 @@ function PartListCard({ item, onDelete }: { item: OmPartsInventoryRow; onDelete:
   );
 }
 
+// fallow-ignore-next-line complexity
 export function OmPartsInventoryClient({ projectId }: Props) {
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("0");
   const [reorderLevel, setReorderLevel] = useState("5");
   const [unitCost, setUnitCost] = useState("");
+  const [filter, setFilter] = useState<PartsFilter>("ALL");
 
   const { data: items = [], isPending } = useQuery({
     queryKey: qk.omPartsInventory(projectId),
@@ -137,7 +142,26 @@ export function OmPartsInventoryClient({ projectId }: Props) {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const lowStockCount = items.filter((i) => i.lowStock).length;
+  const stats = useMemo(() => {
+    let low = 0;
+    let out = 0;
+    let ok = 0;
+    let inventoryValue = 0;
+    for (const i of items) {
+      if (i.quantity <= 0) out += 1;
+      else if (i.lowStock) low += 1;
+      else ok += 1;
+      if (i.unitCost != null) inventoryValue += i.unitCost * i.quantity;
+    }
+    return { total: items.length, low, out, ok, inventoryValue };
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    if (filter === "LOW") return items.filter((i) => i.lowStock && i.quantity > 0);
+    if (filter === "OUT") return items.filter((i) => i.quantity <= 0);
+    if (filter === "OK") return items.filter((i) => !i.lowStock && i.quantity > 0);
+    return items;
+  }, [items, filter]);
 
   if (isPending) return <EnterpriseLoadingState message="Loading parts…" label="Loading" />;
 
@@ -148,6 +172,52 @@ export function OmPartsInventoryClient({ projectId }: Props) {
         title="Parts inventory"
         description="Stock tracked when technicians complete work orders."
       />
+
+      {items.length > 0 ? (
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+          <EnterpriseOverviewKpiTile
+            label="Total"
+            value={stats.total}
+            borderClass="border-l-[var(--enterprise-primary)]"
+            hint={
+              stats.inventoryValue > 0
+                ? `On-hand value ≈ $${stats.inventoryValue.toFixed(0)}`
+                : undefined
+            }
+            active={filter === "ALL"}
+            onClick={() => setFilter("ALL")}
+          />
+          <EnterpriseOverviewKpiTile
+            label="In stock"
+            value={stats.ok}
+            borderClass="border-l-[var(--enterprise-semantic-success-text)]"
+            active={filter === "OK"}
+            onClick={() => setFilter("OK")}
+          />
+          <EnterpriseOverviewKpiTile
+            label="Low stock"
+            value={stats.low}
+            borderClass={
+              stats.low > 0
+                ? "border-l-[var(--enterprise-semantic-warning-text)]"
+                : "border-l-[var(--enterprise-border)]"
+            }
+            active={filter === "LOW"}
+            onClick={() => setFilter("LOW")}
+          />
+          <EnterpriseOverviewKpiTile
+            label="Out of stock"
+            value={stats.out}
+            borderClass={
+              stats.out > 0
+                ? "border-l-[var(--enterprise-semantic-danger-muted)]"
+                : "border-l-[var(--enterprise-border)]"
+            }
+            active={filter === "OUT"}
+            onClick={() => setFilter("OUT")}
+          />
+        </div>
+      ) : null}
 
       <OmSectionCard
         title="Add part"
@@ -225,16 +295,31 @@ export function OmPartsInventoryClient({ projectId }: Props) {
         <OmSectionCard
           title="Stock on hand"
           description={
-            lowStockCount > 0
-              ? `${items.length} parts · ${lowStockCount} below reorder`
-              : `${items.length} part${items.length === 1 ? "" : "s"} tracked`
+            filter === "ALL"
+              ? stats.low + stats.out > 0
+                ? `${items.length} parts · ${stats.low + stats.out} need attention`
+                : `${items.length} part${items.length === 1 ? "" : "s"} tracked`
+              : `${filteredItems.length} of ${items.length} shown`
           }
         >
-          <ul className="divide-y divide-[var(--enterprise-border)]/80 overflow-hidden rounded-lg border border-[var(--enterprise-border)]">
-            {items.map((p) => (
-              <PartListCard key={p.id} item={p} onDelete={() => deleteMut.mutate(p.id)} />
-            ))}
-          </ul>
+          {filteredItems.length === 0 ? (
+            <p className="text-sm text-[var(--enterprise-text-muted)]">
+              No parts match this filter.{" "}
+              <button
+                type="button"
+                onClick={() => setFilter("ALL")}
+                className="font-semibold text-[var(--enterprise-primary)] hover:underline"
+              >
+                Clear filter
+              </button>
+            </p>
+          ) : (
+            <ul className="divide-y divide-[var(--enterprise-border)]/80 overflow-hidden rounded-lg border border-[var(--enterprise-border)]">
+              {filteredItems.map((p) => (
+                <PartListCard key={p.id} item={p} onDelete={() => deleteMut.mutate(p.id)} />
+              ))}
+            </ul>
+          )}
         </OmSectionCard>
       )}
     </div>

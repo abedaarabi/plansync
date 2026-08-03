@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
   Boxes,
@@ -14,10 +13,14 @@ import {
   Tags,
 } from "lucide-react";
 import type { OmAssetRow } from "@/lib/api-client";
+import { EnterpriseOverviewCard } from "@/components/enterprise/EnterpriseOverviewCard";
 import { EnterpriseOverviewKpiTile } from "@/components/enterprise/EnterpriseOverviewKpiTile";
 import {
+  OverviewSegmentBar,
+  OverviewSegmentLegend,
+} from "@/components/enterprise/EnterpriseOverviewSegments";
+import {
   computeOmAssetsOverview,
-  type OmAssetCountSegment,
   type OmAssetsListFilter,
   type OmAssetsOverviewStats,
 } from "@/lib/omAssetsOverviewStats";
@@ -31,130 +34,7 @@ const KPI_BORDER = {
   danger: "border-l-[var(--enterprise-semantic-danger-muted)]",
 } as const;
 
-function OverviewCard({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: LucideIcon;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="enterprise-card flex min-w-0 flex-col p-4">
-      <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
-        <Icon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-        {title}
-      </h3>
-      <div className="mt-3 min-w-0 flex-1">{children}</div>
-    </section>
-  );
-}
-
-function SegmentBar({
-  segments,
-  onSelect,
-  label,
-}: {
-  segments: OmAssetCountSegment[];
-  onSelect?: (key: string) => void;
-  label: string;
-}) {
-  const total = segments.reduce((a, s) => a + s.count, 0);
-  if (total === 0) return null;
-  return (
-    <div
-      className="w-full rounded-lg bg-[var(--enterprise-bg)] p-px ring-1 ring-[var(--enterprise-border)]/80"
-      role={onSelect ? "group" : "img"}
-      aria-label={`${label}, ${total} total`}
-    >
-      <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-md">
-        {segments.map((s) => {
-          const selectable = onSelect && s.key !== "CAT:__other__";
-          if (selectable) {
-            return (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => onSelect(s.key)}
-                className="min-h-full min-w-1 rounded-sm p-0 transition-opacity hover:opacity-75"
-                style={{ flexGrow: s.count, backgroundColor: s.fill }}
-                title={`${s.label}: ${s.count} — filter list`}
-                aria-label={`Filter by ${s.label} (${s.count})`}
-              />
-            );
-          }
-          return (
-            <div
-              key={s.key}
-              className="min-h-full min-w-1 rounded-sm"
-              style={{ flexGrow: s.count, backgroundColor: s.fill }}
-              title={`${s.label}: ${s.count}`}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function SegmentLegend({
-  segments,
-  onSelect,
-  activeKey,
-}: {
-  segments: OmAssetCountSegment[];
-  onSelect?: (key: string) => void;
-  activeKey?: string;
-}) {
-  return (
-    <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5">
-      {segments.map((s) => {
-        const selectable = onSelect && s.key !== "CAT:__other__";
-        const active = activeKey === s.key;
-        const inner = (
-          <>
-            <span
-              className="h-2.5 w-2.5 shrink-0 rounded-sm ring-1 ring-black/5"
-              style={{ backgroundColor: s.fill }}
-              aria-hidden
-            />
-            {s.label}{" "}
-            <span className="tabular-nums font-semibold text-[var(--enterprise-text)]">
-              {s.count}
-            </span>
-          </>
-        );
-        if (!selectable) {
-          return (
-            <li
-              key={s.key}
-              className="inline-flex items-center gap-1.5 px-1.5 py-1 text-[11px] text-[var(--enterprise-text-muted)]"
-            >
-              {inner}
-            </li>
-          );
-        }
-        return (
-          <li key={s.key}>
-            <button
-              type="button"
-              onClick={() => onSelect(s.key)}
-              aria-pressed={active}
-              className={`inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] ${
-                active
-                  ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-text)]"
-                  : "text-[var(--enterprise-text-muted)]"
-              }`}
-            >
-              {inner}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
+const NON_SELECTABLE_CAT = ["CAT:__other__"] as const;
 
 function KpiRow({
   stats,
@@ -265,36 +145,38 @@ export function OmAssetsOverview({ rows, filter, onFilterChange, searchActive }:
         <KpiRow stats={stats} filter={filter} onSelect={onFilterChange} />
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <OverviewCard title="Link status" icon={Link2}>
-            <SegmentBar
+          <EnterpriseOverviewCard title="Link status" icon={Link2}>
+            <OverviewSegmentBar
               segments={stats.linkSegments}
               onSelect={selectFilter}
               label="Link status distribution"
             />
-            <SegmentLegend
+            <OverviewSegmentLegend
               segments={stats.linkSegments}
               onSelect={selectFilter}
               activeKey={filter}
             />
-          </OverviewCard>
-          <OverviewCard title="Top categories" icon={Tags}>
+          </EnterpriseOverviewCard>
+          <EnterpriseOverviewCard title="Top categories" icon={Tags}>
             {stats.categorySegments.length === 0 ? (
               <p className="text-[12px] text-[var(--enterprise-text-muted)]">No categories yet.</p>
             ) : (
               <>
-                <SegmentBar
+                <OverviewSegmentBar
                   segments={stats.categorySegments}
                   onSelect={selectFilter}
                   label="Category distribution"
+                  nonSelectableKeys={NON_SELECTABLE_CAT}
                 />
-                <SegmentLegend
+                <OverviewSegmentLegend
                   segments={stats.categorySegments}
                   onSelect={selectFilter}
                   activeKey={filter}
+                  nonSelectableKeys={NON_SELECTABLE_CAT}
                 />
               </>
             )}
-          </OverviewCard>
+          </EnterpriseOverviewCard>
         </div>
 
         {filter !== "ALL" ? (

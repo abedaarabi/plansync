@@ -2781,6 +2781,11 @@ button:active:not(:disabled),
   );
 }
 
+/* Enterprise app shell type — Inter/Geist on desktop; system SF stack on mobile (see max-lg block). */
+.enterprise-app-shell {
+  font-family: var(--font-inter), var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
 /* Main workspace canvas — soft atmosphere (reads “premium” without noise) */
 .enterprise-main-canvas {
   /* Avoid horizontal jump when overflow-y switches (e.g. loading → full Materials page). */
@@ -3115,45 +3120,174 @@ button:active:not(:disabled),
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Full-bleed mobile pages — drop artificial max-width constraints */
+  /*
+   * iOS-style app canvas: page content uses the full device width.
+   * Gutters come from the page shell (px-4 ≈ 16px) — do not add a second
+   * padding-inline here (that stacked with shell padding and looked narrow).
+   */
+  .enterprise-main-inner,
+  .client-portal-main,
   .mobile-app-page,
   .enterprise-animate-in {
-    padding-inline: 1rem;
+    width: 100%;
     max-width: 100%;
+    box-sizing: border-box;
   }
 
-  .mobile-app-page > .max-w-6xl,
-  .mobile-app-page > .mx-auto,
-  .enterprise-animate-in > .max-w-6xl,
-  .enterprise-animate-in > .mx-auto.max-w-6xl {
+  .enterprise-main-inner
+    :is(.max-w-3xl, .max-w-4xl, .max-w-5xl, .max-w-6xl, .max-w-7xl, .max-w-\[1600px\]),
+  .mobile-app-page
+    :is(.max-w-3xl, .max-w-4xl, .max-w-5xl, .max-w-6xl, .max-w-7xl, .max-w-\[1600px\]),
+  .enterprise-animate-in
+    :is(.max-w-3xl, .max-w-4xl, .max-w-5xl, .max-w-6xl, .max-w-7xl, .max-w-\[1600px\]),
+  .client-portal-main :is(.max-w-3xl, .max-w-4xl, .max-w-5xl, .max-w-6xl, .max-w-7xl) {
     max-width: 100% !important;
-    margin-inline: 0 !important;
   }
 
-  /* Page headings */
+  /*
+   * iOS-like type scale (approx. SF Dynamic Type defaults):
+   * Title ~28 / Headline ~17 / Body ~17 / Subhead ~15 / Footnote ~13 / Caption ~12
+   */
+  .enterprise-app-shell {
+    font-family:
+      -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", var(--font-geist-sans),
+      system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Top bar titles — outside .mobile-app-page but same iOS headline size */
+  .enterprise-app-shell header .enterprise-type-nav,
+  .enterprise-app-shell header .enterprise-type-nav-strong {
+    font-size: 1.0625rem;
+    letter-spacing: -0.015em;
+  }
+
+  .mobile-app-page,
+  .enterprise-animate-in,
+  .client-portal-main {
+    font-size: 17px;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+  }
+
   .mobile-app-page h1,
   .enterprise-animate-in h1 {
-    font-size: clamp(1.375rem, 5vw, 1.875rem);
-    line-height: 1.2;
+    font-size: 1.75rem;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    font-weight: 700;
     text-wrap: balance;
   }
 
-  /* Floor for body copy — no tiny field labels on mobile */
-  .mobile-app-page,
-  .enterprise-animate-in,
-  .client-portal-main,
-  .marketing-main-inner {
-    font-size: max(16px, 1rem);
-    line-height: 1.5;
+  .mobile-app-page h2,
+  .enterprise-animate-in h2 {
+    font-size: 1.375rem;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
   }
 
-  .mobile-app-page .text-xs,
-  .enterprise-animate-in .text-xs,
-  .mobile-app-page .text-\[11px\],
-  .enterprise-animate-in .text-\[11px\],
-  .mobile-app-page .text-\[10px\],
-  .enterprise-animate-in .text-\[10px\] {
-    font-size: max(14px, 0.875rem) !important;
+  .mobile-app-page h3,
+  .enterprise-animate-in h3 {
+    font-size: 1.125rem;
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+  }
+
+  .mobile-app-page .enterprise-type-body,
+  .enterprise-animate-in .enterprise-type-body,
+  .client-portal-main .enterprise-type-body {
+    font-size: 1.0625rem;
+    line-height: 1.4;
+  }
+
+  .mobile-app-page .enterprise-type-nav,
+  .mobile-app-page .enterprise-type-nav-strong,
+  .enterprise-animate-in .enterprise-type-nav,
+  .enterprise-animate-in .enterprise-type-nav-strong {
+    font-size: 1.0625rem;
+    letter-spacing: -0.015em;
+  }
+
+  .mobile-app-page .enterprise-type-label,
+  .enterprise-animate-in .enterprise-type-label,
+  .client-portal-main .enterprise-type-label {
+    font-size: 0.8125rem;
+    letter-spacing: 0.06em;
+  }
+
+  .mobile-app-page .enterprise-type-caption,
+  .enterprise-animate-in .enterprise-type-caption,
+  .client-portal-main .enterprise-type-caption {
+    font-size: 0.8125rem;
+    line-height: 1.35;
+  }
+
+  /* Utility floors — kill desktop-dense 10–12px chrome */
+  .mobile-app-page :is(.text-\[10px\], .text-\[11px\], .text-\[12px\], .text-xs),
+  .enterprise-animate-in :is(.text-\[10px\], .text-\[11px\], .text-\[12px\], .text-xs),
+  .client-portal-main :is(.text-\[10px\], .text-\[11px\], .text-\[12px\], .text-xs) {
+    font-size: 0.8125rem !important;
+    line-height: 1.35 !important;
+  }
+
+  .mobile-app-page .text-sm,
+  .enterprise-animate-in .text-sm,
+  .client-portal-main .text-sm {
+    font-size: 0.9375rem !important;
+    line-height: 1.4 !important;
+  }
+
+  .mobile-app-page .text-base,
+  .enterprise-animate-in .text-base,
+  .client-portal-main .text-base {
+    font-size: 1.0625rem !important;
+    line-height: 1.4 !important;
+  }
+
+  .mobile-app-page .text-lg,
+  .enterprise-animate-in .text-lg,
+  .client-portal-main .text-lg {
+    font-size: 1.25rem !important;
+    line-height: 1.3 !important;
+    letter-spacing: -0.02em;
+  }
+
+  /* List / card titles read as iOS Headline */
+  .mobile-app-page .mobile-list-row h2,
+  .mobile-app-page article h2 {
+    font-size: 1.0625rem !important;
+    line-height: 1.3 !important;
+    letter-spacing: -0.015em;
+  }
+
+  /* Icons: bump dense 12–16px glyphs toward iOS list/toolbar weights */
+  .mobile-app-page :is(svg.h-3, svg.w-3, svg.size-3),
+  .enterprise-animate-in :is(svg.h-3, svg.w-3, svg.size-3),
+  .client-portal-main :is(svg.h-3, svg.w-3, svg.size-3) {
+    width: 1rem !important;
+    height: 1rem !important;
+  }
+
+  .mobile-app-page :is(svg.h-3\.5, svg.w-3\.5, svg.size-3\.5),
+  .enterprise-animate-in :is(svg.h-3\.5, svg.w-3\.5, svg.size-3\.5),
+  .client-portal-main :is(svg.h-3\.5, svg.w-3\.5, svg.size-3\.5) {
+    width: 1.125rem !important;
+    height: 1.125rem !important;
+  }
+
+  .mobile-app-page :is(svg.h-4, svg.w-4, svg.size-4),
+  .enterprise-animate-in :is(svg.h-4, svg.w-4, svg.size-4),
+  .client-portal-main :is(svg.h-4, svg.w-4, svg.size-4) {
+    width: 1.25rem !important;
+    height: 1.25rem !important;
+  }
+
+  .mobile-app-page :is(svg.h-5, svg.w-5, svg.size-5),
+  .enterprise-animate-in :is(svg.h-5, svg.w-5, svg.size-5),
+  .client-portal-main :is(svg.h-5, svg.w-5, svg.size-5) {
+    width: 1.375rem !important;
+    height: 1.375rem !important;
   }
 
   /* Horizontal table scroll with touch momentum */

@@ -70,6 +70,13 @@ import {
   folderBreadcrumb,
   sortedVersions,
 } from "@/components/file-explorer";
+import { folderSubtreeIds, isInFolderSubtree } from "@/lib/folderSubtree";
+import { FilesOverview } from "@/components/enterprise/FilesOverview";
+import {
+  filterProjectFiles,
+  filesOverviewFilterLabel,
+  type FilesOverviewFilter,
+} from "@/lib/filesOverviewStats";
 
 const UPLOAD_INPUT_ID = "project-files-upload-input";
 const ROOT_DROP_KEY = "root";
@@ -95,6 +102,7 @@ type PendingDeletion =
   | { type: "folder"; folder: ProjectFolder }
   | null;
 
+// fallow-ignore-next-line complexity
 export function ProjectFilesClient({ projectId }: { projectId: string }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -205,6 +213,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState("");
+  const [overviewFilter, setOverviewFilter] = useState<FilesOverviewFilter>("ALL");
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const [federationIfcIds, setFederationIfcIds] = useState<Set<string>>(() => new Set());
   const [isDragOver, setIsDragOver] = useState(false);
@@ -251,6 +260,14 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
+
+  // Keep list as the only layout below lg (grid toggle is desktop-only).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia("(max-width: 1023px)").matches && viewMode !== "list") {
+      setViewMode("list");
+    }
+  }, [viewMode]);
 
   const toggleTreeExpand = useCallback((id: string) => {
     setTreeExpanded((prev) => {
@@ -352,18 +369,39 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     [visibleFiles],
   );
 
+  const overviewActive = overviewFilter !== "ALL";
+
+  const searchSubtree = useMemo(
+    () => (project ? folderSubtreeIds(folderId, project.folders) : null),
+    [project, folderId],
+  );
+
   const filteredSubfolders = useMemo(() => {
+    // Kind / status overview filters show a project-wide file list — hide folders.
+    if (overviewActive) return [];
     if (!searchQuery.trim()) return subfolders;
-    return filterByName(project?.folders ?? [], searchQuery).filter(
-      (folder) => folder.parentId === folderId,
-    );
-  }, [searchQuery, subfolders, project, folderId]);
+    return filterByName(project?.folders ?? [], searchQuery).filter((folder) => {
+      if (folder.id === folderId) return false;
+      return isInFolderSubtree(folder.id, searchSubtree);
+    });
+  }, [overviewActive, searchQuery, subfolders, project, folderId, searchSubtree]);
+
   const filteredFiles = useMemo(() => {
-    if (!searchQuery.trim()) return sortedFiles;
-    return filterByName(project?.files ?? [], searchQuery).filter(
-      (file) => file.folderId === folderId,
+    if (!project) return [];
+    const base = overviewActive ? filterProjectFiles(project.files, overviewFilter) : sortedFiles;
+    const scoped = overviewActive
+      ? base
+      : searchQuery.trim()
+        ? filterByName(project.files, searchQuery).filter((file) =>
+            isInFolderSubtree(file.folderId, searchSubtree),
+          )
+        : base;
+    const afterSearch =
+      overviewActive && searchQuery.trim() ? filterByName(scoped, searchQuery) : scoped;
+    return [...afterSearch].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
     );
-  }, [searchQuery, sortedFiles, project, folderId]);
+  }, [project, overviewActive, overviewFilter, sortedFiles, searchQuery, searchSubtree]);
 
   const breadcrumb = useMemo(
     () => (project ? folderBreadcrumb(folderId, project.folders) : []),
@@ -1129,7 +1167,23 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         aria-label="Upload files"
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-[var(--enterprise-shadow-card)]">
+      <FilesOverview
+        project={project}
+        filter={overviewFilter}
+        onFilterChange={setOverviewFilter}
+        storageUsedBytes={
+          primary?.workspace.storageUsedBytes != null
+            ? Number(primary.workspace.storageUsedBytes)
+            : undefined
+        }
+        storageQuotaBytes={
+          primary?.workspace.storageQuotaBytes != null
+            ? Number(primary.workspace.storageQuotaBytes)
+            : undefined
+        }
+      />
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-card)]">
         <FileExplorerTopBar
           breadcrumbs={breadcrumbItems}
           onNavigate={openFolderOrRequest}
@@ -1187,6 +1241,15 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             searchQuery={searchQuery}
+            listScopeHint={
+              overviewActive
+                ? `${filesOverviewFilterLabel(overviewFilter)} · across project`
+                : searchQuery.trim()
+                  ? folderId
+                    ? "this folder and subfolders"
+                    : "all folders"
+                  : undefined
+            }
             selectedItemKey={selectedItemKey}
             onSelectItem={setSelectedItemKey}
             onOpenFolder={openFolderOrRequest}

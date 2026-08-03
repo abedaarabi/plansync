@@ -22,21 +22,25 @@ type Props = {
 
 export function OmKpiCard({ label, value, icon: Icon, hint, tone = "primary" }: Props) {
   return (
-    <div className={`enterprise-card rounded-xl border-l-4 p-3 sm:p-4 ${TONE_BORDER[tone]}`}>
-      {Icon ? (
-        <Icon className="h-4 w-4 text-[var(--enterprise-primary)]" strokeWidth={1.75} aria-hidden />
-      ) : null}
-      <p
-        className={`text-xl font-bold tabular-nums tracking-tight text-[var(--enterprise-text)] sm:text-2xl ${Icon ? "mt-1.5" : ""}`}
-      >
-        {value}
-      </p>
-      <p className="mt-1 text-xs font-semibold leading-snug text-[var(--enterprise-text-muted)]">
+    <div
+      className={`enterprise-card rounded-xl border-l-[3px] px-3 py-2.5 sm:rounded-lg sm:px-2.5 sm:py-2 ${TONE_BORDER[tone]}`}
+      title={hint}
+    >
+      <div className="flex items-center gap-1.5">
+        {Icon ? (
+          <Icon
+            className="h-4 w-4 shrink-0 text-[var(--enterprise-primary)] sm:h-3.5 sm:w-3.5"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        ) : null}
+        <p className="text-lg font-bold tabular-nums leading-none tracking-tight text-[var(--enterprise-text)] sm:text-base lg:text-lg">
+          {value}
+        </p>
+      </div>
+      <p className="mt-1.5 text-xs font-semibold uppercase tracking-[0.06em] leading-snug text-[var(--enterprise-text-muted)]">
         {label}
       </p>
-      {hint ? (
-        <p className="mt-1 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">{hint}</p>
-      ) : null}
     </div>
   );
 }

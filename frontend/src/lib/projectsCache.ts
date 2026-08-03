@@ -1,19 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { CloudFile, FileVersion, Folder, Project } from "@/types/projects";
+import { folderSubtreeIds } from "@/lib/folderSubtree";
 import { qk } from "@/lib/queryKeys";
-
-/** Collect folder id and all descendant folder ids (same project tree). */
-function collectFolderSubtreeIds(rootId: string, folders: Folder[]): Set<string> {
-  const ids = new Set<string>();
-  const walk = (id: string) => {
-    ids.add(id);
-    for (const f of folders) {
-      if (f.parentId === id) walk(f.id);
-    }
-  };
-  walk(rootId);
-  return ids;
-}
 
 export function mergeUploadedFileIntoProject(
   queryClient: QueryClient,
@@ -121,7 +109,7 @@ export function removeFolderSubtreeFromProjectCache(
     if (!old) return old;
     return old.map((p) => {
       if (p.id !== projectId) return p;
-      const subtree = collectFolderSubtreeIds(folderId, p.folders);
+      const subtree = folderSubtreeIds(folderId, p.folders) ?? new Set<string>();
       const nextFolders = p.folders.filter((f) => !subtree.has(f.id));
       const nextFiles = p.files.filter((f) => {
         if (f.folderId == null) return true;

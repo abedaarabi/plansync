@@ -19,6 +19,7 @@ import { WorkOrderCard } from "@/components/enterprise/WorkOrderCard";
 import { WorkOrderCompleteSlideOver } from "@/components/enterprise/WorkOrderCompleteSlideOver";
 import { WorkOrderCreateSlideOver } from "@/components/enterprise/WorkOrderCreateSlideOver";
 import { WorkOrderEditSlideOver } from "@/components/enterprise/WorkOrderEditSlideOver";
+import { WorkOrdersOverview } from "@/components/enterprise/WorkOrdersOverview";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
@@ -30,7 +31,6 @@ import {
   postWorkOrderAiTroubleshoot,
   postWorkOrderVendorLink,
   type IssueRow,
-  ProRequiredError,
 } from "@/lib/api-client";
 import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
@@ -40,10 +40,16 @@ import {
   OM_COMPACT_SELECT,
   OM_PAGE_CLASS,
 } from "@/lib/omCompactStyles";
+import { useTickNowMs } from "@/lib/useTickNowMs";
+import {
+  computeWorkOrdersOverview,
+  filterWorkOrders,
+  type WorkOrdersOverviewFilter,
+} from "@/lib/workOrdersOverviewStats";
 
-type ListFilter = "all" | "mine" | "dueToday" | "overdue";
+type ChipKey = "all" | "mine" | "dueToday" | "overdue";
 
-const LIST_FILTERS: { key: ListFilter; label: string; icon: typeof LayoutGrid }[] = [
+const LIST_FILTERS: { key: ChipKey; label: string; icon: typeof LayoutGrid }[] = [
   { key: "all", label: "All", icon: LayoutGrid },
   { key: "mine", label: "Mine", icon: UserRound },
   { key: "dueToday", label: "Due today", icon: Calendar },
@@ -52,25 +58,35 @@ const LIST_FILTERS: { key: ListFilter; label: string; icon: typeof LayoutGrid }[
 
 type Props = { projectId: string };
 
-function isOverdue(dueDate: string | null | undefined): boolean {
-  if (!dueDate) return false;
-  const d = new Date(dueDate);
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  return d < today;
+function chipToFilter(key: ChipKey): WorkOrdersOverviewFilter {
+  if (key === "mine") return "MINE";
+  if (key === "dueToday") return "DUE_TODAY";
+  if (key === "overdue") return "OVERDUE";
+  return "ACTIVE";
 }
 
-function isDueToday(dueDate: string | null | undefined): boolean {
-  if (!dueDate) return false;
-  const d = new Date(dueDate);
-  const today = new Date();
-  return (
-    d.getUTCFullYear() === today.getUTCFullYear() &&
-    d.getUTCMonth() === today.getUTCMonth() &&
-    d.getUTCDate() === today.getUTCDate()
-  );
+function filterToChip(filter: WorkOrdersOverviewFilter): ChipKey {
+  if (filter === "MINE") return "mine";
+  if (filter === "DUE_TODAY") return "dueToday";
+  if (filter === "OVERDUE") return "overdue";
+  return "all";
 }
 
+function filterToStatusSelect(filter: WorkOrdersOverviewFilter): string {
+  if (
+    filter === "OPEN" ||
+    filter === "IN_PROGRESS" ||
+    filter === "RESOLVED" ||
+    filter === "CLOSED" ||
+    filter === "ALL"
+  ) {
+    return filter;
+  }
+  if (filter === "ACTIVE") return "ACTIVE";
+  return "ACTIVE";
+}
+
+// fallow-ignore-next-line complexity
 export function WorkOrdersClient({ projectId }: Props) {
   const searchParams = useSearchParams();
   const assetIdFilter = searchParams.get("assetId") ?? undefined;
@@ -78,16 +94,14 @@ export function WorkOrdersClient({ projectId }: Props) {
   const { primary, me } = useEnterpriseWorkspace();
   const currentUserId = me?.user.id;
   const workspaceId = primary?.workspace.id;
+  const nowMs = useTickNowMs();
 
-  const [listFilter, setListFilter] = useState<ListFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("ACTIVE");
+  const [overviewFilter, setOverviewFilter] = useState<WorkOrdersOverviewFilter>("ACTIVE");
   const [createOpen, setCreateOpen] = useState(false);
   const [editIssue, setEditIssue] = useState<IssueRow | null>(null);
   const [completeIssue, setCompleteIssue] = useState<IssueRow | null>(null);
   const [aiBusyId, setAiBusyId] = useState<string | null>(null);
   const [vendorLinkBusyId, setVendorLinkBusyId] = useState<string | null>(null);
-
-  const filterKey = `${listFilter}-${statusFilter}-${assetIdFilter ?? ""}`;
 
   const { data: session, isPending: sessionPending } = useQuery({
     queryKey: qk.projectSession(projectId),
@@ -106,40 +120,28 @@ export function WorkOrdersClient({ projectId }: Props) {
     isPending,
     error,
   } = useQuery({
-    queryKey: qk.workOrders(projectId, filterKey),
+    queryKey: qk.workOrders(projectId, assetIdFilter ?? "all"),
     queryFn: () =>
       fetchIssuesForProject(projectId, {
         issueKind: "WORK_ORDER",
         assetId: assetIdFilter,
-        ...(listFilter === "mine" ? { assignee: "me" } : {}),
-        ...(listFilter === "dueToday" ? { dueToday: true } : {}),
-        ...(listFilter === "overdue" ? { overdueOnly: true } : {}),
       }),
     enabled: Boolean(session?.settings.modules.issues),
   });
 
-  const filtered = useMemo(() => {
-    if (statusFilter === "ALL") return rows;
-    if (statusFilter === "ACTIVE") {
-      return rows.filter((r) => r.status === "OPEN" || r.status === "IN_PROGRESS");
-    }
-    return rows.filter((r) => r.status === statusFilter);
-  }, [rows, statusFilter]);
+  const overviewStats = useMemo(
+    () => computeWorkOrdersOverview(rows, nowMs, currentUserId),
+    [rows, nowMs, currentUserId],
+  );
 
-  const filterCounts = useMemo(() => {
-    let mine = 0;
-    let dueToday = 0;
-    let overdue = 0;
-    for (const r of rows) {
-      const active = r.status === "OPEN" || r.status === "IN_PROGRESS";
-      if (r.assigneeId && currentUserId && r.assigneeId === currentUserId) mine += 1;
-      if (active && isDueToday(r.dueDate)) dueToday += 1;
-      if (active && isOverdue(r.dueDate)) overdue += 1;
-    }
-    return { mine, dueToday, overdue, all: rows.length };
-  }, [rows, currentUserId]);
+  const filtered = useMemo(
+    () => filterWorkOrders(rows, overviewFilter, nowMs, currentUserId),
+    [rows, overviewFilter, nowMs, currentUserId],
+  );
 
-  const filtersActive = listFilter !== "all" || statusFilter !== "ACTIVE" || Boolean(assetIdFilter);
+  const filtersActive = overviewFilter !== "ACTIVE" || Boolean(assetIdFilter);
+  const selectedChip = filterToChip(overviewFilter);
+  const statusSelectValue = filterToStatusSelect(overviewFilter);
 
   const refresh = useCallback(async () => {
     await qc.invalidateQueries({ queryKey: qk.workOrders(projectId), exact: false });
@@ -203,11 +205,11 @@ export function WorkOrdersClient({ projectId }: Props) {
 
   const pBase = projectScopedHref(projectId, "", workspaceId);
 
-  function filterCount(key: ListFilter): number | null {
-    if (key === "all") return filterCounts.all > 0 ? filterCounts.all : null;
-    if (key === "mine") return filterCounts.mine > 0 ? filterCounts.mine : null;
-    if (key === "dueToday") return filterCounts.dueToday > 0 ? filterCounts.dueToday : null;
-    if (key === "overdue") return filterCounts.overdue > 0 ? filterCounts.overdue : null;
+  function chipCount(key: ChipKey): number | null {
+    if (key === "all") return overviewStats.active > 0 ? overviewStats.active : null;
+    if (key === "mine") return overviewStats.mine > 0 ? overviewStats.mine : null;
+    if (key === "dueToday") return overviewStats.dueToday > 0 ? overviewStats.dueToday : null;
+    if (key === "overdue") return overviewStats.overdue > 0 ? overviewStats.overdue : null;
     return null;
   }
 
@@ -229,16 +231,25 @@ export function WorkOrdersClient({ projectId }: Props) {
         </div>
       </header>
 
+      {rows.length > 0 ? (
+        <WorkOrdersOverview
+          rows={rows}
+          filter={overviewFilter}
+          onFilterChange={setOverviewFilter}
+          currentUserId={currentUserId}
+        />
+      ) : null}
+
       <div className="sticky top-0 z-10 flex flex-col gap-2 border-b border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)]/95 pb-3 backdrop-blur-md lg:static lg:bg-transparent">
         <div className="flex flex-wrap items-center gap-2">
           <div
-            className="mobile-chip-scroll flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="mobile-chip-scroll enterprise-scrollbar flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5"
             role="tablist"
             aria-label="Work order filters"
           >
             {LIST_FILTERS.map((f) => {
-              const selected = listFilter === f.key;
-              const count = filterCount(f.key);
+              const selected = selectedChip === f.key;
+              const count = chipCount(f.key);
               const TabIcon = f.icon;
               return (
                 <button
@@ -246,7 +257,7 @@ export function WorkOrdersClient({ projectId }: Props) {
                   type="button"
                   role="tab"
                   aria-selected={selected}
-                  onClick={() => setListFilter(f.key)}
+                  onClick={() => setOverviewFilter(chipToFilter(f.key))}
                   className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
                     selected ? OM_COMPACT_CHIP_ACTIVE : OM_COMPACT_CHIP_IDLE
                   }`}
@@ -273,10 +284,7 @@ export function WorkOrdersClient({ projectId }: Props) {
             {filtersActive ? (
               <button
                 type="button"
-                onClick={() => {
-                  setListFilter("all");
-                  setStatusFilter("ACTIVE");
-                }}
+                onClick={() => setOverviewFilter("ACTIVE")}
                 className="inline-flex items-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-text)]"
               >
                 <RotateCcw className="h-3 w-3 opacity-80" strokeWidth={2} aria-hidden />
@@ -284,8 +292,8 @@ export function WorkOrdersClient({ projectId }: Props) {
               </button>
             ) : null}
             <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              value={statusSelectValue}
+              onChange={(e) => setOverviewFilter(e.target.value as WorkOrdersOverviewFilter)}
               className={`${OM_COMPACT_SELECT} w-auto min-w-[9.5rem]`}
               aria-label="Status filter"
             >
