@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Mail, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { EnterpriseOverviewKpiTile } from "@/components/enterprise/EnterpriseOverviewKpiTile";
 import { OmEmptyState } from "@/components/enterprise/OmEmptyState";
 import { OmSectionCard } from "@/components/enterprise/OmSectionCard";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
@@ -19,6 +20,8 @@ import {
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { OM_COMPACT_INPUT, OM_COMPACT_LABEL, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
+
+type VendorFilter = "ALL" | "WITH_EMAIL" | "WITH_TRADE" | "MISSING_CONTACT";
 
 type Props = { projectId: string };
 
@@ -207,11 +210,33 @@ export function OmVendorsClient({ projectId }: Props) {
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editTrade, setEditTrade] = useState("");
+  const [filter, setFilter] = useState<VendorFilter>("ALL");
 
   const { data: vendors = [], isPending } = useQuery({
     queryKey: qk.omVendors(projectId),
     queryFn: () => fetchOmVendors(projectId),
   });
+
+  const stats = useMemo(() => {
+    let withEmail = 0;
+    let withTrade = 0;
+    let missingContact = 0;
+    for (const v of vendors) {
+      if (v.email?.trim()) withEmail += 1;
+      if (v.trade?.trim()) withTrade += 1;
+      if (!v.email?.trim() && !v.phone?.trim()) missingContact += 1;
+    }
+    return { total: vendors.length, withEmail, withTrade, missingContact };
+  }, [vendors]);
+
+  const filteredVendors = useMemo(() => {
+    if (filter === "WITH_EMAIL") return vendors.filter((v) => Boolean(v.email?.trim()));
+    if (filter === "WITH_TRADE") return vendors.filter((v) => Boolean(v.trade?.trim()));
+    if (filter === "MISSING_CONTACT") {
+      return vendors.filter((v) => !v.email?.trim() && !v.phone?.trim());
+    }
+    return vendors;
+  }, [vendors, filter]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: qk.omVendors(projectId) });
 
@@ -270,6 +295,44 @@ export function OmVendorsClient({ projectId }: Props) {
         description="Contractors and external maintenance partners for work orders."
       />
 
+      {vendors.length > 0 ? (
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+          <EnterpriseOverviewKpiTile
+            label="Total"
+            value={stats.total}
+            borderClass="border-l-[var(--enterprise-primary)]"
+            active={filter === "ALL"}
+            onClick={() => setFilter("ALL")}
+          />
+          <EnterpriseOverviewKpiTile
+            label="With email"
+            value={stats.withEmail}
+            borderClass="border-l-[var(--enterprise-semantic-success-text)]"
+            active={filter === "WITH_EMAIL"}
+            onClick={() => setFilter("WITH_EMAIL")}
+          />
+          <EnterpriseOverviewKpiTile
+            label="With trade"
+            value={stats.withTrade}
+            borderClass="border-l-[var(--enterprise-primary)]"
+            active={filter === "WITH_TRADE"}
+            onClick={() => setFilter("WITH_TRADE")}
+          />
+          <EnterpriseOverviewKpiTile
+            label="No contact"
+            value={stats.missingContact}
+            borderClass={
+              stats.missingContact > 0
+                ? "border-l-[var(--enterprise-semantic-warning-text)]"
+                : "border-l-[var(--enterprise-border)]"
+            }
+            hint="Missing email and phone"
+            active={filter === "MISSING_CONTACT"}
+            onClick={() => setFilter("MISSING_CONTACT")}
+          />
+        </div>
+      ) : null}
+
       <OmSectionCard
         title="Add vendor"
         description="Used when assigning work orders or sending vendor portal links."
@@ -314,38 +377,55 @@ export function OmVendorsClient({ projectId }: Props) {
       ) : (
         <OmSectionCard
           title="Vendor directory"
-          description={`${vendors.length} partner${vendors.length === 1 ? "" : "s"} on this project`}
+          description={
+            filter === "ALL"
+              ? `${vendors.length} partner${vendors.length === 1 ? "" : "s"} on this project`
+              : `${filteredVendors.length} of ${vendors.length} shown`
+          }
         >
-          <ul className="divide-y divide-[var(--enterprise-border)]/80 overflow-hidden rounded-lg border border-[var(--enterprise-border)]">
-            {vendors.map((v) => (
-              <VendorListCard
-                key={v.id}
-                vendor={v}
-                editing={editingId === v.id}
-                editName={editName}
-                editEmail={editEmail}
-                editTrade={editTrade}
-                onEditName={setEditName}
-                onEditEmail={setEditEmail}
-                onEditTrade={setEditTrade}
-                onStartEdit={() => startEdit(v)}
-                onCancelEdit={() => setEditingId(null)}
-                onSave={() => {
-                  if (!editName.trim()) return;
-                  patchMut.mutate({
-                    id: v.id,
-                    body: {
-                      name: editName.trim(),
-                      email: editEmail.trim() || null,
-                      trade: editTrade.trim() || null,
-                    },
-                  });
-                }}
-                onDelete={() => deleteMut.mutate(v.id)}
-                saving={patchMut.isPending}
-              />
-            ))}
-          </ul>
+          {filteredVendors.length === 0 ? (
+            <p className="text-sm text-[var(--enterprise-text-muted)]">
+              No vendors match this filter.{" "}
+              <button
+                type="button"
+                onClick={() => setFilter("ALL")}
+                className="font-semibold text-[var(--enterprise-primary)] hover:underline"
+              >
+                Clear filter
+              </button>
+            </p>
+          ) : (
+            <ul className="divide-y divide-[var(--enterprise-border)]/80 overflow-hidden rounded-lg border border-[var(--enterprise-border)]">
+              {filteredVendors.map((v) => (
+                <VendorListCard
+                  key={v.id}
+                  vendor={v}
+                  editing={editingId === v.id}
+                  editName={editName}
+                  editEmail={editEmail}
+                  editTrade={editTrade}
+                  onEditName={setEditName}
+                  onEditEmail={setEditEmail}
+                  onEditTrade={setEditTrade}
+                  onStartEdit={() => startEdit(v)}
+                  onCancelEdit={() => setEditingId(null)}
+                  onSave={() => {
+                    if (!editName.trim()) return;
+                    patchMut.mutate({
+                      id: v.id,
+                      body: {
+                        name: editName.trim(),
+                        email: editEmail.trim() || null,
+                        trade: editTrade.trim() || null,
+                      },
+                    });
+                  }}
+                  onDelete={() => deleteMut.mutate(v.id)}
+                  saving={patchMut.isPending}
+                />
+              ))}
+            </ul>
+          )}
         </OmSectionCard>
       )}
     </div>

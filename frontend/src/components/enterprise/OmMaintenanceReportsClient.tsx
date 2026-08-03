@@ -44,13 +44,13 @@ export function OmMaintenanceReportsClient({ projectId }: Props) {
         description="MTTR, labor and parts costs, PM compliance, and open backlog."
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4">
         <OmKpiCard
-          label="Mean time to repair"
+          label="MTTR"
           value={report.mttrHours != null ? `${report.mttrHours}h` : "—"}
           icon={Clock}
           tone="primary"
-          hint="Resolved work orders"
+          hint="Mean time to repair · resolved work orders"
         />
         <OmKpiCard
           label="Labor hours"

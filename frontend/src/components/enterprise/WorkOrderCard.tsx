@@ -11,6 +11,7 @@ import {
   Flag,
   Link2,
   Package,
+  Pencil,
   Play,
   Sparkles,
   UserRound,
@@ -104,6 +105,7 @@ export type WorkOrderCardProps = {
   aiBusy: boolean;
 };
 
+// fallow-ignore-next-line complexity
 export function WorkOrderCard({
   wo,
   onEdit,
@@ -229,51 +231,69 @@ export function WorkOrderCard({
           ) : null}
         </div>
 
-        <div className="flex w-full shrink-0 flex-wrap items-center gap-1.5 sm:w-auto sm:justify-end sm:gap-2">
+        <div className="flex w-full shrink-0 items-center justify-end gap-0.5 sm:w-auto">
           {isActive ? (
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <EnterpriseButton size="sm" onClick={onComplete}>
-                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-                Complete
+            <>
+              <EnterpriseButton
+                size="sm"
+                variant="ghost"
+                className="!h-8 !min-h-8 !w-8 !px-0"
+                onClick={onComplete}
+                title="Complete"
+                aria-label="Complete work order"
+              >
+                <CheckCircle2 className="h-4 w-4" aria-hidden />
               </EnterpriseButton>
               {wo.status === "OPEN" ? (
-                <EnterpriseButton size="sm" variant="secondary" onClick={onStart}>
-                  <Play className="h-3.5 w-3.5" aria-hidden />
-                  Start
+                <EnterpriseButton
+                  size="sm"
+                  variant="ghost"
+                  className="!h-8 !min-h-8 !w-8 !px-0"
+                  onClick={onStart}
+                  title="Start"
+                  aria-label="Start work order"
+                >
+                  <Play className="h-4 w-4" aria-hidden />
                 </EnterpriseButton>
               ) : null}
-            </div>
+            </>
           ) : null}
-          <div
-            className={`flex flex-wrap items-center gap-1.5 sm:gap-2 ${isActive ? "sm:border-l sm:border-[var(--enterprise-border)]/80 sm:pl-2" : ""}`}
+          <EnterpriseButton
+            size="sm"
+            variant="ghost"
+            className="!h-8 !min-h-8 !w-8 !px-0"
+            onClick={onEdit}
+            title="Edit"
+            aria-label="Edit work order"
           >
-            <EnterpriseButton size="sm" variant="secondary" onClick={onEdit}>
-              Edit
+            <Pencil className="h-4 w-4" aria-hidden />
+          </EnterpriseButton>
+          {isActive ? (
+            <EnterpriseButton
+              size="sm"
+              variant="ghost"
+              className="!h-8 !min-h-8 !w-8 !px-0"
+              disabled={vendorLinkBusy}
+              onClick={onVendorLink}
+              title={vendorLinkBusy ? "Sending vendor link…" : "Send vendor link"}
+              aria-label={vendorLinkBusy ? "Sending vendor link" : "Send vendor link"}
+            >
+              <Link2 className="h-4 w-4" aria-hidden />
             </EnterpriseButton>
-            {isActive ? (
-              <EnterpriseButton
-                size="sm"
-                variant="secondary"
-                disabled={vendorLinkBusy}
-                onClick={onVendorLink}
-              >
-                <Link2 className="h-3.5 w-3.5" aria-hidden />
-                {vendorLinkBusy ? "Sending…" : "Vendor link"}
-              </EnterpriseButton>
-            ) : null}
-            {wo.assetId ? (
-              <EnterpriseButton
-                size="sm"
-                variant="secondary"
-                disabled={aiBusy}
-                className="border-[var(--enterprise-semantic-info-border)] text-[var(--enterprise-semantic-info-text)] hover:bg-[var(--enterprise-semantic-info-bg)]"
-                onClick={onAiHelp}
-              >
-                <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                {aiBusy ? "Thinking…" : "AI help"}
-              </EnterpriseButton>
-            ) : null}
-          </div>
+          ) : null}
+          {wo.assetId ? (
+            <EnterpriseButton
+              size="sm"
+              variant="ghost"
+              className="!h-8 !min-h-8 !w-8 !px-0 text-[var(--enterprise-semantic-info-text)]"
+              disabled={aiBusy}
+              onClick={onAiHelp}
+              title={aiBusy ? "AI thinking…" : "AI help"}
+              aria-label={aiBusy ? "AI help loading" : "AI help"}
+            >
+              <Sparkles className="h-4 w-4" aria-hidden />
+            </EnterpriseButton>
+          ) : null}
         </div>
       </div>
     </article>
