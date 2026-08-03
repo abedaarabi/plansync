@@ -53,7 +53,7 @@ export function BimContextMenu(props: {
 
   useEffect(() => {
     ranAction.current = false;
-    const onDocDown = (e: MouseEvent) => {
+    const onDocDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
       if (menuRef.current?.contains(e.target as Node)) return;
       props.onClose();
@@ -61,11 +61,11 @@ export function BimContextMenu(props: {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") props.onClose();
     };
-    // Capture phase so the viewer canvas doesn't eat the dismiss.
-    document.addEventListener("mousedown", onDocDown, true);
+    // Capture pointerdown so iPad taps outside dismiss (mousedown alone is unreliable).
+    document.addEventListener("pointerdown", onDocDown, true);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onDocDown, true);
+      document.removeEventListener("pointerdown", onDocDown, true);
       document.removeEventListener("keydown", onKey);
     };
   }, [props.onClose]);
@@ -80,7 +80,7 @@ export function BimContextMenu(props: {
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="bim-context-menu-portal">
+    <div className="bim-theme bim-context-menu-portal">
       <div
         ref={menuRef}
         className="bim-glass-surface fixed z-[101] min-w-[12rem] overflow-hidden rounded-xl py-1"

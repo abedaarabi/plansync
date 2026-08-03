@@ -2,9 +2,16 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useBodyScrollLock, useEscapeToClose } from "@/hooks/useOverlayLock";
+import {
+  bottomSheetChrome,
+  type EnterpriseBottomSheetVariant,
+} from "./enterpriseBottomSheetChrome";
 
 const TRANSITION_MS = 320;
 const SHEET_TRANSITION = "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]";
+
+export type { EnterpriseBottomSheetVariant };
 
 export type EnterpriseBottomSheetProps = {
   open: boolean;
@@ -20,10 +27,17 @@ export type EnterpriseBottomSheetProps = {
   closeOnBackdrop?: boolean;
   closeOnEscape?: boolean;
   showDragHandle?: boolean;
+  /** Light enterprise chrome vs dark BIM/viewer chrome */
+  variant?: EnterpriseBottomSheetVariant;
   /** Extra classes on the sheet panel */
   panelClassName?: string;
   /** Extra classes on scroll body */
   bodyClassName?: string;
+  /**
+   * When false, the sheet body does not scroll — children own scrolling
+   * (needed for nested docks like clash on iPad).
+   */
+  bodyScroll?: boolean;
   footer?: ReactNode;
   footerClassName?: string;
 };
@@ -43,8 +57,10 @@ export function EnterpriseBottomSheet({
   closeOnBackdrop = true,
   closeOnEscape = true,
   showDragHandle = true,
+  variant = "enterprise",
   panelClassName = "",
   bodyClassName = "",
+  bodyScroll = true,
   footer,
   footerClassName = "",
 }: EnterpriseBottomSheetProps) {
@@ -52,6 +68,7 @@ export function EnterpriseBottomSheet({
   const [sheetActive, setSheetActive] = useState(false);
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enterRafRef = useRef<number | null>(null);
+  const chrome = bottomSheetChrome(variant, footerClassName);
 
   useEffect(() => {
     if (open) {
@@ -88,32 +105,15 @@ export function EnterpriseBottomSheet({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!shouldRender) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [shouldRender]);
-
-  useEffect(() => {
-    if (!shouldRender || !closeOnEscape) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [shouldRender, closeOnEscape, onClose]);
+  useBodyScrollLock(shouldRender);
+  useEscapeToClose(shouldRender && closeOnEscape, onClose);
 
   if (!shouldRender || typeof document === "undefined") return null;
 
-  const backdropClass =
-    "pointer-events-auto absolute inset-0 bg-[var(--enterprise-text)]/45 backdrop-blur-[2px] transition-opacity duration-300 ease-out " +
-    (sheetActive ? "opacity-100" : "opacity-0");
-
+  const backdropClass = chrome.backdropBase + (sheetActive ? "opacity-100" : "opacity-0");
   const panelClass = [
-    "fixed inset-x-0 bottom-0 z-[111] flex w-full flex-col overflow-hidden rounded-t-2xl border border-b-0 border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]",
+    "fixed inset-x-0 bottom-0 z-[111] flex w-full flex-col overflow-hidden rounded-t-2xl border border-b-0",
+    chrome.panelTheme,
     maxHeightClass,
     SHEET_TRANSITION,
     sheetActive ? "translate-y-0" : "translate-y-full",
@@ -121,6 +121,10 @@ export function EnterpriseBottomSheet({
   ]
     .filter(Boolean)
     .join(" ");
+
+  const bodyClass = bodyScroll
+    ? `mobile-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 ${bodyClassName}`
+    : `flex min-h-0 flex-1 flex-col overflow-hidden overscroll-contain ${bodyClassName}`;
 
   return createPortal(
     <div className={`fixed inset-0 overflow-hidden ${overlayZClass}`} role="presentation">
@@ -140,21 +144,11 @@ export function EnterpriseBottomSheet({
       >
         {showDragHandle ? (
           <div className="flex shrink-0 justify-center pt-2.5 pb-1" aria-hidden>
-            <div className="h-1 w-10 rounded-full bg-[var(--enterprise-border)]" />
+            <div className={chrome.handle} />
           </div>
         ) : null}
-        <div
-          className={`mobile-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 ${bodyClassName}`}
-        >
-          {children}
-        </div>
-        {footer ? (
-          <div
-            className={`flex shrink-0 flex-col gap-2 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 px-4 py-3 ${footerClassName}`}
-          >
-            {footer}
-          </div>
-        ) : null}
+        <div className={bodyClass}>{children}</div>
+        {footer ? <div className={chrome.footer}>{footer}</div> : null}
       </div>
     </div>,
     document.body,

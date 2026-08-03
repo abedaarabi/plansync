@@ -128,12 +128,11 @@ export function EnterpriseResponsiveDialog({
         closeOnBackdrop={closeOnBackdrop}
         closeOnEscape={closeOnEscape}
         showDragHandle={showDragHandle}
+        variant={variant === "viewer-dark" ? "viewer-dark" : "enterprise"}
         bodyClassName={bodyClassName}
         footerClassName={footerClassName}
         footer={footer}
-        panelClassName={
-          variant === "viewer-dark" ? "border-white/10 bg-slate-900 text-slate-100" : undefined
-        }
+        panelClassName={panelClassName}
       >
         {children}
       </EnterpriseBottomSheet>

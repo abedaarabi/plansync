@@ -51,7 +51,7 @@ export function BimModelQualityPanel(props: {
   const authoredColorPct = resolveAuthoredColorPct(props.loq, props.quantityIndex);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+    <div className="bim-dock-scroll px-4 py-4">
       <div className="mb-4 flex items-start gap-2.5">
         <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--bim-accent-muted)] text-[var(--bim-accent)]">
           <BarChart3 className="h-4 w-4" aria-hidden />

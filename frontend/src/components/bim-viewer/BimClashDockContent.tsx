@@ -346,7 +346,7 @@ export function BimClashDockContent(props: {
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="bim-dock-scroll">
             <BimClashDetailPanel
               clash={selected}
               creatingIssue={props.creatingIssue}
@@ -489,7 +489,7 @@ export function BimClashDockContent(props: {
               ) : null}
             </div>
           ) : (
-            <ul ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
+            <ul ref={listRef} className="bim-dock-scroll space-y-2 p-2.5">
               {props.grouped
                 ? groups.map(([groupId, groupClashes]) => {
                     const open = expandedGroups.has(groupId);

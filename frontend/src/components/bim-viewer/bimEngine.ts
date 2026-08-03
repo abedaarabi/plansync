@@ -78,6 +78,7 @@ import {
   SectionBoxController,
 } from "@/components/bim-viewer/sectionBoxController";
 import { BimRenderEffects } from "@/components/bim-viewer/bimRenderEffects";
+import { hapticTap } from "@/lib/haptic";
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import * as OBC from "@thatopen/components";
@@ -92,6 +93,8 @@ const FRAGMENTS_WORKER_URL = "/bim/fragments-worker.mjs";
 const MIN_CANVAS_PX = 2;
 /** Ignore tiny hand jitter when distinguishing click vs drag. */
 const POINTER_CLICK_THRESHOLD_PX = 8;
+/** Touch/pen hold duration that opens the same menu as right-click. */
+const CONTEXT_LONG_PRESS_MS = 500;
 /** Forward collision distance for walk mode (metres). */
 const WALK_COLLISION_DISTANCE = 0.9;
 const WALK_COLLISION_POLL_MS = 120;
@@ -305,6 +308,10 @@ export class BimEngine {
   private resizeObserver: ResizeObserver | null = null;
   private pointerDown = { x: 0, y: 0 };
   private pointerMoved = false;
+  private longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  private longPressPointerId: number | null = null;
+  /** Set when a touch long-press opens the context menu (suppresses click-select). */
+  private longPressOpenedMenu = false;
   private disposed = false;
   private rimLight: THREE.DirectionalLight | null = null;
   private hemiLight: THREE.HemisphereLight | null = null;
@@ -790,6 +797,7 @@ export class BimEngine {
     container.addEventListener("pointerdown", this.onCanvasPointerDown, { passive: true });
     container.addEventListener("pointermove", this.onCanvasPointerMove, { passive: true });
     container.addEventListener("pointerup", this.onCanvasPointerUp);
+    container.addEventListener("pointercancel", this.onCanvasPointerCancel);
     container.addEventListener("contextmenu", this.onCanvasContextMenu, { capture: true });
     window.addEventListener("keydown", this.onGlobalKeyDown);
 
@@ -3494,9 +3502,57 @@ export class BimEngine {
     void this.openContextMenuAfterPick(e);
   };
 
-  private async openContextMenuAfterPick(e: MouseEvent): Promise<void> {
+  private clearLongPressTimer(): void {
+    if (this.longPressTimer != null) {
+      clearTimeout(this.longPressTimer);
+      this.longPressTimer = null;
+    }
+    this.longPressPointerId = null;
+  }
+
+  private canStartContextLongPress(e: PointerEvent): boolean {
+    if (e.pointerType !== "touch" && e.pointerType !== "pen") return false;
+    if (e.button !== 0) return false;
+    if (this.tool === "markup" || this.tool === "clip") return false;
+    if (this.issuePlacementPick) return false;
+    if (this.sectionBox?.isDragging()) return false;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest(".bim-view-cube, .bim-plan-minimap, .bim-walk-chrome, .bim-split-pane")) {
+      return false;
+    }
+    return true;
+  }
+
+  private startContextLongPress(e: PointerEvent): void {
+    this.clearLongPressTimer();
+    this.longPressOpenedMenu = false;
+    if (!this.canStartContextLongPress(e)) return;
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    const pointerId = e.pointerId;
+    this.longPressPointerId = pointerId;
+    this.longPressTimer = setTimeout(() => {
+      this.longPressTimer = null;
+      if (this.disposed || this.pointerMoved || this.longPressPointerId !== pointerId) return;
+      this.longPressOpenedMenu = true;
+      hapticTap(12);
+      void this.openContextMenuAfterPick({
+        clientX,
+        clientY,
+        ctrlKey: false,
+        metaKey: false,
+      });
+    }, CONTEXT_LONG_PRESS_MS);
+  }
+
+  private async openContextMenuAfterPick(e: {
+    clientX: number;
+    clientY: number;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+  }): Promise<void> {
     const pickPromise = this.selectAtPointer(e as unknown as PointerEvent, {
-      additive: e.ctrlKey || e.metaKey,
+      additive: Boolean(e.ctrlKey || e.metaKey),
       forContextMenu: true,
     });
     this.contextMenuPickPromise = pickPromise;
@@ -3533,6 +3589,8 @@ export class BimEngine {
   private onCanvasPointerDown = (e: PointerEvent): void => {
     this.pointerDown = { x: e.clientX, y: e.clientY };
     this.pointerMoved = false;
+    this.longPressOpenedMenu = false;
+    this.startContextLongPress(e);
     // Before camera-controls starts a drag, lock the pivot to the selection.
     if (
       this.selectionOrbitPoint &&
@@ -3553,6 +3611,7 @@ export class BimEngine {
     const startPointerT = this.sectionBox.pointerAxisT(pick.handle, pick.plane.origin, ndc);
     if (startPointerT == null) return;
 
+    this.clearLongPressTimer();
     this.sectionBox.beginDrag(pick.handle, pick.plane, startPointerT);
     if (this.world) this.world.camera.enabled = false;
     this.container?.setPointerCapture(e.pointerId);
@@ -3563,7 +3622,10 @@ export class BimEngine {
   private onCanvasPointerMove = (e: PointerEvent): void => {
     const dx = e.clientX - this.pointerDown.x;
     const dy = e.clientY - this.pointerDown.y;
-    if (Math.hypot(dx, dy) > POINTER_CLICK_THRESHOLD_PX) this.pointerMoved = true;
+    if (Math.hypot(dx, dy) > POINTER_CLICK_THRESHOLD_PX) {
+      this.pointerMoved = true;
+      this.clearLongPressTimer();
+    }
 
     if (this.sectionBox?.isDragging()) {
       this.sectionBox.pointerMove(this.pointerNdc(e));
@@ -3571,13 +3633,23 @@ export class BimEngine {
     }
   };
 
+  private onCanvasPointerCancel = (): void => {
+    this.clearLongPressTimer();
+  };
+
   // fallow-ignore-next-line complexity
   private onCanvasPointerUp = (e: PointerEvent): void => {
+    this.clearLongPressTimer();
     if (this.sectionBox?.isDragging()) {
       this.sectionBox.endDrag();
       if (this.world) this.world.camera.enabled = true;
       this.container?.releasePointerCapture(e.pointerId);
       e.preventDefault();
+      return;
+    }
+
+    if (this.longPressOpenedMenu) {
+      this.longPressOpenedMenu = false;
       return;
     }
 
@@ -5546,10 +5618,12 @@ export class BimEngine {
     document.removeEventListener("pointerlockchange", this.onPointerLockChange);
     document.removeEventListener("mousemove", this.onPointerLockMouseMove);
     const container = this.container;
+    this.clearLongPressTimer();
     if (container) {
       container.removeEventListener("pointerdown", this.onCanvasPointerDown);
       container.removeEventListener("pointermove", this.onCanvasPointerMove);
       container.removeEventListener("pointerup", this.onCanvasPointerUp);
+      container.removeEventListener("pointercancel", this.onCanvasPointerCancel);
       container.removeEventListener("contextmenu", this.onCanvasContextMenu, { capture: true });
     }
     this.resizeObserver?.disconnect();

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormHTMLAttributes, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { useBodyScrollLock, useEscapeToClose } from "@/hooks/useOverlayLock";
 
 const SLIDE_OVER_PANEL_TRANSITION =
   "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]";
@@ -147,26 +148,8 @@ export function EnterpriseSlideOver({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!shouldRender) return;
-    const prevOverflow = document.body.style.overflow;
-    const prevOverflowX = document.body.style.overflowX;
-    document.body.style.overflow = "hidden";
-    document.body.style.overflowX = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.overflowX = prevOverflowX;
-    };
-  }, [shouldRender]);
-
-  useEffect(() => {
-    if (!shouldRender || !closeOnEscape) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [shouldRender, closeOnEscape, onClose]);
+  useBodyScrollLock(shouldRender);
+  useEscapeToClose(shouldRender && closeOnEscape, onClose);
 
   if (!shouldRender || typeof document === "undefined") return null;
 

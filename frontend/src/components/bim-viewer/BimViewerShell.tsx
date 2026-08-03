@@ -2851,8 +2851,10 @@ export function BimViewerShell(props: {
             open
             onClose={closeClashDock}
             ariaLabel="Clash detection"
+            variant="viewer-dark"
             maxHeightClass="max-h-[min(78dvh,720px)]"
-            panelClassName="bg-[var(--bim-shell)] text-[var(--bim-text)]"
+            bodyScroll={false}
+            bodyClassName="p-0"
           >
             {clashDockBody}
           </EnterpriseBottomSheet>

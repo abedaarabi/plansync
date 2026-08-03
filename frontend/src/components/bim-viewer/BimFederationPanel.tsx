@@ -79,7 +79,7 @@ export function BimFederationPanel(props: {
         </p>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+      <div className="bim-dock-scroll px-2 py-2">
         <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--bim-text-subtle)]">
           Loaded in view
         </p>

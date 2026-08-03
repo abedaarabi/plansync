@@ -207,7 +207,7 @@ export function BimClashSetsPanel(props: {
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-2.5">
+      <div className="bim-dock-scroll space-y-3 p-2.5">
         <p className="px-0.5 text-[10px] leading-snug text-[var(--bim-text-muted)]">
           Choose model A vs model B, then narrow by element type for large tests.
         </p>

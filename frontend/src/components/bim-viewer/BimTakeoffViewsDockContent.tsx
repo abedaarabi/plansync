@@ -43,8 +43,8 @@ export function BimTakeoffViewsDockContent(props: {
   const [tab, setTab] = useState<BimTakeoffViewsTab>(props.initialTab ?? "takeoff");
 
   return (
-    <>
-      <div className="border-b border-[var(--bim-border)] px-3 py-2.5">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b border-[var(--bim-border)] px-3 py-2.5">
         <div className="bim-segment bim-segment-compact">
           <SegmentBtn
             active={tab === "takeoff"}
@@ -56,46 +56,48 @@ export function BimTakeoffViewsDockContent(props: {
         </div>
       </div>
 
-      {tab === "takeoff" ? (
-        <div className="p-4">
-          <BimTakeoffPanel
-            fileVersionId={props.fileVersionId}
-            projectId={props.projectId}
-            selectedGuids={props.selectedGuids}
-            selectionSummary={props.takeoffSelectionSummary}
-            resolveModelQuantities={props.resolveModelQuantities}
-          />
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4 p-4">
-          <BimSavedViewsPanel
-            views={props.savedViews}
-            onSave={props.onSaveView}
-            onApply={props.onApplyView}
-            onDelete={props.onDeleteView}
-          />
-          {props.compareDeltas ? (
-            <BimComparePanel
-              baseVersion={props.compareDeltas.baseVersion}
-              compareVersion={props.compareDeltas.compareVersion}
-              deltas={props.compareDeltas.deltas}
-            />
-          ) : null}
-          <div className="bim-detail-card">
-            <p className="bim-section-title">Markups</p>
-            <p className="mb-3 text-[11px] text-[var(--bim-text-muted)]">
-              Saved view markups for this model revision.
-            </p>
-            <BimMarkupsPanel
-              engine={props.markupEngine ?? null}
-              annotations={props.markupAnnotations ?? []}
-              selectedIds={props.markupSelectedIds ?? []}
-              onSelect={(id) => props.onSelectMarkup?.(id)}
+      <div className="bim-dock-scroll">
+        {tab === "takeoff" ? (
+          <div className="p-4">
+            <BimTakeoffPanel
+              fileVersionId={props.fileVersionId}
+              projectId={props.projectId}
+              selectedGuids={props.selectedGuids}
+              selectionSummary={props.takeoffSelectionSummary}
+              resolveModelQuantities={props.resolveModelQuantities}
             />
           </div>
-        </div>
-      )}
-    </>
+        ) : (
+          <div className="flex flex-col gap-4 p-4">
+            <BimSavedViewsPanel
+              views={props.savedViews}
+              onSave={props.onSaveView}
+              onApply={props.onApplyView}
+              onDelete={props.onDeleteView}
+            />
+            {props.compareDeltas ? (
+              <BimComparePanel
+                baseVersion={props.compareDeltas.baseVersion}
+                compareVersion={props.compareDeltas.compareVersion}
+                deltas={props.compareDeltas.deltas}
+              />
+            ) : null}
+            <div className="bim-detail-card">
+              <p className="bim-section-title">Markups</p>
+              <p className="mb-3 text-[11px] text-[var(--bim-text-muted)]">
+                Saved view markups for this model revision.
+              </p>
+              <BimMarkupsPanel
+                engine={props.markupEngine ?? null}
+                annotations={props.markupAnnotations ?? []}
+                selectedIds={props.markupSelectedIds ?? []}
+                onSelect={(id) => props.onSelectMarkup?.(id)}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -134,7 +134,7 @@ export function BimModelTreePanel(props: {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+      <div className="bim-dock-scroll px-2 py-2">
         <TreeSection title="Levels" open={levelsOpen} onToggle={() => setLevelsOpen((v) => !v)}>
           {filteredStoreys.length === 0 ? (
             <p className="px-2 py-1 text-[11px] text-[var(--bim-text-muted)]">No levels found.</p>

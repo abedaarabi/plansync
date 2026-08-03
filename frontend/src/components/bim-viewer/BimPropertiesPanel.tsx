@@ -312,7 +312,7 @@ export function BimPropertiesPanel(props: {
             <X className="h-4 w-4" aria-hidden />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+        <div className="bim-dock-scroll">{body}</div>
       </aside>
     );
   }

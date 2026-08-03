@@ -135,7 +135,7 @@ export function BimFiltersPanel(props: {
   }
 
   return (
-    <div className="flex min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       {/* Status bar */}
       <div className="border-b border-[var(--bim-border)] bg-[var(--bim-hover)] px-3 py-2.5">
         {active ? (
@@ -229,7 +229,7 @@ export function BimFiltersPanel(props: {
         </div>
 
         <ul
-          className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)]"
+          className="bim-dock-scroll rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)]"
           aria-label={`${PICKER_LABELS[pickerField]} list`}
         >
           {pickerOptions.length === 0 ? (

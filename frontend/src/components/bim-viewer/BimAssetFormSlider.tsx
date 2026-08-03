@@ -110,7 +110,7 @@ export function BimAssetFormSlider(props: {
       closeOnOutsideClick={false}
     >
       <div className="flex h-full min-h-0 flex-col">
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-2.5">
+        <div className="bim-dock-scroll space-y-3 px-3 py-2.5">
           {previewUrl ? (
             <div className="overflow-hidden rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_40%,transparent)]">
               <img

@@ -52,9 +52,9 @@ export function BimInspectDockContent(props: {
   }
 
   return (
-    <>
+    <div className="flex h-full min-h-0 flex-col">
       {props.selection ? (
-        <div className="bim-dock-selection">
+        <div className="bim-dock-selection shrink-0">
           <p className="bim-dock-selection__name">{props.selection.name ?? "Unnamed element"}</p>
           <p className="bim-dock-selection__meta">
             {[props.selection.ifcType ?? "IFC element", props.selection.storey]
@@ -64,7 +64,7 @@ export function BimInspectDockContent(props: {
         </div>
       ) : null}
 
-      <div className="border-b border-[var(--bim-border)] px-2.5 py-1.5">
+      <div className="shrink-0 border-b border-[var(--bim-border)] px-2.5 py-1.5">
         <div className="bim-segment bim-segment-compact">
           <SegmentBtn
             active={tab === "properties"}
@@ -79,31 +79,33 @@ export function BimInspectDockContent(props: {
         </div>
       </div>
 
-      {tab === "properties" ? (
-        <BimPropertiesPanel
-          selection={props.selection}
-          quantityIndex={props.quantityIndex}
-          fileId={props.fileId}
-          fileVersionId={props.fileVersionId}
-          projectId={props.projectId}
-          variant="tab-content"
-          onClose={props.onClearSelection}
-          onStartCreateIssue={props.onStartCreateIssue}
-          onAddFilterRule={props.onAddFilterRule}
-        />
-      ) : (
-        <div className="p-2.5">
-          <BimQuantitiesPanel
-            entries={props.quantityRollup.entries}
-            count={props.quantityRollup.count}
-            length={props.quantityRollup.length}
-            area={props.quantityRollup.area}
-            volume={props.quantityRollup.volume}
-            selectionSummary={props.takeoffSelectionSummary}
+      <div className="bim-dock-scroll">
+        {tab === "properties" ? (
+          <BimPropertiesPanel
+            selection={props.selection}
+            quantityIndex={props.quantityIndex}
+            fileId={props.fileId}
+            fileVersionId={props.fileVersionId}
+            projectId={props.projectId}
+            variant="tab-content"
+            onClose={props.onClearSelection}
+            onStartCreateIssue={props.onStartCreateIssue}
+            onAddFilterRule={props.onAddFilterRule}
           />
-        </div>
-      )}
-    </>
+        ) : (
+          <div className="p-2.5">
+            <BimQuantitiesPanel
+              entries={props.quantityRollup.entries}
+              count={props.quantityRollup.count}
+              length={props.quantityRollup.length}
+              area={props.quantityRollup.area}
+              volume={props.quantityRollup.volume}
+              selectionSummary={props.takeoffSelectionSummary}
+            />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

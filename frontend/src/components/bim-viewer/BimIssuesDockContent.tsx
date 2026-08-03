@@ -204,7 +204,7 @@ export function BimIssuesDockContent(props: {
                   : `${props.issues.length} issue${props.issues.length === 1 ? "" : "s"}`}
               </p>
             </div>
-            <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
+            <ul className="bim-dock-scroll space-y-2 p-2.5">
               {filtered.map((issue) => {
                 const thumb = photoUrls[issue.id];
                 return (

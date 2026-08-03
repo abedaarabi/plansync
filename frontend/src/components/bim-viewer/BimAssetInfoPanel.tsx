@@ -194,7 +194,7 @@ export function BimAssetInfoPanel(props: {
       onClose={props.onClose}
       closeOnOutsideClick={false}
     >
-      <div className="space-y-3 px-3 py-2.5">
+      <div className="bim-dock-scroll space-y-3 px-3 py-2.5">
         {asset.hasImage ? (
           <div className="overflow-hidden rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_40%,transparent)]">
             <OmAssetImageThumb

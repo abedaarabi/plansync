@@ -512,8 +512,45 @@ button:active:not(:disabled),
     }
   }
 
-  .bim-viewer,
+  /*
+   * Portaled BIM surfaces (bottom sheets, context menu) render outside .bim-viewer.
+   * `.bim-theme` carries the color tokens so docks stay dark on mobile/iPad.
+   */
+  .bim-theme,
   .bim-context-menu-portal {
+    --bim-shell: #0f172a;
+    --bim-shell-deep: #111827;
+    --bim-canvas: #0f172a;
+    --bim-accent: #3b82f6;
+    --bim-accent-hover: #60a5fa;
+    --bim-accent-muted: rgba(59, 130, 246, 0.12);
+    --bim-accent-selected: rgba(59, 130, 246, 0.35);
+    --bim-text: #f9fafb;
+    --bim-text-muted: #94a3b8;
+    --bim-text-subtle: #64748b;
+    --bim-border: #475569;
+    --bim-border-strong: #64748b;
+    --bim-panel: #1e293b;
+    --bim-hover: #334155;
+    --bim-panel-shadow: 0 1px 2px rgba(15, 23, 42, 0.28), 0 10px 28px rgba(15, 23, 42, 0.35);
+    --bim-transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+    --bim-chrome-bg: #0f172a;
+    --bim-chrome-surface: #334155;
+    --bim-chrome-text: #f9fafb;
+    --bim-chrome-text-muted: #cbd5e1;
+    --bim-chrome-border: #475569;
+    --bim-glass-bg: color-mix(in srgb, #3f5169 86%, #94a3b8 14%);
+    --bim-glass-blur: 18px;
+    --bim-success: #10b981;
+    --bim-warning: #f59e0b;
+    --bim-danger: #ef4444;
+    --bim-info: #06b6d4;
+    --bim-icon: #cbd5e1;
+    --bim-disabled: #64748b;
+    color: var(--bim-text);
+  }
+
+  .bim-viewer {
     --bim-accent: #3b82f6;
     --bim-chrome-surface: #334155;
     --bim-chrome-text: #f9fafb;
@@ -2134,9 +2171,33 @@ button:active:not(:disabled),
   }
 
   .bim-glass-dock__body {
-    @apply min-h-0 flex-1 overflow-y-auto;
+    @apply flex min-h-0 flex-1 flex-col overflow-hidden;
     background: color-mix(in srgb, var(--bim-panel) 72%, #475569 28%);
+  }
+
+  /* Single scroll owner inside glass docks / clash sheet (avoids nested iOS scroll lock). */
+  .bim-dock-scroll {
+    @apply min-h-0 flex-1 overflow-y-auto overscroll-contain;
+    touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Phone + tablet: solid dark docks — frosted glass reads as washed/white. */
+  @media (max-width: 1023px) {
+    .bim-glass-dock.bim-glass-surface {
+      background: var(--bim-panel);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      border-color: var(--bim-border);
+    }
+
+    .bim-glass-dock__body {
+      background: var(--bim-panel);
+    }
+
+    .bim-glass-dock__header {
+      background: color-mix(in srgb, var(--bim-shell) 55%, var(--bim-panel) 45%);
+    }
   }
 
   @media (max-width: 639px) {
@@ -2154,6 +2215,11 @@ button:active:not(:disabled),
       max-height: min(82dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 3rem));
       border-radius: 1.25rem 1.25rem 0 0;
       padding-bottom: env(safe-area-inset-bottom, 0px);
+      box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.55);
+    }
+
+    .bim-glass-dock__header {
+      padding-top: 0.25rem;
     }
 
     .bim-glass-dock[data-side="left"],
@@ -2170,10 +2236,6 @@ button:active:not(:disabled),
       margin: 0.35rem auto 0.5rem;
       border-radius: 9999px;
       background: color-mix(in srgb, var(--bim-border-strong) 85%, transparent);
-    }
-
-    .bim-glass-dock__header {
-      padding-top: 0.25rem;
     }
 
     .bim-glass-dock-enter[data-side="left"],

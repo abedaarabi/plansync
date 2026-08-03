@@ -1041,7 +1041,7 @@ export function IssueFormSlider(props: Props) {
       )}
 
       <div
-        className={`min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-x-none [scrollbar-color:rgba(71,85,105,0.5)_transparent] [scrollbar-width:thin] ${
+        className={`bim-dock-scroll min-w-0 overflow-x-hidden overscroll-x-none [scrollbar-color:rgba(71,85,105,0.5)_transparent] [scrollbar-width:thin] ${
           embedded || isDocked ? "px-3 py-2.5" : viewerOperationsMode ? "px-4 py-3" : "px-5 py-4"
         }`}
       >
