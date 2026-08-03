@@ -18,7 +18,12 @@ import {
 } from "@/lib/api-client";
 import { sortedVersions } from "@/components/file-explorer/fileExplorerUtils";
 import { assetHasSheetPin } from "@/lib/assetPinFocus";
-import { omAssetViewerHref } from "@/lib/omAssetViewerNavigation";
+import { openBimViewer } from "@/lib/bim/openBimViewer";
+import {
+  omAssetBimViewerHref,
+  omAssetHasBimLink,
+  omAssetViewerHref,
+} from "@/lib/omAssetViewerNavigation";
 import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
 import type { CloudFile } from "@/types/projects";
@@ -52,6 +57,7 @@ type Props = {
   onDelete: (asset: OmAssetRow) => void;
 };
 
+// fallow-ignore-next-line complexity
 export function OmAssetDetailSlide({
   open,
   onClose,
@@ -117,6 +123,16 @@ export function OmAssetDetailSlide({
 
   const openViewerForAsset = useCallback(() => {
     if (!asset?.fileId) return;
+    if (omAssetHasBimLink(asset)) {
+      const href = omAssetBimViewerHref(projectId, asset);
+      if (!href) {
+        toast.error("Could not open 3D model for this asset.");
+        return;
+      }
+      onClose();
+      openBimViewer(href);
+      return;
+    }
     const f = pdfFiles.find((x) => x.id === asset.fileId);
     if (!f) {
       toast.error("Drawing file not found in project.");
@@ -211,7 +227,11 @@ export function OmAssetDetailSlide({
           )}
           <div className="space-y-2 border-t border-[var(--enterprise-border)] p-4">
             <div className="flex flex-wrap items-center gap-2">
-              {assetHasSheetPin(asset) ? (
+              {omAssetHasBimLink(asset) ? (
+                <span className="inline-flex items-center rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-sky-800 dark:text-sky-200">
+                  Linked in 3D
+                </span>
+              ) : assetHasSheetPin(asset) ? (
                 <span className="inline-flex items-center rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-200">
                   Pin on drawing
                 </span>
@@ -228,7 +248,8 @@ export function OmAssetDetailSlide({
             <p className="flex items-start gap-2 text-[var(--enterprise-text-muted)]">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
               <span className="font-medium text-[var(--enterprise-text)]">
-                {asset.locationLabel?.trim() ||
+                {asset.bimAnchor?.spatialPath?.[0]?.trim() ||
+                  asset.locationLabel?.trim() ||
                   [asset.hall, asset.rowLabel, asset.rack, asset.positionU]
                     .filter(Boolean)
                     .join(" / ") ||
@@ -241,7 +262,11 @@ export function OmAssetDetailSlide({
                 onClick={openViewerForAsset}
                 className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-teal-700 hover:underline dark:text-teal-300"
               >
-                {assetHasSheetPin(asset) ? "Zoom to equipment pin" : "Open linked drawing"}
+                {omAssetHasBimLink(asset)
+                  ? "Open in 3D viewer"
+                  : assetHasSheetPin(asset)
+                    ? "Zoom to equipment pin"
+                    : "Open linked drawing"}
                 <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
               </button>
             ) : null}
@@ -259,6 +284,20 @@ export function OmAssetDetailSlide({
             <dd>{asset.model?.trim() || "—"}</dd>
             <dt className="text-[var(--enterprise-text-muted)]">Serial</dt>
             <dd className="font-mono text-xs">{asset.serialNumber?.trim() || "—"}</dd>
+            {asset.bimAnchor?.ifcType ? (
+              <>
+                <dt className="text-[var(--enterprise-text-muted)]">IFC type</dt>
+                <dd>{asset.bimAnchor.ifcType}</dd>
+              </>
+            ) : null}
+            {asset.file?.name ? (
+              <>
+                <dt className="text-[var(--enterprise-text-muted)]">
+                  {omAssetHasBimLink(asset) ? "3D model" : "Drawing"}
+                </dt>
+                <dd className="truncate">{asset.file.name}</dd>
+              </>
+            ) : null}
             <dt className="text-[var(--enterprise-text-muted)]">Installed</dt>
             <dd>{formatDetailDate(asset.installDate)}</dd>
             <dt className="text-[var(--enterprise-text-muted)]">Warranty</dt>

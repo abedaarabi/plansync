@@ -333,6 +333,41 @@ type OmAssetRowDb = Prisma.AssetGetPayload<{
   };
 }>;
 
+const omAssetBimAnchorSchema = z
+  .object({
+    ifcGuid: z.string().min(1).max(64),
+    localId: z.number().int().optional(),
+    name: z.string().max(300).optional(),
+    ifcType: z.string().max(120).optional(),
+    spatialPath: z.array(z.string().max(300)).max(20).optional(),
+    position: z.object({ x: z.number(), y: z.number(), z: z.number() }).optional(),
+    fileVersionId: z.string().max(64).optional(),
+  })
+  .nullable()
+  .optional();
+
+/** Shared optional fields on create/patch asset bodies (keeps routes from cloning). */
+const omAssetSharedBodyFields = {
+  category: z.string().max(120).nullable().optional(),
+  manufacturer: z.string().max(200).nullable().optional(),
+  model: z.string().max(200).nullable().optional(),
+  serialNumber: z.string().max(200).nullable().optional(),
+  locationLabel: z.string().max(500).nullable().optional(),
+  hall: z.string().max(120).nullable().optional(),
+  rowLabel: z.string().max(120).nullable().optional(),
+  rack: z.string().max(120).nullable().optional(),
+  positionU: z.string().max(120).nullable().optional(),
+  installDate: z.string().datetime().nullable().optional(),
+  warrantyExpires: z.string().datetime().nullable().optional(),
+  lastServiceAt: z.string().datetime().nullable().optional(),
+  notes: z.string().max(5000).nullable().optional(),
+  fileId: z.string().nullable().optional(),
+  fileVersionId: z.string().nullable().optional(),
+  pageNumber: z.number().int().min(1).nullable().optional(),
+  annotationId: z.string().nullable().optional(),
+  bimAnchor: omAssetBimAnchorSchema,
+} as const;
+
 function toOmAssetJson(a: OmAssetRowDb) {
   const {
     occupantScanSecret,
@@ -769,6 +804,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     return c.json(rows.map(toOmAssetJson));
   });
 
+  // fallow-ignore-next-line complexity
   r.post("/projects/:projectId/om/assets", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const auth = await loadProjectWithAuth(projectId, c.get("user").id);
@@ -785,23 +821,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       .object({
         tag: z.string().min(1).max(80),
         name: z.string().min(1).max(500),
-        category: z.string().max(120).nullable().optional(),
-        manufacturer: z.string().max(200).nullable().optional(),
-        model: z.string().max(200).nullable().optional(),
-        serialNumber: z.string().max(200).nullable().optional(),
-        locationLabel: z.string().max(500).nullable().optional(),
-        hall: z.string().max(120).nullable().optional(),
-        rowLabel: z.string().max(120).nullable().optional(),
-        rack: z.string().max(120).nullable().optional(),
-        positionU: z.string().max(120).nullable().optional(),
-        installDate: z.string().datetime().nullable().optional(),
-        warrantyExpires: z.string().datetime().nullable().optional(),
-        lastServiceAt: z.string().datetime().nullable().optional(),
-        notes: z.string().max(5000).nullable().optional(),
-        fileId: z.string().nullable().optional(),
-        fileVersionId: z.string().nullable().optional(),
-        pageNumber: z.number().int().min(1).nullable().optional(),
-        annotationId: z.string().nullable().optional(),
+        ...omAssetSharedBodyFields,
         pinJson: z.unknown().optional(),
       })
       .safeParse(await c.req.json());
@@ -815,6 +835,9 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       if (!fv) return c.json({ error: "File version not found in this project" }, 400);
     } else if (d.fileId || d.fileVersionId) {
       return c.json({ error: "fileId and fileVersionId must be set together" }, 400);
+    }
+    if (d.bimAnchor && !(d.fileId && d.fileVersionId)) {
+      return c.json({ error: "bimAnchor requires fileId and fileVersionId" }, 400);
     }
 
     const occupantScanSecret = ctx.settings.modules.omTenantPortal
@@ -846,6 +869,10 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
           pageNumber: d.pageNumber ?? null,
           annotationId: d.annotationId ?? null,
           pinJson: d.pinJson === undefined ? undefined : (d.pinJson as Prisma.InputJsonValue),
+          bimAnchor:
+            d.bimAnchor === undefined || d.bimAnchor === null
+              ? undefined
+              : (d.bimAnchor as Prisma.InputJsonValue),
           ...(occupantScanSecret ? { occupantScanSecret } : {}),
         },
         include: {
@@ -876,6 +903,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     return c.json(toOmAssetJson(row));
   });
 
+  // fallow-ignore-next-line complexity
   r.patch("/projects/:projectId/om/assets/:assetId", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const assetId = c.req.param("assetId")!;
@@ -896,23 +924,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       .object({
         tag: z.string().min(1).max(80).optional(),
         name: z.string().min(1).max(500).optional(),
-        category: z.string().max(120).nullable().optional(),
-        manufacturer: z.string().max(200).nullable().optional(),
-        model: z.string().max(200).nullable().optional(),
-        serialNumber: z.string().max(200).nullable().optional(),
-        locationLabel: z.string().max(500).nullable().optional(),
-        hall: z.string().max(120).nullable().optional(),
-        rowLabel: z.string().max(120).nullable().optional(),
-        rack: z.string().max(120).nullable().optional(),
-        positionU: z.string().max(120).nullable().optional(),
-        installDate: z.string().datetime().nullable().optional(),
-        warrantyExpires: z.string().datetime().nullable().optional(),
-        lastServiceAt: z.string().datetime().nullable().optional(),
-        notes: z.string().max(5000).nullable().optional(),
-        fileId: z.string().nullable().optional(),
-        fileVersionId: z.string().nullable().optional(),
-        pageNumber: z.number().int().min(1).nullable().optional(),
-        annotationId: z.string().nullable().optional(),
+        ...omAssetSharedBodyFields,
         pinJson: z.unknown().nullable().optional(),
       })
       .safeParse(await c.req.json());
@@ -929,6 +941,13 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         if (!fv) return c.json({ error: "File version not found in this project" }, 400);
       } else if (nf || nv) {
         return c.json({ error: "fileId and fileVersionId must be set together" }, 400);
+      }
+    }
+    if (d.bimAnchor) {
+      const nf = d.fileId !== undefined ? d.fileId : existing.fileId;
+      const nv = d.fileVersionId !== undefined ? d.fileVersionId : existing.fileVersionId;
+      if (!nf || !nv) {
+        return c.json({ error: "bimAnchor requires fileId and fileVersionId" }, 400);
       }
     }
 
@@ -964,6 +983,12 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         ...(d.annotationId !== undefined ? { annotationId: d.annotationId } : {}),
         ...(d.pinJson !== undefined
           ? { pinJson: d.pinJson as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput }
+          : {}),
+        ...(d.bimAnchor !== undefined
+          ? {
+              bimAnchor:
+                d.bimAnchor === null ? Prisma.DbNull : (d.bimAnchor as Prisma.InputJsonValue),
+            }
           : {}),
       },
       include: {

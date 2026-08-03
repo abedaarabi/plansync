@@ -4,6 +4,30 @@ import type { CloudFile } from "@/types/projects";
 
 export type OmAssetViewerMode = "place" | "focus";
 
+export function omAssetHasBimLink(
+  asset: Pick<OmAssetRow, "bimAnchor" | "fileId" | "fileVersionId">,
+): boolean {
+  return Boolean(asset.bimAnchor?.ifcGuid?.trim() && asset.fileId && asset.fileVersionId);
+}
+
+/** Relative URL to open the BIM viewer focused on the linked element. */
+export function omAssetBimViewerHref(projectId: string, asset: OmAssetRow): string | null {
+  const guid = asset.bimAnchor?.ifcGuid?.trim();
+  if (!guid || !asset.fileId || !asset.fileVersionId || !asset.file || !asset.fileVersion) {
+    return null;
+  }
+  const q = new URLSearchParams({
+    fileId: asset.fileId,
+    name: asset.file.name,
+    projectId,
+    fileVersionId: asset.fileVersionId,
+    version: String(asset.fileVersion.version),
+    guid,
+    omAssetId: asset.id,
+  });
+  return `/bim-viewer?${q.toString()}`;
+}
+
 export function buildOmAssetViewerQuery(
   projectId: string,
   file: CloudFile,

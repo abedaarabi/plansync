@@ -21,7 +21,13 @@ import {
 import { sortedVersions } from "@/components/file-explorer/fileExplorerUtils";
 import { assetHasSheetPin } from "@/lib/assetPinFocus";
 import { isPdfFile } from "@/lib/isPdfFile";
-import { buildOmAssetViewerQuery, omAssetViewerMode } from "@/lib/omAssetViewerNavigation";
+import { openBimViewer } from "@/lib/bim/openBimViewer";
+import {
+  buildOmAssetViewerQuery,
+  omAssetBimViewerHref,
+  omAssetHasBimLink,
+  omAssetViewerMode,
+} from "@/lib/omAssetViewerNavigation";
 import { qk } from "@/lib/queryKeys";
 import type { CloudFile, FileVersion } from "@/types/projects";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
@@ -83,6 +89,7 @@ function StatPill({
   );
 }
 
+// fallow-ignore-next-line complexity
 export function OmAssetsClient({ projectId }: Props) {
   const qc = useQueryClient();
   const router = useRouter();
@@ -290,11 +297,12 @@ export function OmAssetsClient({ projectId }: Props) {
         pageNumber: null,
         annotationId: null,
         pinJson: null,
+        bimAnchor: null,
       });
     },
     onSuccess: async () => {
       await invalidateAssets();
-      toast.success("Drawing link cleared.");
+      toast.success("Model / drawing link cleared.");
     },
     onError: (e: Error) => {
       toast.error(e instanceof ProRequiredError ? "Pro subscription required." : e.message);
@@ -309,6 +317,7 @@ export function OmAssetsClient({ projectId }: Props) {
         pageNumber: null,
         annotationId: null,
         pinJson: null,
+        bimAnchor: null,
       });
     },
     onSuccess: async () => {
@@ -346,6 +355,15 @@ export function OmAssetsClient({ projectId }: Props) {
   }
 
   function openViewerForLinkedAsset(asset: OmAssetRow) {
+    if (omAssetHasBimLink(asset)) {
+      const href = omAssetBimViewerHref(projectId, asset);
+      if (!href) {
+        toast.error("Could not open 3D model for this asset.");
+        return;
+      }
+      openBimViewer(href);
+      return;
+    }
     if (!asset.fileId || !project) return;
     const f = project.files.find((x) => x.id === asset.fileId);
     if (!f) {
@@ -535,7 +553,7 @@ export function OmAssetsClient({ projectId }: Props) {
               }}
               onViewDrawing={openViewerForLinkedAsset}
               onClearLink={(id) => {
-                if (confirm("Clear the drawing link for this asset?")) {
+                if (confirm("Clear the model / drawing link for this asset?")) {
                   clearLinkMut.mutate(id);
                 }
               }}

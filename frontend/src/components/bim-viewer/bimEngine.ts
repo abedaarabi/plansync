@@ -5216,10 +5216,10 @@ export class BimEngine {
     }
   }
 
-  async zoomToSelection(): Promise<void> {
+  async zoomToSelection(opts?: { fitScale?: number }): Promise<void> {
     const map = await this.getActiveSelectionMapAsync();
     if (!map) return;
-    await this.zoomToModelIdMap(map);
+    await this.zoomToModelIdMap(map, opts?.fitScale);
   }
 
   /**
@@ -5250,11 +5250,11 @@ export class BimEngine {
     this.bumpRender();
   }
 
-  async zoomToGuids(guids: string[]): Promise<void> {
+  async zoomToGuids(guids: string[], opts?: { fitScale?: number }): Promise<void> {
     if (guids.length === 0) return;
     const map = await this.resolveModelIdMapFromGuids(guids);
     if (!map) return;
-    await this.zoomToModelIdMap(map);
+    await this.zoomToModelIdMap(map, opts?.fitScale);
   }
 
   // fallow-ignore-next-line complexity
@@ -5285,7 +5285,7 @@ export class BimEngine {
   }
 
   // fallow-ignore-next-line complexity
-  private async zoomToModelIdMap(map: OBC.ModelIdMap): Promise<void> {
+  private async zoomToModelIdMap(map: OBC.ModelIdMap, fitScale?: number): Promise<void> {
     const box = await this.getModelIdMapBoundingBox(map);
     if (!box) {
       await this.fitToView();
@@ -5297,7 +5297,7 @@ export class BimEngine {
     if (!Number.isFinite(sphere.radius) || sphere.radius < minRadius) {
       sphere.radius = this.detectModelUnits() === "mm" ? 2000 : 2;
     }
-    await this.focusCameraOnSphere(sphere);
+    await this.focusCameraOnSphere(sphere, fitScale ?? 0.82);
   }
 
   /**

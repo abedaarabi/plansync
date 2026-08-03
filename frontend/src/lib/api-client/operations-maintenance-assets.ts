@@ -3,15 +3,21 @@
  */
 import { apiUrl } from "@/lib/api-url";
 import type { ProjectSessionResponse } from "./core-project-ops";
+import type { IssueBimAnchor } from "./core-issues-takeoff";
 import { jsonHeaders, readJsonErrorBody, readJsonOrEmpty } from "./shared";
 import { ProRequiredError } from "./errors";
 import { referencePhotoContentType } from "@/lib/referencePhotoMime";
 
 // --- Operations & Maintenance (O&M) ---
 
-export type OmAssetRow = {
-  id: string;
-  projectId: string;
+/** 3D element anchor on an O&M asset (mirrors `Asset.bimAnchor`). */
+export type OmAssetBimAnchor = Pick<
+  IssueBimAnchor,
+  "ifcGuid" | "localId" | "name" | "ifcType" | "spatialPath" | "position" | "fileVersionId"
+>;
+
+/** Fields shared by list rows and create/patch bodies. */
+type OmAssetWritableFields = {
   tag: string;
   name: string;
   category?: string | null;
@@ -32,6 +38,13 @@ export type OmAssetRow = {
   pageNumber: number | null;
   annotationId: string | null;
   pinJson: unknown;
+  /** 3D anchor when linked from the BIM viewer. */
+  bimAnchor?: OmAssetBimAnchor | null;
+};
+
+export type OmAssetRow = OmAssetWritableFields & {
+  id: string;
+  projectId: string;
   file: { id: string; name: string } | null;
   fileVersion: { id: string; version: number } | null;
   /** True when a tenant portal equipment QR secret exists for this asset. */
@@ -63,25 +76,7 @@ export async function fetchOmAssets(
 export type OmAssetCreateBody = {
   tag: string;
   name: string;
-  category?: string | null;
-  manufacturer?: string | null;
-  model?: string | null;
-  serialNumber?: string | null;
-  locationLabel?: string | null;
-  hall?: string | null;
-  rowLabel?: string | null;
-  rack?: string | null;
-  positionU?: string | null;
-  installDate?: string | null;
-  warrantyExpires?: string | null;
-  lastServiceAt?: string | null;
-  notes?: string | null;
-  fileId?: string | null;
-  fileVersionId?: string | null;
-  pageNumber?: number | null;
-  annotationId?: string | null;
-  pinJson?: unknown;
-};
+} & Partial<Omit<OmAssetWritableFields, "tag" | "name">>;
 
 export async function createOmAsset(
   projectId: string,
@@ -392,28 +387,7 @@ export async function deleteOmAssetDocument(
 export async function patchOmAsset(
   projectId: string,
   assetId: string,
-  patch: {
-    tag?: string;
-    name?: string;
-    category?: string | null;
-    manufacturer?: string | null;
-    model?: string | null;
-    serialNumber?: string | null;
-    locationLabel?: string | null;
-    hall?: string | null;
-    rowLabel?: string | null;
-    rack?: string | null;
-    positionU?: string | null;
-    installDate?: string | null;
-    warrantyExpires?: string | null;
-    lastServiceAt?: string | null;
-    notes?: string | null;
-    fileId?: string | null;
-    fileVersionId?: string | null;
-    pageNumber?: number | null;
-    annotationId?: string | null;
-    pinJson?: unknown | null;
-  },
+  patch: Partial<OmAssetWritableFields> & { pinJson?: unknown | null },
 ): Promise<OmAssetRow> {
   const res = await fetch(
     apiUrl(

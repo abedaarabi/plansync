@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Boxes,
@@ -96,9 +97,24 @@ import type { CloudFile } from "@/types/projects";
 import { BimMarkupOverlay } from "./BimMarkupOverlay";
 import { BimIssuesDockContent } from "./BimIssuesDockContent";
 import { IssueFormSlider } from "@/components/pdf-viewer/IssueFormSlider";
+import { BimAssetFormSlider } from "./BimAssetFormSlider";
+import { BimAssetInfoPanel } from "./BimAssetInfoPanel";
 import { focusBimIssueInViewer } from "@/lib/bim/focusBimIssue";
 import type { IssueBimAnchor } from "@/lib/api-client/core-issues-takeoff";
 import { selectionToBimAnchor } from "@/lib/bim/bimIssueAnchor";
+import {
+  assetDraftFromBimSelection,
+  bimAnchorFromSelection,
+  BIM_ASSET_SOFT_FIT_SCALE,
+} from "@/lib/bim/omAssetFromSelection";
+import type { AssetFormDraft } from "@/components/enterprise/OmAssetFormFields";
+import {
+  fetchOmAssets,
+  type OmAssetBimAnchor,
+  type OmAssetRow,
+} from "@/lib/api-client/operations-maintenance-assets";
+import { fetchProjectSession } from "@/lib/api-client";
+import { qk } from "@/lib/queryKeys";
 import {
   clashGroupIssueDescription,
   clashGroupIssueTitle,
@@ -192,6 +208,8 @@ export function BimViewerShell(props: {
   fileVersionId: string | null;
   initialGuid?: string | null;
   issueId?: string | null;
+  /** Focus an O&M asset linked to a BIM element (`?omAssetId=`). */
+  omAssetId?: string | null;
   compareFileVersionId?: string | null;
   federationMembers: BimFederationMember[];
   collabEnabled?: boolean;
@@ -303,6 +321,27 @@ export function BimViewerShell(props: {
     active: clashDockOpen || activeDock === "clashes",
     models: clashModels,
   });
+
+  const { data: projectSession } = useQuery({
+    queryKey: qk.projectSession(resolvedProjectId ?? ""),
+    queryFn: () => fetchProjectSession(resolvedProjectId!),
+    enabled: Boolean(resolvedProjectId),
+    staleTime: 60_000,
+  });
+  const canCreateOmAsset = Boolean(
+    projectSession &&
+    !projectSession.isExternal &&
+    projectSession.operationsMode &&
+    projectSession.settings.modules.omAssets,
+  );
+
+  const { data: omAssetsForFocus } = useQuery({
+    queryKey: qk.omAssets(resolvedProjectId ?? ""),
+    queryFn: () => fetchOmAssets(resolvedProjectId!),
+    enabled: Boolean(resolvedProjectId && props.omAssetId?.trim() && phase.kind === "ready"),
+    staleTime: 30_000,
+  });
+
   const mobileAssigneeDefaulted = useRef(false);
   useEffect(() => {
     if (activeDock !== "clashes" || !isNarrowViewport || mobileAssigneeDefaulted.current) return;
@@ -549,6 +588,12 @@ export function BimViewerShell(props: {
     initialPriority?: string;
     sourceClashIds?: string[];
   } | null>(null);
+  const [assetCreateDraft, setAssetCreateDraft] = useState<{
+    bimAnchor: OmAssetBimAnchor;
+    initialDraft: AssetFormDraft;
+    pendingPhoto?: File;
+  } | null>(null);
+  const [focusedOmAsset, setFocusedOmAsset] = useState<OmAssetRow | null>(null);
   const [clashIssuePreparing, setClashIssuePreparing] = useState(false);
   const [issuePlacementActive, setIssuePlacementActive] = useState(false);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
@@ -1110,10 +1155,23 @@ export function BimViewerShell(props: {
     const guid = props.initialGuid;
     if (props.issueId?.trim()) return;
     if (!guid || phase.kind !== "ready") return;
+    const soft = Boolean(props.omAssetId?.trim());
     void engineRef.current?.selectByGuids([guid], false).then(() => {
-      void engineRef.current?.zoomToSelection();
+      void engineRef.current?.zoomToSelection(
+        soft ? { fitScale: BIM_ASSET_SOFT_FIT_SCALE } : undefined,
+      );
     });
-  }, [props.initialGuid, props.issueId, phase.kind, quantityIndex]);
+  }, [props.initialGuid, props.issueId, props.omAssetId, phase.kind, quantityIndex]);
+
+  useEffect(() => {
+    const id = props.omAssetId?.trim();
+    if (!id || !omAssetsForFocus) {
+      if (!id) setFocusedOmAsset(null);
+      return;
+    }
+    const row = omAssetsForFocus.find((a) => a.id === id) ?? null;
+    setFocusedOmAsset(row);
+  }, [props.omAssetId, omAssetsForFocus]);
 
   useEffect(() => {
     issueFocusConsumedRef.current = null;
@@ -1643,6 +1701,53 @@ export function BimViewerShell(props: {
     })();
   }, [captureIssueSnapshotFile, selectedGuids, selection, startIssueCreate]);
 
+  const startAssetCreateFromSelection = useCallback(() => {
+    // fallow-ignore-next-line complexity
+    void (async () => {
+      if (!resolvedFileVersionId || !resolvedProjectId) {
+        toast.error(
+          "Missing project or file version. Reopen this model from the project Files tab.",
+        );
+        return;
+      }
+      if (!canCreateOmAsset) {
+        toast.error("Operations assets are not enabled for this project.");
+        return;
+      }
+      if (!selection) {
+        toast.error("Select an element in the model first.");
+        return;
+      }
+      const bimAnchor = bimAnchorFromSelection(selection);
+      if (!bimAnchor) {
+        toast.error("Select a model element with an IFC GUID to create an asset.");
+        return;
+      }
+      const engine = engineRef.current;
+      if (engine) {
+        await engine.zoomToSelection({ fitScale: BIM_ASSET_SOFT_FIT_SCALE });
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, 220);
+        });
+      }
+      const issueAnchor = selectionToBimAnchor(selection);
+      const pendingPhoto = issueAnchor
+        ? await captureIssueSnapshotFile({ anchor: issueAnchor })
+        : await captureIssueSnapshotFile();
+      setAssetCreateDraft({
+        bimAnchor,
+        initialDraft: assetDraftFromBimSelection(selection),
+        pendingPhoto,
+      });
+    })();
+  }, [
+    canCreateOmAsset,
+    captureIssueSnapshotFile,
+    resolvedFileVersionId,
+    resolvedProjectId,
+    selection,
+  ]);
+
   // fallow-ignore-next-line complexity
   const buildMarkupBimAnchor = useCallback((): IssueBimAnchor | undefined => {
     if (selection?.ifcGuid) {
@@ -1822,13 +1927,16 @@ export function BimViewerShell(props: {
           case "createIssue":
             startIssueCreateFromSelection();
             break;
+          case "createAsset":
+            startAssetCreateFromSelection();
+            break;
           case "showAll":
             await engine.showAllElements();
             break;
         }
       })();
     },
-    [openPropertiesDock, startIssueCreateFromSelection],
+    [openPropertiesDock, startAssetCreateFromSelection, startIssueCreateFromSelection],
   );
 
   useEffect(() => {
@@ -2749,6 +2857,7 @@ export function BimViewerShell(props: {
             x={contextMenu.x}
             y={contextMenu.y}
             hasSelection={contextMenu.hasSelection}
+            canCreateAsset={canCreateOmAsset}
             onAction={onContextAction}
             onClose={() => setContextMenu(null)}
           />
@@ -2833,6 +2942,36 @@ export function BimViewerShell(props: {
 
         {workChromeReady ? (
           <BimShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+        ) : null}
+
+        {workChromeReady && assetCreateDraft && resolvedFileVersionId && resolvedProjectId ? (
+          <BimAssetFormSlider
+            open
+            projectId={resolvedProjectId}
+            fileId={props.fileId}
+            fileVersionId={resolvedFileVersionId}
+            modelName={props.fileName}
+            bimAnchor={assetCreateDraft.bimAnchor}
+            initialDraft={assetCreateDraft.initialDraft}
+            pendingPhoto={assetCreateDraft.pendingPhoto}
+            onClose={() => setAssetCreateDraft(null)}
+            onCreated={(asset) => {
+              setAssetCreateDraft(null);
+              setFocusedOmAsset(asset);
+            }}
+          />
+        ) : null}
+
+        {workChromeReady &&
+        focusedOmAsset &&
+        !assetCreateDraft &&
+        !issueCreateDraft &&
+        !editIssue ? (
+          <BimAssetInfoPanel
+            asset={focusedOmAsset}
+            modelName={props.fileName}
+            onClose={() => setFocusedOmAsset(null)}
+          />
         ) : null}
 
         {workChromeReady && issueCreateDraft && resolvedFileVersionId && resolvedProjectId ? (

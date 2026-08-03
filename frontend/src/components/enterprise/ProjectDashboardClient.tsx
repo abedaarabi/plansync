@@ -35,9 +35,11 @@ import { DashboardActivityChart } from "@/components/enterprise/DashboardActivit
 import { ProjectHomeOverviewCharts } from "@/components/enterprise/ProjectHomeOverviewCharts";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { IfcFileIcon } from "@/components/icons/IfcFileIcon";
 import { PdfFileIcon } from "@/components/icons/PdfFileIcon";
 import type { CloudFile } from "@/types/projects";
-import { isPdfFile } from "@/lib/isPdfFile";
+import { openBimViewer } from "@/lib/bim/openBimViewer";
+import { isIfcFile, isPdfFile } from "@/lib/isPdfFile";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { ProjectLogo } from "./ProjectLogo";
 import { ProjectLocationMap } from "./ProjectLocationMap";
@@ -96,6 +98,7 @@ type Props = {
   projectId: string;
 };
 
+// fallow-ignore-next-line complexity
 export function ProjectDashboardClient({ projectId }: Props) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
@@ -146,6 +149,10 @@ export function ProjectDashboardClient({ projectId }: Props) {
     if (v) {
       q.set("version", String(v.version));
       q.set("fileVersionId", v.id);
+    }
+    if (isIfcFile(f)) {
+      openBimViewer(`/bim-viewer?${q.toString()}`);
+      return;
     }
     router.push(`/viewer?${q.toString()}`);
   }
@@ -571,6 +578,8 @@ export function ProjectDashboardClient({ projectId }: Props) {
                   >
                     {isPdfFile(f) ? (
                       <PdfFileIcon className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
+                    ) : isIfcFile(f) ? (
+                      <IfcFileIcon className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
                     ) : (
                       <FileText
                         className="mt-0.5 h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)] sm:mt-0"

@@ -1211,6 +1211,8 @@ model Asset {
   pageNumber    Int?
   annotationId  String?
   pinJson       Json?
+  /// 3D element anchor when created/linked from the BIM viewer (IFC GUID + context).
+  bimAnchor     Json?
 
   /// Unguessable token for per-asset tenant portal QR (`/occupant/{portal}?a=...`).
   occupantScanSecret String? @unique

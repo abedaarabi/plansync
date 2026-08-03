@@ -29,6 +29,7 @@ export function BimViewerClient() {
   const compareFileVersionId = searchParams.get("compareFileVersionId");
   const modelsParam = searchParams.get("models");
   const issueId = searchParams.get("issueId");
+  const omAssetId = searchParams.get("omAssetId");
   const buildingId = searchParams.get("buildingId");
   const locationId = searchParams.get("locationId");
   const levelId = searchParams.get("levelId");
@@ -81,6 +82,7 @@ export function BimViewerClient() {
         fileVersionId={fileVersionId}
         initialGuid={initialGuid}
         issueId={issueId}
+        omAssetId={omAssetId}
         compareFileVersionId={compareFileVersionId}
         federationMembers={federationMembers}
         collabEnabled={false}
