@@ -26,9 +26,9 @@ const inter = Inter({
   display: "swap",
 });
 
-const siteTitle = "PlanSync — free construction PDF viewer in your browser";
+const siteTitle = "PlanSync — Plans, issues, RFIs & ops in one place";
 const siteDescription =
-  "Free online PDF viewer for construction plans: calibrate scale, measure and mark up drawings, export marked PDFs. No account; files stay local in your browser.";
+  "One workspace for construction and FM teams. Measure and mark up PDFs free in your browser, then collaborate on issues, RFIs, takeoff, BIM, and facilities workflows.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteOrigin()),

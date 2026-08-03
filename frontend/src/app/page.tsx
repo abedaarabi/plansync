@@ -3,10 +3,9 @@ import { HomeClient } from "@/components/HomeClient";
 import { getHomepageJsonLd } from "@/lib/landingJsonLd";
 import { getSiteOrigin } from "@/lib/siteUrl";
 
-const shareTitle =
-  "PlanSync — Construction + datacenter platform | Free PDF viewer and orchestration workflows";
+const shareTitle = "PlanSync — Plans, issues, RFIs & ops in one place";
 const shareDescription =
-  "PlanSync connects drawings, issues, RFIs, and datacenter operations workflows. Start with a free PDF viewer: calibrate scale, measure, annotate, and export — no sign-up required.";
+  "Everyone works from the same drawings. Pin issues, run RFIs, measure takeoff, open IFC models, and manage facilities — start free in your browser, no signup required.";
 
 export const metadata: Metadata = {
   title: shareTitle,
