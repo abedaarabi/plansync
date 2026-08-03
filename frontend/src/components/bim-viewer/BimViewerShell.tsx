@@ -1205,24 +1205,22 @@ export function BimViewerShell(props: {
     setClusterByType(engineRef.current?.isClusterByTypeActive() ?? false);
   }, [loadedModels]);
 
-  /** Esc resets active filter / colorize (same as Filters → Reset). */
+  /** Esc = Show all objects (clears isolate/hide/section/filters + selection). */
   useEffect(() => {
     if (phase.kind !== "ready") return;
 
-    // fallow-ignore-next-line complexity
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || issuePlacementActive) return;
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if ((e.target as HTMLElement | null)?.isContentEditable) return;
-      if (!hasActiveFilter(filterState) && !filterState.colorize?.enabled) return;
       e.preventDefault();
       onShowAll();
     };
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [filterState, phase.kind, onShowAll, issuePlacementActive]);
+  }, [phase.kind, onShowAll, issuePlacementActive]);
 
   // fallow-ignore-next-line complexity
   useEffect(() => {
@@ -1591,9 +1589,7 @@ export function BimViewerShell(props: {
       void (async () => {
         const engine = engineRef.current;
         if (!engine) return;
-        if (action !== "showAll") {
-          await engine.flushContextMenuPick();
-        }
+        await engine.flushContextMenuPick();
         switch (action) {
           case "zoom":
             await engine.zoomToSelection();

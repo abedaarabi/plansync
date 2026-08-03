@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 
 const MENU_WIDTH = 192;
@@ -23,7 +23,9 @@ export function BimContextMenu(props: {
   onAction: (action: string) => void;
   onClose: () => void;
 }) {
+  const menuRef = useRef<HTMLDivElement>(null);
   const position = useMemo(() => clampMenuPosition(props.x, props.y), [props.x, props.y]);
+  const ranAction = useRef(false);
 
   const items = props.hasSelection
     ? [
@@ -39,30 +41,41 @@ export function BimContextMenu(props: {
     : [{ id: "showAll", label: "Show all objects" }];
 
   useEffect(() => {
+    ranAction.current = false;
+    const onDocDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      if (menuRef.current?.contains(e.target as Node)) return;
+      props.onClose();
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") props.onClose();
     };
+    // Capture phase so the viewer canvas doesn't eat the dismiss.
+    document.addEventListener("mousedown", onDocDown, true);
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocDown, true);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [props.onClose]);
+
+  const runAction = (id: string) => {
+    if (ranAction.current) return;
+    ranAction.current = true;
+    props.onAction(id);
+    props.onClose();
+  };
 
   if (typeof document === "undefined") return null;
 
   return createPortal(
     <div className="bim-context-menu-portal">
-      <button
-        type="button"
-        className="fixed inset-0 z-[100] cursor-default bg-slate-900/5"
-        aria-label="Close menu"
-        onMouseDown={(e) => {
-          if (e.button === 0) props.onClose();
-        }}
-        onContextMenu={(e) => e.preventDefault()}
-      />
       <div
+        ref={menuRef}
         className="bim-glass-surface fixed z-[101] min-w-[12rem] overflow-hidden rounded-xl py-1"
         style={{ left: position.x, top: position.y }}
         role="menu"
+        onContextMenu={(e) => e.preventDefault()}
       >
         {props.hasSelection ? (
           <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--bim-chrome-text-muted)]">
@@ -75,9 +88,13 @@ export function BimContextMenu(props: {
             type="button"
             role="menuitem"
             data-muted={"muted" in item && item.muted ? "true" : undefined}
-            onClick={() => {
-              props.onAction(item.id);
-              props.onClose();
+            onPointerDown={(e) => {
+              // Fire on pointerdown so the action isn't lost if the menu unmounts
+              // before click (viewer / capture handlers).
+              if (e.button !== 0) return;
+              e.preventDefault();
+              e.stopPropagation();
+              runAction(item.id);
             }}
             className="block w-full px-3 py-2 text-left text-[12px] font-medium text-[var(--bim-chrome-text)] transition-colors duration-100 hover:bg-[color-mix(in_srgb,var(--bim-chrome-surface)_70%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--bim-accent)]"
           >

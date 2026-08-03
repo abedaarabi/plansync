@@ -317,6 +317,8 @@ export class BimEngine {
   private selectionLoadId = 0;
   private quantityIndex: BimQuantityIndex | null = null;
   private selectedGuids = new Set<string>();
+  /** World-space orbit pivot for the active selection (applied on drag). */
+  private selectionOrbitPoint: THREE.Vector3 | null = null;
   private issueAnchors: {
     ifcGuid?: string;
     localId?: number;
@@ -3156,6 +3158,7 @@ export class BimEngine {
     this.selectedGuids.clear();
     this.lastPickMap = null;
     this.lastPickedModelId = null;
+    this.selectionOrbitPoint = null;
     void this.requestFragmentHighlights();
     void this.renderEffects?.setSelection(null);
     this.events.onSelection(null);
@@ -3179,7 +3182,8 @@ export class BimEngine {
     this.syncHoverEnabled();
     if (tool !== "select" && tool !== "markup") this.clearSelection();
     if (tool !== "clip") {
-      this.sectionBox?.deactivate();
+      // Clears both the 2-handle gizmo and any 6-plane selection section box.
+      this.deleteClippingPlanes();
     } else {
       const box = this.getModelBoundingBox();
       if (box) {
@@ -3222,6 +3226,15 @@ export class BimEngine {
 
   deleteClippingPlanes(): void {
     this.sectionBox?.deactivate();
+    const clipper = this.components?.get(OBC.Clipper);
+    if (clipper) {
+      for (const [, plane] of clipper.list) {
+        plane.controls.detach();
+        plane.controls.enabled = false;
+      }
+      clipper.deleteAll();
+      clipper.enabled = false;
+    }
     this.bumpRender();
   }
 
@@ -3237,14 +3250,10 @@ export class BimEngine {
         this.exitWalkPointerLock();
         return;
       }
-      if (this.tool === "clip") {
-        this.deleteClippingPlanes();
-        this.setTool("select");
-        return;
-      }
+      e.preventDefault();
       this.activeMeasurement()?.cancelCreation();
-      this.clearSelection();
-      this.events.onSelection(null);
+      // Same as context-menu "Show all objects": restore visibility, clip, selection.
+      void this.showAllElements();
       return;
     }
 
@@ -3341,18 +3350,12 @@ export class BimEngine {
 
     e.preventDefault();
     e.stopPropagation();
-
-    const initialHasSelection = this.selectedGuids.size > 0 || this.lastPickMap != null;
-    this.events.onContextMenu?.({
-      x: e.clientX,
-      y: e.clientY,
-      hasSelection: initialHasSelection,
-    });
-    void this.refineContextMenuPick(e, initialHasSelection);
+    // Await the pick first so we open one menu (long when an element is hit),
+    // instead of flashing the empty short menu then replacing it.
+    void this.openContextMenuAfterPick(e);
   };
 
-  // fallow-ignore-next-line complexity
-  private async refineContextMenuPick(e: MouseEvent, initialHasSelection: boolean): Promise<void> {
+  private async openContextMenuAfterPick(e: MouseEvent): Promise<void> {
     const pickPromise = this.selectAtPointer(e as unknown as PointerEvent, {
       additive: e.ctrlKey || e.metaKey,
       forContextMenu: true,
@@ -3360,15 +3363,19 @@ export class BimEngine {
     this.contextMenuPickPromise = pickPromise;
     try {
       const picked = await pickPromise;
-      if (picked !== initialHasSelection) {
-        this.events.onContextMenu?.({
-          x: e.clientX,
-          y: e.clientY,
-          hasSelection: picked,
-        });
-      }
+      const hasSelection = picked || this.selectedGuids.size > 0 || this.lastPickMap != null;
+      this.events.onContextMenu?.({
+        x: e.clientX,
+        y: e.clientY,
+        hasSelection,
+      });
     } catch {
-      /* keep the menu that was shown synchronously */
+      const hasSelection = this.selectedGuids.size > 0 || this.lastPickMap != null;
+      this.events.onContextMenu?.({
+        x: e.clientX,
+        y: e.clientY,
+        hasSelection,
+      });
     } finally {
       if (this.contextMenuPickPromise === pickPromise) {
         this.contextMenuPickPromise = null;
@@ -3387,6 +3394,14 @@ export class BimEngine {
   private onCanvasPointerDown = (e: PointerEvent): void => {
     this.pointerDown = { x: e.clientX, y: e.clientY };
     this.pointerMoved = false;
+    // Before camera-controls starts a drag, lock the pivot to the selection.
+    if (
+      this.selectionOrbitPoint &&
+      this.cameraMode === "orbit" &&
+      (e.button === 0 || e.button === 1 || e.button === 2)
+    ) {
+      this.applyCachedSelectionOrbitPoint();
+    }
 
     if (this.tool !== "clip" || e.button !== 0) return;
 
@@ -3570,6 +3585,7 @@ export class BimEngine {
     this.lastPickedModelId = hit.modelId;
     await this.requestFragmentHighlights();
     await this.handleHighlight(map, hit.modelId);
+    void this.focusOrbitOnSelectionMap(map);
     this.bumpRender();
     this.events.onMultiSelection?.([...this.selectedGuids]);
     return true;
@@ -4116,6 +4132,7 @@ export class BimEngine {
     this.lastPickMap = map;
     await this.requestFragmentHighlights();
     await this.handleHighlight(map);
+    void this.focusOrbitOnSelectionMap(map);
     this.events.onMultiSelection?.([...this.selectedGuids]);
   }
 
@@ -4483,6 +4500,16 @@ export class BimEngine {
     this.clearClashSceneGhost();
     await this.clearColorize();
     await this.clearFilterGhost();
+    // Section / clip planes also hide geometry — clear them with visibility.
+    const wasClip = this.tool === "clip";
+    this.deleteClippingPlanes();
+    if (wasClip) {
+      this.tool = "select";
+      this.mustComponents().get(OBF.Highlighter).config.selectEnabled = true;
+      this.syncHoverEnabled();
+      this.applyBim360Navigation();
+      this.events.onToolChange?.("select");
+    }
     const hider = this.mustComponents().get(OBC.Hider);
     await hider.set(true);
     await this.showAllGroups();
@@ -4647,45 +4674,64 @@ export class BimEngine {
 
   async setXRayMode(enabled: boolean): Promise<void> {
     this.xRayActive = enabled;
+    if (!enabled) {
+      await this.clearFilterGhost();
+      await this.resetFilterVisibility();
+      this.bumpRender();
+      return;
+    }
+    const guids = [...this.selectedGuids];
+    if (guids.length > 0) {
+      // Keep selection solid; fade the rest of the model.
+      await this.applyFilterGhostState(guids, 0.14);
+      await this.requestFragmentHighlights();
+      this.bumpRender();
+      return;
+    }
+    // No GUID index yet — fall back to hard isolate.
     const map = await this.getActiveSelectionMapAsync();
     if (!map) return;
-    const hider = this.mustComponents().get(OBC.Hider);
-    if (enabled) await hider.isolate(map);
-    else await hider.set(true);
+    await this.mustComponents().get(OBC.Hider).isolate(map);
     this.bumpRender();
   }
 
+  /**
+   * Clip the model to a six-plane box around the selection.
+   * Avoids setTool("clip") which would clearSelection() and reset to the full model.
+   */
   // fallow-ignore-next-line complexity
   async sectionBoxOnSelection(): Promise<void> {
     const map = await this.getActiveSelectionMapAsync();
     if (!map) return;
+    const box = await this.getModelIdMapBoundingBox(map);
+    if (!box || !this.isValidBox3(box)) return;
+
+    const mm = this.detectModelUnits() === "mm";
+    const size = box.getSize(new THREE.Vector3());
+    const minEdge = mm ? 500 : 0.5;
+    const pad =
+      size.x < minEdge || size.y < minEdge || size.z < minEdge
+        ? mm
+          ? 1000
+          : 1
+        : Math.max(size.length() * 0.04, mm ? 100 : 0.1);
+    box.expandByScalar(pad);
+
     const world = this.mustWorld();
     const components = this.mustComponents();
     const clipper = components.get(OBC.Clipper);
-    clipper.enabled = true;
-    clipper.deleteAll();
 
-    const box = new THREE.Box3();
-    const fragments = components.get(OBC.FragmentsManager);
-    for (const [mid, ids] of Object.entries(map)) {
-      const model = fragments.list.get(mid);
-      if (!model) continue;
-      for (const lid of ids) {
-        try {
-          const [pos] = await model.getPositions([lid]);
-          if (pos) box.expandByPoint(new THREE.Vector3(pos.x, pos.y, pos.z));
-        } catch {
-          /* optional */
-        }
-      }
+    // Drop interactive 2-handle gizmo / any prior planes, then install a tight box.
+    this.sectionBox?.deactivate();
+    for (const [, plane] of clipper.list) {
+      plane.controls.detach();
+      plane.controls.enabled = false;
     }
-    if (box.isEmpty()) return;
+    clipper.deleteAll();
+    clipper.enabled = true;
 
-    const pad = 0.15;
-    box.expandByScalar(pad);
-    const min = box.min;
-    const max = box.max;
-    const planes: { normal: THREE.Vector3; point: THREE.Vector3 }[] = [
+    const { min, max } = box;
+    const specs: { normal: THREE.Vector3; point: THREE.Vector3 }[] = [
       { normal: new THREE.Vector3(1, 0, 0), point: new THREE.Vector3(min.x, 0, 0) },
       { normal: new THREE.Vector3(-1, 0, 0), point: new THREE.Vector3(max.x, 0, 0) },
       { normal: new THREE.Vector3(0, 1, 0), point: new THREE.Vector3(0, min.y, 0) },
@@ -4693,10 +4739,23 @@ export class BimEngine {
       { normal: new THREE.Vector3(0, 0, 1), point: new THREE.Vector3(0, 0, min.z) },
       { normal: new THREE.Vector3(0, 0, -1), point: new THREE.Vector3(0, 0, max.z) },
     ];
-    for (const p of planes) {
-      clipper.createFromNormalAndCoplanarPoint(world, p.normal, p.point);
+    for (const spec of specs) {
+      const id = clipper.createFromNormalAndCoplanarPoint(world, spec.normal, spec.point);
+      const plane = clipper.list.get(id);
+      if (!plane) continue;
+      plane.enabled = true;
+      hideClipPlaneFace(plane);
     }
+    world.renderer?.updateClippingPlanes();
+
+    components.get(OBF.LengthMeasurement).enabled = false;
+    components.get(OBF.AreaMeasurement).enabled = false;
+    components.get(OBF.AngleMeasurement).enabled = false;
+    components.get(OBF.Highlighter).config.selectEnabled = false;
     this.tool = "clip";
+    this.syncHoverEnabled();
+    this.applyBim360Navigation();
+    this.events.onToolChange?.("clip");
     this.bumpRender();
   }
 
@@ -5007,6 +5066,34 @@ export class BimEngine {
     const map = await this.getActiveSelectionMapAsync();
     if (!map) return;
     await this.zoomToModelIdMap(map);
+  }
+
+  /**
+   * Cache + apply an orbit pivot on the selection without flying the camera —
+   * so the next drag inspects that area instead of a distant model-center pivot.
+   */
+  private async focusOrbitOnSelectionMap(map: OBC.ModelIdMap): Promise<void> {
+    const box = await this.getModelIdMapBoundingBox(map);
+    if (!box) {
+      this.selectionOrbitPoint = null;
+      return;
+    }
+    const center = box.getCenter(new THREE.Vector3());
+    if (!Number.isFinite(center.x) || !Number.isFinite(center.y) || !Number.isFinite(center.z)) {
+      this.selectionOrbitPoint = null;
+      return;
+    }
+    this.selectionOrbitPoint = center;
+    this.applyCachedSelectionOrbitPoint();
+  }
+
+  private applyCachedSelectionOrbitPoint(): void {
+    if (this.cameraMode !== "orbit") return;
+    const point = this.selectionOrbitPoint;
+    const controls = this.world?.camera?.controls;
+    if (!point || !controls) return;
+    controls.setOrbitPoint(point.x, point.y, point.z);
+    this.bumpRender();
   }
 
   async zoomToGuids(guids: string[]): Promise<void> {

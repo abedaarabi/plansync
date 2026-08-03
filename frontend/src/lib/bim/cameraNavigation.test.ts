@@ -17,5 +17,7 @@ describe("camera navigation profiles", () => {
     expect(normal.azimuthRotateSpeed).toBeLessThan(fast.azimuthRotateSpeed);
     expect(slow.dollySpeed).toBeLessThan(normal.dollySpeed);
     expect(normal.dollySpeed).toBeLessThan(fast.dollySpeed);
+    expect(slow.truckSpeed).toBeLessThan(normal.truckSpeed);
+    expect(normal.truckSpeed).toBeLessThan(fast.truckSpeed);
   });
 });

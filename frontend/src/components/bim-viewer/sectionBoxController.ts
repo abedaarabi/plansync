@@ -47,9 +47,13 @@ export class SectionBoxController {
     return this.slots.size > 0;
   }
 
-  /** 1. Activate section box on model or custom bounds (full model visible until drag). */
+  /**
+   * Activate section box on model or custom bounds.
+   * Default: handles sit just outside the box (no clip until drag).
+   * `fitTight`: clip immediately to the given bounds (context-menu selection).
+   */
   // fallow-ignore-next-line complexity
-  activate(bounds: THREE.Box3): void {
+  activate(bounds: THREE.Box3, opts?: { fitTight?: boolean }): void {
     const world = this.getWorld();
     if (!world?.renderer) return;
 
@@ -59,7 +63,8 @@ export class SectionBoxController {
 
     const clipper = this.getClipper();
     const center = bounds.getCenter(new THREE.Vector3());
-    const pad = bounds.getSize(new THREE.Vector3()).length() * PAD_RATIO;
+    const fitTight = opts?.fitTight === true;
+    const pad = fitTight ? 0 : bounds.getSize(new THREE.Vector3()).length() * PAD_RATIO;
 
     for (const handle of HANDLES) {
       const normal = this.clipNormal(handle);
@@ -68,12 +73,14 @@ export class SectionBoxController {
       const plane = clipper.list.get(id);
       if (!plane) continue;
       plane.type = `section-${handle}`;
-      plane.enabled = false;
+      plane.enabled = fitTight;
       plane.helper.visible = false;
+      if (fitTight) hideClipPlaneFace(plane);
       this.slots.set(handle, { handle, plane });
     }
 
     this.buildGizmo();
+    if (fitTight) world.renderer.updateClippingPlanes();
     this.onRender();
   }
 
