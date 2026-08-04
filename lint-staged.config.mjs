@@ -20,9 +20,7 @@ export default {
   "frontend/**/*.{js,jsx,mjs,cjs,ts,tsx}": (files) => {
     // Vendored bundles (e.g. pdf.js worker) must not be eslint/prettier'd —
     // formatting them can wipe the staged content and yield an empty commit.
-    const sourceFiles = files.filter(
-      (f) => !/[\\/]public[\\/].*\.worker\.(m?js|cjs)$/.test(f),
-    );
+    const sourceFiles = files.filter((f) => !/[\\/]public[\\/].*\.worker\.(m?js|cjs)$/.test(f));
     if (!sourceFiles.length) return [];
     return [
       eslintInPackage("frontend", sourceFiles),

@@ -10,3 +10,7 @@ frontend/public/sw.js
 frontend/public/workbox-*.js
 **/public/worker-*.js
 frontend/public/worker-*.js
+**/public/*.worker.mjs
+frontend/public/*.worker.mjs
+**/public/*.worker.js
+frontend/public/*.worker.js
