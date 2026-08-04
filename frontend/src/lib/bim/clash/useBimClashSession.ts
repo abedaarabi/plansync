@@ -62,7 +62,7 @@ export function useBimClashSession(args: {
   const [assigneeMe, setAssigneeMe] = useState(false);
   const [grouped, setGrouped] = useState(true);
   const [focusMode, setFocusMode] = useState(true);
-  const [contextMode, setContextModeState] = useState<ClashContextMode>("color");
+  const [contextMode, setContextModeState] = useState<ClashContextMode>("ghost");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [runStats, setRunStats] = useState<BimClashRunStats | null>(null);

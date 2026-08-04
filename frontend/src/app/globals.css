@@ -2396,6 +2396,24 @@ button:active:not(:disabled),
     cursor: crosshair;
   }
 
+  /* Ctrl/Cmd-drag rubber-band multi-select (window = solid, crossing = dashed). */
+  .bim-marquee {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 6;
+    pointer-events: none;
+    box-sizing: border-box;
+    border: 1.5px solid var(--bim-accent);
+    background: var(--bim-accent-muted);
+    will-change: transform, width, height;
+  }
+
+  .bim-marquee[data-mode="crossing"] {
+    border-style: dashed;
+    background: color-mix(in srgb, var(--bim-accent) 8%, transparent);
+  }
+
   .bim-placement-hint {
     top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
     max-width: min(92vw, 20rem);

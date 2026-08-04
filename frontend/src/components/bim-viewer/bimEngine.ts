@@ -77,6 +77,7 @@ import {
   hideClipPlaneFace,
   SectionBoxController,
 } from "@/components/bim-viewer/sectionBoxController";
+import { BimMarqueeOverlay } from "@/components/bim-viewer/bimMarqueeOverlay";
 import { BimRenderEffects } from "@/components/bim-viewer/bimRenderEffects";
 import { hapticTap } from "@/lib/haptic";
 import * as THREE from "three";
@@ -92,6 +93,8 @@ const FRAGMENTS_WORKER_URL = "/bim/fragments-worker.mjs";
 const MIN_CANVAS_PX = 2;
 /** Ignore tiny hand jitter when distinguishing click vs drag. */
 const POINTER_CLICK_THRESHOLD_PX = 8;
+/** Minimum rubber-band size before Ctrl/Cmd-drag commits a box select. */
+const MARQUEE_MIN_PX = 6;
 /** Touch/pen hold duration that opens the same menu as right-click. */
 const CONTEXT_LONG_PRESS_MS = 500;
 /** Forward collision distance for walk mode (metres). */
@@ -311,6 +314,15 @@ export class BimEngine {
   private longPressPointerId: number | null = null;
   /** Set when a touch long-press opens the context menu (suppresses click-select). */
   private longPressOpenedMenu = false;
+  private readonly marqueeOverlay = new BimMarqueeOverlay();
+  /** Ctrl/Cmd+drag rubber-band multi-select (orbit is suppressed while active). */
+  private marqueeGesture: {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    active: boolean;
+    additive: boolean;
+  } | null = null;
   private disposed = false;
   private rimLight: THREE.DirectionalLight | null = null;
   private hemiLight: THREE.HemisphereLight | null = null;
@@ -397,6 +409,8 @@ export class BimEngine {
   private static readonly CLASH_GHOST_TINT = new THREE.Color(0x6a6e74);
   /** Bumps on every presentClashPartners call so stale async mode switches are ignored. */
   private clashPresentSeq = 0;
+  /** Last applied Color/Ghost/Hide — used to keep ghost when switching clash rows. */
+  private clashContextMode: "color" | "ghost" | "hide" | null = null;
   private clashGhostRefreshTimer: number | null = null;
   private highlightRepaintTimer: number | null = null;
   private materialSyncInProgress = false;
@@ -750,7 +764,7 @@ export class BimEngine {
     this.applyBim360Navigation();
     this.applyCameraNavigation();
 
-    // Selection highlighting (single select) — click picking is handled in
+    // Selection highlighting — click / marquee picking is handled in
     // onCanvasPointerUp so we always raycast from the actual pointer coords.
     const highlighter = components.get(OBF.Highlighter);
     highlighter.setup({
@@ -806,6 +820,7 @@ export class BimEngine {
 
     // Listen on the renderer container (not just the canvas) so clicks are
     // picked up reliably alongside camera-controls and measurement tools.
+    this.marqueeOverlay.attach(container);
     container.addEventListener("pointerdown", this.onCanvasPointerDown, { passive: true });
     container.addEventListener("pointermove", this.onCanvasPointerMove, { passive: true });
     container.addEventListener("pointerup", this.onCanvasPointerUp);
@@ -3709,6 +3724,8 @@ export class BimEngine {
       this.applyCachedSelectionOrbitPoint();
     }
 
+    if (this.tryBeginMarqueeGesture(e)) return;
+
     if (this.tool !== "clip" || e.button !== 0) return;
 
     if (!this.sectionBox?.isActive()) return;
@@ -3736,6 +3753,11 @@ export class BimEngine {
       this.clearLongPressTimer();
     }
 
+    if (this.updateMarqueeGesture(e)) {
+      e.preventDefault();
+      return;
+    }
+
     if (this.sectionBox?.isDragging()) {
       this.sectionBox.pointerMove(this.pointerNdc(e));
       e.preventDefault();
@@ -3744,6 +3766,7 @@ export class BimEngine {
 
   private onCanvasPointerCancel = (): void => {
     this.clearLongPressTimer();
+    this.cancelMarqueeGesture();
   };
 
   // fallow-ignore-next-line complexity
@@ -3754,6 +3777,11 @@ export class BimEngine {
       if (this.world) this.world.camera.enabled = true;
       this.container?.releasePointerCapture(e.pointerId);
       e.preventDefault();
+      return;
+    }
+
+    if (this.marqueeGesture && this.marqueeGesture.pointerId === e.pointerId) {
+      void this.commitMarqueeGesture(e);
       return;
     }
 
@@ -3812,6 +3840,192 @@ export class BimEngine {
   /** Raycast at the pointer location and highlight the hit element. */
   private pickSelection(e: PointerEvent): void {
     void this.selectAtPointer(e, { additive: e.ctrlKey || e.metaKey });
+  }
+
+  /** Ctrl/Cmd+left-drag starts a rubber-band (left-drag alone still orbits). */
+  private tryBeginMarqueeGesture(e: PointerEvent): boolean {
+    if (e.button !== 0) return false;
+    if (this.tool !== "select" || this.cameraMode !== "orbit") return false;
+    if (this.issuePlacementPick) return false;
+    if (!(e.ctrlKey || e.metaKey)) return false;
+
+    this.clearLongPressTimer();
+    this.marqueeGesture = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      active: false,
+      // Shift = add to selection; bare Ctrl/Cmd marquee replaces.
+      additive: e.shiftKey,
+    };
+    this.setMarqueeOrbitEnabled(false);
+    return true;
+  }
+
+  private updateMarqueeGesture(e: PointerEvent): boolean {
+    const gesture = this.marqueeGesture;
+    if (!gesture || gesture.pointerId !== e.pointerId) return false;
+
+    const dx = e.clientX - gesture.startX;
+    const dy = e.clientY - gesture.startY;
+    if (!gesture.active && Math.hypot(dx, dy) > POINTER_CLICK_THRESHOLD_PX) {
+      gesture.active = true;
+      gesture.additive = e.shiftKey;
+      this.marqueeOverlay.begin(gesture.startX, gesture.startY);
+      this.container?.setPointerCapture(e.pointerId);
+    }
+    if (gesture.active) {
+      gesture.additive = e.shiftKey;
+      this.marqueeOverlay.update(e.clientX, e.clientY);
+    }
+    return true;
+  }
+
+  private cancelMarqueeGesture(): void {
+    if (!this.marqueeGesture) return;
+    this.marqueeOverlay.cancel();
+    this.marqueeGesture = null;
+    this.setMarqueeOrbitEnabled(true);
+  }
+
+  private setMarqueeOrbitEnabled(enabled: boolean): void {
+    const controls = this.world?.camera?.controls;
+    if (!controls) return;
+    if (!enabled) {
+      controls.mouseButtons.left = CAM_NONE;
+      if (this.world) this.world.camera.enabled = false;
+      return;
+    }
+    if (this.world) this.world.camera.enabled = true;
+    this.applyBim360Navigation();
+  }
+
+  // fallow-ignore-next-line complexity
+  private async commitMarqueeGesture(e: PointerEvent): Promise<void> {
+    const gesture = this.marqueeGesture;
+    this.marqueeGesture = null;
+    if (!gesture) return;
+
+    const additive = gesture.additive || e.shiftKey;
+    const wasActive = gesture.active;
+    const rect = wasActive ? this.marqueeOverlay.end() : null;
+    if (!wasActive) this.marqueeOverlay.cancel();
+    try {
+      this.container?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* not capturing */
+    }
+    this.setMarqueeOrbitEnabled(true);
+
+    if (!wasActive || !rect || rect.width < MARQUEE_MIN_PX || rect.height < MARQUEE_MIN_PX) {
+      // Tiny Ctrl/Cmd drag → same as Ctrl/Cmd click.
+      this.pointerMoved = false;
+      void this.selectAtPointer(e, { additive: e.ctrlKey || e.metaKey || additive });
+      return;
+    }
+
+    await this.selectInScreenRect(rect, { additive });
+  }
+
+  /**
+   * Select every element whose geometry intersects the screen-space rubber-band.
+   * Left→right = window (fully inside); right→left = crossing (partial hit).
+   */
+  // fallow-ignore-next-line complexity
+  private async selectInScreenRect(
+    rect: {
+      topLeft: { x: number; y: number };
+      bottomRight: { x: number; y: number };
+      mode: "window" | "crossing";
+    },
+    opts: { additive?: boolean } = {},
+  ): Promise<void> {
+    const world = this.world;
+    const components = this.components;
+    if (!world?.renderer || !components) return;
+
+    const canvas = world.renderer.three.domElement;
+    const camera = world.camera.three as THREE.PerspectiveCamera | THREE.OrthographicCamera;
+    const fragments = components.get(OBC.FragmentsManager);
+    if (!fragments?.initialized) return;
+
+    const fullyIncluded = rect.mode === "window";
+    const topLeft = new THREE.Vector2(rect.topLeft.x, rect.topLeft.y);
+    const bottomRight = new THREE.Vector2(rect.bottomRight.x, rect.bottomRight.y);
+    const pickMap: OBC.ModelIdMap = {};
+    const guids: string[] = [];
+
+    for (const [modelId, entry] of this.modelRegistry) {
+      if (!entry.visible) continue;
+      const model = fragments.list.get(modelId);
+      if (!model) continue;
+      let result: FRAGS.RectangleRaycastResult | null = null;
+      try {
+        result = await model.rectangleRaycast({
+          camera,
+          dom: canvas,
+          topLeft,
+          bottomRight,
+          fullyIncluded,
+        });
+      } catch {
+        continue;
+      }
+      if (!result?.localIds?.length) continue;
+
+      const localIds = result.localIds.filter(
+        (id) => typeof id === "number" && !this.isFilterGhostLocalId(modelId, id),
+      );
+      if (localIds.length === 0) continue;
+
+      if (!pickMap[modelId]) pickMap[modelId] = new Set<number>();
+      for (const id of localIds) (pickMap[modelId] as Set<number>).add(id);
+
+      for (let i = 0; i < localIds.length; i += BimEngine.GUID_SYNC_CHUNK) {
+        const chunk = localIds.slice(i, i + BimEngine.GUID_SYNC_CHUNK);
+        try {
+          const chunkGuids = await model.getGuidsByLocalIds(chunk);
+          for (let j = 0; j < chunk.length; j++) {
+            const guid = chunkGuids[j];
+            const localId = chunk[j]!;
+            if (!guid) continue;
+            guids.push(guid);
+            this.guidIndex.set(guid, {
+              modelId,
+              localId,
+              fileVersionId: entry.fileVersionId,
+              sourceLabel: entry.name,
+            });
+          }
+        } catch {
+          /* best-effort GUID resolve */
+        }
+      }
+    }
+
+    const additive = opts.additive ?? false;
+    if (guids.length === 0) {
+      if (!additive) this.clearSelection();
+      return;
+    }
+
+    if (!additive) this.selectedGuids.clear();
+    for (const g of guids) this.selectedGuids.add(g);
+
+    const map =
+      (await this.resolveModelIdMapFromGuids([...this.selectedGuids])) ??
+      (Object.keys(pickMap).length > 0 ? pickMap : null);
+    if (!map) {
+      if (!additive) this.clearSelection();
+      return;
+    }
+
+    this.lastPickMap = map;
+    await this.requestFragmentHighlights();
+    await this.handleHighlight(map);
+    void this.focusOrbitOnSelectionMap(map);
+    this.bumpRender();
+    this.events.onMultiSelection?.([...this.selectedGuids]);
   }
 
   // fallow-ignore-next-line complexity
@@ -4662,10 +4876,29 @@ export class BimEngine {
   }
 
   /**
+   * Swap Item 1/2 colors without fragments.core.update — keeps scene ghost intact
+   * when the user clicks through clash rows.
+   */
+  private async repaintClashPartnerColors(): Promise<void> {
+    const fragments = this.readyFragments();
+    if (!fragments || this.disposed) return;
+    try {
+      await fragments.resetHighlight();
+    } catch {
+      /* best-effort clear of prior pair colors */
+    }
+    await this.paintClashItemHighlights();
+    this.bumpRender();
+  }
+
+  /**
    * Clash focus presentation:
    * - color: full federation opaque + Item 1 green / Item 2 red
    * - ghost: fade all models + solid clash pair
    * - hide: isolate only the clash pair
+   *
+   * Switching clash rows keeps the current Color/Ghost/Hide mode (no solid flash).
+   * Mode only rebuilds when the user changes the segment control.
    */
   // fallow-ignore-next-line complexity
   async presentClashPartners(opts: {
@@ -4680,20 +4913,24 @@ export class BimEngine {
   }): Promise<void> {
     const refs = [opts.a, opts.b].filter((r) => r.guid);
     if (refs.length === 0) return;
-    const context = opts.context ?? "color";
+    const context = opts.context ?? "ghost";
     const refocusCamera = opts.refocusCamera !== false;
     const seq = ++this.clashPresentSeq;
     const stillCurrent = () => !this.disposed && this.clashPresentSeq === seq;
+    const sameContext = this.clashContextMode === context;
+    const keepSceneGhost =
+      context === "ghost" && sameContext && this.clashSceneGhostOpacity != null;
 
     this.clashReviewSuppressSelectPaint = true;
+    this.clashContextMode = context;
     this.clashGhostPickOnly = false;
     this.clashPickAllowMap = null;
     this.selectedGuids.clear();
     this.lastPickMap = null;
     this.lastPickedModelId = null;
     this.activeFilterGhostMap = null;
-    // Always drop prior ghost/hide so Color/Ghost/Hide toggles start from a clean baseline.
-    this.clearClashSceneGhost();
+    // Leaving Ghost (or first entry / mode change) restores solids; row switches keep fade.
+    if (!keepSceneGhost) this.clearClashSceneGhost();
     await this.renderEffects?.setSelection(null);
     if (!stillCurrent()) return;
     this.events.onSelection(null);
@@ -4728,7 +4965,48 @@ export class BimEngine {
       });
     }
 
-    // Restore full visibility before Color/Ghost; Hide isolates after.
+    // Same mode + next clash row: only swap the pair colors (and isolate set for Hide).
+    if (sameContext && context === "hide") {
+      if (partnerMap) {
+        await this.mustComponents().get(OBC.Hider).isolate(partnerMap);
+        this.invalidatePlanSilhouette();
+      }
+      if (!stillCurrent()) return;
+      await this.repaintClashPartnerColors();
+      if (!stillCurrent()) return;
+      if (refocusCamera) {
+        await this.zoomToClashFocus({
+          point: opts.point,
+          partnerMap,
+          fallbackGuids: refs.map((r) => r.guid),
+        });
+      }
+      return;
+    }
+
+    if (sameContext && (context === "ghost" || context === "color")) {
+      await this.repaintClashPartnerColors();
+      if (!stillCurrent()) return;
+      if (context === "ghost") {
+        const ghostOpacity = opts.ghostOpacity ?? CLASH_SCENE_GHOST_OPACITY;
+        this.clashSceneGhostOpacity = ghostOpacity;
+        this.applyClashSceneGhost(ghostOpacity);
+        this.solidifyClashItemMaterials();
+      } else {
+        this.solidifyClashItemMaterials();
+      }
+      if (!stillCurrent()) return;
+      if (refocusCamera) {
+        await this.zoomToClashFocus({
+          point: opts.point,
+          partnerMap,
+          fallbackGuids: refs.map((r) => r.guid),
+        });
+      }
+      return;
+    }
+
+    // Mode change / first entry — full Color / Ghost / Hide rebuild.
     await this.ensureBaseVisibilityForFilter();
     if (!stillCurrent()) return;
     if (context !== "hide") this.invalidatePlanSilhouette();
@@ -4790,6 +5068,7 @@ export class BimEngine {
   async clearClashReviewPresentation(): Promise<void> {
     this.clashPresentSeq += 1;
     this.clashReviewSuppressSelectPaint = false;
+    this.clashContextMode = null;
     this.clashGhostPickOnly = false;
     this.clashPickAllowMap = null;
     this.syncHoverEnabled();
@@ -4826,6 +5105,7 @@ export class BimEngine {
 
   async showAllElements(): Promise<void> {
     this.clashReviewSuppressSelectPaint = false;
+    this.clashContextMode = null;
     this.clashGhostPickOnly = false;
     this.clashPickAllowMap = null;
     this.clearClashSceneGhost();
@@ -5730,6 +6010,8 @@ export class BimEngine {
     document.removeEventListener("mousemove", this.onPointerLockMouseMove);
     const container = this.container;
     this.clearLongPressTimer();
+    this.cancelMarqueeGesture();
+    this.marqueeOverlay.dispose();
     if (container) {
       container.removeEventListener("pointerdown", this.onCanvasPointerDown);
       container.removeEventListener("pointermove", this.onCanvasPointerMove);

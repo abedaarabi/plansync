@@ -37,6 +37,24 @@ export const BIM_SHORTCUT_SECTIONS: BimShortcutSection[] = [
     title: "Selection",
     icon: MousePointerClick,
     rows: [
+      {
+        keys: ["Ctrl", "Click"],
+        keyJoin: "combo",
+        action: "Add / toggle element in selection",
+        icon: MousePointerClick,
+      },
+      {
+        keys: ["Ctrl", "Drag"],
+        keyJoin: "combo",
+        action: "Box-select elements (L→R window, R→L crossing)",
+        icon: ScanSearch,
+      },
+      {
+        keys: ["Ctrl", "Shift", "Drag"],
+        keyJoin: "combo",
+        action: "Add box selection to current selection",
+        icon: MousePointerClick,
+      },
       { keys: ["H"], action: "Hide selected object", icon: EyeOff },
       { keys: ["Space"], action: "Zoom to selected object", icon: ScanSearch },
       {
