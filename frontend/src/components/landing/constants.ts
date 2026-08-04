@@ -1,5 +1,5 @@
-export const YOUTUBE_WALKTHROUGH_ID = "B3aR-qLvCFo";
-export const YOUTUBE_HERO_DEMO_ID = "7g1qpgmHNg0";
+export const YOUTUBE_PLAN_VIEWER_ID = "aMiDXOnUJOA";
+export const YOUTUBE_BIM_VIEWER_ID = "xb31sYZH-ms";
 export const YOUTUBE_PDF_VERSION_CONTROL_ID = "4DnCFziN66o";
 
 export const FREE_FEATURES = [

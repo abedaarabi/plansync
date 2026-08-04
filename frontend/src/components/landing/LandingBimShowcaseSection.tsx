@@ -7,6 +7,8 @@ import { ArrowRight, Box, Crosshair } from "lucide-react";
 import type { ReactNode } from "react";
 import { trackMarketingEvent } from "@/lib/marketingAnalytics";
 import { AnimateIn } from "./AnimateIn";
+import { YOUTUBE_BIM_VIEWER_ID } from "./constants";
+import { LandingYoutubeFacade } from "./YouTubeEmbeds";
 
 const VIEWER_BULLETS = ["viewerBullet1", "viewerBullet2", "viewerBullet3"] as const;
 const CLASH_BULLETS = ["clashBullet1", "clashBullet2", "clashBullet3"] as const;
@@ -52,7 +54,7 @@ function ProductShot({
           sizes="(max-width: 1024px) 100vw, 50vw"
           priority={priority}
           loading={priority ? undefined : "lazy"}
-          quality={80}
+          quality={82}
         />
       </div>
     </div>
@@ -138,8 +140,26 @@ export function LandingBimShowcaseSection() {
         </AnimateIn>
 
         <div className="mt-16 space-y-16 sm:mt-20 sm:space-y-24">
-          <AnimateIn delay={60} className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
-            <ProductShot src="/images/3dviewer.webp" alt={t("viewerImageAlt")} priority />
+          <AnimateIn
+            delay={60}
+            className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)] lg:gap-12"
+          >
+            <div className="relative">
+              <div
+                className="pointer-events-none absolute -inset-4 rounded-4xl bg-[radial-gradient(ellipse_at_50%_40%,color-mix(in_srgb,var(--landing-cta)_18%,transparent),transparent_65%)] blur-2xl"
+                aria-hidden
+              />
+              <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-950 shadow-[0_28px_65px_-18px_rgba(15,23,42,0.2),0_0_0_1px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.035]">
+                <LandingYoutubeFacade
+                  videoId={YOUTUBE_BIM_VIEWER_ID}
+                  title={t("viewerVideoTitle")}
+                  playAriaLabel={t("viewerPlayAriaLabel")}
+                  posterAlt={t("viewerImageAlt")}
+                  posterSrc="/images/3dviewer.webp"
+                  playButtonId="bim-viewer-play"
+                />
+              </div>
+            </div>
             <FeatureCopy
               icon={<Box className="h-5 w-5" strokeWidth={1.75} />}
               iconClass="bg-linear-to-br from-blue-600 to-blue-700 shadow-blue-600/25"
@@ -170,20 +190,29 @@ export function LandingBimShowcaseSection() {
         </div>
 
         <AnimateIn delay={100} className="mt-14 flex flex-col items-center gap-3 sm:mt-16">
-          <Link
-            href="/sign-in"
-            onClick={() =>
-              trackMarketingEvent("marketing_cta_click", {
-                ctaType: "start_trial",
-                source: "bim_showcase",
-                destination: "/sign-in",
-              })
-            }
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-(--landing-cta) px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:bg-(--landing-cta-bright)"
-          >
-            {t("cta")}
-            <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
-          </Link>
+          <div className="flex flex-col items-stretch gap-2.5 sm:flex-row sm:items-center">
+            <Link
+              href="/sign-in"
+              onClick={() =>
+                trackMarketingEvent("marketing_cta_click", {
+                  ctaType: "start_trial",
+                  source: "bim_showcase",
+                  destination: "/sign-in",
+                })
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-(--landing-cta) px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:bg-(--landing-cta-bright)"
+            >
+              {t("cta")}
+              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+            </Link>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              onClick={() => document.getElementById("bim-viewer-play")?.click()}
+            >
+              {t("ctaSecondary")}
+            </button>
+          </div>
           <p className="text-sm text-slate-500">{t("ctaHint")}</p>
         </AnimateIn>
       </div>

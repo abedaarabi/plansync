@@ -3,24 +3,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ArrowRight, CheckCircle2, ServerCog, ShieldCheck, Users2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Users2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { trackMarketingEvent } from "@/lib/marketingAnalytics";
 import { getHeroExperimentVariant, type HeroExperimentVariant } from "@/lib/marketingExperiments";
 import { AnimateIn } from "./AnimateIn";
-import { BrowserMockup } from "./BrowserMockup";
-import { LandingHeroDemoVideo } from "./YouTubeEmbeds";
 
 type LandingHeroSectionProps = {
   prefersReducedMotion: boolean;
   onGoToFreeViewer: (source?: string) => void;
 };
 
-const STAT_KEYS = [
-  { valueKey: "stat1Value" as const, labelKey: "stat1Label" as const },
-  { valueKey: "stat2Value" as const, labelKey: "stat2Label" as const },
-  { valueKey: "stat3Value" as const, labelKey: "stat3Label" as const },
-];
+const TRUST_NAMES = ["NORTHRIDGE BUILD", "MECHANICA PRO", "HARBOR FM"] as const;
 
 export function LandingHeroSection({
   prefersReducedMotion,
@@ -69,7 +63,6 @@ export function LandingHeroSection({
             poster="/images/cta/CTA-constraction-hero.webp"
             aria-hidden
           >
-            <source src="/hero.webm" type="video/webm" />
             <source src="/hero.mp4" type="video/mp4" />
           </video>
         )}
@@ -88,7 +81,6 @@ export function LandingHeroSection({
         className="pointer-events-none absolute inset-0 shadow-[inset_0_0_90px_rgba(0,0,0,0.18),inset_0_-100px_150px_rgba(0,0,0,0.38)]"
         aria-hidden
       />
-      {/* Subtle grid texture */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.04]"
         style={{
@@ -101,10 +93,10 @@ export function LandingHeroSection({
       {/* ── Content ── */}
       <div className="relative z-10 mx-auto w-full max-w-6xl px-6">
         <AnimateIn instant>
-          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-14 xl:gap-16">
-            <div className="text-center lg:text-left">
-              {/* Eyebrow badge */}
-              <p className="landing-type-label mb-6 inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] bg-[color-mix(in_srgb,var(--landing-cta)_14%,rgba(15,23,42,0.5))] px-4 py-1.5 text-blue-100 shadow-sm backdrop-blur-md lg:inline-flex">
+          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-12 xl:gap-16">
+            {/* Copy first on mobile so CTAs stay above the fold */}
+            <div className="order-1 text-center lg:text-left">
+              <p className="landing-type-label mb-5 inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] bg-[color-mix(in_srgb,var(--landing-cta)_14%,rgba(15,23,42,0.5))] px-4 py-1.5 text-blue-100 shadow-sm backdrop-blur-md lg:inline-flex">
                 <span className="relative flex h-2 w-2" aria-hidden>
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--landing-cta) opacity-60" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-(--landing-cta)" />
@@ -112,18 +104,15 @@ export function LandingHeroSection({
                 {t("eyebrow")}
               </p>
 
-              {/* Headline */}
-              <h1 className="text-balance text-[2.35rem] font-bold leading-[1.06] tracking-tight text-white sm:text-[3.05rem] lg:max-w-[13ch] lg:text-[3.35rem] lg:leading-[1.05]">
+              <h1 className="text-balance text-[2.35rem] font-bold leading-[1.06] tracking-tight text-white sm:text-[3.05rem] lg:max-w-[16ch] lg:text-[3.35rem] lg:leading-[1.05]">
                 {t("title")}
               </h1>
 
-              {/* Sub-copy */}
-              <p className="mx-auto mt-6 max-w-[58ch] text-[1.04rem] leading-relaxed text-blue-100/85 sm:mt-7 sm:text-[1.12rem] lg:mx-0 lg:max-w-[52ch] lg:text-[1.18rem]">
+              <p className="mx-auto mt-5 max-w-[58ch] text-[1.04rem] leading-relaxed text-blue-100/85 sm:mt-6 sm:text-[1.12rem] lg:mx-0 lg:max-w-[48ch] lg:text-[1.15rem]">
                 {heroSub}
               </p>
 
-              {/* CTAs */}
-              <div className="mt-9 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-4 lg:justify-start">
+              <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-4 lg:justify-start">
                 <button
                   type="button"
                   onClick={() => onGoToFreeViewer("hero_primary_cta")}
@@ -149,55 +138,38 @@ export function LandingHeroSection({
               </div>
 
               <div className="landing-type-caption mt-5 flex flex-wrap items-center justify-center gap-2.5 text-blue-100/90 lg:justify-start">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-300/35 bg-cyan-400/10 px-3 py-1.5 text-cyan-100">
-                  <ServerCog className="h-3.5 w-3.5 text-cyan-300" />
-                  Built for datacenter delivery
-                </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/8 px-3 py-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
-                  No signup for viewer
+                  {t("chipNoSignup")}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/8 px-3 py-1.5">
                   <Users2 className="h-3.5 w-3.5 text-sky-300" />
-                  Used by PMs, GCs, and Subs
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/8 px-3 py-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
-                  Secure cloud option
+                  {t("chipAudience")}
                 </span>
               </div>
 
-              {/* Stat chips */}
-              <div className="mt-9 flex flex-wrap items-stretch justify-center gap-3 lg:justify-start">
-                {STAT_KEYS.map((chip) => (
-                  <div
-                    key={chip.labelKey}
-                    className="flex flex-col items-center rounded-xl border border-white/10 bg-white/[0.07] px-5 py-3 text-center backdrop-blur-sm transition hover:border-white/20 hover:bg-white/10 sm:items-start sm:text-left"
-                  >
-                    <span className="text-base font-bold text-white">{t(chip.valueKey)}</span>
-                    <span className="landing-type-caption text-blue-200/60">
-                      {t(chip.labelKey)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <p className="landing-type-caption mt-4 text-blue-100/65 lg:text-start">
+                {t("trustLine")} <span className="text-blue-50/80">{TRUST_NAMES.join(" · ")}</span>
+              </p>
             </div>
 
-            <div className="relative mx-auto w-full max-w-lg lg:mx-0 lg:max-w-none lg:ps-3">
+            <div className="relative order-2 mx-auto w-full max-w-md sm:max-w-lg lg:mx-0 lg:max-w-xl lg:justify-self-end">
               <div
-                className="pointer-events-none absolute -inset-4 rounded-4xl bg-[radial-gradient(ellipse_at_50%_30%,rgba(59,130,246,0.22),transparent_58%)] blur-2xl sm:-inset-6"
+                className="pointer-events-none absolute -inset-4 rounded-3xl bg-[radial-gradient(ellipse_at_50%_40%,rgba(255,255,255,0.1),transparent_65%)] blur-2xl"
                 aria-hidden
               />
-              <div className="relative lg:-rotate-[0.65deg]">
-                <BrowserMockup
-                  variant="elevated"
-                  className="shadow-[0_32px_90px_-16px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.08)] ring-1 ring-white/12"
-                >
-                  <LandingHeroDemoVideo />
-                </BrowserMockup>
-              </div>
-              <div className="landing-type-caption pointer-events-none absolute -bottom-4 -left-3 hidden rounded-lg border border-white/20 bg-slate-950/55 px-3 py-2 text-blue-100/80 backdrop-blur-md lg:block">
-                Live product walkthrough
+              <div className="relative overflow-hidden rounded-2xl bg-slate-950 shadow-[0_28px_70px_-18px_rgba(0,0,0,0.5)] ring-1 ring-white/12">
+                <div className="relative aspect-16/10 w-full max-sm:aspect-16/11">
+                  <Image
+                    src="/images/measure.png"
+                    alt={t("heroImageAlt")}
+                    fill
+                    className="object-cover object-top"
+                    sizes="(max-width: 1024px) 90vw, 520px"
+                    priority
+                    quality={82}
+                  />
+                </div>
               </div>
             </div>
           </div>

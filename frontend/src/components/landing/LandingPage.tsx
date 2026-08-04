@@ -8,6 +8,7 @@ import { LandingChatAssistant } from "./LandingChatAssistant";
 import { LandingHeroSection } from "./LandingHeroSection";
 import { LandingBimShowcaseSection } from "./LandingBimShowcaseSection";
 import { LandingHowItWorksSection } from "./LandingHowItWorksSection";
+import { LandingPlanViewerSection } from "./LandingPlanViewerSection";
 import { LandingPwaInstallSection } from "./LandingPwaInstallSection";
 import { LandingProofSection } from "./LandingProofSection";
 import { LandingSolutionsShowcaseSection } from "./LandingSolutionsShowcaseSection";
@@ -23,8 +24,9 @@ function LandingHomeMain() {
         prefersReducedMotion={prefersReducedMotion}
         onGoToFreeViewer={goToFreeViewer}
       />
-      <LandingBimShowcaseSection />
       <LandingProofSection />
+      <LandingPlanViewerSection />
+      <LandingBimShowcaseSection />
       <LandingSolutionsShowcaseSection />
       <LandingHowItWorksSection />
       <LandingPwaInstallSection />
