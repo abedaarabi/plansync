@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { BimQuantityIndex } from "@plansync/shared/bimTypes";
 import {
   buildClashSetDef,
+  clashCoveredByOpenModels,
   disciplineSetDef,
   displayModelLabel,
+  fileVersionIdFromModelId,
   ifcTypeCountsForModel,
+  openFileVersionIdsFromModelIds,
   resolveClashSet,
   sortModelsForClashPair,
+  testMatchesOpenModels,
 } from "./clashSets";
 
 function sampleIndex(): BimQuantityIndex {
@@ -166,5 +170,25 @@ describe("clashSets", () => {
 
     const counts = ifcTypeCountsForModel(sampleIndex(), "fileB:fv-b");
     expect(counts).toEqual([{ ifcType: "IfcDuctSegment", count: 1 }]);
+  });
+
+  it("gates clash tests and rows to open model partners", () => {
+    expect(fileVersionIdFromModelId("fileA:fv-a__L01")).toBe("fv-a");
+    expect(openFileVersionIdsFromModelIds(["fileA:fv-a", "fileB:fv-b"])).toEqual(
+      new Set(["fv-a", "fv-b"]),
+    );
+
+    const test = {
+      setA: buildClashSetDef({ modelId: "fileA:fv-a", modelName: "Structure.ifc" }),
+      setB: buildClashSetDef({ modelId: "fileB:fv-b", modelName: "MEP.ifc" }),
+    };
+    expect(testMatchesOpenModels(test, ["fileA:fv-a", "fileB:fv-b"])).toBe(true);
+    expect(testMatchesOpenModels(test, ["fileA:fv-a"])).toBe(false);
+    expect(testMatchesOpenModels(test, ["fileC:fv-c"])).toBe(false);
+
+    const clash = { fileVersionAId: "fv-a", fileVersionBId: "fv-b" };
+    expect(clashCoveredByOpenModels(clash, new Set(["fv-a", "fv-b"]))).toBe(true);
+    expect(clashCoveredByOpenModels(clash, new Set(["fv-a"]))).toBe(false);
+    expect(clashCoveredByOpenModels(clash, new Set(["fv-c"]))).toBe(false);
   });
 });

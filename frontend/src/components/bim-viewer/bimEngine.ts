@@ -5815,15 +5815,12 @@ export class BimEngine {
       }
     }
 
-    if (clashCenter) {
-      await this.focusCameraOnSphere(new THREE.Sphere(clashCenter, minRadius * 1.6), fitScale);
-      return;
-    }
+    // Do not zoom to a bare clash point when partner geometry is missing — that
+    // flies the camera to stale coordinates after switching to unrelated models.
     if (opts.fallbackGuids && opts.fallbackGuids.length > 0) {
       await this.zoomToGuids(opts.fallbackGuids);
       return;
     }
-    await this.fitToView();
   }
 
   getCameraState(): Record<string, unknown> {

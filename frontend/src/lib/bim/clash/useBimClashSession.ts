@@ -22,11 +22,14 @@ import {
 } from "@/lib/api-client";
 import {
   buildClashSetDef,
+  clashCoveredByOpenModels,
   ifcTypesFromSet,
   levelFromSet,
   modelIdFromSet,
+  openFileVersionIdsFromModelIds,
   resolveClashSet,
   sortModelsForClashPair,
+  testMatchesOpenModels,
 } from "@/lib/bim/clash/clashSets";
 import { enrichClashRowsWithQuantityNames } from "@/lib/bim/clash/clashLabels";
 import { runClashTest } from "@/lib/bim/clash/runClashTest";
@@ -37,6 +40,49 @@ import {
   type ClashSessionState,
 } from "@/lib/bim/clash/clashSessionStorage";
 import type { BimEngine } from "@/components/bim-viewer/bimEngine";
+
+type ClashModelRef = { modelId: string; name: string };
+
+function withModelOnSet(prev: BimClashSetDef, model: ClashModelRef): BimClashSetDef {
+  const prevId = modelIdFromSet(prev);
+  return buildClashSetDef({
+    modelId: model.modelId,
+    modelName: model.name,
+    // Keep type/level filters only when the model itself is unchanged.
+    ifcTypes: prevId === model.modelId ? ifcTypesFromSet(prev) : [],
+    level: prevId === model.modelId ? levelFromSet(prev) : null,
+  });
+}
+
+/** Rebind Set A/B to the current federation; returns null when nothing changed. */
+function nextClashSetsForModels(
+  models: ClashModelRef[],
+  prevA: BimClashSetDef,
+  prevB: BimClashSetDef,
+): { setA: BimClashSetDef; setB: BimClashSetDef } | null {
+  if (models.length === 0) return null;
+  const sorted = sortModelsForClashPair(models);
+  const ids = new Set(models.map((m) => m.modelId));
+  const idA = modelIdFromSet(prevA);
+  const idB = modelIdFromSet(prevB);
+  const aModel = idA && ids.has(idA) ? models.find((m) => m.modelId === idA)! : sorted[0]!;
+  const bModel =
+    sorted.length < 2
+      ? null
+      : idB && ids.has(idB) && idB !== aModel.modelId
+        ? models.find((m) => m.modelId === idB)!
+        : (sorted.find((m) => m.modelId !== aModel.modelId) ?? null);
+
+  const nextA = withModelOnSet(prevA, aModel);
+  const nextB = bModel
+    ? withModelOnSet(prevB, bModel)
+    : { label: "Set B", rules: [] as BimClashSetDef["rules"] };
+
+  const aChanged = modelIdFromSet(prevA) !== modelIdFromSet(nextA) || prevA.label !== nextA.label;
+  const bChanged = modelIdFromSet(prevB) !== modelIdFromSet(nextB) || prevB.label !== nextB.label;
+  if (!aChanged && !bChanged) return null;
+  return { setA: nextA, setB: nextB };
+}
 
 // fallow-ignore-next-line complexity
 export function useBimClashSession(args: {
@@ -88,6 +134,13 @@ export function useBimClashSession(args: {
     [args.models],
   );
 
+  const openModelIds = useMemo(() => (args.models ?? []).map((m) => m.modelId), [args.models]);
+
+  const openFileVersionIds = useMemo(
+    () => openFileVersionIdsFromModelIds(openModelIds),
+    [openModelIds],
+  );
+
   // Restore session once per project.
   useEffect(() => {
     if (!args.projectId || sessionLoaded.current) return;
@@ -107,53 +160,40 @@ export function useBimClashSession(args: {
   // Bind sets to loaded models once when the model list changes — never in a setA/setB loop.
   useEffect(() => {
     const models = args.models ?? [];
-    if (models.length === 0) return;
-    const sorted = sortModelsForClashPair(models);
-    const ids = new Set(models.map((m) => m.modelId));
+    const openIds = models.map((m) => m.modelId);
+    const openFvs = openFileVersionIdsFromModelIds(openIds);
 
-    const withModel = (prev: BimClashSetDef, model: { modelId: string; name: string }) => {
-      const prevId = modelIdFromSet(prev);
-      return buildClashSetDef({
-        modelId: model.modelId,
-        modelName: model.name,
-        // Keep type/level filters only when the model itself is unchanged.
-        ifcTypes: prevId === model.modelId ? ifcTypesFromSet(prev) : [],
-        level: prevId === model.modelId ? levelFromSet(prev) : null,
-      });
-    };
-
-    const prevA = setARef.current;
-    const prevB = setBRef.current;
-    const idA = modelIdFromSet(prevA);
-    const idB = modelIdFromSet(prevB);
-    const aModel = idA && ids.has(idA) ? models.find((m) => m.modelId === idA)! : sorted[0]!;
-    const bModel =
-      sorted.length < 2
-        ? null
-        : idB && ids.has(idB) && idB !== aModel.modelId
-          ? models.find((m) => m.modelId === idB)!
-          : (sorted.find((m) => m.modelId !== aModel.modelId) ?? null);
-
-    const nextA = withModel(prevA, aModel);
-    const nextB = bModel
-      ? withModel(prevB, bModel)
-      : { label: "Set B", rules: [] as BimClashSetDef["rules"] };
-
-    if (modelIdFromSet(prevA) !== modelIdFromSet(nextA) || prevA.label !== nextA.label) {
-      setSetA(nextA);
+    const nextSets = nextClashSetsForModels(models, setARef.current, setBRef.current);
+    if (nextSets) {
+      setSetA(nextSets.setA);
+      setSetB(nextSets.setB);
     }
-    if (modelIdFromSet(prevB) !== modelIdFromSet(nextB) || prevB.label !== nextB.label) {
-      setSetB(nextB);
+
+    // Drop results / selection when the federation no longer covers the active test.
+    const test = activeTestRef.current;
+    if (test && !testMatchesOpenModels(test, openIds)) {
+      setActiveTest(null);
+      setClashes([]);
+      setRunStats(null);
+      setSelectedClashId(null);
+      void engineRef.current?.clearClashReviewPresentation();
+    } else {
+      const clash = selectedClashRef.current;
+      if (clash && !clashCoveredByOpenModels(clash, openFvs)) {
+        setSelectedClashId(null);
+        void engineRef.current?.clearClashReviewPresentation();
+      }
     }
     // modelsKey captures args.models identity without a new array each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync only when loaded models change
   }, [modelsKey]);
 
-  // Persist session.
+  // Persist session. Keep last matching testId when results are cleared for an unrelated federation.
   useEffect(() => {
     if (!args.projectId || !args.active) return;
+    const prevTestId = readClashSession(args.projectId).testId;
     const state: ClashSessionState = {
-      testId: activeTest?.id ?? null,
+      testId: activeTest?.id ?? prevTestId,
       statusFilter,
       assigneeMe,
       grouped,
@@ -182,19 +222,30 @@ export function useBimClashSession(args: {
 
   const pickPreferredClashTest = useCallback(
     (list: BimClashTestRow[], session: ClashSessionState): BimClashTestRow | null => {
+      const matching = list.filter((t) => testMatchesOpenModels(t, openModelIds));
+      if (matching.length === 0) return null;
       const currentId = activeTestRef.current?.id;
       const labelA = setARef.current.label;
       const labelB = setBRef.current.label;
       return (
-        (currentId ? list.find((t) => t.id === currentId) : null) ??
-        list.find((t) => t.id === session.testId) ??
-        list.find((t) => t.setA.label === labelA && t.setB.label === labelB) ??
-        list[0] ??
+        (currentId ? matching.find((t) => t.id === currentId) : null) ??
+        matching.find((t) => t.id === session.testId) ??
+        matching.find((t) => t.setA.label === labelA && t.setB.label === labelB) ??
+        matching[0] ??
         null
       );
     },
-    [],
+    [openModelIds],
   );
+
+  const clearClashResultsState = useCallback(async () => {
+    setActiveTest(null);
+    setClashes([]);
+    setRunStats(null);
+    setSelectedClashId(null);
+    setPreviewHits([]);
+    await engineRef.current?.clearClashReviewPresentation();
+  }, []);
 
   const reloadTests = useCallback(async () => {
     if (!args.projectId) return;
@@ -202,18 +253,26 @@ export function useBimClashSession(args: {
       const list = await fetchClashTests(args.projectId);
       setTests(list);
       const preferred = pickPreferredClashTest(list, readClashSession(args.projectId));
-      if (!preferred) return;
+      if (!preferred) {
+        await clearClashResultsState();
+        return;
+      }
       setActiveTest(preferred);
       // Do not overwrite setA/setB here — that fought model binding and re-fetched in a loop.
       const data = await fetchClashTestClashes(preferred.id);
       setClashes(data.clashes);
       setRunStats(data.test.lastRunStats);
-      // Keep pair presentation if a clash is already selected.
+      // Keep pair presentation if a clash is already selected and still covered.
       const row = selectedClashIdRef.current
         ? data.clashes.find((c) => c.id === selectedClashIdRef.current)
         : null;
       const engine = engineRef.current;
-      if (engine && row && (row.guidA || row.guidB)) {
+      if (
+        engine &&
+        row &&
+        (row.guidA || row.guidB) &&
+        clashCoveredByOpenModels(row, openFileVersionIds)
+      ) {
         await engine.presentClashPartners({
           a: { guid: row.guidA, fileVersionId: row.fileVersionAId },
           b: { guid: row.guidB, fileVersionId: row.fileVersionBId },
@@ -221,18 +280,30 @@ export function useBimClashSession(args: {
           context: contextModeRef.current,
           refocusCamera: false,
         });
+      } else if (
+        selectedClashIdRef.current &&
+        (!row || !clashCoveredByOpenModels(row, openFileVersionIds))
+      ) {
+        setSelectedClashId(null);
+        await engine?.clearClashReviewPresentation();
       }
     } catch (err) {
       if (args.active) {
         toast.error(err instanceof Error ? err.message : "Could not load clash tests");
       }
     }
-  }, [args.projectId, args.active, pickPreferredClashTest]);
+  }, [
+    args.projectId,
+    args.active,
+    pickPreferredClashTest,
+    clearClashResultsState,
+    openFileVersionIds,
+  ]);
 
   useEffect(() => {
     if (!args.active || !args.projectId) return;
     void reloadTests();
-  }, [args.active, args.projectId, reloadTests]);
+  }, [args.active, args.projectId, modelsKey, reloadTests]);
 
   const displayClashes = useMemo(() => {
     const rows = previewHits.length > 0 && running ? previewHits : clashes;
@@ -311,6 +382,10 @@ export function useBimClashSession(args: {
       const engine = engineRef.current;
       if (!engine) return;
       if (!clash.guidA && !clash.guidB) return;
+      if (!clashCoveredByOpenModels(clash, openFileVersionIds)) {
+        toast.error("Load both clash partner models to review this clash.");
+        return;
+      }
       await engine.presentClashPartners({
         a: { guid: clash.guidA, fileVersionId: clash.fileVersionAId },
         b: { guid: clash.guidB, fileVersionId: clash.fileVersionBId },
@@ -319,7 +394,7 @@ export function useBimClashSession(args: {
         refocusCamera: opts?.refocusCamera,
       });
     },
-    [],
+    [openFileVersionIds],
   );
 
   const setContextMode = useCallback(
@@ -520,10 +595,14 @@ export function useBimClashSession(args: {
 
   const focusClash = useCallback(
     async (clash: BimClashRow) => {
+      if (!clashCoveredByOpenModels(clash, openFileVersionIds)) {
+        toast.error("Load both clash partner models to review this clash.");
+        return;
+      }
       setSelectedClashId(clash.id);
       await presentClashIsolate(clash);
     },
-    [presentClashIsolate],
+    [presentClashIsolate, openFileVersionIds],
   );
 
   const clearFocusMode = useCallback(async () => {

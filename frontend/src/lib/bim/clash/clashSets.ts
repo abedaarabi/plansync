@@ -153,6 +153,78 @@ export function levelFromSet(set: BimClashSetDef): string | null {
   return set.rules.find((r) => r.field === "level")?.values[0] ?? null;
 }
 
+/** `fileId:fileVersionId` (and progressive `…__tile`) → bare fileVersionId. */
+export function fileVersionIdFromModelId(modelId: string): string | null {
+  const base = baseFederationModelId(modelId.trim());
+  if (!base) return null;
+  const i = base.indexOf(":");
+  if (i === -1) return base;
+  const fv = base.slice(i + 1).trim();
+  return fv || null;
+}
+
+/** Open federation revisions from loaded model ids. */
+export function openFileVersionIdsFromModelIds(modelIds: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const id of modelIds) {
+    const fv = fileVersionIdFromModelId(id);
+    if (fv) out.add(fv.toLowerCase());
+  }
+  return out;
+}
+
+function modelIdEqualsOpen(candidate: string, openModelId: string): boolean {
+  const a = candidate.toLowerCase();
+  const b = openModelId.toLowerCase();
+  const aBase = baseFederationModelId(a);
+  const bBase = baseFederationModelId(b);
+  if (a === b || aBase === bBase || aBase === b || a === bBase) return true;
+  const aFv = fileVersionIdFromModelId(aBase);
+  const bFv = fileVersionIdFromModelId(bBase);
+  if (aFv && bFv && aFv === bFv) return true;
+  if (aFv && (bBase === aFv || bBase.endsWith(`:${aFv}`))) return true;
+  if (bFv && (aBase === bFv || aBase.endsWith(`:${bFv}`))) return true;
+  return false;
+}
+
+/** True when a set's model rule targets one of the open federation members. */
+function setModelInOpenModels(
+  setModelId: string | null | undefined,
+  openModelIds: string[],
+): boolean {
+  if (!setModelId || openModelIds.length === 0) return false;
+  return openModelIds.some((openId) => modelIdEqualsOpen(setModelId, openId));
+}
+
+/**
+ * Clash test applies to the current federation only when both set partners
+ * are among the open models (model-scoped sets).
+ */
+export function testMatchesOpenModels(
+  test: { setA: BimClashSetDef; setB: BimClashSetDef },
+  openModelIds: string[],
+): boolean {
+  const idA = modelIdFromSet(test.setA);
+  const idB = modelIdFromSet(test.setB);
+  if (!idA || !idB) return false;
+  return setModelInOpenModels(idA, openModelIds) && setModelInOpenModels(idB, openModelIds);
+}
+
+/** Both clash partner revisions must be loaded before review / camera focus. */
+export function clashCoveredByOpenModels(
+  clash: { fileVersionAId: string; fileVersionBId: string },
+  openFileVersionIds: Set<string> | Iterable<string>,
+): boolean {
+  const open =
+    openFileVersionIds instanceof Set
+      ? openFileVersionIds
+      : new Set([...openFileVersionIds].map((id) => id.toLowerCase()));
+  const a = clash.fileVersionAId?.trim().toLowerCase();
+  const b = clash.fileVersionBId?.trim().toLowerCase();
+  if (!a || !b) return false;
+  return open.has(a) && open.has(b);
+}
+
 /** Strip IFC extension for picker labels. */
 export function displayModelLabel(name: string): string {
   const trimmed = name.trim();
