@@ -3241,6 +3241,24 @@ function occupantPortalHeadlineFromSettingsJson(raw: unknown): string | null {
   return typeof h === "string" && h.trim() ? h.trim().slice(0, 200) : null;
 }
 
+/** Public-safe element summary from an asset bimAnchor (null when unlinked / invalid). */
+function occupantElementFromBimAnchor(
+  bimAnchor: unknown,
+): { name: string | null; ifcType: string | null } | null {
+  const parsed = omAssetBimAnchorSchema.safeParse(bimAnchor);
+  if (!parsed.success || !parsed.data) return null;
+  return {
+    name: parsed.data.name?.trim() ? parsed.data.name.trim() : null,
+    ifcType: parsed.data.ifcType?.trim() ? parsed.data.ifcType.trim() : null,
+  };
+}
+
+function bimAnchorJsonForIssue(bimAnchor: unknown): Prisma.InputJsonValue | null {
+  const parsed = omAssetBimAnchorSchema.safeParse(bimAnchor);
+  if (!parsed.success || !parsed.data) return null;
+  return parsed.data as Prisma.InputJsonValue;
+}
+
 /** Public occupant routes (no session). */
 export function registerOccupantPublicRoutes(r: Hono, env: Env) {
   r.get("/occupant/:token/meta", async (c) => {
@@ -3275,14 +3293,27 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
       name: string;
       category: string | null;
       locationLabel: string | null;
+      element: { name: string | null; ifcType: string | null } | null;
     } | null = null;
     if (assetSecretRaw) {
       const a = await prisma.asset.findFirst({
         where: { projectId: row.projectId, occupantScanSecret: assetSecretRaw },
-        select: { tag: true, name: true, category: true, locationLabel: true },
+        select: {
+          tag: true,
+          name: true,
+          category: true,
+          locationLabel: true,
+          bimAnchor: true,
+        },
       });
       if (!a) return c.json({ error: "Invalid equipment link" }, 404);
-      asset = a;
+      asset = {
+        tag: a.tag,
+        name: a.name,
+        category: a.category,
+        locationLabel: a.locationLabel,
+        element: occupantElementFromBimAnchor(a.bimAnchor),
+      };
     }
 
     const occupantHeadline = occupantPortalHeadlineFromSettingsJson(row.project.settingsJson);
@@ -3294,6 +3325,7 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
     });
   });
 
+  // fallow-ignore-next-line complexity
   r.post("/occupant/:token/submit", async (c) => {
     const token = c.req.param("token")!;
     const body = z
@@ -3349,6 +3381,7 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
       fileVersionId: string | null;
       pageNumber: number | null;
       annotationId: string | null;
+      bimAnchor: unknown;
     } | null = null;
     if (assetSecret) {
       const a = await prisma.asset.findFirst({
@@ -3362,11 +3395,13 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
           fileVersionId: true,
           pageNumber: true,
           annotationId: true,
+          bimAnchor: true,
         },
       });
       if (!a) return c.json({ error: "Invalid equipment link" }, 400);
       boundAsset = a;
     }
+    const issueBimAnchor = boundAsset ? bimAnchorJsonForIssue(boundAsset.bimAnchor) : null;
 
     type ResolvedDrawing = {
       fileId: string;
@@ -3448,6 +3483,7 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
         sheetVersion,
         pageNumber,
         annotationId,
+        ...(issueBimAnchor ? { bimAnchor: issueBimAnchor } : {}),
         title,
         description: body.data.description,
         location: location || null,
@@ -3495,6 +3531,7 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
             projectId: issue.projectId,
             fileName: sheetName?.trim() ? sheetName.trim() : "Drawing",
             version: sheetVersion ?? 1,
+            bimAnchor: issueBimAnchor,
           })
         : `/projects/${link.projectId}/om/tenant-requests/${issue.id}`;
     const baseUrl = env.PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";

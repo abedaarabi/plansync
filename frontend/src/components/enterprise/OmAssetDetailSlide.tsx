@@ -21,7 +21,10 @@ import { assetHasSheetPin } from "@/lib/assetPinFocus";
 import { openBimViewer } from "@/lib/bim/openBimViewer";
 import {
   omAssetBimViewerHref,
+  omAssetCanOpenBim,
+  omAssetCanOpenDrawing,
   omAssetHasBimLink,
+  omAssetLinkedPdfFile,
   omAssetViewerHref,
 } from "@/lib/omAssetViewerNavigation";
 import { projectScopedHref } from "@/lib/projectScopedPath";
@@ -52,7 +55,8 @@ type Props = {
   onClose: () => void;
   projectId: string;
   asset: OmAssetRow | null;
-  pdfFiles: CloudFile[];
+  /** All project files (PDF + IFC) — used to open the correct viewer. */
+  projectFiles: CloudFile[];
   onEdit: () => void;
   onDelete: (asset: OmAssetRow) => void;
 };
@@ -63,7 +67,7 @@ export function OmAssetDetailSlide({
   onClose,
   projectId,
   asset,
-  pdfFiles,
+  projectFiles,
   onEdit,
   onDelete,
 }: Props) {
@@ -121,21 +125,14 @@ export function OmAssetDetailSlide({
     [assetWorkOrders],
   );
 
-  const openViewerForAsset = useCallback(() => {
-    if (!asset?.fileId) return;
-    if (omAssetHasBimLink(asset)) {
-      const href = omAssetBimViewerHref(projectId, asset);
-      if (!href) {
-        toast.error("Could not open 3D model for this asset.");
-        return;
-      }
-      onClose();
-      openBimViewer(href);
-      return;
-    }
-    const f = pdfFiles.find((x) => x.id === asset.fileId);
+  const canOpenDrawing = asset ? omAssetCanOpenDrawing(asset, projectFiles) : false;
+  const canOpenBim = asset ? omAssetCanOpenBim(asset, projectFiles) : false;
+
+  const openDrawingViewer = useCallback(() => {
+    if (!asset) return;
+    const f = omAssetLinkedPdfFile(asset, projectFiles);
     if (!f) {
-      toast.error("Drawing file not found in project.");
+      toast.error("No PDF drawing linked to this asset.");
       return;
     }
     const sorted = sortedVersions(f);
@@ -146,7 +143,18 @@ export function OmAssetDetailSlide({
     }
     router.push(omAssetViewerHref(projectId, f, asset, verRow));
     onClose();
-  }, [asset, pdfFiles, projectId, router, onClose]);
+  }, [asset, projectFiles, projectId, router, onClose]);
+
+  const openBimViewerForAsset = useCallback(() => {
+    if (!asset) return;
+    const href = omAssetBimViewerHref(projectId, asset, projectFiles);
+    if (!href) {
+      toast.error("Could not open 3D model for this asset.");
+      return;
+    }
+    onClose();
+    openBimViewer(href);
+  }, [asset, projectFiles, projectId, onClose]);
 
   const maintenanceHref = projectScopedHref(projectId, "/om/maintenance", workspaceId);
   const workOrdersHref = projectScopedHref(
@@ -231,19 +239,20 @@ export function OmAssetDetailSlide({
                 <span className="inline-flex items-center rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-sky-800 dark:text-sky-200">
                   Linked in 3D
                 </span>
-              ) : assetHasSheetPin(asset) ? (
+              ) : null}
+              {assetHasSheetPin(asset) ? (
                 <span className="inline-flex items-center rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-200">
                   Pin on drawing
                 </span>
-              ) : asset.file ? (
+              ) : canOpenDrawing ? (
                 <span className="enterprise-badge-neutral inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold">
                   Sheet linked
                 </span>
-              ) : (
+              ) : !omAssetHasBimLink(asset) ? (
                 <span className="text-xs text-[var(--enterprise-text-muted)]">
                   No drawing linked
                 </span>
-              )}
+              ) : null}
             </div>
             <p className="flex items-start gap-2 text-[var(--enterprise-text-muted)]">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
@@ -256,20 +265,28 @@ export function OmAssetDetailSlide({
                   "No location set"}
               </span>
             </p>
-            {asset.fileId ? (
-              <button
-                type="button"
-                onClick={openViewerForAsset}
-                className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-teal-700 hover:underline dark:text-teal-300"
-              >
-                {omAssetHasBimLink(asset)
-                  ? "Open in 3D viewer"
-                  : assetHasSheetPin(asset)
-                    ? "Zoom to equipment pin"
-                    : "Open linked drawing"}
-                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
-              </button>
-            ) : null}
+            <div className="flex flex-col items-start gap-1">
+              {canOpenDrawing ? (
+                <button
+                  type="button"
+                  onClick={openDrawingViewer}
+                  className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-teal-700 hover:underline dark:text-teal-300"
+                >
+                  {assetHasSheetPin(asset) ? "Zoom to equipment pin" : "Open linked drawing"}
+                  <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
+                </button>
+              ) : null}
+              {canOpenBim ? (
+                <button
+                  type="button"
+                  onClick={openBimViewerForAsset}
+                  className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-sky-700 hover:underline dark:text-sky-300"
+                >
+                  Open in 3D viewer
+                  <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -293,7 +310,7 @@ export function OmAssetDetailSlide({
             {asset.file?.name ? (
               <>
                 <dt className="text-[var(--enterprise-text-muted)]">
-                  {omAssetHasBimLink(asset) ? "3D model" : "Drawing"}
+                  {canOpenDrawing ? "Drawing" : "Model / drawing"}
                 </dt>
                 <dd className="truncate">{asset.file.name}</dd>
               </>
@@ -310,6 +327,13 @@ export function OmAssetDetailSlide({
           assetId={asset.id}
           assetTag={asset.tag}
           assetName={asset.name}
+          elementLabel={
+            omAssetHasBimLink(asset)
+              ? asset.bimAnchor?.name?.trim() ||
+                asset.bimAnchor?.ifcType?.trim() ||
+                "Linked model element"
+              : null
+          }
           enabled={open}
         />
 

@@ -1,27 +1,110 @@
 import { assetHasSheetPin } from "@/lib/assetPinFocus";
 import type { OmAssetRow } from "@/lib/api-client";
-import type { CloudFile } from "@/types/projects";
+import { isIfcFile, isPdfFile } from "@/lib/isPdfFile";
+import type { CloudFile, FileVersion } from "@/types/projects";
 
 export type OmAssetViewerMode = "place" | "focus";
 
+/** True when the asset has a BIM element anchor (may also have a separate PDF drawing). */
 export function omAssetHasBimLink(
   asset: Pick<OmAssetRow, "bimAnchor" | "fileId" | "fileVersionId">,
 ): boolean {
-  return Boolean(asset.bimAnchor?.ifcGuid?.trim() && asset.fileId && asset.fileVersionId);
+  return Boolean(asset.bimAnchor?.ifcGuid?.trim());
+}
+
+function findFileByVersionId(
+  files: CloudFile[],
+  fileVersionId: string,
+): { file: CloudFile; version: FileVersion } | null {
+  for (const file of files) {
+    const version = file.versions.find((v) => v.id === fileVersionId);
+    if (version) return { file, version };
+  }
+  return null;
+}
+
+/** Linked project file when `fileId` points at a PDF drawing. */
+export function omAssetLinkedPdfFile(
+  asset: Pick<OmAssetRow, "fileId">,
+  projectFiles: CloudFile[],
+): CloudFile | null {
+  if (!asset.fileId) return null;
+  const f = projectFiles.find((x) => x.id === asset.fileId);
+  return f && isPdfFile(f) ? f : null;
+}
+
+/**
+ * Resolve the IFC model to open for a BIM-linked asset.
+ * Prefers `bimAnchor.fileVersionId` when the asset's primary file is a PDF (or missing).
+ */
+function omAssetBimModelRef(
+  asset: OmAssetRow,
+  projectFiles: CloudFile[] = [],
+): {
+  fileId: string;
+  fileVersionId: string;
+  fileName: string;
+  version: number;
+} | null {
+  const guid = asset.bimAnchor?.ifcGuid?.trim();
+  if (!guid) return null;
+
+  const anchorFv = asset.bimAnchor?.fileVersionId?.trim();
+  if (anchorFv) {
+    const resolved = findFileByVersionId(projectFiles, anchorFv);
+    if (resolved && isIfcFile(resolved.file)) {
+      return {
+        fileId: resolved.file.id,
+        fileVersionId: resolved.version.id,
+        fileName: resolved.file.name,
+        version: resolved.version.version,
+      };
+    }
+  }
+
+  if (!asset.fileId || !asset.fileVersionId || !asset.file || !asset.fileVersion) return null;
+  if (isPdfFile(asset.file)) return null;
+  if (projectFiles.length > 0) {
+    const f = projectFiles.find((x) => x.id === asset.fileId);
+    if (f && !isIfcFile(f) && isPdfFile(f)) return null;
+  } else if (asset.file.name && isPdfFile(asset.file)) {
+    return null;
+  }
+
+  return {
+    fileId: asset.fileId,
+    fileVersionId: asset.fileVersionId,
+    fileName: asset.file.name,
+    version: asset.fileVersion.version,
+  };
+}
+
+export function omAssetCanOpenBim(asset: OmAssetRow, projectFiles: CloudFile[] = []): boolean {
+  return omAssetBimModelRef(asset, projectFiles) != null;
+}
+
+export function omAssetCanOpenDrawing(
+  asset: Pick<OmAssetRow, "fileId">,
+  projectFiles: CloudFile[],
+): boolean {
+  return omAssetLinkedPdfFile(asset, projectFiles) != null;
 }
 
 /** Relative URL to open the BIM viewer focused on the linked element. */
-export function omAssetBimViewerHref(projectId: string, asset: OmAssetRow): string | null {
+export function omAssetBimViewerHref(
+  projectId: string,
+  asset: OmAssetRow,
+  projectFiles: CloudFile[] = [],
+): string | null {
   const guid = asset.bimAnchor?.ifcGuid?.trim();
-  if (!guid || !asset.fileId || !asset.fileVersionId || !asset.file || !asset.fileVersion) {
-    return null;
-  }
+  const model = omAssetBimModelRef(asset, projectFiles);
+  if (!guid || !model) return null;
   const q = new URLSearchParams({
-    fileId: asset.fileId,
-    name: asset.file.name,
+    fileId: model.fileId,
+    name: model.fileName,
     projectId,
-    fileVersionId: asset.fileVersionId,
-    version: String(asset.fileVersion.version),
+    fileVersionId: model.fileVersionId,
+    version: String(model.version),
     guid,
     omAssetId: asset.id,
   });

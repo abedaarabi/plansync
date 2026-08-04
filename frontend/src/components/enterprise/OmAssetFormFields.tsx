@@ -127,7 +127,10 @@ export function assetDraftToCreateBody(d: AssetFormDraft): Parameters<typeof cre
   };
 }
 
-/** Patch body for edit — clears drawing link when no file is attached. */
+/**
+ * Patch body for edit — updates the drawing link without clearing a BIM element.
+ * Attaching a PDF resets sheet pin fields; use "Clear link" to drop the 3D anchor.
+ */
 export function assetDraftToPatchBody(d: AssetFormDraft) {
   const hasFile = d.attachFileId.trim().length > 0 && d.attachFileVersionId.trim().length > 0;
   return {
@@ -136,6 +139,9 @@ export function assetDraftToPatchBody(d: AssetFormDraft) {
       ? {
           fileId: d.attachFileId.trim(),
           fileVersionId: d.attachFileVersionId.trim(),
+          pageNumber: null,
+          annotationId: null,
+          pinJson: null,
         }
       : {
           fileId: null,

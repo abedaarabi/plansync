@@ -4,22 +4,36 @@ import type { LucideIcon } from "lucide-react";
 import { Boxes, Link2, Package, PanelRightOpen, Pencil, Unlink } from "lucide-react";
 import type { OmAssetRow } from "@/lib/api-client";
 import { assetHasSheetPin } from "@/lib/assetPinFocus";
-import { omAssetHasBimLink } from "@/lib/omAssetViewerNavigation";
+import {
+  omAssetCanOpenBim,
+  omAssetCanOpenDrawing,
+  omAssetHasBimLink,
+} from "@/lib/omAssetViewerNavigation";
+import type { CloudFile } from "@/types/projects";
 
 export type OmAssetsListActions = {
   projectId: string;
+  projectFiles: CloudFile[];
   formatLocation: (a: OmAssetRow) => string;
   onOpenDetail: (asset: OmAssetRow) => void;
   onEdit: (asset: OmAssetRow) => void;
   onLink: (asset: OmAssetRow) => void;
   onViewDrawing: (asset: OmAssetRow) => void;
+  onViewBim: (asset: OmAssetRow) => void;
   onClearLink: (assetId: string) => void;
   clearLinkPending: boolean;
 };
 
 type AssetRowActionsProps = Pick<
   OmAssetsListActions,
-  "onOpenDetail" | "onEdit" | "onLink" | "onViewDrawing" | "onClearLink" | "clearLinkPending"
+  | "projectFiles"
+  | "onOpenDetail"
+  | "onEdit"
+  | "onLink"
+  | "onViewDrawing"
+  | "onViewBim"
+  | "onClearLink"
+  | "clearLinkPending"
 > & {
   asset: OmAssetRow;
   className?: string;
@@ -27,14 +41,20 @@ type AssetRowActionsProps = Pick<
 
 export function AssetRowActions({
   asset,
+  projectFiles,
   onOpenDetail,
   onEdit,
   onLink,
   onViewDrawing,
+  onViewBim,
   onClearLink,
   clearLinkPending,
   className = "inline-flex items-center justify-end gap-0.5",
 }: AssetRowActionsProps) {
+  const canOpenDrawing = omAssetCanOpenDrawing(asset, projectFiles);
+  const canOpenBim = omAssetCanOpenBim(asset, projectFiles);
+  const hasAnyLink = Boolean(asset.fileId) || omAssetHasBimLink(asset);
+
   return (
     <div className={className}>
       <AssetRowActionButton
@@ -47,18 +67,22 @@ export function AssetRowActions({
         Icon={Pencil}
         onClick={() => onEdit(asset)}
       />
-      {asset.fileId ? (
+      {canOpenDrawing ? (
         <AssetRowActionButton
           label={
-            omAssetHasBimLink(asset)
-              ? `Open 3D for ${asset.tag}`
-              : assetHasSheetPin(asset)
-                ? `View pin for ${asset.tag}`
-                : `Open drawing for ${asset.tag}`
+            assetHasSheetPin(asset) ? `View pin for ${asset.tag}` : `Open drawing for ${asset.tag}`
           }
-          Icon={omAssetHasBimLink(asset) ? Boxes : Package}
+          Icon={Package}
           teal
           onClick={() => onViewDrawing(asset)}
+        />
+      ) : null}
+      {canOpenBim ? (
+        <AssetRowActionButton
+          label={`Open 3D for ${asset.tag}`}
+          Icon={Boxes}
+          teal
+          onClick={() => onViewBim(asset)}
         />
       ) : null}
       <AssetRowActionButton
@@ -66,11 +90,11 @@ export function AssetRowActions({
         Icon={Link2}
         onClick={() => onLink(asset)}
       />
-      {asset.fileId ? (
+      {hasAnyLink ? (
         <AssetRowActionButton
           label={
             omAssetHasBimLink(asset)
-              ? `Clear 3D link for ${asset.tag}`
+              ? `Clear model / drawing link for ${asset.tag}`
               : `Clear drawing link for ${asset.tag}`
           }
           Icon={Unlink}
@@ -122,7 +146,16 @@ function AssetRowActionButton({
 }
 
 export function DrawingStatusBadge({ asset }: { asset: OmAssetRow }) {
-  if (omAssetHasBimLink(asset)) {
+  const hasBim = omAssetHasBimLink(asset);
+  const hasSheet = Boolean(asset.fileId) || assetHasSheetPin(asset);
+  if (hasBim && hasSheet) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:text-sky-200">
+        3D + sheet
+      </span>
+    );
+  }
+  if (hasBim) {
     return (
       <span className="inline-flex items-center rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:text-sky-200">
         3D model

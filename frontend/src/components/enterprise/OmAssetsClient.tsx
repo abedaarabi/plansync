@@ -28,7 +28,7 @@ import { openBimViewer } from "@/lib/bim/openBimViewer";
 import {
   buildOmAssetViewerQuery,
   omAssetBimViewerHref,
-  omAssetHasBimLink,
+  omAssetLinkedPdfFile,
   omAssetViewerMode,
 } from "@/lib/omAssetViewerNavigation";
 import { qk } from "@/lib/queryKeys";
@@ -267,7 +267,7 @@ export function OmAssetsClient({ projectId }: Props) {
         pageNumber: null,
         annotationId: null,
         pinJson: null,
-        bimAnchor: null,
+        // Keep bimAnchor so a linked PDF does not drop the 3D element.
       });
     },
     onSuccess: async () => {
@@ -304,26 +304,29 @@ export function OmAssetsClient({ projectId }: Props) {
     setLinkExpandedFileId(null);
   }
 
-  function openViewerForLinkedAsset(asset: OmAssetRow) {
-    if (omAssetHasBimLink(asset)) {
-      const href = omAssetBimViewerHref(projectId, asset);
-      if (!href) {
-        toast.error("Could not open 3D model for this asset.");
-        return;
-      }
-      openBimViewer(href);
-      return;
-    }
-    if (!asset.fileId || !project) return;
-    const f = project.files.find((x) => x.id === asset.fileId);
+  function openDrawingForLinkedAsset(asset: OmAssetRow) {
+    if (!project) return;
+    const f = omAssetLinkedPdfFile(asset, project.files);
     if (!f) {
-      toast.error("Drawing file not found in project.");
+      toast.error("No PDF drawing linked to this asset.");
       return;
     }
     const sorted = sortedVersions(f);
     const verRow = sorted.find((v) => v.id === asset.fileVersionId) ?? sorted[0];
-    if (!verRow) return;
+    if (!verRow) {
+      toast.error("No revision available for this drawing.");
+      return;
+    }
     openViewerForAsset(f, asset, verRow.id, assetHasSheetPin(asset) ? "focus" : "place");
+  }
+
+  function openBimForLinkedAsset(asset: OmAssetRow) {
+    const href = omAssetBimViewerHref(projectId, asset, project?.files ?? []);
+    if (!href) {
+      toast.error("Could not open 3D model for this asset.");
+      return;
+    }
+    openBimViewer(href);
   }
 
   function startPlacePinForAsset(asset: OmAssetRow) {
@@ -521,12 +524,14 @@ export function OmAssetsClient({ projectId }: Props) {
             <div className="hidden md:block">
               <OmAssetsTable
                 projectId={projectId}
+                projectFiles={project?.files ?? []}
                 rows={filteredRows}
                 formatLocation={formatAssetLocation}
                 onOpenDetail={setDetailAsset}
                 onEdit={handleEditAsset}
                 onLink={handleLinkAsset}
-                onViewDrawing={openViewerForLinkedAsset}
+                onViewDrawing={openDrawingForLinkedAsset}
+                onViewBim={openBimForLinkedAsset}
                 onClearLink={handleClearLink}
                 clearLinkPending={clearLinkMut.isPending}
               />
@@ -534,12 +539,14 @@ export function OmAssetsClient({ projectId }: Props) {
             <div className="md:hidden">
               <OmAssetsMobileList
                 projectId={projectId}
+                projectFiles={project?.files ?? []}
                 rows={filteredRows}
                 formatLocation={formatAssetLocation}
                 onOpenDetail={setDetailAsset}
                 onEdit={handleEditAsset}
                 onLink={handleLinkAsset}
-                onViewDrawing={openViewerForLinkedAsset}
+                onViewDrawing={openDrawingForLinkedAsset}
+                onViewBim={openBimForLinkedAsset}
                 onClearLink={handleClearLink}
                 clearLinkPending={clearLinkMut.isPending}
               />
@@ -918,7 +925,7 @@ export function OmAssetsClient({ projectId }: Props) {
         onClose={() => setDetailAsset(null)}
         projectId={projectId}
         asset={detailLive}
-        pdfFiles={pdfFiles}
+        projectFiles={project?.files ?? []}
         onEdit={() => {
           if (!detailLive) return;
           setDetailAsset(null);

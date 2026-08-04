@@ -531,6 +531,8 @@ export type OccupantPortalMeta = {
     name: string;
     category: string | null;
     locationLabel: string | null;
+    /** Linked BIM element when the asset QR is bound to a 3D element. */
+    element?: { name: string | null; ifcType: string | null } | null;
   } | null;
 };
 

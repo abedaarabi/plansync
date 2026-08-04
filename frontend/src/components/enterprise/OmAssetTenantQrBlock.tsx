@@ -19,10 +19,22 @@ type Props = {
   assetId: string;
   assetTag: string;
   assetName: string;
+  /** Display label for a linked BIM element, when the asset has one. */
+  elementLabel?: string | null;
   enabled: boolean;
 };
 
-export function OmAssetTenantQrBlock({ projectId, assetId, assetTag, assetName, enabled }: Props) {
+// fallow-ignore-next-line complexity
+export function OmAssetTenantQrBlock({
+  projectId,
+  assetId,
+  assetTag,
+  assetName,
+  elementLabel,
+  enabled,
+}: Props) {
+  const hasElement = Boolean(elementLabel?.trim());
+  const elementTrimmed = elementLabel?.trim() || "";
   const qc = useQueryClient();
   const { primary } = useEnterpriseWorkspace();
   const tenantPortalHref = primary
@@ -110,11 +122,13 @@ export function OmAssetTenantQrBlock({ projectId, assetId, assetTag, assetName, 
       toast.error("Allow pop-ups to print the label.");
       return;
     }
-    const title = `${assetTag} — ${assetName}`;
+    const title = hasElement
+      ? `${assetTag} — ${assetName} · ${elementTrimmed}`
+      : `${assetTag} — ${assetName}`;
     w.document
       .write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title></head><body style="font-family:system-ui,sans-serif;text-align:center;padding:32px;max-width:400px;margin:0 auto">
 <p style="font-size:14px;font-weight:600;margin:0 0 8px">${title}</p>
-<p style="font-size:12px;color:#444;margin:0 0 16px">Scan to report an issue for this equipment.</p>
+<p style="font-size:12px;color:#444;margin:0 0 16px">Scan to report an issue for this equipment${hasElement ? " and linked element" : ""}.</p>
 <img src="${qrDataUrl}" width="220" height="220" alt="QR code" style="display:block;margin:0 auto" />
 <p style="font-size:10px;color:#666;word-break:break-all;margin-top:16px">${fullUrl}</p>
 </body></html>`);
@@ -129,7 +143,7 @@ export function OmAssetTenantQrBlock({ projectId, assetId, assetTag, assetName, 
     <section className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-3">
       <h3 className="mb-2 flex items-center gap-2 border-b border-[var(--enterprise-border)] pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
         <QrCode className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" strokeWidth={2} />
-        Occupant QR (building link + asset)
+        Occupant QR (building link + asset{hasElement ? " + element" : ""})
       </h3>
       {tokensPending ? (
         <p className="text-[13px] text-[var(--enterprise-text-muted)]">Loading portal links…</p>
@@ -144,14 +158,23 @@ export function OmAssetTenantQrBlock({ projectId, assetId, assetTag, assetName, 
             Occupant hub
           </Link>{" "}
           page. Each asset has a fixed equipment id; combined with your chosen building link it
-          forms the full occupant URL below — that is how the report is bound to this device (not a
-          random link).
+          forms the full occupant URL below — that is how the report is bound to this device
+          {hasElement ? " and its linked element" : ""} (not a random link).
         </p>
       ) : (
         <div className="space-y-3">
+          {hasElement ? (
+            <p className="text-[12px] leading-snug text-[var(--enterprise-text-muted)]">
+              Linked element:{" "}
+              <span className="font-medium text-[var(--enterprise-text)]">{elementTrimmed}</span>.
+              Occupants who scan will see this element on the report form, and the request will open
+              on it in the model.
+            </p>
+          ) : null}
           <label className="block text-[13px]">
             <span className="mb-1 block font-medium text-[var(--enterprise-text)]">
-              Building link to embed (binds this asset when QR is generated)
+              Building link to embed (binds this asset
+              {hasElement ? " and element" : ""} when QR is generated)
             </span>
             <p className="mb-2 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
               Same link as on the Occupant hub; QR uses this plus{" "}
@@ -185,7 +208,8 @@ export function OmAssetTenantQrBlock({ projectId, assetId, assetTag, assetName, 
               />
               <div className="flex w-full flex-col gap-2 sm:flex-1">
                 <p className="text-[11px] font-medium text-[var(--enterprise-text)]">
-                  Full occupant URL (building + this asset)
+                  Full occupant URL (building + this asset
+                  {hasElement ? " + element" : ""})
                 </p>
                 <p className="break-all font-mono text-[11px] text-[var(--enterprise-text-muted)]">
                   {fullUrl}

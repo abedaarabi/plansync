@@ -15,12 +15,14 @@ type Props = OmAssetsListActions & {
 
 export function OmAssetsTable({
   projectId,
+  projectFiles,
   rows,
   formatLocation,
   onOpenDetail,
   onEdit,
   onLink,
   onViewDrawing,
+  onViewBim,
   onClearLink,
   clearLinkPending,
 }: Props) {
@@ -104,10 +106,12 @@ export function OmAssetsTable({
                 <td className="px-2 py-2.5 text-right">
                   <AssetRowActions
                     asset={a}
+                    projectFiles={projectFiles}
                     onOpenDetail={onOpenDetail}
                     onEdit={onEdit}
                     onLink={onLink}
                     onViewDrawing={onViewDrawing}
+                    onViewBim={onViewBim}
                     onClearLink={onClearLink}
                     clearLinkPending={clearLinkPending}
                   />
@@ -123,12 +127,14 @@ export function OmAssetsTable({
 
 export function OmAssetsMobileList({
   projectId,
+  projectFiles,
   rows,
   formatLocation,
   onOpenDetail,
   onEdit,
   onLink,
   onViewDrawing,
+  onViewBim,
   onClearLink,
   clearLinkPending,
 }: Props) {
@@ -178,11 +184,13 @@ export function OmAssetsMobileList({
             </div>
             <AssetRowActions
               asset={a}
+              projectFiles={projectFiles}
               className="mt-2 flex items-center justify-end gap-0.5"
               onOpenDetail={onOpenDetail}
               onEdit={onEdit}
               onLink={onLink}
               onViewDrawing={onViewDrawing}
+              onViewBim={onViewBim}
               onClearLink={onClearLink}
               clearLinkPending={clearLinkPending}
             />

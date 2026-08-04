@@ -25,6 +25,7 @@ type Props = { token: string; initialAssetSecret?: string };
 
 type Phase = "form" | "done";
 
+// fallow-ignore-next-line complexity
 export function OccupantPortalPublicClient({ token, initialAssetSecret }: Props) {
   const assetSecret = initialAssetSecret?.trim() || undefined;
 
@@ -184,6 +185,24 @@ export function OccupantPortalPublicClient({ token, initialAssetSecret }: Props)
             <span className="font-normal text-[var(--enterprise-text-muted)]"> — </span>
             {meta.asset.name}
           </p>
+          {meta.asset.element ? (
+            <p className="mt-1 text-[var(--enterprise-text)]">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                Element
+              </span>
+              <span className="mt-0.5 block">
+                {meta.asset.element.name?.trim() ||
+                  meta.asset.element.ifcType?.trim() ||
+                  "Linked model element"}
+                {meta.asset.element.name?.trim() && meta.asset.element.ifcType?.trim() ? (
+                  <span className="text-[var(--enterprise-text-muted)]">
+                    {" "}
+                    · {meta.asset.element.ifcType.trim()}
+                  </span>
+                ) : null}
+              </span>
+            </p>
+          ) : null}
           {meta.asset.locationLabel?.trim() ? (
             <p className="mt-1 text-[var(--enterprise-text-muted)]">
               {meta.asset.locationLabel.trim()}
