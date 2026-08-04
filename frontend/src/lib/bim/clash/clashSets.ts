@@ -1,6 +1,7 @@
 import type { BimClashSetDef, BimClashSetRule } from "@plansync/shared/bimClashTypes";
 import type { BimQuantityEntry, BimQuantityIndex } from "@plansync/shared/bimTypes";
 import { disciplineForIfcType } from "@/lib/bim/discipline";
+import { baseFederationModelId } from "@/lib/bim/federation";
 
 export type ResolvedClashElement = {
   guid: string;
@@ -32,13 +33,20 @@ function entryMatchesRule(entry: BimQuantityEntry, rule: BimClashSetRule): boole
   switch (rule.field) {
     case "model": {
       const mid = (entry.sourceModelId ?? entry.sourceFileVersionId ?? "").toLowerCase();
+      const midBase = baseFederationModelId(mid);
       const label = (entry.sourceLabel ?? "").toLowerCase();
       const fvid = (entry.sourceFileVersionId ?? "").toLowerCase();
-      if (values.has(mid) || values.has(label) || values.has(fvid)) return true;
-      // Match `fileId:fileVersionId` rules against either half.
-      for (const v of values) {
-        if (fvid && (v === fvid || v.endsWith(`:${fvid}`))) return true;
-        if (mid && (v === mid || mid.endsWith(`:${v}`) || v.endsWith(`:${mid}`))) return true;
+      // Match bare member ids and progressive tile ids (`memberId__tileId`).
+      for (const raw of values) {
+        const v = raw.toLowerCase();
+        const vBase = baseFederationModelId(v);
+        if (v === mid || v === midBase || vBase === mid || vBase === midBase) return true;
+        if (v === label || v === fvid || vBase === fvid) return true;
+        if (fvid && (v.endsWith(`:${fvid}`) || vBase.endsWith(`:${fvid}`))) return true;
+        if (mid && (mid.endsWith(`:${v}`) || v.endsWith(`:${mid}`))) return true;
+        if (midBase && (midBase.endsWith(`:${vBase}`) || vBase.endsWith(`:${midBase}`))) {
+          return true;
+        }
       }
       return false;
     }

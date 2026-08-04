@@ -132,6 +132,18 @@ describe("clashSets", () => {
     expect(resolved.map((e) => e.guid)).toEqual(["g-beam"]);
   });
 
+  it("matches progressive tile model ids to bare member ids", () => {
+    const index = sampleIndex();
+    const set = {
+      label: "Model A tile",
+      rules: [{ field: "model" as const, values: ["fileA:fv-a__L01"] }],
+    };
+    expect(resolveClashSet(index, set).map((e) => e.guid)).toEqual(["g-beam"]);
+    expect(ifcTypeCountsForModel(index, "fileB:fv-b__0_0_0")).toEqual([
+      { ifcType: "IfcDuctSegment", count: 1 },
+    ]);
+  });
+
   it("labels and sorts models from file names", () => {
     expect(displayModelLabel("MEP_Services.ifc")).toBe("MEP_Services");
     const sorted = sortModelsForClashPair([

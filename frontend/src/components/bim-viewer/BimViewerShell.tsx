@@ -88,6 +88,7 @@ import {
 } from "@/lib/bim/viewportAppearanceStorage";
 import {
   buildModelId,
+  collapseLoadedModelsByMember,
   mergeFederatedQuantityIndices,
   syncFederationViewerUrl,
   type BimFederationMember,
@@ -328,9 +329,14 @@ export function BimViewerShell(props: {
     setActiveDock("clashes");
   }, [phase.kind, props.initialPanel, props.workspaceMode]);
 
-  const clashModels = useMemo(
-    () => loadedModels.map((m) => ({ modelId: m.modelId, name: m.name })),
+  const logicalLoadedModels = useMemo(
+    () => collapseLoadedModelsByMember(loadedModels),
     [loadedModels],
+  );
+
+  const clashModels = useMemo(
+    () => logicalLoadedModels.map((m) => ({ modelId: m.modelId, name: m.name })),
+    [logicalLoadedModels],
   );
 
   const clash = useBimClashSession({
@@ -2585,7 +2591,7 @@ export function BimViewerShell(props: {
           setB: clash.setB,
           setACount: clash.setCounts.a,
           setBCount: clash.setCounts.b,
-          models: loadedModels.map((m) => ({
+          models: logicalLoadedModels.map((m) => ({
             modelId: m.modelId,
             name: m.name,
             visible: m.visible,
@@ -2871,7 +2877,7 @@ export function BimViewerShell(props: {
               onAppearanceChange={onAppearanceChange}
               projectId={resolvedProjectId}
               federationMembers={federationMembers}
-              loadedModels={loadedModels}
+              loadedModels={logicalLoadedModels}
               addingFileVersionId={addingFileVersionId}
               onAddFederationMember={onAddFederationMember}
               onRemoveFederationMember={onRemoveFederationMember}

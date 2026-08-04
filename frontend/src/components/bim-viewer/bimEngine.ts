@@ -42,7 +42,11 @@ import {
   mergeViewportAppearance,
   type BimViewportAppearance,
 } from "@/lib/bim/viewportAppearance";
-import { buildModelId, type BimFederationMember } from "@/lib/bim/federation";
+import {
+  baseFederationModelId,
+  buildModelId,
+  type BimFederationMember,
+} from "@/lib/bim/federation";
 import { assertIfcBytesIntact } from "@/lib/bim/ifcBytes";
 import { convertIfcInWorker } from "@/lib/bim/ifcConvertClient";
 import { getBimCameraNavigationProfile } from "@/lib/bim/cameraNavigation";
@@ -564,10 +568,15 @@ export class BimEngine {
 
   // fallow-ignore-next-line unused-class-member
   async setModelVisible(modelId: string, visible: boolean): Promise<void> {
-    const entry = this.modelRegistry.get(modelId);
-    if (!entry) return;
-    entry.visible = visible;
-    entry.model.object.visible = visible;
+    const baseId = baseFederationModelId(modelId);
+    let matched = false;
+    for (const [id, entry] of this.modelRegistry) {
+      if (id !== modelId && baseFederationModelId(id) !== baseId) continue;
+      entry.visible = visible;
+      entry.model.object.visible = visible;
+      matched = true;
+    }
+    if (!matched) return;
     await this.mustComponents().get(OBC.FragmentsManager).core.update(true);
     this.invalidatePlanSilhouette();
     this.bumpRender();

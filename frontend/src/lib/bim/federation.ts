@@ -15,6 +15,43 @@ export function buildModelId(
   return `${member.fileId}:${member.fileVersionId}`;
 }
 
+/**
+ * Progressive geometry tiles use `${memberId}__${tileId}` in the fragments registry.
+ * Quantity-index / clash sets always use the bare member id from {@link buildModelId}.
+ */
+export function baseFederationModelId(modelId: string): string {
+  const sep = modelId.indexOf("__");
+  return sep === -1 ? modelId : modelId.slice(0, sep);
+}
+
+type LoadedModelLike = {
+  modelId: string;
+  fileId: string;
+  fileVersionId: string;
+  name: string;
+  visible: boolean;
+  version?: string | null;
+};
+
+/**
+ * Collapse storey/partition tiles into one logical IFC row (same file name otherwise
+ * repeats once per tile in clash / federation pickers).
+ */
+export function collapseLoadedModelsByMember<T extends LoadedModelLike>(models: T[]): T[] {
+  const byMember = new Map<string, T>();
+  for (const m of models) {
+    const modelId = buildModelId(m);
+    const prev = byMember.get(modelId);
+    if (!prev) {
+      byMember.set(modelId, { ...m, modelId });
+      continue;
+    }
+    // Hide only when every tile is hidden (visibility toggles apply to all tiles).
+    byMember.set(modelId, { ...prev, visible: prev.visible && m.visible });
+  }
+  return [...byMember.values()];
+}
+
 // fallow-ignore-next-line complexity
 export function parseFederationMembers(
   primary: BimFederationMember,
