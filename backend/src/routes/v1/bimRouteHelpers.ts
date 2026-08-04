@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { prisma } from "../../lib/prisma.js";
-import { loadProjectForMember } from "../../lib/projectAccess.js";
+import { isProjectAccessError, loadProjectForMember } from "../../lib/projectAccess.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
 import type { Env } from "../../lib/env.js";
 import { getObjectStream } from "../../lib/s3.js";
@@ -32,7 +32,9 @@ export async function authorizeBimFileVersion(
   const fv = await loadBimFileVersion(fileVersionId);
   if (!fv) return { response: c.json({ error: "Not found" }, 404) };
   const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-  if (!access) return { response: c.json({ error: "Forbidden" }, 403) };
+  if (isProjectAccessError(access)) {
+    return { response: c.json({ error: access.error }, access.status) };
+  }
   if (opts?.requirePro) {
     const pro = requireBimPro(fv.file.project.workspace);
     if (pro) return { response: c.json({ error: pro.error }, pro.status) };

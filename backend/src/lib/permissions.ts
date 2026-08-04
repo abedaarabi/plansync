@@ -185,11 +185,25 @@ export async function loadProjectWithAuth(
   };
 }
 
+export type ProjectMemberAccess =
+  | { project: Project & { workspace: Workspace } }
+  | { error: string; status: 403 | 404 };
+
+/**
+ * Discriminator for {@link loadProjectForMember} results.
+ * Never use `if (!access)` — denied access is still a truthy `{ error }` object.
+ */
+export function isProjectAccessError(
+  access: ProjectMemberAccess,
+): access is { error: string; status: 403 | 404 } {
+  return "error" in access;
+}
+
 /** Backwards-compatible wrapper returning only project or error. */
 export async function loadProjectForMember(
   projectId: string,
   userId: string,
-): Promise<{ project: Project & { workspace: Workspace } } | { error: string; status: 403 | 404 }> {
+): Promise<ProjectMemberAccess> {
   const r = await loadProjectWithAuth(projectId, userId);
   if ("error" in r) return r;
   return { project: r.ctx.project };

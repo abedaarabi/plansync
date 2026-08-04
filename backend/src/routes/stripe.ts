@@ -8,6 +8,7 @@ import { inferBillingPlanFromSubscription } from "../lib/stripeBillingPlan.js";
 import { resolveEnterpriseMonthlyPriceId } from "../lib/stripeEnterprisePrice.js";
 import { resolveProMonthlyPriceId } from "../lib/stripeProPrice.js";
 import { sessionMiddleware } from "../middleware/session.js";
+import { processStripeWebhookOnce } from "../lib/stripeWebhookProcess.js";
 
 function subscriptionPeriodEnd(sub: Stripe.Subscription): Date | null {
   const t = (sub as unknown as { current_period_end?: number }).current_period_end;
@@ -559,99 +560,112 @@ export function stripeRoutes(env: Env, auth: AuthLike) {
       return c.json({ error: "Invalid signature" }, 400);
     }
 
-    const existing = await prisma.processedStripeEvent.findUnique({
-      where: { eventId: event.id },
-    });
-    if (existing) return c.json({ received: true, duplicate: true });
-
-    await prisma.processedStripeEvent.create({ data: { eventId: event.id } });
-
-    try {
-      switch (event.type) {
-        case "checkout.session.completed": {
-          const sess = event.data.object as Stripe.Checkout.Session;
-          const subId =
-            typeof sess.subscription === "string" ? sess.subscription : sess.subscription?.id;
-          const customerId = typeof sess.customer === "string" ? sess.customer : sess.customer?.id;
-          const wsId = sess.metadata?.workspaceId;
-          if (wsId && subId && customerId) {
-            const pt = sess.metadata?.planTier;
-            const checkoutTier = pt === "pro" || pt === "enterprise" ? pt : null;
-            await persistCheckoutSubscriptionToWorkspace(
-              stripe,
-              env,
-              wsId,
-              customerId,
-              subId,
-              "checkout.session.completed",
-              checkoutTier,
-            );
-          }
-          break;
-        }
-        case "customer.subscription.updated":
-        case "customer.subscription.deleted": {
-          const sub = event.data.object as Stripe.Subscription;
-          const found = await prisma.workspace.findFirst({
-            where: { stripeSubscriptionId: sub.id },
-          });
-          if (found) {
-            let billingPlan: "pro" | "enterprise" | undefined;
-            if (event.type === "customer.subscription.updated") {
-              try {
-                const full = await stripe.subscriptions.retrieve(sub.id, {
-                  expand: ["items.data.price"],
-                });
-                const inferred = await inferBillingPlanFromSubscription(stripe, env, full);
-                if (inferred) billingPlan = inferred;
-              } catch (e) {
-                console.error("[stripe] subscription.updated infer billingPlan", e);
-              }
+    const outcome = await processStripeWebhookOnce(
+      event.id,
+      {
+        hasProcessed: async (eventId) => {
+          const row = await prisma.processedStripeEvent.findUnique({ where: { eventId } });
+          return Boolean(row);
+        },
+        markProcessed: async (eventId) => {
+          await prisma.processedStripeEvent.create({ data: { eventId } });
+        },
+      },
+      async () => {
+        switch (event.type) {
+          case "checkout.session.completed": {
+            const sess = event.data.object as Stripe.Checkout.Session;
+            const subId =
+              typeof sess.subscription === "string" ? sess.subscription : sess.subscription?.id;
+            const customerId =
+              typeof sess.customer === "string" ? sess.customer : sess.customer?.id;
+            const wsId = sess.metadata?.workspaceId;
+            if (wsId && subId && customerId) {
+              const pt = sess.metadata?.planTier;
+              const checkoutTier = pt === "pro" || pt === "enterprise" ? pt : null;
+              await persistCheckoutSubscriptionToWorkspace(
+                stripe,
+                env,
+                wsId,
+                customerId,
+                subId,
+                "checkout.session.completed",
+                checkoutTier,
+              );
             }
-            await prisma.workspace.update({
-              where: { id: found.id },
-              data: {
-                subscriptionStatus: sub.status,
-                currentPeriodEnd: subscriptionPeriodEnd(sub),
-                ...(billingPlan != null ? { billingPlan } : {}),
-              },
-            });
-            await logActivity(found.id, ActivityType.SUBSCRIPTION_UPDATED, {
-              metadata: { status: sub.status, event: event.type, billingPlan },
-            });
+            break;
           }
-          break;
-        }
-        case "invoice.payment_failed": {
-          const inv = event.data.object as Stripe.Invoice;
-          const subRef = (inv as unknown as { subscription?: string | Stripe.Subscription | null })
-            .subscription;
-          const subId =
-            typeof subRef === "string" ? subRef : subRef && "id" in subRef ? subRef.id : undefined;
-          if (subId) {
+          case "customer.subscription.updated":
+          case "customer.subscription.deleted": {
+            const sub = event.data.object as Stripe.Subscription;
             const found = await prisma.workspace.findFirst({
-              where: { stripeSubscriptionId: subId },
+              where: { stripeSubscriptionId: sub.id },
             });
             if (found) {
+              let billingPlan: "pro" | "enterprise" | undefined;
+              if (event.type === "customer.subscription.updated") {
+                try {
+                  const full = await stripe.subscriptions.retrieve(sub.id, {
+                    expand: ["items.data.price"],
+                  });
+                  const inferred = await inferBillingPlanFromSubscription(stripe, env, full);
+                  if (inferred) billingPlan = inferred;
+                } catch (e) {
+                  console.error("[stripe] subscription.updated infer billingPlan", e);
+                }
+              }
               await prisma.workspace.update({
                 where: { id: found.id },
-                data: { subscriptionStatus: "past_due" },
+                data: {
+                  subscriptionStatus: sub.status,
+                  currentPeriodEnd: subscriptionPeriodEnd(sub),
+                  ...(billingPlan != null ? { billingPlan } : {}),
+                },
               });
               await logActivity(found.id, ActivityType.SUBSCRIPTION_UPDATED, {
-                metadata: { status: "past_due", event: "invoice.payment_failed" },
+                metadata: { status: sub.status, event: event.type, billingPlan },
               });
             }
+            break;
           }
-          break;
+          case "invoice.payment_failed": {
+            const inv = event.data.object as Stripe.Invoice;
+            const subRef = (
+              inv as unknown as { subscription?: string | Stripe.Subscription | null }
+            ).subscription;
+            const subId =
+              typeof subRef === "string"
+                ? subRef
+                : subRef && "id" in subRef
+                  ? subRef.id
+                  : undefined;
+            if (subId) {
+              const found = await prisma.workspace.findFirst({
+                where: { stripeSubscriptionId: subId },
+              });
+              if (found) {
+                await prisma.workspace.update({
+                  where: { id: found.id },
+                  data: { subscriptionStatus: "past_due" },
+                });
+                await logActivity(found.id, ActivityType.SUBSCRIPTION_UPDATED, {
+                  metadata: { status: "past_due", event: "invoice.payment_failed" },
+                });
+              }
+            }
+            break;
+          }
+          default:
+            break;
         }
-        default:
-          break;
-      }
-    } catch (e) {
-      console.error("Stripe webhook handler error", e);
+      },
+    );
+
+    if (outcome.status === "duplicate") return c.json({ received: true, duplicate: true });
+    if (outcome.status === "failed") {
+      console.error("Stripe webhook handler error", outcome.error);
       return c.json({ error: "Handler failed" }, 500);
     }
-
     return c.json({ received: true });
   });
 

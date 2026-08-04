@@ -32,4 +32,27 @@ describe("v1 API smoke", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
+
+  it("BIM file-version routes require auth (no anonymous cross-tenant reads)", async () => {
+    const app = v1Routes(mockAuth, testEnv());
+    const res = await app.request("http://localhost/file-versions/fv_x/bim/status", {
+      method: "GET",
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("file upload routes require auth", async () => {
+    const app = v1Routes(mockAuth, testEnv());
+    const res = await app.request("http://localhost/files/presign-upload", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: "ws",
+        projectId: "p",
+        fileName: "a.pdf",
+        sizeBytes: 1,
+      }),
+    });
+    expect(res.status).toBe(401);
+  });
 });

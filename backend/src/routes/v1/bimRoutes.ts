@@ -3,7 +3,7 @@ import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
-import { loadProjectForMember } from "../../lib/projectAccess.js";
+import { isProjectAccessError, loadProjectForMember } from "../../lib/projectAccess.js";
 import type { Env } from "../../lib/env.js";
 import { getObjectStream } from "../../lib/s3.js";
 import { webStreamToBuffer } from "../../lib/bim/streamUtils.js";
@@ -203,7 +203,7 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     if (fv.fileId !== base.fileId) return c.json({ error: "Versions must be same file" }, 400);
 
     const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-    if (!access) return c.json({ error: "Forbidden" }, 403);
+    if (isProjectAccessError(access)) return c.json({ error: access.error }, access.status);
 
     const [currentRows, baseRows] = await Promise.all([
       prisma.bimElementVersion.findMany({
@@ -396,7 +396,7 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     if (fv.fileId !== other.fileId) return c.json({ error: "Versions must be same file" }, 400);
 
     const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-    if (!access) return c.json({ error: "Forbidden" }, 403);
+    if (isProjectAccessError(access)) return c.json({ error: access.error }, access.status);
 
     const [a, b] = await Promise.all([
       readBimQuantityIndex(env, fv),
@@ -635,7 +635,7 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     const view = await prisma.bimSavedView.findUnique({ where: { id: c.req.param("viewId") } });
     if (!view) return c.json({ error: "Not found" }, 404);
     const access = await loadProjectForMember(view.projectId, c.get("user").id);
-    if (!access) return c.json({ error: "Forbidden" }, 403);
+    if (isProjectAccessError(access)) return c.json({ error: access.error }, access.status);
     await prisma.bimSavedView.delete({ where: { id: view.id } });
     return c.json({ ok: true });
   });
@@ -762,7 +762,7 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
       return c.json({ error: "Not found" }, 404);
     }
     const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-    if (!access) return c.json({ error: "Forbidden" }, 403);
+    if (isProjectAccessError(access)) return c.json({ error: access.error }, access.status);
     const pro = requireBimPro(fv.file.project.workspace);
     if (pro) return c.json({ error: pro.error }, pro.status);
 
@@ -777,7 +777,7 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
   r.get("/projects/:projectId/drawing-sheets", needUser, async (c) => {
     const projectId = c.req.param("projectId");
     const access = await loadProjectForMember(projectId, c.get("user").id);
-    if ("error" in access) return c.json({ error: access.error }, access.status);
+    if (isProjectAccessError(access)) return c.json({ error: access.error }, access.status);
     const pro = requireBimPro(access.project.workspace);
     if (pro) return c.json({ error: pro.error }, pro.status);
 
@@ -853,7 +853,7 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     const map = await prisma.drawingLevelMap.findUnique({ where: { id: c.req.param("mapId") } });
     if (!map) return c.json({ error: "Not found" }, 404);
     const access = await loadProjectForMember(map.projectId, c.get("user").id);
-    if (!access) return c.json({ error: "Forbidden" }, 403);
+    if (isProjectAccessError(access)) return c.json({ error: access.error }, access.status);
 
     const fv = await loadBimFileVersion(map.ifcFileVersionId);
     if (!fv) return c.json({ error: "Not found" }, 404);
@@ -877,7 +877,7 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     const map = await prisma.drawingLevelMap.findUnique({ where: { id: c.req.param("mapId") } });
     if (!map) return c.json({ error: "Not found" }, 404);
     const access = await loadProjectForMember(map.projectId, c.get("user").id);
-    if (!access) return c.json({ error: "Forbidden" }, 403);
+    if (isProjectAccessError(access)) return c.json({ error: access.error }, access.status);
 
     const fv = await loadBimFileVersion(map.ifcFileVersionId);
     if (!fv) return c.json({ error: "Not found" }, 404);
