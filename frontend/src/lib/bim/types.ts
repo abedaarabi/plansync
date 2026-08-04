@@ -21,6 +21,8 @@ export type BimConversionStatus = {
   bimPublishedAt: string | null;
   levelCount: number;
   mappedSheetCount: number;
+  /** Source IFC byte length when known (from FileVersion.sizeBytes). */
+  sourceByteLength?: number | null;
 };
 
 export type BimSavedViewRecord = {

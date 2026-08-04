@@ -203,9 +203,96 @@ function elevationBounds(
   return [0, 0, z, 1, 1, z + 3];
 }
 
+function monolithicOnly(monolithic: Buffer): FragmentsConvertResult {
+  return {
+    monolithic,
+    tiles: [
+      {
+        id: "0_0_0",
+        buffer: monolithic,
+        bounds: [0, 0, 0, 0, 0, 0],
+        guidCount: 0,
+      },
+    ],
+  };
+}
+
+function chunkGroupCount(monolithicBytes: number): number {
+  return Math.min(MAX_STOREY_TILES, Math.max(2, Math.ceil(monolithicBytes / TILE_MIN_BYTES)));
+}
+
+async function convertSubsetFile(path: string): Promise<Buffer> {
+  const subset = await readFile(path);
+  const tileFrag = await convertIfcToFragments(new Uint8Array(subset));
+  return Buffer.from(tileFrag);
+}
+
+async function buildStoreyTiles(
+  dir: string,
+  inputPath: string,
+  storeys: StoreyGroup[],
+  onProgress?: (fraction: number) => void,
+): Promise<FragmentsTile[]> {
+  const limited = storeys.slice(0, MAX_STOREY_TILES);
+  const splitter = new FRAGS.IfcSplitter(nodeIfcSplitterIO());
+  const tiles: FragmentsTile[] = [];
+  for (let i = 0; i < limited.length; i++) {
+    const storey = limited[i]!;
+    const outPath = join(dir, `storey_${i}.ifc`);
+    try {
+      await splitter.extract(inputPath, storey.expressIds, outPath);
+      const buffer = await convertSubsetFile(outPath);
+      tiles.push({
+        id: storey.id,
+        buffer,
+        bounds: elevationBounds(storey.elevation),
+        guidCount: storey.expressIds.length,
+      });
+    } catch (err) {
+      console.warn("[bim.fragments] storey tile skipped", storey.name, err);
+    }
+    onProgress?.((i + 1) / limited.length);
+  }
+  return tiles;
+}
+
 /**
- * Convert IFC → Fragments; for large multi-storey models also produce storey tiles
- * via IfcSplitter.extract + per-storey IfcImporter.
+ * Split a large IFC into roughly equal element groups when storey tiling is
+ * unavailable (single-storey warehouses, plant models, infrastructure, etc.).
+ */
+async function buildChunkTiles(
+  dir: string,
+  inputPath: string,
+  numGroups: number,
+  onProgress?: (fraction: number) => void,
+): Promise<FragmentsTile[]> {
+  const splitter = new FRAGS.IfcSplitter(nodeIfcSplitterIO());
+  const groups = await splitter.split(inputPath, numGroups, (groupId) =>
+    join(dir, `chunk_${groupId}.ifc`),
+  );
+  const entries = [...groups.entries()].sort((a, b) => a[0] - b[0]);
+  const tiles: FragmentsTile[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const [groupId, data] = entries[i]!;
+    try {
+      const buffer = await convertSubsetFile(data.path);
+      tiles.push({
+        id: `chunk_${groupId}`,
+        buffer,
+        bounds: [0, 0, i, 1, 1, i + 1],
+        guidCount: data.ids.size,
+      });
+    } catch (err) {
+      console.warn("[bim.fragments] chunk tile skipped", groupId, err);
+    }
+    onProgress?.((i + 1) / Math.max(1, entries.length));
+  }
+  return tiles;
+}
+
+/**
+ * Convert IFC → Fragments; for large models also produce tiles via storey
+ * extract when possible, otherwise equal element-group splits.
  */
 // fallow-ignore-next-line complexity
 export async function convertIfcToFragmentsWithTiles(
@@ -218,64 +305,35 @@ export async function convertIfcToFragmentsWithTiles(
   );
   const monolithic = Buffer.from(fragBytes);
 
-  const storeys = await collectStoreyGroups(ifcBytes);
-  if (storeys.length < 2 || monolithic.byteLength < TILE_MIN_BYTES) {
+  if (monolithic.byteLength < TILE_MIN_BYTES) {
     onProgress?.(1, "fragments");
-    return {
-      monolithic,
-      tiles: [
-        {
-          id: "0_0_0",
-          buffer: monolithic,
-          bounds: [0, 0, 0, 0, 0, 0],
-          guidCount: 0,
-        },
-      ],
-    };
+    return monolithicOnly(monolithic);
   }
 
-  const limited = storeys.slice(0, MAX_STOREY_TILES);
+  const storeys = await collectStoreyGroups(ifcBytes);
   const dir = await mkdtemp(join(tmpdir(), "plansync-bim-tiles-"));
   const inputPath = join(dir, "source.ifc");
   await writeFile(inputPath, ifcBytes);
 
-  const tiles: FragmentsTile[] = [];
+  let tiles: FragmentsTile[] = [];
   try {
-    const splitter = new FRAGS.IfcSplitter(nodeIfcSplitterIO());
-    for (let i = 0; i < limited.length; i++) {
-      const storey = limited[i]!;
-      const outPath = join(dir, `storey_${i}.ifc`);
-      try {
-        await splitter.extract(inputPath, storey.expressIds, outPath);
-        const subset = await readFile(outPath);
-        const tileFrag = await convertIfcToFragments(new Uint8Array(subset));
-        tiles.push({
-          id: storey.id,
-          buffer: Buffer.from(tileFrag),
-          bounds: elevationBounds(storey.elevation),
-          guidCount: storey.expressIds.length,
-        });
-      } catch (err) {
-        console.warn("[bim.fragments] storey tile skipped", storey.name, err);
-      }
-      onProgress?.(0.72 + ((i + 1) / limited.length) * 0.28, "tiles");
+    if (storeys.length >= 2) {
+      tiles = await buildStoreyTiles(dir, inputPath, storeys, (f) =>
+        onProgress?.(0.72 + f * 0.28, "tiles"),
+      );
+    }
+    // Large single/few-storey models still need progressive load tiles.
+    if (tiles.length < 2) {
+      tiles = await buildChunkTiles(dir, inputPath, chunkGroupCount(monolithic.byteLength), (f) =>
+        onProgress?.(0.72 + f * 0.28, "tiles"),
+      );
     }
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 
   if (tiles.length < 2) {
-    return {
-      monolithic,
-      tiles: [
-        {
-          id: "0_0_0",
-          buffer: monolithic,
-          bounds: [0, 0, 0, 0, 0, 0],
-          guidCount: 0,
-        },
-      ],
-    };
+    return monolithicOnly(monolithic);
   }
 
   onProgress?.(1, "tiles");

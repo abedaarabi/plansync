@@ -8,8 +8,10 @@ import {
 import { loadFragmentsProgressive } from "@/lib/bim/progressiveTileLoader";
 import {
   BIM_STALL_MS,
+  CLIENT_IFC_PARSE_MAX_BYTES,
   BimLoadAbortedError,
   BimLoadStallError,
+  BimServerProcessingRequiredError,
   fetchBinaryWithRetry,
   pollUntil,
 } from "@/lib/bim/loadFetch";
@@ -23,7 +25,12 @@ import {
 import { assertIfcBytesIntact } from "@/lib/bim/ifcBytes";
 import type { BimConversionStatus } from "@/lib/bim/types";
 
+/** Default wait for server fragments before considering client fallback. */
 const FRAGMENTS_WAIT_MS = 12 * 60_000;
+/** Extra wait budget for large IFCs (per 100 MiB of source). */
+const FRAGMENTS_WAIT_EXTRA_PER_100MIB_MS = 6 * 60_000;
+/** Hard ceiling for waiting on server conversion. */
+const FRAGMENTS_WAIT_MAX_MS = 45 * 60_000;
 const CONVERT_STALL_MS = 45_000;
 
 // fallow-ignore-next-line complexity
@@ -60,11 +67,32 @@ function statusToPrepareFraction(status: BimConversionStatus | null): number | n
   return null;
 }
 
+function sourceByteLength(status: BimConversionStatus | null): number | null {
+  const n = status?.sourceByteLength;
+  return n != null && Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function fragmentsWaitMs(status: BimConversionStatus | null): number {
+  const bytes = sourceByteLength(status);
+  if (bytes == null) return FRAGMENTS_WAIT_MS;
+  const extraBlocks = Math.max(0, Math.ceil(bytes / (100 * 1024 * 1024)) - 1);
+  return Math.min(
+    FRAGMENTS_WAIT_MAX_MS,
+    FRAGMENTS_WAIT_MS + extraBlocks * FRAGMENTS_WAIT_EXTRA_PER_100MIB_MS,
+  );
+}
+
+function tooLargeForClientParse(status: BimConversionStatus | null, knownBytes?: number): boolean {
+  const bytes = knownBytes ?? sourceByteLength(status);
+  return bytes != null && bytes > CLIENT_IFC_PARSE_MAX_BYTES;
+}
+
 async function waitForServerFragments(
   fileVersionId: string,
   opts?: {
     signal?: AbortSignal;
     onPreparing?: (fraction: number | null) => void;
+    timeoutMs?: number;
   },
 ): Promise<BimConversionStatus | null> {
   let status = await fetchBimStatus(fileVersionId).catch(() => null);
@@ -79,6 +107,7 @@ async function waitForServerFragments(
   }
 
   const waitStarted = Date.now();
+  const timeoutMs = opts?.timeoutMs ?? fragmentsWaitMs(status);
   const emitPreparing = (s: BimConversionStatus | null) => {
     const fromStatus = statusToPrepareFraction(s);
     if (fromStatus != null) {
@@ -86,7 +115,7 @@ async function waitForServerFragments(
       return;
     }
     // Soft estimate so large models aren't stuck with an indeterminate bar.
-    const soft = Math.min(0.45, 0.04 + (Date.now() - waitStarted) / (10 * 60_000));
+    const soft = Math.min(0.45, 0.04 + (Date.now() - waitStarted) / Math.max(timeoutMs, 1));
     opts?.onPreparing?.(soft);
   };
   emitPreparing(status);
@@ -104,7 +133,7 @@ async function waitForServerFragments(
     },
     {
       intervalMs: 2_500,
-      timeoutMs: FRAGMENTS_WAIT_MS,
+      timeoutMs,
       signal: opts?.signal,
       onValue: emitPreparing,
     },
@@ -151,6 +180,23 @@ async function loadFromServerTiles(
   return false;
 }
 
+function refuseClientParse(member: BimFederationMember, status: BimConversionStatus | null): never {
+  const active = conversionActive(status) || status?.pipelinePhase === "fragments";
+  if (active) {
+    throw new BimServerProcessingRequiredError(
+      `${member.name} is still being processed on the server. Large models cannot be converted in the browser — wait for processing to finish, then open again.`,
+    );
+  }
+  if (status?.conversionStatus === "failed") {
+    throw new BimServerProcessingRequiredError(
+      `${member.name} is too large to convert in the browser, and server processing failed. Retry conversion from the file menu, then open again.`,
+    );
+  }
+  throw new BimServerProcessingRequiredError(
+    `${member.name} is too large to convert in the browser. Wait for server processing to finish, then try again.`,
+  );
+}
+
 // fallow-ignore-next-line complexity
 export async function loadFederationMember(
   engine: BimEngine,
@@ -175,6 +221,7 @@ export async function loadFederationMember(
     status = await waitForServerFragments(resolved.fileVersionId!, {
       signal: opts?.signal,
       onPreparing: opts?.onPreparing,
+      timeoutMs: fragmentsWaitMs(status),
     });
   }
 
@@ -205,7 +252,12 @@ export async function loadFederationMember(
     return;
   }
 
-  // Last resort: download IFC and convert in the browser.
+  // Large IFCs must never hit the in-browser WASM path — it OOMs the tab.
+  if (tooLargeForClientParse(status)) {
+    refuseClientParse(resolved, status);
+  }
+
+  // Last resort (small/medium files only): download IFC and convert in a worker.
   const v =
     resolved.version != null && resolved.version !== ""
       ? `?version=${encodeURIComponent(resolved.version)}`
@@ -220,6 +272,10 @@ export async function loadFederationMember(
   );
   if (!res.ok) throw new Error(`Could not download ${resolved.name} (${res.status}).`);
   assertIfcBytesIntact(bytes, resolved.name);
+
+  if (tooLargeForClientParse(status, bytes.byteLength)) {
+    refuseClientParse(resolved, status);
+  }
 
   let lastConvertAt = Date.now();
   let convertStallTimer: number | undefined;

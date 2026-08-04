@@ -30,7 +30,6 @@ import {
   BIM_SELECTION,
   BIM_SPACE_MATERIAL,
   BIM_VIEWPORT,
-  configureLod500Importer,
   createBimSkyTexture,
   fogDistanceScales,
   getBimBackgroundProfile,
@@ -45,6 +44,7 @@ import {
 } from "@/lib/bim/viewportAppearance";
 import { buildModelId, type BimFederationMember } from "@/lib/bim/federation";
 import { assertIfcBytesIntact } from "@/lib/bim/ifcBytes";
+import { convertIfcInWorker } from "@/lib/bim/ifcConvertClient";
 import { getBimCameraNavigationProfile } from "@/lib/bim/cameraNavigation";
 import { bimViewportPixelRatio } from "@/lib/bim/viewportPixelRatio";
 import { ViewCubeOverlay } from "@/lib/bim/viewCube";
@@ -86,7 +86,6 @@ import * as OBF from "@thatopen/components-front";
 import * as FRAGS from "@thatopen/fragments";
 
 /** Served from `public/bim/` — see docs/bim-viewer.md for how to update. */
-const WEB_IFC_WASM_PATH = "/bim/";
 const FRAGMENTS_WORKER_URL = "/bim/fragments-worker.mjs";
 
 /** Minimum canvas size before we trust a resize (avoids 0×0 WebGL init). */
@@ -322,6 +321,19 @@ export class BimEngine {
   private appearance: BimViewportAppearance = { ...DEFAULT_BIM_VIEWPORT_APPEARANCE };
   /** Cancels stale property loads when the user clicks another element quickly. */
   private selectionLoadId = 0;
+  /** Recent full property payloads — re-selecting the same element skips Fragments round-trips. */
+  private readonly selectionDetailsCache = new Map<
+    string,
+    {
+      ifcGuid: string | null;
+      name: string | null;
+      ifcType: string | null;
+      position: { x: number; y: number; z: number } | null;
+      attributes: { label: string; value: string }[];
+      psets: { name: string; props: { label: string; value: string }[] }[];
+    }
+  >();
+  private static readonly SELECTION_DETAILS_CACHE_MAX = 64;
   private quantityIndex: BimQuantityIndex | null = null;
   private selectedGuids = new Set<string>();
   /** World-space orbit pivot for the active selection (applied on drag). */
@@ -847,7 +859,8 @@ export class BimEngine {
   }
 
   /**
-   * Converts raw IFC bytes client-side (web-ifc WASM) and loads the result.
+   * Converts raw IFC bytes in a dedicated Web Worker (lite geometry profile),
+   * then loads the Fragments buffer. Isolates WASM OOM from the main tab.
    * Returns the Fragments buffer so the caller can cache it in IndexedDB.
    */
   // fallow-ignore-next-line complexity
@@ -862,33 +875,23 @@ export class BimEngine {
       return existing ? existing.model.getBuffer(false) : new ArrayBuffer(0);
     }
     assertIfcBytesIntact(bytes, member.name);
-    await this.prepareFederationLoad();
-    const components = this.mustComponents();
-    const ifcLoader = components.get(OBC.IfcLoader);
-    await ifcLoader.setup({
-      autoSetWasm: false,
-      wasm: { path: WEB_IFC_WASM_PATH, absolute: true },
-    });
-    let model: FRAGS.FragmentsModel;
+
+    let buffer: ArrayBuffer;
     try {
-      model = await ifcLoader.load(bytes, true, modelId, {
-        instanceCallback: configureLod500Importer,
-        processData: {
-          progressCallback: (progress: number) => opts?.onProgress?.(progress),
-        },
+      buffer = await convertIfcInWorker(bytes, {
+        onProgress: opts?.onProgress,
       });
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);
-      if (/bad_alloc|Aborted|abort\(/i.test(raw)) {
+      if (/bad_alloc|Aborted|abort\(|out of memory/i.test(raw)) {
         throw new Error(
-          `${member.name} could not be parsed (web-ifc aborted). The IFC may be corrupted — re-upload the full file.`,
+          `${member.name} could not be parsed (web-ifc aborted). The IFC may be too large for this device or corrupted — wait for server processing or re-upload the full file.`,
         );
       }
-      throw err;
+      throw err instanceof Error ? err : new Error(raw);
     }
-    this.registerModel(model, member);
-    const buffer = await model.getBuffer(false);
-    await this.afterModelAdded(opts?.fitView ?? false);
+
+    await this.addFragmentTile(buffer, member, undefined, { fitView: opts?.fitView ?? false });
     return buffer;
   }
 
@@ -3232,6 +3235,11 @@ export class BimEngine {
     this.bumpRender();
   }
 
+  /**
+   * Resolves after the light selection (GUID / name / type) so pick + context
+   * menu are not blocked by the heavy property-set fetch. Full parameters load
+   * in the background and update the selection when ready.
+   */
   // fallow-ignore-next-line complexity
   private async handleHighlight(
     map: OBC.ModelIdMap,
@@ -3274,55 +3282,131 @@ export class BimEngine {
 
       const ifcType = data._category ? attrValue(data, "_category") : null;
       const meta = this.modelRegistry.get(modelId);
-      this.events.onSelection({
+      const ifcGuid = guid ?? attrValue(data, "_guid") ?? attrValue(data, "GlobalId");
+      const name = attrValue(data, "Name");
+      const storey = this.storeyByModelLocalId.get(modelLocalKey(modelId, localId)) ?? null;
+      const attributes = flattenAttributes(data);
+      const light: BimSelection = {
         modelId,
         fileVersionId: meta?.fileVersionId ?? null,
         sourceLabel: meta?.name ?? null,
         localId,
-        ifcGuid: guid ?? attrValue(data, "_guid") ?? attrValue(data, "GlobalId"),
-        name: attrValue(data, "Name"),
+        ifcGuid,
+        name,
         ifcType,
-        storey: this.storeyByModelLocalId.get(modelLocalKey(modelId, localId)) ?? null,
+        storey,
         position: null,
-        attributes: flattenAttributes(data),
+        attributes,
         psets: [],
         detailsPending: true,
-      });
+      };
+      this.events.onSelection(light);
 
-      const [fullData] = await model.getItemsData([localId], {
-        attributesDefault: true,
-        relationsDefault: { attributes: true, relations: false },
-        relations: {
-          IsDefinedBy: { attributes: true, relations: true },
-          HasProperties: { attributes: true, relations: true },
-          Quantities: { attributes: true, relations: true },
-          ContainedInStructure: { attributes: true, relations: true },
-          IsTypedBy: { attributes: true, relations: true },
-          Decomposes: { attributes: true, relations: false },
-        },
-      });
-      if (loadId !== this.selectionLoadId) return;
-
-      let position: { x: number; y: number; z: number } | null = null;
-      position = await this.getElementAnchorPosition(model, localId);
-      if (loadId !== this.selectionLoadId) return;
-
-      this.events.onSelection({
-        modelId,
-        fileVersionId: meta?.fileVersionId ?? null,
-        sourceLabel: meta?.name ?? null,
-        localId,
-        ifcGuid: guid ?? attrValue(fullData, "_guid") ?? attrValue(fullData, "GlobalId"),
-        name: attrValue(fullData, "Name"),
-        ifcType: fullData._category ? attrValue(fullData, "_category") : ifcType,
-        storey: this.storeyByModelLocalId.get(modelLocalKey(modelId, localId)) ?? null,
-        position,
-        attributes: flattenAttributes(fullData),
-        psets: extractPsets(fullData),
-        detailsPending: false,
+      // Background — do not await (blocks right-click / Add asset).
+      void this.enrichSelectionDetails({
+        loadId,
+        model,
+        light,
       });
     } catch {
       if (loadId === this.selectionLoadId) this.events.onSelection(null);
+    }
+  }
+
+  private selectionDetailsCacheKey(modelId: string, localId: number): string {
+    return `${modelId}:${localId}`;
+  }
+
+  private rememberSelectionDetails(
+    key: string,
+    details: {
+      ifcGuid: string | null;
+      name: string | null;
+      ifcType: string | null;
+      position: { x: number; y: number; z: number } | null;
+      attributes: { label: string; value: string }[];
+      psets: { name: string; props: { label: string; value: string }[] }[];
+    },
+  ): void {
+    if (this.selectionDetailsCache.has(key)) this.selectionDetailsCache.delete(key);
+    this.selectionDetailsCache.set(key, details);
+    while (this.selectionDetailsCache.size > BimEngine.SELECTION_DETAILS_CACHE_MAX) {
+      const oldest = this.selectionDetailsCache.keys().next().value;
+      if (oldest == null) break;
+      this.selectionDetailsCache.delete(oldest);
+    }
+  }
+
+  /**
+   * Full psets + world position after light selection.
+   * Slim query (IsDefinedBy only — ThatOpen recommended), parallel position fetch,
+   * and a small LRU cache for re-selects.
+   */
+  // fallow-ignore-next-line complexity
+  private async enrichSelectionDetails(args: {
+    loadId: number;
+    model: FRAGS.FragmentsModel;
+    light: BimSelection;
+  }): Promise<void> {
+    const { loadId, model, light } = args;
+    const cacheKey = this.selectionDetailsCacheKey(light.modelId, light.localId);
+    const cached = this.selectionDetailsCache.get(cacheKey);
+    if (cached) {
+      if (loadId !== this.selectionLoadId) return;
+      // Refresh LRU order.
+      this.rememberSelectionDetails(cacheKey, cached);
+      this.events.onSelection({
+        ...light,
+        ifcGuid: cached.ifcGuid ?? light.ifcGuid,
+        name: cached.name ?? light.name,
+        ifcType: cached.ifcType ?? light.ifcType,
+        position: cached.position,
+        attributes: cached.attributes,
+        psets: cached.psets,
+        detailsPending: false,
+      });
+      return;
+    }
+
+    try {
+      // Only walk IsDefinedBy → HasProperties / Quantities. Extra relations
+      // (ContainedInStructure, IsTypedBy, Decomposes) were unused by the panel
+      // and dominate latency on large models.
+      const [fullDataResult, position] = await Promise.all([
+        model.getItemsData([light.localId], {
+          attributesDefault: true,
+          relationsDefault: { attributes: false, relations: false },
+          relations: {
+            IsDefinedBy: { attributes: true, relations: true },
+          },
+        }),
+        this.getElementAnchorPosition(model, light.localId),
+      ]);
+      if (loadId !== this.selectionLoadId) return;
+
+      const fullData = fullDataResult[0];
+      const details = {
+        ifcGuid:
+          light.ifcGuid ??
+          (fullData ? (attrValue(fullData, "_guid") ?? attrValue(fullData, "GlobalId")) : null),
+        name: (fullData ? attrValue(fullData, "Name") : null) ?? light.name,
+        ifcType: fullData?._category ? attrValue(fullData, "_category") : light.ifcType,
+        position,
+        attributes: fullData ? flattenAttributes(fullData) : light.attributes,
+        psets: fullData ? extractPsets(fullData) : [],
+      };
+      this.rememberSelectionDetails(cacheKey, details);
+
+      this.events.onSelection({
+        ...light,
+        ...details,
+        detailsPending: false,
+      });
+    } catch {
+      // Keep the light selection usable for Add asset / issues; only clear the spinner.
+      if (loadId === this.selectionLoadId) {
+        this.events.onSelection({ ...light, detailsPending: false });
+      }
     }
   }
 
@@ -5634,6 +5718,8 @@ export class BimEngine {
   // fallow-ignore-next-line complexity
   dispose(): void {
     this.disposed = true;
+    this.selectionLoadId += 1;
+    this.selectionDetailsCache.clear();
     this.exitWalkPointerLock();
     this.stopWalkLoop();
     window.removeEventListener("keydown", this.onGlobalKeyDown);

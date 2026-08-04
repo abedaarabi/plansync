@@ -266,6 +266,8 @@ export function BimViewerShell(props: {
   const [tool, setTool] = useState<BimTool>("select");
   const [cameraMode, setCameraMode] = useState<BimCameraMode>("orbit");
   const [selection, setSelection] = useState<BimSelection | null>(null);
+  /** Latest pick — context-menu actions can run before React re-renders selection. */
+  const selectionRef = useRef<BimSelection | null>(null);
   const [storeys, setStoreys] = useState<BimVisibilityGroup[]>([]);
   const [categories, setCategories] = useState<BimVisibilityGroup[]>([]);
   const [activeDock, setActiveDock] = useState<BimDockId | null>(null);
@@ -681,6 +683,7 @@ export function BimViewerShell(props: {
         const engine = new BimEngine({
           onSelection: (sel) => {
             if (cancelled) return;
+            selectionRef.current = sel;
             setSelection(sel);
             // Clash review keeps green/red colors. Don't steal the Clashes dock
             // (issue deep-links and clash results live there); inspect via the clash panel.
@@ -1553,6 +1556,7 @@ export function BimViewerShell(props: {
 
   const clearSelection = useCallback(() => {
     engineRef.current?.clearSelection();
+    selectionRef.current = null;
     setSelection(null);
     setSelectedGuids(new Set());
   }, []);
@@ -1805,8 +1809,9 @@ export function BimViewerShell(props: {
   const startIssueCreateFromSelection = useCallback(() => {
     // fallow-ignore-next-line complexity
     void (async () => {
+      const sel = selectionRef.current ?? selection;
       const anchor =
-        (selection ? selectionToBimAnchor(selection) : undefined) ??
+        (sel ? selectionToBimAnchor(sel) : undefined) ??
         (selectedGuids.size > 0 ? { ifcGuid: [...selectedGuids][0]! } : undefined);
       if (!anchor) {
         toast.error("Select an element in the model first.");
@@ -1830,16 +1835,17 @@ export function BimViewerShell(props: {
         toast.error("Operations assets are not enabled for this project.");
         return;
       }
-      if (!selection) {
+      const sel = selectionRef.current ?? selection;
+      if (!sel) {
         toast.error("Select an element in the model first.");
         return;
       }
-      const existing = findOmAssetByGuid(omAssetsList, selection.ifcGuid);
+      const existing = findOmAssetByGuid(omAssetsList, sel.ifcGuid);
       if (existing) {
         setFocusedOmAsset(existing);
         return;
       }
-      const bimAnchor = bimAnchorFromSelection(selection);
+      const bimAnchor = bimAnchorFromSelection(sel);
       if (!bimAnchor) {
         toast.error("Select a model element with an IFC GUID to create an asset.");
         return;
@@ -1851,15 +1857,17 @@ export function BimViewerShell(props: {
           window.setTimeout(resolve, 220);
         });
       }
-      const issueAnchor = selectionToBimAnchor(selection);
+      // Prefer enriched details if they finished while we zoomed / snapped.
+      const draftSel = selectionRef.current ?? sel;
+      const issueAnchor = selectionToBimAnchor(draftSel);
       const pendingPhoto = issueAnchor
         ? await captureIssueSnapshotFile({ anchor: issueAnchor })
         : await captureIssueSnapshotFile();
       setActiveDock(null);
       setFocusedOmAsset(null);
       setAssetCreateDraft({
-        bimAnchor,
-        initialDraft: assetDraftFromBimSelection(selection),
+        bimAnchor: bimAnchorFromSelection(draftSel) ?? bimAnchor,
+        initialDraft: assetDraftFromBimSelection(draftSel),
         pendingPhoto,
       });
     })();

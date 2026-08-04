@@ -4,6 +4,12 @@ const BIM_FETCH_TIMEOUT_MS = 120_000;
 export const BIM_STALL_MS = 45_000;
 const DEFAULT_RETRIES = 2;
 
+/**
+ * Above this source IFC size, never download+parse in the browser —
+ * WASM + tessellation will OOM the tab (500MB+ / 500k+ elements).
+ */
+export const CLIENT_IFC_PARSE_MAX_BYTES = 150 * 1024 * 1024;
+
 export class BimLoadAbortedError extends Error {
   constructor(message = "Model load was cancelled.") {
     super(message);
@@ -15,6 +21,16 @@ export class BimLoadStallError extends Error {
   constructor(message = "Loading stalled. Check your connection and try again.") {
     super(message);
     this.name = "BimLoadStallError";
+  }
+}
+
+/** Large IFC must finish server conversion — in-browser parse would crash the tab. */
+export class BimServerProcessingRequiredError extends Error {
+  constructor(
+    message = "This model is too large to convert in the browser. Wait for server processing to finish, then try again.",
+  ) {
+    super(message);
+    this.name = "BimServerProcessingRequiredError";
   }
 }
 

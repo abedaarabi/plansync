@@ -94,6 +94,7 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
       Boolean(fv.quantityIndexS3Key) &&
       (conversionStatus === "summary_ready" || !quantityIndexReady);
 
+    const sourceByteLength = Number(fv.sizeBytes);
     return c.json({
       fileVersionId: fv.id,
       conversionStatus,
@@ -111,6 +112,8 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
       bimPublishedAt: statusCounts.bimPublishedAt,
       levelCount: statusCounts.levelCount,
       mappedSheetCount: statusCounts.mappedSheetCount,
+      /** Source IFC size — used by the viewer to refuse unsafe in-browser conversion. */
+      sourceByteLength: Number.isFinite(sourceByteLength) ? sourceByteLength : null,
     });
   });
 

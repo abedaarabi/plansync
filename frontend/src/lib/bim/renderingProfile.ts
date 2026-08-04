@@ -1,4 +1,3 @@
-import * as FRAGS from "@thatopen/fragments";
 import * as THREE from "three";
 import { BIM_PALETTE } from "@/lib/bim/bimPalette";
 import type {
@@ -394,17 +393,3 @@ export const BIM_SPACE_MATERIAL = {
   color: STATUS.information,
   opacity: 0.16,
 } as const;
-
-/** High-detail IFC → Fragments conversion (full tessellation, space boundaries). */
-export function configureLod500Importer(importer: FRAGS.IfcImporter): void {
-  Object.assign(importer.geometryProcessSettings, {
-    threshold: 10_000,
-    precision: 1e8,
-    normalPrecision: 1e9,
-    planePrecision: 1e6,
-    faceThreshold: 0.45,
-    forceTransparentSpaces: true,
-    processIfcRelSpaceBoundarySecondLevel: true,
-  });
-  importer.doubleSidedMaterials = true;
-}
