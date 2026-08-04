@@ -178,6 +178,42 @@ export async function fetchIssue(issueId: string): Promise<IssueRow> {
   return res.json() as Promise<IssueRow>;
 }
 
+export type IssuesChatMessage = {
+  role: "user" | "model";
+  content: string;
+};
+
+export async function fetchProjectIssuesChat(
+  projectId: string,
+  body: { messages: IssuesChatMessage[] },
+): Promise<{ reply: string; issues: IssueRow[] }> {
+  const res = await fetch(
+    apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/ai/issues-chat`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const bodyJson = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const msg =
+      res.status === 429
+        ? "Too many requests. Please try again shortly."
+        : res.status === 503
+          ? "Assistant is temporarily unavailable."
+          : readJsonErrorBody(bodyJson, res, "Could not reach Issues assistant.");
+    throw Object.assign(new Error(msg), { httpStatus: res.status });
+  }
+  const data = (await res.json()) as { reply?: string; issues?: IssueRow[] };
+  if (typeof data.reply !== "string" || !data.reply.trim()) {
+    throw new Error("Invalid assistant response.");
+  }
+  return { reply: data.reply.trim(), issues: Array.isArray(data.issues) ? data.issues : [] };
+}
+
 /** Presign PUT, upload to S3, then complete — returns the updated issue row. */
 export async function uploadIssueReferencePhotoFile(
   issueId: string,

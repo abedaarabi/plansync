@@ -15,7 +15,9 @@ import { ProjectContextSync } from "./ProjectContextSync";
 import { ProjectSessionRedirect } from "./ProjectSessionRedirect";
 import { UploadProgressDock } from "./UploadProgressDock";
 import { EnterpriseMobileBottomNav } from "./EnterpriseMobileBottomNav";
+import { IssuesChatAssistant } from "./assistant/IssuesChatAssistant";
 import { DEFAULT_ENTERPRISE_PRIMARY_HEX } from "@/lib/enterpriseTheme";
+import { extractProjectIdFromPath } from "@/lib/projectScopedPath";
 
 export function EnterpriseShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -104,6 +106,7 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   const isWorkspaceGate = pathname === "/workspaces";
+  const projectId = extractProjectIdFromPath(pathname);
 
   return (
     <QueryProvider>
@@ -177,6 +180,7 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
             <EnterpriseMobileBottomNav onOpenMore={toggleMobileNav} />
             <CommandPalette open={commandOpen} onClose={closePalette} />
             <UploadProgressDock />
+            {projectId ? <IssuesChatAssistant projectId={projectId} /> : null}
           </div>
         )}
       </EnterpriseWorkspaceProvider>

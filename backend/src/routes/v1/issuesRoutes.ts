@@ -66,6 +66,15 @@ import {
   procedureToJsonValue,
   type WorkOrderChecklistItem,
 } from "../../lib/workOrderChecklist.js";
+import { geminiConfigured, geminiIssuesChat } from "../../lib/geminiSheetAi.js";
+import { issuesChatRateLimited } from "../../lib/issuesChatRateLimit.js";
+import {
+  ISSUES_CHAT_CARD_LIMIT,
+  ISSUES_CHAT_CATALOG_LIMIT,
+  catalogRank,
+  isIssueRowOverdue,
+  matchIssuesForQuery,
+} from "../../lib/issuesChatMatch.js";
 
 function requirePro(workspace: { subscriptionStatus: string | null }) {
   if (!isWorkspacePro(workspace)) {
@@ -189,6 +198,14 @@ async function issueRowsToJson(rows: IssueRow[], projectId: string, maskPortalRe
     }),
   );
 }
+
+const issuesChatMessageSchema = z.object({
+  role: z.enum(["user", "model"]),
+  content: z.string().max(4000),
+});
+const issuesChatBodySchema = z.object({
+  messages: z.array(issuesChatMessageSchema).min(1).max(24),
+});
 
 type IssueAccessResult =
   | { ok: false; status: 402 | 403 | 404; error: string }
@@ -495,6 +512,136 @@ export function registerIssuesRoutes(
     });
     const mask = ctx.workspaceMember.isExternal;
     return c.json(await issueRowsToJson(rows, projectId, mask));
+  });
+
+  /** Project Issues assistant: retrieve matching issues, then Gemini narrates them. */
+  // fallow-ignore-next-line complexity
+  r.post("/projects/:projectId/ai/issues-chat", needUser, async (c) => {
+    const projectId = c.req.param("projectId")!;
+    const userId = c.get("user").id;
+    if (issuesChatRateLimited(userId)) {
+      return c.json({ error: "Too many requests. Please try again shortly." }, 429);
+    }
+    if (!geminiConfigured(env)) {
+      return c.json({ error: "Assistant is temporarily unavailable." }, 503);
+    }
+
+    const raw = await c.req.json().catch(() => null);
+    const parsed = issuesChatBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+    const last = parsed.data.messages[parsed.data.messages.length - 1];
+    if (!last || last.role !== "user") {
+      return c.json({ error: "Last message must be from the user." }, 400);
+    }
+
+    const auth = await loadProjectWithAuth(projectId, userId);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+    const { ctx } = auth;
+    if (!ctx.settings.modules.issues) {
+      return c.json({
+        reply: "Issues aren't enabled for this project.",
+        issues: [],
+      });
+    }
+    const gate = requirePro(ctx.project.workspace);
+    if (gate) return c.json({ error: gate.error }, gate.status);
+
+    const scope = issuesWhereForAuth(ctx, userId);
+    const nowMs = Date.now();
+    const [rows, clashLinks, me] = await Promise.all([
+      prisma.issue.findMany({
+        where: { projectId, ...scope },
+        include: issueInclude,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.bimClash.findMany({
+        where: { projectId, issueId: { not: null } },
+        select: { issueId: true },
+        distinct: ["issueId"],
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+      }),
+    ]);
+    const clashIssueIds = new Set(
+      clashLinks.map((c) => c.issueId).filter((id): id is string => Boolean(id)),
+    );
+    const displayNums = await issueDisplayNumbersForProject(projectId);
+    const ranked = [...rows].sort((a, b) => catalogRank(b, nowMs) - catalogRank(a, nowMs));
+    const catalogRows = ranked.slice(0, ISSUES_CHAT_CATALOG_LIMIT);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const mask = ctx.workspaceMember.isExternal;
+
+    const toContext = (row: IssueRow) => ({
+      id: row.id,
+      displayNumber: displayNums.get(row.id) ?? null,
+      title: row.title,
+      status: row.status,
+      priority: row.priority,
+      kind: row.issueKind,
+      assigneeName: row.assignee?.name ?? row.externalAssigneeName ?? null,
+      creatorName: row.creator?.name ?? row.reporterName ?? null,
+      dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null,
+      createdAt: row.createdAt ? row.createdAt.toISOString().slice(0, 10) : null,
+      sheetName: row.sheetName ?? row.file?.name ?? null,
+      pageNumber: row.pageNumber ?? null,
+      location: row.location,
+      description: row.description ? row.description.slice(0, 220) : null,
+      overdue: isIssueRowOverdue(row, nowMs),
+      hasClash: clashIssueIds.has(row.id),
+      hasBimAnchor: row.bimAnchor != null,
+      commentCount: row._count?.comments ?? 0,
+    });
+
+    try {
+      const modelResult = await geminiIssuesChat(env, {
+        projectName: ctx.project.name,
+        totalInProject: rows.length,
+        currentUserName: me?.name ?? null,
+        catalog: catalogRows.map(toContext),
+        messages: parsed.data.messages,
+      });
+
+      let matched = modelResult.issueIds
+        .map((id) => byId.get(id))
+        .filter((row): row is IssueRow => Boolean(row))
+        .slice(0, ISSUES_CHAT_CARD_LIMIT);
+
+      let reply = modelResult.reply;
+
+      // Heuristic fallback when the model returns no grounded ids.
+      if (matched.length === 0) {
+        const fallback = matchIssuesForQuery(
+          rows,
+          displayNums,
+          last.content,
+          userId,
+          nowMs,
+          clashIssueIds,
+        );
+        matched = fallback.matched;
+        if (matched.length > 0 && (!reply || /no matching issues/i.test(reply))) {
+          reply = `I found ${fallback.totalMatched} matching issue${fallback.totalMatched === 1 ? "" : "s"}. Here ${fallback.totalMatched === 1 ? "is the top result" : `are the top ${matched.length}`}.`;
+        } else if (matched.length === 0 && !reply.trim()) {
+          reply =
+            "I couldn't find matching issues. Try asking for all issues, a title, status, overdue, clash-linked, or assigned to you.";
+        }
+      }
+
+      const issuesJson = matched.map((row) =>
+        issueRowJson(row, {
+          maskPortalReporter: mask,
+          displayNumber: displayNums.get(row.id) ?? null,
+        }),
+      );
+      return c.json({ reply, issues: issuesJson });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Chat failed";
+      return c.json({ error: msg }, 502);
+    }
   });
 
   r.get("/issues/:issueId", needUser, async (c) => {

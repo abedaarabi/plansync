@@ -392,3 +392,180 @@ export async function geminiMarketingLandingChat(
   if (!text?.trim()) throw new EmptyModelResponseError();
   return text.trim();
 }
+
+export type IssuesChatIssueContext = {
+  id: string;
+  displayNumber: number | null;
+  title: string;
+  status: string;
+  priority: string;
+  kind: string;
+  assigneeName: string | null;
+  creatorName: string | null;
+  dueDate: string | null;
+  createdAt: string | null;
+  sheetName: string | null;
+  pageNumber: number | null;
+  location: string | null;
+  description: string | null;
+  overdue: boolean;
+  hasClash: boolean;
+  hasBimAnchor: boolean;
+  commentCount: number;
+};
+
+export type IssuesChatModelResult = {
+  reply: string;
+  issueIds: string[];
+};
+
+function unescapeJsonStringLiteral(raw: string): string {
+  try {
+    return JSON.parse(`"${raw}"`) as string;
+  } catch {
+    return raw
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\");
+  }
+}
+
+function looksLikeRawIssuesChatJson(text: string): boolean {
+  const t = text.trim();
+  return (
+    (t.startsWith("{") && /"reply"\s*:/.test(t)) ||
+    /^"reply"\s*:/.test(t) ||
+    (/\\n/.test(t) && /"issueIds"\s*:/.test(t))
+  );
+}
+
+/** Parse model output into reply + ids; never surface raw JSON to the user. */
+function parseIssuesChatModelText(text: string, allowedIds: Set<string>): IssuesChatModelResult {
+  const sanitizeIds = (raw: unknown): string[] => {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((id): id is string => typeof id === "string" && allowedIds.has(id))
+      .slice(0, 12);
+  };
+
+  try {
+    const json = extractJsonObject(text) as { reply?: unknown; issueIds?: unknown };
+    if (typeof json.reply === "string" && json.reply.trim()) {
+      return { reply: json.reply.trim(), issueIds: sanitizeIds(json.issueIds) };
+    }
+  } catch {
+    /* fall through to field extraction */
+  }
+
+  const replyMatch = /"reply"\s*:\s*"((?:\\.|[^"\\])*)"/.exec(text);
+  const idsMatch = /"issueIds"\s*:\s*\[([\s\S]*?)\]/.exec(text);
+  const reply = replyMatch ? unescapeJsonStringLiteral(replyMatch[1]!).trim() : "";
+  const issueIds = idsMatch
+    ? sanitizeIds([...idsMatch[1]!.matchAll(/"([^"]+)"/g)].map((m) => m[1]!))
+    : [];
+
+  if (reply) return { reply, issueIds };
+
+  // Last resort: strip obvious JSON wrappers so the UI never shows `"reply": "…"`.
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .replace(/^\{\s*"reply"\s*:\s*"/, "")
+    .replace(/"\s*,\s*"issueIds"\s*:\s*\[[\s\S]*\]\s*\}\s*$/, "")
+    .trim();
+  return {
+    reply: looksLikeRawIssuesChatJson(cleaned)
+      ? "I found matching issues — see the cards below."
+      : cleaned || "I found matching issues — see the cards below.",
+    issueIds,
+  };
+}
+
+/**
+ * Grounded Issues assistant: model picks issue ids from the catalog, then writes a short reply.
+ * Cards are always resolved from those ids server-side (never invented).
+ */
+export async function geminiIssuesChat(
+  env: Env,
+  input: {
+    projectName: string;
+    catalog: IssuesChatIssueContext[];
+    totalInProject: number;
+    currentUserName: string | null;
+    messages: { role: "user" | "model"; content: string }[];
+  },
+): Promise<IssuesChatModelResult> {
+  const key = resolveGeminiApiKey(env);
+  if (!key) throw new Error("Gemini API key not configured");
+
+  const genAI = new GoogleGenerativeAI(key);
+  const model = genAI.getGenerativeModel({
+    model: env.GEMINI_MODEL.trim() || "gemini-2.5-flash",
+    generationConfig: {
+      maxOutputTokens: 2048,
+      temperature: 0.2,
+      responseMimeType: "application/json",
+    },
+  });
+
+  if (!input.messages.length) throw new Error("No messages");
+
+  const allowedIds = new Set(input.catalog.map((i) => i.id));
+  const system = `You are PlanSync's Issues assistant for the project "${input.projectName}".
+The current user is ${input.currentUserName?.trim() || "a project member"}.
+You receive ISSUE_CATALOG (authoritative). The UI will render clickable cards for the issue ids you return.
+
+Understand natural language. Examples:
+- "give me all issues" / "list every issue" → select broadly (prefer open/in-progress first, then others)
+- "overdue", "my issues", "high priority", "open", "in progress", "resolved", "closed"
+- "clash" / "clashed" / "BIM clash" → issues with hasClash=true or hasBimAnchor=true, or title/description about clashes
+- title / sheet / location / assignee name fragments → match those fields
+- work orders / occupant / construction → use kind
+
+Respond with a single JSON object of this shape:
+{"reply":"markdown string","issueIds":["id1","id2"]}
+
+Rules:
+- issueIds MUST be ids from ISSUE_CATALOG only (never invent ids or issues).
+- Return at most 12 issueIds, best matches first.
+- For broad "all/list/show issues" requests, return up to 12 representative issues and say how many exist in total (${input.totalInProject} in project; catalog may be a subset of ${input.catalog.length}).
+- If nothing matches, return issueIds: [] and explain briefly what you can filter (status, overdue, assignee, clash, title).
+- Never invent statuses, assignees, or dates not in the catalog.
+- "reply" is the user-visible message only (markdown). Do not include JSON keys, issueIds, or escape sequences in the visible meaning — the client renders reply as markdown.
+- When listing 2+ issues, prefer a GitHub-flavored markdown TABLE (not bullets), after a one-line intro. Include the useful columns from the catalog. Example:
+  Here are the matching issues:
+
+  | # | Title | Status | Priority | Assignee | Due | Created by | Sheet |
+  |---|---|---|---|---|---|---|---|
+  | 11 | Clash group | Open | High | Alex | 2026-08-12 | Sam | A-101 |
+  Use Due, Created by, Sheet, Location, Kind when present. Put — when a cell is empty. Keep cell text short (no pipes | inside cells). Escape newlines in the JSON string as \\n.
+- For a single issue, summarize key fields (status, priority, assignee, due, creator, sheet) in a short paragraph (cards appear below).
+- No legal advice.`;
+
+  const catalogJson = JSON.stringify({
+    totalInProject: input.totalInProject,
+    catalogSize: input.catalog.length,
+    issues: input.catalog,
+  });
+
+  const lines = input.messages.map((m) => {
+    const label = m.role === "user" ? "User" : "Assistant";
+    return `${label}: ${m.content}`;
+  });
+  const prompt = `${system}
+
+ISSUE_CATALOG:
+${catalogJson}
+
+Conversation:
+${lines.join("\n\n")}`;
+
+  const result = await model.generateContent([{ text: prompt }]);
+  const text = result.response.text();
+  if (!text?.trim()) throw new EmptyModelResponseError();
+
+  return parseIssuesChatModelText(text, allowedIds);
+}
