@@ -89,6 +89,44 @@ import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 import * as FRAGS from "@thatopen/fragments";
+import { modelLocalKey } from "./engine/ids";
+import { attrValue, extractPsets, flattenAttributes } from "./engine/ifcItemProps";
+import {
+  hasActiveFilterHighlights,
+  hasActiveFragmentHighlights,
+  hasActiveSelectionHighlight,
+  hasClashPairColors,
+  shouldDeferMaterialSync,
+  shouldEnableHover,
+  shouldPaintFragmentSelectTint,
+} from "./engine/highlightDecision";
+import { modelIdMapHas } from "./engine/modelIdMap";
+import { sanitizeHighlightMap } from "./engine/sanitizeHighlightMap";
+import type {
+  BimCameraMode,
+  BimEngineEvents,
+  BimLoadedModel,
+  BimSelection,
+  BimTool,
+} from "./engine/types";
+import {
+  clampWalkEyePosition,
+  detectModelUnitsFromRadius,
+  findWalkFloorY,
+  isValidBox3,
+  resolveStoreyName,
+  walkEyeHeight,
+  walkFeetInset,
+} from "./engine/walkMath";
+
+export type {
+  BimCameraMode,
+  BimEngineEvents,
+  BimLoadedModel,
+  BimSelection,
+  BimTool,
+  BimVisibilityGroup,
+} from "./engine/types";
 
 /** Served from `public/bim/` — see docs/bim-viewer.md for how to update. */
 const FRAGMENTS_WORKER_URL = "/bim/fragments-worker.mjs";
@@ -128,148 +166,8 @@ const CAM_DOLLY = 16;
 const CAM_TOUCH_ROTATE = 64;
 const CAM_TOUCH_DOLLY_TRUCK = 4096;
 
-export type BimTool = "select" | "clip" | "length" | "area" | "angle" | "markup";
-export type BimCameraMode = "orbit" | "walk";
-
-export type BimSelection = {
-  modelId: string;
-  fileVersionId: string | null;
-  sourceLabel: string | null;
-  localId: number;
-  ifcGuid: string | null;
-  name: string | null;
-  ifcType: string | null;
-  storey: string | null;
-  position: { x: number; y: number; z: number } | null;
-  attributes: { label: string; value: string }[];
-  psets: { name: string; props: { label: string; value: string }[] }[];
-  /** True while property sets are still loading in the background. */
-  detailsPending?: boolean;
-  /** Multi-select: all selected elements. */
-  items?: {
-    modelId: string;
-    localId: number;
-    ifcGuid: string | null;
-    name?: string | null;
-    ifcType?: string | null;
-  }[];
-  count?: number;
-};
-
-export type BimVisibilityGroup = { name: string; visible: boolean };
-
-export type BimLoadedModel = BimFederationMember & {
-  modelId: string;
-  visible: boolean;
-};
-
-function modelLocalKey(modelId: string, localId: number): string {
-  return `${modelId}:${localId}`;
-}
-
-export type BimEngineEvents = {
-  onSelection: (sel: BimSelection | null) => void;
-  onGroupsChanged: (groups: {
-    storeys: BimVisibilityGroup[];
-    categories: BimVisibilityGroup[];
-  }) => void;
-  /** Cursor position in model space (metres), when available. */
-  onCursorPosition?: (pos: { x: number; y: number; z: number } | null) => void;
-  onMultiSelection?: (guids: string[]) => void;
-  onContextMenu?: (pos: { x: number; y: number; hasSelection: boolean }) => void;
-  onToolChange?: (tool: BimTool) => void;
-  onQualityChanged?: (state: BimQualityState) => void;
-  /** Ctrl/Cmd+L — host should copy the current view URL. */
-  onCopyViewLink?: () => void;
-};
-
 const STOREY_CLASSIFICATION = "PlanSyncLevels";
 const CATEGORY_CLASSIFICATION = "PlanSyncCategories";
-
-// fallow-ignore-next-line complexity
-function formatAttrValue(value: unknown): string | null {
-  if (value == null) return null;
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "number" || typeof value === "string") {
-    const s = String(value).trim();
-    return s === "" ? null : s;
-  }
-  if (typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-    if ("value" in obj) return formatAttrValue(obj.value);
-    if ("wrappedValue" in obj) return formatAttrValue(obj.wrappedValue);
-    if ("Name" in obj && typeof obj.Name === "string") return obj.Name;
-  }
-  return null;
-}
-
-function attrValue(item: FRAGS.ItemData, key: string): string | null {
-  const raw = item[key];
-  if (!raw || Array.isArray(raw)) return null;
-  return formatAttrValue((raw as FRAGS.ItemAttribute).value);
-}
-
-function isItemDataArray(
-  v: FRAGS.ItemAttribute | FRAGS.ItemData[] | undefined,
-): v is FRAGS.ItemData[] {
-  return Array.isArray(v);
-}
-
-/** Flattens direct (non-relation) attributes of an item into label/value rows. */
-// fallow-ignore-next-line complexity
-function flattenAttributes(item: FRAGS.ItemData): { label: string; value: string }[] {
-  const rows: { label: string; value: string }[] = [];
-  for (const [key, v] of Object.entries(item)) {
-    if (Array.isArray(v)) continue;
-    const value = (v as FRAGS.ItemAttribute).value;
-    if (value == null || typeof value === "object") continue;
-    const s = String(value).trim();
-    if (s === "") continue;
-    rows.push({ label: key, value: s });
-  }
-  return rows;
-}
-
-/** Extracts IFC property sets from an item's IsDefinedBy relations. */
-// fallow-ignore-next-line complexity
-function extractPsets(
-  item: FRAGS.ItemData,
-): { name: string; props: { label: string; value: string }[] }[] {
-  const rel = item.IsDefinedBy;
-  if (!isItemDataArray(rel)) return [];
-  const out: { name: string; props: { label: string; value: string }[] }[] = [];
-  for (const pset of rel) {
-    const name = attrValue(pset, "Name") ?? "Property set";
-    const props: { label: string; value: string }[] = [];
-    const hasProps = pset.HasProperties;
-    if (isItemDataArray(hasProps)) {
-      for (const p of hasProps) {
-        const label = attrValue(p, "Name");
-        const value =
-          attrValue(p, "NominalValue") ??
-          attrValue(p, "Value") ??
-          attrValue(p, "EnumerationValues");
-        if (label && value != null) props.push({ label, value });
-      }
-    }
-    // Quantity sets (IfcElementQuantity → Quantities)
-    const quantities = pset.Quantities;
-    if (isItemDataArray(quantities)) {
-      for (const q of quantities) {
-        const label = attrValue(q, "Name");
-        const value =
-          attrValue(q, "LengthValue") ??
-          attrValue(q, "AreaValue") ??
-          attrValue(q, "VolumeValue") ??
-          attrValue(q, "CountValue") ??
-          attrValue(q, "WeightValue");
-        if (label && value != null) props.push({ label, value });
-      }
-    }
-    if (props.length > 0) out.push({ name, props });
-  }
-  return out;
-}
 
 export class BimEngine {
   private components: OBC.Components | null = null;
@@ -1254,26 +1152,28 @@ export class BimEngine {
 
   /** True when Item 1 / Item 2 clash colors are painted (guids resolved). */
   hasClashPairColors(): boolean {
-    return this.activeColorizeGroups.some(
-      (g) => g.styleId === "clash-item-1" || g.styleId === "clash-item-2",
-    );
+    return hasClashPairColors(this.activeColorizeGroups);
   }
 
-  /** Re-apply ghost / colorize tints after fragment material or tile updates. */
-  private hasActiveFilterHighlights(): boolean {
-    return (
-      this.activeFilterGhostMap != null ||
-      this.activeFilterMatchMap != null ||
-      this.filterSceneGhostOpacity != null ||
-      this.activeColorizeGroups.length > 0
-    );
+  private filterHighlightState() {
+    return {
+      hasFilterGhostMap: this.activeFilterGhostMap != null,
+      hasFilterMatchMap: this.activeFilterMatchMap != null,
+      filterSceneGhostOpacity: this.filterSceneGhostOpacity,
+      colorizeGroupCount: this.activeColorizeGroups.length,
+    };
   }
 
-  // fallow-ignore-next-line complexity
-  private hasActiveSelectionHighlight(): boolean {
-    // Clash review keeps guids for inspect/UI but must not paint select tint.
-    if (this.clashReviewSuppressSelectPaint) return false;
-    if (this.selectedGuids.size > 0 || this.lastPickMap != null) return true;
+  private selectionHighlightState() {
+    return {
+      clashReviewSuppressSelectPaint: this.clashReviewSuppressSelectPaint,
+      selectedGuidCount: this.selectedGuids.size,
+      hasLastPickMap: this.lastPickMap != null,
+      highlighterSelectHasIds: this.highlighterSelectHasIds(),
+    };
+  }
+
+  private highlighterSelectHasIds(): boolean {
     const highlighter = this.components?.get(OBF.Highlighter);
     if (!highlighter) return false;
     const selectMap = highlighter.selection[highlighter.config.selectName];
@@ -1284,33 +1184,50 @@ export class BimEngine {
     return false;
   }
 
+  private postproductionOutlinesActive(): boolean {
+    const post = this.world?.renderer?.postproduction;
+    return !!(post?.enabled && post.outlinesEnabled);
+  }
+
+  /** Re-apply ghost / colorize tints after fragment material or tile updates. */
+  private hasActiveFilterHighlights(): boolean {
+    return hasActiveFilterHighlights(this.filterHighlightState());
+  }
+
+  private hasActiveSelectionHighlight(): boolean {
+    return hasActiveSelectionHighlight(this.selectionHighlightState());
+  }
+
   /**
    * Prefer Outliner see-through + edge (BIM 360 / Forge OVERLAYED). Flat fragment
    * select tint flattens materials and looks muddy when stacked with the outline.
    */
   private shouldPaintFragmentSelectTint(): boolean {
-    if (this.clashReviewSuppressSelectPaint) return false;
-    const post = this.world?.renderer?.postproduction;
-    if (post?.enabled && post.outlinesEnabled) return false;
-    return true;
+    return shouldPaintFragmentSelectTint({
+      clashReviewSuppressSelectPaint: this.clashReviewSuppressSelectPaint,
+      postproductionOutlinesActive: this.postproductionOutlinesActive(),
+    });
   }
 
   private hasActiveFragmentHighlights(): boolean {
-    // Outline-only selection (BIM 360) does not need fragment tints — keep
-    // materials live under the Outliner wash instead of deferring sync.
-    const selectTint = this.hasActiveSelectionHighlight() && this.shouldPaintFragmentSelectTint();
-    return this.hasActiveFilterHighlights() || selectTint;
+    return hasActiveFragmentHighlights({
+      filter: this.filterHighlightState(),
+      selection: this.selectionHighlightState(),
+      postproductionOutlinesActive: this.postproductionOutlinesActive(),
+    });
   }
 
   /** Hover preview is only useful in orbit select mode — not over look-only ghosts. */
   private syncHoverEnabled(): void {
     const hoverer = this.components?.get(OBF.Hoverer);
     if (!hoverer) return;
-    const ghostLookOnly =
-      this.clashGhostPickOnly ||
-      this.activeFilterGhostMap != null ||
-      this.filterSceneGhostOpacity != null;
-    hoverer.enabled = this.tool === "select" && this.cameraMode !== "walk" && !ghostLookOnly;
+    hoverer.enabled = shouldEnableHover({
+      tool: this.tool,
+      cameraMode: this.cameraMode,
+      clashGhostPickOnly: this.clashGhostPickOnly,
+      hasFilterGhostMap: this.activeFilterGhostMap != null,
+      filterSceneGhostOpacity: this.filterSceneGhostOpacity,
+    });
   }
 
   /** Queue a single coalesced repaint of selection + filter overlays. */
@@ -1340,23 +1257,12 @@ export class BimEngine {
   }
 
   /** Drop model/local ids that are no longer in the loaded fragment list. */
-  // fallow-ignore-next-line complexity
   private sanitizeHighlightMap(
     map: OBC.ModelIdMap | null | undefined,
     fragments: OBC.FragmentsManager | null | undefined,
   ): OBC.ModelIdMap | null {
-    if (!map || !fragments?.initialized) return null;
-    try {
-      const out: OBC.ModelIdMap = {};
-      for (const [modelId, ids] of Object.entries(map)) {
-        if (!fragments.list.has(modelId)) continue;
-        if (!(ids instanceof Set) || ids.size === 0) continue;
-        out[modelId] = new Set(ids);
-      }
-      return Object.keys(out).length > 0 ? out : null;
-    } catch {
-      return null;
-    }
+    if (!fragments?.initialized) return null;
+    return sanitizeHighlightMap(map, new Set(fragments.list.keys()));
   }
 
   /**
@@ -1539,11 +1445,11 @@ export class BimEngine {
   }
 
   private shouldDeferMaterialSync(): boolean {
-    return (
-      this.hasActiveFragmentHighlights() ||
-      this.clashSceneGhostOpacity != null ||
-      this.filterSceneGhostOpacity != null
-    );
+    return shouldDeferMaterialSync({
+      hasFragmentHighlights: this.hasActiveFragmentHighlights(),
+      clashSceneGhostOpacity: this.clashSceneGhostOpacity,
+      filterSceneGhostOpacity: this.filterSceneGhostOpacity,
+    });
   }
 
   private maybeScheduleDeferredMaterialSync(): void {
@@ -1868,91 +1774,37 @@ export class BimEngine {
 
   /** Standing eye height in model units (metres or millimetres). */
   private walkEyeHeight(box: THREE.Box3): number {
-    const units = this.detectModelUnits();
-    if (!this.isValidBox3(box)) {
-      return units === "mm" ? 1700 : 1.7;
-    }
-    const size = box.getSize(new THREE.Vector3());
-    if (units === "mm") {
-      return THREE.MathUtils.clamp(size.y * 0.05, 1400, 2100);
-    }
-    return THREE.MathUtils.clamp(size.y * 0.05, 1.4, 2.1);
+    return walkEyeHeight(box, this.detectModelUnits());
   }
 
-  // fallow-ignore-next-line complexity
   private isValidBox3(box: THREE.Box3 | null | undefined): box is THREE.Box3 {
-    if (!box || box.isEmpty()) return false;
-    const { min, max } = box;
-    return (
-      Number.isFinite(min.x) &&
-      Number.isFinite(min.y) &&
-      Number.isFinite(min.z) &&
-      Number.isFinite(max.x) &&
-      Number.isFinite(max.y) &&
-      Number.isFinite(max.z) &&
-      min.x <= max.x &&
-      min.y <= max.y &&
-      min.z <= max.z
-    );
+    return isValidBox3(box);
   }
 
-  // fallow-ignore-next-line complexity
   private walkFeetInset(clampBox: THREE.Box3): number {
-    const units = this.detectModelUnits();
-    const minInset = units === "mm" ? 250 : 0.25;
-    if (!this.isValidBox3(clampBox)) return minInset;
-    const size = clampBox.getSize(new THREE.Vector3());
-    const span = Math.min(Math.abs(size.x), Math.abs(size.z));
-    if (!Number.isFinite(span) || span <= 0) return minInset;
-    return Math.max(span * 0.02, minInset);
+    return walkFeetInset(clampBox, this.detectModelUnits());
   }
 
   /** Resolve walkable floor elevation (fragments are not THREE.Raycaster-safe). */
-  // fallow-ignore-next-line complexity
   private findWalkFloorY(hintY: number, modelBox: THREE.Box3 | null): number {
-    if (this.planMinimapStoreyFloorY != null && Number.isFinite(this.planMinimapStoreyFloorY)) {
-      return this.planMinimapStoreyFloorY;
-    }
-    if (Number.isFinite(hintY)) return hintY;
-    if (this.isValidBox3(modelBox)) return modelBox.min.y;
-    return 0;
+    return findWalkFloorY(hintY, modelBox, this.planMinimapStoreyFloorY);
   }
 
   /** Place walk camera on the model floor near the orbit pivot (or bbox center). */
-  // fallow-ignore-next-line complexity
   private clampWalkEyePosition(
     pivot: THREE.Vector3,
     modelBox: THREE.Box3,
     eyeHeight: number,
     footprintBox: THREE.Box3 = modelBox,
   ): THREE.Vector3 {
-    const clampBox = this.isValidBox3(footprintBox)
-      ? footprintBox
-      : this.isValidBox3(modelBox)
-        ? modelBox
-        : null;
-
-    let x = pivot.x;
-    let z = pivot.z;
-    if (clampBox) {
-      const inset = this.walkFeetInset(clampBox);
-      const center = clampBox.getCenter(new THREE.Vector3());
-      const loX = Math.min(clampBox.min.x + inset, clampBox.max.x - inset);
-      const hiX = Math.max(clampBox.min.x + inset, clampBox.max.x - inset);
-      const loZ = Math.min(clampBox.min.z + inset, clampBox.max.z - inset);
-      const hiZ = Math.max(clampBox.min.z + inset, clampBox.max.z - inset);
-      x = Number.isFinite(pivot.x) ? THREE.MathUtils.clamp(pivot.x, loX, hiX) : center.x;
-      z = Number.isFinite(pivot.z) ? THREE.MathUtils.clamp(pivot.z, loZ, hiZ) : center.z;
-    }
-
-    const hintY = Number.isFinite(pivot.y)
-      ? pivot.y
-      : this.isValidBox3(modelBox)
-        ? modelBox.min.y
-        : 0;
-    const floorY = this.findWalkFloorY(hintY, modelBox);
-    const safeEyeHeight = Number.isFinite(eyeHeight) ? eyeHeight : this.walkEyeHeight(modelBox);
-    return new THREE.Vector3(x, floorY + safeEyeHeight, z);
+    return clampWalkEyePosition({
+      pivot,
+      modelBox,
+      eyeHeight,
+      footprintBox,
+      units: this.detectModelUnits(),
+      storeyFloorY: this.planMinimapStoreyFloorY,
+    });
   }
 
   /** Section planes + measure tools — colors, units, snapping (BIM 360 style). */
@@ -2075,19 +1927,8 @@ export class BimEngine {
   }
 
   /** Match IFC storey key from source/display name or alias. */
-  // fallow-ignore-next-line complexity
   resolveStoreyName(name: string | null | undefined): string | null {
-    if (!name) return null;
-    if (this.storeyMaps.has(name)) return name;
-    const lower = name.toLowerCase();
-    for (const key of this.storeyMaps.keys()) {
-      if (key.toLowerCase() === lower) return key;
-    }
-    for (const key of this.storeyMaps.keys()) {
-      const kl = key.toLowerCase();
-      if (kl.includes(lower) || lower.includes(kl)) return key;
-    }
-    return null;
+    return resolveStoreyName(name, this.storeyMaps.keys());
   }
 
   invalidatePlanSilhouette(): void {
@@ -2640,9 +2481,7 @@ export class BimEngine {
 
   /** Large IFC models are usually mm; smaller bounds suggest metres. */
   private detectModelUnits(): "m" | "mm" {
-    const sphere = this.getModelBoundingSphere();
-    if (!sphere || !Number.isFinite(sphere.radius)) return "m";
-    return sphere.radius > 500 ? "mm" : "m";
+    return detectModelUnitsFromRadius(this.getModelBoundingSphere()?.radius);
   }
 
   private pointerNormFromEvent(e: PointerEvent): { x: number; y: number } | null {
@@ -2718,17 +2557,8 @@ export class BimEngine {
     };
   }
 
-  private modelIdMapHas(
-    map: OBC.ModelIdMap | null | undefined,
-    modelId: string,
-    localId: number,
-  ): boolean {
-    const ids = map?.[modelId];
-    return ids instanceof Set && ids.has(localId);
-  }
-
   private isFilterGhostLocalId(modelId: string, localId: number): boolean {
-    return this.modelIdMapHas(this.activeFilterGhostMap, modelId, localId);
+    return modelIdMapHas(this.activeFilterGhostMap, modelId, localId);
   }
 
   /** All fragment hits under the pointer, nearest first — used to pierce ghosts. */
@@ -2820,7 +2650,7 @@ export class BimEngine {
     allowMap: OBC.ModelIdMap,
   ): Promise<{ modelId: string; localId: number } | null> {
     for (const hit of await this.raycastAllAtPointer(e)) {
-      if (this.modelIdMapHas(allowMap, hit.modelId, hit.localId)) {
+      if (modelIdMapHas(allowMap, hit.modelId, hit.localId)) {
         return { modelId: hit.modelId, localId: hit.localId };
       }
     }
