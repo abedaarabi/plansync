@@ -1531,12 +1531,14 @@ export function BimViewerShell(props: {
           filterActive,
           visualize,
           matchGuids: guids,
+          colorizeField: filterState.colorize?.field,
           colorizeGroups:
             colorizeActive && legend.length > 0
               ? legend.map((entry, i) => ({
                   styleId: `colorize:${i}`,
                   color: entry.color,
                   guids: entry.guids,
+                  value: entry.value,
                 }))
               : [],
         });

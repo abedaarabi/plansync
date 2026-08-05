@@ -1489,8 +1489,37 @@ export class BimEngine {
       } catch {
         /* worker may reject update while tiles are rebuilding or engine is disposing */
       }
-      // Fragment update restores tile materials — repaint the pair first, then
-      // re-fade context while forcing Item 1/2 back to solid opaque colors.
+      // core.update restores tile materials and wipes fragment highlights —
+      // re-paint filter ghost/colorize (clash pair already has its own repaint).
+      if (this.activeFilterGhostMap) {
+        await paint(
+          BimEngine.FILTER_GHOST_STYLE,
+          {
+            color: new THREE.Color("#64748b"),
+            opacity: this.activeFilterGhostOpacity,
+            transparent: true,
+            renderedFaces: 0,
+            depthTest: true,
+            depthWrite: false,
+          },
+          this.activeFilterGhostMap,
+        );
+      }
+      for (const group of this.activeColorizeGroups) {
+        if (group.styleId.startsWith("clash-item")) continue;
+        await paint(
+          group.styleId,
+          {
+            color: new THREE.Color(group.color),
+            opacity: COLORIZE_HIGHLIGHT_OPACITY,
+            transparent: true,
+            renderedFaces: 0,
+            depthTest: true,
+            depthWrite: false,
+          },
+          group.map,
+        );
+      }
       await this.paintClashItemHighlights();
       if (this.clashSceneGhostOpacity != null) {
         this.applyClashSceneGhost(this.clashSceneGhostOpacity);
@@ -5539,8 +5568,12 @@ export class BimEngine {
       styleId: string;
       color: string;
       guids: string[];
+      /** Legend bucket value (level name, IFC type, …) for classifier fast-path. */
+      value?: string;
       fileVersionId?: string | null;
     }[];
+    /** Color-by-property field — enables storey/category map fast-path. */
+    colorizeField?: "level" | "ifcType" | "material" | "discipline" | "name" | "model" | "any";
     /** Ghost opacity for surrounding context (clash review). Default 0.18. */
     ghostOpacity?: number;
     /**
@@ -5552,10 +5585,13 @@ export class BimEngine {
     const seq = ++this.filterPresentSeq;
     const blockedByClash = () => this.clashReviewSuppressSelectPaint && !opts.force;
     const stillCurrent = () => !this.disposed && this.filterPresentSeq === seq && !blockedByClash();
+    const hasColorize = opts.colorizeGroups.length > 0;
 
     if (blockedByClash()) return;
 
-    if (!opts.filterActive) {
+    // Idle clear only when neither filter nor colorize is active.
+    // Color-by-property alone used to hit this branch and wipe before paint.
+    if (!opts.filterActive && !hasColorize) {
       await this.resetFilterVisibility();
       if (!stillCurrent()) return;
       this.activeFilterGhostMap = null;
@@ -5569,26 +5605,27 @@ export class BimEngine {
       return;
     }
 
+    // Colorize-only (no filter rules): show full model, skip Ghost/Hide.
+    const visualize = opts.filterActive ? opts.visualize : "none";
+
     // Resolve isolate / ghost / colorize into locals, then commit once.
     let nextGhostMap: OBC.ModelIdMap | null = null;
     let nextMatchMap: OBC.ModelIdMap | null = null;
-    let nextGhostOpacity = opts.ghostOpacity ?? 0.18;
+    let nextGhostOpacity = opts.ghostOpacity ?? 0.28;
     let isolateMap: OBC.ModelIdMap | null = null;
     const nextGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
     const nextStyleIds: string[] = [];
 
-    if (opts.visualize === "none") {
+    if (visualize === "none") {
       await this.resetFilterVisibility();
       if (!stillCurrent()) return;
-    } else if (opts.visualize === "isolate") {
+    } else if (visualize === "isolate") {
       isolateMap = opts.matchRefs?.length
         ? await this.resolveGuidRefsToModelIdMap(opts.matchRefs)
         : await this.resolveModelIdMapFromGuids(opts.matchGuids);
       if (!stillCurrent()) return;
-    } else {
+    } else if (opts.matchGuids.length > 0) {
       // Ghost: tint only non-matches. Matches keep real base materials/colors.
-      // Build the non-match map from geometry ids (fast) — never resolve every
-      // non-match GUID through the quantity index.
       await this.ensureBaseVisibilityForFilter();
       if (!stillCurrent()) return;
       const built = await this.buildFilterGhostMaps(opts.matchGuids, nextGhostOpacity);
@@ -5598,13 +5635,16 @@ export class BimEngine {
         nextMatchMap = built.matchMap;
         nextGhostOpacity = built.opacity;
       }
+    } else {
+      await this.ensureBaseVisibilityForFilter();
+      if (!stillCurrent()) return;
     }
 
+    // Classifier maps cover the whole model — only safe when colorize-only.
+    const useClassifierMaps = !opts.filterActive;
     for (const group of opts.colorizeGroups) {
       if (!stillCurrent()) return;
-      const map = await this.resolveGuidRefsToModelIdMap(
-        group.guids.map((guid) => ({ guid, fileVersionId: group.fileVersionId })),
-      );
+      const map = await this.resolveColorizeGroupMap(group, opts.colorizeField, useClassifierMaps);
       if (!map) continue;
       nextStyleIds.push(group.styleId);
       nextGroups.push({ styleId: group.styleId, color: group.color, map });
@@ -5613,7 +5653,7 @@ export class BimEngine {
 
     // Commit visibility + highlight state together.
     this.clearFilterSceneGhost();
-    if (opts.visualize === "isolate") {
+    if (visualize === "isolate") {
       this.activeFilterMatchMap = null;
       this.activeFilterGhostMap = null;
       if (isolateMap) {
@@ -5622,7 +5662,7 @@ export class BimEngine {
         if (!stillCurrent()) return;
         this.invalidatePlanSilhouette();
       }
-    } else if (opts.visualize === "none") {
+    } else if (visualize === "none") {
       this.activeFilterMatchMap = null;
       this.activeFilterGhostMap = null;
     } else {
@@ -5643,6 +5683,82 @@ export class BimEngine {
   }
 
   /**
+   * Resolve a colorize legend bucket to a ModelIdMap.
+   * Prefers classifier storey/category maps (O(1)) then the GUID index cache.
+   */
+  // fallow-ignore-next-line complexity
+  private async resolveColorizeGroupMap(
+    group: {
+      guids: string[];
+      value?: string;
+      fileVersionId?: string | null;
+    },
+    field?: "level" | "ifcType" | "material" | "discipline" | "name" | "model" | "any",
+    useClassifierMaps = false,
+  ): Promise<OBC.ModelIdMap | null> {
+    const value = group.value?.trim();
+    // Full-model colorize by level/category: use classification maps (instant).
+    if (useClassifierMaps && value && value !== "(empty)" && value !== "Other") {
+      if (field === "level") {
+        const storey = this.findStoreyMapByName(value);
+        if (storey) return OBC.ModelIdMapUtils.clone(storey);
+      }
+      if (field === "ifcType") {
+        const category = this.findCategoryMapByName(value);
+        if (category) return OBC.ModelIdMapUtils.clone(category);
+      }
+    }
+
+    if (group.guids.length === 0) return null;
+
+    // Sync path from guidIndex — avoids per-guid awaits when the index is warm.
+    const cached = this.buildModelIdMapFromGuids(group.guids);
+    let cachedCount = 0;
+    if (cached) {
+      for (const ids of Object.values(cached)) {
+        if (ids instanceof Set) cachedCount += ids.size;
+      }
+    }
+    if (cached && cachedCount >= group.guids.length) return cached;
+
+    // Resolve only GUIDs missing from the index, then merge.
+    if (cached && cachedCount > 0) {
+      const missing = group.guids.filter((g) => !this.guidIndex.has(g));
+      if (missing.length === 0) return cached;
+      const rest = await this.resolveGuidRefsToModelIdMap(
+        missing.map((guid) => ({ guid, fileVersionId: group.fileVersionId })),
+      );
+      return this.mergeModelIdMaps(cached, rest);
+    }
+
+    return this.resolveGuidRefsToModelIdMap(
+      group.guids.map((guid) => ({ guid, fileVersionId: group.fileVersionId })),
+    );
+  }
+
+  private findStoreyMapByName(value: string): OBC.ModelIdMap | null {
+    const exact = this.storeyMaps.get(value);
+    if (exact) return exact;
+    const lower = value.toLowerCase();
+    for (const [name, map] of this.storeyMaps) {
+      if (name.trim().toLowerCase() === lower) return map;
+    }
+    return null;
+  }
+
+  private findCategoryMapByName(value: string): OBC.ModelIdMap | null {
+    const exact = this.categoryMaps.get(value);
+    if (exact) return exact;
+    const lower = value.toLowerCase();
+    const normalized = lower.startsWith("ifc") ? lower : `ifc${lower}`;
+    for (const [name, map] of this.categoryMaps) {
+      const n = name.trim().toLowerCase();
+      if (n === lower || n === normalized) return map;
+    }
+    return null;
+  }
+
+  /**
    * Non-match ghost map = all geometry ids minus matches.
    * Matches are left unhighlighted so they keep real model colors.
    */
@@ -5658,8 +5774,10 @@ export class BimEngine {
     const matchMap =
       matchGuids.length > 0 ? await this.resolveModelIdMapFromGuids(matchGuids) : null;
 
-    let all = this.buildAllGeometryModelIdMap();
-    if (!all) all = await this.collectAllGeometryModelIdMap();
+    // Prefer live geometry ids — classifier maps can be incomplete / stale and
+    // produce an empty ghost set (Ghost looks like All).
+    let all = await this.collectAllGeometryModelIdMap();
+    if (!all) all = this.buildAllGeometryModelIdMap();
     if (!all) return null;
 
     const ghostMap = OBC.ModelIdMapUtils.clone(all);
@@ -5671,10 +5789,11 @@ export class BimEngine {
   /** Sync union of classifier category maps (items with geometry). */
   private buildAllGeometryModelIdMap(): OBC.ModelIdMap | null {
     if (this.categoryMaps.size === 0) return null;
-    return OBC.ModelIdMapUtils.join([...this.categoryMaps.values()]);
+    const joined = OBC.ModelIdMapUtils.join([...this.categoryMaps.values()]);
+    return OBC.ModelIdMapUtils.isEmpty(joined) ? null : joined;
   }
 
-  /** Fallback when classifications are not ready yet. */
+  /** Authoritative geometry id set from loaded fragment models. */
   private async collectAllGeometryModelIdMap(): Promise<OBC.ModelIdMap | null> {
     const fragments = this.readyFragments();
     if (!fragments) return null;
