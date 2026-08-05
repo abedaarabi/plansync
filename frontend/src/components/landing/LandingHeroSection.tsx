@@ -160,14 +160,34 @@ export function LandingHeroSection({
               />
               <div className="relative overflow-hidden rounded-2xl bg-slate-950 shadow-[0_28px_70px_-18px_rgba(0,0,0,0.5)] ring-1 ring-white/12">
                 <div className="relative aspect-16/10 w-full max-sm:aspect-16/11">
-                  <Image
-                    src="/images/measure.png"
-                    alt={t("heroImageAlt")}
-                    fill
-                    className="object-cover object-top"
-                    sizes="(max-width: 1024px) 90vw, 520px"
-                    priority
-                    quality={82}
+                  {/* 2D plan viewer — left half */}
+                  <div className="absolute inset-y-0 left-0 w-1/2 overflow-hidden">
+                    <Image
+                      src="/images/measure.png"
+                      alt={t("heroImageAlt")}
+                      fill
+                      className="object-cover object-[15%_top]"
+                      sizes="(max-width: 1024px) 45vw, 260px"
+                      priority
+                      quality={82}
+                    />
+                  </div>
+                  {/* 3D IFC viewer — right half */}
+                  <div className="absolute inset-y-0 right-0 w-1/2 overflow-hidden" aria-hidden>
+                    <Image
+                      src="/images/3dviewer.webp"
+                      alt=""
+                      fill
+                      className="object-cover object-[70%_40%]"
+                      sizes="(max-width: 1024px) 45vw, 260px"
+                      priority
+                      quality={82}
+                    />
+                  </div>
+                  {/* Center seam between 2D and 3D */}
+                  <div
+                    className="pointer-events-none absolute inset-y-0 left-1/2 z-10 w-px -translate-x-1/2 bg-white/55 shadow-[0_0_10px_rgba(255,255,255,0.35)]"
+                    aria-hidden
                   />
                 </div>
               </div>
