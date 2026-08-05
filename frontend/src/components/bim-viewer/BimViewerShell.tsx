@@ -648,6 +648,7 @@ export function BimViewerShell(props: {
     pendingPhoto?: File;
   } | null>(null);
   const [focusedOmAsset, setFocusedOmAsset] = useState<OmAssetRow | null>(null);
+  const [editingOmAsset, setEditingOmAsset] = useState<OmAssetRow | null>(null);
   const [clashIssuePreparing, setClashIssuePreparing] = useState(false);
   const [issuePlacementActive, setIssuePlacementActive] = useState(false);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
@@ -1337,6 +1338,7 @@ export function BimViewerShell(props: {
   useEffect(() => {
     const id = props.omAssetId?.trim();
     if (!id || !omAssetsList) return;
+    setEditingOmAsset(null);
     setFocusedOmAsset(omAssetsList.find((a) => a.id === id) ?? null);
   }, [props.omAssetId, omAssetsList]);
 
@@ -1733,6 +1735,7 @@ export function BimViewerShell(props: {
       engineRef.current?.setIssuePlacementPick(null);
       setEditIssue(null);
       setFocusedOmAsset(null);
+      setEditingOmAsset(null);
       setAssetCreateDraft(null);
       setActiveDock(null);
       setIssueCreateDraft(draft);
@@ -1953,6 +1956,7 @@ export function BimViewerShell(props: {
       }
       const existing = findOmAssetByGuid(omAssetsList, sel.ifcGuid);
       if (existing) {
+        setEditingOmAsset(null);
         setFocusedOmAsset(existing);
         return;
       }
@@ -1976,6 +1980,7 @@ export function BimViewerShell(props: {
         : await captureIssueSnapshotFile();
       setActiveDock(null);
       setFocusedOmAsset(null);
+      setEditingOmAsset(null);
       setAssetCreateDraft({
         bimAnchor: bimAnchorFromSelection(draftSel) ?? bimAnchor,
         initialDraft: assetDraftFromBimSelection(draftSel),
@@ -2003,10 +2008,18 @@ export function BimViewerShell(props: {
         await engine.zoomToSelection({ fitScale: BIM_ASSET_SOFT_FIT_SCALE });
       }
       setAssetCreateDraft(null);
+      setEditingOmAsset(null);
       setActiveDock(null);
       setFocusedOmAsset(asset);
     })();
   }, [linkedAssetForSelection, omAssetsList, selection?.ifcGuid]);
+
+  const startAssetEdit = useCallback((asset: OmAssetRow) => {
+    setAssetCreateDraft(null);
+    setActiveDock(null);
+    setFocusedOmAsset(null);
+    setEditingOmAsset(asset);
+  }, []);
 
   // fallow-ignore-next-line complexity
   const buildMarkupBimAnchor = useCallback((): IssueBimAnchor | undefined => {
@@ -3289,6 +3302,7 @@ export function BimViewerShell(props: {
 
         {workChromeReady && assetCreateDraft && resolvedFileVersionId && resolvedProjectId ? (
           <BimAssetFormSlider
+            mode="create"
             open
             projectId={resolvedProjectId}
             fileId={props.fileId}
@@ -3306,10 +3320,30 @@ export function BimViewerShell(props: {
           />
         ) : null}
 
+        {workChromeReady && editingOmAsset && resolvedProjectId ? (
+          <BimAssetFormSlider
+            mode="edit"
+            open
+            projectId={resolvedProjectId}
+            modelName={props.fileName}
+            asset={editingOmAsset}
+            onClose={() => {
+              setFocusedOmAsset(editingOmAsset);
+              setEditingOmAsset(null);
+            }}
+            onSaved={(asset) => {
+              setEditingOmAsset(null);
+              setFocusedOmAsset(asset);
+              void refetchOmAssets();
+            }}
+          />
+        ) : null}
+
         {workChromeReady &&
         focusedOmAsset &&
         resolvedProjectId &&
         !assetCreateDraft &&
+        !editingOmAsset &&
         !issueCreateDraft &&
         !editIssue ? (
           <BimAssetInfoPanel
@@ -3317,6 +3351,7 @@ export function BimViewerShell(props: {
             projectId={resolvedProjectId}
             modelName={props.fileName}
             onClose={() => setFocusedOmAsset(null)}
+            onEdit={canCreateOmAsset ? () => startAssetEdit(focusedOmAsset) : undefined}
           />
         ) : null}
 

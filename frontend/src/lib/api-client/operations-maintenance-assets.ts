@@ -287,7 +287,7 @@ export async function fetchOmAssetDocuments(
   return res.json() as Promise<OmAssetDocumentRow[]>;
 }
 
-export async function presignOmAssetDocumentUpload(
+async function presignOmAssetDocumentUpload(
   projectId: string,
   assetId: string,
   body: { fileName: string; contentType: string; sizeBytes: number },
@@ -316,7 +316,7 @@ export async function presignOmAssetDocumentUpload(
   return { uploadUrl: j.uploadUrl, key: j.key };
 }
 
-export async function completeOmAssetDocumentUpload(
+async function completeOmAssetDocumentUpload(
   projectId: string,
   assetId: string,
   body: {
@@ -344,6 +344,43 @@ export async function completeOmAssetDocumentUpload(
     throw new Error(typeof j.error === "string" ? j.error : "Could not save document.");
   }
   return res.json() as Promise<OmAssetDocumentRow>;
+}
+
+/** Presign → PUT → complete for one asset document. */
+export async function uploadOmAssetDocumentFile(
+  projectId: string,
+  assetId: string,
+  file: File,
+  opts?: { label?: string },
+): Promise<OmAssetDocumentRow> {
+  const contentType = file.type || "application/octet-stream";
+  const { uploadUrl, key } = await presignOmAssetDocumentUpload(projectId, assetId, {
+    fileName: file.name,
+    contentType,
+    sizeBytes: file.size,
+  });
+  const put = await fetch(uploadUrl, {
+    method: "PUT",
+    mode: "cors",
+    cache: "no-store",
+    headers: { "Content-Type": contentType },
+    body: file,
+  });
+  if (!put.ok) {
+    const hint = await put.text().catch(() => "");
+    throw new Error(
+      hint.trim()
+        ? `Upload failed (${put.status}). ${hint.slice(0, 200)}`
+        : `Upload failed (${put.status}).`,
+    );
+  }
+  return completeOmAssetDocumentUpload(projectId, assetId, {
+    key,
+    label: opts?.label,
+    fileName: file.name,
+    mimeType: contentType,
+    sizeBytes: file.size,
+  });
 }
 
 export async function fetchOmAssetDocumentReadUrl(

@@ -522,18 +522,31 @@ export async function downloadOccupantAssetQrCsv(projectId: string): Promise<voi
   }
 }
 
+/** Public asset summary returned with occupant portal meta (no documents). */
+export type OccupantPortalAssetMeta = {
+  tag: string;
+  name: string;
+  category: string | null;
+  locationLabel: string | null;
+  hall: string | null;
+  rowLabel: string | null;
+  rack: string | null;
+  positionU: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  notes: string | null;
+  hasImage: boolean;
+  level: string | null;
+  /** Linked BIM element when the asset QR is bound to a 3D element. */
+  element?: { name: string | null; ifcType: string | null } | null;
+};
+
 export type OccupantPortalMeta = {
   projectId: string;
   projectName: string;
   occupantHeadline?: string | null;
-  asset: {
-    tag: string;
-    name: string;
-    category: string | null;
-    locationLabel: string | null;
-    /** Linked BIM element when the asset QR is bound to a 3D element. */
-    element?: { name: string | null; ifcType: string | null } | null;
-  } | null;
+  asset: OccupantPortalAssetMeta | null;
 };
 
 export async function fetchOccupantMeta(
@@ -549,6 +562,23 @@ export async function fetchOccupantMeta(
     throw new Error(typeof j.error === "string" ? j.error : "Invalid link.");
   }
   return res.json() as Promise<OccupantPortalMeta>;
+}
+
+export async function fetchOccupantAssetImageUrl(
+  token: string,
+  assetSecret: string,
+): Promise<string> {
+  const q = new URLSearchParams({ a: assetSecret.trim() });
+  const res = await fetch(
+    apiUrl(`/api/v1/occupant/${encodeURIComponent(token)}/asset-image?${q.toString()}`),
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not load equipment photo.");
+  }
+  const j = (await res.json()) as { url?: unknown };
+  if (typeof j.url !== "string" || !j.url) throw new Error("Could not load equipment photo.");
+  return j.url;
 }
 
 export type OccupantSubmitResult = {

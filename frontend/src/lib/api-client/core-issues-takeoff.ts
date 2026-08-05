@@ -101,7 +101,24 @@ export type IssueRow = {
   linkedRfis: { id: string; rfiNumber: number; title: string; status: string }[];
   issueKind?: string;
   assetId?: string | null;
-  asset?: { id: string; tag: string; name: string } | null;
+  asset?: {
+    id: string;
+    tag: string;
+    name: string;
+    category?: string | null;
+    locationLabel?: string | null;
+    hall?: string | null;
+    rowLabel?: string | null;
+    rack?: string | null;
+    positionU?: string | null;
+    manufacturer?: string | null;
+    model?: string | null;
+    serialNumber?: string | null;
+    notes?: string | null;
+    hasImage?: boolean;
+    level?: string | null;
+    element?: { name: string | null; ifcType: string | null } | null;
+  } | null;
   externalAssigneeEmail?: string | null;
   externalAssigneeName?: string | null;
   acknowledgedAt?: string | null;

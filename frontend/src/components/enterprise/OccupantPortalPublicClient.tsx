@@ -4,8 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Building2, Camera, Loader2, Send } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { OmAssetSummaryCard } from "@/components/enterprise/OmAssetSummaryCard";
 import {
   completeOccupantIssueReferencePhoto,
+  fetchOccupantAssetImageUrl,
   fetchOccupantMeta,
   postOccupantSubmit,
   presignOccupantIssueReferencePhoto,
@@ -46,6 +48,14 @@ export function OccupantPortalPublicClient({ token, initialAssetSecret }: Props)
   } = useQuery({
     queryKey: ["occupantMeta", token, assetSecret ?? ""],
     queryFn: () => fetchOccupantMeta(token, { assetSecret }),
+    retry: false,
+  });
+
+  const assetImageQuery = useQuery({
+    queryKey: ["occupantAssetImage", token, assetSecret ?? ""],
+    queryFn: () => fetchOccupantAssetImageUrl(token, assetSecret!),
+    enabled: Boolean(assetSecret && meta?.asset?.hasImage),
+    staleTime: 4 * 60 * 1000,
     retry: false,
   });
 
@@ -176,44 +186,19 @@ export function OccupantPortalPublicClient({ token, initialAssetSecret }: Props)
       </div>
 
       {meta.asset ? (
-        <div className="enterprise-card mb-6 px-4 py-3 text-sm shadow-[var(--enterprise-shadow-xs)]">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-            Equipment
-          </p>
-          <p className="mt-1 font-medium text-[var(--enterprise-text)]">
-            <span className="font-mono">{meta.asset.tag}</span>
-            <span className="font-normal text-[var(--enterprise-text-muted)]"> — </span>
-            {meta.asset.name}
-          </p>
-          {meta.asset.element ? (
-            <p className="mt-1 text-[var(--enterprise-text)]">
-              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                Element
-              </span>
-              <span className="mt-0.5 block">
-                {meta.asset.element.name?.trim() ||
-                  meta.asset.element.ifcType?.trim() ||
-                  "Linked model element"}
-                {meta.asset.element.name?.trim() && meta.asset.element.ifcType?.trim() ? (
-                  <span className="text-[var(--enterprise-text-muted)]">
-                    {" "}
-                    · {meta.asset.element.ifcType.trim()}
-                  </span>
-                ) : null}
-              </span>
-            </p>
-          ) : null}
-          {meta.asset.locationLabel?.trim() ? (
-            <p className="mt-1 text-[var(--enterprise-text-muted)]">
-              {meta.asset.locationLabel.trim()}
-            </p>
-          ) : null}
-          {meta.asset.category?.trim() ? (
-            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-              {meta.asset.category.trim()}
-            </p>
-          ) : null}
-        </div>
+        <OmAssetSummaryCard
+          className="enterprise-card mb-6 space-y-3 px-4 py-3 text-sm shadow-[var(--enterprise-shadow-xs)]"
+          asset={meta.asset}
+          image={
+            meta.asset.hasImage
+              ? {
+                  mode: "url",
+                  url: assetImageQuery.data,
+                  loading: assetImageQuery.isPending,
+                }
+              : undefined
+          }
+        />
       ) : null}
 
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">

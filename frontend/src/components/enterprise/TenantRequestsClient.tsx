@@ -51,6 +51,7 @@ import {
   priorityBadgeClassLight,
 } from "@/lib/issueStatusStyle";
 import { qk } from "@/lib/queryKeys";
+import { OmAssetSummaryCard } from "@/components/enterprise/OmAssetSummaryCard";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import {
   AssigneeFilterSelect,
@@ -867,19 +868,39 @@ export function TenantRequestsClient({ projectId, selectedIssueId }: Props) {
             </section>
 
             {detailIssue.asset || detailIssue.location?.trim() ? (
-              <section>
+              <section className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                   Location / equipment
                 </h3>
                 {detailIssue.asset ? (
-                  <p className="mt-2">
-                    <span className="font-mono text-xs">{detailIssue.asset.tag}</span>
-                    <span className="text-[var(--enterprise-text-muted)]"> — </span>
-                    {detailIssue.asset.name}
-                  </p>
-                ) : null}
-                {detailIssue.location?.trim() ? (
-                  <p className="mt-2 text-[var(--enterprise-text-muted)]">
+                  <OmAssetSummaryCard
+                    showTitle={false}
+                    className="space-y-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/30 px-3 py-3"
+                    asset={detailIssue.asset}
+                    image={
+                      detailIssue.asset.hasImage
+                        ? {
+                            mode: "auth",
+                            projectId,
+                            assetId: detailIssue.asset.id,
+                          }
+                        : undefined
+                    }
+                    footer={
+                      detailIssue.location?.trim() ? (
+                        <p className="border-t border-[var(--enterprise-border)] pt-2 text-sm text-[var(--enterprise-text-muted)]">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide">
+                            Report location
+                          </span>
+                          <span className="mt-0.5 block text-[var(--enterprise-text)]">
+                            {detailIssue.location.trim()}
+                          </span>
+                        </p>
+                      ) : null
+                    }
+                  />
+                ) : detailIssue.location?.trim() ? (
+                  <p className="text-[var(--enterprise-text-muted)]">
                     {detailIssue.location.trim()}
                   </p>
                 ) : null}

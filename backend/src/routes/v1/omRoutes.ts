@@ -3253,6 +3253,65 @@ function occupantElementFromBimAnchor(
   };
 }
 
+function occupantLevelFromBimAnchor(bimAnchor: unknown): string | null {
+  const parsed = omAssetBimAnchorSchema.safeParse(bimAnchor);
+  if (!parsed.success || !parsed.data) return null;
+  const level = parsed.data.spatialPath?.[0]?.trim();
+  return level ? level : null;
+}
+
+const occupantAssetPublicSelect = {
+  tag: true,
+  name: true,
+  category: true,
+  locationLabel: true,
+  hall: true,
+  rowLabel: true,
+  rack: true,
+  positionU: true,
+  manufacturer: true,
+  model: true,
+  serialNumber: true,
+  notes: true,
+  imageS3Key: true,
+  bimAnchor: true,
+} as const;
+
+function toOccupantAssetPublicJson(a: {
+  tag: string;
+  name: string;
+  category: string | null;
+  locationLabel: string | null;
+  hall: string | null;
+  rowLabel: string | null;
+  rack: string | null;
+  positionU: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  notes: string | null;
+  imageS3Key: string | null;
+  bimAnchor: unknown;
+}) {
+  return {
+    tag: a.tag,
+    name: a.name,
+    category: a.category,
+    locationLabel: a.locationLabel,
+    hall: a.hall,
+    rowLabel: a.rowLabel,
+    rack: a.rack,
+    positionU: a.positionU,
+    manufacturer: a.manufacturer,
+    model: a.model,
+    serialNumber: a.serialNumber,
+    notes: a.notes,
+    hasImage: Boolean(a.imageS3Key),
+    level: occupantLevelFromBimAnchor(a.bimAnchor),
+    element: occupantElementFromBimAnchor(a.bimAnchor),
+  };
+}
+
 function bimAnchorJsonForIssue(bimAnchor: unknown): Prisma.InputJsonValue | null {
   const parsed = omAssetBimAnchorSchema.safeParse(bimAnchor);
   if (!parsed.success || !parsed.data) return null;
@@ -3288,32 +3347,14 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
       return c.json({ error: "This link has expired" }, 403);
     }
 
-    let asset: {
-      tag: string;
-      name: string;
-      category: string | null;
-      locationLabel: string | null;
-      element: { name: string | null; ifcType: string | null } | null;
-    } | null = null;
+    let asset: ReturnType<typeof toOccupantAssetPublicJson> | null = null;
     if (assetSecretRaw) {
       const a = await prisma.asset.findFirst({
         where: { projectId: row.projectId, occupantScanSecret: assetSecretRaw },
-        select: {
-          tag: true,
-          name: true,
-          category: true,
-          locationLabel: true,
-          bimAnchor: true,
-        },
+        select: occupantAssetPublicSelect,
       });
       if (!a) return c.json({ error: "Invalid equipment link" }, 404);
-      asset = {
-        tag: a.tag,
-        name: a.name,
-        category: a.category,
-        locationLabel: a.locationLabel,
-        element: occupantElementFromBimAnchor(a.bimAnchor),
-      };
+      asset = toOccupantAssetPublicJson(a);
     }
 
     const occupantHeadline = occupantPortalHeadlineFromSettingsJson(row.project.settingsJson);
@@ -3323,6 +3364,48 @@ export function registerOccupantPublicRoutes(r: Hono, env: Env) {
       occupantHeadline,
       asset,
     });
+  });
+
+  /** Public equipment photo for a scanned asset QR (token + asset secret). */
+  r.get("/occupant/:token/asset-image", async (c) => {
+    const token = c.req.param("token")!;
+    const assetSecretRaw = c.req.query("a")?.trim();
+    if (!assetSecretRaw || assetSecretRaw.length > 80) {
+      return c.json({ error: "Invalid equipment link" }, 400);
+    }
+
+    const row = await prisma.occupantPortalToken.findFirst({
+      where: { token, revokedAt: null },
+      include: {
+        project: {
+          select: {
+            id: true,
+            operationsMode: true,
+          },
+        },
+      },
+    });
+    if (!row) return c.json({ error: "Invalid or expired link" }, 404);
+    if (!row.project.operationsMode) return c.json({ error: "This portal is not active" }, 403);
+    if (row.expiresAt && row.expiresAt < new Date()) {
+      return c.json({ error: "This link has expired" }, 403);
+    }
+
+    const asset = await prisma.asset.findFirst({
+      where: { projectId: row.projectId, occupantScanSecret: assetSecretRaw },
+      select: { imageS3Key: true },
+    });
+    if (!asset?.imageS3Key) return c.json({ error: "Not found" }, 404);
+
+    let url: string | null;
+    try {
+      url = await presignGet(env, asset.imageS3Key);
+    } catch (e) {
+      console.error("[occupant asset image]", e);
+      return c.json({ error: "Could not create download link (S3)." }, 503);
+    }
+    if (!url) return c.json({ error: "S3 not configured" }, 503);
+    return c.json({ url });
   });
 
   // fallow-ignore-next-line complexity

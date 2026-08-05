@@ -156,7 +156,25 @@ const issueInclude = {
   assignee: { select: userPublicSelect },
   creator: { select: userPublicSelect },
   completedBy: { select: userPublicSelect },
-  asset: { select: { id: true, tag: true, name: true } },
+  asset: {
+    select: {
+      id: true,
+      tag: true,
+      name: true,
+      category: true,
+      locationLabel: true,
+      hall: true,
+      rowLabel: true,
+      rack: true,
+      positionU: true,
+      manufacturer: true,
+      model: true,
+      serialNumber: true,
+      notes: true,
+      imageS3Key: true,
+      bimAnchor: true,
+    },
+  },
   vendor: { select: { id: true, name: true, email: true, trade: true } },
   file: { select: { name: true } },
   fileVersion: { select: { version: true } },
@@ -170,6 +188,35 @@ const issueInclude = {
 } as const;
 
 type IssueRow = Prisma.IssueGetPayload<{ include: typeof issueInclude }>;
+
+function issueAssetPublicJson(asset: NonNullable<IssueRow["asset"]>) {
+  const bim =
+    asset.bimAnchor && typeof asset.bimAnchor === "object" && !Array.isArray(asset.bimAnchor)
+      ? (asset.bimAnchor as { name?: unknown; ifcType?: unknown; spatialPath?: unknown })
+      : null;
+  const spatial = Array.isArray(bim?.spatialPath) ? bim.spatialPath : null;
+  const levelRaw = typeof spatial?.[0] === "string" ? spatial[0].trim() : "";
+  const elName = typeof bim?.name === "string" ? bim.name.trim() : "";
+  const elType = typeof bim?.ifcType === "string" ? bim.ifcType.trim() : "";
+  return {
+    id: asset.id,
+    tag: asset.tag,
+    name: asset.name,
+    category: asset.category,
+    locationLabel: asset.locationLabel,
+    hall: asset.hall,
+    rowLabel: asset.rowLabel,
+    rack: asset.rack,
+    positionU: asset.positionU,
+    manufacturer: asset.manufacturer,
+    model: asset.model,
+    serialNumber: asset.serialNumber,
+    notes: asset.notes,
+    hasImage: Boolean(asset.imageS3Key),
+    level: levelRaw || null,
+    element: elName || elType ? { name: elName || null, ifcType: elType || null } : null,
+  };
+}
 const CARRY_FORWARD_META_KEY = "__carryForwardFromFileVersionId";
 
 async function issueDisplayNumbersForProject(projectId: string): Promise<Map<string, number>> {
@@ -375,7 +422,7 @@ function issueRowJson(
     })),
     issueKind: row.issueKind,
     assetId: row.assetId,
-    asset: row.asset ? { id: row.asset.id, tag: row.asset.tag, name: row.asset.name } : null,
+    asset: row.asset ? issueAssetPublicJson(row.asset) : null,
     externalAssigneeEmail: row.externalAssigneeEmail,
     externalAssigneeName: row.externalAssigneeName,
     acknowledgedAt: row.acknowledgedAt ? row.acknowledgedAt.toISOString() : null,

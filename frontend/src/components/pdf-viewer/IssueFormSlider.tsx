@@ -59,6 +59,7 @@ import { DeleteIssueConfirmDialog } from "./DeleteIssueConfirmDialog";
 import { IssuePhotoSketchModal } from "./IssuePhotoSketchModal";
 import { IssueReferenceLiveCapture } from "./IssueReferenceLiveCapture";
 import { ViewerUserThumb } from "./ViewerUserThumb";
+import { canLiveCameraCapture } from "@/lib/canLiveCameraCapture";
 import { referencePhotoContentType } from "@/lib/referencePhotoMime";
 import { IssueGuide } from "./IssueGuide";
 
@@ -406,16 +407,7 @@ export function IssueFormSlider(props: Props) {
     [referencePhotos],
   );
 
-  const canLiveCapture = useMemo(
-    () =>
-      typeof navigator !== "undefined" &&
-      typeof window !== "undefined" &&
-      Boolean(navigator.mediaDevices?.getUserMedia) &&
-      (window.isSecureContext === true ||
-        window.location.protocol === "https:" ||
-        window.location.hostname === "localhost"),
-    [],
-  );
+  const canLiveCapture = canLiveCameraCapture();
 
   useEffect(() => {
     if (variant !== "create" || !open || props.variant !== "create") {

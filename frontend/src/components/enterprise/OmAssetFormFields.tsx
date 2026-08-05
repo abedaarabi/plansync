@@ -127,6 +127,11 @@ export function assetDraftToCreateBody(d: AssetFormDraft): Parameters<typeof cre
   };
 }
 
+/** Field-only patch — does not touch drawing / BIM file links. */
+export function assetDraftToCorePatchBody(d: AssetFormDraft) {
+  return assetDraftCoreFields(d);
+}
+
 /**
  * Patch body for edit — updates the drawing link without clearing a BIM element.
  * Attaching a PDF resets sheet pin fields; use "Clear link" to drop the 3D anchor.

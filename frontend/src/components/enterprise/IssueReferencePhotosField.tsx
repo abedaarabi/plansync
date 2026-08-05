@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
+import { canLiveCameraCapture } from "@/lib/canLiveCameraCapture";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Camera, ImagePlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -68,16 +69,7 @@ export function IssueReferencePhotosField({
   const [liveCaptureOpen, setLiveCaptureOpen] = useState(false);
   const isPendingMode = !issueId;
 
-  const canLiveCapture = useMemo(
-    () =>
-      typeof navigator !== "undefined" &&
-      typeof window !== "undefined" &&
-      Boolean(navigator.mediaDevices?.getUserMedia) &&
-      (window.isSecureContext === true ||
-        window.location.protocol === "https:" ||
-        window.location.hostname === "localhost"),
-    [],
-  );
+  const canLiveCapture = canLiveCameraCapture();
 
   const uploadMut = useMutation({
     mutationFn: (file: File) => uploadIssueReferencePhotoFile(issueId!, file),

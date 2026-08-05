@@ -1,0 +1,160 @@
+"use client";
+
+import type { ReactNode } from "react";
+import { OmAssetImageThumb } from "@/components/enterprise/OmAssetImageThumb";
+
+export type OmAssetSummaryFields = {
+  tag: string;
+  name: string;
+  category?: string | null;
+  locationLabel?: string | null;
+  hall?: string | null;
+  rowLabel?: string | null;
+  rack?: string | null;
+  positionU?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  notes?: string | null;
+  level?: string | null;
+  hasImage?: boolean;
+  element?: { name: string | null; ifcType: string | null } | null;
+};
+
+function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
+  const v = value?.trim();
+  if (!v) return null;
+  return (
+    <div>
+      <dt className="text-[11px] font-medium text-[var(--enterprise-text-muted)]">{label}</dt>
+      <dd className="mt-0.5 break-words text-sm font-medium text-[var(--enterprise-text)]">{v}</dd>
+    </div>
+  );
+}
+
+function structuredLocation(asset: OmAssetSummaryFields): string | null {
+  const parts = [asset.hall, asset.rowLabel, asset.rack, asset.positionU]
+    .map((s) => s?.trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/**
+ * Equipment summary for occupant report + inbox (photo + fields, no documents).
+ */
+// fallow-ignore-next-line complexity
+export function OmAssetSummaryCard(props: {
+  asset: OmAssetSummaryFields;
+  /** Authenticated image via project asset id, or a public/presigned URL. */
+  image?:
+    | { mode: "auth"; projectId: string; assetId: string }
+    | { mode: "url"; url: string | null | undefined; loading?: boolean };
+  className?: string;
+  footer?: ReactNode;
+  /** When false, skip the "Equipment" eyebrow (parent already titles the section). */
+  showTitle?: boolean;
+}) {
+  const { asset } = props;
+  const showTitle = props.showTitle !== false;
+  const hasImage = Boolean(asset.hasImage);
+  const locationStruct = structuredLocation(asset);
+  const elementLabel = asset.element?.name?.trim() || asset.element?.ifcType?.trim() || null;
+  const elementTypeExtra =
+    asset.element?.name?.trim() && asset.element?.ifcType?.trim()
+      ? asset.element.ifcType.trim()
+      : null;
+
+  let photo: ReactNode = null;
+  if (hasImage && props.image?.mode === "auth") {
+    photo = (
+      <div className="overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]">
+        <OmAssetImageThumb
+          projectId={props.image.projectId}
+          assetId={props.image.assetId}
+          hasImage
+          alt={asset.name}
+          className="max-h-44 w-full object-cover object-center"
+          fallbackClassName="flex h-28 w-full items-center justify-center bg-[var(--enterprise-bg)]"
+        />
+      </div>
+    );
+  } else if (hasImage && props.image?.mode === "url") {
+    photo = (
+      <div className="overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]">
+        {props.image.loading || !props.image.url ? (
+          <div className="flex h-28 w-full items-center justify-center text-xs text-[var(--enterprise-text-muted)]">
+            Loading photo…
+          </div>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL
+          <img
+            src={props.image.url}
+            alt={asset.name}
+            className="max-h-44 w-full object-cover object-center"
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={
+        props.className ??
+        "enterprise-card space-y-3 px-4 py-3 text-sm shadow-[var(--enterprise-shadow-xs)]"
+      }
+    >
+      {showTitle ? (
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+          Equipment
+        </p>
+      ) : null}
+
+      {photo}
+
+      <div>
+        <p className="font-medium text-[var(--enterprise-text)]">
+          <span className="font-mono">{asset.tag}</span>
+          <span className="font-normal text-[var(--enterprise-text-muted)]"> — </span>
+          {asset.name}
+        </p>
+        {elementLabel ? (
+          <p className="mt-1 text-[var(--enterprise-text)]">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+              Element
+            </span>
+            <span className="mt-0.5 block">
+              {elementLabel}
+              {elementTypeExtra ? (
+                <span className="text-[var(--enterprise-text-muted)]"> · {elementTypeExtra}</span>
+              ) : null}
+            </span>
+          </p>
+        ) : null}
+      </div>
+
+      <dl className="grid grid-cols-2 gap-3">
+        <InfoRow label="Level" value={asset.level} />
+        <InfoRow label="Category" value={asset.category} />
+        <InfoRow label="Location" value={asset.locationLabel} />
+        <InfoRow label="Hall / row / rack" value={locationStruct} />
+        <InfoRow label="Manufacturer" value={asset.manufacturer} />
+        <InfoRow label="Model" value={asset.model} />
+        <InfoRow label="Serial" value={asset.serialNumber} />
+      </dl>
+
+      {asset.notes?.trim() ? (
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+            Notes
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-[var(--enterprise-text)]">
+            {asset.notes.trim()}
+          </p>
+        </div>
+      ) : null}
+
+      {props.footer}
+    </div>
+  );
+}
