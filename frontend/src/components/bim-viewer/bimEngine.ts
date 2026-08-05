@@ -383,9 +383,37 @@ export class BimEngine {
   /** Active colorize highlighter style ids (filter visualization). */
   private colorizeStyleIds: string[] = [];
   private static readonly FILTER_GHOST_STYLE = "filter:ghost";
-  /** Persisted filter highlight state so material sync / plan bake can restore tints. */
+  /** Solid overlay on filter matches while the rest of the scene is material-faded. */
+  private static readonly FILTER_MATCH_STYLE = "filter:match";
+  private static readonly FILTER_GHOST_TINT = new THREE.Color(0x64748b);
+  /**
+   * Legacy per-element ghost highlight map. Prefer {@link filterSceneGhostOpacity}
+   * (O(materials) fade) — highlighting every non-match id does not scale.
+   */
   private activeFilterGhostMap: OBC.ModelIdMap | null = null;
   private activeFilterGhostOpacity = 0.18;
+  /** Match set for filter Ghost picking / solid overlays (small). */
+  private activeFilterMatchMap: OBC.ModelIdMap | null = null;
+  /** Cached match paint groups (original colors) — valid while scene ghost is on. */
+  private filterMatchPaintGroups: {
+    modelId: string;
+    color: THREE.Color;
+    localIds: number[];
+    renderedFaces: number;
+  }[] = [];
+  /** Scene-wide material fade while Filters → Ghost is active. */
+  private filterSceneGhostOpacity: number | null = null;
+  private filterGhostRefreshTimer: number | null = null;
+  private filterGhostMatBackup = new Map<
+    THREE.Material,
+    {
+      opacity: number;
+      transparent: boolean;
+      depthWrite: boolean;
+      color?: THREE.Color;
+      emissive?: THREE.Color;
+    }
+  >();
   private activeColorizeGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
   /**
    * Clash review owns viewport presentation (ghost + Item 1/2 colors). While set,
@@ -413,6 +441,8 @@ export class BimEngine {
   private static readonly CLASH_GHOST_TINT = new THREE.Color(0x6a6e74);
   /** Bumps on every presentClashPartners call so stale async mode switches are ignored. */
   private clashPresentSeq = 0;
+  /** Bumps on every filter Ghost/Hide/All apply so stale mode switches cannot commit. */
+  private filterPresentSeq = 0;
   /** Last applied Color/Ghost/Hide — used to keep ghost when switching clash rows. */
   private clashContextMode: "color" | "ghost" | "hide" | null = null;
   private clashGhostRefreshTimer: number | null = null;
@@ -714,6 +744,7 @@ export class BimEngine {
       if (this.effectiveQuality) this.applyRenderQuality(this.effectiveQuality);
       fragments.core.update(true);
       this.scheduleClashSceneGhostRefresh();
+      this.scheduleFilterSceneGhostRefresh();
       this.applyViewportAtmosphere(this.getModelBoundingSphere());
       void this.refreshIssueAnchorWorld();
     });
@@ -751,6 +782,23 @@ export class BimEngine {
         this.scheduleClashSceneGhostRefresh();
         return;
       }
+      if (this.filterSceneGhostOpacity != null) {
+        const threeMat = material as unknown as THREE.Material;
+        if (this.isFilterOverlayMaterial(threeMat)) {
+          this.solidifyFilterOverlayMaterial(threeMat);
+          return;
+        }
+        this.ghostFilterMaterial(threeMat, this.filterSceneGhostOpacity);
+        if (!isLod) {
+          material.polygonOffset = true;
+          material.polygonOffsetUnits = 1;
+          material.polygonOffsetFactor = Math.random();
+          if ("side" in material) material.side = THREE.DoubleSide;
+          if ("fog" in material) material.fog = true;
+        }
+        this.scheduleFilterSceneGhostRefresh();
+        return;
+      }
       if (this.materialSyncInProgress) return;
       if (!isLod) {
         material.polygonOffset = true;
@@ -782,6 +830,7 @@ export class BimEngine {
       autoUpdateFragments: false,
       selectMaterialDefinition: {
         color: new THREE.Color(SELECTION_ACCENT),
+        // Fallback only — Outliner provides the BIM 360 see-through look when post is on.
         opacity: BIM_SELECTION.fillOpacity,
         transparent: true,
         renderedFaces: 0,
@@ -803,13 +852,14 @@ export class BimEngine {
     const hoverer = components.get(OBF.Hoverer);
     hoverer.world = world;
     hoverer.fade = true;
-    hoverer.fadeDuration = 140;
+    hoverer.fadeDuration = 120;
     hoverer.mode = OBF.HovererMode.MOUSE_MOVE;
     hoverer.material = new THREE.MeshBasicMaterial({
       color: new THREE.Color(HOVER_ACCENT),
       transparent: true,
       opacity: BIM_SELECTION.hoverOpacity,
       depthTest: true,
+      depthWrite: false,
       side: THREE.DoubleSide,
     });
     hoverer.enabled = false;
@@ -1211,7 +1261,12 @@ export class BimEngine {
 
   /** Re-apply ghost / colorize tints after fragment material or tile updates. */
   private hasActiveFilterHighlights(): boolean {
-    return this.activeFilterGhostMap != null || this.activeColorizeGroups.length > 0;
+    return (
+      this.activeFilterGhostMap != null ||
+      this.activeFilterMatchMap != null ||
+      this.filterSceneGhostOpacity != null ||
+      this.activeColorizeGroups.length > 0
+    );
   }
 
   // fallow-ignore-next-line complexity
@@ -1229,15 +1284,32 @@ export class BimEngine {
     return false;
   }
 
+  /**
+   * Prefer Outliner see-through + edge (BIM 360 / Forge OVERLAYED). Flat fragment
+   * select tint flattens materials and looks muddy when stacked with the outline.
+   */
+  private shouldPaintFragmentSelectTint(): boolean {
+    if (this.clashReviewSuppressSelectPaint) return false;
+    const post = this.world?.renderer?.postproduction;
+    if (post?.enabled && post.outlinesEnabled) return false;
+    return true;
+  }
+
   private hasActiveFragmentHighlights(): boolean {
-    return this.hasActiveFilterHighlights() || this.hasActiveSelectionHighlight();
+    // Outline-only selection (BIM 360) does not need fragment tints — keep
+    // materials live under the Outliner wash instead of deferring sync.
+    const selectTint = this.hasActiveSelectionHighlight() && this.shouldPaintFragmentSelectTint();
+    return this.hasActiveFilterHighlights() || selectTint;
   }
 
   /** Hover preview is only useful in orbit select mode — not over look-only ghosts. */
   private syncHoverEnabled(): void {
     const hoverer = this.components?.get(OBF.Hoverer);
     if (!hoverer) return;
-    const ghostLookOnly = this.clashGhostPickOnly || this.activeFilterGhostMap != null;
+    const ghostLookOnly =
+      this.clashGhostPickOnly ||
+      this.activeFilterGhostMap != null ||
+      this.filterSceneGhostOpacity != null;
     hoverer.enabled = this.tool === "select" && this.cameraMode !== "walk" && !ghostLookOnly;
   }
 
@@ -1389,10 +1461,12 @@ export class BimEngine {
 
       if (!this.readyFragments()) return;
 
-      // During clash review, keep Item 1/2 colors; selection still updates for properties.
-      const selectMap = this.clashReviewSuppressSelectPaint
-        ? null
-        : this.sanitizeHighlightMap(this.getActiveSelectionMap(), fragments);
+      // Outliner owns the BIM 360 look when post outlines are on; fragment tint
+      // is only a fallback (transparent bg / outlines disabled). Clash review
+      // never paints select tint so Item 1/2 colors stay visible.
+      const selectMap = this.shouldPaintFragmentSelectTint()
+        ? this.sanitizeHighlightMap(this.getActiveSelectionMap(), fragments)
+        : null;
       if (selectMap && highlighter) {
         const selectName = highlighter.config.selectName;
         const selectDef = highlighter.styles.get(selectName);
@@ -1436,7 +1510,11 @@ export class BimEngine {
   }
 
   private shouldDeferMaterialSync(): boolean {
-    return this.hasActiveFragmentHighlights() || this.clashSceneGhostOpacity != null;
+    return (
+      this.hasActiveFragmentHighlights() ||
+      this.clashSceneGhostOpacity != null ||
+      this.filterSceneGhostOpacity != null
+    );
   }
 
   private maybeScheduleDeferredMaterialSync(): void {
@@ -2738,7 +2816,12 @@ export class BimEngine {
       return this.pickFromAllowMap(e, this.clashPickAllowMap);
     }
 
-    // Filter Ghost: skip dimmed ids and pierce through to visible matches.
+    // Filter Ghost (scene fade): only matches are selectable.
+    if (this.filterSceneGhostOpacity != null && this.activeFilterMatchMap) {
+      return this.pickFromAllowMap(e, this.activeFilterMatchMap);
+    }
+
+    // Legacy per-element filter ghost: skip dimmed ids and pierce to matches.
     if (this.activeFilterGhostMap) {
       for (const hit of await this.raycastAllAtPointer(e)) {
         if (!this.isFilterGhostLocalId(hit.modelId, hit.localId)) {
@@ -2788,6 +2871,7 @@ export class BimEngine {
       this.pendingMaterialSync = true;
       if (this.hasActiveFragmentHighlights()) this.scheduleHighlightRepaint();
       if (this.clashSceneGhostOpacity != null) this.scheduleClashSceneGhostRefresh();
+      if (this.filterSceneGhostOpacity != null) this.scheduleFilterSceneGhostRefresh();
       return;
     }
     if (this.materialSyncTimer != null) window.clearTimeout(this.materialSyncTimer);
@@ -4696,6 +4780,224 @@ export class BimEngine {
     return typeof customId === "string" && customId.startsWith("clash-item");
   }
 
+  private isFilterOverlayMaterial(mat: THREE.Material): boolean {
+    const customId = mat.userData?.customId;
+    return (
+      typeof customId === "string" &&
+      (customId === BimEngine.FILTER_MATCH_STYLE || customId.startsWith("colorize:"))
+    );
+  }
+
+  /** Fade a base material for Filters → Ghost (skip match/colorize overlays). */
+  private ghostFilterMaterial(mat: THREE.Material, opacity: number): void {
+    if (!("opacity" in mat)) return;
+    if (this.isFilterOverlayMaterial(mat)) {
+      this.solidifyFilterOverlayMaterial(mat);
+      return;
+    }
+    const m = mat as THREE.Material & {
+      opacity: number;
+      transparent: boolean;
+      depthWrite: boolean;
+      needsUpdate: boolean;
+      color?: THREE.Color;
+      emissive?: THREE.Color;
+    };
+    if (!this.filterGhostMatBackup.has(m)) {
+      this.filterGhostMatBackup.set(m, {
+        opacity: m.opacity,
+        transparent: m.transparent,
+        depthWrite: m.depthWrite,
+        color: m.color ? m.color.clone() : undefined,
+        emissive: m.emissive ? m.emissive.clone() : undefined,
+      });
+    }
+    const pipelineChanged = !m.transparent || m.depthWrite;
+    m.transparent = true;
+    m.opacity = opacity;
+    m.depthWrite = false;
+    if (m.color) m.color.copy(BimEngine.FILTER_GHOST_TINT);
+    if (m.emissive) m.emissive.setRGB(0, 0, 0);
+    if ("highlightOpacity" in m) {
+      (m as THREE.Material & { highlightOpacity: number }).highlightOpacity = opacity;
+    }
+    if (pipelineChanged) m.needsUpdate = true;
+  }
+
+  private solidifyFilterOverlayMaterial(mat: THREE.Material): void {
+    if (!("opacity" in mat)) return;
+    const m = mat as THREE.Material & {
+      opacity: number;
+      transparent: boolean;
+      depthWrite: boolean;
+      depthTest: boolean;
+      needsUpdate: boolean;
+    };
+    this.filterGhostMatBackup.delete(m);
+    const customId = m.userData?.customId;
+    const colorize = typeof customId === "string" && customId.startsWith("colorize:");
+    const pipelineChanged = m.transparent !== colorize || !m.depthWrite || m.opacity < 1;
+    m.opacity = colorize ? COLORIZE_HIGHLIGHT_OPACITY : 1;
+    m.transparent = colorize;
+    m.depthWrite = !colorize;
+    m.depthTest = true;
+    if ("highlightOpacity" in m) {
+      (m as THREE.Material & { highlightOpacity: number }).highlightOpacity = m.opacity;
+    }
+    if (pipelineChanged) m.needsUpdate = true;
+  }
+
+  private solidifyFilterOverlayMaterials(): void {
+    for (const material of this.collectFragmentMaterials()) {
+      if (this.isFilterOverlayMaterial(material)) this.solidifyFilterOverlayMaterial(material);
+    }
+  }
+
+  private applyFilterSceneGhost(opacity: number): void {
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    if (!fragments?.initialized) return;
+    this.filterSceneGhostOpacity = opacity;
+    for (const material of this.collectFragmentMaterials()) {
+      this.ghostFilterMaterial(material, opacity);
+    }
+    this.solidifyFilterOverlayMaterials();
+    this.bumpRender();
+  }
+
+  private scheduleFilterSceneGhostRefresh(): void {
+    if (this.disposed || this.filterSceneGhostOpacity == null) return;
+    if (this.filterGhostRefreshTimer != null) window.clearTimeout(this.filterGhostRefreshTimer);
+    this.filterGhostRefreshTimer = window.setTimeout(() => {
+      this.filterGhostRefreshTimer = null;
+      if (this.filterSceneGhostOpacity == null) return;
+      void this.paintFilterMatchHighlights().then(() => {
+        if (this.filterSceneGhostOpacity == null) return;
+        this.applyFilterSceneGhost(this.filterSceneGhostOpacity);
+        this.solidifyFilterOverlayMaterials();
+      });
+    }, 240);
+  }
+
+  /** Read match colors from live materials — call before scene-fading the base. */
+  // fallow-ignore-next-line complexity
+  private async resolveFilterMatchPaintGroups(): Promise<
+    { modelId: string; color: THREE.Color; localIds: number[]; renderedFaces: number }[]
+  > {
+    const out: {
+      modelId: string;
+      color: THREE.Color;
+      localIds: number[];
+      renderedFaces: number;
+    }[] = [];
+    const fragments = this.readyFragments();
+    if (!fragments || !this.activeFilterMatchMap) return out;
+    const safeMap = this.sanitizeHighlightMap(this.activeFilterMatchMap, fragments);
+    if (!safeMap) return out;
+
+    for (const [modelId, ids] of Object.entries(safeMap)) {
+      if (!(ids instanceof Set) || ids.size === 0) continue;
+      const model = fragments.list.get(modelId);
+      if (!model) continue;
+      const localIds = [...ids];
+      try {
+        const groups = await model.getItemsMaterialDefinition(localIds);
+        for (const group of groups) {
+          if (!group.localIds.length) continue;
+          out.push({
+            modelId,
+            color:
+              group.definition.color instanceof THREE.Color
+                ? group.definition.color.clone()
+                : new THREE.Color("#d1d5db"),
+            localIds: group.localIds,
+            renderedFaces: group.definition.renderedFaces ?? 0,
+          });
+        }
+      } catch {
+        out.push({
+          modelId,
+          color: new THREE.Color("#e2e8f0"),
+          localIds,
+          renderedFaces: 0,
+        });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Paint filter matches as opaque overlays. Overlays use filter:match customId
+   * so {@link ghostFilterMaterial} leaves them solid on the faded scene.
+   */
+  private async paintFilterMatchHighlightGroups(
+    groups: { modelId: string; color: THREE.Color; localIds: number[]; renderedFaces: number }[],
+  ): Promise<void> {
+    const fragments = this.readyFragments();
+    if (!fragments || this.disposed || groups.length === 0) return;
+
+    for (const group of groups) {
+      if (group.localIds.length === 0) continue;
+      try {
+        await fragments.highlight(
+          {
+            color: group.color,
+            opacity: 1,
+            transparent: false,
+            renderedFaces: group.renderedFaces,
+            depthTest: true,
+            depthWrite: true,
+            customId: BimEngine.FILTER_MATCH_STYLE,
+          },
+          { [group.modelId]: new Set(group.localIds) },
+        );
+      } catch {
+        /* stale maps during tile churn */
+      }
+    }
+
+    this.solidifyFilterOverlayMaterials();
+    this.bumpRender();
+  }
+
+  /** Re-apply solid match overlays using cached pre-fade colors when available. */
+  private async paintFilterMatchHighlights(): Promise<void> {
+    const groups =
+      this.filterMatchPaintGroups.length > 0
+        ? this.filterMatchPaintGroups
+        : await this.resolveFilterMatchPaintGroups();
+    await this.paintFilterMatchHighlightGroups(groups);
+  }
+
+  private clearFilterSceneGhost(): void {
+    if (this.filterGhostRefreshTimer != null) {
+      window.clearTimeout(this.filterGhostRefreshTimer);
+      this.filterGhostRefreshTimer = null;
+    }
+    this.filterSceneGhostOpacity = null;
+    this.filterMatchPaintGroups = [];
+    for (const [mat, prev] of this.filterGhostMatBackup) {
+      try {
+        const m = mat as THREE.Material & {
+          opacity: number;
+          transparent: boolean;
+          depthWrite: boolean;
+          needsUpdate: boolean;
+          color?: THREE.Color;
+          emissive?: THREE.Color;
+        };
+        m.opacity = prev.opacity;
+        m.transparent = prev.transparent;
+        m.depthWrite = prev.depthWrite;
+        if (prev.color && m.color) m.color.copy(prev.color);
+        if (prev.emissive && m.emissive) m.emissive.copy(prev.emissive);
+        m.needsUpdate = true;
+      } catch {
+        /* material may already be disposed */
+      }
+    }
+    this.filterGhostMatBackup.clear();
+  }
+
   /** Fade + desaturate a fragment material for clash scene ghost (O(1) per material). */
   private ghostClashMaterial(mat: THREE.Material, opacity: number): void {
     if (!("opacity" in mat)) return;
@@ -4896,7 +5198,13 @@ export class BimEngine {
     } catch {
       /* best-effort clear of prior pair colors */
     }
+    // resetHighlight often recreates materials one tick later; if Ghost is on,
+    // those new mats arrive solid until the coalesced refresh re-fades them.
     await this.paintClashItemHighlights();
+    if (this.clashSceneGhostOpacity != null) {
+      this.applyClashSceneGhost(this.clashSceneGhostOpacity);
+      this.solidifyClashItemMaterials();
+    }
     this.bumpRender();
   }
 
@@ -4934,10 +5242,14 @@ export class BimEngine {
     this.clashContextMode = context;
     this.clashGhostPickOnly = false;
     this.clashPickAllowMap = null;
+    // Invalidate any in-flight filter Ghost/Hide/All commit.
+    this.filterPresentSeq += 1;
     this.selectedGuids.clear();
     this.lastPickMap = null;
     this.lastPickedModelId = null;
     this.activeFilterGhostMap = null;
+    this.activeFilterMatchMap = null;
+    this.clearFilterSceneGhost();
     // Leaving Ghost (or first entry / mode change) restores solids; row switches keep fade.
     if (!keepSceneGhost) this.clearClashSceneGhost();
     await this.renderEffects?.setSelection(null);
@@ -5001,6 +5313,8 @@ export class BimEngine {
         this.clashSceneGhostOpacity = ghostOpacity;
         this.applyClashSceneGhost(ghostOpacity);
         this.solidifyClashItemMaterials();
+        // Tile/LOD material churn after resetHighlight often undoes the fade.
+        this.scheduleClashSceneGhostRefresh();
       } else {
         this.solidifyClashItemMaterials();
       }
@@ -5029,6 +5343,8 @@ export class BimEngine {
       await this.requestFragmentHighlights();
     } else if (context === "ghost") {
       const ghostOpacity = opts.ghostOpacity ?? CLASH_SCENE_GHOST_OPACITY;
+      // Set opacity before highlight paint so runFragmentHighlightPaint's trailing
+      // ghost pass and onItemSet handlers see a live Ghost context.
       this.clashSceneGhostOpacity = ghostOpacity;
       await this.requestFragmentHighlights();
       if (!stillCurrent()) return;
@@ -5073,10 +5389,17 @@ export class BimEngine {
     this.bumpRender();
   }
 
-  /** Exit clash review presentation (pair colors + ghost + suppress flag). */
+  /**
+   * Exit clash review presentation (pair colors + scene ghost + isolate).
+   * Keeps suppress flagged until overlays are cleared so the filter dock cannot
+   * race in mid-teardown; Shell re-applies filterState after selectedClashId clears.
+   */
+  // fallow-ignore-next-line unused-class-member
   async clearClashReviewPresentation(): Promise<void> {
     this.clashPresentSeq += 1;
-    this.clashReviewSuppressSelectPaint = false;
+    this.filterPresentSeq += 1;
+    // Keep clashReviewSuppressSelectPaint true until the end — releasing it early
+    // lets an in-flight filter apply wipe the scene (blue ghost / lost pair colors).
     this.clashContextMode = null;
     this.clashGhostPickOnly = false;
     this.clashPickAllowMap = null;
@@ -5086,14 +5409,38 @@ export class BimEngine {
       this.highlightRepaintTimer = null;
     }
     this.clearClashSceneGhost();
-    await this.applyFilterPresentation({
-      filterActive: false,
-      visualize: "none",
-      matchGuids: [],
-      colorizeGroups: [],
-      force: true,
-    });
-    await this.showAllElements();
+    this.activeColorizeGroups = [];
+    this.colorizeStyleIds = [];
+    this.activeFilterGhostMap = null;
+    this.activeFilterMatchMap = null;
+    this.clearFilterSceneGhost();
+
+    // Undo Hide-mode isolate without the nuclear showAllElements path (that
+    // cleared filter ghost and raced the Shell re-apply).
+    try {
+      const hider = this.mustComponents().get(OBC.Hider);
+      await hider.set(true);
+      await this.showAllGroups();
+      await this.reapplyGroupVisibility();
+    } catch {
+      /* engine may be disposing */
+    }
+
+    const fragments = this.readyFragments();
+    if (fragments) {
+      try {
+        await fragments.resetHighlight();
+        await fragments.core.update(true);
+      } catch {
+        /* best-effort */
+      }
+    }
+
+    this.clashReviewSuppressSelectPaint = false;
+    this.syncHoverEnabled();
+    this.invalidatePlanSilhouette();
+    this.bumpRender();
+    this.maybeScheduleDeferredMaterialSync();
   }
 
   async isolateSelection(): Promise<void> {
@@ -5118,6 +5465,8 @@ export class BimEngine {
     this.clashGhostPickOnly = false;
     this.clashPickAllowMap = null;
     this.clearClashSceneGhost();
+    this.activeFilterMatchMap = null;
+    this.clearFilterSceneGhost();
     await this.clearColorize();
     await this.clearFilterGhost();
     this.syncHoverEnabled();
@@ -5173,6 +5522,11 @@ export class BimEngine {
   /**
    * Apply filter visualize + colorize in one pass so ghost/colorize/selection
    * are painted together without intermediate wipes.
+   *
+   * Clash review owns the viewport: filter-dock calls must not commit while
+   * suppress is set. All awaits happen before mutating shared highlight state
+   * so a clash that starts mid-resolve cannot be wiped by a late commit
+   * (which was painting slate-blue filter:ghost over Item 1/2 colors).
    */
   // fallow-ignore-next-line complexity
   async applyFilterPresentation(opts: {
@@ -5195,61 +5549,156 @@ export class BimEngine {
      */
     force?: boolean;
   }): Promise<void> {
-    // Filter-dock idle clears must not wipe an active clash review presentation.
-    const idleClear =
-      !opts.filterActive && opts.visualize === "none" && opts.colorizeGroups.length === 0;
-    if (idleClear && this.clashReviewSuppressSelectPaint && !opts.force) return;
+    const seq = ++this.filterPresentSeq;
+    const blockedByClash = () => this.clashReviewSuppressSelectPaint && !opts.force;
+    const stillCurrent = () => !this.disposed && this.filterPresentSeq === seq && !blockedByClash();
+
+    if (blockedByClash()) return;
 
     if (!opts.filterActive) {
       await this.resetFilterVisibility();
-      // Clash review may have started while we awaited — do not wipe it.
-      if (this.clashReviewSuppressSelectPaint && !opts.force) return;
+      if (!stillCurrent()) return;
       this.activeFilterGhostMap = null;
+      this.activeFilterMatchMap = null;
+      this.clearFilterSceneGhost();
       this.activeColorizeGroups = [];
       this.colorizeStyleIds = [];
       await this.requestFragmentHighlights();
+      if (!stillCurrent()) return;
       this.maybeScheduleDeferredMaterialSync();
       return;
     }
 
-    this.activeFilterGhostMap = null;
+    // Resolve isolate / ghost / colorize into locals, then commit once.
+    let nextGhostMap: OBC.ModelIdMap | null = null;
+    let nextMatchMap: OBC.ModelIdMap | null = null;
+    let nextGhostOpacity = opts.ghostOpacity ?? 0.18;
+    let isolateMap: OBC.ModelIdMap | null = null;
+    const nextGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
+    const nextStyleIds: string[] = [];
 
     if (opts.visualize === "none") {
       await this.resetFilterVisibility();
+      if (!stillCurrent()) return;
     } else if (opts.visualize === "isolate") {
-      const map = opts.matchRefs?.length
+      isolateMap = opts.matchRefs?.length
         ? await this.resolveGuidRefsToModelIdMap(opts.matchRefs)
         : await this.resolveModelIdMapFromGuids(opts.matchGuids);
-      if (map) {
-        const hider = this.mustComponents().get(OBC.Hider);
-        await hider.isolate(map);
-        this.invalidatePlanSilhouette();
-      }
+      if (!stillCurrent()) return;
     } else {
-      await this.applyFilterGhostState(opts.matchGuids, opts.ghostOpacity ?? 0.18);
+      // Ghost: tint only non-matches. Matches keep real base materials/colors.
+      // Build the non-match map from geometry ids (fast) — never resolve every
+      // non-match GUID through the quantity index.
+      await this.ensureBaseVisibilityForFilter();
+      if (!stillCurrent()) return;
+      const built = await this.buildFilterGhostMaps(opts.matchGuids, nextGhostOpacity);
+      if (!stillCurrent()) return;
+      if (built) {
+        nextGhostMap = built.ghostMap;
+        nextMatchMap = built.matchMap;
+        nextGhostOpacity = built.opacity;
+      }
     }
 
-    const nextGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
-    this.colorizeStyleIds = [];
     for (const group of opts.colorizeGroups) {
+      if (!stillCurrent()) return;
       const map = await this.resolveGuidRefsToModelIdMap(
         group.guids.map((guid) => ({ guid, fileVersionId: group.fileVersionId })),
       );
       if (!map) continue;
-      this.colorizeStyleIds.push(group.styleId);
+      nextStyleIds.push(group.styleId);
       nextGroups.push({ styleId: group.styleId, color: group.color, map });
     }
+    if (!stillCurrent()) return;
+
+    // Commit visibility + highlight state together.
+    this.clearFilterSceneGhost();
+    if (opts.visualize === "isolate") {
+      this.activeFilterMatchMap = null;
+      this.activeFilterGhostMap = null;
+      if (isolateMap) {
+        const hider = this.mustComponents().get(OBC.Hider);
+        await hider.isolate(isolateMap);
+        if (!stillCurrent()) return;
+        this.invalidatePlanSilhouette();
+      }
+    } else if (opts.visualize === "none") {
+      this.activeFilterMatchMap = null;
+      this.activeFilterGhostMap = null;
+    } else {
+      this.activeFilterGhostMap = nextGhostMap;
+      this.activeFilterMatchMap = nextMatchMap;
+      this.activeFilterGhostOpacity = nextGhostOpacity;
+    }
+
+    this.colorizeStyleIds = nextStyleIds;
     this.activeColorizeGroups = nextGroups;
+    this.syncHoverEnabled();
 
     await this.requestFragmentHighlights();
+    if (!stillCurrent()) return;
     if (!this.hasActiveFragmentHighlights()) {
       this.maybeScheduleDeferredMaterialSync();
     }
   }
 
+  /**
+   * Non-match ghost map = all geometry ids minus matches.
+   * Matches are left unhighlighted so they keep real model colors.
+   */
+  // fallow-ignore-next-line complexity
+  private async buildFilterGhostMaps(
+    matchGuids: string[],
+    opacity: number,
+  ): Promise<{
+    ghostMap: OBC.ModelIdMap;
+    matchMap: OBC.ModelIdMap | null;
+    opacity: number;
+  } | null> {
+    const matchMap =
+      matchGuids.length > 0 ? await this.resolveModelIdMapFromGuids(matchGuids) : null;
+
+    let all = this.buildAllGeometryModelIdMap();
+    if (!all) all = await this.collectAllGeometryModelIdMap();
+    if (!all) return null;
+
+    const ghostMap = OBC.ModelIdMapUtils.clone(all);
+    if (matchMap) OBC.ModelIdMapUtils.remove(ghostMap, matchMap);
+    if (OBC.ModelIdMapUtils.isEmpty(ghostMap)) return null;
+    return { ghostMap, matchMap, opacity };
+  }
+
+  /** Sync union of classifier category maps (items with geometry). */
+  private buildAllGeometryModelIdMap(): OBC.ModelIdMap | null {
+    if (this.categoryMaps.size === 0) return null;
+    return OBC.ModelIdMapUtils.join([...this.categoryMaps.values()]);
+  }
+
+  /** Fallback when classifications are not ready yet. */
+  private async collectAllGeometryModelIdMap(): Promise<OBC.ModelIdMap | null> {
+    const fragments = this.readyFragments();
+    if (!fragments) return null;
+    const out: OBC.ModelIdMap = {};
+    for (const [modelId, model] of fragments.list) {
+      try {
+        const ids = await model.getItemsIdsWithGeometry();
+        if (!ids?.length) continue;
+        out[modelId] = new Set(ids);
+      } catch {
+        /* model may be unloading */
+      }
+    }
+    return Object.keys(out).length > 0 ? out : null;
+  }
+
   async clearFilterGhost(): Promise<void> {
-    const hadGhost = this.activeFilterGhostMap != null;
+    const hadGhost =
+      this.activeFilterGhostMap != null ||
+      this.activeFilterMatchMap != null ||
+      this.filterSceneGhostOpacity != null;
     this.activeFilterGhostMap = null;
+    this.activeFilterMatchMap = null;
+    this.clearFilterSceneGhost();
     if (hadGhost) this.syncHoverEnabled();
     if (!hadGhost && this.activeColorizeGroups.length === 0) return;
     await this.requestFragmentHighlights();
@@ -5258,26 +5707,13 @@ export class BimEngine {
     }
   }
 
-  /** Update ghost state only — caller paints via requestFragmentHighlights(). */
-  // fallow-ignore-next-line complexity
+  /** X-ray / selection ghost — dim everything except the selection. */
   private async applyFilterGhostState(matchGuids: string[], opacity = 0.18): Promise<void> {
-    const index = this.quantityIndex;
-    if (!index || matchGuids.length === 0) return;
-
     await this.ensureBaseVisibilityForFilter();
-
-    const matchSet = new Set(matchGuids);
-    const ghostGuids = index.elements.filter((el) => !matchSet.has(el.guid)).map((el) => el.guid);
-    if (ghostGuids.length === 0) {
-      this.activeFilterGhostMap = null;
-      this.syncHoverEnabled();
-      return;
-    }
-
-    const map = await this.resolveModelIdMapFromGuids(ghostGuids);
-    if (!map) return;
-
-    this.activeFilterGhostMap = map;
+    const built = await this.buildFilterGhostMaps(matchGuids, opacity);
+    this.clearFilterSceneGhost();
+    this.activeFilterGhostMap = built?.ghostMap ?? null;
+    this.activeFilterMatchMap = built?.matchMap ?? null;
     this.activeFilterGhostOpacity = opacity;
     this.syncHoverEnabled();
   }

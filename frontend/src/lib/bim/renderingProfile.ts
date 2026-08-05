@@ -268,13 +268,21 @@ export const BIM_VIEWPORT = BIM_SKY_PRESETS.cinematic;
 /** Matches `--bim-accent` in globals.css */
 export const BIM_ACCENT = STATUS.primary;
 
-/** Selection / hover — outline + soft glow from the interaction palette. */
+/**
+ * Selection / hover — see-through blue wash via Outliner (no edge lines).
+ * Fragment tint is only a fallback when post outlines are off.
+ */
 export const BIM_SELECTION = {
   fill: INTERACTION.selectedOutline,
-  fillOpacity: 0.2,
+  /** Soft fallback tint when Outliner / post-production is unavailable. */
+  fillOpacity: 0.18,
   hover: INTERACTION.hoveredOutline,
-  hoverOpacity: 0.16,
+  hoverOpacity: 0.1,
   glow: INTERACTION.selectedGlow,
+  /** No screen-space edge stroke — fill wash only. */
+  outlineThickness: 0,
+  /** See-through blue wash over selected geometry. */
+  outlineFillOpacity: 0.32,
 } as const;
 
 const BIM_BACKGROUND_PROFILES: Record<BimBackgroundTheme, BimBackgroundProfile> = {

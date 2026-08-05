@@ -157,6 +157,12 @@ export function useBimClashSession(args: {
     setContextModeState(s.contextMode);
   }, [args.projectId]);
 
+  /** Tear down clash viewport first, then clear selection so Filters can re-apply. */
+  const endClashReviewPresentation = useCallback(async () => {
+    await engineRef.current?.clearClashReviewPresentation();
+    setSelectedClashId(null);
+  }, []);
+
   // Bind sets to loaded models once when the model list changes — never in a setA/setB loop.
   useEffect(() => {
     const models = args.models ?? [];
@@ -175,18 +181,16 @@ export function useBimClashSession(args: {
       setActiveTest(null);
       setClashes([]);
       setRunStats(null);
-      setSelectedClashId(null);
-      void engineRef.current?.clearClashReviewPresentation();
+      void endClashReviewPresentation();
     } else {
       const clash = selectedClashRef.current;
       if (clash && !clashCoveredByOpenModels(clash, openFvs)) {
-        setSelectedClashId(null);
-        void engineRef.current?.clearClashReviewPresentation();
+        void endClashReviewPresentation();
       }
     }
     // modelsKey captures args.models identity without a new array each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync only when loaded models change
-  }, [modelsKey]);
+  }, [modelsKey, endClashReviewPresentation]);
 
   // Persist session. Keep last matching testId when results are cleared for an unrelated federation.
   useEffect(() => {
@@ -242,10 +246,9 @@ export function useBimClashSession(args: {
     setActiveTest(null);
     setClashes([]);
     setRunStats(null);
-    setSelectedClashId(null);
     setPreviewHits([]);
-    await engineRef.current?.clearClashReviewPresentation();
-  }, []);
+    await endClashReviewPresentation();
+  }, [endClashReviewPresentation]);
 
   const reloadTests = useCallback(async () => {
     if (!args.projectId) return;
@@ -284,8 +287,7 @@ export function useBimClashSession(args: {
         selectedClashIdRef.current &&
         (!row || !clashCoveredByOpenModels(row, openFileVersionIds))
       ) {
-        setSelectedClashId(null);
-        await engine?.clearClashReviewPresentation();
+        await endClashReviewPresentation();
       }
     } catch (err) {
       if (args.active) {
@@ -297,6 +299,7 @@ export function useBimClashSession(args: {
     args.active,
     pickPreferredClashTest,
     clearClashResultsState,
+    endClashReviewPresentation,
     openFileVersionIds,
   ]);
 
@@ -606,11 +609,8 @@ export function useBimClashSession(args: {
   );
 
   const clearFocusMode = useCallback(async () => {
-    const engine = args.engine;
-    if (!engine) return;
-    setSelectedClashId(null);
-    await engine.clearClashReviewPresentation();
-  }, [args.engine]);
+    await endClashReviewPresentation();
+  }, [endClashReviewPresentation]);
 
   const deleteClashById = useCallback(
     async (clash: BimClashRow) => {
@@ -618,15 +618,14 @@ export function useBimClashSession(args: {
         await deleteClash(clash.id);
         setClashes((prev) => prev.filter((c) => c.id !== clash.id));
         if (selectedClashId === clash.id) {
-          setSelectedClashId(null);
-          await args.engine?.clearClashReviewPresentation();
+          await endClashReviewPresentation();
         }
         toast.success("Clash deleted");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not delete clash");
       }
     },
-    [args.engine, selectedClashId],
+    [endClashReviewPresentation, selectedClashId],
   );
 
   /** Wipe all saved clashes for the active test and return to a clean setup. */
@@ -635,9 +634,8 @@ export function useBimClashSession(args: {
     if (!test) {
       setClashes([]);
       setRunStats(null);
-      setSelectedClashId(null);
       setPreviewHits([]);
-      await args.engine?.clearClashReviewPresentation();
+      await endClashReviewPresentation();
       return;
     }
     try {
@@ -645,7 +643,6 @@ export function useBimClashSession(args: {
       setClashes([]);
       setRunStats(null);
       setPreviewHits([]);
-      setSelectedClashId(null);
       setActiveTest({
         ...test,
         lastRunAt: null,
@@ -660,7 +657,7 @@ export function useBimClashSession(args: {
             : t,
         ),
       );
-      await args.engine?.clearClashReviewPresentation();
+      await endClashReviewPresentation();
       toast.success(
         deletedCount > 0
           ? `Cleared ${deletedCount.toLocaleString()} clash${deletedCount === 1 ? "" : "es"}`
@@ -669,7 +666,7 @@ export function useBimClashSession(args: {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not reset clash results");
     }
-  }, [activeTest, args.engine]);
+  }, [activeTest, endClashReviewPresentation]);
 
   /** After IssueFormSlider saves, attach the new issue to one or more clashes. */
   const linkClashesToIssue = useCallback(

@@ -39,10 +39,11 @@ export const BIM_PALETTE = {
   },
 
   interaction: {
-    selectedOutline: "#4F8FD7",
-    selectedGlow: "rgba(59,130,246,0.35)",
-    selectedGlowOpacity: 0.35,
-    hoveredOutline: "#78A9D8",
+    /** Matches app / `--bim-accent` (`status.primary`). */
+    selectedOutline: "#3B82F6",
+    selectedGlow: "rgba(59,130,246,0.4)",
+    selectedGlowOpacity: 0.4,
+    hoveredOutline: "#60A5FA",
     hiddenOpacity: 0.08,
     nonSelectedOpacity: 0.12,
     sectionPlane: "#06B6D4",

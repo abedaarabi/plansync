@@ -596,6 +596,10 @@ export function BimViewerShell(props: {
   const issueFocusConsumedRef = useRef<string | null>(null);
   const filterZoomTimerRef = useRef<number | null>(null);
   const filterApplyGenRef = useRef(0);
+  /** Skip one filter zoom after clash review ends (restore Ghost without yanking camera). */
+  const skipFilterZoomOnceRef = useRef(false);
+  /** Last applied visualize — mode-only toggles should not re-zoom. */
+  const filterVisualizeRef = useRef(filterState.visualize);
 
   const markupAnnotations = useBimMarkupStore((s) => s.annotations);
   const markupSelectedIds = useBimMarkupStore((s) => s.selectedIds);
@@ -1477,11 +1481,16 @@ export function BimViewerShell(props: {
     return () => window.removeEventListener("keydown", onKey);
   }, [phase.kind, onShowAll, issuePlacementActive]);
 
+  useEffect(() => {
+    if (clash.selectedClashId) skipFilterZoomOnceRef.current = true;
+  }, [clash.selectedClashId]);
+
   // fallow-ignore-next-line complexity
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine || phase.kind !== "ready") return;
     // Clash review owns ghost/colorize — filter dock must not overwrite it.
+    // Re-runs when selectedClashId clears so Ghost/colorize restore after review.
     if (engine.isClashReviewActive()) return;
 
     const filterActive = hasActiveFilter(filterState);
@@ -1489,6 +1498,7 @@ export function BimViewerShell(props: {
     const applyGen = ++filterApplyGenRef.current;
 
     if (!filterActive && !colorizeActive) {
+      skipFilterZoomOnceRef.current = false;
       void engine.applyFilterPresentation({
         filterActive: false,
         visualize: "none",
@@ -1508,6 +1518,8 @@ export function BimViewerShell(props: {
     const guids = filterMatches.map((m) => m.guid);
     const legend = filterLegend;
     const visualize = filterState.visualize;
+    const visualizeChanged = filterVisualizeRef.current !== visualize;
+    filterVisualizeRef.current = visualize;
 
     filterZoomTimerRef.current = window.setTimeout(() => {
       // fallow-ignore-next-line complexity
@@ -1531,7 +1543,10 @@ export function BimViewerShell(props: {
         if (applyGen !== filterApplyGenRef.current) return;
         if (engine.isClashReviewActive()) return;
 
-        if (filterActive && guids.length > 0) {
+        // Ghost/Hide/All toggles and post-clash restores should not re-frame the camera.
+        const skipZoom = skipFilterZoomOnceRef.current || visualizeChanged;
+        skipFilterZoomOnceRef.current = false;
+        if (!skipZoom && filterActive && guids.length > 0) {
           await engine.zoomToGuids(guids);
         }
       })();
@@ -1543,7 +1558,7 @@ export function BimViewerShell(props: {
       }
       filterApplyGenRef.current += 1;
     };
-  }, [filterState, filterMatches, filterLegend, phase.kind]);
+  }, [filterState, filterMatches, filterLegend, phase.kind, clash.selectedClashId]);
 
   const clearMarkups = useCallback(() => {
     setActiveFlyout(null);

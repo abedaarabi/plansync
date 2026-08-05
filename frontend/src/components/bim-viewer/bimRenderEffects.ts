@@ -5,12 +5,15 @@ import {
   type BimQualityState,
 } from "@/lib/bim/renderQuality";
 import { BIM_PALETTE } from "@/lib/bim/bimPalette";
+import { BIM_SELECTION } from "@/lib/bim/renderingProfile";
 import type { BimEdgeMode, BimViewportAppearance } from "@/lib/bim/viewportAppearance";
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 import * as THREE from "three";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { FXAAShader } from "three/examples/jsm/shaders/FXAAShader.js";
+
+const SELECTION_OUTLINE_GROUP = "selection";
 
 type BimPostWorld = OBC.SimpleWorld<
   OBC.SimpleScene,
@@ -103,15 +106,24 @@ export class BimRenderEffects {
     const outliner = this.components.get(OBF.Outliner);
     outliner.world = this.world;
     outliner.enabled = true;
-    outliner.create("selection", {
-      color: new THREE.Color(BIM_PALETTE.interaction.selectedOutline),
-      fillColor: new THREE.Color(BIM_PALETTE.interaction.selectedOutline),
-      fillOpacity: 0.05,
-      thickness: 1.25,
+
+    const color = new THREE.Color(BIM_SELECTION.fill);
+    const config = {
+      color,
+      fillColor: color.clone(),
+      fillOpacity: BIM_SELECTION.outlineFillOpacity,
+      thickness: BIM_SELECTION.outlineThickness,
       priority: 2,
-    });
-    outliner.clean("selection");
-    if (map) await outliner.addItems(map, "selection");
+    };
+    if (outliner.list().includes(SELECTION_OUTLINE_GROUP)) {
+      outliner.configure(SELECTION_OUTLINE_GROUP, config);
+    } else {
+      outliner.create(SELECTION_OUTLINE_GROUP, config);
+    }
+
+    outliner.clean(SELECTION_OUTLINE_GROUP);
+    if (map) await outliner.addItems(map, SELECTION_OUTLINE_GROUP);
+    this.renderer.needsUpdate = true;
   }
 
   resize(): void {
@@ -126,7 +138,7 @@ export class BimRenderEffects {
   dispose(): void {
     this.renderer.onBeforeUpdate.remove(this.onBeforeRender);
     this.renderer.onAfterUpdate.remove(this.onAfterRender);
-    this.components.get(OBF.Outliner).clean("selection");
+    this.components.get(OBF.Outliner).clean(SELECTION_OUTLINE_GROUP);
     if (this.fxaaRestoreTimer != null) window.clearTimeout(this.fxaaRestoreTimer);
     this.fxaaPass?.dispose();
     this.fxaaPass = null;
