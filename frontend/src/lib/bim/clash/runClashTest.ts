@@ -1,4 +1,5 @@
-import type { BimClashHit, BimClashSetDef } from "@plansync/shared/bimClashTypes";
+import type { BimClashHit, BimClashRunMode, BimClashSetDef } from "@plansync/shared/bimClashTypes";
+import { runModeNeedsClearance } from "@plansync/shared/bimClashTypes";
 import type { BimQuantityIndex } from "@plansync/shared/bimTypes";
 import {
   broadPhasePairs,
@@ -16,10 +17,16 @@ import type {
   ClashWorkerRequest,
 } from "./clashWorker";
 
+export type ClashGuidRef = { guid: string; fileVersionId?: string | null };
+
 export type ClashGeometrySource = {
+  /**
+   * Resolve IFC GUIDs to fragment local ids. Prefer fileVersionId so federated
+   * models (and progressive tiles) map correctly even when GlobalIds collide.
+   */
   resolveGuidsToLocalIds: (
-    guids: string[],
-  ) => Map<string, { modelId: string; localId: number; fileVersionId: string | null }>;
+    refs: ClashGuidRef[],
+  ) => Promise<Map<string, { modelId: string; localId: number; fileVersionId: string | null }>>;
   getElementBoxes: (modelId: string, localIds: number[]) => Promise<Float32Array>;
   getElementGeometry: (
     modelId: string,
@@ -40,6 +47,7 @@ export type RunClashTestArgs = {
   setB: BimClashSetDef;
   clearanceEnabled: boolean;
   clearanceMm: number;
+  runMode?: BimClashRunMode;
   fallbackFileVersionId?: string | null;
   pairCap?: number;
   signal?: AbortSignal;
@@ -50,6 +58,11 @@ export type RunClashTestArgs = {
     hits: BimClashHit[];
   }) => void;
 };
+
+function effectiveClearance(args: RunClashTestArgs): boolean {
+  const mode = args.runMode ?? (args.clearanceEnabled ? "BOTH" : "HARD");
+  return runModeNeedsClearance(mode) && args.clearanceMm > 0;
+}
 
 export type RunClashTestDiagnostics = {
   setACount: number;
@@ -90,6 +103,7 @@ function emptyResult(diagnostics: RunClashTestDiagnostics): RunClashTestResult {
   return { hits: [], scannedPairs: 0, truncated: false, diagnostics };
 }
 
+// fallow-ignore-next-line complexity
 async function collectBoxes(
   engine: ClashGeometrySource,
   elements: {
@@ -110,11 +124,18 @@ async function collectBoxes(
       name: string | null;
     }[]
   >();
-  const resolved = engine.resolveGuidsToLocalIds(elements.map((e) => e.guid));
-  const metaByGuid = new Map(elements.map((e) => [e.guid, e]));
+  const resolved = await engine.resolveGuidsToLocalIds(
+    elements.map((e) => ({ guid: e.guid, fileVersionId: e.fileVersionId })),
+  );
+  // Key meta by guid+fileVersion — federated models may reuse GlobalIds.
+  const metaByKey = new Map(elements.map((e) => [`${e.fileVersionId}\0${e.guid}`, e] as const));
 
   for (const [guid, loc] of resolved) {
-    const meta = metaByGuid.get(guid);
+    const meta =
+      metaByKey.get(`${loc.fileVersionId ?? ""}\0${guid}`) ??
+      elements.find(
+        (e) => e.guid === guid && (!loc.fileVersionId || e.fileVersionId === loc.fileVersionId),
+      );
     if (!meta) continue;
     const list = byModel.get(loc.modelId) ?? [];
     list.push({
@@ -158,11 +179,17 @@ async function collectGeometry(
   signal?: AbortSignal,
 ): Promise<Map<string, ClashMeshPayload>> {
   const byModel = new Map<string, ClashElementBox[]>();
-  const resolved = engine.resolveGuidsToLocalIds(candidates.map((c) => c.guid));
-  const guidToBox = new Map(candidates.map((c) => [c.guid, c]));
+  const resolved = await engine.resolveGuidsToLocalIds(
+    candidates.map((c) => ({ guid: c.guid, fileVersionId: c.fileVersionId })),
+  );
+  const boxByKey = new Map(candidates.map((c) => [`${c.fileVersionId}\0${c.guid}`, c] as const));
 
   for (const [guid, loc] of resolved) {
-    const box = guidToBox.get(guid);
+    const box =
+      boxByKey.get(`${loc.fileVersionId ?? ""}\0${guid}`) ??
+      candidates.find(
+        (c) => c.guid === guid && (!loc.fileVersionId || c.fileVersionId === loc.fileVersionId),
+      );
     if (!box) continue;
     const list = byModel.get(loc.modelId) ?? [];
     list.push(box);
@@ -172,12 +199,16 @@ async function collectGeometry(
   const meshes = new Map<string, ClashMeshPayload>();
   for (const [modelId, boxes] of byModel) {
     if (signal?.aborted) break;
-    const locs = engine.resolveGuidsToLocalIds(boxes.map((b) => b.guid));
+    const locs = await engine.resolveGuidsToLocalIds(
+      boxes.map((b) => ({ guid: b.guid, fileVersionId: b.fileVersionId })),
+    );
     const localIds: number[] = [];
     const order: ClashElementBox[] = [];
     for (const box of boxes) {
       const loc = locs.get(box.guid);
       if (!loc || loc.modelId !== modelId) continue;
+      // Prefer the entry that matches this box's file version when GlobalIds collide.
+      if (loc.fileVersionId && loc.fileVersionId !== box.fileVersionId) continue;
       localIds.push(loc.localId);
       order.push(box);
     }
@@ -211,7 +242,9 @@ function runOnMainThread(
 ): Promise<RunClashTestResult> {
   return new Promise((resolve) => {
     const origin = computeOriginOffset(setA, setB);
-    const pairs = broadPhasePairs(setA, setB, args.clearanceMm, args.clearanceEnabled);
+    const clearanceOn = effectiveClearance(args);
+    const runMode = args.runMode ?? (args.clearanceEnabled ? "BOTH" : "HARD");
+    const pairs = broadPhasePairs(setA, setB, args.clearanceMm, clearanceOn);
     const meshes = new Map<string, ClashMeshPayload>();
     for (const [key, m] of worldMeshes) {
       meshes.set(key, { ...m, positions: offsetPositions(m.positions, origin) });
@@ -247,8 +280,9 @@ function runOnMainThread(
         slice,
         meshes,
         {
-          clearanceEnabled: args.clearanceEnabled,
+          clearanceEnabled: clearanceOn,
           clearanceMm: args.clearanceMm,
+          runMode,
           pairCap: slice.length,
         },
         origin,
@@ -346,14 +380,17 @@ function runInWorker(
       reject(err.error ?? new Error("Clash worker error"));
     };
 
+    const clearanceOn = effectiveClearance(args);
+    const runMode = args.runMode ?? (args.clearanceEnabled ? "BOTH" : "HARD");
     const req: ClashWorkerRequest = {
       type: "run",
       requestId,
       setA,
       setB,
       meshes: meshRecord,
-      clearanceEnabled: args.clearanceEnabled,
+      clearanceEnabled: clearanceOn,
       clearanceMm: args.clearanceMm,
+      runMode,
       pairCap: args.pairCap,
     };
     worker.postMessage(req, transfer);
@@ -384,7 +421,7 @@ export async function runClashTest(args: RunClashTestArgs): Promise<RunClashTest
     return emptyResult({ ...baseDiag, boxesA: setA.length, boxesB: setB.length });
   }
 
-  const pairs = broadPhasePairs(setA, setB, args.clearanceMm, args.clearanceEnabled);
+  const pairs = broadPhasePairs(setA, setB, args.clearanceMm, effectiveClearance(args));
   const candidateBoxes: ClashElementBox[] = [];
   const seen = new Set<string>();
   for (const p of pairs) {

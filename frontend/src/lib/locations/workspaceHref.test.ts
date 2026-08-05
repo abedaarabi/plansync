@@ -49,4 +49,19 @@ describe("buildWorkspaceHref", () => {
     expect(href).toContain("models=");
     expect(href).toContain("buildingId=b1");
   });
+
+  it("includes clash deep-link ids", () => {
+    const href = buildWorkspaceHref({
+      fileId: "f1",
+      fileName: "A.ifc",
+      projectId: "p1",
+      buildingId: "b1",
+      locationId: "l1",
+      panel: "clashes",
+      testId: "test-1",
+      clashId: "clash-9",
+    });
+    expect(href).toContain("testId=test-1");
+    expect(href).toContain("clashId=clash-9");
+  });
 });

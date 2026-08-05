@@ -98,6 +98,19 @@ export async function fetchClashTests(projectId: string): Promise<BimClashTestRo
   return j.tests ?? [];
 }
 
+export type BuildingClashSample = {
+  id: string;
+  clashType: BimClashType;
+  distanceMm: number;
+  status: BimClashStatus;
+  guidA: string;
+  guidB: string;
+  fileVersionAId: string;
+  fileVersionBId: string;
+  nameA: string | null;
+  nameB: string | null;
+};
+
 export type BuildingClashSummary = {
   openCount: number;
   resolvedCount: number;
@@ -112,6 +125,7 @@ export type BuildingClashSummary = {
     clashCount: number;
     lastRunAt: string | null;
     lastRunStats: BimClashRunStats | null;
+    sampleClashes?: BuildingClashSample[];
   }>;
 };
 

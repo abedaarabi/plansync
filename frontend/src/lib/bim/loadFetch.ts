@@ -195,6 +195,9 @@ export async function pollUntil<T>(
     timeoutMs?: number;
     signal?: AbortSignal;
     onValue?: (value: T) => void;
+    /** When true, throw {@link BimLoadStallError} instead of returning the last value. */
+    throwOnTimeout?: boolean;
+    timeoutMessage?: string;
   },
 ): Promise<T> {
   const intervalMs = opts?.intervalMs ?? 2_000;
@@ -209,5 +212,48 @@ export async function pollUntil<T>(
     opts?.onValue?.(last);
     if (isDone(last)) return last;
   }
+  if (opts?.throwOnTimeout) {
+    throw new BimLoadStallError(
+      opts.timeoutMessage ?? "Timed out waiting for the model. Try again.",
+    );
+  }
   return last;
+}
+
+/** Race a promise against a timeout (and optional abort). */
+export async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  opts?: { signal?: AbortSignal; message?: string },
+): Promise<T> {
+  if (opts?.signal?.aborted) throw new BimLoadAbortedError();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new BimLoadStallError(opts?.message ?? "Operation timed out. Try again.")),
+      timeoutMs,
+    );
+  });
+  const onAbort = () => {
+    if (timer != null) clearTimeout(timer);
+  };
+  opts?.signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    return await Promise.race([
+      promise,
+      timeoutPromise,
+      ...(opts?.signal
+        ? [
+            new Promise<never>((_, reject) => {
+              opts.signal!.addEventListener("abort", () => reject(new BimLoadAbortedError()), {
+                once: true,
+              });
+            }),
+          ]
+        : []),
+    ]);
+  } finally {
+    if (timer != null) clearTimeout(timer);
+    opts?.signal?.removeEventListener("abort", onAbort);
+  }
 }

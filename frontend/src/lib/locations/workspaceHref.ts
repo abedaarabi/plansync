@@ -22,6 +22,9 @@ export type WorkspaceHrefInput = {
   models?: BimFederationMember[] | null;
   /** Open a viewer dock on load (e.g. clashes). */
   panel?: string | null;
+  /** Deep-link into a clash test / clash row. */
+  testId?: string | null;
+  clashId?: string | null;
 };
 
 /** Build a `/bim-viewer` URL for the building workspace (work or edit/mapping). */
@@ -41,6 +44,8 @@ export function buildWorkspaceHref(input: WorkspaceHrefInput): string {
   if (input.alignAssetId) q.set("alignAssetId", input.alignAssetId);
   if (input.previewAssetId) q.set("previewAssetId", input.previewAssetId);
   if (input.panel) q.set("panel", input.panel);
+  if (input.testId) q.set("testId", input.testId);
+  if (input.clashId) q.set("clashId", input.clashId);
   if (input.models && input.models.length > 0) {
     q.set("models", encodeURIComponent(JSON.stringify(input.models)));
   }
@@ -72,6 +77,8 @@ export function workspaceHrefFromIfcAsset(
     | "previewAssetId"
     | "models"
     | "panel"
+    | "testId"
+    | "clashId"
   >,
 ): string {
   return buildWorkspaceHref({
@@ -93,7 +100,15 @@ export function workspaceHrefFromIfcAssets(
   locationId: string,
   extras?: Pick<
     WorkspaceHrefInput,
-    "levelId" | "view" | "mode" | "alignLevelId" | "alignAssetId" | "previewAssetId" | "panel"
+    | "levelId"
+    | "view"
+    | "mode"
+    | "alignLevelId"
+    | "alignAssetId"
+    | "previewAssetId"
+    | "panel"
+    | "testId"
+    | "clashId"
   >,
 ): string | null {
   const ready = assets.filter((a) => a.type === "IFC" && a.status === "READY" && a.fileVersionId);

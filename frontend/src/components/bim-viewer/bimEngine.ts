@@ -19,7 +19,10 @@ import {
   upgradeLambertToStandard,
 } from "@/lib/bim/materialColor";
 import { COLORIZE_HIGHLIGHT_OPACITY } from "@/lib/bim/colorizePalette";
+import type { BimClashType } from "@plansync/shared/bimClashTypes";
 import {
+  CLASH_CLEARANCE_MARKER_COLOR,
+  CLASH_HARD_MARKER_COLOR,
   CLASH_ITEM1_COLOR,
   CLASH_ITEM2_COLOR,
   CLASH_SCENE_GHOST_OPACITY,
@@ -95,6 +98,7 @@ import {
   hasActiveFilterHighlights,
   hasActiveFragmentHighlights,
   hasActiveSelectionHighlight,
+  hasBothClashPartnerColors,
   hasClashPairColors,
   shouldDeferMaterialSync,
   shouldEnableHover,
@@ -343,6 +347,8 @@ export class BimEngine {
   private filterPresentSeq = 0;
   /** Last applied Color/Ghost/Hide — used to keep ghost when switching clash rows. */
   private clashContextMode: "color" | "ghost" | "hide" | null = null;
+  /** Contact/gap marker group (sphere + optional segment). */
+  private clashMarkerGroup: THREE.Group | null = null;
   private clashGhostRefreshTimer: number | null = null;
   private highlightRepaintTimer: number | null = null;
   private materialSyncInProgress = false;
@@ -386,25 +392,92 @@ export class BimEngine {
   }
 
   /**
-   * Resolve IFC GUIDs to runtime localIds via the quantity-index guid map.
-   * Used by clash detection without exposing FragmentsModel.
+   * Resolve IFC GUIDs to runtime localIds for clash detection.
+   * Uses the guid index, then scans federation tiles / members by fileVersionId.
    */
-  // fallow-ignore-next-line unused-class-member
-  resolveGuidsToLocalIds(
-    guids: string[],
-  ): Map<string, { modelId: string; localId: number; fileVersionId: string | null }> {
+  // fallow-ignore-next-line complexity, unused-class-member
+  async resolveGuidsToLocalIds(
+    refs: { guid: string; fileVersionId?: string | null }[],
+  ): Promise<Map<string, { modelId: string; localId: number; fileVersionId: string | null }>> {
     const out = new Map<
       string,
       { modelId: string; localId: number; fileVersionId: string | null }
     >();
-    for (const guid of guids) {
+    if (refs.length === 0) return out;
+
+    // Warm the index if empty (e.g. second model finished after last sync).
+    if (this.guidIndex.size === 0 && this.quantityIndex) {
+      await this.syncGuidLocalIdMap();
+    }
+
+    const unresolved: { guid: string; fileVersionId?: string | null }[] = [];
+    for (const ref of refs) {
+      const guid = ref.guid?.trim();
+      if (!guid) continue;
       const hit = this.guidIndex.get(guid);
-      if (!hit) continue;
-      out.set(guid, {
-        modelId: hit.modelId,
-        localId: hit.localId,
-        fileVersionId: hit.fileVersionId,
-      });
+      if (
+        hit &&
+        (!ref.fileVersionId || hit.fileVersionId === ref.fileVersionId) &&
+        this.fragmentsHasModel(hit.modelId)
+      ) {
+        out.set(guid, {
+          modelId: hit.modelId,
+          localId: hit.localId,
+          fileVersionId: hit.fileVersionId,
+        });
+        continue;
+      }
+      unresolved.push({ guid, fileVersionId: ref.fileVersionId });
+    }
+
+    if (unresolved.length === 0) return out;
+
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    if (!fragments?.initialized) return out;
+
+    for (const ref of unresolved) {
+      const candidates = this.fragmentEntriesForFileVersion(ref.fileVersionId);
+      for (const [modelId, entry] of candidates) {
+        const model = fragments.list.get(modelId);
+        if (!model) continue;
+        try {
+          const [localId] = await model.getLocalIdsByGuids([ref.guid]);
+          if (localId == null) continue;
+          this.guidIndex.set(ref.guid, {
+            modelId,
+            localId,
+            fileVersionId: entry.fileVersionId,
+            sourceLabel: entry.name,
+          });
+          out.set(ref.guid, {
+            modelId,
+            localId,
+            fileVersionId: entry.fileVersionId,
+          });
+          break;
+        } catch {
+          /* try next tile / member */
+        }
+      }
+    }
+    return out;
+  }
+
+  private fragmentsHasModel(modelId: string): boolean {
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    return Boolean(fragments?.list.has(modelId));
+  }
+
+  /** Member + tile fragment entries for a file version (or all when omitted). */
+  private fragmentEntriesForFileVersion(
+    fileVersionId?: string | null,
+  ): [string, BimFederationMember & { model: FRAGS.FragmentsModel; visible: boolean }][] {
+    const want = fileVersionId?.trim().toLowerCase() ?? null;
+    const out: [string, BimFederationMember & { model: FRAGS.FragmentsModel; visible: boolean }][] =
+      [];
+    for (const [modelId, entry] of this.modelRegistry) {
+      if (want && entry.fileVersionId.trim().toLowerCase() !== want) continue;
+      out.push([modelId, entry]);
     }
     return out;
   }
@@ -929,6 +1002,10 @@ export class BimEngine {
       this.setupMarkupTools(world);
     }
     this.invalidatePlanSilhouette();
+    // Re-bind quantity GUIDs after tiles/members land — clash needs fragment localIds.
+    if (this.quantityIndex) {
+      void this.syncGuidLocalIdMap().then(() => this.refreshIssueAnchorWorld());
+    }
   }
 
   /** Ensures the model is parented to the scene and wired to the active camera. */
@@ -1153,6 +1230,11 @@ export class BimEngine {
   /** True when Item 1 / Item 2 clash colors are painted (guids resolved). */
   hasClashPairColors(): boolean {
     return hasClashPairColors(this.activeColorizeGroups);
+  }
+
+  /** True when both green (Item 1) and red (Item 2) clash partners are painted. */
+  hasBothClashPartnerColors(): boolean {
+    return hasBothClashPartnerColors(this.activeColorizeGroups);
   }
 
   private filterHighlightState() {
@@ -4163,9 +4245,11 @@ export class BimEngine {
   }
 
   async fitToView(): Promise<void> {
+    if (this.disposed) return;
     const world = this.mustWorld();
     const fragments = this.mustComponents().get(OBC.FragmentsManager);
     await fragments.core.update(true);
+    if (this.disposed) return;
     this.syncRendererSize(world.renderer!);
     const sphere = this.getModelBoundingSphere();
     if (sphere && sphere.radius > 0 && Number.isFinite(sphere.radius)) {
@@ -4173,7 +4257,8 @@ export class BimEngine {
       // Slightly shrink the bound so the model fills more of the viewport.
       const fitSphere = sphere.clone();
       fitSphere.radius *= 0.82;
-      await world.camera.controls.fitToSphere(fitSphere, true);
+      // Non-animated: animated fitToSphere can hang if controls dispose mid-tween.
+      await world.camera.controls.fitToSphere(fitSphere, false);
       world.camera.controls.setOrbitPoint(sphere.center.x, sphere.center.y, sphere.center.z);
     } else {
       await world.camera.fitToItems();
@@ -4399,6 +4484,24 @@ export class BimEngine {
     return [...this.selectedGuids];
   }
 
+  /** Fragment model ids for a bare federation member id (includes progressive tiles). */
+  private fragmentModelIdsForMember(memberModelId: string): string[] {
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    if (!fragments?.initialized) return [];
+    const base = baseFederationModelId(memberModelId);
+    const ids: string[] = [];
+    for (const id of fragments.list.keys()) {
+      if (id === memberModelId || baseFederationModelId(id) === base) ids.push(id);
+    }
+    // Also match registry tiles for this member even if list keys differ in casing.
+    for (const id of this.modelRegistry.keys()) {
+      if (id === memberModelId || baseFederationModelId(id) === base) {
+        if (!ids.includes(id)) ids.push(id);
+      }
+    }
+    return ids;
+  }
+
   // fallow-ignore-next-line complexity
   private async syncGuidLocalIdMap(): Promise<void> {
     this.guidIndex.clear();
@@ -4417,8 +4520,13 @@ export class BimEngine {
     for (const el of index.elements) {
       const modelId = el.sourceModelId ?? this.primaryModelId;
       const fileVersionId =
-        el.sourceFileVersionId ?? this.modelRegistry.get(modelId)?.fileVersionId;
-      const sourceLabel = el.sourceLabel ?? this.modelRegistry.get(modelId)?.name ?? null;
+        el.sourceFileVersionId ??
+        (modelId ? this.modelRegistry.get(modelId)?.fileVersionId : null) ??
+        [...this.modelRegistry.values()].find(
+          (e) => el.sourceFileVersionId != null && e.fileVersionId === el.sourceFileVersionId,
+        )?.fileVersionId;
+      const sourceLabel =
+        el.sourceLabel ?? (modelId ? this.modelRegistry.get(modelId)?.name : null) ?? null;
       if (!modelId || !fileVersionId) continue;
 
       let bucket = modelBuckets.get(modelId);
@@ -4433,28 +4541,38 @@ export class BimEngine {
       });
     }
 
-    for (const [modelId, bucket] of modelBuckets) {
-      const model = fragments.list.get(modelId);
-      if (!model) continue;
-      for (let i = 0; i < bucket.guids.length; i += BimEngine.GUID_SYNC_CHUNK) {
-        const chunk = bucket.guids.slice(i, i + BimEngine.GUID_SYNC_CHUNK);
-        try {
-          const localIds = await model.getLocalIdsByGuids(chunk);
-          for (let j = 0; j < chunk.length; j++) {
-            const guid = chunk[j]!;
-            const localId = localIds[j];
-            if (localId == null) continue;
-            const meta = bucket.meta.get(guid);
-            if (!meta) continue;
-            this.guidIndex.set(guid, {
-              modelId,
-              localId,
-              fileVersionId: meta.fileVersionId,
-              sourceLabel: meta.sourceLabel,
-            });
+    for (const [memberModelId, bucket] of modelBuckets) {
+      // Progressive tiles use `${memberId}__${tileId}` — bare member id is often absent.
+      const fragmentIds = this.fragmentModelIdsForMember(memberModelId);
+      if (fragmentIds.length === 0) continue;
+
+      const pending = new Set(bucket.guids);
+      for (const fragmentModelId of fragmentIds) {
+        if (pending.size === 0) break;
+        const model = fragments.list.get(fragmentModelId);
+        if (!model) continue;
+        const guids = [...pending];
+        for (let i = 0; i < guids.length; i += BimEngine.GUID_SYNC_CHUNK) {
+          const chunk = guids.slice(i, i + BimEngine.GUID_SYNC_CHUNK);
+          try {
+            const localIds = await model.getLocalIdsByGuids(chunk);
+            for (let j = 0; j < chunk.length; j++) {
+              const guid = chunk[j]!;
+              const localId = localIds[j];
+              if (localId == null) continue;
+              const meta = bucket.meta.get(guid);
+              if (!meta) continue;
+              this.guidIndex.set(guid, {
+                modelId: fragmentModelId,
+                localId,
+                fileVersionId: meta.fileVersionId,
+                sourceLabel: meta.sourceLabel,
+              });
+              pending.delete(guid);
+            }
+          } catch {
+            /* best-effort per tile */
           }
-        } catch {
-          /* best-effort */
         }
       }
     }
@@ -5082,6 +5200,10 @@ export class BimEngine {
     b: { guid: string; fileVersionId?: string | null };
     /** World-space clash contact point — preferred camera focus. */
     point?: { x: number; y: number; z: number } | null;
+    closestA?: { x: number; y: number; z: number } | null;
+    closestB?: { x: number; y: number; z: number } | null;
+    clashType?: BimClashType | null;
+    distanceMm?: number | null;
     context?: "color" | "ghost" | "hide";
     ghostOpacity?: number;
     /** When false, re-paint only (e.g. Color/Ghost/Hide toggle). Default true. */
@@ -5154,6 +5276,13 @@ export class BimEngine {
       if (!stillCurrent()) return;
       await this.repaintClashPartnerColors();
       if (!stillCurrent()) return;
+      this.updateClashGapMarker({
+        point: opts.point,
+        closestA: opts.closestA,
+        closestB: opts.closestB,
+        clashType: opts.clashType,
+        distanceMm: opts.distanceMm,
+      });
       if (refocusCamera) {
         await this.zoomToClashFocus({
           point: opts.point,
@@ -5178,6 +5307,13 @@ export class BimEngine {
         this.solidifyClashItemMaterials();
       }
       if (!stillCurrent()) return;
+      this.updateClashGapMarker({
+        point: opts.point,
+        closestA: opts.closestA,
+        closestB: opts.closestB,
+        clashType: opts.clashType,
+        distanceMm: opts.distanceMm,
+      });
       if (refocusCamera) {
         await this.zoomToClashFocus({
           point: opts.point,
@@ -5221,6 +5357,13 @@ export class BimEngine {
     }
 
     if (!stillCurrent()) return;
+    this.updateClashGapMarker({
+      point: opts.point,
+      closestA: opts.closestA,
+      closestB: opts.closestB,
+      clashType: opts.clashType,
+      distanceMm: opts.distanceMm,
+    });
     if (refocusCamera) {
       await this.zoomToClashFocus({
         point: opts.point,
@@ -5268,6 +5411,7 @@ export class BimEngine {
       this.highlightRepaintTimer = null;
     }
     this.clearClashSceneGhost();
+    this.clearClashGapMarker();
     this.activeColorizeGroups = [];
     this.colorizeStyleIds = [];
     this.activeFilterGhostMap = null;
@@ -5300,6 +5444,101 @@ export class BimEngine {
     this.invalidatePlanSilhouette();
     this.bumpRender();
     this.maybeScheduleDeferredMaterialSync();
+  }
+
+  private clearClashGapMarker(): void {
+    const group = this.clashMarkerGroup;
+    if (!group) return;
+    this.world?.scene.three.remove(group);
+    group.traverse((obj) => {
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+        obj.geometry?.dispose();
+        const mat = obj.material;
+        if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+        else mat?.dispose();
+      }
+    });
+    this.clashMarkerGroup = null;
+  }
+
+  // fallow-ignore-next-line complexity
+  private updateClashGapMarker(opts: {
+    point?: { x: number; y: number; z: number } | null;
+    closestA?: { x: number; y: number; z: number } | null;
+    closestB?: { x: number; y: number; z: number } | null;
+    clashType?: BimClashType | null;
+    distanceMm?: number | null;
+  }): void {
+    this.clearClashGapMarker();
+    const point = opts.point;
+    if (
+      !point ||
+      !Number.isFinite(point.x) ||
+      !Number.isFinite(point.y) ||
+      !Number.isFinite(point.z)
+    ) {
+      return;
+    }
+    const world = this.world;
+    if (!world) return;
+
+    const mm = this.detectModelUnits() === "mm";
+    const type = opts.clashType ?? "HARD";
+    const colorHex = type === "CLEARANCE" ? CLASH_CLEARANCE_MARKER_COLOR : CLASH_HARD_MARKER_COLOR;
+    const color = new THREE.Color(colorHex);
+    const gapM =
+      type === "CLEARANCE" && opts.distanceMm != null && opts.distanceMm > 0
+        ? opts.distanceMm / 1000
+        : 0;
+    const sphereR = Math.max(mm ? 40 : 0.04, gapM > 0 ? gapM * 0.35 : mm ? 80 : 0.08);
+
+    const group = new THREE.Group();
+    group.name = "clash-gap-marker";
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(sphereR, 16, 12),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.85,
+        depthTest: false,
+      }),
+    );
+    sphere.position.set(point.x, point.y, point.z);
+    sphere.renderOrder = 10_000;
+    group.add(sphere);
+
+    const a = opts.closestA;
+    const b = opts.closestB;
+    if (
+      a &&
+      b &&
+      Number.isFinite(a.x) &&
+      Number.isFinite(b.x) &&
+      Number.isFinite(a.y) &&
+      Number.isFinite(b.y) &&
+      Number.isFinite(a.z) &&
+      Number.isFinite(b.z)
+    ) {
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(a.x, a.y, a.z),
+        new THREE.Vector3(b.x, b.y, b.z),
+      ]);
+      const line = new THREE.Line(
+        geo,
+        new THREE.LineBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.95,
+          depthTest: false,
+        }),
+      );
+      line.renderOrder = 10_001;
+      group.add(line);
+    }
+
+    world.scene.three.add(group);
+    this.clashMarkerGroup = group;
+    this.bumpRender();
   }
 
   async isolateSelection(): Promise<void> {
@@ -6156,9 +6395,8 @@ export class BimEngine {
   }
 
   /**
-   * Frame both clash partners around the contact point.
-   * Prefers a comfortable neighborhood that keeps Item 1 + Item 2 visible;
-   * clamps extreme pull-back for very large hosts (long walls, slabs).
+   * Frame a tight neighborhood around the clash contact — avoid pulling back to
+   * the full length of long walls/slabs (Navis-like local review framing).
    */
   // fallow-ignore-next-line complexity
   private async zoomToClashFocus(opts: {
@@ -6167,10 +6405,10 @@ export class BimEngine {
     fallbackGuids?: string[];
   }): Promise<void> {
     const mm = this.detectModelUnits() === "mm";
-    const minRadius = mm ? 2500 : 2.5;
-    const maxRadius = mm ? 14000 : 14;
-    // Larger than default 0.82 → more padding / farther camera.
-    const fitScale = 1.08;
+    const minRadius = mm ? 800 : 0.8;
+    const maxRadius = mm ? 6000 : 6;
+    const localMargin = mm ? 1500 : 1.5;
+    const fitScale = 0.92;
     const point = opts.point;
     const hasPoint =
       point != null &&
@@ -6182,19 +6420,22 @@ export class BimEngine {
     if (opts.partnerMap) {
       const box = await this.getModelIdMapBoundingBox(opts.partnerMap);
       if (box) {
-        if (clashCenter) box.expandByPoint(clashCenter);
-        const partnerSphere = new THREE.Sphere();
-        box.getBoundingSphere(partnerSphere);
-        if (Number.isFinite(partnerSphere.radius) && partnerSphere.radius > 0) {
-          // Orbit on the clash contact when available; otherwise the pair centroid.
-          const center = clashCenter?.clone() ?? partnerSphere.center.clone();
-          // Radius must reach both partners from the orbit center.
-          let radius = partnerSphere.center.distanceTo(center) + partnerSphere.radius * 1.15;
-          radius = Math.max(minRadius, Math.min(maxRadius, radius));
-          await this.focusCameraOnSphere(new THREE.Sphere(center, radius), fitScale);
-          if (clashCenter) {
-            this.world?.camera.controls.setOrbitPoint(clashCenter.x, clashCenter.y, clashCenter.z);
-          }
+        const center = clashCenter?.clone() ?? box.getCenter(new THREE.Vector3());
+        // Local box around the clash point, then intersect with partner bounds.
+        const local = new THREE.Box3(
+          center.clone().addScalar(-localMargin),
+          center.clone().addScalar(localMargin),
+        );
+        const clipped = local.clone().intersect(box);
+        const frameBox = clipped.isEmpty() ? local : clipped;
+        if (clashCenter) frameBox.expandByPoint(clashCenter);
+        const sphere = new THREE.Sphere();
+        frameBox.getBoundingSphere(sphere);
+        if (Number.isFinite(sphere.radius) && sphere.radius > 0) {
+          sphere.center.copy(center);
+          sphere.radius = Math.max(minRadius, Math.min(maxRadius, sphere.radius * 1.05));
+          await this.focusCameraOnSphere(sphere, fitScale);
+          this.world?.camera.controls.setOrbitPoint(center.x, center.y, center.z);
           return;
         }
       }

@@ -1,8 +1,14 @@
-import type { BimClashSetDef, BimClashStatus } from "@plansync/shared/bimClashTypes";
+import type {
+  BimClashRunMode,
+  BimClashSetDef,
+  BimClashStatus,
+  BimClashType,
+} from "@plansync/shared/bimClashTypes";
+import { runModeFromClearanceEnabled } from "@plansync/shared/bimClashTypes";
 
 const STORAGE_KEY = "plansync-bim-clash-session";
-/** v3: Ghost is the default clash context (faded federation + solid pair). */
-const STORAGE_VERSION = 3;
+/** v4: runMode + typeFilter. */
+const STORAGE_VERSION = 4;
 
 /** How the rest of the building is shown while reviewing a clash. */
 export type ClashContextMode = "color" | "ghost" | "hide";
@@ -10,6 +16,7 @@ export type ClashContextMode = "color" | "ghost" | "hide";
 export type ClashSessionState = {
   testId: string | null;
   statusFilter: BimClashStatus | "ALL" | "ORPHANED" | "STALE";
+  typeFilter: BimClashType | "ALL";
   assigneeMe: boolean;
   grouped: boolean;
   focusMode: boolean;
@@ -18,11 +25,13 @@ export type ClashSessionState = {
   setB: BimClashSetDef | null;
   clearanceEnabled: boolean;
   clearanceMm: number;
+  runMode: BimClashRunMode;
 };
 
 const DEFAULT_SESSION: ClashSessionState = {
   testId: null,
   statusFilter: "ALL",
+  typeFilter: "ALL",
   assigneeMe: false,
   grouped: true,
   focusMode: true,
@@ -31,6 +40,7 @@ const DEFAULT_SESSION: ClashSessionState = {
   setB: null,
   clearanceEnabled: true,
   clearanceMm: 25,
+  runMode: "BOTH",
 };
 
 function parseContextMode(value: unknown): ClashContextMode {
@@ -38,28 +48,56 @@ function parseContextMode(value: unknown): ClashContextMode {
   return DEFAULT_SESSION.contextMode;
 }
 
+function parseRunMode(value: unknown, clearanceEnabled: boolean): BimClashRunMode {
+  if (value === "HARD" || value === "CLEARANCE" || value === "BOTH") return value;
+  return runModeFromClearanceEnabled(clearanceEnabled);
+}
+
+function parseTypeFilter(value: unknown): BimClashType | "ALL" {
+  if (value === "HARD" || value === "CLEARANCE" || value === "DUPLICATE" || value === "ALL") {
+    return value;
+  }
+  return "ALL";
+}
+
 export function readClashSession(projectId: string): ClashSessionState {
   if (typeof window === "undefined") return { ...DEFAULT_SESSION };
   try {
     const raw = localStorage.getItem(`${STORAGE_KEY}:${projectId}`);
     if (!raw) return { ...DEFAULT_SESSION };
-    const parsed = JSON.parse(raw) as { v?: number } & Partial<ClashSessionState>;
+    const parsed = JSON.parse(raw) as { v?: number } & Partial<ClashSessionState> & {
+        clearanceEnabled?: boolean;
+      };
     // v2→v3: keep sets/filters; switch default context from Color → Ghost.
     if (parsed.v === 2) {
+      const clearanceEnabled = parsed.clearanceEnabled ?? DEFAULT_SESSION.clearanceEnabled;
       return {
         ...DEFAULT_SESSION,
         ...parsed,
         contextMode: "ghost",
-        v: undefined,
-      } as ClashSessionState;
+        runMode: parseRunMode(parsed.runMode, clearanceEnabled),
+        typeFilter: parseTypeFilter(parsed.typeFilter),
+      };
+    }
+    if (parsed.v === 3) {
+      const clearanceEnabled = parsed.clearanceEnabled ?? DEFAULT_SESSION.clearanceEnabled;
+      return {
+        ...DEFAULT_SESSION,
+        ...parsed,
+        contextMode: parseContextMode(parsed.contextMode),
+        runMode: parseRunMode(parsed.runMode, clearanceEnabled),
+        typeFilter: parseTypeFilter(parsed.typeFilter),
+      };
     }
     if (parsed.v !== STORAGE_VERSION) return { ...DEFAULT_SESSION };
+    const clearanceEnabled = parsed.clearanceEnabled ?? DEFAULT_SESSION.clearanceEnabled;
     return {
       ...DEFAULT_SESSION,
       ...parsed,
       contextMode: parseContextMode(parsed.contextMode),
-      v: undefined,
-    } as ClashSessionState;
+      runMode: parseRunMode(parsed.runMode, clearanceEnabled),
+      typeFilter: parseTypeFilter(parsed.typeFilter),
+    };
   } catch {
     return { ...DEFAULT_SESSION };
   }

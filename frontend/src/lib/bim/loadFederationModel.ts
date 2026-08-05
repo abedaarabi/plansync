@@ -14,6 +14,7 @@ import {
   BimServerProcessingRequiredError,
   fetchBinaryWithRetry,
   pollUntil,
+  withTimeout,
 } from "@/lib/bim/loadFetch";
 import type { BimEngine } from "@/components/bim-viewer/bimEngine";
 import type { BimFederationMember } from "@/lib/bim/federation";
@@ -26,12 +27,14 @@ import { assertIfcBytesIntact } from "@/lib/bim/ifcBytes";
 import type { BimConversionStatus } from "@/lib/bim/types";
 
 /** Default wait for server fragments before considering client fallback. */
-const FRAGMENTS_WAIT_MS = 12 * 60_000;
+const FRAGMENTS_WAIT_MS = 3 * 60_000;
 /** Extra wait budget for large IFCs (per 100 MiB of source). */
-const FRAGMENTS_WAIT_EXTRA_PER_100MIB_MS = 6 * 60_000;
-/** Hard ceiling for waiting on server conversion. */
-const FRAGMENTS_WAIT_MAX_MS = 45 * 60_000;
+const FRAGMENTS_WAIT_EXTRA_PER_100MIB_MS = 90_000;
+/** Hard ceiling for waiting on server conversion (then error + Retry). */
+const FRAGMENTS_WAIT_MAX_MS = 8 * 60_000;
 const CONVERT_STALL_MS = 45_000;
+/** First tile / fragment import must finish or we surface Retry. */
+const FIRST_GEOMETRY_TIMEOUT_MS = 90_000;
 
 // fallow-ignore-next-line complexity
 export async function resolveFederationMember(
@@ -93,9 +96,10 @@ async function waitForServerFragments(
     signal?: AbortSignal;
     onPreparing?: (fraction: number | null) => void;
     timeoutMs?: number;
+    memberName?: string;
   },
 ): Promise<BimConversionStatus | null> {
-  let status = await fetchBimStatus(fileVersionId).catch(() => null);
+  let status = await fetchBimStatus(fileVersionId, { signal: opts?.signal }).catch(() => null);
   if (status?.fragmentsReady) return status;
 
   const shouldKick =
@@ -120,24 +124,35 @@ async function waitForServerFragments(
   };
   emitPreparing(status);
 
-  status = await pollUntil(
-    () => fetchBimStatus(fileVersionId).catch(() => status),
-    (s) => {
-      if (!s) return false;
-      if (s.fragmentsReady) return true;
-      if (s.conversionStatus === "failed") return true;
-      // Still producing server geometry — keep waiting.
-      if (s.pipelinePhase === "fragments" || conversionActive(s)) return false;
-      // Index finished and geometry phase is not running — fall back to client convert.
-      return s.conversionStatus === "ready";
-    },
-    {
-      intervalMs: 2_500,
-      timeoutMs,
-      signal: opts?.signal,
-      onValue: emitPreparing,
-    },
-  );
+  const label = opts?.memberName?.trim() || "Model";
+  try {
+    status = await pollUntil(
+      () => fetchBimStatus(fileVersionId, { signal: opts?.signal }).catch(() => status),
+      (s) => {
+        if (!s) return false;
+        if (s.fragmentsReady) return true;
+        if (s.conversionStatus === "failed") return true;
+        // Still producing server geometry — keep waiting.
+        if (s.pipelinePhase === "fragments" || conversionActive(s)) return false;
+        // Index finished and geometry phase is not running — fall back to client convert.
+        return s.conversionStatus === "ready";
+      },
+      {
+        intervalMs: 2_500,
+        timeoutMs,
+        signal: opts?.signal,
+        onValue: emitPreparing,
+        // Large models cannot fall through to browser convert — fail fast with Retry.
+        throwOnTimeout: tooLargeForClientParse(status),
+        timeoutMessage: `${label} is still processing on the server. Wait a bit, then retry.`,
+      },
+    );
+  } catch (err) {
+    if (err instanceof BimLoadStallError && tooLargeForClientParse(status)) {
+      throw new BimServerProcessingRequiredError(err.message);
+    }
+    throw err;
+  }
   return status;
 }
 
@@ -163,10 +178,19 @@ async function loadFromServerTiles(
   })) {
     if (opts?.signal?.aborted) throw new BimLoadAbortedError();
     const isLast = tile.index >= tile.total - 1;
-    await engine.addFragmentTile(tile.buffer, member, tile.tileId, {
+    const add = engine.addFragmentTile(tile.buffer, member, tile.tileId, {
       fitView: false,
       skipPostProcess: !first && !isLast,
     });
+    // First tile runs full post-process; don't let a hung worker pin the overlay forever.
+    if (first) {
+      await withTimeout(add, FIRST_GEOMETRY_TIMEOUT_MS, {
+        signal: opts?.signal,
+        message: `Timed out loading ${member.name}. Try again.`,
+      });
+    } else {
+      await add;
+    }
     loaded += 1;
     if (first) {
       first = false;
@@ -216,12 +240,15 @@ export async function loadFederationMember(
 
   if (opts?.signal?.aborted) throw new BimLoadAbortedError();
 
-  let status = await fetchBimStatus(resolved.fileVersionId).catch(() => null);
+  let status = await fetchBimStatus(resolved.fileVersionId, { signal: opts?.signal }).catch(
+    () => null,
+  );
   if (!status?.fragmentsReady) {
     status = await waitForServerFragments(resolved.fileVersionId!, {
       signal: opts?.signal,
       onPreparing: opts?.onPreparing,
       timeoutMs: fragmentsWaitMs(status),
+      memberName: resolved.name,
     });
   }
 
@@ -244,7 +271,14 @@ export async function loadFederationMember(
   const cached = await readCachedFragments(cacheKey);
   if (cached) {
     opts?.onDownloading?.(1, cached.byteLength);
-    await engine.addFragments(cached, resolved, { fitView: opts?.fitView ?? false });
+    await withTimeout(
+      engine.addFragments(cached, resolved, { fitView: opts?.fitView ?? false }),
+      FIRST_GEOMETRY_TIMEOUT_MS,
+      {
+        signal: opts?.signal,
+        message: `Timed out loading ${resolved.name} from cache. Try again.`,
+      },
+    );
     await opts?.onFirstGeometry?.();
     if (!status?.fragmentsReady) {
       void uploadBimFragments(resolved.fileVersionId!, cached).catch(() => undefined);

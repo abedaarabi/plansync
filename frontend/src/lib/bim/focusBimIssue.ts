@@ -30,12 +30,13 @@ async function presentStoredClashPair(
       context: "ghost",
       refocusCamera: attempt === 0 || Date.now() + 400 > deadline,
     });
-    if (engine.hasClashPairColors()) return true;
+    // Require both partners — green-only used to short-circuit before model B loaded.
+    if (engine.hasBothClashPartnerColors()) return true;
     attempt += 1;
     if (retryMs > 0) await sleep(350);
   } while (Date.now() < deadline);
 
-  return engine.hasClashPairColors();
+  return engine.hasBothClashPartnerColors();
 }
 
 /** Fly the camera to an issue's markups, clash pair, element, or world position. */
@@ -59,9 +60,19 @@ export async function focusBimIssueInViewer(
   const retryMs = opts?.retryMs ?? 0;
 
   // Clash-promoted issues: both guids are on bimAnchor — present ghost + pair colors.
+  // Do not fall through to single-guid select (that clears the pair and leaves only green).
   if (issue.bimAnchor?.ifcGuidB?.trim()) {
     const ok = await presentStoredClashPair(engine, issue, retryMs || 8_000);
     if (ok) return true;
+    if (engine.hasClashPairColors()) {
+      // Partner model may still be streaming — keep partial paint and signal retry.
+      return false;
+    }
+    const clashPos = issue.bimAnchor.position;
+    if (clashPos) {
+      await engine.zoomToWorldPoints([clashPos]);
+    }
+    return false;
   }
 
   const guid = issue.bimAnchor?.ifcGuid?.trim();

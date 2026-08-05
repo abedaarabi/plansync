@@ -13,18 +13,22 @@ import {
   TicketPlus,
 } from "lucide-react";
 import type {
+  BimClashRunMode,
   BimClashRunStats,
   BimClashSetDef,
   BimClashStatus,
+  BimClashType,
 } from "@plansync/shared/bimClashTypes";
 import type { BimClashRow as ClashRow, BimClashTestRow } from "@/lib/api-client/bim-clash";
 import { patchClash } from "@/lib/api-client/bim-clash";
 import type { ClashContextMode } from "@/lib/bim/clash/clashSessionStorage";
 import { clashElementLabel } from "@/lib/bim/clash/clashLabels";
+import { displayModelLabel, testMatchesOpenModels } from "@/lib/bim/clash/clashSets";
 import {
   CLASH_ITEM1_COLOR,
   CLASH_ITEM2_COLOR,
   clashStatusLabel,
+  clashTypeLabel,
 } from "@/lib/bim/clash/clashStatusStyle";
 import { BimClashRow } from "./BimClashRow";
 import { BimClashDetailPanel } from "./BimClashDetailPanel";
@@ -41,6 +45,8 @@ const FILTERS: Array<BimClashStatus | "ALL" | "ORPHANED" | "STALE"> = [
   "STALE",
 ];
 
+const TYPE_FILTERS: Array<BimClashType | "ALL"> = ["ALL", "HARD", "CLEARANCE", "DUPLICATE"];
+
 type ClashDockTab = "results" | "setup";
 type ResultsPane = "list" | "detail";
 
@@ -55,13 +61,16 @@ export type BimClashSetupProps = {
   levels: string[];
   clearanceEnabled: boolean;
   clearanceMm: number;
+  runMode: BimClashRunMode;
   running: boolean;
   progress: number | null;
+  runAgainstModelIds?: string[];
   onChangeSetA: (set: BimClashSetDef) => void;
   onChangeSetB: (set: BimClashSetDef) => void;
   onToggleModelVisible: (modelId: string, visible: boolean) => void;
-  onClearanceEnabledChange: (v: boolean) => void;
+  onRunModeChange: (mode: BimClashRunMode) => void;
   onClearanceMmChange: (v: number) => void;
+  onToggleRunAgainst?: (modelId: string) => void;
   onRun: () => void;
   onCancel: () => void;
 };
@@ -76,6 +85,11 @@ function filterLabel(f: (typeof FILTERS)[number]): string {
   if (f === "ORPHANED") return "Orphaned";
   if (f === "STALE") return "Stale";
   return clashStatusLabel(f);
+}
+
+function typeFilterLabel(f: (typeof TYPE_FILTERS)[number]): string {
+  if (f === "ALL") return "All types";
+  return clashTypeLabel(f);
 }
 
 function elementLabel(clash: ClashRow, side: "a" | "b"): string {
@@ -107,15 +121,21 @@ function clashGroupTitle(clashes: ClashRow[]): { title: string; subtitle: string
 // fallow-ignore-next-line complexity
 export function BimClashDockContent(props: {
   test: BimClashTestRow | null;
+  tests?: BimClashTestRow[];
   clashes: ClashRow[];
   selectedClashId: string | null;
   statusFilter: BimClashStatus | "ALL" | "ORPHANED" | "STALE";
+  typeFilter: BimClashType | "ALL";
   assigneeMe: boolean;
   grouped: boolean;
   contextMode: ClashContextMode;
   runStats: BimClashRunStats | null;
+  lastRunTruncated?: boolean;
   setup: BimClashSetupProps;
+  modelNameByFileVersionId?: Record<string, string>;
   onStatusFilterChange: (f: BimClashStatus | "ALL" | "ORPHANED" | "STALE") => void;
+  onTypeFilterChange: (f: BimClashType | "ALL") => void;
+  onSelectTest?: (test: BimClashTestRow) => void;
   onAssigneeMeChange: (v: boolean) => void;
   onGroupedChange: (v: boolean) => void;
   onContextModeChange: (m: ClashContextMode) => void;
@@ -177,8 +197,18 @@ export function BimClashDockContent(props: {
       default:
         rows = rows.filter((c) => c.status === props.statusFilter);
     }
+    if (props.typeFilter !== "ALL") {
+      rows = rows.filter((c) => c.clashType === props.typeFilter);
+    }
     return rows;
-  }, [props.clashes, props.statusFilter, props.assigneeMe, props.currentUserId, props.test]);
+  }, [
+    props.clashes,
+    props.statusFilter,
+    props.typeFilter,
+    props.assigneeMe,
+    props.currentUserId,
+    props.test,
+  ]);
 
   const groups = useMemo(() => {
     const map = new Map<string, ClashRow[]>();
@@ -191,12 +221,28 @@ export function BimClashDockContent(props: {
     return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
   }, [filtered]);
 
+  const matchingTests = useMemo(() => {
+    const list = props.tests ?? [];
+    if (list.length === 0) return [];
+    const openIds = props.setup.models.map((m) => m.modelId);
+    return list.filter((t) => testMatchesOpenModels(t, openIds));
+  }, [props.tests, props.setup.models]);
+
   const selected = props.clashes.find((c) => c.id === props.selectedClashId) ?? null;
   const selectedIndex = selected ? filtered.findIndex((c) => c.id === selected.id) : -1;
   const stats = props.runStats ?? props.test?.lastRunStats ?? null;
-  const setupSummary = `${props.setup.setA.label} vs ${props.setup.setB.label}${
-    props.setup.clearanceEnabled ? ` · ${props.setup.clearanceMm} mm` : ""
+  const setupSummary = `${props.setup.setA.label} × ${props.setup.setB.label}${
+    props.setup.runMode === "HARD"
+      ? " · hard"
+      : props.setup.runMode === "CLEARANCE"
+        ? ` · clearance ${props.setup.clearanceMm} mm`
+        : ` · both · ${props.setup.clearanceMm} mm`
   }`;
+
+  function modelLabelFor(fileVersionId: string): string | null {
+    const name = props.modelNameByFileVersionId?.[fileVersionId];
+    return name ? displayModelLabel(name) : null;
+  }
 
   function selectClash(clash: ClashRow, openDetail = false) {
     props.onSelectClash(clash);
@@ -366,19 +412,40 @@ export function BimClashDockContent(props: {
       ) : (
         <>
           <div className="flex shrink-0 items-center gap-1 border-b border-[var(--bim-border)] px-2.5 py-1.5">
-            <p
-              className="min-w-0 flex-1 truncate text-[10px] text-[var(--bim-text-muted)]"
-              title={setupSummary}
-            >
-              <span className="font-medium text-[var(--bim-text)]">{setupSummary}</span>
-              {stats ? (
-                <span className="text-[var(--bim-text-subtle)]">
-                  {" "}
-                  · +{stats.newCount} new
-                  {stats.reopenedCount ? `, ${stats.reopenedCount} reopened` : ""}
-                </span>
-              ) : null}
-            </p>
+            {matchingTests.length > 1 && props.onSelectTest ? (
+              <label className="min-w-0 flex-1">
+                <span className="sr-only">Clash test</span>
+                <select
+                  className="bim-select w-full truncate px-1.5 py-1 text-[10px]"
+                  value={props.test?.id ?? ""}
+                  onChange={(e) => {
+                    const next = matchingTests.find((t) => t.id === e.target.value);
+                    if (next) props.onSelectTest?.(next);
+                  }}
+                >
+                  {matchingTests.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {typeof t.clashCount === "number" ? ` (${t.clashCount})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <p
+                className="min-w-0 flex-1 truncate text-[10px] text-[var(--bim-text-muted)]"
+                title={setupSummary}
+              >
+                <span className="font-medium text-[var(--bim-text)]">{setupSummary}</span>
+                {stats ? (
+                  <span className="text-[var(--bim-text-subtle)]">
+                    {" "}
+                    · +{stats.newCount} new
+                    {stats.reopenedCount ? `, ${stats.reopenedCount} reopened` : ""}
+                  </span>
+                ) : null}
+              </p>
+            )}
             {props.onResetResults && (props.clashes.length > 0 || props.test) ? (
               <button
                 type="button"
@@ -399,6 +466,12 @@ export function BimClashDockContent(props: {
               Edit
             </button>
           </div>
+
+          {props.lastRunTruncated ? (
+            <div className="shrink-0 border-b border-[var(--bim-border)] bg-[var(--bim-warning)]/10 px-2.5 py-1.5 text-[10px] leading-snug text-[var(--bim-warning)]">
+              Pair cap reached — narrow type/level filters and re-run for a full scan.
+            </div>
+          ) : null}
 
           <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-[var(--bim-border)] px-2.5 py-1.5">
             {FILTERS.map((f) => (
@@ -438,6 +511,23 @@ export function BimClashDockContent(props: {
                 )}
               </button>
             </div>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-[var(--bim-border)] px-2.5 py-1.5">
+            {TYPE_FILTERS.map((f) => (
+              <button
+                key={f}
+                type="button"
+                className={`bim-focus-ring rounded-md px-2 py-1 text-[10px] font-medium ${
+                  props.typeFilter === f
+                    ? "bg-[var(--bim-accent-muted)] text-[var(--bim-text)]"
+                    : "text-[var(--bim-text-muted)] hover:bg-[var(--bim-hover)]"
+                }`}
+                onClick={() => props.onTypeFilterChange(f)}
+              >
+                {typeFilterLabel(f)}
+              </button>
+            ))}
           </div>
 
           <div className="flex shrink-0 items-center gap-2 border-b border-[var(--bim-border)] px-2.5 py-1.5">
@@ -561,6 +651,8 @@ export function BimClashDockContent(props: {
                                 selected={props.selectedClashId === clash.id}
                                 stale={isStale(clash, props.test)}
                                 orphaned={Boolean(clash.elementMissingSinceId)}
+                                modelLabelA={modelLabelFor(clash.fileVersionAId)}
+                                modelLabelB={modelLabelFor(clash.fileVersionBId)}
                                 onSelect={() => selectClash(clash)}
                                 onOpenDetail={() => selectClash(clash, true)}
                                 onResolve={() => void resolveClash(clash)}
@@ -581,6 +673,8 @@ export function BimClashDockContent(props: {
                       selected={props.selectedClashId === clash.id}
                       stale={isStale(clash, props.test)}
                       orphaned={Boolean(clash.elementMissingSinceId)}
+                      modelLabelA={modelLabelFor(clash.fileVersionAId)}
+                      modelLabelB={modelLabelFor(clash.fileVersionBId)}
                       onSelect={() => selectClash(clash)}
                       onOpenDetail={() => selectClash(clash, true)}
                       onResolve={() => void resolveClash(clash)}

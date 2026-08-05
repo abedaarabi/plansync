@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type {
+  BimClashRunMode,
   BimClashRunStats,
   BimClashSetDef,
   BimClashStatus,
+  BimClashType,
 } from "@plansync/shared/bimClashTypes";
+import { runModeNeedsClearance } from "@plansync/shared/bimClashTypes";
 import type { BimQuantityIndex } from "@plansync/shared/bimTypes";
 import {
   bulkPatchClashes,
@@ -93,6 +96,9 @@ export function useBimClashSession(args: {
   active: boolean;
   /** Loaded federation models — used to default Structure vs MEP as model pairs. */
   models?: { modelId: string; name: string }[];
+  /** Deep-link from building hub. */
+  initialTestId?: string | null;
+  initialClashId?: string | null;
 }) {
   const [tests, setTests] = useState<BimClashTestRow[]>([]);
   const [activeTest, setActiveTest] = useState<BimClashTestRow | null>(null);
@@ -102,9 +108,14 @@ export function useBimClashSession(args: {
   const [setB, setSetB] = useState<BimClashSetDef>({ label: "Set B", rules: [] });
   const [clearanceEnabled, setClearanceEnabled] = useState(true);
   const [clearanceMm, setClearanceMm] = useState(25);
+  const [runMode, setRunModeState] = useState<BimClashRunMode>("BOTH");
   const [statusFilter, setStatusFilter] = useState<BimClashStatus | "ALL" | "ORPHANED" | "STALE">(
     "ALL",
   );
+  const [typeFilter, setTypeFilter] = useState<BimClashType | "ALL">("ALL");
+  const [lastRunTruncated, setLastRunTruncated] = useState(false);
+  const [runAgainstModelIds, setRunAgainstModelIds] = useState<string[]>([]);
+  const prevModelsKeyRef = useRef<string>("");
   const [assigneeMe, setAssigneeMe] = useState(false);
   const [grouped, setGrouped] = useState(true);
   const [focusMode, setFocusMode] = useState(true);
@@ -115,6 +126,7 @@ export function useBimClashSession(args: {
   const [previewHits, setPreviewHits] = useState<BimClashRow[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const sessionLoaded = useRef(false);
+  const deepLinkApplied = useRef(false);
   const setARef = useRef(setA);
   const setBRef = useRef(setB);
   setARef.current = setA;
@@ -150,7 +162,9 @@ export function useBimClashSession(args: {
     if (s.setB) setSetB(s.setB);
     setClearanceEnabled(s.clearanceEnabled);
     setClearanceMm(s.clearanceMm);
+    setRunModeState(s.runMode);
     setStatusFilter(s.statusFilter);
+    setTypeFilter(s.typeFilter);
     setAssigneeMe(s.assigneeMe);
     setGrouped(s.grouped);
     setFocusMode(s.focusMode);
@@ -199,6 +213,7 @@ export function useBimClashSession(args: {
     const state: ClashSessionState = {
       testId: activeTest?.id ?? prevTestId,
       statusFilter,
+      typeFilter,
       assigneeMe,
       grouped,
       focusMode,
@@ -207,6 +222,7 @@ export function useBimClashSession(args: {
       setB,
       clearanceEnabled,
       clearanceMm,
+      runMode,
     };
     writeClashSession(args.projectId, state);
   }, [
@@ -214,6 +230,7 @@ export function useBimClashSession(args: {
     args.active,
     activeTest?.id,
     statusFilter,
+    typeFilter,
     assigneeMe,
     grouped,
     focusMode,
@@ -222,11 +239,47 @@ export function useBimClashSession(args: {
     setB,
     clearanceEnabled,
     clearanceMm,
+    runMode,
   ]);
+
+  const setRunMode = useCallback((mode: BimClashRunMode) => {
+    setRunModeState(mode);
+    setClearanceEnabled(runModeNeedsClearance(mode));
+  }, []);
+
+  const toggleRunAgainst = useCallback((modelId: string) => {
+    setRunAgainstModelIds((prev) =>
+      prev.includes(modelId) ? prev.filter((id) => id !== modelId) : [...prev, modelId],
+    );
+  }, []);
+
+  // Prompt when a new federation member appears while clash dock is active.
+  useEffect(() => {
+    if (!args.active) {
+      prevModelsKeyRef.current = modelsKey;
+      return;
+    }
+    const prev = prevModelsKeyRef.current;
+    prevModelsKeyRef.current = modelsKey;
+    if (!prev || !modelsKey || prev === modelsKey) return;
+    const prevIds = new Set(prev.split("|").map((p) => p.split("\0")[0]!));
+    const models = args.models ?? [];
+    const added = models.filter((m) => !prevIds.has(m.modelId));
+    if (added.length === 0) return;
+    const names = added.map((m) => m.name.replace(/\.(ifc|ifczip)$/i, "")).join(", ");
+    toast.message(`New model in federation: ${names}`, {
+      description: "Open Clash → Setup to run against your other models.",
+    });
+  }, [args.active, args.models, modelsKey]);
 
   const pickPreferredClashTest = useCallback(
     (list: BimClashTestRow[], session: ClashSessionState): BimClashTestRow | null => {
       const matching = list.filter((t) => testMatchesOpenModels(t, openModelIds));
+      const deepId = args.initialTestId?.trim();
+      if (deepId) {
+        const deep = list.find((t) => t.id === deepId) ?? matching.find((t) => t.id === deepId);
+        if (deep) return deep;
+      }
       if (matching.length === 0) return null;
       const currentId = activeTestRef.current?.id;
       const labelA = setARef.current.label;
@@ -239,7 +292,7 @@ export function useBimClashSession(args: {
         null
       );
     },
-    [openModelIds],
+    [openModelIds, args.initialTestId],
   );
 
   const clearClashResultsState = useCallback(async () => {
@@ -250,6 +303,7 @@ export function useBimClashSession(args: {
     await endClashReviewPresentation();
   }, [endClashReviewPresentation]);
 
+  // fallow-ignore-next-line complexity
   const reloadTests = useCallback(async () => {
     if (!args.projectId) return;
     try {
@@ -261,14 +315,29 @@ export function useBimClashSession(args: {
         return;
       }
       setActiveTest(preferred);
-      // Do not overwrite setA/setB here — that fought model binding and re-fetched in a loop.
+      // Only sync sets from the test when deep-linking — otherwise model binding owns Set A/B.
+      if (args.initialTestId && preferred.id === args.initialTestId) {
+        setSetA(preferred.setA);
+        setSetB(preferred.setB);
+        setClearanceEnabled(preferred.clearanceEnabled);
+        setClearanceMm(preferred.clearanceMm);
+        setRunModeState(preferred.clearanceEnabled ? "BOTH" : "HARD");
+      }
       const data = await fetchClashTestClashes(preferred.id);
       setClashes(data.clashes);
       setRunStats(data.test.lastRunStats);
-      // Keep pair presentation if a clash is already selected and still covered.
-      const row = selectedClashIdRef.current
-        ? data.clashes.find((c) => c.id === selectedClashIdRef.current)
-        : null;
+
+      const deepClashId = args.initialClashId?.trim();
+      let row =
+        deepClashId && !deepLinkApplied.current
+          ? (data.clashes.find((c) => c.id === deepClashId) ?? null)
+          : selectedClashIdRef.current
+            ? (data.clashes.find((c) => c.id === selectedClashIdRef.current) ?? null)
+            : null;
+      if (deepClashId && row && !deepLinkApplied.current) {
+        deepLinkApplied.current = true;
+        setSelectedClashId(row.id);
+      }
       const engine = engineRef.current;
       if (
         engine &&
@@ -280,8 +349,10 @@ export function useBimClashSession(args: {
           a: { guid: row.guidA, fileVersionId: row.fileVersionAId },
           b: { guid: row.guidB, fileVersionId: row.fileVersionBId },
           point: row.point,
+          clashType: row.clashType,
+          distanceMm: row.distanceMm,
           context: contextModeRef.current,
-          refocusCamera: false,
+          refocusCamera: Boolean(deepClashId && row.id === deepClashId),
         });
       } else if (
         selectedClashIdRef.current &&
@@ -297,6 +368,7 @@ export function useBimClashSession(args: {
   }, [
     args.projectId,
     args.active,
+    args.initialClashId,
     pickPreferredClashTest,
     clearClashResultsState,
     endClashReviewPresentation,
@@ -326,8 +398,11 @@ export function useBimClashSession(args: {
     } else if (statusFilter !== "ALL") {
       rows = rows.filter((c) => c.status === statusFilter);
     }
+    if (typeFilter !== "ALL") {
+      rows = rows.filter((c) => c.clashType === typeFilter);
+    }
     return new Set(rows.map((c) => c.id));
-  }, [displayClashes, statusFilter, activeTest?.lastRunAt]);
+  }, [displayClashes, statusFilter, typeFilter, activeTest?.lastRunAt]);
 
   const selectedClash = displayClashes.find((c) => c.id === selectedClashId) ?? null;
   selectedClashRef.current = selectedClash;
@@ -336,32 +411,6 @@ export function useBimClashSession(args: {
     () => clashes.filter((c) => c.status === "NEW" || c.status === "ACTIVE").length,
     [clashes],
   );
-
-  const ensureTest = useCallback(async (): Promise<BimClashTestRow> => {
-    if (!args.projectId) throw new Error("Missing project");
-    if (
-      activeTest &&
-      activeTest.setA.label === setA.label &&
-      activeTest.setB.label === setB.label
-    ) {
-      return activeTest;
-    }
-    const existing = tests.find((t) => t.setA.label === setA.label && t.setB.label === setB.label);
-    if (existing) {
-      setActiveTest(existing);
-      return existing;
-    }
-    const created = await createClashTest(args.projectId, {
-      name: `${setA.label} vs ${setB.label}`,
-      setA,
-      setB,
-      clearanceEnabled,
-      clearanceMm,
-    });
-    setTests((prev) => [created, ...prev]);
-    setActiveTest(created);
-    return created;
-  }, [args.projectId, activeTest, setA, setB, tests, clearanceEnabled, clearanceMm]);
 
   const cancelRun = useCallback(() => {
     abortRef.current?.abort();
@@ -393,6 +442,8 @@ export function useBimClashSession(args: {
         a: { guid: clash.guidA, fileVersionId: clash.fileVersionAId },
         b: { guid: clash.guidB, fileVersionId: clash.fileVersionBId },
         point: clash.point,
+        clashType: clash.clashType,
+        distanceMm: clash.distanceMm,
         context: contextOverride ?? contextModeRef.current,
         refocusCamera: opts?.refocusCamera,
       });
@@ -441,134 +492,205 @@ export function useBimClashSession(args: {
     setRunning(true);
     setProgress(0);
     setPreviewHits([]);
+
+    const models = args.models ?? [];
+    const primaryBId = modelIdFromSet(setB);
+    const extraB = runAgainstModelIds
+      .filter((id) => id !== primaryBId && id !== modelIdFromSet(setA))
+      .map((id) => models.find((m) => m.modelId === id))
+      .filter((m): m is ClashModelRef => Boolean(m));
+    const pairSets: BimClashSetDef[] = [
+      setB,
+      ...extraB.map((m) => withModelOnSet({ label: "Set B", rules: [] }, m)),
+    ];
+
     try {
-      const test = await ensureTest();
-      toast.message(
-        `Scanning ${setCounts.a.toLocaleString()} × ${setCounts.b.toLocaleString()} elements…`,
-      );
-      const result = await runClashTest({
-        engine,
-        quantityIndex: args.quantityIndex,
-        setA,
-        setB,
-        clearanceEnabled,
-        clearanceMm,
-        fallbackFileVersionId: args.fileVersionId,
-        signal: controller.signal,
-        onProgress: (info) => {
-          if (info.total > 0) setProgress(info.done / info.total);
-          if (info.hits.length > 0) {
-            // Temporary preview rows until persist completes.
-            setPreviewHits(
-              info.hits.map((h, i) => ({
-                id: `preview-${i}-${h.guidA}-${h.guidB}`,
-                testId: test.id,
-                projectId: args.projectId!,
-                fileVersionAId: h.fileVersionIdA,
-                fileVersionBId: h.fileVersionIdB,
-                elementAId: "",
-                elementBId: "",
-                guidA: h.guidA,
-                guidB: h.guidB,
-                clashType: h.clashType,
-                distanceMm: h.distanceMm,
-                point: h.point,
-                contactCount: h.contactCount,
-                status: "NEW" as const,
-                statusChangedAt: null,
-                statusDistanceMm: null,
-                assigneeId: null,
-                groupId: null,
-                elementMissingSinceId: null,
-                issueId: null,
-                firstSeenAt: new Date().toISOString(),
-                lastSeenAt: new Date().toISOString(),
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                elementA: {
-                  name: h.nameA ?? null,
-                  ifcType: h.ifcTypeA ?? null,
-                  ifcGuid: h.guidA,
-                },
-                elementB: {
-                  name: h.nameB ?? null,
-                  ifcType: h.ifcTypeB ?? null,
-                  ifcGuid: h.guidB,
-                },
-                assignee: null,
-                issue: null,
-              })),
-            );
-          }
-        },
-      });
-      if (controller.signal.aborted) return;
+      let lastSaved: { clashes: BimClashRow[]; stats: BimClashRunStats } | null = null;
+      let anyTruncated = false;
+      let lastHits = 0;
+      let primarySetB = setB;
 
-      const d = result.diagnostics;
-      if (d.setACount === 0 || d.setBCount === 0) {
-        toast.error(
-          `Selection sets are empty (A: ${d.setACount}, B: ${d.setBCount}). Pick each IFC under Model in Selection sets.`,
+      for (let pi = 0; pi < pairSets.length; pi++) {
+        if (controller.signal.aborted) return;
+        const pairB = pairSets[pi]!;
+        primarySetB = pairB;
+        setSetB(pairB);
+
+        const test =
+          activeTest &&
+          activeTest.setA.label === setA.label &&
+          activeTest.setB.label === pairB.label
+            ? activeTest
+            : await (async () => {
+                const existing = tests.find(
+                  (t) => t.setA.label === setA.label && t.setB.label === pairB.label,
+                );
+                if (existing) {
+                  setActiveTest(existing);
+                  return existing;
+                }
+                const created = await createClashTest(args.projectId!, {
+                  name: `${setA.label} × ${pairB.label}`,
+                  setA,
+                  setB: pairB,
+                  clearanceEnabled: runModeNeedsClearance(runMode),
+                  clearanceMm,
+                });
+                setTests((prev) => [created, ...prev]);
+                setActiveTest(created);
+                return created;
+              })();
+
+        const aCount = resolveClashSet(args.quantityIndex, setA, args.fileVersionId).length;
+        const bCount = resolveClashSet(args.quantityIndex, pairB, args.fileVersionId).length;
+        toast.message(
+          pairSets.length > 1
+            ? `Scanning pair ${pi + 1}/${pairSets.length}: ${setA.label} × ${pairB.label}…`
+            : `Scanning ${aCount.toLocaleString()} × ${bCount.toLocaleString()} elements…`,
         );
-        return;
-      }
-      if (d.boxesA === 0 || d.boxesB === 0) {
-        toast.error(
-          `Could not read geometry boxes (A: ${d.boxesA}, B: ${d.boxesB}). Wait for both models to finish loading.`,
-        );
-        return;
-      }
-      if (d.pairs === 0) {
-        toast.error(
-          `No overlapping pairs (${d.boxesA} × ${d.boxesB} boxes). Models may not share the same coordinates.`,
-        );
-        return;
+
+        const result = await runClashTest({
+          engine,
+          quantityIndex: args.quantityIndex,
+          setA,
+          setB: pairB,
+          clearanceEnabled: runModeNeedsClearance(runMode),
+          clearanceMm,
+          runMode,
+          fallbackFileVersionId: args.fileVersionId,
+          signal: controller.signal,
+          onProgress: (info) => {
+            if (info.total > 0) {
+              setProgress((pi + info.done / info.total) / pairSets.length);
+            }
+            if (info.hits.length > 0 && pi === 0) {
+              setPreviewHits(
+                info.hits.map((h, i) => ({
+                  id: `preview-${i}-${h.guidA}-${h.guidB}`,
+                  testId: test.id,
+                  projectId: args.projectId!,
+                  fileVersionAId: h.fileVersionIdA,
+                  fileVersionBId: h.fileVersionIdB,
+                  elementAId: "",
+                  elementBId: "",
+                  guidA: h.guidA,
+                  guidB: h.guidB,
+                  clashType: h.clashType,
+                  distanceMm: h.distanceMm,
+                  point: h.point,
+                  contactCount: h.contactCount,
+                  status: "NEW" as const,
+                  statusChangedAt: null,
+                  statusDistanceMm: null,
+                  assigneeId: null,
+                  groupId: null,
+                  elementMissingSinceId: null,
+                  issueId: null,
+                  firstSeenAt: new Date().toISOString(),
+                  lastSeenAt: new Date().toISOString(),
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  elementA: {
+                    name: h.nameA ?? null,
+                    ifcType: h.ifcTypeA ?? null,
+                    ifcGuid: h.guidA,
+                  },
+                  elementB: {
+                    name: h.nameB ?? null,
+                    ifcType: h.ifcTypeB ?? null,
+                    ifcGuid: h.guidB,
+                  },
+                  assignee: null,
+                  issue: null,
+                })),
+              );
+            }
+          },
+        });
+        if (controller.signal.aborted) return;
+
+        const d = result.diagnostics;
+        if (d.setACount === 0 || d.setBCount === 0) {
+          toast.error(
+            `Selection sets are empty (A: ${d.setACount}, B: ${d.setBCount}). Pick each IFC under Model in Selection sets.`,
+          );
+          return;
+        }
+        if (d.boxesA === 0 || d.boxesB === 0) {
+          toast.error(
+            `Could not read geometry boxes (A: ${d.boxesA}/${d.setACount}, B: ${d.boxesB}/${d.setBCount}). ` +
+              ((d.setACount > 0 && d.boxesA === 0) || (d.setBCount > 0 && d.boxesB === 0)
+                ? "One model’s elements are indexed but not bound to loaded 3D geometry yet — wait a moment and try again, or toggle the model off/on."
+                : "Wait for both models to finish loading."),
+          );
+          return;
+        }
+        if (d.pairs === 0 && pairSets.length === 1) {
+          toast.error(
+            `No overlapping pairs (${d.boxesA} × ${d.boxesB} boxes). Models may not share the same coordinates.`,
+          );
+          return;
+        }
+
+        if (result.truncated) anyTruncated = true;
+        lastHits = result.hits.length;
+
+        const saved = await postClashRun(test.id, {
+          clearanceEnabled: runModeNeedsClearance(runMode),
+          clearanceMm,
+          runMode,
+          setA,
+          setB: pairB,
+          hits: result.hits,
+          scannedPairs: result.scannedPairs,
+          truncated: result.truncated,
+        });
+        lastSaved = saved;
+        setActiveTest({
+          ...test,
+          lastRunAt: new Date().toISOString(),
+          lastRunStats: saved.stats,
+          clearanceEnabled: runModeNeedsClearance(runMode),
+          clearanceMm,
+          setA,
+          setB: pairB,
+        });
       }
 
-      const saved = await postClashRun(test.id, {
-        clearanceEnabled,
-        clearanceMm,
-        setA,
-        setB,
-        hits: result.hits,
-        scannedPairs: result.scannedPairs,
-        truncated: result.truncated,
-      });
-      setClashes(saved.clashes);
-      setRunStats(saved.stats);
+      setLastRunTruncated(anyTruncated);
+      if (anyTruncated) {
+        toast.warning(
+          "Pair cap reached on at least one run. Narrow type/level filters and re-run.",
+        );
+      }
+
+      if (!lastSaved) return;
+      setClashes(lastSaved.clashes);
+      setRunStats(lastSaved.stats);
       setPreviewHits([]);
       setStatusFilter("ALL");
-      setActiveTest((prev) =>
-        prev
-          ? {
-              ...prev,
-              lastRunAt: new Date().toISOString(),
-              lastRunStats: saved.stats,
-              clearanceEnabled,
-              clearanceMm,
-              setA,
-              setB,
-            }
-          : prev,
-      );
+      setTypeFilter("ALL");
+      setSetB(primarySetB);
+      setRunAgainstModelIds([]);
 
       const reviewFirst =
-        saved.clashes.find((c) => c.status === "NEW" || c.status === "ACTIVE") ??
-        saved.clashes[0] ??
+        lastSaved.clashes.find((c) => c.status === "NEW" || c.status === "ACTIVE") ??
+        lastSaved.clashes[0] ??
         null;
       if (reviewFirst) {
         setSelectedClashId(reviewFirst.id);
         await presentClashIsolate(reviewFirst);
         toast.success(
-          `Clash run complete · ${saved.clashes.length} clashes · reviewing first result`,
+          pairSets.length > 1
+            ? `Clash runs complete · ${pairSets.length} pairs · reviewing ${lastSaved.clashes.length} clashes`
+            : `Clash run complete · ${lastSaved.clashes.length} clashes · reviewing first result`,
         );
-      } else if (result.hits.length > 0) {
+      } else if (lastHits > 0) {
         toast.error(
-          `Found ${result.hits.length} geometric hits but none could be saved. Check that both models belong to this project.`,
+          `Found ${lastHits} geometric hits but none could be saved. Check that both models belong to this project.`,
         );
       } else {
-        toast.success(
-          `Clash run complete · no clashes · ${result.scannedPairs.toLocaleString()} pairs scanned`,
-        );
+        toast.success("Clash run complete · no clashes");
       }
     } catch (err) {
       if (!controller.signal.aborted) {
@@ -585,27 +707,58 @@ export function useBimClashSession(args: {
     args.projectId,
     args.quantityIndex,
     args.fileVersionId,
+    args.models,
     setA,
     setB,
-    setCounts.a,
-    setCounts.b,
-    clearanceEnabled,
+    runAgainstModelIds,
+    activeTest,
+    tests,
+    runMode,
     clearanceMm,
-    ensureTest,
     cancelRun,
     presentClashIsolate,
   ]);
 
   const focusClash = useCallback(
-    async (clash: BimClashRow) => {
+    async (clash: BimClashRow, opts?: { refocusCamera?: boolean }) => {
       if (!clashCoveredByOpenModels(clash, openFileVersionIds)) {
         toast.error("Load both clash partner models to review this clash.");
         return;
       }
       setSelectedClashId(clash.id);
-      await presentClashIsolate(clash);
+      await presentClashIsolate(clash, undefined, {
+        refocusCamera: opts?.refocusCamera !== false,
+      });
     },
     [presentClashIsolate, openFileVersionIds],
+  );
+
+  /** Re-paint green/red (and gap marker) without yanking the camera — e.g. return to Clashes dock. */
+  const reapplyClashPresentation = useCallback(async () => {
+    const clash = selectedClashRef.current;
+    if (!clash) return;
+    await presentClashIsolate(clash, undefined, { refocusCamera: false });
+  }, [presentClashIsolate]);
+
+  const selectTest = useCallback(
+    async (test: BimClashTestRow) => {
+      setActiveTest(test);
+      setSetA(test.setA);
+      setSetB(test.setB);
+      setClearanceEnabled(test.clearanceEnabled);
+      setClearanceMm(test.clearanceMm);
+      setRunModeState(test.clearanceEnabled ? "BOTH" : "HARD");
+      setLastRunTruncated(false);
+      try {
+        const data = await fetchClashTestClashes(test.id);
+        setClashes(data.clashes);
+        setRunStats(data.test.lastRunStats);
+        await endClashReviewPresentation();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not load clash test");
+      }
+    },
+    [endClashReviewPresentation],
   );
 
   const clearFocusMode = useCallback(async () => {
@@ -707,7 +860,9 @@ export function useBimClashSession(args: {
     setB,
     clearanceEnabled,
     clearanceMm,
+    runMode,
     statusFilter,
+    typeFilter,
     assigneeMe,
     grouped,
     focusMode,
@@ -715,6 +870,8 @@ export function useBimClashSession(args: {
     running,
     progress,
     runStats,
+    lastRunTruncated,
+    runAgainstModelIds,
     openCount,
     filteredIds,
     setCounts,
@@ -723,7 +880,10 @@ export function useBimClashSession(args: {
     setSetB,
     setClearanceEnabled,
     setClearanceMm,
+    setRunMode,
+    toggleRunAgainst,
     setStatusFilter,
+    setTypeFilter,
     setAssigneeMe,
     setGrouped,
     setFocusMode,
@@ -733,6 +893,8 @@ export function useBimClashSession(args: {
     runTest,
     cancelRun,
     focusClash,
+    reapplyClashPresentation,
+    selectTest,
     inspectClashItem,
     clearFocusMode,
     deleteClashById,

@@ -181,9 +181,63 @@ async function issueDisplayNumbersForProject(projectId: string): Promise<Map<str
   return new Map(chron.map((row, i) => [row.id, i + 1]));
 }
 
+type BimAnchorRecord = {
+  fileVersionId?: unknown;
+  fileId?: unknown;
+  modelFileName?: unknown;
+  fileVersionIdB?: unknown;
+  fileIdB?: unknown;
+  modelFileNameB?: unknown;
+};
+
+/** Fill missing clash-partner file ids/names so reopen links can federate. */
+async function hydrateIssueBimAnchors(rows: IssueRow[]): Promise<IssueRow[]> {
+  const needIds = new Set<string>();
+  for (const row of rows) {
+    const a = row.bimAnchor;
+    if (!a || typeof a !== "object" || Array.isArray(a)) continue;
+    const anchor = a as BimAnchorRecord;
+    if (typeof anchor.fileVersionId === "string" && typeof anchor.fileId !== "string") {
+      needIds.add(anchor.fileVersionId);
+    }
+    if (typeof anchor.fileVersionIdB === "string" && typeof anchor.fileIdB !== "string") {
+      needIds.add(anchor.fileVersionIdB);
+    }
+  }
+  if (needIds.size === 0) return rows;
+
+  const fvs = await prisma.fileVersion.findMany({
+    where: { id: { in: [...needIds] } },
+    select: { id: true, fileId: true, file: { select: { name: true } } },
+  });
+  const byId = new Map(fvs.map((fv) => [fv.id, fv]));
+
+  return rows.map((row) => {
+    const a = row.bimAnchor;
+    if (!a || typeof a !== "object" || Array.isArray(a)) return row;
+    const anchor = { ...(a as Record<string, unknown>) };
+    let changed = false;
+    const fvA = typeof anchor.fileVersionId === "string" ? byId.get(anchor.fileVersionId) : null;
+    if (fvA && typeof anchor.fileId !== "string") {
+      anchor.fileId = fvA.fileId;
+      if (typeof anchor.modelFileName !== "string") anchor.modelFileName = fvA.file.name;
+      changed = true;
+    }
+    const fvB = typeof anchor.fileVersionIdB === "string" ? byId.get(anchor.fileVersionIdB) : null;
+    if (fvB && typeof anchor.fileIdB !== "string") {
+      anchor.fileIdB = fvB.fileId;
+      if (typeof anchor.modelFileNameB !== "string") anchor.modelFileNameB = fvB.file.name;
+      changed = true;
+    }
+    if (!changed) return row;
+    return { ...row, bimAnchor: anchor as IssueRow["bimAnchor"] };
+  });
+}
+
 async function issueRowJsonWithDisplay(row: IssueRow, opts?: { maskPortalReporter?: boolean }) {
   const displayNums = await issueDisplayNumbersForProject(row.projectId);
-  return issueRowJson(row, {
+  const [hydrated] = await hydrateIssueBimAnchors([row]);
+  return issueRowJson(hydrated ?? row, {
     ...opts,
     displayNumber: displayNums.get(row.id) ?? null,
   });
@@ -191,7 +245,8 @@ async function issueRowJsonWithDisplay(row: IssueRow, opts?: { maskPortalReporte
 
 async function issueRowsToJson(rows: IssueRow[], projectId: string, maskPortalReporter: boolean) {
   const displayNums = await issueDisplayNumbersForProject(projectId);
-  return rows.map((row) =>
+  const hydrated = await hydrateIssueBimAnchors(rows);
+  return hydrated.map((row) =>
     issueRowJson(row, {
       maskPortalReporter,
       displayNumber: displayNums.get(row.id) ?? null,
@@ -967,11 +1022,15 @@ export function registerIssuesRoutes(
             spatialPath: z.array(z.string().max(300)).max(20).optional(),
             position: z.object({ x: z.number(), y: z.number(), z: z.number() }).optional(),
             fileVersionId: z.string().max(64).optional(),
+            fileId: z.string().max(64).optional(),
+            modelFileName: z.string().max(300).optional(),
             /** Clash partner (item 2) — enables ghost + green/red on open. */
             ifcGuidB: z.string().min(1).max(64).optional(),
             nameB: z.string().max(300).optional(),
             ifcTypeB: z.string().max(120).optional(),
             fileVersionIdB: z.string().max(64).optional(),
+            fileIdB: z.string().max(64).optional(),
+            modelFileNameB: z.string().max(300).optional(),
           })
           .optional(),
         /** Link new issue to one or more project RFIs (merged with `rfiId` if both sent). */

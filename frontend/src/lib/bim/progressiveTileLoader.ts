@@ -1,6 +1,6 @@
 import { apiUrl } from "@/lib/api-url";
 import { apiJsonFetch } from "@/lib/api-client/shared";
-import { fetchBinaryWithRetry } from "@/lib/bim/loadFetch";
+import { BimLoadAbortedError, fetchBinaryWithRetry } from "@/lib/bim/loadFetch";
 
 type GeometryManifestTile = {
   id: string;
@@ -18,10 +18,14 @@ type GeometryManifest = {
   tiles: GeometryManifestTile[];
 };
 
-async function fetchGeometryManifest(fileVersionId: string): Promise<GeometryManifest | null> {
+async function fetchGeometryManifest(
+  fileVersionId: string,
+  signal?: AbortSignal,
+): Promise<GeometryManifest | null> {
   try {
     return await apiJsonFetch<GeometryManifest>(
       `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/geometry-manifest`,
+      { signal: signal ?? AbortSignal.timeout(30_000) },
     );
   } catch {
     return null;
@@ -103,8 +107,10 @@ export async function* loadFragmentsProgressive(
   },
 ): AsyncGenerator<ProgressiveTile> {
   if (opts?.fragmentsReady === false) return;
+  if (opts?.signal?.aborted) throw new BimLoadAbortedError();
 
-  const manifest = await fetchGeometryManifest(fileVersionId);
+  const manifest = await fetchGeometryManifest(fileVersionId, opts?.signal);
+  if (opts?.signal?.aborted) throw new BimLoadAbortedError();
   const tiles = manifest?.tiles?.length ? sortTiles(manifest.tiles) : null;
   const multi = Boolean(manifest && !manifest.monolithic && tiles && tiles.length > 1);
 
@@ -115,7 +121,7 @@ export async function* loadFragmentsProgressive(
 
     for (let i = 0; i < tiles.length; i++) {
       const tile = tiles[i]!;
-      if (opts?.signal?.aborted) return;
+      if (opts?.signal?.aborted) throw new BimLoadAbortedError();
       const buffer = await fetchTileBuffer(fileVersionId, tile.contentHash, {
         signal: opts?.signal,
         onDownloading: (fraction, bytesTotal) => {

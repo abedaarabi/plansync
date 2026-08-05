@@ -626,6 +626,63 @@ export function registerClashRoutes(
       newestModelAt && lastRunAt && newestModelAt.getTime() > lastRunAt.getTime(),
     );
 
+    const sampleByTest = new Map<
+      string,
+      Array<{
+        id: string;
+        clashType: string;
+        distanceMm: number;
+        status: string;
+        guidA: string;
+        guidB: string;
+        fileVersionAId: string;
+        fileVersionBId: string;
+        nameA: string | null;
+        nameB: string | null;
+      }>
+    >();
+    if (testIds.length > 0) {
+      const samples = await prisma.bimClash.findMany({
+        where: {
+          ...buildingClashWhere,
+          testId: { in: testIds },
+          status: { in: [BimClashStatus.NEW, BimClashStatus.ACTIVE] },
+        },
+        orderBy: [{ status: "asc" }, { distanceMm: "asc" }],
+        take: Math.min(testIds.length * 8, 80),
+        select: {
+          id: true,
+          testId: true,
+          clashType: true,
+          distanceMm: true,
+          status: true,
+          guidA: true,
+          guidB: true,
+          fileVersionAId: true,
+          fileVersionBId: true,
+          elementA: { select: { name: true } },
+          elementB: { select: { name: true } },
+        },
+      });
+      for (const s of samples) {
+        const list = sampleByTest.get(s.testId) ?? [];
+        if (list.length >= 5) continue;
+        list.push({
+          id: s.id,
+          clashType: s.clashType,
+          distanceMm: s.distanceMm,
+          status: s.status,
+          guidA: s.guidA,
+          guidB: s.guidB,
+          fileVersionAId: s.fileVersionAId,
+          fileVersionBId: s.fileVersionBId,
+          nameA: s.elementA?.name ?? null,
+          nameB: s.elementB?.name ?? null,
+        });
+        sampleByTest.set(s.testId, list);
+      }
+    }
+
     return c.json({
       summary: {
         openCount,
@@ -641,6 +698,7 @@ export function registerClashRoutes(
           clashCount: totalByTest.get(t.id) ?? 0,
           lastRunAt: t.lastRunAt?.toISOString() ?? null,
           lastRunStats: parseRunStats(t.lastRunStats),
+          sampleClashes: sampleByTest.get(t.id) ?? [],
         })),
       },
     });

@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, EyeOff, Loader2, Play, X } from "lucide-react";
-import type { BimClashSetDef } from "@plansync/shared/bimClashTypes";
+import type { BimClashRunMode, BimClashSetDef } from "@plansync/shared/bimClashTypes";
 import {
   buildClashSetDef,
   displayModelLabel,
@@ -195,16 +195,25 @@ export function BimClashSetsPanel(props: {
   levels: string[];
   clearanceEnabled: boolean;
   clearanceMm: number;
+  runMode: BimClashRunMode;
   running: boolean;
   progress: number | null;
+  /** Extra counterparts for “Run against…” (multi-pair). */
+  runAgainstModelIds?: string[];
   onChangeSetA: (set: BimClashSetDef) => void;
   onChangeSetB: (set: BimClashSetDef) => void;
   onToggleModelVisible: (modelId: string, visible: boolean) => void;
-  onClearanceEnabledChange: (v: boolean) => void;
+  onRunModeChange: (mode: BimClashRunMode) => void;
   onClearanceMmChange: (v: number) => void;
+  onToggleRunAgainst?: (modelId: string) => void;
   onRun: () => void;
   onCancel: () => void;
 }) {
+  const clearanceActive = props.runMode !== "HARD";
+  const setAModelId = modelIdFromSet(props.setA);
+  const counterparts = props.models.filter((m) => m.modelId !== setAModelId);
+  const runAgainst = new Set(props.runAgainstModelIds ?? []);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="bim-dock-scroll space-y-3 p-2.5">
@@ -231,18 +240,68 @@ export function BimClashSetsPanel(props: {
           onChange={props.onChangeSetB}
           onToggleModelVisible={props.onToggleModelVisible}
         />
+        {counterparts.length > 1 && props.onToggleRunAgainst ? (
+          <div className="bim-detail-card space-y-2 p-2.5">
+            <p className="text-[11px] font-semibold text-[var(--bim-text)]">Run against…</p>
+            <p className="text-[10px] leading-snug text-[var(--bim-text-muted)]">
+              Optionally clash Set A against extra models (each pair saves as its own test).
+            </p>
+            <ul className="space-y-1">
+              {counterparts.map((m) => {
+                const isPrimaryB = modelIdFromSet(props.setB) === m.modelId;
+                const checked = isPrimaryB || runAgainst.has(m.modelId);
+                return (
+                  <li key={m.modelId}>
+                    <label className="flex items-center gap-2 text-[11px] text-[var(--bim-text-muted)]">
+                      <input
+                        type="checkbox"
+                        className="rounded border-[var(--bim-border)]"
+                        checked={checked}
+                        disabled={props.running || isPrimaryB}
+                        onChange={() => props.onToggleRunAgainst?.(m.modelId)}
+                      />
+                      <span className="truncate text-[var(--bim-text)]">
+                        {displayModelLabel(m.name)}
+                      </span>
+                      {isPrimaryB ? (
+                        <span className="text-[9px] text-[var(--bim-text-muted)]">Set B</span>
+                      ) : null}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
         <div className="bim-detail-card space-y-2 p-2.5">
-          <p className="text-[11px] font-semibold text-[var(--bim-text)]">Clearance</p>
-          <label className="flex items-center gap-2 text-[11px] text-[var(--bim-text-muted)]">
-            <input
-              type="checkbox"
-              className="rounded border-[var(--bim-border)]"
-              checked={props.clearanceEnabled}
-              disabled={props.running}
-              onChange={(e) => props.onClearanceEnabledChange(e.target.checked)}
-            />
-            Soft clearance clashes
-          </label>
+          <p className="text-[11px] font-semibold text-[var(--bim-text)]">Clash type</p>
+          <div className="bim-segment bim-segment-compact">
+            {(
+              [
+                ["HARD", "Hard"],
+                ["CLEARANCE", "Clearance"],
+                ["BOTH", "Both"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className="bim-segment-btn"
+                data-active={props.runMode === id ? "true" : undefined}
+                disabled={props.running}
+                onClick={() => props.onRunModeChange(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] leading-snug text-[var(--bim-text-muted)]">
+            {props.runMode === "HARD"
+              ? "Report intersecting geometry only."
+              : props.runMode === "CLEARANCE"
+                ? "Report pairs closer than the distance that do not intersect."
+                : "Report hard intersections and clearance (soft) gaps."}
+          </p>
           <label className="flex items-center gap-2 text-[11px] text-[var(--bim-text-muted)]">
             <span className="w-16 shrink-0">Distance</span>
             <input
@@ -250,7 +309,7 @@ export function BimClashSetsPanel(props: {
               min={0}
               max={1000}
               value={props.clearanceMm}
-              disabled={props.running || !props.clearanceEnabled}
+              disabled={props.running || !clearanceActive}
               onChange={(e) => props.onClearanceMmChange(Number(e.target.value) || 0)}
               className="bim-select w-20 px-1.5 py-1 text-[11px]"
               aria-label="Clearance millimetres"

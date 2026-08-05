@@ -39,6 +39,8 @@ export function BimViewerClient() {
   const alignAssetId = searchParams.get("alignAssetId");
   const previewAssetId = searchParams.get("previewAssetId");
   const panel = searchParams.get("panel");
+  const initialClashTestId = searchParams.get("testId");
+  const initialClashId = searchParams.get("clashId");
   const workspaceMode = buildingId
     ? parseBuildingWorkspaceMode(searchParams.get("mode"), {
         alignActive: Boolean(alignLevelId && alignAssetId) || Boolean(previewAssetId),
@@ -95,6 +97,8 @@ export function BimViewerClient() {
         alignAssetId={alignAssetId}
         previewAssetId={previewAssetId}
         initialPanel={panel}
+        initialClashTestId={initialClashTestId}
+        initialClashId={initialClashId}
       />
     </QueryProvider>
   );

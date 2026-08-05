@@ -144,7 +144,8 @@ import { BimFiltersPanel, useBimFilterPreview } from "./BimFiltersPanel";
 import { BimLoadingOverlay } from "./BimLoadingOverlay";
 import { overallLoadFraction } from "@/lib/bim/bimLoadingSteps";
 import { readModelThumbnailDataUrl } from "@/lib/bim/bimThumbnailCache";
-import { disposeModelThumbnailService, requestModelThumbnail } from "@/lib/bim/modelThumbnail";
+import { BimLoadAbortedError } from "@/lib/bim/loadFetch";
+import { disposeModelThumbnailService, peekModelThumbnail } from "@/lib/bim/modelThumbnail";
 import {
   fetchBimSyncContext,
   fetchDrawingLevelMaps,
@@ -243,6 +244,9 @@ export function BimViewerShell(props: {
   previewAssetId?: string | null;
   /** Open a dock on first ready (e.g. `clashes` from building hub). */
   initialPanel?: string | null;
+  /** Deep-link into a clash test / clash after load. */
+  initialClashTestId?: string | null;
+  initialClashId?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -344,9 +348,22 @@ export function BimViewerShell(props: {
     fileVersionId: resolvedFileVersionId,
     quantityIndex,
     engine: activeEngine,
-    active: clashDockOpen || activeDock === "clashes",
+    // Stay active while reviewing even if Filters/Properties is open.
+    active: Boolean(resolvedProjectId) && phase.kind === "ready",
     models: clashModels,
+    initialTestId: props.initialClashTestId,
+    initialClashId: props.initialClashId,
   });
+
+  const prevActiveDockRef = useRef<BimDockId | null>(null);
+  useEffect(() => {
+    const prev = prevActiveDockRef.current;
+    prevActiveDockRef.current = activeDock;
+    // Returning to Clashes after Filters/other docks — restore green/red + gap marker.
+    if (activeDock === "clashes" && prev !== "clashes" && clash.selectedClashId) {
+      void clash.reapplyClashPresentation();
+    }
+  }, [activeDock, clash.selectedClashId, clash.reapplyClashPresentation]);
 
   const { data: projectSession } = useQuery({
     queryKey: qk.projectSession(resolvedProjectId ?? ""),
@@ -669,6 +686,7 @@ export function BimViewerShell(props: {
     if (!viewportEl) return;
 
     let cancelled = false;
+    let becameReady = false;
     const abort = new AbortController();
     disposeModelThumbnailService();
     setPhase({ kind: "resolving" });
@@ -676,16 +694,32 @@ export function BimViewerShell(props: {
     setLoadPreviewUrl(null);
     setGeometryStream(null);
 
+    // Last-resort: if nothing reaches ready/error, surface Retry instead of spinning forever.
+    const loadWatchdog = window.setTimeout(() => {
+      if (cancelled || becameReady) return;
+      cancelled = true;
+      abort.abort();
+      setGeometryStream(null);
+      setPhase({
+        kind: "error",
+        message: "Loading is taking too long. Check your connection and try again.",
+      });
+    }, 10 * 60_000);
+
     // fallow-ignore-next-line complexity
     void (async () => {
       try {
+        // Never await full-fragment thumbnail generation here — it can hang the
+        // entire load on Preparing. Memory + IDB only; overlay also loads IDB itself.
         const fvId = props.fileVersionId;
         if (fvId) {
-          let preview = await readModelThumbnailDataUrl(fvId);
-          if (!preview) {
-            preview = await requestModelThumbnail(fvId, props.fileId);
+          const peek = peekModelThumbnail(fvId);
+          if (peek) setLoadPreviewUrl(peek);
+          else {
+            void readModelThumbnailDataUrl(fvId).then((preview) => {
+              if (!cancelled && preview) setLoadPreviewUrl(preview);
+            });
           }
-          if (!cancelled && preview) setLoadPreviewUrl(preview);
         }
         disposeModelThumbnailService();
         if (cancelled) return;
@@ -752,13 +786,21 @@ export function BimViewerShell(props: {
         setResolvedProjectId(props.projectId);
 
         const memberTotal = resolvedMembers.length;
-        let becameReady = false;
-        const markReadySoon = async () => {
+        /** Dismiss overlay immediately; camera fit must never block ready/tile load. */
+        const markReadySoon = () => {
           if (cancelled || becameReady) return;
           becameReady = true;
-          await engine.fitToView();
-          await engine.resizeViewport();
-          if (!cancelled) setPhase({ kind: "ready" });
+          window.clearTimeout(loadWatchdog);
+          setPhase({ kind: "ready" });
+          void Promise.race([
+            (async () => {
+              await engine.fitToView();
+              await engine.resizeViewport();
+            })(),
+            new Promise<void>((resolve) => {
+              window.setTimeout(resolve, 2_500);
+            }),
+          ]).catch(() => undefined);
         };
 
         const reportProgress = (
@@ -841,9 +883,9 @@ export function BimViewerShell(props: {
             onConverting: (fraction) => {
               trackAndReport("converting", fraction);
             },
-            onFirstGeometry: async () => {
+            onFirstGeometry: () => {
               if (i === 0) {
-                await markReadySoon();
+                markReadySoon();
                 // Keep a percent chip while remaining tiles / federated models stream.
                 if (!cancelled) {
                   setGeometryStream({
@@ -863,24 +905,23 @@ export function BimViewerShell(props: {
 
         if (cancelled) return;
         if (!becameReady) {
-          await engine.fitToView();
-          await engine.resizeViewport();
-          setPhase({ kind: "ready" });
+          markReadySoon();
         }
         setGeometryStream(null);
       } catch (e) {
-        if (!cancelled) {
-          setGeometryStream(null);
-          setPhase({
-            kind: "error",
-            message: e instanceof Error ? e.message : "Could not load the model.",
-          });
-        }
+        window.clearTimeout(loadWatchdog);
+        if (cancelled || e instanceof BimLoadAbortedError) return;
+        setGeometryStream(null);
+        setPhase({
+          kind: "error",
+          message: e instanceof Error ? e.message : "Could not load the model.",
+        });
       }
     })();
 
     return () => {
       cancelled = true;
+      window.clearTimeout(loadWatchdog);
       abort.abort();
       setGeometryStream(null);
       const engine = engineRef.current;
@@ -1332,18 +1373,47 @@ export function BimViewerShell(props: {
         const engine = engineRef.current;
         if (!engine) return;
 
+        const partnerFv = issue.bimAnchor?.fileVersionIdB?.trim() || "";
+        const needClashPair = Boolean(issue.bimAnchor?.ifcGuidB?.trim());
+        const partnerExpected = Boolean(
+          partnerFv && federationMembers.some((m) => m.fileVersionId === partnerFv),
+        );
+        const partnerLoaded = () =>
+          !partnerExpected || engine.getLoadedModels().some((m) => m.fileVersionId === partnerFv);
+
+        // Primary marks ready on first geometry; wait for the clash partner model next.
+        if (needClashPair && partnerExpected && !partnerLoaded()) {
+          const waitUntil = Date.now() + 90_000;
+          while (!cancelled && Date.now() < waitUntil && !partnerLoaded()) {
+            await new Promise<void>((r) => window.setTimeout(r, 350));
+          }
+          if (cancelled) return;
+          if (!partnerLoaded()) {
+            // Still streaming — retry when loadedModels updates.
+            return;
+          }
+        }
+
         // Clash issues store both guids on bimAnchor → ghost + green/red (no clash-test fetch).
-        const focused = await focusBimIssueInViewer(engine, issue, { retryMs: 15_000 });
-        if (!focused && !cancelled) {
+        const focused = await focusBimIssueInViewer(engine, issue, {
+          retryMs: needClashPair ? 20_000 : 15_000,
+        });
+        if (cancelled) return;
+
+        const pairReady = !needClashPair || engine.hasBothClashPartnerColors();
+        // Partner still streaming after a partial green paint — retry on next load.
+        if (needClashPair && !pairReady && !partnerLoaded()) {
+          return;
+        }
+
+        if (!focused && !pairReady) {
           toast.info("Could not locate the linked element — showing the full model.");
         }
 
-        if (!cancelled) {
-          setSelectedIssueId(issue.id);
-          setActiveDock("issues");
-          setEditIssue(issue);
-          issueFocusConsumedRef.current = issueId;
-        }
+        setSelectedIssueId(issue.id);
+        setActiveDock("issues");
+        setEditIssue(issue);
+        issueFocusConsumedRef.current = issueId;
       } catch (e) {
         if (!cancelled) {
           toast.error(e instanceof Error ? e.message : "Could not open issue.");
@@ -1355,7 +1425,14 @@ export function BimViewerShell(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.issueId, props.fileVersionId, federationMembers, phase.kind, resolvedFileVersionId]);
+  }, [
+    props.issueId,
+    props.fileVersionId,
+    federationMembers,
+    phase.kind,
+    resolvedFileVersionId,
+    loadedModels,
+  ]);
 
   useEffect(() => {
     const onFs = () => setFullscreen(Boolean(document.fullscreenElement));
@@ -1699,19 +1776,30 @@ export function BimViewerShell(props: {
     [props.fileName],
   );
 
-  const clashToBimAnchor = useCallback((row: BimClashRow): IssueBimAnchor => {
-    return {
-      ifcGuid: row.guidA,
-      name: row.elementA?.name ?? undefined,
-      ifcType: row.elementA?.ifcType ?? undefined,
-      position: row.point,
-      fileVersionId: row.fileVersionAId || undefined,
-      ifcGuidB: row.guidB,
-      nameB: row.elementB?.name ?? undefined,
-      ifcTypeB: row.elementB?.ifcType ?? undefined,
-      fileVersionIdB: row.fileVersionBId || undefined,
-    };
-  }, []);
+  const clashToBimAnchor = useCallback(
+    (row: BimClashRow): IssueBimAnchor => {
+      const memberA = federationMembers.find((m) => m.fileVersionId === row.fileVersionAId);
+      const memberB = federationMembers.find((m) => m.fileVersionId === row.fileVersionBId);
+      const sameModel = Boolean(row.fileVersionAId) && row.fileVersionAId === row.fileVersionBId;
+      return {
+        ifcGuid: row.guidA,
+        name: row.elementA?.name ?? undefined,
+        ifcType: row.elementA?.ifcType ?? undefined,
+        position: row.point,
+        fileVersionId: row.fileVersionAId || undefined,
+        fileId: memberA?.fileId,
+        modelFileName: memberA?.name,
+        ifcGuidB: row.guidB,
+        nameB: row.elementB?.name ?? undefined,
+        ifcTypeB: row.elementB?.ifcType ?? undefined,
+        // Self-clash: omit partner file so reopen stays single-model.
+        fileVersionIdB: sameModel ? undefined : row.fileVersionBId || undefined,
+        fileIdB: sameModel ? undefined : memberB?.fileId,
+        modelFileNameB: sameModel ? undefined : memberB?.name,
+      };
+    },
+    [federationMembers],
+  );
 
   const openLinkedClashIssue = useCallback(async (issueId: string) => {
     try {
@@ -2590,19 +2678,32 @@ export function BimViewerShell(props: {
     [quantityIndex, clash.setB],
   );
 
+  const clashModelNameByFv = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const m of logicalLoadedModels) {
+      const fv = m.modelId.includes(":") ? m.modelId.split(":").pop() : m.modelId;
+      if (fv) out[fv] = m.name;
+    }
+    return out;
+  }, [logicalLoadedModels]);
+
   const clashDockBody =
     workChromeReady && activeDock === "clashes" ? (
       <BimClashDockContent
         test={clash.activeTest}
+        tests={clash.tests}
         clashes={clash.clashes}
         selectedClashId={clash.selectedClashId}
         statusFilter={clash.statusFilter}
+        typeFilter={clash.typeFilter}
         assigneeMe={clash.assigneeMe}
         grouped={clash.grouped}
         contextMode={clash.contextMode}
         runStats={clash.runStats}
+        lastRunTruncated={clash.lastRunTruncated}
         currentUserId={currentUserId}
         creatingIssue={clashIssuePreparing}
+        modelNameByFileVersionId={clashModelNameByFv}
         setup={{
           setA: clash.setA,
           setB: clash.setB,
@@ -2618,17 +2719,22 @@ export function BimViewerShell(props: {
           levels: clash.levels,
           clearanceEnabled: clash.clearanceEnabled,
           clearanceMm: clash.clearanceMm,
+          runMode: clash.runMode,
           running: clash.running,
           progress: clash.progress,
+          runAgainstModelIds: clash.runAgainstModelIds,
           onChangeSetA: clash.setSetA,
           onChangeSetB: clash.setSetB,
           onToggleModelVisible: onToggleModelVisible,
-          onClearanceEnabledChange: clash.setClearanceEnabled,
+          onRunModeChange: clash.setRunMode,
           onClearanceMmChange: clash.setClearanceMm,
+          onToggleRunAgainst: clash.toggleRunAgainst,
           onRun: () => void clash.runTest(),
           onCancel: clash.cancelRun,
         }}
         onStatusFilterChange={clash.setStatusFilter}
+        onTypeFilterChange={clash.setTypeFilter}
+        onSelectTest={(t) => void clash.selectTest(t)}
         onAssigneeMeChange={clash.setAssigneeMe}
         onGroupedChange={clash.setGrouped}
         onContextModeChange={clash.setContextMode}
@@ -2645,9 +2751,9 @@ export function BimViewerShell(props: {
       />
     ) : null;
 
+  /** Close the panel only — keep selected clash so Filters → Clashes can restore colors. */
   const closeClashDock = () => {
     setActiveDock(null);
-    void clash.clearFocusMode();
   };
   const workspaceStorey = workspaceLevel
     ? (activeEngine?.resolveStoreyName(workspaceLevel.sourceName) ??
@@ -3234,11 +3340,18 @@ export function BimViewerShell(props: {
               layout="docked"
               embedded
               bimContext={{
-                fileId: props.fileId,
-                fileVersionId: resolvedFileVersionId,
+                // Clash issues prefer set-A's model so reopen loads the right primary + partner.
+                fileId:
+                  issueCreateDraft.bimAnchor?.fileId && issueCreateDraft.bimAnchor?.fileVersionId
+                    ? issueCreateDraft.bimAnchor.fileId
+                    : props.fileId,
+                fileVersionId:
+                  issueCreateDraft.bimAnchor?.fileId && issueCreateDraft.bimAnchor?.fileVersionId
+                    ? issueCreateDraft.bimAnchor.fileVersionId
+                    : resolvedFileVersionId,
                 projectId: resolvedProjectId,
                 bimAnchor: issueCreateDraft.bimAnchor,
-                modelName: props.fileName,
+                modelName: issueCreateDraft.bimAnchor?.modelFileName ?? props.fileName,
               }}
               initialLinkedMarkupIds={issueCreateDraft.initialLinkedMarkupIds}
               pendingReferencePhoto={issueCreateDraft.pendingReferencePhoto}

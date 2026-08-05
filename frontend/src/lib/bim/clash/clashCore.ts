@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { MeshBVH, type HitPointInfo } from "three-mesh-bvh";
-import type { BimClashHit, BimClashType } from "@plansync/shared/bimClashTypes";
+import type { BimClashHit, BimClashRunMode, BimClashType } from "@plansync/shared/bimClashTypes";
+import { filterHitsByRunMode, runModeNeedsClearance } from "@plansync/shared/bimClashTypes";
 
 export type ClashElementBox = {
   guid: string;
@@ -24,6 +25,8 @@ export type ClashMeshPayload = {
 export type ClashCoreOptions = {
   clearanceEnabled: boolean;
   clearanceMm: number;
+  /** Defaults from clearanceEnabled when omitted. */
+  runMode?: BimClashRunMode;
   /** Max pairs to narrow-phase; remainder truncated. */
   pairCap?: number;
   onProgress?: (done: number, total: number, hits: BimClashHit[]) => void;
@@ -40,6 +43,13 @@ export type ClashCoreResult = {
 
 const DUPLICATE_CENTROID_EPS_M = 0.05;
 const DUPLICATE_VOLUME_RATIO = 0.15;
+/** Hard clash when surfaces are within 0.1 mm (Navis-style touch tolerance). */
+const HARD_EPSILON_M = 0.0001;
+
+function resolveRunMode(opts: ClashCoreOptions): BimClashRunMode {
+  if (opts.runMode) return opts.runMode;
+  return opts.clearanceEnabled ? "BOTH" : "HARD";
+}
 
 function boxCenter(box: Float32Array): { x: number; y: number; z: number } {
   return {
@@ -76,14 +86,6 @@ function boxesOverlap(a: Float32Array, b: Float32Array): boolean {
     a[2]! <= b[5]! &&
     a[5]! >= b[2]!
   );
-}
-
-function overlapDepthMm(a: Float32Array, b: Float32Array): number {
-  const ox = Math.min(a[3]!, b[3]!) - Math.max(a[0]!, b[0]!);
-  const oy = Math.min(a[4]!, b[4]!) - Math.max(a[1]!, b[1]!);
-  const oz = Math.min(a[5]!, b[5]!) - Math.max(a[2]!, b[2]!);
-  if (ox <= 0 || oy <= 0 || oz <= 0) return 0;
-  return -Math.min(ox, oy, oz) * 1000;
 }
 
 function isDuplicateCandidate(a: ClashElementBox, b: ClashElementBox): boolean {
@@ -136,7 +138,7 @@ export type BroadPhasePair = {
   duplicate: boolean;
 };
 
-// fallow-ignore-next-line complexity
+/** Broad phase — pad only set A when clearance is on (avoids 2× inflation). */
 export function broadPhasePairs(
   setA: ClashElementBox[],
   setB: ClashElementBox[],
@@ -149,8 +151,7 @@ export function broadPhasePairs(
     const aBox = padM > 0 ? inflateBox(a.box, padM) : a.box;
     for (const b of setB) {
       if (a.guid === b.guid && a.fileVersionId === b.fileVersionId) continue;
-      const bBox = padM > 0 ? inflateBox(b.box, padM) : b.box;
-      if (!boxesOverlap(aBox, bBox)) continue;
+      if (!boxesOverlap(aBox, b.box)) continue;
       pairs.push({ a, b, duplicate: isDuplicateCandidate(a, b) });
     }
   }
@@ -171,6 +172,7 @@ function contactPenetrationMm(
   bvhA: MeshBVH,
   geomB: THREE.BufferGeometry,
   matrix: THREE.Matrix4,
+  fallbackPoint: { x: number; y: number; z: number },
 ): { depthMm: number; point: { x: number; y: number; z: number }; contactCount: number } {
   const boxA =
     bvhA.geometry.boundingBox ??
@@ -188,12 +190,51 @@ function contactPenetrationMm(
   overlap.getSize(size);
   const center = new THREE.Vector3();
   overlap.getCenter(center);
-  const depthMm =
-    size.x > 0 && size.y > 0 && size.z > 0 ? -Math.min(size.x, size.y, size.z) * 1000 : 0;
+  const hasOverlap = size.x > 0 && size.y > 0 && size.z > 0;
+  const depthMm = hasOverlap ? -Math.min(size.x, size.y, size.z) * 1000 : 0;
   return {
     depthMm,
-    point: { x: center.x, y: center.y, z: center.z },
+    point: hasOverlap ? { x: center.x, y: center.y, z: center.z } : fallbackPoint,
     contactCount: 1,
+  };
+}
+
+function worldPoint(
+  local: THREE.Vector3,
+  originOffset: { x: number; y: number; z: number },
+): { x: number; y: number; z: number } {
+  return {
+    x: local.x + originOffset.x,
+    y: local.y + originOffset.y,
+    z: local.z + originOffset.z,
+  };
+}
+
+function hitBase(
+  meshA: ClashMeshPayload,
+  meshB: ClashMeshPayload,
+  clashType: BimClashType,
+  distanceMm: number,
+  point: { x: number; y: number; z: number },
+  contactCount: number,
+  closestA?: { x: number; y: number; z: number },
+  closestB?: { x: number; y: number; z: number },
+): BimClashHit {
+  return {
+    guidA: meshA.guid,
+    guidB: meshB.guid,
+    fileVersionIdA: meshA.fileVersionId,
+    fileVersionIdB: meshB.fileVersionId,
+    clashType,
+    distanceMm,
+    point,
+    contactCount,
+    closestA,
+    closestB,
+    nameA: meshA.name,
+    nameB: meshB.name,
+    ifcTypeA: meshA.ifcType,
+    ifcTypeB: meshB.ifcType,
   };
 }
 
@@ -205,43 +246,15 @@ function classifyPair(
   originOffset: { x: number; y: number; z: number },
   isDuplicate: boolean,
 ): BimClashHit | null {
-  if (isDuplicate) {
-    const ca = {
-      x: 0,
-      y: 0,
-      z: 0,
-    };
-    // Approximate midpoint from mesh A AABB.
-    const geomA = meshToGeometry(meshA);
-    geomA.computeBoundingBox();
-    const c = new THREE.Vector3();
-    geomA.boundingBox!.getCenter(c);
-    ca.x = c.x + originOffset.x;
-    ca.y = c.y + originOffset.y;
-    ca.z = c.z + originOffset.z;
-    geomA.dispose();
-    return {
-      guidA: meshA.guid,
-      guidB: meshB.guid,
-      fileVersionIdA: meshA.fileVersionId,
-      fileVersionIdB: meshB.fileVersionId,
-      clashType: "DUPLICATE",
-      distanceMm: 0,
-      point: ca,
-      contactCount: 1,
-      nameA: meshA.name,
-      nameB: meshB.name,
-      ifcTypeA: meshA.ifcType,
-      ifcTypeB: meshB.ifcType,
-    };
-  }
+  const runMode = resolveRunMode(opts);
+  const clearanceOn = runModeNeedsClearance(runMode) && opts.clearanceMm > 0;
+  const clearanceM = clearanceOn ? opts.clearanceMm / 1000 : 0;
 
   const geomA = meshToGeometry(meshA);
   const geomB = meshToGeometry(meshB);
   try {
     const bvhA = new MeshBVH(geomA);
     const identity = new THREE.Matrix4();
-    const clearanceM = opts.clearanceEnabled ? opts.clearanceMm / 1000 : 0;
     const target1: HitPointInfo = {
       point: new THREE.Vector3(),
       distance: 0,
@@ -252,59 +265,67 @@ function classifyPair(
       distance: 0,
       faceIndex: 0,
     };
-    const closest = bvhA.closestPointToGeometry(
-      geomB,
-      identity,
-      target1,
-      target2,
-      0,
-      Math.max(clearanceM, 1e-6),
-    );
+    const maxSearch = Math.max(clearanceM, HARD_EPSILON_M);
+    const closest = bvhA.closestPointToGeometry(geomB, identity, target1, target2, 0, maxSearch);
 
-    if (!closest) return null;
-
-    const distance = closest.distance;
-    let clashType: BimClashType;
-    let distanceMm: number;
-    let point: { x: number; y: number; z: number };
-    let contactCount = 1;
-
-    if (distance <= 1e-6 || bvhA.intersectsGeometry(geomB, identity)) {
-      clashType = "HARD";
-      const contact = contactPenetrationMm(bvhA, geomB, identity);
-      distanceMm = contact.depthMm;
-      point = {
-        x: contact.point.x + originOffset.x,
-        y: contact.point.y + originOffset.y,
-        z: contact.point.z + originOffset.z,
-      };
-      contactCount = contact.contactCount;
-    } else if (opts.clearanceEnabled && distance <= clearanceM) {
-      clashType = "CLEARANCE";
-      distanceMm = distance * 1000;
-      point = {
-        x: (target1.point.x + target2.point.x) * 0.5 + originOffset.x,
-        y: (target1.point.y + target2.point.y) * 0.5 + originOffset.y,
-        z: (target1.point.z + target2.point.z) * 0.5 + originOffset.z,
-      };
-    } else {
+    if (!closest) {
+      // Far apart — only a pure duplicate flag (no intersection) may still report.
+      if (isDuplicate && runMode !== "CLEARANCE") {
+        const c = new THREE.Vector3();
+        geomA.computeBoundingBox();
+        geomA.boundingBox!.getCenter(c);
+        return hitBase(meshA, meshB, "DUPLICATE", 0, worldPoint(c, originOffset), 1);
+      }
       return null;
     }
 
-    return {
-      guidA: meshA.guid,
-      guidB: meshB.guid,
-      fileVersionIdA: meshA.fileVersionId,
-      fileVersionIdB: meshB.fileVersionId,
-      clashType,
-      distanceMm,
-      point,
-      contactCount,
-      nameA: meshA.name,
-      nameB: meshB.name,
-      ifcTypeA: meshA.ifcType,
-      ifcTypeB: meshB.ifcType,
+    const distance = closest.distance;
+    const closestA = worldPoint(target1.point, originOffset);
+    const closestB = worldPoint(target2.point, originOffset);
+    const mid = {
+      x: (closestA.x + closestB.x) * 0.5,
+      y: (closestA.y + closestB.y) * 0.5,
+      z: (closestA.z + closestB.z) * 0.5,
     };
+
+    // Prefer distance; only probe intersection when surfaces are within hard epsilon.
+    const nearTouch = distance <= HARD_EPSILON_M;
+    const intersects = nearTouch && bvhA.intersectsGeometry(geomB, identity);
+
+    if (intersects || nearTouch) {
+      if (runMode === "CLEARANCE") return null;
+      const contact = contactPenetrationMm(bvhA, geomB, identity, {
+        x: mid.x - originOffset.x,
+        y: mid.y - originOffset.y,
+        z: mid.z - originOffset.z,
+      });
+      return hitBase(
+        meshA,
+        meshB,
+        "HARD",
+        contact.depthMm,
+        {
+          x: contact.point.x + originOffset.x,
+          y: contact.point.y + originOffset.y,
+          z: contact.point.z + originOffset.z,
+        },
+        contact.contactCount,
+        closestA,
+        closestB,
+      );
+    }
+
+    if (clearanceOn && distance <= clearanceM) {
+      if (runMode === "HARD") return null;
+      return hitBase(meshA, meshB, "CLEARANCE", distance * 1000, mid, 1, closestA, closestB);
+    }
+
+    // Non-intersecting duplicate candidates (same type / near centroid).
+    if (isDuplicate && runMode !== "CLEARANCE") {
+      return hitBase(meshA, meshB, "DUPLICATE", distance * 1000, mid, 1, closestA, closestB);
+    }
+
+    return null;
   } finally {
     geomA.dispose();
     geomB.dispose();
@@ -326,6 +347,7 @@ export function runNarrowPhase(
   const work = truncated ? pairs.slice(0, pairCap) : pairs;
   const hits: BimClashHit[] = [];
   let done = 0;
+  const runMode = resolveRunMode(opts);
 
   for (const pair of work) {
     if (opts.signal?.aborted) break;
@@ -341,12 +363,12 @@ export function runNarrowPhase(
     const hit = classifyPair(meshA, meshB, opts, originOffset, pair.duplicate);
     if (hit) hits.push(hit);
     if (done % 8 === 0 || done === work.length) {
-      opts.onProgress?.(done, work.length, hits);
+      opts.onProgress?.(done, work.length, filterHitsByRunMode(hits, runMode));
     }
   }
 
   return {
-    hits,
+    hits: filterHitsByRunMode(hits, runMode),
     scannedPairs: work.length,
     truncated,
     originOffset,
@@ -408,7 +430,9 @@ export function runClashOnBoxes(
   const boxesA = setA.map((s) => s.box);
   const boxesB = setB.map((s) => s.box);
   const origin = computeOriginOffset(boxesA, boxesB);
-  const pairs = broadPhasePairs(boxesA, boxesB, opts.clearanceMm, opts.clearanceEnabled);
+  const runMode = resolveRunMode(opts);
+  const clearanceOn = runModeNeedsClearance(runMode) && opts.clearanceMm > 0;
+  const pairs = broadPhasePairs(boxesA, boxesB, opts.clearanceMm, clearanceOn);
   const meshes = new Map<string, ClashMeshPayload>();
   for (const s of [...setA, ...setB]) {
     const key = `${s.mesh.fileVersionId}:${s.mesh.guid}`;
@@ -417,5 +441,5 @@ export function runClashOnBoxes(
       positions: offsetPositions(s.mesh.positions, origin),
     });
   }
-  return runNarrowPhase(pairs, meshes, opts, origin);
+  return runNarrowPhase(pairs, meshes, { ...opts, runMode }, origin);
 }

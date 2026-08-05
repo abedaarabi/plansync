@@ -3,6 +3,7 @@ import {
   hasActiveFilterHighlights,
   hasActiveFragmentHighlights,
   hasActiveSelectionHighlight,
+  hasBothClashPartnerColors,
   hasClashPairColors,
   shouldDeferMaterialSync,
   shouldEnableHover,
@@ -204,5 +205,15 @@ describe("hasClashPairColors", () => {
     expect(hasClashPairColors([{ styleId: "filter:match" }])).toBe(false);
     expect(hasClashPairColors([{ styleId: "clash-item-1" }])).toBe(true);
     expect(hasClashPairColors([{ styleId: "clash-item-2" }])).toBe(true);
+  });
+});
+
+describe("hasBothClashPartnerColors", () => {
+  it("requires green and red items together", () => {
+    expect(hasBothClashPartnerColors([{ styleId: "clash-item-1" }])).toBe(false);
+    expect(hasBothClashPartnerColors([{ styleId: "clash-item-2" }])).toBe(false);
+    expect(
+      hasBothClashPartnerColors([{ styleId: "clash-item-1" }, { styleId: "clash-item-2" }]),
+    ).toBe(true);
   });
 });

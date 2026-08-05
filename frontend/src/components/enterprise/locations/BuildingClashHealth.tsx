@@ -6,9 +6,12 @@ import { AlertTriangle, Crosshair, PanelsTopLeft, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   clearBuildingClashResults,
+  clearClashTestResults,
   fetchBuildingClashSummary,
+  type BuildingClashSample,
   type BuildingClashSummary,
 } from "@/lib/api-client/bim-clash";
+import { clashTypeLabel, formatClashDistanceDetail } from "@/lib/bim/clash/clashStatusStyle";
 import { ProRequiredError } from "@/lib/api-client/errors";
 import {
   EnterpriseResponsiveDialog,
@@ -20,7 +23,13 @@ import { qk } from "@/lib/queryKeys";
 type Props = {
   buildingId: string;
   onReviewIn3d: () => void;
+  onOpenTest?: (testId: string) => void;
+  onOpenClash?: (opts: { testId: string; clash: BuildingClashSample }) => void;
 };
+
+type PendingClear =
+  | { kind: "building"; clashCount: number; testCount: number }
+  | { kind: "test"; testId: string; testName: string; clashCount: number };
 
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -76,20 +85,44 @@ function TypeChip({ label, count }: { label: string; count: number }) {
 }
 
 function ClearClashesConfirmDialog({
-  open,
-  clashCount,
-  testCount,
+  pending,
   isDeleting,
   onConfirm,
   onCancel,
 }: {
-  open: boolean;
-  clashCount: number;
-  testCount: number;
+  pending: PendingClear | null;
   isDeleting: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const open = pending != null;
+  const isTest = pending?.kind === "test";
+  const title = isTest ? "Delete clashes for this test?" : "Delete all clash results?";
+  const confirmLabel = isTest ? "Delete" : "Delete all";
+  const body =
+    pending?.kind === "test" ? (
+      <>
+        This permanently removes{" "}
+        <span className="font-semibold text-[var(--enterprise-text)]">
+          {pending.clashCount} clash{pending.clashCount === 1 ? "" : "es"}
+        </span>{" "}
+        from{" "}
+        <span className="break-words font-semibold text-[var(--enterprise-text)]">
+          &quot;{pending.testName}&quot;
+        </span>
+        . Other model pairs are unchanged. The test setup is kept so you can run it again.
+      </>
+    ) : pending ? (
+      <>
+        This permanently removes{" "}
+        <span className="font-semibold text-[var(--enterprise-text)]">
+          {pending.clashCount} clash{pending.clashCount === 1 ? "" : "es"}
+        </span>{" "}
+        from {pending.testCount} test{pending.testCount === 1 ? "" : "s"} for this building. Test
+        setups are kept so you can run them again. Linked issues are not deleted.
+      </>
+    ) : null;
+
   return (
     <EnterpriseResponsiveDialog
       open={open}
@@ -99,15 +132,16 @@ function ClearClashesConfirmDialog({
       ariaDescribedBy="clear-building-clashes-desc"
       closeOnBackdrop={!isDeleting}
       closeOnEscape={!isDeleting}
+      panelClassName="max-w-md"
       footer={
         <>
           <button
             type="button"
             disabled={isDeleting}
             onClick={onConfirm}
-            className={`${MOBILE_DIALOG_BTN_PRIMARY} bg-red-600 text-white hover:bg-red-700 disabled:pointer-events-none`}
+            className={`${MOBILE_DIALOG_BTN_PRIMARY} bg-[var(--enterprise-semantic-danger-text)] text-white hover:opacity-90 disabled:pointer-events-none`}
           >
-            {isDeleting ? "Deleting…" : "Delete all clashes"}
+            {isDeleting ? "Deleting…" : confirmLabel}
           </button>
           <button
             type="button"
@@ -120,27 +154,22 @@ function ClearClashesConfirmDialog({
         </>
       }
     >
-      <div className="flex gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-600">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-semantic-danger-text)]">
           <AlertTriangle className="h-5 w-5" strokeWidth={2} aria-hidden />
-        </div>
+        </span>
         <div className="min-w-0 flex-1">
           <h2
             id="clear-building-clashes-title"
-            className="text-balance text-lg font-semibold text-[var(--enterprise-text)]"
+            className="text-balance text-lg font-semibold leading-snug text-[var(--enterprise-text)]"
           >
-            Delete all clash results?
+            {title}
           </h2>
           <p
             id="clear-building-clashes-desc"
-            className="mt-2 text-base leading-relaxed text-[var(--enterprise-text-muted)]"
+            className="mt-2 text-sm leading-relaxed text-[var(--enterprise-text-muted)] sm:text-base"
           >
-            This permanently removes{" "}
-            <span className="font-medium text-[var(--enterprise-text)]">
-              {clashCount} clash{clashCount === 1 ? "" : "es"}
-            </span>{" "}
-            from {testCount} test{testCount === 1 ? "" : "s"} for this building. Test setups are
-            kept so you can run them again. Linked issues are not deleted.
+            {body}
           </p>
         </div>
       </div>
@@ -149,9 +178,10 @@ function ClearClashesConfirmDialog({
 }
 
 // fallow-ignore-next-line complexity
-export function BuildingClashHealth({ buildingId, onReviewIn3d }: Props) {
+export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOpenClash }: Props) {
   const qc = useQueryClient();
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingClear, setPendingClear] = useState<PendingClear | null>(null);
+  const [expandedTestId, setExpandedTestId] = useState<string | null>(null);
 
   const { data, isPending, error } = useQuery({
     queryKey: qk.buildingClashSummary(buildingId),
@@ -161,14 +191,22 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d }: Props) {
   });
 
   const clearMut = useMutation({
-    mutationFn: () => clearBuildingClashResults(buildingId),
-    onSuccess: (res) => {
+    mutationFn: async (pending: PendingClear) => {
+      if (pending.kind === "building") return clearBuildingClashResults(buildingId);
+      return clearClashTestResults(pending.testId);
+    },
+    onSuccess: (res, pending) => {
       void qc.invalidateQueries({ queryKey: qk.buildingClashSummary(buildingId) });
-      setConfirmOpen(false);
+      setPendingClear(null);
+      if (expandedTestId && pending.kind === "test" && pending.testId === expandedTestId) {
+        setExpandedTestId(null);
+      }
       toast.success(
         res.deletedCount === 0
           ? "No clash results to delete"
-          : `Deleted ${res.deletedCount} clash${res.deletedCount === 1 ? "" : "es"}`,
+          : pending.kind === "test"
+            ? `Deleted ${res.deletedCount} clash${res.deletedCount === 1 ? "" : "es"} from ${pending.testName}`
+            : `Deleted ${res.deletedCount} clash${res.deletedCount === 1 ? "" : "es"}`,
       );
     },
     onError: (e: Error) => toast.error(e.message || "Could not delete clashes."),
@@ -261,7 +299,13 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d }: Props) {
             <button
               type="button"
               className="mobile-touch-target inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--enterprise-semantic-danger-text)] transition hover:bg-[var(--enterprise-semantic-danger-bg)]"
-              onClick={() => setConfirmOpen(true)}
+              onClick={() =>
+                setPendingClear({
+                  kind: "building",
+                  clashCount: clashTotal,
+                  testCount: data.tests.length,
+                })
+              }
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden />
               Delete all
@@ -282,7 +326,8 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d }: Props) {
         <div className="enterprise-alert-warning flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <p>
-            Models changed since the last clash run. Open 3D and re-run tests to refresh results.
+            Models were updated after the last clash run. Stored results may be for previous IFC
+            versions — open 3D and re-run tests to refresh.
           </p>
         </div>
       ) : null}
@@ -313,34 +358,108 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d }: Props) {
           <ul className="overflow-hidden rounded-xl ring-1 ring-[var(--enterprise-border)]">
             {data.tests.map((t, i) => {
               const delta = t.lastRunStats?.newCount ?? 0;
+              const samples = t.sampleClashes ?? [];
+              const expanded = expandedTestId === t.id;
               return (
                 <li
                   key={t.id}
-                  className={`flex flex-wrap items-center justify-between gap-2 px-3.5 py-3 ${
+                  className={`${
                     i > 0 ? "border-t border-[var(--enterprise-border)]" : ""
                   } bg-[var(--enterprise-surface)]`}
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-[var(--enterprise-text)]">
-                      {t.name}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
-                      {t.clashCount} clash{t.clashCount === 1 ? "" : "es"}
-                      {t.lastRunAt ? ` · ${relativeTime(t.lastRunAt)}` : ""}
-                      {delta > 0 ? (
-                        <span className="text-[var(--enterprise-semantic-warning-text)]">
-                          {` · +${delta} new`}
-                        </span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-3">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => setExpandedTestId(expanded ? null : t.id)}
+                    >
+                      <p className="truncate text-sm font-medium text-[var(--enterprise-text)]">
+                        {t.name}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
+                        {t.clashCount} clash{t.clashCount === 1 ? "" : "es"}
+                        {t.lastRunAt ? ` · ${relativeTime(t.lastRunAt)}` : ""}
+                        {delta > 0 ? (
+                          <span className="text-[var(--enterprise-semantic-warning-text)]">
+                            {` · +${delta} new`}
+                          </span>
+                        ) : null}
+                      </p>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span
+                        className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                          t.openCount > 0 ? "enterprise-badge-warning" : "enterprise-badge-success"
+                        }`}
+                      >
+                        {t.openCount > 0 ? `${t.openCount} open` : "Clear"}
+                      </span>
+                      {t.clashCount > 0 ? (
+                        <button
+                          type="button"
+                          className="mobile-touch-target inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-medium text-[var(--enterprise-semantic-danger-text)] transition hover:bg-[var(--enterprise-semantic-danger-bg)]"
+                          aria-label={`Delete clashes for ${t.name}`}
+                          title="Delete clashes for this model pair"
+                          onClick={() =>
+                            setPendingClear({
+                              kind: "test",
+                              testId: t.id,
+                              testName: t.name,
+                              clashCount: t.clashCount,
+                            })
+                          }
+                        >
+                          <Trash2 className="h-3 w-3" aria-hidden />
+                          Delete
+                        </button>
                       ) : null}
-                    </p>
+                      {onOpenTest ? (
+                        <button
+                          type="button"
+                          className="enterprise-btn-secondary mobile-touch-target inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-medium"
+                          onClick={() => onOpenTest(t.id)}
+                        >
+                          <PanelsTopLeft className="h-3 w-3" aria-hidden />
+                          Open
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                  <span
-                    className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                      t.openCount > 0 ? "enterprise-badge-warning" : "enterprise-badge-success"
-                    }`}
-                  >
-                    {t.openCount > 0 ? `${t.openCount} open` : "Clear"}
-                  </span>
+                  {expanded && samples.length > 0 ? (
+                    <ul className="space-y-1 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2">
+                      {samples.map((c) => (
+                        <li key={c.id}>
+                          <button
+                            type="button"
+                            className="flex w-full items-start justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition hover:bg-[var(--enterprise-hover-surface)]"
+                            onClick={() => onOpenClash?.({ testId: t.id, clash: c })}
+                            disabled={!onOpenClash}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium text-[var(--enterprise-text)]">
+                                {(c.nameA ?? c.guidA.slice(0, 8)) +
+                                  " × " +
+                                  (c.nameB ?? c.guidB.slice(0, 8))}
+                              </span>
+                              <span className="text-[11px] text-[var(--enterprise-text-muted)]">
+                                {clashTypeLabel(c.clashType)} ·{" "}
+                                {formatClashDistanceDetail(c.clashType, c.distanceMm)}
+                              </span>
+                            </span>
+                            <Crosshair
+                              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--enterprise-primary)]"
+                              aria-hidden
+                            />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {expanded && samples.length === 0 && t.openCount === 0 ? (
+                    <p className="border-t border-[var(--enterprise-border)] px-3.5 py-2 text-[11px] text-[var(--enterprise-text-muted)]">
+                      No open clashes in this test.
+                    </p>
+                  ) : null}
                 </li>
               );
             })}
@@ -372,13 +491,13 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d }: Props) {
       )}
 
       <ClearClashesConfirmDialog
-        open={confirmOpen}
-        clashCount={clashTotal}
-        testCount={data.tests.length}
+        pending={pendingClear}
         isDeleting={clearMut.isPending}
-        onConfirm={() => clearMut.mutate()}
+        onConfirm={() => {
+          if (pendingClear) clearMut.mutate(pendingClear);
+        }}
         onCancel={() => {
-          if (!clearMut.isPending) setConfirmOpen(false);
+          if (!clearMut.isPending) setPendingClear(null);
         }}
       />
     </section>

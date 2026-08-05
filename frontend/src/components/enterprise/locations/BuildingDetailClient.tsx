@@ -178,9 +178,33 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
     return null;
   };
 
-  const openWorkspace = (mode: "view" | "edit", opts?: { panel?: string | null }) => {
-    const chosen = resolveOpenAssets(mode);
+  // fallow-ignore-next-line complexity
+  const openWorkspace = (
+    mode: "view" | "edit",
+    opts?: {
+      panel?: string | null;
+      testId?: string | null;
+      clashId?: string | null;
+      /** Prefer these file version ids when opening a specific clash/test. */
+      partnerFileVersionIds?: string[];
+    },
+  ) => {
+    let chosen = resolveOpenAssets(mode);
     if (!chosen?.length) return;
+    const partners = opts?.partnerFileVersionIds?.filter(Boolean) ?? [];
+    if (partners.length > 0 && mode === "view") {
+      const byFv = new Map(
+        readyIfc.filter((a) => a.fileVersionId).map((a) => [a.fileVersionId!, a]),
+      );
+      const partnerAssets = partners
+        .map((fv) => byFv.get(fv))
+        .filter((a): a is BuildingAsset => Boolean(a));
+      if (partnerAssets.length > 0) {
+        // Keep any already-selected extras that aren't the pair.
+        const extra = chosen.filter((a) => a.fileVersionId && !partners.includes(a.fileVersionId));
+        chosen = [...partnerAssets, ...extra];
+      }
+    }
     const last = mode === "view" ? readBuildingLastView(buildingId) : null;
     const href = workspaceHrefFromIfcAssets(
       chosen,
@@ -193,6 +217,8 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
             view: last?.view ?? "3d",
             levelId: last?.view === "plan" ? last.levelId : null,
             panel: opts?.panel ?? null,
+            testId: opts?.testId ?? null,
+            clashId: opts?.clashId ?? null,
           }
         : { mode: "edit", view: "3d", levelId: null },
     );
@@ -569,6 +595,15 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
               <BuildingClashHealth
                 buildingId={buildingId}
                 onReviewIn3d={() => openWorkspace("view", { panel: "clashes" })}
+                onOpenTest={(testId) => openWorkspace("view", { panel: "clashes", testId })}
+                onOpenClash={({ testId, clash }) =>
+                  openWorkspace("view", {
+                    panel: "clashes",
+                    testId,
+                    clashId: clash.id,
+                    partnerFileVersionIds: [clash.fileVersionAId, clash.fileVersionBId],
+                  })
+                }
               />
             </div>
           ) : null}

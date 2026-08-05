@@ -2,8 +2,28 @@ import { apiUrl } from "@/lib/api-url";
 import type { BimConversionStatus, BimQuantityIndex, BimSavedViewRecord } from "@/lib/bim/types";
 import { apiJsonFetch } from "./shared";
 
-export async function fetchBimStatus(fileVersionId: string): Promise<BimConversionStatus> {
-  return apiJsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/status`);
+const BIM_STATUS_TIMEOUT_MS = 30_000;
+const BIM_FRAGMENTS_FETCH_TIMEOUT_MS = 120_000;
+
+function withTimeoutSignal(timeoutMs: number, outer?: AbortSignal | null): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  if (!outer) return timeout;
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  timeout.addEventListener("abort", onAbort, { once: true });
+  outer.addEventListener("abort", onAbort, { once: true });
+  if (timeout.aborted || outer.aborted) controller.abort();
+  return controller.signal;
+}
+
+export async function fetchBimStatus(
+  fileVersionId: string,
+  init?: RequestInit,
+): Promise<BimConversionStatus> {
+  return apiJsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/status`, {
+    ...init,
+    signal: withTimeoutSignal(BIM_STATUS_TIMEOUT_MS, init?.signal),
+  });
 }
 
 export async function triggerBimConversion(fileVersionId: string): Promise<{ jobRunId: string }> {
@@ -50,10 +70,16 @@ export async function fetchBimQuantityIndexSummaryWithCache(
   return index;
 }
 
-export async function fetchBimFragmentsBuffer(fileVersionId: string): Promise<ArrayBuffer | null> {
+export async function fetchBimFragmentsBuffer(
+  fileVersionId: string,
+  opts?: { signal?: AbortSignal },
+): Promise<ArrayBuffer | null> {
   const res = await fetch(
     apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/fragments`),
-    { credentials: "include" },
+    {
+      credentials: "include",
+      signal: withTimeoutSignal(BIM_FRAGMENTS_FETCH_TIMEOUT_MS, opts?.signal),
+    },
   );
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Could not load fragments (${res.status})`);

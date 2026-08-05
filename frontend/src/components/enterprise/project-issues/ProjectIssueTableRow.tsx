@@ -14,7 +14,6 @@ import { useRouter } from "next/navigation";
 import {
   ArrowUpCircle,
   Calendar,
-  Camera,
   ExternalLink,
   Flag,
   MapPin,
@@ -33,6 +32,7 @@ import {
   priorityBadgeClassLight,
 } from "@/lib/issueStatusStyle";
 import { isIssueOverdue, issueOverviewShortDate } from "@/lib/issuesOverviewStats";
+import { IssueReferencePhotoThumb } from "./IssueReferencePhotoThumb";
 import {
   ROW_ACTION_CLASS,
   ROW_ACTION_DANGER_CLASS,
@@ -77,7 +77,8 @@ function IssueTitleCell({
   promoteBusy,
   onPromoteToWorkOrder,
 }: Pick<IssueRowProps, "issue" | "showPromoteOccupant" | "promoteBusy" | "onPromoteToWorkOrder">) {
-  const photoCount = issue.referencePhotos?.length ?? 0;
+  const photos = issue.referencePhotos ?? [];
+  const firstPhoto = photos[0];
   const detailHref = `/projects/${issue.projectId}/issues/${issue.id}`;
   const metaLine = [
     issueSheetLabel(issue),
@@ -88,12 +89,20 @@ function IssueTitleCell({
 
   return (
     <td className="max-w-[min(420px,38vw)] px-4 py-3 align-top">
-      <div className="flex gap-2">
-        <MapPin
-          className="mt-0.5 h-4 w-4 shrink-0 text-[var(--enterprise-primary)]"
-          strokeWidth={1.75}
-          aria-hidden
-        />
+      <div className="flex gap-2.5">
+        {firstPhoto ? (
+          <IssueReferencePhotoThumb
+            issueId={issue.id}
+            photo={firstPhoto}
+            extraCount={Math.max(0, photos.length - 1)}
+          />
+        ) : (
+          <MapPin
+            className="mt-0.5 h-4 w-4 shrink-0 text-[var(--enterprise-primary)]"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        )}
         <div className="min-w-0">
           <p className="line-clamp-2 text-sm leading-snug">
             {issue.displayNumber != null ? (
@@ -115,14 +124,8 @@ function IssueTitleCell({
           >
             {metaLine}
           </p>
-          <span className="mt-1 flex flex-wrap items-center gap-1.5">
-            {photoCount > 0 ? (
-              <span className="inline-flex items-center gap-1 rounded-md bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--enterprise-primary)]">
-                <Camera className="h-3 w-3" strokeWidth={2} aria-hidden />
-                {photoCount}
-              </span>
-            ) : null}
-            {showPromoteOccupant && issue.issueKind === "OCCUPANT" && onPromoteToWorkOrder ? (
+          {showPromoteOccupant && issue.issueKind === "OCCUPANT" && onPromoteToWorkOrder ? (
+            <span className="mt-1 flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
                 disabled={promoteBusy}
@@ -132,8 +135,8 @@ function IssueTitleCell({
                 <ArrowUpCircle className="h-3 w-3" aria-hidden />
                 Promote to work order
               </button>
-            ) : null}
-          </span>
+            </span>
+          ) : null}
         </div>
       </div>
     </td>

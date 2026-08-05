@@ -10,6 +10,7 @@ import {
   CLASH_ITEM1_COLOR,
   CLASH_ITEM2_COLOR,
   clashStatusLabel,
+  clashTypeBadgeClass,
   clashTypeLabel,
   formatClashDistanceDetail,
 } from "@/lib/bim/clash/clashStatusStyle";
@@ -87,7 +88,9 @@ export function BimClashDetailPanel(props: {
         <span className="bim-clash-pill" data-status={props.clash.status}>
           {clashStatusLabel(props.clash.status)}
         </span>
-        <span className="rounded-md bg-[var(--bim-hover)] px-1.5 py-0.5 font-medium text-[var(--bim-text)]">
+        <span
+          className={`rounded-md px-1.5 py-0.5 font-medium ${clashTypeBadgeClass(props.clash.clashType)}`}
+        >
           {clashTypeLabel(props.clash.clashType)}
         </span>
         <span className="tabular-nums font-medium text-[var(--bim-text)]">

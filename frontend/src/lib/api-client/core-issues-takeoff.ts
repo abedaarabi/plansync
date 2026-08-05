@@ -48,6 +48,10 @@ export type IssueBimAnchor = {
   position?: { x: number; y: number; z: number };
   /** Federated model version for `ifcGuid` (clash item 1 / green). */
   fileVersionId?: string;
+  /** File id for `fileVersionId` — needed to reopen federated clash partners. */
+  fileId?: string;
+  /** Display name of the IFC file for item 1 (not the element name). */
+  modelFileName?: string;
   /**
    * Clash partner (item 2 / red). When set, opening the issue ghosts the model
    * and colors this pair green/red — no clash-test reload required.
@@ -56,6 +60,10 @@ export type IssueBimAnchor = {
   nameB?: string;
   ifcTypeB?: string;
   fileVersionIdB?: string;
+  /** File id for `fileVersionIdB`. */
+  fileIdB?: string;
+  /** Display name of the IFC file for item 2. */
+  modelFileNameB?: string;
 };
 
 export type IssueRow = {
@@ -510,6 +518,29 @@ export function viewerHrefForTakeoffLine(row: TakeoffLineRow): string {
   return `/viewer?${q.toString()}`;
 }
 
+/**
+ * Extra federation members for a clash-linked BIM issue (partner models not
+ * already the issue's primary `fileVersionId`).
+ */
+export function federationExtrasForIssue(
+  row: Pick<IssueRow, "fileVersionId" | "bimAnchor">,
+): { fileId: string; fileVersionId: string; name: string }[] {
+  const anchor = row.bimAnchor;
+  if (!anchor || !row.fileVersionId) return [];
+  const primaryFv = row.fileVersionId;
+  const extras: { fileId: string; fileVersionId: string; name: string }[] = [];
+  const push = (fileId: string | undefined, fileVersionId: string | undefined, name: string) => {
+    const fv = fileVersionId?.trim();
+    const fid = fileId?.trim();
+    if (!fv || !fid || fv === primaryFv) return;
+    if (extras.some((m) => m.fileVersionId === fv)) return;
+    extras.push({ fileId: fid, fileVersionId: fv, name: name.trim() || "Model.ifc" });
+  };
+  push(anchor.fileId, anchor.fileVersionId, anchor.modelFileName ?? "Model.ifc");
+  push(anchor.fileIdB, anchor.fileVersionIdB, anchor.modelFileNameB ?? "Model.ifc");
+  return extras;
+}
+
 /** Relative URL to open the viewer on this issue, or null when no file is linked. */
 // fallow-ignore-next-line complexity
 export function viewerHrefForIssue(row: IssueRow): string | null {
@@ -523,6 +554,12 @@ export function viewerHrefForIssue(row: IssueRow): string | null {
   q.set("issueId", row.id);
   if (row.bimAnchor?.ifcGuid) q.set("guid", row.bimAnchor.ifcGuid);
   const path = row.bimAnchor ? "/bim-viewer" : "/viewer";
+  if (path === "/bim-viewer") {
+    const extras = federationExtrasForIssue(row);
+    if (extras.length > 0) {
+      q.set("models", encodeURIComponent(JSON.stringify(extras)));
+    }
+  }
   return `${path}?${q.toString()}`;
 }
 

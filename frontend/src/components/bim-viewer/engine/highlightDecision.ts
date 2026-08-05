@@ -93,3 +93,14 @@ export function shouldEnableHover(opts: {
 export function hasClashPairColors(groups: ReadonlyArray<{ styleId: string }>): boolean {
   return groups.some((g) => g.styleId === "clash-item-1" || g.styleId === "clash-item-2");
 }
+
+/** True when both Item 1 (green) and Item 2 (red) are painted. */
+export function hasBothClashPartnerColors(groups: ReadonlyArray<{ styleId: string }>): boolean {
+  let item1 = false;
+  let item2 = false;
+  for (const g of groups) {
+    if (g.styleId === "clash-item-1") item1 = true;
+    if (g.styleId === "clash-item-2") item2 = true;
+  }
+  return item1 && item2;
+}

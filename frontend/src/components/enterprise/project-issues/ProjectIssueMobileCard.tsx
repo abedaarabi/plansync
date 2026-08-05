@@ -18,23 +18,35 @@ import {
 } from "@/lib/issueStatusStyle";
 import { isIssueOverdue, issueOverviewShortDate } from "@/lib/issuesOverviewStats";
 import { MOBILE_FIELD_SELECT } from "@/lib/mobileFormStyles";
+import { IssueReferencePhotoThumb } from "./IssueReferencePhotoThumb";
 import { IssuePriorityBadge } from "./ProjectIssueTableRow";
 import type { IssueRowProps } from "./issueRowShared";
 
 function MobileCardHead({ issue }: Pick<IssueRowProps, "issue">) {
+  const photos = issue.referencePhotos ?? [];
+  const firstPhoto = photos[0];
   return (
     <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0 flex-1">
-        <Link
-          href={`/projects/${issue.projectId}/issues/${issue.id}`}
-          title={`View “${issue.title}”`}
-          className="text-sm font-semibold leading-snug text-[var(--enterprise-text)] transition hover:text-[var(--enterprise-primary)] hover:underline"
-        >
-          {issue.title}
-        </Link>
-        <p className="mt-1 line-clamp-1 text-sm text-[var(--enterprise-text-muted)]">
-          {issueSheetLabel(issue)}
-        </p>
+      <div className="flex min-w-0 flex-1 gap-2.5">
+        {firstPhoto ? (
+          <IssueReferencePhotoThumb
+            issueId={issue.id}
+            photo={firstPhoto}
+            extraCount={Math.max(0, photos.length - 1)}
+          />
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/projects/${issue.projectId}/issues/${issue.id}`}
+            title={`View “${issue.title}”`}
+            className="text-sm font-semibold leading-snug text-[var(--enterprise-text)] transition hover:text-[var(--enterprise-primary)] hover:underline"
+          >
+            {issue.title}
+          </Link>
+          <p className="mt-1 line-clamp-1 text-sm text-[var(--enterprise-text-muted)]">
+            {issueSheetLabel(issue)}
+          </p>
+        </div>
       </div>
       <IssuePriorityBadge priority={issue.priority} />
     </div>
@@ -169,7 +181,6 @@ function MobileCardActions({
 export const ProjectIssueMobileCard = memo(function ProjectIssueMobileCard(props: IssueRowProps) {
   const { issue, nowMs } = props;
   const viewerHref = viewerHrefForIssue(issue);
-  const photoCount = issue.referencePhotos?.length ?? 0;
 
   return (
     <li className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 shadow-[var(--enterprise-shadow-xs)]">
@@ -185,11 +196,6 @@ export const ProjectIssueMobileCard = memo(function ProjectIssueMobileCard(props
         onStatusChange={props.onStatusChange}
       />
       <MobileCardDue issue={issue} nowMs={nowMs} />
-      {photoCount > 0 ? (
-        <p className="mt-2 text-xs font-medium text-[var(--enterprise-primary)]">
-          {photoCount} attached photo{photoCount === 1 ? "" : "s"}
-        </p>
-      ) : null}
       <MobileCardActions
         issue={issue}
         viewerHref={viewerHref}

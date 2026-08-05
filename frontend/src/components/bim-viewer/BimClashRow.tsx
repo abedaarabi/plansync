@@ -7,8 +7,9 @@ import {
   CLASH_ITEM1_COLOR,
   CLASH_ITEM2_COLOR,
   clashStatusLabel,
+  clashTypeBadgeClass,
   clashTypeLabel,
-  formatClashDistanceMm,
+  formatClashDistanceDetail,
 } from "@/lib/bim/clash/clashStatusStyle";
 
 function shortType(ifcType: string | null | undefined): string {
@@ -21,6 +22,8 @@ export function BimClashRow(props: {
   selected: boolean;
   stale: boolean;
   orphaned: boolean;
+  modelLabelA?: string | null;
+  modelLabelB?: string | null;
   onSelect: () => void;
   onOpenDetail?: () => void;
   onResolve: () => void;
@@ -31,6 +34,8 @@ export function BimClashRow(props: {
   const nameB = clashElementLabel(clash.elementB, clash.guidB);
   const typeA = shortType(clash.elementA?.ifcType);
   const typeB = shortType(clash.elementB?.ifcType);
+  const metaA = [props.modelLabelA, typeA].filter(Boolean).join(" · ");
+  const metaB = [props.modelLabelB, typeB].filter(Boolean).join(" · ");
 
   return (
     <li data-clash-id={clash.id}>
@@ -62,7 +67,7 @@ export function BimClashRow(props: {
                   <p className="truncate text-[11px] font-semibold text-[var(--bim-text)]">
                     {nameA}
                   </p>
-                  <p className="truncate text-[9px] text-[var(--bim-text-muted)]">{typeA}</p>
+                  <p className="truncate text-[9px] text-[var(--bim-text-muted)]">{metaA}</p>
                 </div>
               </div>
               <div className="flex items-start gap-1.5">
@@ -75,7 +80,7 @@ export function BimClashRow(props: {
                   <p className="truncate text-[11px] font-semibold text-[var(--bim-text)]">
                     {nameB}
                   </p>
-                  <p className="truncate text-[9px] text-[var(--bim-text-muted)]">{typeB}</p>
+                  <p className="truncate text-[9px] text-[var(--bim-text-muted)]">{metaB}</p>
                 </div>
               </div>
             </div>
@@ -85,11 +90,13 @@ export function BimClashRow(props: {
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="rounded-md bg-[var(--bim-hover)] px-1.5 py-0.5 text-[9px] text-[var(--bim-text-muted)]">
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-[9px] font-medium ${clashTypeBadgeClass(clash.clashType)}`}
+            >
               {clashTypeLabel(clash.clashType)}
             </span>
             <span className="text-[10px] font-medium tabular-nums text-[var(--bim-text)]">
-              {formatClashDistanceMm(clash.distanceMm)}
+              {formatClashDistanceDetail(clash.clashType, clash.distanceMm)}
             </span>
             {props.stale ? (
               <span className="rounded-md bg-[var(--bim-hover)] px-1.5 py-0.5 text-[9px] text-[var(--bim-warning)]">

@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import type { BimClashHit } from "@plansync/shared/bimClashTypes";
+import type { BimClashHit, BimClashRunMode } from "@plansync/shared/bimClashTypes";
 import {
   broadPhasePairs,
   computeOriginOffset,
@@ -28,6 +28,7 @@ export type ClashWorkerRequest = {
   >;
   clearanceEnabled: boolean;
   clearanceMm: number;
+  runMode?: BimClashRunMode;
   pairCap?: number;
 };
 
@@ -101,6 +102,7 @@ function handleRun(msg: ClashWorkerRequest): void {
       {
         clearanceEnabled: msg.clearanceEnabled,
         clearanceMm: msg.clearanceMm,
+        runMode: msg.runMode,
         pairCap: msg.pairCap,
         signal: {
           get aborted() {
