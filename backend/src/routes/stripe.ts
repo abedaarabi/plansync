@@ -12,6 +12,7 @@ import {
 } from "../lib/stripeBillingPlan.js";
 import { stripeSubscriptionRequiresCheckout } from "../lib/planFeatureGates.js";
 import { processStripeWebhookOnce } from "../lib/stripeWebhookProcess.js";
+import { syncWorkspaceSeatOverageSafe } from "../lib/syncSeatOverageSubscription.js";
 import { sessionMiddleware } from "../middleware/session.js";
 
 function parsePaidBillingPlan(raw: string): PaidBillingPlan | null {
@@ -99,6 +100,7 @@ async function persistCheckoutSubscriptionToWorkspace(
   await logActivity(wsId, ActivityType.SUBSCRIPTION_UPDATED, {
     metadata: { status: sub.status, source, billingPlan: billingPlan ?? undefined },
   });
+  await syncWorkspaceSeatOverageSafe(env, wsId);
 }
 
 // fallow-ignore-next-line complexity
@@ -197,6 +199,7 @@ async function runChangeSubscriptionPlan(
         currentPeriodEnd: subscriptionPeriodEnd(sub),
       },
     });
+    await syncWorkspaceSeatOverageSafe(env, workspaceId);
     return c.json({
       ok: true as const,
       alreadyOnPlan: true as const,
@@ -281,6 +284,7 @@ async function runChangeSubscriptionPlan(
       billingPlan: billingPlan ?? targetPlan,
     },
   });
+  await syncWorkspaceSeatOverageSafe(env, workspaceId);
 
   return c.json({
     ok: true as const,

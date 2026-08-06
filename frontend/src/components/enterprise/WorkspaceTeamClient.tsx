@@ -583,7 +583,8 @@ export function WorkspaceTeamClient({
                   </h2>
                   <p className="mt-2 max-w-xl text-sm leading-relaxed text-[var(--enterprise-subtitle)]">
                     Manage who can access this workspace. Included seats cover your core team;
-                    extras bill monthly when you grow past the plan allowance.
+                    extras are added to your Stripe subscription (prorated) when you grow past the
+                    plan allowance.
                   </p>
                 </div>
               </div>

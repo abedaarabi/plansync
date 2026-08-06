@@ -58,7 +58,7 @@ Cancel Pro/Enterprise anytime from billing settings. Export data before cancelli
 - Free PDFs never leave the browser; Pro uploads go to your workspace cloud.
 - 14-day Pro trial = full Pro access, no card required.
 - Upgrade Free → Pro: local markups can migrate to cloud when you upgrade.
-- Team/Pro include 5 internal seats; Enterprise includes 10. Extra seats billed per plan ($15 / $19 / $25) when you exceed the included amount.
+- Team/Pro include 5 internal seats; Enterprise includes 10. Extra seats are added to the Stripe subscription automatically ($15 / $19 / $25 per seat/month) when you exceed the included amount (prorated).
 - Unlimited projects per workspace on Pro/Enterprise.
 - Do not invent integrations, custom pricing, SLAs, or features not listed here.
 - For account-specific billing, project data, or enterprise contracts: suggest sign-in or contacting support@plansync.dev.

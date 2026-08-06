@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 import type { PaidBillingPlan } from "../config/product.js";
 import type { Env } from "./env.js";
 import { resolveEnterpriseMonthlyPriceId } from "./stripeEnterprisePrice.js";
+import { isExtraSeatSubscriptionItem } from "./stripeExtraSeatPrice.js";
 import { resolveProMonthlyPriceId } from "./stripeProPrice.js";
 import { resolveTeamMonthlyPriceId } from "./stripeTeamPrice.js";
 
@@ -132,12 +133,12 @@ export async function resolvePriceIdForBillingPlan(
   return resolveProMonthlyPriceId(stripe, env.STRIPE_PRICE_PRO_MONTHLY);
 }
 
-/** Prefer the line item whose price matches `currentPriceId`; else first recurring item. */
+/** Prefer the plan line item (never an extra-seat add-on). */
 export function pickSubscriptionLineItem(
   sub: Stripe.Subscription,
   currentPriceId: string | null,
 ): Stripe.SubscriptionItem | null {
-  const items = sub.items?.data ?? [];
+  const items = (sub.items?.data ?? []).filter((item) => !isExtraSeatSubscriptionItem(item));
   if (currentPriceId) {
     const match = items.find((item) => priceIdOfItem(item) === currentPriceId);
     if (match) return match;

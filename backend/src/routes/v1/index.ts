@@ -18,6 +18,8 @@ import {
   includedSeatsForBillingPlan,
 } from "../../config/product.js";
 import { isWorkspaceOmBilling, isWorkspacePro } from "../../lib/subscription.js";
+import { countSeatPressure } from "../../lib/seatPressure.js";
+import { syncWorkspaceSeatOverageSafe } from "../../lib/syncSeatOverageSubscription.js";
 import {
   deleteObject,
   getObjectStream,
@@ -311,20 +313,6 @@ function safeZipSegment(input: string): string {
   return cleaned || "untitled";
 }
 
-async function countSeatPressure(workspaceId: string): Promise<number> {
-  const now = new Date();
-  const [members, linkInvites, emailInvites] = await Promise.all([
-    prisma.workspaceMember.count({ where: { workspaceId, isExternal: false } }),
-    prisma.workspaceInvite.count({
-      where: { workspaceId, revokedAt: null, expiresAt: { gt: now } },
-    }),
-    prisma.emailInvite.count({
-      where: { workspaceId, revokedAt: null, acceptedAt: null, expiresAt: { gt: now } },
-    }),
-  ]);
-  return members + linkInvites + emailInvites;
-}
-
 export function v1Routes(
   auth: {
     api: {
@@ -559,6 +547,7 @@ export function v1Routes(
       entityId: userId,
       metadata: { via: "invite_link" },
     });
+    await syncWorkspaceSeatOverageSafe(env, inv.workspaceId);
     const ws = await prisma.workspace.findUniqueOrThrow({ where: { id: inv.workspaceId } });
     return c.json({ ok: true, workspace: workspaceJson(ws, env) });
   });
@@ -675,6 +664,7 @@ export function v1Routes(
       entityId: userId,
       metadata: { via: "email_invite", email: inv.email },
     });
+    await syncWorkspaceSeatOverageSafe(env, inv.workspaceId);
     const ws = await prisma.workspace.findUniqueOrThrow({ where: { id: inv.workspaceId } });
     return c.json({ ok: true, workspace: workspaceJson(ws, env) });
   });
@@ -1210,6 +1200,7 @@ export function v1Routes(
         expiresAt,
       },
     });
+    await syncWorkspaceSeatOverageSafe(env, workspaceId);
     const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
     const inviteUrl = `${base}/join/${inv.token}`;
     return c.json({
@@ -1235,6 +1226,7 @@ export function v1Routes(
       where: { id: inv.id },
       data: { revokedAt: /* @__PURE__ */ new Date() },
     });
+    await syncWorkspaceSeatOverageSafe(env, workspaceId);
     return c.json({ ok: true });
   });
 
@@ -1285,187 +1277,195 @@ export function v1Routes(
     });
   });
 
-  r.post("/workspaces/:workspaceId/email-invites", needUser, async (c) => {
-    const workspaceId = c.req.param("workspaceId")!;
-    const admin = await prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
-      include: { workspace: true },
-    });
-    if (!admin) return c.json({ error: "Forbidden" }, 403);
-    const ws = admin.workspace;
-    const gate = requirePro(ws);
-    if (gate) return c.json({ error: gate.error }, gate.status);
-
-    const body = z
-      .object({
-        email: z.string().email(),
-        projectIds: z.array(z.string()).max(50).optional().default([]),
-        role: z.nativeEnum(WorkspaceRole).optional(),
-        inviteKind: z.nativeEnum(EmailInviteKind).optional(),
-        trade: z.string().max(120).optional(),
-        inviteeName: z.string().max(200).optional(),
-        inviteeCompany: z.string().max(200).optional(),
-        expiresInDays: z.number().min(1).max(90).optional(),
-      })
-      .safeParse(await c.req.json());
-    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
-
-    const emailNorm = body.data.email.toLowerCase().trim();
-    const projectIds = [...new Set(body.data.projectIds)];
-    const inviteKind = body.data.inviteKind ?? EmailInviteKind.INTERNAL;
-
-    if (inviteKind !== EmailInviteKind.INTERNAL && projectIds.length === 0) {
-      return c.json({ error: "External invites require at least one project." }, 400);
-    }
-
-    if (projectIds.length > 0) {
-      const projCount = await prisma.project.count({
-        where: { workspaceId, id: { in: projectIds } },
+  r.post(
+    "/workspaces/:workspaceId/email-invites",
+    needUser,
+    // fallow-ignore-next-line complexity
+    async (c) => {
+      const workspaceId = c.req.param("workspaceId")!;
+      const admin = await prisma.workspaceMember.findFirst({
+        where: { workspaceId, userId: c.get("user").id, role: { in: WORKSPACE_MANAGER_ROLES } },
+        include: { workspace: true },
       });
-      if (projCount !== projectIds.length) {
-        return c.json({ error: "Invalid project selection" }, 400);
-      }
-    }
+      if (!admin) return c.json({ error: "Forbidden" }, 403);
+      const ws = admin.workspace;
+      const gate = requirePro(ws);
+      if (gate) return c.json({ error: gate.error }, gate.status);
 
-    const existingUser = await prisma.user.findFirst({
-      where: { email: emailNorm },
-    });
-    if (existingUser) {
-      const already = await prisma.workspaceMember.findFirst({
-        where: { workspaceId, userId: existingUser.id },
+      const body = z
+        .object({
+          email: z.string().email(),
+          projectIds: z.array(z.string()).max(50).optional().default([]),
+          role: z.nativeEnum(WorkspaceRole).optional(),
+          inviteKind: z.nativeEnum(EmailInviteKind).optional(),
+          trade: z.string().max(120).optional(),
+          inviteeName: z.string().max(200).optional(),
+          inviteeCompany: z.string().max(200).optional(),
+          expiresInDays: z.number().min(1).max(90).optional(),
+        })
+        .safeParse(await c.req.json());
+      if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+      const emailNorm = body.data.email.toLowerCase().trim();
+      const projectIds = [...new Set(body.data.projectIds)];
+      const inviteKind = body.data.inviteKind ?? EmailInviteKind.INTERNAL;
+
+      if (inviteKind !== EmailInviteKind.INTERNAL && projectIds.length === 0) {
+        return c.json({ error: "External invites require at least one project." }, 400);
+      }
+
+      if (projectIds.length > 0) {
+        const projCount = await prisma.project.count({
+          where: { workspaceId, id: { in: projectIds } },
+        });
+        if (projCount !== projectIds.length) {
+          return c.json({ error: "Invalid project selection" }, 400);
+        }
+      }
+
+      const existingUser = await prisma.user.findFirst({
+        where: { email: emailNorm },
       });
-      if (already) {
-        return c.json({ error: "User is already a member of this workspace." }, 400);
+      if (existingUser) {
+        const already = await prisma.workspaceMember.findFirst({
+          where: { workspaceId, userId: existingUser.id },
+        });
+        if (already) {
+          return c.json({ error: "User is already a member of this workspace." }, 400);
+        }
       }
-    }
 
-    const dup = await prisma.emailInvite.findFirst({
-      where: {
-        workspaceId,
-        email: emailNorm,
-        revokedAt: null,
-        acceptedAt: null,
-        expiresAt: { gt: /* @__PURE__ */ new Date() },
-      },
-    });
-    if (dup) {
-      return c.json({ error: "An active invite already exists for this email." }, 400);
-    }
-
-    if (inviteKind === EmailInviteKind.INTERNAL) {
-      const pressure = await countSeatPressure(workspaceId);
-      if (pressure >= MAX_WORKSPACE_MEMBERS) {
-        return c.json({ error: "Workspace is full" }, 400);
-      }
-    }
-
-    const days = body.data.expiresInDays ?? 14;
-    const expiresAt = new Date(Date.now() + days * 86_400_000);
-    const token = newInviteToken();
-    const inviter = await prisma.user.findUniqueOrThrow({
-      where: { id: c.get("user").id },
-      select: { name: true, image: true, email: true },
-    });
-
-    const from = inviteFromAddress(env);
-    if (!env.RESEND_API_KEY || !from) {
-      return c.json(
-        { error: "Email is not configured (set RESEND_API_KEY and RESEND_FROM)." },
-        503,
-      );
-    }
-
-    const invite = await prisma.emailInvite.create({
-      data: {
-        token,
-        workspaceId,
-        email: emailNorm,
-        invitedById: c.get("user").id,
-        role: body.data.role ?? WorkspaceRole.MEMBER,
-        inviteKind,
-        trade: body.data.trade?.trim() || null,
-        inviteeName: body.data.inviteeName?.trim() || null,
-        inviteeCompany: body.data.inviteeCompany?.trim() || null,
-        expiresAt,
-        projects: {
-          create: projectIds.map((projectId) => ({ projectId })),
+      const dup = await prisma.emailInvite.findFirst({
+        where: {
+          workspaceId,
+          email: emailNorm,
+          revokedAt: null,
+          acceptedAt: null,
+          expiresAt: { gt: /* @__PURE__ */ new Date() },
         },
-      },
-      include: {
-        workspace: true,
-        projects: { include: { project: { select: { name: true } } } },
-      },
-    });
-
-    const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
-    const joinUrl = `${base}/join/email/${invite.token}`;
-    const projectNames = invite.projects.map((p) => p.project.name);
-    const expiresLabel = expiresAt.toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-
-    const apiOrigin = apiPublicOrigin(env);
-    const emailInput = {
-      to: emailNorm,
-      inviterName: inviter.name,
-      inviterImage: inviter.image,
-      workspaceName: invite.workspace.name,
-      workspaceLogoUrl: resolveWorkspaceEmailLogoUrl(
-        base,
-        invite.workspace.logoUrl,
-        invite.workspace.website,
-        {
-          workspaceId: invite.workspace.id,
-          logoS3Key: invite.workspace.logoS3Key,
-          publicApiUrl: apiOrigin,
-        },
-      ),
-      publicAppUrl: base,
-      publicApiUrl: apiOrigin,
-      projectNames,
-      joinUrl,
-      expiresLabel,
-      inviteKind: inviteKind as InviteEmailKind,
-      trade: invite.trade,
-      inviteeName: invite.inviteeName,
-      inviteeCompany: invite.inviteeCompany,
-    };
-
-    const resend = new Resend(env.RESEND_API_KEY);
-    const subjectTag =
-      inviteKind === EmailInviteKind.CLIENT
-        ? " (Client portal)"
-        : inviteKind === EmailInviteKind.CONTRACTOR || inviteKind === EmailInviteKind.SUBCONTRACTOR
-          ? " (Project collaboration)"
-          : "";
-    const sendResult = await resend.emails.send({
-      from,
-      to: emailNorm,
-      subject: `${inviter.name} invited you to ${invite.workspace.name} on PlanSync${subjectTag}`,
-      html: buildProjectInviteEmailHtml(emailInput),
-      text: buildProjectInviteEmailText(emailInput),
-    });
-
-    if (sendResult.error) {
-      console.error("[email-invite] send failed", {
-        workspaceId,
-        inviteId: invite.id,
-        email: emailNorm,
-        resendError: sendResult.error.message,
       });
-      await prisma.emailInvite.delete({ where: { id: invite.id } });
-      return c.json({ error: sendResult.error.message ?? "Could not send email" }, 502);
-    }
+      if (dup) {
+        return c.json({ error: "An active invite already exists for this email." }, 400);
+      }
 
-    return c.json({
-      id: invite.id,
-      email: invite.email,
-      expiresAt: invite.expiresAt,
-    });
-  });
+      if (inviteKind === EmailInviteKind.INTERNAL) {
+        const pressure = await countSeatPressure(workspaceId);
+        if (pressure >= MAX_WORKSPACE_MEMBERS) {
+          return c.json({ error: "Workspace is full" }, 400);
+        }
+      }
+
+      const days = body.data.expiresInDays ?? 14;
+      const expiresAt = new Date(Date.now() + days * 86_400_000);
+      const token = newInviteToken();
+      const inviter = await prisma.user.findUniqueOrThrow({
+        where: { id: c.get("user").id },
+        select: { name: true, image: true, email: true },
+      });
+
+      const from = inviteFromAddress(env);
+      if (!env.RESEND_API_KEY || !from) {
+        return c.json(
+          { error: "Email is not configured (set RESEND_API_KEY and RESEND_FROM)." },
+          503,
+        );
+      }
+
+      const invite = await prisma.emailInvite.create({
+        data: {
+          token,
+          workspaceId,
+          email: emailNorm,
+          invitedById: c.get("user").id,
+          role: body.data.role ?? WorkspaceRole.MEMBER,
+          inviteKind,
+          trade: body.data.trade?.trim() || null,
+          inviteeName: body.data.inviteeName?.trim() || null,
+          inviteeCompany: body.data.inviteeCompany?.trim() || null,
+          expiresAt,
+          projects: {
+            create: projectIds.map((projectId) => ({ projectId })),
+          },
+        },
+        include: {
+          workspace: true,
+          projects: { include: { project: { select: { name: true } } } },
+        },
+      });
+
+      const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
+      const joinUrl = `${base}/join/email/${invite.token}`;
+      const projectNames = invite.projects.map((p) => p.project.name);
+      const expiresLabel = expiresAt.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
+      const apiOrigin = apiPublicOrigin(env);
+      const emailInput = {
+        to: emailNorm,
+        inviterName: inviter.name,
+        inviterImage: inviter.image,
+        workspaceName: invite.workspace.name,
+        workspaceLogoUrl: resolveWorkspaceEmailLogoUrl(
+          base,
+          invite.workspace.logoUrl,
+          invite.workspace.website,
+          {
+            workspaceId: invite.workspace.id,
+            logoS3Key: invite.workspace.logoS3Key,
+            publicApiUrl: apiOrigin,
+          },
+        ),
+        publicAppUrl: base,
+        publicApiUrl: apiOrigin,
+        projectNames,
+        joinUrl,
+        expiresLabel,
+        inviteKind: inviteKind as InviteEmailKind,
+        trade: invite.trade,
+        inviteeName: invite.inviteeName,
+        inviteeCompany: invite.inviteeCompany,
+      };
+
+      const resend = new Resend(env.RESEND_API_KEY);
+      const subjectTag =
+        inviteKind === EmailInviteKind.CLIENT
+          ? " (Client portal)"
+          : inviteKind === EmailInviteKind.CONTRACTOR ||
+              inviteKind === EmailInviteKind.SUBCONTRACTOR
+            ? " (Project collaboration)"
+            : "";
+      const sendResult = await resend.emails.send({
+        from,
+        to: emailNorm,
+        subject: `${inviter.name} invited you to ${invite.workspace.name} on PlanSync${subjectTag}`,
+        html: buildProjectInviteEmailHtml(emailInput),
+        text: buildProjectInviteEmailText(emailInput),
+      });
+
+      if (sendResult.error) {
+        console.error("[email-invite] send failed", {
+          workspaceId,
+          inviteId: invite.id,
+          email: emailNorm,
+          resendError: sendResult.error.message,
+        });
+        await prisma.emailInvite.delete({ where: { id: invite.id } });
+        return c.json({ error: sendResult.error.message ?? "Could not send email" }, 502);
+      }
+
+      await syncWorkspaceSeatOverageSafe(env, workspaceId);
+
+      return c.json({
+        id: invite.id,
+        email: invite.email,
+        expiresAt: invite.expiresAt,
+      });
+    },
+  );
 
   r.post("/workspaces/:workspaceId/email-invites/:inviteId/resend", needUser, async (c) => {
     const workspaceId = c.req.param("workspaceId")!;
@@ -1644,6 +1644,7 @@ export function v1Routes(
       where: { id: inv.id },
       data: { revokedAt: /* @__PURE__ */ new Date() },
     });
+    await syncWorkspaceSeatOverageSafe(env, workspaceId);
     return c.json({ ok: true });
   });
 
@@ -1880,6 +1881,7 @@ export function v1Routes(
       entityId: targetUserId,
       metadata: deleteAccountAfterRemoval ? { accountDeleted: true } : undefined,
     });
+    await syncWorkspaceSeatOverageSafe(env, workspaceId);
     return c.json({ ok: true, accountDeleted: deleteAccountAfterRemoval });
   });
 
@@ -1927,6 +1929,7 @@ export function v1Routes(
       entityId: invitee.id,
       metadata: { email: body.data.email },
     });
+    await syncWorkspaceSeatOverageSafe(env, workspaceId);
     return c.json({ ok: true });
   });
 

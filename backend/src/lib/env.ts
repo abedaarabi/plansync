@@ -40,6 +40,10 @@ const schema = z.object({
   STRIPE_PRICE_TEAM_MONTHLY: z.string().optional(),
   STRIPE_PRICE_PRO_MONTHLY: z.string().optional(),
   STRIPE_PRICE_ENTERPRISE_MONTHLY: z.string().optional(),
+  /** Optional `price_…` for extra seats beyond the plan pack (auto-created if unset). */
+  STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_PRO_EXTRA_SEAT_MONTHLY: z.string().optional(),
+  STRIPE_PRICE_ENTERPRISE_EXTRA_SEAT_MONTHLY: z.string().optional(),
   /**
    * Stripe Checkout shows “Add promotion code” when true (default). Create Coupons + Promotion codes in the Dashboard.
    * Set to 0 / false / off / no to disable.

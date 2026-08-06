@@ -63,8 +63,8 @@ describe("inferBillingPlanFromPriceShape", () => {
 
 describe("pickSubscriptionLineItem", () => {
   const items = [
-    { id: "si_a", price: { id: "price_old" } },
-    { id: "si_b", price: { id: "price_new" } },
+    { id: "si_a", price: { id: "price_old", metadata: {} } },
+    { id: "si_b", price: { id: "price_new", metadata: {} } },
   ] as unknown as Stripe.SubscriptionItem[];
 
   it("matches by price id when present", () => {
@@ -72,9 +72,24 @@ describe("pickSubscriptionLineItem", () => {
     expect(pickSubscriptionLineItem(sub, "price_new")?.id).toBe("si_b");
   });
 
-  it("falls back to the first item when price id is unknown", () => {
+  it("falls back to the first plan item when price id is unknown", () => {
     const sub = { items: { data: items } } as Stripe.Subscription;
     expect(pickSubscriptionLineItem(sub, "price_missing")?.id).toBe("si_a");
     expect(pickSubscriptionLineItem(sub, null)?.id).toBe("si_a");
+  });
+
+  it("ignores extra-seat add-on line items", () => {
+    const mixed = [
+      {
+        id: "si_seat",
+        price: {
+          id: "price_seat",
+          metadata: { plansync: "enterprise_extra_seat_monthly" },
+        },
+      },
+      { id: "si_plan", price: { id: "price_ent", metadata: { plansync: "enterprise_monthly" } } },
+    ] as unknown as Stripe.SubscriptionItem[];
+    const sub = { items: { data: mixed } } as Stripe.Subscription;
+    expect(pickSubscriptionLineItem(sub, null)?.id).toBe("si_plan");
   });
 });
