@@ -4,7 +4,10 @@ import { useEffect } from "react";
 import { openBimViewer } from "@/lib/bim/openBimViewer";
 import { buildWorkspaceHref } from "@/lib/locations/workspaceHref";
 import { useBuildingAssetsQuery } from "@/lib/locations/useBuildingQueries";
+import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 import { EnterpriseLoadingState } from "../EnterpriseLoadingState";
+import { useEnterpriseWorkspace } from "../EnterpriseWorkspaceContext";
+import { PlanUpgradeCallout } from "../PlanUpgradeCallout";
 import { MatchingWindowClient } from "./MatchingWindowClient";
 
 type Props = {
@@ -25,6 +28,9 @@ export function MatchDrawingPageClient({
   assetId,
   readOnly,
 }: Props) {
+  const { primary, loading: workspaceLoading } = useEnterpriseWorkspace();
+  const isProPlus = isWorkspaceProPlusClient(primary?.workspace);
+
   const { data: assetsData, isLoading } = useBuildingAssetsQuery(buildingId, {
     typeFilter: "ALL",
     disciplineFilter: "ALL",
@@ -33,7 +39,7 @@ export function MatchDrawingPageClient({
   const readyIfc = assetsData?.assets.find((a) => a.type === "IFC" && a.status === "READY") ?? null;
 
   useEffect(() => {
-    if (readOnly || isLoading || !readyIfc) return;
+    if (!isProPlus || readOnly || isLoading || !readyIfc) return;
     const href = buildWorkspaceHref({
       fileId: readyIfc.id,
       fileName: readyIfc.fileName,
@@ -46,7 +52,30 @@ export function MatchDrawingPageClient({
       alignAssetId: assetId,
     });
     openBimViewer(href);
-  }, [readOnly, isLoading, readyIfc, projectId, buildingId, locationId, levelId, assetId]);
+  }, [
+    isProPlus,
+    readOnly,
+    isLoading,
+    readyIfc,
+    projectId,
+    buildingId,
+    locationId,
+    levelId,
+    assetId,
+  ]);
+
+  if (workspaceLoading) {
+    return <EnterpriseLoadingState label="Loading workspace…" />;
+  }
+
+  if (!isProPlus) {
+    return (
+      <PlanUpgradeCallout
+        feature="BIM drawing matching"
+        detail="Upgrade to Pro to align PDFs to IFC levels in the BIM workspace."
+      />
+    );
+  }
 
   if (readOnly) {
     return (

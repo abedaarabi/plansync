@@ -5,9 +5,14 @@ describe("buildMarketingLandingSystemPrompt", () => {
   it("includes all plan tiers and key solutions", () => {
     const prompt = buildMarketingLandingSystemPrompt("en");
     expect(prompt).toContain("Free");
-    expect(prompt).toContain("$49/month");
+    expect(prompt).toContain("**Team**");
+    expect(prompt).toContain("**Pro**");
+    expect(prompt).toContain("**Enterprise**");
     expect(prompt).toContain("$99/month");
+    expect(prompt).toContain("$179/month");
+    expect(prompt).toContain("$299/month");
     expect(prompt).toContain("Quantity takeoff");
+    expect(prompt).toContain("BIM/IFC viewer");
     expect(prompt).toContain("Tenant portal");
     expect(prompt).toContain("RFI workflow");
     expect(prompt).toContain("O&M + handover");

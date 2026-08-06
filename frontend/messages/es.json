@@ -122,6 +122,23 @@
       "Recepción, activos y órdenes de trabajo",
       "Planes de mantenimiento e inspecciones",
       "Portal de inquilinos"
+    ],
+    "teamLabel": "Team",
+    "teamIncluded": "{seats} miembros incluidos · proyectos ilimitados",
+    "teamEverything": "Everything in Free +",
+    "enterpriseIncluded": "{seats} miembros incluidos · proyectos ilimitados",
+    "compareTitle": "Compare plans",
+    "compareSubtitle": "Visualiza y marca PDF gratis — añade Pro para colaboración en equipo, o Enterprise para operación y mantenimiento.",
+    "compareFeature": "Feature",
+    "comparePrice": "Price",
+    "teamFeatures": [
+      "Almacenamiento en la nube 20 GB",
+      "Colaboración en equipo",
+      "Incidencias en planos",
+      "Flujo de RFIs",
+      "Cubicación de cantidades",
+      "Control de versiones PDF",
+      "Programa del proyecto"
     ]
   },
   "pwa": {

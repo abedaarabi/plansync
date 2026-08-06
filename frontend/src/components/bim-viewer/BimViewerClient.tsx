@@ -1,10 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import Link from "next/link";
+import { useMemo, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { fetchMe, fetchProjectSession } from "@/lib/api-client";
 import { parseFederationMembers, type BimFederationMember } from "@/lib/bim/federation";
 import { parseBuildingWorkspaceMode } from "@/lib/locations/workspaceHref";
+import { qk } from "@/lib/queryKeys";
+import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { BimBootLoadingFromUrl } from "./BimLoadingOverlay";
 
@@ -17,6 +22,54 @@ const BimViewerShell = dynamic(() => import("./BimViewerShell").then((m) => m.Bi
   ssr: false,
   loading: () => <BimBootLoadingFromUrl />,
 });
+
+function BimProPlusGate({
+  projectId,
+  children,
+}: {
+  projectId: string | null;
+  children: ReactNode;
+}) {
+  const { data: me, isPending: mePending } = useQuery({
+    queryKey: qk.me(),
+    queryFn: fetchMe,
+  });
+  const { data: session, isPending: sessionPending } = useQuery({
+    queryKey: qk.projectSession(projectId ?? ""),
+    queryFn: () => fetchProjectSession(projectId!),
+    enabled: Boolean(projectId),
+  });
+
+  if (mePending || (projectId && sessionPending)) {
+    return <BimBootLoadingFromUrl />;
+  }
+
+  const membership = projectId
+    ? me?.workspaces.find((m) => m.workspace.id === session?.workspaceId)
+    : undefined;
+  const allowed = membership
+    ? isWorkspaceProPlusClient(membership.workspace)
+    : Boolean(me?.workspaces.some((m) => isWorkspaceProPlusClient(m.workspace)));
+
+  if (!allowed) {
+    return (
+      <div className="bim-viewer flex h-dvh flex-col items-center justify-center gap-3 px-6">
+        <p className="text-[14px] font-medium text-[var(--bim-text)]">BIM requires Pro</p>
+        <p className="max-w-sm text-center text-[12px] text-[var(--bim-text-muted)]">
+          Upgrade this workspace to Pro or Enterprise to open IFC models and clash detection.
+        </p>
+        <Link
+          href="/organization?tab=billing"
+          className="rounded-lg bg-[var(--bim-accent)] px-3 py-2 text-[12px] font-semibold text-white"
+        >
+          View plans &amp; billing
+        </Link>
+      </div>
+    );
+  }
+
+  return children;
+}
 
 export function BimViewerClient() {
   const searchParams = useSearchParams();
@@ -75,31 +128,33 @@ export function BimViewerClient() {
 
   return (
     <QueryProvider>
-      <BimViewerShell
-        key={sessionKey}
-        fileId={fileId}
-        fileName={name ? decodeURIComponent(name) : "Model.ifc"}
-        projectId={projectId}
-        version={version}
-        fileVersionId={fileVersionId}
-        initialGuid={initialGuid}
-        issueId={issueId}
-        omAssetId={omAssetId}
-        compareFileVersionId={compareFileVersionId}
-        federationMembers={federationMembers}
-        collabEnabled={false}
-        buildingId={buildingId}
-        locationId={locationId}
-        workspaceMode={workspaceMode}
-        initialLevelId={levelId}
-        initialView={initialView}
-        alignLevelId={alignLevelId}
-        alignAssetId={alignAssetId}
-        previewAssetId={previewAssetId}
-        initialPanel={panel}
-        initialClashTestId={initialClashTestId}
-        initialClashId={initialClashId}
-      />
+      <BimProPlusGate projectId={projectId}>
+        <BimViewerShell
+          key={sessionKey}
+          fileId={fileId}
+          fileName={name ? decodeURIComponent(name) : "Model.ifc"}
+          projectId={projectId}
+          version={version}
+          fileVersionId={fileVersionId}
+          initialGuid={initialGuid}
+          issueId={issueId}
+          omAssetId={omAssetId}
+          compareFileVersionId={compareFileVersionId}
+          federationMembers={federationMembers}
+          collabEnabled={false}
+          buildingId={buildingId}
+          locationId={locationId}
+          workspaceMode={workspaceMode}
+          initialLevelId={levelId}
+          initialView={initialView}
+          alignLevelId={alignLevelId}
+          alignAssetId={alignAssetId}
+          previewAssetId={previewAssetId}
+          initialPanel={panel}
+          initialClashTestId={initialClashTestId}
+          initialClashId={initialClashId}
+        />
+      </BimProPlusGate>
     </QueryProvider>
   );
 }

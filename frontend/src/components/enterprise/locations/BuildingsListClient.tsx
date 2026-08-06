@@ -13,6 +13,7 @@ import {
   useLocationDetailQuery,
   useUpdateBuildingMutation,
 } from "@/lib/locations/useBuildingQueries";
+import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 import { useEnterpriseWorkspace } from "../EnterpriseWorkspaceContext";
 import { EnterpriseLoadingState } from "../EnterpriseLoadingState";
 import { BuildingCard } from "./BuildingCard";
@@ -31,6 +32,7 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
   const router = useRouter();
   const { primary } = useEnterpriseWorkspace();
   const workspaceId = primary?.workspace.id ?? "";
+  const isProPlus = isWorkspaceProPlusClient(primary?.workspace);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<LocationBuildingRow | null>(null);
   const [browserBuilding, setBrowserBuilding] = useState<{ id: string; name: string } | null>(null);
@@ -193,8 +195,17 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
           } else {
             createMut.mutate(input, {
               onSuccess: (building) => {
-                toast.success("Building created — add your files");
                 setFormOpen(false);
+                if (!isProPlus) {
+                  toast.message("Building created", {
+                    description: "BIM / IFC upload requires Pro — upgrade under Billing.",
+                  });
+                  router.push(
+                    `/projects/${projectId}/locations/${locationId}/buildings/${building.id}`,
+                  );
+                  return;
+                }
+                toast.success("Building created — add your files");
                 setBrowserBuilding({ id: building.id, name: building.name });
               },
               onError: (err: Error) => toast.error(err.message),

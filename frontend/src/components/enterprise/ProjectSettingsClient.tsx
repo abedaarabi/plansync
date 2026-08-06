@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Settings, ShieldCheck } from "lucide-react";
+import {
+  Building2,
+  Eye,
+  KeyRound,
+  Layers,
+  Settings,
+  ShieldCheck,
+  Webhook,
+  Wrench,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   createProjectWebhook,
@@ -26,6 +35,8 @@ import { OccupantPortalLinksSettings } from "./OccupantPortalLinksSettings";
 import { AccessRestricted } from "./AccessRestricted";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { OM_COMPACT_INPUT, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
+import { SettingsSection } from "@/components/enterprise/project-settings/SettingsSection";
+import { SettingsToggleRow } from "@/components/enterprise/project-settings/SettingsToggleRow";
 
 type Props = { projectId: string };
 
@@ -44,6 +55,7 @@ const API_KEY_SCOPE_OPTIONS = [
   "integrations:write",
 ] as const;
 
+// fallow-ignore-next-line complexity
 export function ProjectSettingsClient({ projectId }: Props) {
   const queryClient = useQueryClient();
   const { primary, loading: meLoading } = useEnterpriseWorkspace();
@@ -208,6 +220,15 @@ export function ProjectSettingsClient({ projectId }: Props) {
   const ws = primary?.workspace;
   const omBilling = isWorkspaceOmBillingClient(ws);
   const billingHref = isSuperAdmin(primary?.role) ? "/organization?tab=billing" : "/organization";
+  const enabledModuleCount = [
+    m.issues,
+    m.rfis,
+    m.takeoff,
+    m.proposals,
+    m.punch,
+    m.fieldReports,
+    m.schedule,
+  ].filter(Boolean).length;
 
   function toggleModule(key: keyof typeof m, value: boolean) {
     setModulesDraft((prev) => ({ ...(prev ?? m), [key]: value }));
@@ -222,128 +243,169 @@ export function ProjectSettingsClient({ projectId }: Props) {
     mutation.mutate({ projectId, patch: { clientVisibility: { [key]: value } } });
   }
 
-  const sectionClass =
-    "rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 shadow-[var(--enterprise-shadow-xs)] sm:p-4";
-
-  const row = (label: string, on: boolean, onToggle: (v: boolean) => void, disabled?: boolean) => (
-    <div className="flex flex-col gap-2 rounded-xl border border-[var(--enterprise-border)]/75 bg-[var(--enterprise-bg)]/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <span className="text-sm font-medium text-[var(--enterprise-text)]">{label}</span>
-      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1">
-        <span className="text-xs font-medium text-[var(--enterprise-text-muted)]">
-          {on ? "On" : "Off"}
-        </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={on}
-          aria-label={`${label} toggle`}
-          disabled={disabled}
-          onClick={() => onToggle(!on)}
-          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition ${
-            on
-              ? "border-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]"
-              : "border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]"
-          } disabled:cursor-not-allowed disabled:opacity-50`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
-              on ? "translate-x-5" : "translate-x-1"
-            }`}
-            aria-hidden
-          />
-        </button>
-      </div>
-    </div>
-  );
-
   return (
-    <div className={OM_PAGE_CLASS}>
+    <div className={`${OM_PAGE_CLASS} enterprise-animate-in space-y-5`}>
       <OmSubPageHeader
         icon={Settings}
         title="Project settings"
-        description={`${session.projectName} — modules, integrations, and client visibility.`}
-      >
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-0.5 text-[11px] font-semibold text-[var(--enterprise-text-muted)]">
-          <ShieldCheck className="h-3 w-3 text-[var(--enterprise-primary)]" />
-          Super Admin controls
-        </span>
-      </OmSubPageHeader>
+        description="Modules, integrations, O&M, and what clients see on this project."
+      />
 
-      <section className={sectionClass}>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-          Modules
-        </h2>
+      <div className="enterprise-card overflow-hidden">
+        <div className="border-b border-[var(--enterprise-border)] bg-[linear-gradient(135deg,var(--enterprise-primary-soft),transparent_55%)] px-4 py-5 sm:px-6">
+          <div className="flex flex-wrap items-start gap-4">
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] ring-1 ring-[var(--enterprise-border)]"
+              aria-hidden
+            >
+              <Building2 className="h-6 w-6" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
+                Active project
+              </p>
+              <h2 className="mt-1 text-xl font-semibold tracking-tight text-[var(--enterprise-text)]">
+                {session.projectName}
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--enterprise-subtitle)]">
+                Configure what your team uses day to day. Disabled modules disappear from the
+                sidebar for everyone on this project.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="enterprise-badge-neutral">
+                  {enabledModuleCount} construction module{enabledModuleCount === 1 ? "" : "s"} on
+                </span>
+                {om ? (
+                  <span className="enterprise-badge-success">Operations mode</span>
+                ) : (
+                  <span className="enterprise-badge-neutral">Construction mode</span>
+                )}
+                {canEditSettings ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-0.5 text-[11px] font-semibold text-[var(--enterprise-text-muted)]">
+                    <ShieldCheck className="h-3 w-3 text-[var(--enterprise-primary)]" aria-hidden />
+                    Super Admin
+                  </span>
+                ) : (
+                  <span className="enterprise-badge-neutral">Admin · view / integrations</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-3 px-4 py-3 sm:grid-cols-3 sm:px-6">
+          <p className="text-xs text-[var(--enterprise-text-muted)]">
+            <span className="font-medium text-[var(--enterprise-text)]">Modules</span> — hide tools
+            you are not using so the workspace stays focused.
+          </p>
+          <p className="text-xs text-[var(--enterprise-text-muted)]">
+            <span className="font-medium text-[var(--enterprise-text)]">Integrations</span> — API
+            keys and webhooks for BI, automation, and partners.
+          </p>
+          <p className="text-xs text-[var(--enterprise-text-muted)]">
+            <span className="font-medium text-[var(--enterprise-text)]">Clients &amp; O&amp;M</span>{" "}
+            — portal visibility and Enterprise handover features.
+          </p>
+        </div>
+      </div>
+
+      <SettingsSection
+        icon={Layers}
+        title="Modules"
+        description="Turn features on or off for this project. Changes apply immediately in the sidebar."
+      >
         {!canEditSettings ? (
-          <p className="pb-4 text-xs text-[var(--enterprise-text-muted)]">
+          <p className="text-sm text-[var(--enterprise-text-muted)]">
             Module toggles are editable by Super Admin only.
           </p>
         ) : (
-          <div className="space-y-3">
-            <p className="pb-1 text-xs text-[var(--enterprise-text-muted)]">
-              Disabled modules are hidden from the sidebar for everyone on this project.
-            </p>
-            <div className="mb-1 rounded-xl border border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/40 p-3">
-              <p className="text-xs text-[var(--enterprise-text-muted)]">
-                Data center profile enables Operations mode and keeps schedule, issues, punch, field
-                reporting, and O&amp;M modules active while turning off RFIs, takeoff, and
-                proposals.
+          <>
+            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 px-3.5 py-3">
+              <p className="text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
+                <span className="font-medium text-[var(--enterprise-text)]">
+                  Data center profile
+                </span>{" "}
+                enables Operations mode and keeps schedule, issues, punch, field reporting, and
+                O&amp;M active while turning off RFIs, takeoff, and proposals.
               </p>
               <button
                 type="button"
                 disabled={datacenterDefaultsMutation.isPending}
                 onClick={() => datacenterDefaultsMutation.mutate()}
-                className="mt-2 inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
+                className="enterprise-btn-secondary mt-2.5 inline-flex min-h-9 items-center rounded-lg px-3 text-xs font-semibold disabled:opacity-50"
               >
                 {datacenterDefaultsMutation.isPending
-                  ? "Applying data center defaults..."
+                  ? "Applying data center defaults…"
                   : "Apply data center defaults"}
               </button>
             </div>
-            {row("Issues", m.issues, (v) => toggleModule("issues", v))}
-            {row("RFIs", m.rfis, (v) => toggleModule("rfis", v))}
-            {row("Quantity Takeoff", m.takeoff, (v) => toggleModule("takeoff", v))}
-            {row("Proposals", m.proposals, (v) => toggleModule("proposals", v))}
-            {row("Punch List", m.punch, (v) => toggleModule("punch", v))}
-            {row("Field Reports", m.fieldReports, (v) => toggleModule("fieldReports", v))}
-            {row("Construction schedule", m.schedule, (v) => toggleModule("schedule", v))}
-          </div>
+            <SettingsToggleRow
+              label="Issues"
+              description="Track construction issues on drawings"
+              on={m.issues}
+              onToggle={(v) => toggleModule("issues", v)}
+            />
+            <SettingsToggleRow
+              label="RFIs"
+              description="Request for information workflow"
+              on={m.rfis}
+              onToggle={(v) => toggleModule("rfis", v)}
+            />
+            <SettingsToggleRow
+              label="Quantity takeoff"
+              description="Calibrated quantities and materials (Pro+)"
+              on={m.takeoff}
+              onToggle={(v) => toggleModule("takeoff", v)}
+            />
+            <SettingsToggleRow
+              label="Proposals"
+              description="Estimates and client proposal portal (Pro+)"
+              on={m.proposals}
+              onToggle={(v) => toggleModule("proposals", v)}
+            />
+            <SettingsToggleRow
+              label="Punch list"
+              description="Closeout punch items and status"
+              on={m.punch}
+              onToggle={(v) => toggleModule("punch", v)}
+            />
+            <SettingsToggleRow
+              label="Field reports"
+              description="Daily / site field reporting"
+              on={m.fieldReports}
+              onToggle={(v) => toggleModule("fieldReports", v)}
+            />
+            <SettingsToggleRow
+              label="Construction schedule"
+              description="Project schedule and milestones"
+              on={m.schedule}
+              onToggle={(v) => toggleModule("schedule", v)}
+            />
+          </>
         )}
-      </section>
+      </SettingsSection>
 
-      <section className={sectionClass}>
-        <div className="mb-4 flex items-start gap-3">
-          <div className="mt-0.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-2 text-[var(--enterprise-primary)]">
-            <KeyRound className="h-4 w-4" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-              Integration API keys
-            </h2>
-            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-              Admin and Super Admin can create project-scoped API keys for integrations. New keys
-              are shown once, then hidden.
-            </p>
-          </div>
-        </div>
+      <SettingsSection
+        icon={KeyRound}
+        title="Integration API keys"
+        description="Project-scoped keys for Power BI, automation, and partner tools. New keys are shown once."
+      >
         {newApiKeyPlainText ? (
-          <div className="mb-4 rounded-xl border border-emerald-300/80 bg-emerald-50 px-4 py-3">
-            <p className="text-xs font-semibold text-emerald-900">Copy and store this key now</p>
+          <div className="enterprise-alert-success px-4 py-3">
+            <p className="text-xs font-semibold">Copy and store this key now</p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <code className="mobile-table-wrap block w-full overflow-x-auto rounded-lg border border-emerald-300/80 bg-white px-3 py-2 text-xs text-emerald-950">
+              <code className="mobile-table-wrap block w-full overflow-x-auto rounded-lg border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs text-[var(--enterprise-text)]">
                 {newApiKeyPlainText}
               </code>
               <button
                 type="button"
-                className="inline-flex min-h-9 items-center justify-center rounded-lg bg-emerald-700 px-3 text-xs font-semibold text-white"
-                onClick={async () => {
-                  await navigator.clipboard.writeText(newApiKeyPlainText);
-                }}
+                className="enterprise-btn-primary inline-flex min-h-9 items-center justify-center rounded-lg px-3 text-xs font-semibold"
+                onClick={() => void navigator.clipboard.writeText(newApiKeyPlainText)}
               >
                 Copy
               </button>
               <button
                 type="button"
-                className="inline-flex min-h-9 items-center justify-center rounded-lg border border-emerald-400 bg-white px-3 text-xs font-semibold text-emerald-900"
+                className="enterprise-btn-secondary inline-flex min-h-9 items-center justify-center rounded-lg px-3 text-xs font-semibold"
                 onClick={() => setNewApiKeyPlainText(null)}
               >
                 Dismiss
@@ -351,28 +413,39 @@ export function ProjectSettingsClient({ projectId }: Props) {
             </div>
           </div>
         ) : null}
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            type="text"
-            value={apiKeyNameDraft}
-            onChange={(e) => setApiKeyNameDraft(e.target.value)}
-            placeholder="Key name (e.g. Power BI sync)"
-            className={`${OM_COMPACT_INPUT} max-w-xl`}
-            disabled={createApiKeyMutation.isPending}
-            maxLength={120}
-          />
-          <input
-            type="text"
-            value={apiKeyServiceDraft}
-            onChange={(e) => setApiKeyServiceDraft(e.target.value)}
-            placeholder="Service label (optional)"
-            className={`${OM_COMPACT_INPUT} max-w-xs`}
-            disabled={createApiKeyMutation.isPending}
-            maxLength={120}
-          />
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1">
+            <label className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]">
+              Key name
+            </label>
+            <input
+              type="text"
+              value={apiKeyNameDraft}
+              onChange={(e) => setApiKeyNameDraft(e.target.value)}
+              placeholder="e.g. Power BI sync"
+              className={OM_COMPACT_INPUT}
+              disabled={createApiKeyMutation.isPending}
+              maxLength={120}
+            />
+          </div>
+          <div className="min-w-0 sm:max-w-[12rem]">
+            <label className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]">
+              Service <span className="font-normal">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={apiKeyServiceDraft}
+              onChange={(e) => setApiKeyServiceDraft(e.target.value)}
+              placeholder="Service label"
+              className={OM_COMPACT_INPUT}
+              disabled={createApiKeyMutation.isPending}
+              maxLength={120}
+            />
+          </div>
           <button
             type="button"
-            className="inline-flex min-h-9 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-3 text-xs font-semibold text-white disabled:opacity-50"
+            className="enterprise-btn-primary inline-flex min-h-10 items-center justify-center rounded-lg px-3.5 text-xs font-semibold disabled:opacity-50"
             disabled={createApiKeyMutation.isPending}
             onClick={() =>
               createApiKeyMutation.mutate({
@@ -382,12 +455,13 @@ export function ProjectSettingsClient({ projectId }: Props) {
               })
             }
           >
-            {createApiKeyMutation.isPending ? "Creating..." : "Create key"}
+            {createApiKeyMutation.isPending ? "Creating…" : "Create key"}
           </button>
         </div>
-        <div className="mb-4 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3">
+
+        <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 p-3">
           <p className="mb-2 text-xs font-medium text-[var(--enterprise-text-muted)]">
-            API key scopes (leave empty for full project access)
+            Scopes — leave empty for full project access
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {API_KEY_SCOPE_OPTIONS.map((scope) => {
@@ -407,24 +481,25 @@ export function ProjectSettingsClient({ projectId }: Props) {
                     }
                     className="accent-[var(--enterprise-primary)]"
                   />
-                  <span>{scope}</span>
+                  <span className="font-mono text-[11px]">{scope}</span>
                 </label>
               );
             })}
           </div>
         </div>
+
         <div className="space-y-2">
           {apiKeysQuery.isLoading ? (
-            <p className="text-xs text-[var(--enterprise-text-muted)]">Loading keys...</p>
+            <p className="text-xs text-[var(--enterprise-text-muted)]">Loading keys…</p>
           ) : null}
           {apiKeysQuery.data?.items?.length ? (
             apiKeysQuery.data.items.map((k) => (
               <div
                 key={k.id}
-                className="flex flex-col gap-2 rounded-lg border border-[var(--enterprise-border)] p-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3.5 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-[var(--enterprise-text)]">
+                  <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">
                     {k.name}
                   </p>
                   {k.serviceLabel ? (
@@ -432,18 +507,18 @@ export function ProjectSettingsClient({ projectId }: Props) {
                       Service: <span className="font-medium">{k.serviceLabel}</span>
                     </p>
                   ) : null}
-                  <p className="text-xs text-[var(--enterprise-text-muted)]">
+                  <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
                     Scopes: {k.scopes.length > 0 ? k.scopes.join(", ") : "Full access"}
                   </p>
-                  <p className="text-xs text-[var(--enterprise-text-muted)]">
-                    <span className="rounded bg-[var(--enterprise-bg)] px-1.5 py-0.5 font-mono text-[11px]">
-                      {k.keyPrefix}...
+                  <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
+                    <span className="rounded-md bg-[var(--enterprise-bg)] px-1.5 py-0.5 font-mono text-[11px]">
+                      {k.keyPrefix}…
                     </span>{" "}
-                    | Created {new Date(k.createdAt).toLocaleString()} | Last used{" "}
+                    · Created {new Date(k.createdAt).toLocaleString()} · Last used{" "}
                     {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleString() : "Never"}
                   </p>
                   {k.revokedAt ? (
-                    <p className="text-xs font-medium text-amber-700">
+                    <p className="mt-1 text-xs font-medium text-[var(--enterprise-semantic-warning-text)]">
                       Revoked {new Date(k.revokedAt).toLocaleString()}
                     </p>
                   ) : null}
@@ -451,7 +526,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
                 {!k.revokedAt ? (
                   <button
                     type="button"
-                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 bg-white px-3 text-xs font-semibold text-red-700 disabled:opacity-50"
+                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-[var(--enterprise-semantic-danger-text)] disabled:opacity-50"
                     disabled={revokeApiKeyMutation.isPending}
                     onClick={() => revokeApiKeyMutation.mutate(k.id)}
                   >
@@ -460,37 +535,47 @@ export function ProjectSettingsClient({ projectId }: Props) {
                 ) : null}
               </div>
             ))
-          ) : (
-            <p className="text-xs text-[var(--enterprise-text-muted)]">No API keys yet.</p>
-          )}
+          ) : !apiKeysQuery.isLoading ? (
+            <p className="rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-6 text-center text-xs text-[var(--enterprise-text-muted)]">
+              No API keys yet. Create one to connect external tools.
+            </p>
+          ) : null}
         </div>
-      </section>
+      </SettingsSection>
 
-      <section className={sectionClass}>
-        <h2 className="pb-2 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-          Outbound webhooks
-        </h2>
-        <p className="pb-3 text-xs text-[var(--enterprise-text-muted)]">
-          Webhooks receive signed activity events for this project.
-        </p>
-        <div className="mb-3 flex flex-col gap-2 sm:flex-row">
-          <input
-            type="url"
-            value={webhookUrlDraft}
-            onChange={(e) => setWebhookUrlDraft(e.target.value)}
-            placeholder="https://example.com/plansync-events"
-            className={OM_COMPACT_INPUT}
-          />
-          <input
-            type="text"
-            value={webhookEventsDraft}
-            onChange={(e) => setWebhookEventsDraft(e.target.value)}
-            placeholder="Events (comma separated, optional)"
-            className={OM_COMPACT_INPUT}
-          />
+      <SettingsSection
+        icon={Webhook}
+        title="Outbound webhooks"
+        description="Receive signed activity events for this project at your HTTPS endpoint."
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1">
+            <label className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]">
+              Endpoint URL
+            </label>
+            <input
+              type="url"
+              value={webhookUrlDraft}
+              onChange={(e) => setWebhookUrlDraft(e.target.value)}
+              placeholder="https://example.com/plansync-events"
+              className={OM_COMPACT_INPUT}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <label className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]">
+              Events <span className="font-normal">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={webhookEventsDraft}
+              onChange={(e) => setWebhookEventsDraft(e.target.value)}
+              placeholder="Comma-separated, or leave blank for all"
+              className={OM_COMPACT_INPUT}
+            />
+          </div>
           <button
             type="button"
-            className="inline-flex min-h-9 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-3 text-xs font-semibold text-white disabled:opacity-50"
+            className="enterprise-btn-primary inline-flex min-h-10 items-center justify-center rounded-lg px-3.5 text-xs font-semibold disabled:opacity-50"
             disabled={createWebhookMutation.isPending || !webhookUrlDraft.trim()}
             onClick={() =>
               createWebhookMutation.mutate({
@@ -510,25 +595,34 @@ export function ProjectSettingsClient({ projectId }: Props) {
             webhooksQuery.data.items.map((w) => (
               <div
                 key={w.id}
-                className="flex flex-col gap-2 rounded-lg border border-[var(--enterprise-border)] p-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-xl border border-[var(--enterprise-border)] p-3.5 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-[var(--enterprise-text)]">
-                    {w.url}
-                  </p>
-                  <p className="text-xs text-[var(--enterprise-text-muted)]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">
+                      {w.url}
+                    </p>
+                    <span
+                      className={
+                        w.isActive ? "enterprise-badge-success" : "enterprise-badge-neutral"
+                      }
+                    >
+                      {w.isActive ? "Active" : "Disabled"}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
                     Events: {w.events.length > 0 ? w.events.join(", ") : "All activity events"}
                   </p>
-                  <p className="text-xs text-[var(--enterprise-text-muted)]">
+                  <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
                     Last success:{" "}
-                    {w.lastSuccessAt ? new Date(w.lastSuccessAt).toLocaleString() : "Never"} | Last
+                    {w.lastSuccessAt ? new Date(w.lastSuccessAt).toLocaleString() : "Never"} · Last
                     error: {w.lastErrorAt ? new Date(w.lastErrorAt).toLocaleString() : "None"}
                   </p>
                 </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)]"
+                    className="enterprise-btn-secondary inline-flex min-h-9 items-center justify-center rounded-lg px-3 text-xs font-semibold"
                     onClick={() =>
                       toggleWebhookMutation.mutate({ webhookId: w.id, isActive: !w.isActive })
                     }
@@ -537,7 +631,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
                   </button>
                   <button
                     type="button"
-                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-300 bg-white px-3 text-xs font-semibold text-red-700"
+                    className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--enterprise-semantic-danger-border)] px-3 text-xs font-semibold text-[var(--enterprise-semantic-danger-text)]"
                     onClick={() => deleteWebhookMutation.mutate(w.id)}
                   >
                     Delete
@@ -546,63 +640,80 @@ export function ProjectSettingsClient({ projectId }: Props) {
               </div>
             ))
           ) : (
-            <p className="text-xs text-[var(--enterprise-text-muted)]">
+            <p className="rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-6 text-center text-xs text-[var(--enterprise-text-muted)]">
               No webhooks configured yet.
             </p>
           )}
         </div>
-      </section>
+      </SettingsSection>
 
-      <section className={sectionClass}>
-        <h2 className="pb-2 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-          Operations &amp; Maintenance
-        </h2>
+      <SettingsSection
+        icon={Wrench}
+        title="Operations & Maintenance"
+        description="Handover, assets, work orders, maintenance, inspections, and occupant reporting."
+        badge={
+          omBilling ? (
+            <span className="enterprise-badge-success">Enterprise</span>
+          ) : (
+            <span className="enterprise-badge-warning">Enterprise plan</span>
+          )
+        }
+      >
         {!canEditSettings ? (
-          <p className="pb-4 text-xs text-[var(--enterprise-text-muted)]">
+          <p className="text-sm text-[var(--enterprise-text-muted)]">
             O&amp;M module settings are editable by Super Admin only.
           </p>
         ) : (
-          <p className="pb-4 text-xs text-[var(--enterprise-text-muted)]">
+          <p className="text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
             Turn on for handover buildings: the{" "}
-            <strong className="font-medium text-[var(--enterprise-text)]">Handover</strong> hub
-            (readiness snapshot), asset register, work orders, preventive maintenance, inspections,
-            and occupant reporting. Set lifecycle stage to <strong>Handover &amp; FM</strong> from
-            the project editor when you enter commissioning.
+            <strong className="font-medium text-[var(--enterprise-text)]">Handover</strong> hub,
+            asset register, work orders, preventive maintenance, inspections, and occupant
+            reporting. Set lifecycle stage to{" "}
+            <strong className="font-medium text-[var(--enterprise-text)]">Handover &amp; FM</strong>{" "}
+            from the project editor when you enter commissioning.
           </p>
         )}
+
         {!omBilling ? (
-          <div className="mb-4 rounded-xl border border-amber-200/90 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 shadow-sm">
-            <p className="font-medium text-amber-950">Enterprise plan required</p>
-            <p className="mt-1.5 text-xs leading-relaxed text-amber-900/90">
-              O&amp;M navigation and hubs are included with the{" "}
-              <strong className="font-semibold">Enterprise</strong> workspace plan. Upgrade under{" "}
-              <strong className="font-semibold">Organization → Plan &amp; billing</strong> so this
-              project can use handover, assets, maintenance, inspections, and occupant reporting
-              after you turn on Operations mode.
+          <div className="enterprise-alert-warning px-4 py-3">
+            <p className="text-sm font-semibold text-[var(--enterprise-text)]">
+              Enterprise plan required
+            </p>
+            <p className="mt-1.5 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
+              O&amp;M navigation and hubs are included with Enterprise. Upgrade under Organization →
+              Plan &amp; billing, then enable Operations mode here.
             </p>
             <div className="mt-3">
               {isSuperAdmin(primary?.role) ? (
                 <Link
                   href={billingHref}
-                  className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:opacity-95"
+                  className="enterprise-btn-primary inline-flex min-h-10 items-center justify-center rounded-lg px-4 text-xs font-semibold"
                 >
                   Open Plan &amp; billing
                 </Link>
               ) : (
-                <p className="text-xs font-medium text-amber-900/90">
-                  Ask a workspace Super Admin to upgrade the plan in Plan &amp; billing.
+                <p className="text-xs font-medium text-[var(--enterprise-text-muted)]">
+                  Ask a workspace Super Admin to upgrade the plan.
                 </p>
               )}
             </div>
           </div>
         ) : null}
-        {canEditSettings
-          ? row("Operations mode", om, (v) => opModeMutation.mutate(v), opModeMutation.isPending)
-          : null}
+
+        {canEditSettings ? (
+          <SettingsToggleRow
+            label="Operations mode"
+            description="Switch this project into FM / handover workflows"
+            on={om}
+            onToggle={(v) => opModeMutation.mutate(v)}
+            disabled={opModeMutation.isPending}
+          />
+        ) : null}
+
         {om ? (
-          <div className="mt-3 rounded-xl border border-[var(--enterprise-border)]/75 bg-[var(--enterprise-bg)]/40 px-3 py-3">
-            <p className="text-xs text-[var(--enterprise-text-muted)]">
-              Heads up: existing issues stay in this project and are now listed under{" "}
+          <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-3.5 py-3">
+            <p className="text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
+              Existing issues stay in this project and are listed under{" "}
               <strong className="font-semibold text-[var(--enterprise-text)]">
                 Construction issues
               </strong>
@@ -611,35 +722,50 @@ export function ProjectSettingsClient({ projectId }: Props) {
             {m.issues ? (
               <Link
                 href={`/projects/${projectId}/issues?issueKind=CONSTRUCTION`}
-                className="mt-2 inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-[var(--enterprise-text)]"
+                className="enterprise-btn-secondary mt-2 inline-flex min-h-10 items-center justify-center rounded-lg px-3 text-xs font-semibold"
               >
                 Open Construction issues
               </Link>
             ) : null}
           </div>
         ) : null}
+
         {canEditSettings && om ? (
           <>
-            {row("O&M: Assets", m.omAssets ?? true, (v) => toggleModule("omAssets", v))}
-            {row("O&M: Maintenance (PPM)", m.omMaintenance ?? true, (v) =>
-              toggleModule("omMaintenance", v),
-            )}
-            {row("O&M: Inspections", m.omInspections ?? true, (v) =>
-              toggleModule("omInspections", v),
-            )}
-            {row("O&M: Occupant portal", m.omTenantPortal ?? true, (v) =>
-              toggleModule("omTenantPortal", v),
-            )}
+            <SettingsToggleRow
+              label="O&M: Assets"
+              description="Asset register and QR links"
+              on={m.omAssets ?? true}
+              onToggle={(v) => toggleModule("omAssets", v)}
+            />
+            <SettingsToggleRow
+              label="O&M: Maintenance (PPM)"
+              description="Preventive maintenance schedules"
+              on={m.omMaintenance ?? true}
+              onToggle={(v) => toggleModule("omMaintenance", v)}
+            />
+            <SettingsToggleRow
+              label="O&M: Inspections"
+              description="Inspection templates and runs"
+              on={m.omInspections ?? true}
+              onToggle={(v) => toggleModule("omInspections", v)}
+            />
+            <SettingsToggleRow
+              label="O&M: Occupant portal"
+              description="Public / QR occupant reporting"
+              on={m.omTenantPortal ?? true}
+              onToggle={(v) => toggleModule("omTenantPortal", v)}
+            />
             {m.omTenantPortal ? (
               <>
                 <OccupantPortalLinksSettings projectId={projectId} />
-                <div className="border-b border-[var(--enterprise-border)] py-4 last:border-0">
+                <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-3.5 py-3">
                   <label className="block text-sm font-medium text-[var(--enterprise-text)]">
                     Occupant page headline
                   </label>
                   <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-                    Optional line shown at the top of the public occupant form (building or
-                    equipment scan). Leave blank to use the default.
+                    Optional line at the top of the public occupant form. Leave blank for the
+                    default.
                   </p>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                     <input
@@ -671,7 +797,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
                           },
                         })
                       }
-                      className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white disabled:opacity-50"
+                      className="enterprise-btn-primary inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-semibold disabled:opacity-50"
                     >
                       Save headline
                     </button>
@@ -681,54 +807,72 @@ export function ProjectSettingsClient({ projectId }: Props) {
             ) : null}
           </>
         ) : null}
-      </section>
+      </SettingsSection>
 
       {canEditSettings ? (
-        <section className={sectionClass}>
-          <h2 className="pb-2 text-sm font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-            Client visibility
-          </h2>
-          <p className="pb-4 text-xs text-[var(--enterprise-text-muted)]">
-            Controls what clients see in their portal when invited to this project.
-          </p>
-          {row("Show issues to client", c.showIssues, (v) => toggleClient("showIssues", v))}
-          {row("Show RFIs to client", c.showRfis, (v) => toggleClient("showRfis", v))}
-          {row("Show field reports", c.showFieldReports, (v) =>
-            toggleClient("showFieldReports", v),
-          )}
-          {row("Show punch list", c.showPunchList, (v) => toggleClient("showPunchList", v))}
-          {row("Show drawings to client", c.showDrawings, (v) => toggleClient("showDrawings", v))}
-          {row("Allow client to comment", c.allowClientComment, (v) =>
-            toggleClient("allowClientComment", v),
-          )}
-        </section>
+        <SettingsSection
+          icon={Eye}
+          title="Client visibility"
+          description="Control what invited clients see in their portal for this project."
+        >
+          <SettingsToggleRow
+            label="Show issues to client"
+            on={c.showIssues}
+            onToggle={(v) => toggleClient("showIssues", v)}
+          />
+          <SettingsToggleRow
+            label="Show RFIs to client"
+            on={c.showRfis}
+            onToggle={(v) => toggleClient("showRfis", v)}
+          />
+          <SettingsToggleRow
+            label="Show field reports"
+            on={c.showFieldReports}
+            onToggle={(v) => toggleClient("showFieldReports", v)}
+          />
+          <SettingsToggleRow
+            label="Show punch list"
+            on={c.showPunchList}
+            onToggle={(v) => toggleClient("showPunchList", v)}
+          />
+          <SettingsToggleRow
+            label="Show drawings to client"
+            on={c.showDrawings}
+            onToggle={(v) => toggleClient("showDrawings", v)}
+          />
+          <SettingsToggleRow
+            label="Allow client to comment"
+            on={c.allowClientComment}
+            onToggle={(v) => toggleClient("allowClientComment", v)}
+          />
+        </SettingsSection>
       ) : null}
 
       {mutation.isError ? (
-        <p className="text-sm text-red-600">
+        <div className="enterprise-alert-danger text-sm">
           {mutation.error instanceof Error ? mutation.error.message : "Could not save."}
-        </p>
+        </div>
       ) : null}
       {createApiKeyMutation.isError ? (
-        <p className="text-sm text-red-600">
+        <div className="enterprise-alert-danger text-sm">
           {createApiKeyMutation.error instanceof Error
             ? createApiKeyMutation.error.message
             : "Could not create API key."}
-        </p>
+        </div>
       ) : null}
       {revokeApiKeyMutation.isError ? (
-        <p className="text-sm text-red-600">
+        <div className="enterprise-alert-danger text-sm">
           {revokeApiKeyMutation.error instanceof Error
             ? revokeApiKeyMutation.error.message
             : "Could not revoke API key."}
-        </p>
+        </div>
       ) : null}
       {datacenterDefaultsMutation.isError ? (
-        <p className="text-sm text-red-600">
+        <div className="enterprise-alert-danger text-sm">
           {datacenterDefaultsMutation.error instanceof Error
             ? datacenterDefaultsMutation.error.message
             : "Could not apply data center defaults."}
-        </p>
+        </div>
       ) : null}
     </div>
   );

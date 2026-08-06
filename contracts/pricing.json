@@ -1,0 +1,11 @@
+{
+  "teamMonthlyUsd": 99,
+  "proMonthlyUsd": 179,
+  "enterpriseMonthlyUsd": 299,
+  "teamIncludedSeats": 5,
+  "proIncludedSeats": 5,
+  "enterpriseIncludedSeats": 10,
+  "teamExtraSeatUsd": 15,
+  "proExtraSeatUsd": 19,
+  "enterpriseExtraSeatUsd": 25
+}

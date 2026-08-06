@@ -122,6 +122,23 @@
       "移交、资产与工单",
       "维护计划与检查",
       "租户门户"
+    ],
+    "teamLabel": "Team",
+    "teamIncluded": "含 {seats} 名成员 · 项目不限",
+    "teamEverything": "Everything in Free +",
+    "enterpriseIncluded": "含 {seats} 名成员 · 项目不限",
+    "compareTitle": "Compare plans",
+    "compareSubtitle": "免费查看与标注 PDF — Pro 用于团队协作，Enterprise 增加运维与维护功能。",
+    "compareFeature": "Feature",
+    "comparePrice": "Price",
+    "teamFeatures": [
+      "20GB 云存储",
+      "团队协作",
+      "图纸上问题跟踪",
+      "RFI 工作流",
+      "工程量算量",
+      "PDF 版本管理",
+      "项目进度计划"
     ]
   },
   "pwa": {

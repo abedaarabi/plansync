@@ -1,4 +1,4 @@
-/** Subset of workspace fields from `/api/v1/me` — keep in sync with backend `isWorkspacePro`. */
+/** Subset of workspace fields from `/api/v1/me` — keep in sync with backend `subscription.ts`. */
 export type WorkspaceProFields = {
   subscriptionStatus?: string | null;
   currentPeriodEnd?: string | Date | null;
@@ -7,8 +7,7 @@ export type WorkspaceProFields = {
 };
 
 /**
- * Matches backend `isWorkspacePro` — Pro for `active`, Stripe `trialing`, or in-app trial before
- * `currentPeriodEnd`.
+ * Matches backend `isWorkspacePro` — paid cloud for Team / Pro / Enterprise.
  */
 export function isWorkspaceProClient(ws: WorkspaceProFields | null | undefined): boolean {
   if (!ws) return false;
@@ -23,6 +22,13 @@ export function isWorkspaceProClient(ws: WorkspaceProFields | null | undefined):
     return endMs > Date.now();
   }
   return false;
+}
+
+/** Pro+ (takeoff / BIM / proposals) — matches backend `isWorkspaceProPlus`. */
+export function isWorkspaceProPlusClient(ws: WorkspaceProFields | null | undefined): boolean {
+  if (!ws || !isWorkspaceProClient(ws)) return false;
+  if (ws.billingPlan === "team") return false;
+  return true;
 }
 
 /** O&M billing — matches backend `isWorkspaceOmBilling`. */

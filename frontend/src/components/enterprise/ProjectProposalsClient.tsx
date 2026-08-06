@@ -36,7 +36,8 @@ import {
   OM_PAGE_CLASS,
 } from "@/lib/omCompactStyles";
 import { qk } from "@/lib/queryKeys";
-import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { PlanUpgradeCallout } from "@/components/enterprise/PlanUpgradeCallout";
+import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 import { useProjectCurrency } from "@/hooks/useProjectCurrency";
 import { useTickNowMs } from "@/lib/useTickNowMs";
 
@@ -104,7 +105,7 @@ export function ProjectProposalsClient({
 }) {
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = isWorkspaceProClient(primary?.workspace);
+  const isPro = isWorkspaceProPlusClient(primary?.workspace);
   const { currency: projectCurrency } = useProjectCurrency(projectId);
   const nowMs = useTickNowMs();
 
@@ -156,19 +157,11 @@ export function ProjectProposalsClient({
   }
 
   if (!isPro) {
-    return (
-      <div className="enterprise-alert-warning p-6 text-sm">
-        Proposals require a Pro workspace (active or trial).
-      </div>
-    );
+    return <PlanUpgradeCallout feature="Proposals" />;
   }
 
   if (error instanceof ProRequiredError) {
-    return (
-      <div className="enterprise-alert-warning p-6 text-sm">
-        Proposals require a Pro workspace (active or trial).
-      </div>
-    );
+    return <PlanUpgradeCallout feature="Proposals" />;
   }
 
   if (isError && !(error instanceof ProRequiredError)) {

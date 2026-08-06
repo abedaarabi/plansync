@@ -2,17 +2,23 @@
 
 import Link from "next/link";
 import { useMessages, useTranslations } from "next-intl";
-import { ArrowRight, Check, Cloud, Monitor } from "lucide-react";
+import { ArrowRight, Check, Minus, Monitor, Cloud, Building2, Users } from "lucide-react";
 import { AnimateIn } from "./AnimateIn";
 import {
   ENTERPRISE_FEATURES as ENTERPRISE_FEATURES_DEFAULT,
   FREE_FEATURES as FREE_FEATURES_DEFAULT,
+  PRICING_COMPARE_ROWS,
   PRO_FEATURES as PRO_FEATURES_DEFAULT,
+  TEAM_FEATURES as TEAM_FEATURES_DEFAULT,
+  type PricingCompareCell,
 } from "./constants";
 import {
+  ENTERPRISE_INCLUDED_SEATS,
   ENTERPRISE_MONTHLY_PRICE_USD,
   PRO_INCLUDED_SEATS,
   PRO_MONTHLY_PRICE_USD,
+  TEAM_INCLUDED_SEATS,
+  TEAM_MONTHLY_PRICE_USD,
 } from "@/lib/productPricing";
 import { trackMarketingEvent } from "@/lib/marketingAnalytics";
 
@@ -23,17 +29,88 @@ type LandingPricingSectionProps = {
 type PricingMsgs = {
   pricing?: {
     freeFeatures?: string[];
+    teamFeatures?: string[];
     proFeatures?: string[];
     enterpriseFeatures?: string[];
+    compareRows?: Array<{
+      feature: string;
+      free: string;
+      team: string;
+      pro: string;
+      enterprise: string;
+    }>;
   };
 };
+
+function CellValue({ value }: { value: PricingCompareCell }) {
+  if (value === "yes") {
+    return (
+      <Check
+        className="mx-auto h-5 w-5 text-[var(--landing-cta)]"
+        strokeWidth={2.5}
+        aria-label="Included"
+      />
+    );
+  }
+  if (value === "no") {
+    return (
+      <Minus className="mx-auto h-4 w-4 text-slate-300" strokeWidth={2} aria-label="Not included" />
+    );
+  }
+  return <span className="text-sm font-medium text-slate-700">{value}</span>;
+}
 
 export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectionProps) {
   const t = useTranslations("pricing");
   const messages = useMessages() as PricingMsgs;
   const freeFeatures = messages.pricing?.freeFeatures ?? FREE_FEATURES_DEFAULT;
+  const teamFeatures = messages.pricing?.teamFeatures ?? TEAM_FEATURES_DEFAULT;
   const proFeatures = messages.pricing?.proFeatures ?? PRO_FEATURES_DEFAULT;
   const enterpriseFeatures = messages.pricing?.enterpriseFeatures ?? ENTERPRISE_FEATURES_DEFAULT;
+  const compareRows = messages.pricing?.compareRows ?? PRICING_COMPARE_ROWS;
+
+  const cards = [
+    {
+      id: "free" as const,
+      label: t("freeLabel"),
+      price: t("freePrice"),
+      tagline: t("freeTagline"),
+      tagline2: t("freeTagline2"),
+      features: freeFeatures,
+      icon: Monitor,
+      popular: false,
+    },
+    {
+      id: "team" as const,
+      label: t("teamLabel"),
+      price: `$${TEAM_MONTHLY_PRICE_USD}`,
+      tagline: t("teamIncluded", { seats: TEAM_INCLUDED_SEATS }),
+      tagline2: t("teamEverything"),
+      features: teamFeatures,
+      icon: Users,
+      popular: false,
+    },
+    {
+      id: "pro" as const,
+      label: t("proLabel"),
+      price: `$${PRO_MONTHLY_PRICE_USD}`,
+      tagline: t("proIncluded", { seats: PRO_INCLUDED_SEATS }),
+      tagline2: t("proEverything"),
+      features: proFeatures,
+      icon: Cloud,
+      popular: true,
+    },
+    {
+      id: "enterprise" as const,
+      label: t("enterpriseLabel"),
+      price: `$${ENTERPRISE_MONTHLY_PRICE_USD}`,
+      tagline: t("enterpriseIncluded", { seats: ENTERPRISE_INCLUDED_SEATS }),
+      tagline2: t("enterpriseBlurb"),
+      features: enterpriseFeatures,
+      icon: Building2,
+      popular: false,
+    },
+  ];
 
   return (
     <section
@@ -53,173 +130,188 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
           </p>
         </AnimateIn>
 
-        <div className="mt-16 grid gap-8 lg:grid-cols-3 lg:gap-8">
-          <AnimateIn delay={100}>
-            <div className="flex h-full min-w-0 flex-col rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[var(--enterprise-shadow-card)] sm:p-9">
-              <div className="flex items-start gap-4">
+        <div className="mt-14 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          {cards.map((card, idx) => {
+            const Icon = card.icon;
+            return (
+              <AnimateIn key={card.id} delay={80 + idx * 60}>
                 <div
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 ring-1 ring-slate-200/80"
-                  aria-hidden
+                  className={
+                    card.popular
+                      ? "relative flex h-full min-w-0 flex-col rounded-3xl border-2 border-[var(--landing-cta)] bg-white p-6 shadow-[0_28px_56px_-24px_rgba(37,99,235,0.11),var(--enterprise-shadow-card)] ring-4 ring-[color-mix(in_srgb,var(--landing-cta)_12%,transparent)] sm:p-7"
+                      : "flex h-full min-w-0 flex-col rounded-3xl border border-slate-200/90 bg-white p-6 shadow-[var(--enterprise-shadow-card)] sm:p-7"
+                  }
                 >
-                  <Monitor className="h-6 w-6" strokeWidth={1.75} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                    {t("freeLabel")}
+                  {card.popular ? (
+                    <div className="absolute -top-3.5 start-1/2 -translate-x-1/2 rounded-full bg-[var(--landing-cta)] px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-blue-600/25">
+                      {t("popular")}
+                    </div>
+                  ) : null}
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={
+                        card.popular
+                          ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_22%,transparent)]"
+                          : "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 ring-1 ring-slate-200/80"
+                      }
+                      aria-hidden
+                    >
+                      <Icon className="h-5 w-5" strokeWidth={1.75} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className={
+                          card.popular
+                            ? "text-xs font-semibold uppercase tracking-widest text-[var(--landing-cta)]"
+                            : "text-xs font-semibold uppercase tracking-widest text-slate-500"
+                        }
+                      >
+                        {card.label}
+                      </div>
+                      <div className="mt-1.5 text-3xl font-bold tracking-tight text-slate-900">
+                        {card.price}
+                        {card.id !== "free" ? (
+                          <span className="text-base font-normal text-slate-500">
+                            {t("perMonth")}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1.5 text-sm font-medium text-slate-700">{card.tagline}</p>
+                      <p className="mt-0.5 text-sm text-slate-500">{card.tagline2}</p>
+                    </div>
                   </div>
-                  <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
-                    {t("freePrice")}
-                  </div>
-                  <p className="mt-1 text-sm text-slate-600">{t("freeTagline")}</p>
-                  <p className="mt-0.5 text-sm text-slate-500">{t("freeTagline2")}</p>
+
+                  <ul className="mt-6 flex flex-1 flex-col gap-2">
+                    {card.features.map((f, i) => (
+                      <li
+                        key={`${card.id}-${f}-${i}`}
+                        className="flex items-start gap-2.5 text-sm text-slate-700"
+                      >
+                        <Check
+                          className={
+                            card.popular
+                              ? "mt-0.5 h-4 w-4 shrink-0 text-[var(--landing-cta)]"
+                              : "mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
+                          }
+                          strokeWidth={2.5}
+                        />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+
+                  {card.id === "free" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        trackMarketingEvent("marketing_pricing_interaction", {
+                          plan: "free",
+                          action: "open_viewer",
+                        });
+                        onGoToFreeViewer();
+                      }}
+                      className="mt-7 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
+                    >
+                      {t("openViewer")} <ArrowRight className="h-4 w-4 shrink-0" />
+                    </button>
+                  ) : (
+                    <Link
+                      href="/sign-in"
+                      onClick={() =>
+                        trackMarketingEvent("marketing_pricing_interaction", {
+                          plan: card.id,
+                          action: "start_trial",
+                        })
+                      }
+                      className={
+                        card.popular
+                          ? "btn-shine relative mt-7 flex min-h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[var(--landing-cta)] py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
+                          : "mt-7 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                      }
+                    >
+                      {t("startTrial14")} <ArrowRight className="h-4 w-4 shrink-0" />
+                    </Link>
+                  )}
                 </div>
-              </div>
-
-              <ul className="mt-8 flex flex-1 flex-col gap-2.5">
-                {freeFeatures.map((f, i) => (
-                  <li
-                    key={`${f}-${i}`}
-                    className="flex items-start gap-3 rounded-xl px-1 py-1.5 text-sm text-slate-700"
-                  >
-                    <Check
-                      className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
-                      strokeWidth={2.5}
-                    />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                type="button"
-                onClick={() => {
-                  trackMarketingEvent("marketing_pricing_interaction", {
-                    plan: "free",
-                    action: "open_viewer",
-                  });
-                  onGoToFreeViewer();
-                }}
-                className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
-              >
-                {t("openViewer")} <ArrowRight className="h-4 w-4 shrink-0" />
-              </button>
-            </div>
-          </AnimateIn>
-
-          <AnimateIn delay={200}>
-            <div className="relative flex h-full min-w-0 flex-col rounded-3xl border-2 border-[var(--landing-cta)] bg-white p-8 shadow-[0_28px_56px_-24px_rgba(37,99,235,0.11),var(--enterprise-shadow-card)] ring-4 ring-[color-mix(in_srgb,var(--landing-cta)_12%,transparent)] sm:p-9">
-              <div className="absolute -top-3.5 start-1/2 -translate-x-1/2 rounded-full bg-[var(--landing-cta)] px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-blue-600/25">
-                {t("popular")}
-              </div>
-
-              <div className="flex items-start gap-4">
-                <div
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_22%,transparent)]"
-                  aria-hidden
-                >
-                  <Cloud className="h-6 w-6" strokeWidth={1.75} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold uppercase tracking-widest text-[var(--landing-cta)]">
-                    {t("proLabel")}
-                  </div>
-                  <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
-                    ${PRO_MONTHLY_PRICE_USD}
-                    <span className="text-lg font-normal text-slate-500">{t("perMonth")}</span>
-                  </div>
-                  <p className="mt-2 text-sm font-medium text-slate-700">
-                    {t("proIncluded", { seats: PRO_INCLUDED_SEATS })}
-                  </p>
-                  <p className="mt-0.5 text-sm text-slate-500">{t("proEverything")}</p>
-                </div>
-              </div>
-
-              <ul className="mt-8 flex flex-1 flex-col gap-2.5">
-                {proFeatures.map((f, i) => (
-                  <li
-                    key={`${f}-${i}`}
-                    className="flex items-start gap-3 rounded-xl px-1 py-1.5 text-sm text-slate-700"
-                  >
-                    <Check
-                      className="mt-0.5 h-4 w-4 shrink-0 text-[var(--landing-cta)]"
-                      strokeWidth={2.5}
-                    />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                href="/sign-in"
-                onClick={() =>
-                  trackMarketingEvent("marketing_pricing_interaction", {
-                    plan: "pro",
-                    action: "start_trial",
-                  })
-                }
-                className="btn-shine relative mt-8 flex min-h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[var(--landing-cta)] py-3.5 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
-              >
-                {t("startTrial14")} <ArrowRight className="h-4 w-4 shrink-0" />
-              </Link>
-            </div>
-          </AnimateIn>
-
-          <AnimateIn delay={300}>
-            <div className="flex h-full min-w-0 flex-col rounded-3xl border border-slate-200/90 bg-white p-8 shadow-[var(--enterprise-shadow-card)] sm:p-9">
-              <div className="flex items-start gap-4">
-                <div
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 ring-1 ring-slate-200/80"
-                  aria-hidden
-                >
-                  <Cloud className="h-6 w-6" strokeWidth={1.75} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold uppercase tracking-widest text-slate-600">
-                    {t("enterpriseLabel")}
-                  </div>
-                  <div className="mt-2 text-4xl font-bold tracking-tight text-slate-900">
-                    ${ENTERPRISE_MONTHLY_PRICE_USD}
-                    <span className="text-lg font-normal text-slate-500">{t("perMonth")}</span>
-                  </div>
-                  <p className="mt-2 text-sm font-medium text-slate-700">
-                    {t("proIncluded", { seats: PRO_INCLUDED_SEATS })}
-                  </p>
-                  <p className="mt-0.5 text-sm text-slate-500">{t("enterpriseBlurb")}</p>
-                </div>
-              </div>
-
-              <ul className="mt-8 flex flex-1 flex-col gap-2.5">
-                {enterpriseFeatures.map((f, i) => (
-                  <li
-                    key={`${f}-${i}`}
-                    className="flex items-start gap-3 rounded-xl px-1 py-1.5 text-sm text-slate-700"
-                  >
-                    <Check
-                      className="mt-0.5 h-4 w-4 shrink-0 text-[color-mix(in_srgb,var(--landing-cta)_75%,#64748b)]"
-                      strokeWidth={2.5}
-                    />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                href="/sign-in"
-                onClick={() =>
-                  trackMarketingEvent("marketing_pricing_interaction", {
-                    plan: "enterprise",
-                    action: "start_trial",
-                  })
-                }
-                className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
-              >
-                {t("startTrial14")} <ArrowRight className="h-4 w-4 shrink-0" />
-              </Link>
-            </div>
-          </AnimateIn>
+              </AnimateIn>
+            );
+          })}
         </div>
 
-        <p className="mx-auto mt-10 max-w-2xl text-center text-xs leading-relaxed text-slate-500">
+        <AnimateIn delay={200} className="mt-20">
+          <h3 className="text-center text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+            {t("compareTitle")}
+          </h3>
+          <p className="mx-auto mt-2 max-w-xl text-center text-sm text-slate-600">
+            {t("compareSubtitle")}
+          </p>
+
+          <div className="mt-8 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-[var(--enterprise-shadow-card)]">
+            <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/90">
+                  <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:px-5">
+                    {t("compareFeature")}
+                  </th>
+                  <th className="px-3 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-600">
+                    {t("freeLabel")}
+                  </th>
+                  <th className="px-3 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-600">
+                    {t("teamLabel")}
+                  </th>
+                  <th className="px-3 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-[var(--landing-cta)]">
+                    {t("proLabel")}
+                  </th>
+                  <th className="px-3 py-3.5 text-center text-xs font-semibold uppercase tracking-wider text-slate-600">
+                    {t("enterpriseLabel")}
+                  </th>
+                </tr>
+                <tr className="border-b border-slate-200">
+                  <td className="px-4 py-3 text-xs text-slate-500 sm:px-5">{t("comparePrice")}</td>
+                  <td className="px-3 py-3 text-center text-sm font-semibold text-slate-900">
+                    {t("freePrice")}
+                  </td>
+                  <td className="px-3 py-3 text-center text-sm font-semibold text-slate-900">
+                    ${TEAM_MONTHLY_PRICE_USD}
+                    <span className="font-normal text-slate-500">{t("perMonth")}</span>
+                  </td>
+                  <td className="px-3 py-3 text-center text-sm font-semibold text-slate-900">
+                    ${PRO_MONTHLY_PRICE_USD}
+                    <span className="font-normal text-slate-500">{t("perMonth")}</span>
+                  </td>
+                  <td className="px-3 py-3 text-center text-sm font-semibold text-slate-900">
+                    ${ENTERPRISE_MONTHLY_PRICE_USD}
+                    <span className="font-normal text-slate-500">{t("perMonth")}</span>
+                  </td>
+                </tr>
+              </thead>
+              <tbody>
+                {compareRows.map((row) => (
+                  <tr
+                    key={row.feature}
+                    className="border-b border-slate-100 last:border-0 odd:bg-white even:bg-slate-50/40"
+                  >
+                    <td className="px-4 py-3 font-medium text-slate-800 sm:px-5">{row.feature}</td>
+                    <td className="px-3 py-3 text-center">
+                      <CellValue value={row.free} />
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <CellValue value={row.team} />
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <CellValue value={row.pro} />
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <CellValue value={row.enterprise} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </AnimateIn>
+
+        <p className="mt-8 text-center text-xs leading-relaxed text-slate-500">
           {t("footnote", { seats: PRO_INCLUDED_SEATS })}
         </p>
       </div>

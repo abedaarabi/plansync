@@ -39,7 +39,11 @@ import {
 } from "@/lib/workspaceBranding";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { qk } from "@/lib/queryKeys";
-import { isWorkspaceOmBillingClient, isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import {
+  isWorkspaceOmBillingClient,
+  isWorkspaceProClient,
+  isWorkspaceProPlusClient,
+} from "@/lib/workspaceSubscription";
 import { isSuperAdmin } from "@/lib/workspaceRole";
 import type { MeWorkspace } from "@/types/enterprise";
 import {
@@ -138,6 +142,7 @@ export function EnterpriseSidebar({
   const ws = activeMembership?.workspace;
   const wid = ws?.id;
   const isPro = isWorkspaceProClient(ws);
+  const isProPlus = isWorkspaceProPlusClient(ws);
   const omBilling = isWorkspaceOmBillingClient(ws);
   const projectId = extractProjectIdFromPath(pathname);
   const isProjectContext = Boolean(projectId);
@@ -195,6 +200,7 @@ export function EnterpriseSidebar({
     setWorkspaceLogoFailed(false);
   }, [sidebarLogoSrc]);
 
+  // fallow-ignore-next-line complexity
   const PROJECT_NAV_SECTIONS = useMemo((): NavSection[] => {
     if (!projectId) return [];
     const omBase = projectScopedBaseFromPathname(pathname) ?? `/projects/${projectId}`;
@@ -224,7 +230,8 @@ export function EnterpriseSidebar({
       ];
     }
 
-    const showProposals = mod.proposals && workspaceRole !== "MEMBER";
+    const showProposals = isProPlus && mod.proposals && workspaceRole !== "MEMBER";
+    const showTakeoff = isProPlus && mod.takeoff;
     const showAudit = workspaceRole !== "MEMBER";
 
     const projectItems: NavItem[] = [
@@ -328,7 +335,7 @@ export function EnterpriseSidebar({
         label: t("rfis"),
         icon: MessageSquareQuote,
       });
-    if (mod.takeoff) {
+    if (showTakeoff) {
       coordinationItems.push({
         href: wid ? `/workspaces/${wid}/projects/${projectId}/takeoff` : "#",
         label: t("quantityTakeoff"),
@@ -411,6 +418,7 @@ export function EnterpriseSidebar({
     projectSession?.uiMode,
     operationsMode,
     omBilling,
+    isProPlus,
   ]);
 
   const globalMainSection = useMemo(
@@ -423,12 +431,12 @@ export function EnterpriseSidebar({
       items: [
         { href: "/dashboard", label: t("dashboard"), icon: LayoutDashboard },
         { href: "/projects", label: t("projects"), icon: FileStack },
-        ...(workspaceRole && workspaceRole !== "MEMBER"
+        ...(isProPlus && workspaceRole && workspaceRole !== "MEMBER"
           ? [{ href: "/proposals", label: t("proposalsDashboard"), icon: FileSpreadsheet }]
           : []),
       ],
     }),
-    [t, workspaceRole],
+    [t, workspaceRole, isProPlus],
   );
 
   const SIDEBAR_NAV_PRIMARY = useMemo((): NavSection[] => {
@@ -438,8 +446,9 @@ export function EnterpriseSidebar({
 
   /** First-level rail entries pinned to the bottom (Materials, Org, Account). */
   const SIDEBAR_RAIL_FOOTER_SECTIONS = useMemo((): NavSection[] => {
-    const list: NavSection[] = [
-      {
+    const list: NavSection[] = [];
+    if (isProPlus) {
+      list.push({
         id: "materials",
         title: t("resourceHub"),
         description: t("resourceHubDesc"),
@@ -453,8 +462,8 @@ export function EnterpriseSidebar({
             disabled: !wid,
           },
         ],
-      },
-    ];
+      });
+    }
     if (isSuperAdmin(workspaceRole)) {
       list.push({
         id: "organization",
@@ -466,7 +475,7 @@ export function EnterpriseSidebar({
       });
     }
     return list;
-  }, [wid, workspaceRole, t]);
+  }, [wid, workspaceRole, t, isProPlus]);
 
   const SIDEBAR_NAV_SECTIONS = useMemo(
     (): NavSection[] => [...SIDEBAR_NAV_PRIMARY, ...SIDEBAR_RAIL_FOOTER_SECTIONS],

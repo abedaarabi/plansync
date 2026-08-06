@@ -19,7 +19,7 @@ import {
   patchFolderAccess,
   requestFolderAccess,
 } from "@/lib/api-client";
-import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { isWorkspaceProClient, isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 import {
   addFolderToProjectCache,
   moveFileInProjectCache,
@@ -111,6 +111,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   const { me, primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
   const isPro = isWorkspaceProClient(primary?.workspace);
+  const isProPlus = isWorkspaceProPlusClient(primary?.workspace);
 
   const { data: projects = [], isPending } = useQuery({
     queryKey: qk.projects(wid ?? ""),
@@ -675,6 +676,10 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   }, [project, fileVersionPick, removeBimJob]);
 
   function toggleFederationIfc(f: CloudFile) {
+    if (!isProPlus) {
+      toast.error("BIM / IFC viewing requires Pro. Upgrade under Organization → Billing.");
+      return;
+    }
     if (!isIfcFile(f)) return;
     setFederationIfcIds((prev) => {
       const next = new Set(prev);
@@ -686,6 +691,10 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
 
   // fallow-ignore-next-line complexity
   function openFederationInViewer() {
+    if (!isProPlus) {
+      toast.error("BIM / IFC viewing requires Pro. Upgrade under Organization → Billing.");
+      return;
+    }
     if (!project || federationIfcIds.size < 2) return;
     const members: BimFederationMember[] = [];
     for (const fileId of federationIfcIds) {
@@ -728,6 +737,10 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     }
 
     if (isIfcFile(f)) {
+      if (!isProPlus) {
+        toast.error("BIM / IFC viewing requires Pro. Upgrade under Organization → Billing.");
+        return;
+      }
       if (!verRow) {
         toast.error("No file version available.");
         return;

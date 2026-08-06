@@ -12,10 +12,10 @@ import { logActivity, logActivitySafe } from "../../lib/activity.js";
 import { maybeSendStorageAlerts } from "../../lib/storageAlerts.js";
 import {
   DEFAULT_STORAGE_QUOTA_BYTES,
-  EXTRA_SEAT_MONTHLY_USD,
   MAX_WORKSPACE_MEMBERS,
-  PRO_INCLUDED_SEATS,
   MAX_WORKSPACE_PROJECTS,
+  extraSeatMonthlyUsdForBillingPlan,
+  includedSeatsForBillingPlan,
 } from "../../config/product.js";
 import { isWorkspaceOmBilling, isWorkspacePro } from "../../lib/subscription.js";
 import {
@@ -1653,13 +1653,17 @@ export function v1Routes(
       where: { workspaceId, userId: c.get("user").id },
     });
     if (!m) return c.json({ error: "Forbidden" }, 403);
-    const [list, pressure] = await Promise.all([
+    const [list, pressure, wsBilling] = await Promise.all([
       prisma.workspaceMember.findMany({
         where: { workspaceId },
         include: { user: { select: { id: true, name: true, email: true, image: true } } },
         orderBy: { createdAt: "asc" },
       }),
       countSeatPressure(workspaceId),
+      prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { billingPlan: true },
+      }),
     ]);
 
     const scopedByUser = new Map<string, { id: string; name: string }[]>();
@@ -1681,8 +1685,8 @@ export function v1Routes(
 
     return c.json({
       maxSeats: MAX_WORKSPACE_MEMBERS,
-      includedSeats: PRO_INCLUDED_SEATS,
-      extraSeatMonthlyUsd: EXTRA_SEAT_MONTHLY_USD,
+      includedSeats: includedSeatsForBillingPlan(wsBilling?.billingPlan),
+      extraSeatMonthlyUsd: extraSeatMonthlyUsdForBillingPlan(wsBilling?.billingPlan),
       seatPressure: pressure,
       members: list.map((x) => ({
         id: x.id,
@@ -4434,8 +4438,8 @@ export function v1Routes(
 
     return c.json({
       maxSeats: MAX_WORKSPACE_MEMBERS,
-      includedSeats: PRO_INCLUDED_SEATS,
-      extraSeatMonthlyUsd: EXTRA_SEAT_MONTHLY_USD,
+      includedSeats: includedSeatsForBillingPlan(project.workspace.billingPlan),
+      extraSeatMonthlyUsd: extraSeatMonthlyUsdForBillingPlan(project.workspace.billingPlan),
       seatPressure: pressure,
       members: rows.map((m) => ({
         userId: m.userId,

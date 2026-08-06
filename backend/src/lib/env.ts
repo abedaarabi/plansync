@@ -37,6 +37,7 @@ const schema = z.object({
       }),
   ),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRICE_TEAM_MONTHLY: z.string().optional(),
   STRIPE_PRICE_PRO_MONTHLY: z.string().optional(),
   STRIPE_PRICE_ENTERPRISE_MONTHLY: z.string().optional(),
   /**

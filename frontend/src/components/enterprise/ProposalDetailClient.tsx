@@ -27,7 +27,8 @@ import {
 } from "@/lib/api-client";
 import { proposalStatusBadgeClass, proposalStatusLabel } from "@/lib/proposalStatus";
 import { qk } from "@/lib/queryKeys";
-import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { PlanUpgradeCallout } from "@/components/enterprise/PlanUpgradeCallout";
+import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 
 function fmtMoney(amount: string, currency: string) {
   const n = Number(amount);
@@ -66,7 +67,7 @@ export function ProposalDetailClient({
   const qc = useQueryClient();
   const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = isWorkspaceProClient(primary?.workspace);
+  const isPro = isWorkspaceProPlusClient(primary?.workspace);
 
   const base = wsFromPath
     ? `/workspaces/${wsFromPath}/projects/${projectId}/proposals`
@@ -189,12 +190,7 @@ export function ProposalDetailClient({
   });
 
   if (ctxLoading || (isPro && !wid)) return <EnterpriseLoadingState label="Loading…" />;
-  if (!isPro)
-    return (
-      <div className="enterprise-alert-warning p-6 text-sm">
-        Proposals require a Pro workspace (active or trial).
-      </div>
-    );
+  if (!isPro) return <PlanUpgradeCallout feature="Proposals" />;
   if (isPending) return <EnterpriseLoadingState label="Loading proposal…" />;
   if (isError || !p) {
     return (

@@ -44,7 +44,8 @@ import {
   OM_COMPACT_SELECT,
   OM_PAGE_CLASS,
 } from "@/lib/omCompactStyles";
-import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { PlanUpgradeCallout } from "@/components/enterprise/PlanUpgradeCallout";
+import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 
 const MATERIALS_CATALOG_HELP =
   'Company-wide catalog: one list for the whole workspace — every project (quantity takeoff, estimates, procurement) draws from the same materials. Types are unique per company (e.g. one "Concrete"); add multiple line items under each type. Use Excel template + import to bulk update. After a super admin changes catalog fields, download a fresh template so columns stay in sync.';
@@ -134,6 +135,7 @@ function rowToForm(m: MaterialRow, fieldKeys: MaterialTemplateField[]): FormStat
   };
 }
 
+// fallow-ignore-next-line complexity
 export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceId?: string } = {}) {
   const router = useRouter();
   const pathname = usePathname();
@@ -147,7 +149,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
   const selectedMembership =
     memberships.find((m) => m.workspace.id === workspaceId) ?? primary ?? null;
   const wid = forcedWorkspaceId ?? selectedMembership?.workspace.id;
-  const isPro = isWorkspaceProClient(selectedMembership?.workspace);
+  const isPro = isWorkspaceProPlusClient(selectedMembership?.workspace);
   const isSuperAdmin = selectedMembership?.role === "SUPER_ADMIN";
 
   useEffect(() => {
@@ -366,13 +368,10 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
 
   if (!isPro) {
     return (
-      <div className="enterprise-card border-amber-200/80 bg-amber-50/90 p-8 text-sm text-amber-950">
-        <p className="font-semibold">Pro subscription required</p>
-        <p className="mt-2 text-amber-900/90">
-          The materials database is available on PlanSync Pro. Upgrade to build a shared catalog for
-          your team.
-        </p>
-      </div>
+      <PlanUpgradeCallout
+        feature="Materials database"
+        detail="Upgrade to Pro to build a shared catalog for takeoff and proposals."
+      />
     );
   }
 

@@ -5,15 +5,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { fileVersionWriteBlocked } from "../../lib/fileVersionLock.js";
 import { jsonObjectForResponse } from "../../lib/materialTemplate.js";
-import { isWorkspacePro } from "../../lib/subscription.js";
+import { requireProPlusAccess as requirePro } from "../../lib/planFeatureGates.js";
 import { loadProjectForMember } from "../../lib/projectAccess.js";
-
-function requirePro(workspace: { subscriptionStatus: string | null }) {
-  if (!isWorkspacePro(workspace)) {
-    return { error: "Pro subscription required", status: 402 as const };
-  }
-  return null;
-}
 
 const takeoffInclude = {
   file: { select: { name: true } },

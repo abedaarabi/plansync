@@ -21,6 +21,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { PlanUpgradeCallout } from "@/components/enterprise/PlanUpgradeCallout";
+import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
+import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 import {
   applyTakeoffSync,
   bulkTakeoffAction,
@@ -96,6 +99,8 @@ export function ProjectTakeoffClient({
   const router = useRouter();
   const pathname = usePathname();
   const qc = useQueryClient();
+  const { primary, loading: ctxLoading } = useEnterpriseWorkspace();
+  const isProPlus = isWorkspaceProPlusClient(primary?.workspace);
   const { currency: projectCurrency } = useProjectCurrency(projectId);
   const takeoffKey = qk.takeoffForProject(projectId);
   const [projectDiscountPct, setProjectDiscountPct] = useState("0");
@@ -145,15 +150,17 @@ export function ProjectTakeoffClient({
     queryFn: () => fetchTakeoffLinesForProject(projectId),
     staleTime: 0,
     gcTime: 5 * 60 * 1000,
+    enabled: isProPlus,
   });
   const { data: takeoffViews = [] } = useQuery({
     queryKey: [...takeoffKey, "views"],
     queryFn: () => fetchTakeoffViews(projectId),
+    enabled: isProPlus,
   });
   const { data: takeoffSyncHistory = [] } = useQuery({
     queryKey: [...takeoffKey, "syncHistory"],
     queryFn: () => fetchTakeoffSyncHistory(projectId),
-    enabled: syncHistoryOpen,
+    enabled: isProPlus && syncHistoryOpen,
   });
 
   useEffect(() => {
@@ -633,6 +640,18 @@ export function ProjectTakeoffClient({
     a.download = `takeoff-${projectId.slice(0, 8)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  if (ctxLoading) {
+    return <EnterpriseLoadingState label="Loading workspace…" />;
+  }
+  if (!isProPlus) {
+    return (
+      <PlanUpgradeCallout
+        feature="Quantity takeoff"
+        detail="Upgrade to Pro for calibrated takeoff, materials costing, and drawing sync."
+      />
+    );
   }
 
   return (

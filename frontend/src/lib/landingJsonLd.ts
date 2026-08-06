@@ -58,7 +58,7 @@ export function getHomepageJsonLd(siteOrigin: string) {
           "Markup tools and export to PDF or PNG",
           "O&M handover workflows with asset records, inspections, and maintenance planning",
           "Work orders, tenant request intake, and FM dashboard visibility for operations teams",
-          "Free tier: local-only processing on your device; Pro: optional encrypted cloud projects",
+          "Free tier: local-only processing on your device; Team/Pro/Enterprise: optional encrypted cloud projects",
         ],
       },
       {

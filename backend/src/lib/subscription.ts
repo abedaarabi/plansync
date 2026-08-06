@@ -1,18 +1,19 @@
-/** Fields needed to decide Pro access (matches typical `Workspace` / API workspace JSON). */
+/** Fields needed to decide paid cloud access (matches typical `Workspace` / API workspace JSON). */
 export type WorkspaceSubscriptionFields = {
   subscriptionStatus: string | null;
   currentPeriodEnd?: Date | string | null;
   stripeSubscriptionId?: string | null;
 };
 
-/** Adds `billingPlan` for Enterprise vs Pro (O&M). */
+/** Adds `billingPlan` for Team / Pro / Enterprise. */
 export type WorkspaceBillingPlanFields = WorkspaceSubscriptionFields & {
   billingPlan?: string | null;
 };
 
 /**
- * Pro cloud APIs: paid (`active`), Stripe-managed trial (`trialing` + subscription id), or
+ * Paid cloud APIs: `active`, Stripe-managed trial (`trialing` + subscription id), or
  * app-only trial (`trialing` without Stripe) until `currentPeriodEnd`.
+ * Covers Team, Pro, and Enterprise.
  */
 export function isWorkspacePro(ws: WorkspaceSubscriptionFields): boolean {
   const s = ws.subscriptionStatus;
@@ -29,9 +30,19 @@ export function isWorkspacePro(ws: WorkspaceSubscriptionFields): boolean {
 }
 
 /**
+ * Pro+ features (takeoff, proposals, BIM, clash): Pro and Enterprise, or legacy
+ * workspaces with `billingPlan` null. Explicit `team` does not include these.
+ */
+export function isWorkspaceProPlus(ws: WorkspaceBillingPlanFields): boolean {
+  if (!isWorkspacePro(ws)) return false;
+  if (ws.billingPlan === "team") return false;
+  return true;
+}
+
+/**
  * Operations & Maintenance (O&M) billing: Enterprise subscribers, or legacy workspaces
- * (`billingPlan` null) that already have Pro — keeps existing customers on Pro grandfathered.
- * Explicit `pro` tier does not include O&M.
+ * (`billingPlan` null) that already have paid access — keeps existing customers grandfathered.
+ * Explicit `team` / `pro` tiers do not include O&M.
  */
 export function isWorkspaceOmBilling(ws: WorkspaceBillingPlanFields): boolean {
   if (!isWorkspacePro(ws)) return false;

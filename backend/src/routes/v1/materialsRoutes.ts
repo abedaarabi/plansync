@@ -3,7 +3,7 @@ import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { Prisma, WorkspaceRole } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
-import { isWorkspacePro } from "../../lib/subscription.js";
+import { requireProPlusAccess as requirePro } from "../../lib/planFeatureGates.js";
 import {
   jsonObjectForResponse,
   mergeCustomAttributes,
@@ -17,13 +17,6 @@ import {
   buildMaterialsTemplateBuffer,
   parseMaterialsImportBuffer,
 } from "../../lib/materialsExcel.js";
-
-function requirePro(workspace: { subscriptionStatus: string | null }) {
-  if (!isWorkspacePro(workspace)) {
-    return { error: "Pro subscription required", status: 402 as const };
-  }
-  return null;
-}
 
 function normalizeMaterialKey(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");

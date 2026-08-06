@@ -308,8 +308,9 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
   const setMeasureLabelColor = useViewerStore((s) => s.setMeasureLabelColor);
   const calibrationByPage = useViewerStore((s) => s.calibrationByPage);
   const clearCalibration = useViewerStore((s) => s.clearCalibration);
-  const { enabled: proSheetFeatures } = useViewerProSheetFeatures();
+  const { enabled: proSheetFeatures, takeoffEnabled: proPlusTakeoff } = useViewerProSheetFeatures();
   const showProTabs = Boolean(pdfUrl && proSheetFeatures && viewerProjectId);
+  const showTakeoffTab = showProTabs && proPlusTakeoff;
   const showCollabTab = showProTabs && Boolean(collabCtx?.collabFeatureEnabled);
 
   const pageIdx0 = currentPage - 1;
@@ -464,6 +465,15 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
   }, [showProTabs, sidebarTab, takeoffMode, setTakeoffMode]);
 
   useEffect(() => {
+    if (showTakeoffTab) return;
+    if (sidebarTab === "takeoff") {
+      setSidebarTab("draw");
+      setDockOpen(false);
+    }
+    if (takeoffMode) setTakeoffMode(false);
+  }, [showTakeoffTab, sidebarTab, takeoffMode, setTakeoffMode]);
+
+  useEffect(() => {
     if (showCollabTab || sidebarTab !== "collab") return;
     setSidebarTab("draw");
     setDockOpen(false);
@@ -563,6 +573,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
     (id: string) => {
       const tab = id as SidebarTabId;
       if (!showProTabs && (tab === "issues" || tab === "collab" || tab === "takeoff")) return;
+      if (!showTakeoffTab && tab === "takeoff") return;
       if (!showCollabTab && tab === "collab") return;
       if (dockOpen && sidebarTab === tab) {
         setDockOpen(false);
@@ -579,6 +590,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
       applyDockSideEffects,
       exitTakeoffDrawingMode,
       showProTabs,
+      showTakeoffTab,
       showCollabTab,
     ],
   );
@@ -649,10 +661,10 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
     if (showProTabs) {
       pro.push({ id: "issues", label: "Issues", icon: ListChecks });
       if (showCollabTab) pro.push({ id: "collab", label: "Live", icon: Users });
-      pro.push({ id: "takeoff", label: "Takeoff", icon: Package });
+      if (showTakeoffTab) pro.push({ id: "takeoff", label: "Takeoff", icon: Package });
     }
     return pro.length > 0 ? [doc, markup, pro] : [doc, markup];
-  }, [showProTabs, showCollabTab]);
+  }, [showProTabs, showTakeoffTab, showCollabTab]);
 
   if (!pdfUrl) return null;
 
@@ -684,7 +696,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
             {sidebarTab === "pages" && <SidebarPagesTab pdfDoc={pdfDoc} />}
             {sidebarTab === "outline" && <SidebarOutlineTab pdfDoc={pdfDoc} />}
             {sidebarTab === "issues" && showProTabs && <SidebarIssuesTab />}
-            {sidebarTab === "takeoff" && showProTabs && <SidebarTakeoffTab />}
+            {sidebarTab === "takeoff" && showTakeoffTab && <SidebarTakeoffTab />}
             {sidebarTab === "calibrate" && (
               <div className="w-full">
                 <CalibrationGuide />

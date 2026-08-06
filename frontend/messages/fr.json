@@ -122,6 +122,23 @@
       "Réception, actifs et ordres de travail",
       "Planning d’entretien et inspections",
       "Portail occupants"
+    ],
+    "teamLabel": "Team",
+    "teamIncluded": "{seats} membres inclus · projets illimités",
+    "teamEverything": "Everything in Free +",
+    "enterpriseIncluded": "{seats} membres inclus · projets illimités",
+    "compareTitle": "Compare plans",
+    "compareSubtitle": "Consultez et annotez des PDF gratuitement — ajoutez Pro pour la collaboration d’équipe, ou Enterprise pour l’exploitation et la maintenance.",
+    "compareFeature": "Feature",
+    "comparePrice": "Price",
+    "teamFeatures": [
+      "Stockage cloud 20 Go",
+      "Collaboration d’équipe",
+      "Anomalies sur les plans",
+      "Workflow RFIs",
+      "Métré des quantités",
+      "Contrôle de version PDF",
+      "Planning projet"
     ]
   },
   "pwa": {

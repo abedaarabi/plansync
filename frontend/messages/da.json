@@ -122,6 +122,23 @@
       "Overlevering, aktiver og arbejdsordrer",
       "Vedligeholdelsesplaner og inspektioner",
       "Lejerportal"
+    ],
+    "teamLabel": "Team",
+    "teamIncluded": "{seats} medlemmer inkluderet · ubegrænsede projekter",
+    "teamEverything": "Everything in Free +",
+    "enterpriseIncluded": "{seats} medlemmer inkluderet · ubegrænsede projekter",
+    "compareTitle": "Compare plans",
+    "compareSubtitle": "Vis og annotér PDF’er gratis — tilføj Pro til teamsamarbejde, eller Enterprise til drift og vedligehold.",
+    "compareFeature": "Feature",
+    "comparePrice": "Price",
+    "teamFeatures": [
+      "Cloud-lager 20 GB",
+      "Teamsamarbejde",
+      "Sager på tegninger",
+      "RFI-workflow",
+      "Mængdeopmåling",
+      "PDF-versionsstyring",
+      "Projekttidsplan"
     ]
   },
   "pwa": {

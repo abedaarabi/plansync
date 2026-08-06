@@ -28,25 +28,70 @@
     "quickLinksBody": "استكشف خريطة المنتج كاملة أو انتقل مباشرة إلى الصفحات عالية النية."
   },
   "solutionCopy": {
-    "viewer": { "title": "عارض PDF", "tagline": "قياس وتعليق على أي PDF" },
-    "issues": { "title": "ملاحظات على المخططات", "tagline": "تتبع الملاحظات على المخطط" },
-    "rfis": { "title": "سير عمل RFI", "tagline": "عملية رسمية وليست بريدًا" },
-    "takeoff": { "title": "حصر الكميات", "tagline": "حساب الكميات تلقائيًا" },
-    "audit": { "title": "تدقيق الموقع", "tagline": "فحوصات جودة منهجية" },
-    "proposal": { "title": "العروض", "tagline": "اربح العطاءات بمستندات احترافية" },
-    "cloud-storage": { "title": "التخزين السحابي", "tagline": "ملفات الفريق في مكان آمن واحد" },
+    "viewer": {
+      "title": "عارض PDF",
+      "tagline": "قياس وتعليق على أي PDF"
+    },
+    "issues": {
+      "title": "ملاحظات على المخططات",
+      "tagline": "تتبع الملاحظات على المخطط"
+    },
+    "rfis": {
+      "title": "سير عمل RFI",
+      "tagline": "عملية رسمية وليست بريدًا"
+    },
+    "takeoff": {
+      "title": "حصر الكميات",
+      "tagline": "حساب الكميات تلقائيًا"
+    },
+    "audit": {
+      "title": "تدقيق الموقع",
+      "tagline": "فحوصات جودة منهجية"
+    },
+    "proposal": {
+      "title": "العروض",
+      "tagline": "اربح العطاءات بمستندات احترافية"
+    },
+    "cloud-storage": {
+      "title": "التخزين السحابي",
+      "tagline": "ملفات الفريق في مكان آمن واحد"
+    },
     "pdf-version-control": {
       "title": "التحكم بإصدارات PDF",
       "tagline": "استخدم دائمًا المراجعة الصحيحة"
     },
-    "schedule": { "title": "جدول المشروع", "tagline": "معالم واضحة لكل الفريق" },
-    "om-handover": { "title": "التسليم + O&M", "tagline": "حزم إقفال منظمة" },
-    "om-assets": { "title": "سجل الأصول", "tagline": "قاعدة أصول قابلة للبحث" },
-    "om-maintenance": { "title": "الصيانة", "tagline": "امنع الأعطال قبل حدوثها" },
-    "om-work-orders": { "title": "أوامر العمل", "tagline": "تعيين وتتبع وإغلاق" },
-    "om-inspections": { "title": "الفحوصات", "tagline": "قوالب للامتثال" },
-    "om-tenant-portal": { "title": "بوابة المستأجر", "tagline": "طلبات شاغلين منظمة" },
-    "om-fm-dashboard": { "title": "لوحة FM", "tagline": "نظرة تشغيلية مباشرة" }
+    "schedule": {
+      "title": "جدول المشروع",
+      "tagline": "معالم واضحة لكل الفريق"
+    },
+    "om-handover": {
+      "title": "التسليم + O&M",
+      "tagline": "حزم إقفال منظمة"
+    },
+    "om-assets": {
+      "title": "سجل الأصول",
+      "tagline": "قاعدة أصول قابلة للبحث"
+    },
+    "om-maintenance": {
+      "title": "الصيانة",
+      "tagline": "امنع الأعطال قبل حدوثها"
+    },
+    "om-work-orders": {
+      "title": "أوامر العمل",
+      "tagline": "تعيين وتتبع وإغلاق"
+    },
+    "om-inspections": {
+      "title": "الفحوصات",
+      "tagline": "قوالب للامتثال"
+    },
+    "om-tenant-portal": {
+      "title": "بوابة المستأجر",
+      "tagline": "طلبات شاغلين منظمة"
+    },
+    "om-fm-dashboard": {
+      "title": "لوحة FM",
+      "tagline": "نظرة تشغيلية مباشرة"
+    }
   },
   "hero": {
     "eyebrow": "منصة تعاون للبناء",
@@ -185,6 +230,23 @@
       "التسليم والأصول وأوامر العمل",
       "جداول الصيانة والتفتيش",
       "بوابة المستأجرين"
+    ],
+    "teamLabel": "Team",
+    "teamIncluded": "{seats} أعضاء مشمولون · مشاريع غير محدودة",
+    "teamEverything": "Everything in Free +",
+    "enterpriseIncluded": "{seats} أعضاء مشمولون · مشاريع غير محدودة",
+    "compareTitle": "Compare plans",
+    "compareSubtitle": "اعرض ووسّم ملفات PDF مجانًا — أضف Pro للتعاون الجماعي، أو Enterprise للتشغيل والصيانة.",
+    "compareFeature": "Feature",
+    "comparePrice": "Price",
+    "teamFeatures": [
+      "تخزين سحابي 20 جيجابايت",
+      "تعاون الفريق",
+      "مسائل على المخططات",
+      "سير عمل طلبات المعلومات",
+      "حساب الكميات",
+      "التحكم بإصدارات PDF",
+      "جدولة المشروع"
     ]
   },
   "pwa": {

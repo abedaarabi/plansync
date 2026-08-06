@@ -28,7 +28,8 @@ import {
 } from "@/lib/proposalStatus";
 import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { qk } from "@/lib/queryKeys";
-import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { PlanUpgradeCallout } from "@/components/enterprise/PlanUpgradeCallout";
+import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 
 const STATUS_ORDER = [
   "DRAFT",
@@ -71,20 +72,20 @@ export function ProposalsDashboardClient() {
   const workspace = primary?.workspace;
   const workspaceId = workspace?.id;
   const workspaceRole = primary?.role;
-  const isPro = isWorkspaceProClient(workspace);
+  const isProPlus = isWorkspaceProPlusClient(workspace);
   const canView = workspaceRole === "ADMIN" || workspaceRole === "SUPER_ADMIN";
 
   const projectsQuery = useQuery({
     queryKey: qk.projects(workspaceId ?? ""),
     queryFn: () => fetchProjects(workspaceId!),
-    enabled: Boolean(workspaceId && isPro && canView),
+    enabled: Boolean(workspaceId && isProPlus && canView),
   });
 
   const proposalQueries = useQueries({
     queries: (projectsQuery.data ?? []).map((project) => ({
       queryKey: qk.projectProposals(project.id),
       queryFn: () => fetchProposalsList(project.id),
-      enabled: Boolean(workspaceId && isPro && canView),
+      enabled: Boolean(workspaceId && isProPlus && canView),
       staleTime: 60_000,
     })),
   });
@@ -185,12 +186,8 @@ export function ProposalsDashboardClient() {
     );
   }
 
-  if (!isPro) {
-    return (
-      <div className="enterprise-alert-warning p-6 text-sm">
-        Proposals dashboard requires a Pro workspace (active or trial).
-      </div>
-    );
+  if (!isProPlus) {
+    return <PlanUpgradeCallout feature="Proposals" />;
   }
 
   if (projectsQuery.isPending || proposalsPending) {
@@ -200,11 +197,7 @@ export function ProposalsDashboardClient() {
   if (projectsQuery.isError || hasProposalError) {
     const err = projectsQuery.error ?? firstProposalError;
     if (err instanceof ProRequiredError) {
-      return (
-        <div className="enterprise-alert-warning p-6 text-sm">
-          Proposals dashboard requires a Pro workspace (active or trial).
-        </div>
-      );
+      return <PlanUpgradeCallout feature="Proposals" />;
     }
     return (
       <div className="enterprise-alert-danger p-6 text-sm">

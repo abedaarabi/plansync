@@ -57,7 +57,8 @@ import {
 } from "@/lib/api-client";
 import { proposalCoverTextToHtml } from "@/lib/proposalCoverHtml";
 import { qk } from "@/lib/queryKeys";
-import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import { PlanUpgradeCallout } from "@/components/enterprise/PlanUpgradeCallout";
+import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 import { useProjectCurrency } from "@/hooks/useProjectCurrency";
 
 type AttachmentPick = { fileVersionId: string; label: string; checked: boolean };
@@ -77,7 +78,7 @@ export function ProposalEditorWorkspace({
   const qc = useQueryClient();
   const { primary, me, loading: ctxLoading } = useEnterpriseWorkspace();
   const wid = primary?.workspace.id;
-  const isPro = isWorkspaceProClient(primary?.workspace);
+  const isPro = isWorkspaceProPlusClient(primary?.workspace);
   const currentUserId = me?.user.id;
   const { currency: projectCurrency, isPending: projectCurrencyPending } =
     useProjectCurrency(projectId);
@@ -594,12 +595,7 @@ export function ProposalEditorWorkspace({
   };
 
   if (ctxLoading || (isPro && !wid)) return <EnterpriseLoadingState label="Loading…" />;
-  if (!isPro)
-    return (
-      <div className="enterprise-alert-warning p-6 text-sm">
-        Proposals require a Pro workspace (active or trial).
-      </div>
-    );
+  if (!isPro) return <PlanUpgradeCallout feature="Proposals" />;
   if (editHydrating) return <EnterpriseLoadingState label="Loading proposal…" />;
 
   const totalDisplay = d ? fmtMoney(d.total, d.currency) : null;

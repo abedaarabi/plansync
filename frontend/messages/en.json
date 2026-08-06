@@ -145,22 +145,30 @@
   },
   "pricing": {
     "eyebrow": "Pricing",
-    "title": "Free to start. Pro or Enterprise when you're ready.",
-    "subtitle": "View and mark up PDFs for free — add Pro for team collaboration, or Enterprise for Operations & Maintenance on top.",
+    "title": "Simple plans. Clear upgrades.",
+    "subtitle": "Start free in your browser. Add Team for cloud collaboration, Pro for takeoff and BIM, or Enterprise for Operations & Maintenance.",
     "freeLabel": "Free",
     "freePrice": "$0",
     "freeTagline": "No signup needed",
     "freeTagline2": "Local PDF viewer",
     "openViewer": "Open free viewer",
     "popular": "Most Popular",
+    "teamLabel": "Team",
+    "teamIncluded": "{seats} members included · unlimited projects",
+    "teamEverything": "Everything in Free +",
     "proLabel": "Pro",
     "perMonth": "/month",
     "proIncluded": "{seats} members included · unlimited projects",
-    "proEverything": "Everything in Free +",
+    "proEverything": "Everything in Team +",
     "startTrial14": "Start 14-day Trial",
     "enterpriseLabel": "Enterprise",
-    "enterpriseBlurb": "Pro + O&M",
-    "footnote": "Seat counts follow internal (non-external) members and pending invites. Extra-seat billing is applied when you exceed {seats} — see billing after checkout.",
+    "enterpriseIncluded": "{seats} members included · unlimited projects",
+    "enterpriseBlurb": "Everything in Pro + O&M",
+    "compareTitle": "Compare plans",
+    "compareSubtitle": "See what’s included at each tier — same transparent pricing on the landing page and in your workspace.",
+    "compareFeature": "Feature",
+    "comparePrice": "Price",
+    "footnote": "Seat counts follow internal (non-external) members and pending invites. Extra seats are billed per plan when you exceed the included amount — see billing after checkout.",
     "freeFeatures": [
       "Open any PDF",
       "Calibrate scale",
@@ -170,21 +178,30 @@
       "Works offline",
       "Files never leave device"
     ],
-    "proFeatures": [
+    "teamFeatures": [
+      "Everything in Free",
       "Cloud storage 20GB",
       "Team collaboration",
       "Issues on drawings",
       "RFIs workflow",
-      "Quantity takeoff",
       "PDF version control",
       "Project schedule"
+    ],
+    "proFeatures": [
+      "Everything in Team",
+      "Quantity takeoff",
+      "Proposals & client portal",
+      "BIM / IFC viewer",
+      "Clash detection",
+      "Punch lists & field reports"
     ],
     "enterpriseFeatures": [
       "Everything in Pro",
       "Operations & Maintenance mode",
       "Handover, assets & work orders",
       "Maintenance schedules & inspections",
-      "Tenant portal"
+      "Tenant portal",
+      "FM dashboard"
     ]
   },
   "pwa": {
@@ -279,7 +296,7 @@
       "pricing": {
         "label": "Pricing",
         "title": "Choose the right plan mix",
-        "body": "Start on Free and scale into Pro or Enterprise based on project maturity.",
+        "body": "Start on Free and scale into Team, Pro, or Enterprise based on project maturity.",
         "cta": "Compare plans"
       }
     }
@@ -287,7 +304,7 @@
   "pricingPage": {
     "eyebrow": "Pricing",
     "title": "Transparent plans for solo users, project teams, and enterprise operations",
-    "body": "Start free in-browser, then upgrade when your coordination workflows, cloud storage, and operations requirements grow.",
+    "body": "Start free in-browser, then upgrade to Team, Pro, or Enterprise as coordination, BIM, and operations needs grow.",
     "openViewer": "Open free viewer",
     "startTrial": "Start Pro trial"
   },

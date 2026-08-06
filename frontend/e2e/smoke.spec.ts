@@ -15,4 +15,11 @@ test.describe("Smoke", () => {
     await page.goto("/viewer");
     await expect(page.locator("body")).toBeVisible();
   });
+
+  test("pricing page shows Team / Pro / Enterprise list prices", async ({ page }) => {
+    await page.goto("/pricing");
+    await expect(page.getByText("$99/month").first()).toBeVisible();
+    await expect(page.getByText("$179/month").first()).toBeVisible();
+    await expect(page.getByText("$299/month").first()).toBeVisible();
+  });
 });

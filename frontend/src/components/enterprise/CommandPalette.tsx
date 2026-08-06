@@ -31,7 +31,11 @@ import { useProjectNavHref } from "./useProjectNavHref";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { fetchProjectSession } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
-import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
+import {
+  isWorkspaceOmBillingClient,
+  isWorkspaceProClient,
+  isWorkspaceProPlusClient,
+} from "@/lib/workspaceSubscription";
 import { isSuperAdmin } from "@/lib/workspaceRole";
 import { useMaxLgViewport } from "@/hooks/useMaxLgViewport";
 import { extractProjectIdFromPath } from "@/lib/projectScopedPath";
@@ -54,6 +58,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const wid = ws?.id;
   const workspaceRole = primary?.role;
   const isPro = isWorkspaceProClient(ws);
+  const isProPlus = isWorkspaceProPlusClient(ws);
+  const omBilling = isWorkspaceOmBillingClient(ws);
   const { projectId: lastProjectId } = useProjectNavHref();
   const projectId = extractProjectIdFromPath(pathname) ?? lastProjectId;
 
@@ -71,6 +77,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // fallow-ignore-next-line complexity
   const commands = useMemo((): Cmd[] => {
     const out: Cmd[] = [
       {
@@ -95,7 +102,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         icon: FileStack,
       },
     ];
-    if (workspaceRole && workspaceRole !== "MEMBER") {
+    if (isProPlus && workspaceRole && workspaceRole !== "MEMBER") {
       out.push({
         id: "proposals-dashboard",
         label: "Proposals dashboard",
@@ -105,7 +112,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       });
     }
 
-    if (wid) {
+    if (isProPlus && wid) {
       out.push({
         id: "materials",
         label: "Materials database",
@@ -176,7 +183,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       return out;
     }
 
-    const showProposals = mod.proposals && workspaceRole !== "MEMBER";
+    const showProposals = isProPlus && mod.proposals && workspaceRole !== "MEMBER";
+    const showTakeoff = isProPlus && mod.takeoff;
     const showAudit = workspaceRole !== "MEMBER";
 
     out.push(
@@ -204,7 +212,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         icon: ChartGantt,
       });
     }
-    if (operationsMode) {
+    if (operationsMode && omBilling) {
       out.push({
         id: "om-fm-dashboard",
         label: "FM dashboard",
@@ -292,7 +300,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         icon: MessageSquareQuote,
       });
     }
-    if (mod.takeoff) {
+    if (showTakeoff) {
       out.push({
         id: "takeoff",
         label: "Quantity Takeoff",
@@ -365,6 +373,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     projectSession?.settings,
     mod,
     operationsMode,
+    isProPlus,
+    omBilling,
   ]);
 
   const filtered = useMemo(() => {

@@ -11,3 +11,8 @@ node_modules/
 
 # Stray Next output if dev is run from repo root by mistake
 plansync/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/

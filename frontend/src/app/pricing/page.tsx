@@ -3,7 +3,7 @@ import { PricingPageClient } from "@/components/landing/PricingPageClient";
 
 const title = "Pricing for construction and FM teams · PlanSync";
 const description =
-  "Compare Free, Pro, and Enterprise pricing for PlanSync. Start with a free PDF viewer, then upgrade for team workflows and operations modules.";
+  "Compare Free, Team, Pro, and Enterprise pricing for PlanSync. Start with a free PDF viewer, then upgrade for collaboration, takeoff, BIM, and O&M.";
 
 export const metadata: Metadata = {
   title,

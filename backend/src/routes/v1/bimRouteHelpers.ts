@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { prisma } from "../../lib/prisma.js";
 import { isProjectAccessError, loadProjectForMember } from "../../lib/projectAccess.js";
-import { isWorkspacePro } from "../../lib/subscription.js";
+import { requireBimProPlusAccess } from "../../lib/planFeatureGates.js";
 import type { Env } from "../../lib/env.js";
 import { getObjectStream } from "../../lib/s3.js";
 import { parseQuantityIndexBuffer } from "../../lib/bim/quantityIndexBuilder.js";
@@ -17,11 +17,13 @@ export async function loadBimFileVersion(fileVersionId: string) {
 
 export type BimFileVersion = NonNullable<Awaited<ReturnType<typeof loadBimFileVersion>>>;
 
-export function requireBimPro(workspace: { subscriptionStatus: string | null }) {
-  if (!isWorkspacePro(workspace)) {
-    return { error: "Pro subscription required", status: 402 as const };
-  }
-  return null;
+export function requireBimPro(workspace: {
+  subscriptionStatus: string | null;
+  billingPlan?: string | null;
+  currentPeriodEnd?: Date | string | null;
+  stripeSubscriptionId?: string | null;
+}) {
+  return requireBimProPlusAccess(workspace);
 }
 
 export async function authorizeBimFileVersion(

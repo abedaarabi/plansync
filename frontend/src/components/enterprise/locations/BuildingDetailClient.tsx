@@ -43,7 +43,10 @@ import {
   workspaceHrefFromIfcAssets,
 } from "@/lib/locations/workspaceHref";
 import { qk } from "@/lib/queryKeys";
+import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 import { EnterpriseLoadingState } from "../EnterpriseLoadingState";
+import { useEnterpriseWorkspace } from "../EnterpriseWorkspaceContext";
+import { PlanUpgradeCallout } from "../PlanUpgradeCallout";
 import { BimPipelineProgress } from "../BimPipelineProgress";
 import { BuildingClashHealth } from "./BuildingClashHealth";
 import { BuildingFilesList } from "./BuildingFilesList";
@@ -89,6 +92,8 @@ type BuildingTab = "overview" | "clashes";
 
 // fallow-ignore-next-line complexity
 export function BuildingDetailClient({ projectId, locationId, buildingId, workspaceId }: Props) {
+  const { primary, loading: workspaceLoading } = useEnterpriseWorkspace();
+  const isProPlus = isWorkspaceProPlusClient(primary?.workspace);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState<BuildingAsset | null>(null);
@@ -189,6 +194,10 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
       partnerFileVersionIds?: string[];
     },
   ) => {
+    if (!isProPlus) {
+      toast.error("BIM requires Pro. Upgrade under Organization → Billing.");
+      return;
+    }
     let chosen = resolveOpenAssets(mode);
     if (!chosen?.length) return;
     const partners = opts?.partnerFileVersionIds?.filter(Boolean) ?? [];
@@ -226,6 +235,10 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
   };
 
   const openPdfMapping = (asset: BuildingAsset) => {
+    if (!isProPlus) {
+      toast.error("BIM requires Pro. Upgrade under Organization → Billing.");
+      return;
+    }
     if (!primaryReadyIfc) {
       toast.error("Upload a READY IFC before matching drawings.");
       return;
@@ -278,7 +291,7 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
   const { data: clashSummary } = useQuery({
     queryKey: qk.buildingClashSummary(buildingId),
     queryFn: () => fetchBuildingClashSummary(buildingId),
-    enabled: showClashHub,
+    enabled: showClashHub && isProPlus,
     staleTime: 30_000,
     retry: (count, err) => (err instanceof ProRequiredError ? false : count < 2),
   });
@@ -298,8 +311,17 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
     });
   };
 
-  if ((buildingPending && !building) || (assetsPending && !assetsData)) {
+  if (workspaceLoading || (buildingPending && !building) || (assetsPending && !assetsData)) {
     return <EnterpriseLoadingState label="Loading building…" />;
+  }
+
+  if (!isProPlus) {
+    return (
+      <PlanUpgradeCallout
+        feature="BIM & clash detection"
+        detail="Upgrade to Pro to upload IFC models, publish buildings, and run clash detection."
+      />
+    );
   }
 
   const isReady = publishStatus === "ready";

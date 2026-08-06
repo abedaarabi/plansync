@@ -33,6 +33,7 @@ import { computeWorkspaceHealthScore } from "@/lib/dashboardHealth";
 import { qk } from "@/lib/queryKeys";
 import { useTranslations } from "next-intl";
 
+// fallow-ignore-next-line complexity
 export function DashboardClient() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -233,7 +234,7 @@ export function DashboardClient() {
       ? Math.min(100, (projectCountForUsage / maxProjects) * 100)
       : 0;
   const includedSeats = membersData?.includedSeats ?? 5;
-  const extraSeatUsd = membersData?.extraSeatMonthlyUsd ?? 9;
+  const extraSeatUsd = membersData?.extraSeatMonthlyUsd ?? 15;
   const seatPressure = membersData?.seatPressure ?? 0;
   const seatDenominator = Math.max(includedSeats, 1);
   const seatUsagePct = Math.min(100, (seatPressure / seatDenominator) * 100);

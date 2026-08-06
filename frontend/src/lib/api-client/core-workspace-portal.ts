@@ -278,7 +278,7 @@ export async function patchWorkspace(
 /** Super Admin — Stripe Checkout for PlanSync Pro or Enterprise (subscription). Returns to `/dashboard` after pay. */
 export async function createStripeCheckoutSession(
   workspaceId: string,
-  plan: "pro" | "enterprise" = "pro",
+  plan: "team" | "pro" | "enterprise" = "pro",
 ): Promise<{ url: string }> {
   const res = await fetch(apiUrl("/api/stripe/checkout"), {
     method: "POST",
@@ -363,11 +363,21 @@ export async function createStripePortalSession(workspaceId: string): Promise<{ 
   return { url: j.url };
 }
 
-/** Super Admin — switch existing Stripe subscription between Pro and Enterprise (same subscription, prorated). */
+export class StripePlanChangeRequiresCheckoutError extends Error {
+  readonly plan: "team" | "pro" | "enterprise";
+
+  constructor(plan: "team" | "pro" | "enterprise", message: string) {
+    super(message);
+    this.name = "StripePlanChangeRequiresCheckoutError";
+    this.plan = plan;
+  }
+}
+
+/** Super Admin — switch existing Stripe subscription between paid tiers (same subscription, prorated). */
 export async function changeWorkspaceSubscriptionPlan(
   workspaceId: string,
-  plan: "pro" | "enterprise",
-): Promise<{ alreadyOnPlan: boolean; plan: "pro" | "enterprise" }> {
+  plan: "team" | "pro" | "enterprise",
+): Promise<{ alreadyOnPlan: boolean; plan: "team" | "pro" | "enterprise" }> {
   const res = await fetch(apiUrl("/api/stripe/change-subscription-plan"), {
     method: "POST",
     credentials: "include",
@@ -376,7 +386,8 @@ export async function changeWorkspaceSubscriptionPlan(
   });
   const j = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
     alreadyOnPlan?: boolean;
-    plan?: "pro" | "enterprise";
+    plan?: "team" | "pro" | "enterprise";
+    code?: string;
   };
   if (res.status === 503) {
     throw new Error("Billing is not configured. Add Stripe keys to the API environment.");
@@ -387,10 +398,19 @@ export async function changeWorkspaceSubscriptionPlan(
   if (res.status === 403) {
     throw new Error("Only the workspace Super Admin can change the plan.");
   }
+  if (res.status === 409 && j.code === "requires_checkout") {
+    const p = j.plan === "team" || j.plan === "pro" || j.plan === "enterprise" ? j.plan : plan;
+    throw new StripePlanChangeRequiresCheckoutError(
+      p,
+      typeof j.error === "string"
+        ? j.error
+        : "This subscription was canceled. Start checkout again to subscribe.",
+    );
+  }
   if (!res.ok) {
     throw new Error(readJsonErrorBody(j, res, "Could not change plan"));
   }
-  const outPlan = j.plan === "pro" || j.plan === "enterprise" ? j.plan : plan;
+  const outPlan = j.plan === "team" || j.plan === "pro" || j.plan === "enterprise" ? j.plan : plan;
   return { alreadyOnPlan: j.alreadyOnPlan === true, plan: outPlan };
 }
 
