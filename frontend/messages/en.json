@@ -11,6 +11,7 @@
     "startFree": "Start Free →",
     "toggleMenu": "Toggle menu",
     "construction": "Construction",
+    "story": "Story",
     "operationsFm": "Operations & FM"
   },
   "solutionsMenu": {
@@ -28,25 +29,70 @@
     "quickLinksBody": "Explore the full product map or jump to high-intent pages."
   },
   "solutionCopy": {
-    "viewer": { "title": "PDF viewer", "tagline": "Measure & annotate any PDF" },
-    "issues": { "title": "Issues on drawings", "tagline": "Track issues on the drawing" },
-    "rfis": { "title": "RFI workflow", "tagline": "Formal process, not email" },
-    "takeoff": { "title": "Quantity takeoff", "tagline": "Auto-calculate quantities" },
-    "audit": { "title": "Site audit", "tagline": "Systematic site quality checks" },
-    "proposal": { "title": "Proposals", "tagline": "Win bids with professional docs" },
-    "cloud-storage": { "title": "Cloud storage", "tagline": "Team files in one secure place" },
+    "viewer": {
+      "title": "PDF viewer",
+      "tagline": "Measure & annotate any PDF"
+    },
+    "issues": {
+      "title": "Issues on drawings",
+      "tagline": "Track issues on the drawing"
+    },
+    "rfis": {
+      "title": "RFI workflow",
+      "tagline": "Formal process, not email"
+    },
+    "takeoff": {
+      "title": "Quantity takeoff",
+      "tagline": "Auto-calculate quantities"
+    },
+    "audit": {
+      "title": "Site audit",
+      "tagline": "Systematic site quality checks"
+    },
+    "proposal": {
+      "title": "Proposals",
+      "tagline": "Win bids with professional docs"
+    },
+    "cloud-storage": {
+      "title": "Cloud storage",
+      "tagline": "Team files in one secure place"
+    },
     "pdf-version-control": {
       "title": "PDF version control",
       "tagline": "Always the right sheet revision"
     },
-    "schedule": { "title": "Project schedule", "tagline": "Milestones the whole team can see" },
-    "om-handover": { "title": "O&M + handover", "tagline": "Structured closeout packages" },
-    "om-assets": { "title": "Asset register", "tagline": "Searchable asset database" },
-    "om-maintenance": { "title": "Maintenance", "tagline": "Prevent failures before they happen" },
-    "om-work-orders": { "title": "Work orders", "tagline": "Assign, track, and close" },
-    "om-inspections": { "title": "Inspections", "tagline": "Templates for compliance" },
-    "om-tenant-portal": { "title": "Tenant portal", "tagline": "Structured occupant requests" },
-    "om-fm-dashboard": { "title": "FM dashboard", "tagline": "Live operational overview" }
+    "schedule": {
+      "title": "Project schedule",
+      "tagline": "Milestones the whole team can see"
+    },
+    "om-handover": {
+      "title": "O&M + handover",
+      "tagline": "Structured closeout packages"
+    },
+    "om-assets": {
+      "title": "Asset register",
+      "tagline": "Searchable asset database"
+    },
+    "om-maintenance": {
+      "title": "Maintenance",
+      "tagline": "Prevent failures before they happen"
+    },
+    "om-work-orders": {
+      "title": "Work orders",
+      "tagline": "Assign, track, and close"
+    },
+    "om-inspections": {
+      "title": "Inspections",
+      "tagline": "Templates for compliance"
+    },
+    "om-tenant-portal": {
+      "title": "Tenant portal",
+      "tagline": "Structured occupant requests"
+    },
+    "om-fm-dashboard": {
+      "title": "FM dashboard",
+      "tagline": "Live operational overview"
+    }
   },
   "hero": {
     "eyebrow": "Construction collaboration platform",
@@ -467,6 +513,7 @@
     "features": "Features",
     "pricing": "Pricing",
     "freeViewer": "Free viewer",
+    "story": "Delivery story",
     "changelog": "Changelog",
     "solutionsHeading": "Solutions",
     "company": "Company",
@@ -479,6 +526,16 @@
     "cookies": "Cookie Policy",
     "rights": "All rights reserved.",
     "openViewerCta": "Open free PDF viewer"
+  },
+  "storyPresentation": {
+    "eyebrow": "Story",
+    "pageTitle": "From first drawing to day-one ops",
+    "pageBody": "A short story about complex builds, scattered delivery, and a cleaner path through PlanSync.",
+    "downloadPdf": "Download PDF",
+    "present": "Present",
+    "previous": "Previous slide",
+    "next": "Next slide",
+    "goToSlide": "Go to slide"
   },
   "faq": {
     "eyebrow": "FAQ",

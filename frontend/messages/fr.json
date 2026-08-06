@@ -9,7 +9,8 @@
     "startFree": "Commencer gratuitement →",
     "toggleMenu": "Ouvrir le menu",
     "construction": "Construction",
-    "operationsFm": "Exploitation & FM"
+    "operationsFm": "Exploitation & FM",
+    "story": "Histoire"
   },
   "hero": {
     "eyebrow": "Plateforme de gestion de construction",
@@ -194,7 +195,8 @@
     "terms": "Conditions d’utilisation",
     "cookies": "Politique cookies",
     "rights": "Tous droits réservés.",
-    "openViewerCta": "Ouvrir la visionneuse PDF gratuite"
+    "openViewerCta": "Ouvrir la visionneuse PDF gratuite",
+    "story": "Histoire de livraison"
   },
   "faq": {
     "eyebrow": "FAQ",
@@ -241,5 +243,15 @@
   },
   "auth": {
     "signInTitle": "Connexion"
+  },
+  "storyPresentation": {
+    "eyebrow": "Histoire",
+    "pageTitle": "Du premier plan au jour 1 d’exploitation",
+    "pageBody": "Une courte histoire sur les chantiers complexes, la livraison dispersée, et un chemin plus clair avec PlanSync.",
+    "downloadPdf": "Télécharger le PDF",
+    "present": "Présenter",
+    "previous": "Diapositive précédente",
+    "next": "Diapositive suivante",
+    "goToSlide": "Aller à la diapositive"
   }
 }

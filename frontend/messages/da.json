@@ -9,7 +9,8 @@
     "startFree": "Start gratis →",
     "toggleMenu": "Skift menu",
     "construction": "Byggeri",
-    "operationsFm": "Drift & FM"
+    "operationsFm": "Drift & FM",
+    "story": "Historie"
   },
   "hero": {
     "eyebrow": "Platform til byggeledelse",
@@ -194,7 +195,8 @@
     "terms": "Servicevilkår",
     "cookies": "Cookiepolitik",
     "rights": "Alle rettigheder forbeholdes.",
-    "openViewerCta": "Åbn gratis PDF-fremviser"
+    "openViewerCta": "Åbn gratis PDF-fremviser",
+    "story": "Leveringshistorie"
   },
   "faq": {
     "eyebrow": "FAQ",
@@ -241,5 +243,15 @@
   },
   "auth": {
     "signInTitle": "Log ind"
+  },
+  "storyPresentation": {
+    "eyebrow": "Historie",
+    "pageTitle": "Fra første tegning til ops dag ét",
+    "pageBody": "En kort historie om komplekse byggerier, spredt levering og en klarere vej med PlanSync.",
+    "downloadPdf": "Download PDF",
+    "present": "Præsentér",
+    "previous": "Forrige slide",
+    "next": "Næste slide",
+    "goToSlide": "Gå til slide"
   }
 }

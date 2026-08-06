@@ -38,11 +38,13 @@ export function LandingNav({
     const isActive =
       href === "/pricing"
         ? pathname === "/pricing"
-        : href === "/use-cases"
-          ? pathname.startsWith("/use-cases")
-          : href === "/case-studies"
-            ? pathname.startsWith("/case-studies")
-            : false;
+        : href === "/story"
+          ? pathname === "/story"
+          : href === "/use-cases"
+            ? pathname.startsWith("/use-cases")
+            : href === "/case-studies"
+              ? pathname.startsWith("/case-studies")
+              : false;
     return `landing-type-nav rounded-lg px-2.5 py-2 transition ${
       isActive
         ? "bg-slate-900/[0.04] text-slate-900"
@@ -69,6 +71,9 @@ export function LandingNav({
           <SolutionsDropdown />
           <Link href="/#bim" className={desktopLinkClass("/#bim")}>
             {t("features")}
+          </Link>
+          <Link href="/story" className={desktopLinkClass("/story")}>
+            {t.has("story") ? t("story") : "Story"}
           </Link>
           <Link href="/pricing" className={desktopLinkClass("/pricing")}>
             {t("pricing")}
@@ -191,6 +196,13 @@ export function LandingNav({
               onClick={() => setMobileOpen(false)}
             >
               {t("features")}
+            </Link>
+            <Link
+              href="/story"
+              className="landing-type-nav text-slate-600"
+              onClick={() => setMobileOpen(false)}
+            >
+              {t.has("story") ? t("story") : "Story"}
             </Link>
             <Link
               href="/pricing"

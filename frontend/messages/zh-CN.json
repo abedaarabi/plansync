@@ -9,7 +9,8 @@
     "startFree": "免费开始 →",
     "toggleMenu": "切换菜单",
     "construction": "施工",
-    "operationsFm": "运维与设施管理"
+    "operationsFm": "运维与设施管理",
+    "story": "故事"
   },
   "hero": {
     "eyebrow": "建造管理平台",
@@ -194,7 +195,8 @@
     "terms": "服务条款",
     "cookies": "Cookie 政策",
     "rights": "保留所有权利。",
-    "openViewerCta": "打开免费 PDF 查看器"
+    "openViewerCta": "打开免费 PDF 查看器",
+    "story": "交付故事"
   },
   "faq": {
     "eyebrow": "常见问题",
@@ -241,5 +243,15 @@
   },
   "auth": {
     "signInTitle": "登录"
+  },
+  "storyPresentation": {
+    "eyebrow": "故事",
+    "pageTitle": "从第一张图纸到运营第一天",
+    "pageBody": "关于复杂建造、分散交付，以及 PlanSync 更清晰路径的短故事。",
+    "downloadPdf": "下载 PDF",
+    "present": "演示",
+    "previous": "上一页",
+    "next": "下一页",
+    "goToSlide": "跳转到幻灯片"
   }
 }

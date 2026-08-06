@@ -11,7 +11,8 @@
     "startFree": "ابدأ مجانًا ←",
     "toggleMenu": "تبديل القائمة",
     "construction": "البناء",
-    "operationsFm": "التشغيل وإدارة المرافق"
+    "operationsFm": "التشغيل وإدارة المرافق",
+    "story": "القصة"
   },
   "solutionsMenu": {
     "trigger": "الحلول",
@@ -523,7 +524,8 @@
     "terms": "شروط الخدمة",
     "cookies": "سياسة ملفات تعريف الارتباط",
     "rights": "جميع الحقوق محفوظة.",
-    "openViewerCta": "افتح عارض PDF مجانيًا"
+    "openViewerCta": "افتح عارض PDF مجانيًا",
+    "story": "قصة التسليم"
   },
   "faq": {
     "eyebrow": "الأسئلة الشائعة",
@@ -595,5 +597,15 @@
   },
   "auth": {
     "signInTitle": "تسجيل الدخول"
+  },
+  "storyPresentation": {
+    "eyebrow": "قصة",
+    "pageTitle": "من أول مخطط إلى يوم التشغيل الأول",
+    "pageBody": "قصة قصيرة عن المشاريع المعقدة والتسليم المتناثر ومسار أوضح مع PlanSync.",
+    "downloadPdf": "تنزيل PDF",
+    "present": "عرض",
+    "previous": "الشريحة السابقة",
+    "next": "الشريحة التالية",
+    "goToSlide": "الانتقال إلى الشريحة"
   }
 }

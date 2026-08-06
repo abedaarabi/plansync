@@ -1,0 +1,86 @@
+/* Public /story deck — dark stage on screen; light print-to-PDF */
+
+.story-deck {
+  --story-ink: #0f172a;
+  --story-ink-soft: #334155;
+  --story-muted: #64748b;
+  --story-faint: #94a3b8;
+  --story-panel: #ffffff;
+  --story-panel-soft: #f8fafc;
+  --story-line: rgba(15, 23, 42, 0.1);
+  --story-accent-wash: rgba(37, 99, 235, 0.08);
+  --story-accent-ring: rgba(37, 99, 235, 0.25);
+  --story-stage-min: min(70vh, 640px);
+}
+
+.story-deck .story-stage {
+  --story-ink: #f4f7fb;
+  --story-ink-soft: #e2e8f0;
+  --story-muted: #94a3b8;
+  --story-faint: #64748b;
+  --story-panel: rgba(255, 255, 255, 0.045);
+  --story-panel-soft: rgba(255, 255, 255, 0.03);
+  --story-line: rgba(148, 163, 184, 0.16);
+  --story-accent-wash: rgba(56, 189, 248, 0.1);
+  --story-accent-ring: rgba(56, 189, 248, 0.28);
+  min-height: var(--story-stage-min);
+  border-color: rgba(148, 163, 184, 0.14);
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 0%, rgba(37, 99, 235, 0.22), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 90% 100%, rgba(14, 165, 233, 0.12), transparent 50%), #060a12;
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.35);
+  color: var(--story-ink-soft);
+}
+
+.story-deck.story-presenting .story-stage {
+  min-height: 100%;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+
+.story-print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 12mm;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  nav,
+  footer,
+  .story-no-print {
+    display: none !important;
+  }
+
+  .story-deck {
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .story-stage {
+    display: none !important;
+  }
+
+  .story-print-only {
+    display: block !important;
+  }
+
+  .story-print-slide {
+    break-after: page;
+    page-break-after: always;
+    min-height: 180mm;
+    padding: 8mm 0;
+  }
+
+  .story-print-slide:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

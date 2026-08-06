@@ -9,7 +9,8 @@
     "startFree": "Empezar gratis →",
     "toggleMenu": "Abrir menú",
     "construction": "Construcción",
-    "operationsFm": "Operaciones y FM"
+    "operationsFm": "Operaciones y FM",
+    "story": "Historia"
   },
   "hero": {
     "eyebrow": "Plataforma de gestión de construcción",
@@ -194,7 +195,8 @@
     "terms": "Términos del servicio",
     "cookies": "Política de cookies",
     "rights": "Todos los derechos reservados.",
-    "openViewerCta": "Abrir visor PDF gratuito"
+    "openViewerCta": "Abrir visor PDF gratuito",
+    "story": "Historia de entrega"
   },
   "faq": {
     "eyebrow": "FAQ",
@@ -241,5 +243,15 @@
   },
   "auth": {
     "signInTitle": "Iniciar sesión"
+  },
+  "storyPresentation": {
+    "eyebrow": "Historia",
+    "pageTitle": "Del primer plano al día uno de operaciones",
+    "pageBody": "Una historia corta sobre obras complejas, entrega dispersa y un camino más claro con PlanSync.",
+    "downloadPdf": "Descargar PDF",
+    "present": "Presentar",
+    "previous": "Diapositiva anterior",
+    "next": "Diapositiva siguiente",
+    "goToSlide": "Ir a la diapositiva"
   }
 }

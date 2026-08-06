@@ -76,6 +76,14 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                 </button>
               </li>
               <li>
+                <Link
+                  href="/story"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
+                >
+                  {t.has("story") ? t("story") : "Delivery story"}
+                </Link>
+              </li>
+              <li>
                 <span className="landing-type-nav text-slate-500">{t("changelog")}</span>
               </li>
             </ul>
