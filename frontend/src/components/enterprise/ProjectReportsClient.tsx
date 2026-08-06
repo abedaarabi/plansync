@@ -12,17 +12,21 @@ import {
   CloudRain,
   CloudSun,
   Download,
+  FilePen,
   Image as ImageIcon,
+  LayoutGrid,
   Package,
   Plus,
   RefreshCw,
   ScrollText,
+  Search,
   Send,
   Sun,
   Trash2,
   UserRound,
   UsersRound,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { nanoid } from "nanoid";
@@ -33,9 +37,12 @@ import { toast } from "sonner";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { FieldReportCreateSlideOver } from "@/components/enterprise/FieldReportCreateSlideOver";
+import { FieldReportsOverview } from "@/components/enterprise/FieldReportsOverview";
+import { StatusFilterChips } from "@/components/enterprise/issueListControls";
+import { OmEmptyState } from "@/components/enterprise/OmEmptyState";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import {
-  createFieldReport,
   deleteFieldReport,
   fetchProject,
   fetchProjectFieldReports,
@@ -59,24 +66,49 @@ import {
   type FieldReportDetails,
   type WeeklyVirtual,
 } from "@/lib/fieldReportUtils";
-import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
+import {
+  computeMissingDailyDates,
+  fieldReportMatchesOverviewFilter,
+  type FieldReportsOverviewFilter,
+} from "@/lib/fieldReportsOverviewStats";
+import { FIELD_REPORT_STATUS_LABEL, fieldReportStatusBadgeClass } from "@/lib/issueStatusStyle";
+import {
+  MOBILE_FIELD_INPUT,
+  MOBILE_FIELD_LABEL,
+  MOBILE_FIELD_SELECT,
+  MOBILE_FIELD_TEXTAREA,
+  MOBILE_FORM_SECTION,
+} from "@/lib/mobileFormStyles";
+import {
+  OM_COMPACT_CHIP_ACTIVE,
+  OM_COMPACT_CHIP_IDLE,
+  OM_COMPACT_SELECT,
+  OM_PAGE_CLASS,
+} from "@/lib/omCompactStyles";
 import { qk } from "@/lib/queryKeys";
-
-const PAGE_BG = "#f8fafc";
-const TABLE_BG = "#ffffff";
-const HEADER_BG = "#f1f5f9";
-const BORDER = "#e2e8f0";
-const PRIMARY = "#2563eb";
-const ROW_HOVER = "#f8fafc";
-const SELECTED_BG = "#eff6ff";
+import { useTickNowMs } from "@/lib/useTickNowMs";
 
 /** Slide-over scroll surface + cards */
-const SLIDER_BODY = "space-y-5 bg-gradient-to-b from-[#f1f5f9] to-[#eef2f7] px-4 py-5 sm:px-5";
-const SLIDER_CARD =
-  "rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5";
-/** Shared field chrome; add `w-full` / flex classes at call site. */
-const SLIDER_INPUT =
-  "min-h-11 rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-[15px] text-[#0f172a] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/18 disabled:cursor-not-allowed disabled:bg-[#f8fafc]";
+const SLIDER_BODY = "space-y-5 px-4 py-5 sm:px-5";
+const SLIDER_CARD = MOBILE_FORM_SECTION;
+const SLIDER_INPUT = MOBILE_FIELD_INPUT;
+
+type StatusChip = "ALL" | "DRAFT" | "SUBMITTED";
+
+const STATUS_FILTER_DEFS: { key: StatusChip; label: string; Icon: LucideIcon }[] = [
+  { key: "ALL", label: "All", Icon: LayoutGrid },
+  { key: "DRAFT", label: "Draft", Icon: FilePen },
+  { key: "SUBMITTED", label: "Submitted", Icon: CheckCircle2 },
+];
+
+const FILTER_LABEL_CLASS =
+  "mb-0.5 flex items-center gap-1 text-xs font-medium text-[var(--enterprise-text-muted)]";
+
+const TYPE_CHIP_DEFS = [
+  { key: "ALL" as const, label: "All types" },
+  { key: "DAILY" as const, label: "Daily" },
+  { key: "WEEKLY" as const, label: "Weekly" },
+];
 
 function SliderSectionCard({
   kicker,
@@ -91,20 +123,18 @@ function SliderSectionCard({
 }) {
   return (
     <section className={SLIDER_CARD}>
-      <div className="mb-4 flex items-start gap-3 border-b border-[#f1f5f9] pb-3.5">
+      <div className="mb-4 flex items-start gap-3 border-b border-[var(--enterprise-border)]/60 pb-3.5">
         {icon ? (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f8fafc] text-[#475569] ring-1 ring-inset ring-[#e8edf3]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)]">
             {icon}
           </span>
         ) : null}
         <div className="min-w-0 flex-1 pt-0.5">
           {kicker ? (
-            <p className="text-[11px] font-normal uppercase tracking-[0.08em] text-[#0f172a]">
-              {kicker}
-            </p>
+            <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">{kicker}</p>
           ) : null}
           <h3
-            className={`text-[15px] font-normal leading-snug tracking-tight text-[#0f172a] ${kicker ? "mt-0.5" : ""}`}
+            className={`text-[15px] font-semibold leading-snug tracking-tight text-[var(--enterprise-text)] ${kicker ? "mt-0.5" : ""}`}
           >
             {title}
           </h3>
@@ -187,14 +217,14 @@ function SortHeader({
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-1 text-[11px] font-normal uppercase tracking-wide text-[#0f172a] hover:text-[#111827]"
+      className="inline-flex items-center gap-1 text-[11px] font-normal uppercase tracking-wide text-[var(--enterprise-text-muted)] hover:text-[var(--enterprise-text)]"
     >
       {label}
       {active ? (
         dir === "asc" ? (
-          <ArrowUpAZ className="h-3.5 w-3.5 text-[#2563eb]" />
+          <ArrowUpAZ className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" />
         ) : (
-          <ArrowDownAZ className="h-3.5 w-3.5 text-[#2563eb]" />
+          <ArrowDownAZ className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" />
         )
       ) : (
         <span className="inline-block w-3.5" />
@@ -254,6 +284,7 @@ function exportFieldReportsCsv(
   URL.revokeObjectURL(url);
 }
 
+// fallow-ignore-next-line complexity
 export function ProjectReportsClient({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const router = useRouter();
@@ -262,12 +293,14 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
   const newTitleId = useId();
   const weeklyTitleId = useId();
 
+  const nowMs = useTickNowMs();
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<"ALL" | "DAILY" | "WEEKLY">("ALL");
-  const [filterStatus, setFilterStatus] = useState<"ALL" | "DRAFT" | "SUBMITTED">("ALL");
+  const [filterStatus, setFilterStatus] = useState<StatusChip>("ALL");
   const [filterAuthor, setFilterAuthor] = useState<string>("ALL");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [overviewFilter, setOverviewFilter] = useState<FieldReportsOverviewFilter>("ALL");
   const [sortCol, setSortCol] = useState<SortCol>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -275,10 +308,8 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
   const [activeDailyId, setActiveDailyId] = useState<string | null>(null);
   const [activeWeekly, setActiveWeekly] = useState<WeeklyVirtual | null>(null);
   const [newModalOpen, setNewModalOpen] = useState(false);
+  const [createDefaultDate, setCreateDefaultDate] = useState<string | undefined>();
   const [sendModalOpen, setSendModalOpen] = useState(false);
-  const [newReportDate, setNewReportDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [newAuthor, setNewAuthor] = useState("");
-  const [newMsg, setNewMsg] = useState<string | null>(null);
 
   const [draft, setDraft] = useState<FieldReportDetails>(emptyDetails());
   const [draftMeta, setDraftMeta] = useState<{
@@ -340,50 +371,119 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [reports]);
 
+  const missingDateKeys = useMemo(() => computeMissingDailyDates(reports, nowMs), [reports, nowMs]);
+
+  const memberNames = useMemo(
+    () => members.map((m) => m.name?.trim()).filter((n): n is string => Boolean(n)),
+    [members],
+  );
+
+  const defaultAuthor = memberNames[0] ?? "";
+
+  const onOverviewFilterChange = (key: FieldReportsOverviewFilter) => {
+    setOverviewFilter(key);
+    if (key === "DRAFT" || key === "SUBMITTED") setFilterStatus(key);
+    else if (key === "ALL" || key === "THIS_MONTH" || key === "MISSING") setFilterStatus("ALL");
+    if (key === "DAILY" || key === "WEEKLY") setFilterType(key);
+    else if (key !== "MISSING") setFilterType("ALL");
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setFilterType("ALL");
+    setFilterStatus("ALL");
+    setFilterAuthor("ALL");
+    setDateFrom("");
+    setDateTo("");
+    setOverviewFilter("ALL");
+  };
+
+  const filtersActive =
+    overviewFilter !== "ALL" ||
+    filterStatus !== "ALL" ||
+    filterType !== "ALL" ||
+    filterAuthor !== "ALL" ||
+    Boolean(search.trim()) ||
+    Boolean(dateFrom) ||
+    Boolean(dateTo);
+
   const filtered = useMemo(() => {
+    if (overviewFilter === "MISSING") return [];
     const q = search.trim().toLowerCase();
     const from = dateFrom ? dateFrom : null;
     const to = dateTo ? dateTo : null;
-    return merged.filter((row) => {
-      if (filterType === "DAILY" && row.kind !== "daily") return false;
-      if (filterType === "WEEKLY" && row.kind !== "weekly") return false;
-      if (row.kind === "daily") {
-        const r = row.r;
-        const st = (r.status ?? "DRAFT") as "DRAFT" | "SUBMITTED";
+    return merged.filter(
+      // fallow-ignore-next-line complexity
+      (row) => {
+        if (filterType === "DAILY" && row.kind !== "daily") return false;
+        if (filterType === "WEEKLY" && row.kind !== "weekly") return false;
+        if (row.kind === "daily") {
+          const r = row.r;
+          if (!fieldReportMatchesOverviewFilter(r, overviewFilter, nowMs, missingDateKeys)) {
+            return false;
+          }
+          const st = (r.status ?? "DRAFT") as "DRAFT" | "SUBMITTED";
+          if (filterStatus !== "ALL" && st !== filterStatus) return false;
+          if (filterAuthor !== "ALL" && (r.authorLabel?.trim() || "") !== filterAuthor)
+            return false;
+          const d = r.reportDate.slice(0, 10);
+          if (from && d < from) return false;
+          if (to && d > to) return false;
+          if (q) {
+            const blob = [
+              numMap.get(r.id) ?? "",
+              r.authorLabel ?? "",
+              primaryWeatherLabel(r.weather, parseDetails(r.details)),
+              r.notes ?? "",
+            ]
+              .join(" ")
+              .toLowerCase();
+            if (!blob.includes(q)) return false;
+          }
+          return true;
+        }
+        const w = row.w;
+        if (overviewFilter === "DAILY") return false;
+        if (overviewFilter === "WEEKLY") {
+          /* keep weekly */
+        } else if (overviewFilter === "DRAFT" || overviewFilter === "SUBMITTED") {
+          if (weeklyStatus(w) !== overviewFilter) return false;
+        } else if (overviewFilter === "THIS_MONTH") {
+          const monthStart = new Date(nowMs);
+          monthStart.setDate(1);
+          monthStart.setHours(0, 0, 0, 0);
+          if (new Date(w.weekEndingFriday + "T12:00:00").getTime() < monthStart.getTime()) {
+            return false;
+          }
+        }
+        const st = weeklyStatus(w);
         if (filterStatus !== "ALL" && st !== filterStatus) return false;
-        if (filterAuthor !== "ALL" && (r.authorLabel?.trim() || "") !== filterAuthor) return false;
-        const d = r.reportDate.slice(0, 10);
+        if (filterAuthor !== "ALL") return false;
+        const d = w.weekEndingFriday;
         if (from && d < from) return false;
         if (to && d > to) return false;
         if (q) {
-          const blob = [
-            numMap.get(r.id) ?? "",
-            r.authorLabel ?? "",
-            primaryWeatherLabel(r.weather, parseDetails(r.details)),
-            r.notes ?? "",
-          ]
+          const blob = [w.weekLabel, formatWeekEndingLabel(w.weekEndingFriday), "auto"]
             .join(" ")
             .toLowerCase();
           if (!blob.includes(q)) return false;
         }
         return true;
-      }
-      const w = row.w;
-      const st = weeklyStatus(w);
-      if (filterStatus !== "ALL" && st !== filterStatus) return false;
-      if (filterAuthor !== "ALL") return false;
-      const d = w.weekEndingFriday;
-      if (from && d < from) return false;
-      if (to && d > to) return false;
-      if (q) {
-        const blob = [w.weekLabel, formatWeekEndingLabel(w.weekEndingFriday), "auto"]
-          .join(" ")
-          .toLowerCase();
-        if (!blob.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [merged, search, filterType, filterStatus, filterAuthor, dateFrom, dateTo, numMap]);
+      },
+    );
+  }, [
+    merged,
+    search,
+    filterType,
+    filterStatus,
+    filterAuthor,
+    dateFrom,
+    dateTo,
+    numMap,
+    overviewFilter,
+    missingDateKeys,
+    nowMs,
+  ]);
 
   const sortedRows = useMemo(() => {
     const rows = [...filtered];
@@ -475,19 +575,6 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
     setReportQuery(null);
   }, [setReportQuery]);
 
-  const stats = useMemo(() => {
-    const dailies = reports.filter((r) => (r.reportKind ?? "DAILY") === "DAILY");
-    const now = new Date();
-    const m = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-    const thisMonth = dailies.filter((r) => r.reportDate.slice(0, 7) === m).length;
-    return {
-      total: dailies.length,
-      draft: dailies.filter((r) => (r.status ?? "DRAFT") === "DRAFT").length,
-      submitted: dailies.filter((r) => r.status === "SUBMITTED").length,
-      thisMonth,
-    };
-  }, [reports]);
-
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteFieldReport(projectId, id),
     onSuccess: async (_, id) => {
@@ -499,33 +586,10 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
     onError: (e: Error) => toast.error(e.message || "Delete failed."),
   });
 
-  const createMut = useMutation({
-    mutationFn: () =>
-      createFieldReport(projectId, {
-        reportDate: new Date(newReportDate + "T12:00:00.000Z").toISOString(),
-        reportKind: "DAILY",
-        status: "DRAFT",
-        authorLabel: newAuthor.trim() || undefined,
-        details: emptyDetails(),
-        totalWorkers: 0,
-        photoCount: 0,
-        issueCount: 0,
-      }),
-    onSuccess: (row) => {
-      qc.setQueryData<FieldReportRow[]>(qk.projectFieldReports(projectId), (old) => [
-        normalizeFieldReport(row),
-        ...(old ?? []).filter((r) => r.id !== row.id),
-      ]);
-      setNewModalOpen(false);
-      setNewMsg(null);
-      openDaily(row);
-      toast.success("Report created.");
-    },
-    onError: (e: Error) => {
-      if (e instanceof ProRequiredError) setNewMsg("Pro subscription required.");
-      else setNewMsg(e.message);
-    },
-  });
+  function openCreate(dateYmd?: string) {
+    setCreateDefaultDate(dateYmd);
+    setNewModalOpen(true);
+  }
 
   function openDaily(r: FieldReportRow) {
     closingFromUiRef.current = false;
@@ -769,13 +833,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
   const detailPanelOpen = slideOpen && (!!activeDaily || !!activeWeekly);
 
   return (
-    <div
-      className={OM_PAGE_CLASS}
-      style={{
-        fontFamily: "var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif",
-        backgroundColor: PAGE_BG,
-      }}
-    >
+    <div className={OM_PAGE_CLASS}>
       <OmSubPageHeader
         icon={ScrollText}
         title="Field reports"
@@ -790,15 +848,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               <Download className="h-4 w-4" strokeWidth={1.75} />
               Export
             </EnterpriseButton>
-            <EnterpriseButton
-              size="sm"
-              onClick={() => {
-                setNewMsg(null);
-                setNewReportDate(new Date().toISOString().slice(0, 10));
-                setNewAuthor(members[0]?.name ?? "");
-                setNewModalOpen(true);
-              }}
-            >
+            <EnterpriseButton size="sm" onClick={() => openCreate()}>
               <Plus className="h-4 w-4" strokeWidth={1.75} />
               New report
             </EnterpriseButton>
@@ -806,40 +856,48 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
         }
       />
 
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {(
-          [
-            ["Total reports", stats.total],
-            ["Draft", stats.draft],
-            ["Submitted", stats.submitted],
-            ["This month", stats.thisMonth],
-          ] as const
-        ).map(([label, n]) => (
-          <div
-            key={label}
-            className="rounded-lg border px-3 py-2 shadow-sm"
-            style={{ borderColor: BORDER, backgroundColor: TABLE_BG, borderRadius: 8 }}
-          >
-            <p className="text-lg font-bold tabular-nums text-[#0f172a]">{n}</p>
-            <p className="text-[10px] font-normal uppercase tracking-wide text-[#0f172a]">
-              {label}
-            </p>
-          </div>
-        ))}
-      </section>
+      {!isPending ? (
+        <FieldReportsOverview
+          rows={reports}
+          filter={overviewFilter}
+          onFilterChange={onOverviewFilterChange}
+        />
+      ) : null}
+
+      {overviewFilter === "MISSING" && missingDateKeys.length > 0 ? (
+        <div className="enterprise-alert-warning rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-3 shadow-[var(--enterprise-shadow-xs)]">
+          <p className="text-sm font-semibold text-[var(--enterprise-semantic-danger-text)]">
+            Missing daily reports ({missingDateKeys.length} day
+            {missingDateKeys.length === 1 ? "" : "s"} in the last 14)
+          </p>
+          <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
+            No daily log filed for these dates. Create a report to fill the gap.
+          </p>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {missingDateKeys.map((ymd) => (
+              <li key={ymd}>
+                <EnterpriseButton size="sm" variant="secondary" onClick={() => openCreate(ymd)}>
+                  <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                  {formatReportTableDate(ymd + "T12:00:00.000Z")}
+                </EnterpriseButton>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {selectedIds.length > 0 ? (
         <div
-          className="flex flex-col gap-3 rounded-lg border px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-          style={{ borderColor: `${PRIMARY}33`, backgroundColor: SELECTED_BG }}
+          className="sticky top-0 z-20 flex flex-col gap-3 rounded-xl border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-4 py-3 shadow-[var(--enterprise-shadow-xs)] sm:flex-row sm:items-center sm:justify-between"
+          style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
         >
-          <p className="text-sm font-semibold" style={{ color: PRIMARY }}>
+          <p className="text-sm font-semibold text-[var(--enterprise-primary)]">
             {selectedIds.length} report{selectedIds.length === 1 ? "" : "s"} selected
           </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="inline-flex h-9 items-center rounded-lg border border-[#e2e8f0] bg-white px-3 text-xs font-semibold text-[#0f172a]"
+          <div className="flex flex-wrap items-center gap-2">
+            <EnterpriseButton
+              size="sm"
+              variant="secondary"
               onClick={() => {
                 const subset = sortedRows.filter((row) =>
                   selectedIds.includes(row.kind === "daily" ? row.r.id : row.w.id),
@@ -849,10 +907,10 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               }}
             >
               Export CSV
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-9 items-center rounded-lg border border-[#e2e8f0] bg-white px-3 text-xs font-semibold text-[#0f172a] disabled:cursor-not-allowed disabled:opacity-50"
+            </EnterpriseButton>
+            <EnterpriseButton
+              size="sm"
+              variant="secondary"
               disabled={!sendTarget || sendTarget.alreadySent}
               title={
                 !sendTarget
@@ -876,10 +934,10 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               }}
             >
               Send to Client
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-9 items-center rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-700"
+            </EnterpriseButton>
+            <EnterpriseButton
+              size="sm"
+              variant="danger"
               onClick={() => {
                 const real = selectedIds.filter((id) => !id.startsWith("virtual-week-"));
                 if (
@@ -904,80 +962,118 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 })();
               }}
             >
-              <Trash2 className="mr-1 inline h-3.5 w-3.5" strokeWidth={1.75} />
+              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
               Delete
-            </button>
+            </EnterpriseButton>
             <button
               type="button"
-              className="text-xs font-semibold underline"
-              style={{ color: PRIMARY }}
+              className="text-xs font-semibold text-[var(--enterprise-primary)] underline"
               onClick={() => setSelectedIds([])}
             >
               Clear selection
             </button>
           </div>
         </div>
-      ) : (
-        <section
-          className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:flex-wrap sm:items-center sm:p-4"
-          style={{ borderColor: BORDER, backgroundColor: TABLE_BG }}
-        >
-          <input
-            type="search"
-            placeholder="Search reports…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="min-h-10 w-full min-w-[8rem] flex-1 rounded-lg border border-[#e2e8f0] px-3 text-sm text-[#0f172a] placeholder:text-[#94a3b8] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 sm:max-w-xs"
-            style={{ backgroundColor: PAGE_BG }}
-          />
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value as typeof filterType)}
-            className="min-h-10 min-w-[7rem] rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
-          >
-            <option value="ALL">Type</option>
-            <option value="DAILY">Daily</option>
-            <option value="WEEKLY">Weekly</option>
-          </select>
-          <select
+      ) : reports.length > 0 ? (
+        <section className="enterprise-card flex flex-col gap-2 p-3 sm:p-4">
+          <StatusFilterChips
+            defs={STATUS_FILTER_DEFS}
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
-            className="min-h-10 min-w-[7rem] rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20"
-          >
-            <option value="ALL">Status</option>
-            <option value="DRAFT">Draft</option>
-            <option value="SUBMITTED">Submitted</option>
-          </select>
-          <select
-            value={filterAuthor}
-            onChange={(e) => setFilterAuthor(e.target.value)}
-            className="min-h-10 min-w-[8rem] flex-1 rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] focus:border-[#2563eb] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 sm:flex-none"
-          >
-            <option value="ALL">Written by</option>
-            {authorOptions.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-          <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="min-h-10 min-w-[9rem] flex-1 rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] sm:flex-none"
-              aria-label="From date"
-            />
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="min-h-10 min-w-[9rem] flex-1 rounded-lg border border-[#e2e8f0] px-2 text-sm text-[#0f172a] sm:flex-none"
-              aria-label="To date"
-            />
+            onChange={(key) => {
+              setFilterStatus(key);
+              if (key === "ALL") {
+                if (overviewFilter === "DRAFT" || overviewFilter === "SUBMITTED") {
+                  setOverviewFilter("ALL");
+                }
+              } else {
+                setOverviewFilter(key);
+              }
+            }}
+            filtersActive={filtersActive}
+            onReset={clearFilters}
+          />
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="min-w-[11rem] flex-1 sm:max-w-[16rem]">
+              <span className={FILTER_LABEL_CLASS}>
+                <Search className="h-3.5 w-3.5" aria-hidden />
+                Search
+              </span>
+              <input
+                type="search"
+                placeholder="Search reports…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className={OM_COMPACT_SELECT}
+              />
+            </label>
+            <div
+              className="inline-flex flex-wrap gap-1 rounded-lg border border-[var(--enterprise-border)] p-0.5"
+              role="group"
+              aria-label="Report type"
+            >
+              {TYPE_CHIP_DEFS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  aria-pressed={filterType === t.key}
+                  onClick={() => {
+                    setFilterType(t.key);
+                    if (t.key === "DAILY" || t.key === "WEEKLY") setOverviewFilter(t.key);
+                    else if (overviewFilter === "DAILY" || overviewFilter === "WEEKLY") {
+                      setOverviewFilter("ALL");
+                    }
+                  }}
+                  className={`inline-flex min-h-7 items-center rounded-md px-2.5 text-[11px] font-semibold ${
+                    filterType === t.key ? OM_COMPACT_CHIP_ACTIVE : OM_COMPACT_CHIP_IDLE
+                  }`}
+                  style={
+                    filterType === t.key
+                      ? { backgroundColor: "var(--enterprise-primary)" }
+                      : undefined
+                  }
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <label className="min-w-[8rem]">
+              <span className={FILTER_LABEL_CLASS}>Written by</span>
+              <select
+                value={filterAuthor}
+                onChange={(e) => setFilterAuthor(e.target.value)}
+                className={OM_COMPACT_SELECT}
+              >
+                <option value="ALL">All authors</option>
+                {authorOptions.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="min-w-[8rem]">
+              <span className={FILTER_LABEL_CLASS}>From</span>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className={OM_COMPACT_SELECT}
+                aria-label="From date"
+              />
+            </label>
+            <label className="min-w-[8rem]">
+              <span className={FILTER_LABEL_CLASS}>To</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className={OM_COMPACT_SELECT}
+                aria-label="To date"
+              />
+            </label>
           </div>
         </section>
-      )}
+      ) : null}
 
       {isPending ? (
         <div className="py-16">
@@ -987,26 +1083,31 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
             label="Loading"
           />
         </div>
+      ) : reports.length === 0 && overviewFilter !== "MISSING" ? (
+        <OmEmptyState
+          icon={ScrollText}
+          title="No field reports yet"
+          description="Create a daily report to start logging weather, crews, and site progress."
+          action={
+            <EnterpriseButton size="sm" onClick={() => openCreate()}>
+              <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
+              New report
+            </EnterpriseButton>
+          }
+        />
       ) : (
         <div
-          className="mobile-table-wrap -mx-4 overflow-x-auto sm:mx-0"
+          className="mobile-table-wrap enterprise-card -mx-4 overflow-x-auto sm:mx-0"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           <div className="inline-block min-w-full align-middle">
-            <table
-              className="w-full min-w-[880px] border-collapse rounded-lg shadow-sm md:min-w-[960px]"
-              style={{
-                border: `0.5px solid ${BORDER}`,
-                backgroundColor: TABLE_BG,
-                borderRadius: 8,
-              }}
-            >
+            <table className="w-full min-w-[880px] border-collapse md:min-w-[960px]">
               <thead>
-                <tr style={{ backgroundColor: HEADER_BG, borderBottom: `0.5px solid ${BORDER}` }}>
+                <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
                   <th className="w-10 px-2 py-2 text-left">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-[#cbd5e1]"
+                      className="h-4 w-4 rounded border-[var(--enterprise-border)]"
                       checked={allSelected}
                       onChange={toggleAll}
                       aria-label="Select all"
@@ -1073,46 +1174,112 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               <tbody>
                 {sortedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-sm text-[#0f172a]">
-                      No reports match your filters.
+                    <td
+                      colSpan={8}
+                      className="px-4 py-12 text-center text-sm text-[var(--enterprise-text-muted)]"
+                    >
+                      {overviewFilter === "MISSING"
+                        ? "Use the dates above to create missing daily reports."
+                        : "No reports match your filters."}
                     </td>
                   </tr>
                 ) : (
-                  sortedRows.map((row) => {
-                    const id = row.kind === "daily" ? row.r.id : row.w.id;
-                    const sel = selectedIds.includes(id);
-                    const active =
-                      slideOpen &&
-                      (row.kind === "daily"
-                        ? activeDailyId === row.r.id
-                        : activeWeekly?.id === row.w.id);
-                    const hi = sel || active;
-                    if (row.kind === "daily") {
-                      const r = row.r;
-                      const wx = primaryWeatherLabel(r.weather, parseDetails(r.details));
-                      const st = (r.status ?? "DRAFT") as "DRAFT" | "SUBMITTED";
+                  sortedRows.map(
+                    // fallow-ignore-next-line complexity
+                    (row) => {
+                      const id = row.kind === "daily" ? row.r.id : row.w.id;
+                      const sel = selectedIds.includes(id);
+                      const active =
+                        slideOpen &&
+                        (row.kind === "daily"
+                          ? activeDailyId === row.r.id
+                          : activeWeekly?.id === row.w.id);
+                      const hi = sel || active;
+                      if (row.kind === "daily") {
+                        const r = row.r;
+                        const wx = primaryWeatherLabel(r.weather, parseDetails(r.details));
+                        const st = (r.status ?? "DRAFT") as "DRAFT" | "SUBMITTED";
+                        return (
+                          <tr
+                            key={r.id}
+                            onClick={() => openDaily(r)}
+                            className={`mobile-tappable-row min-h-14 cursor-pointer border-b border-[var(--enterprise-border)] text-sm transition-colors last:border-b-0 active:scale-[0.99] ${
+                              hi
+                                ? "border-l-[3px] border-l-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/8"
+                                : "hover:bg-[var(--enterprise-hover-surface)]"
+                            }`}
+                            style={{ height: 44 }}
+                          >
+                            <td className="px-2" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-[var(--enterprise-border)]"
+                                checked={sel}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedIds((ids) =>
+                                    e.target.checked ? [...ids, id] : ids.filter((x) => x !== id),
+                                  );
+                                }}
+                              />
+                            </td>
+                            <td className="px-3 font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
+                              {numMap.get(r.id) ?? "—"}
+                            </td>
+                            <td className="whitespace-nowrap px-3 text-[var(--enterprise-text)]">
+                              {formatReportTableDate(r.reportDate)}
+                            </td>
+                            <td className="px-3">
+                              <span className="rounded-md border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--enterprise-semantic-info-text)]">
+                                Daily
+                              </span>
+                            </td>
+                            <td className="max-w-[140px] truncate px-3 text-[var(--enterprise-text)]">
+                              {r.authorLabel?.trim() || "—"}
+                            </td>
+                            <td className="px-3">
+                              <div className="flex items-center gap-2 text-[var(--enterprise-text)]">
+                                {wx === "—" ? <span>—</span> : <WeatherIcon text={wx} />}
+                                <span className="truncate">{wx === "—" ? "" : wx}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 tabular-nums text-[var(--enterprise-text)]">
+                              {workerCountForDaily(r)}
+                            </td>
+                            <td className="px-3">
+                              <div className="flex items-center gap-1">
+                                <span
+                                  className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${fieldReportStatusBadgeClass(st)}`}
+                                >
+                                  {FIELD_REPORT_STATUS_LABEL[st] ?? st}
+                                </span>
+                                {!!r.lastEmailedAt || (r.emailSentCount ?? 0) > 0 ? (
+                                  <span className="rounded-md border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--enterprise-semantic-info-text)]">
+                                    Sent
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+                      const w = row.w;
+                      const st = weeklyStatus(w);
                       return (
                         <tr
-                          key={r.id}
-                          onClick={() => openDaily(r)}
-                          className="cursor-pointer border-b text-sm transition-colors last:border-b-0 mobile-tappable-row min-h-14 active:scale-[0.99]"
-                          style={{
-                            borderColor: BORDER,
-                            height: 44,
-                            backgroundColor: hi ? SELECTED_BG : undefined,
-                            borderLeft: hi ? `3px solid ${PRIMARY}` : undefined,
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!hi) e.currentTarget.style.backgroundColor = ROW_HOVER;
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!hi) e.currentTarget.style.backgroundColor = "";
-                          }}
+                          key={w.id}
+                          onClick={() => openWeekly(w)}
+                          className={`mobile-tappable-row min-h-14 cursor-pointer border-b border-[var(--enterprise-border)] text-sm transition-colors last:border-b-0 active:scale-[0.99] ${
+                            hi
+                              ? "border-l-[3px] border-l-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/8"
+                              : "hover:bg-[var(--enterprise-hover-surface)]"
+                          }`}
+                          style={{ height: 44 }}
                         >
                           <td className="px-2" onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
-                              className="h-4 w-4 rounded border-[#cbd5e1]"
+                              className="h-4 w-4 rounded border-[var(--enterprise-border)]"
                               checked={sel}
                               onChange={(e) => {
                                 e.stopPropagation();
@@ -1122,126 +1289,41 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                               }}
                             />
                           </td>
-                          <td
-                            className="px-3 font-mono text-xs font-semibold"
-                            style={{ color: PRIMARY }}
-                          >
-                            {numMap.get(r.id) ?? "—"}
+                          <td className="px-3 font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
+                            {w.weekLabel}
                           </td>
-                          <td className="whitespace-nowrap px-3 text-[#0f172a]">
-                            {formatReportTableDate(r.reportDate)}
+                          <td className="whitespace-nowrap px-3 text-[var(--enterprise-text)]">
+                            {formatWeekEndingLabel(w.weekEndingFriday)}
                           </td>
                           <td className="px-3">
-                            <span className="rounded-md bg-[#eff6ff] px-1.5 py-0.5 text-[11px] font-semibold text-[#1e40af]">
-                              Daily
+                            <span className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--enterprise-text-muted)]">
+                              Weekly
                             </span>
                           </td>
-                          <td className="max-w-[140px] truncate px-3 text-[#0f172a]">
-                            {r.authorLabel?.trim() || "—"}
+                          <td className="px-3 text-[var(--enterprise-text)]">Auto</td>
+                          <td className="px-3 text-[var(--enterprise-text)]">—</td>
+                          <td className="px-3 tabular-nums text-[var(--enterprise-text)]">
+                            {weeklyWorkers(w)}
                           </td>
                           <td className="px-3">
-                            <div className="flex items-center gap-2 text-[#0f172a]">
-                              {wx === "—" ? <span>—</span> : <WeatherIcon text={wx} />}
-                              <span className="truncate">{wx === "—" ? "" : wx}</span>
-                            </div>
-                          </td>
-                          <td className="px-3 tabular-nums text-[#0f172a]">
-                            {workerCountForDaily(r)}
-                          </td>
-                          <td className="px-3">
-                            <div className="flex items-center gap-1">
-                              <span
-                                className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
-                                style={
-                                  st === "SUBMITTED"
-                                    ? { backgroundColor: "#f0fdf4", color: "#166534" }
-                                    : { backgroundColor: "#f8fafc", color: "#475569" }
-                                }
-                              >
-                                {st === "SUBMITTED" ? "Submitted" : "Draft"}
-                              </span>
-                              {!!r.lastEmailedAt || (r.emailSentCount ?? 0) > 0 ? (
-                                <span className="rounded-md bg-[#eff6ff] px-1.5 py-0.5 text-[11px] font-semibold text-[#1d4ed8]">
-                                  Sent
-                                </span>
-                              ) : null}
-                            </div>
+                            <span
+                              className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${fieldReportStatusBadgeClass(st)}`}
+                            >
+                              {FIELD_REPORT_STATUS_LABEL[st] ?? st}
+                            </span>
                           </td>
                         </tr>
                       );
-                    }
-                    const w = row.w;
-                    const st = weeklyStatus(w);
-                    return (
-                      <tr
-                        key={w.id}
-                        onClick={() => openWeekly(w)}
-                        className="cursor-pointer border-b text-sm transition-colors last:border-b-0 mobile-tappable-row min-h-14 active:scale-[0.99]"
-                        style={{
-                          borderColor: BORDER,
-                          height: 44,
-                          backgroundColor: hi ? SELECTED_BG : undefined,
-                          borderLeft: hi ? `3px solid ${PRIMARY}` : undefined,
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!hi) e.currentTarget.style.backgroundColor = ROW_HOVER;
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!hi) e.currentTarget.style.backgroundColor = "";
-                        }}
-                      >
-                        <td className="px-2" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-[#cbd5e1]"
-                            checked={sel}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setSelectedIds((ids) =>
-                                e.target.checked ? [...ids, id] : ids.filter((x) => x !== id),
-                              );
-                            }}
-                          />
-                        </td>
-                        <td
-                          className="px-3 font-mono text-xs font-semibold"
-                          style={{ color: PRIMARY }}
-                        >
-                          {w.weekLabel}
-                        </td>
-                        <td className="whitespace-nowrap px-3 text-[#0f172a]">
-                          {formatWeekEndingLabel(w.weekEndingFriday)}
-                        </td>
-                        <td className="px-3">
-                          <span className="rounded-md bg-[#f5f3ff] px-1.5 py-0.5 text-[11px] font-semibold text-[#6b21a8]">
-                            Weekly
-                          </span>
-                        </td>
-                        <td className="px-3 text-[#0f172a]">Auto</td>
-                        <td className="px-3 text-[#0f172a]">—</td>
-                        <td className="px-3 tabular-nums text-[#0f172a]">{weeklyWorkers(w)}</td>
-                        <td className="px-3">
-                          <span
-                            className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
-                            style={
-                              st === "SUBMITTED"
-                                ? { backgroundColor: "#f0fdf4", color: "#166534" }
-                                : { backgroundColor: "#f8fafc", color: "#475569" }
-                            }
-                          >
-                            {st === "SUBMITTED" ? "Submitted" : "Draft"}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
+                    },
+                  )
                 )}
                 {Array.from({ length: padCount }).map((_, i) => (
                   <tr
                     key={`pad-${i}`}
-                    style={{ height: 44, borderBottom: `0.5px solid ${BORDER}` }}
+                    className="border-b border-[var(--enterprise-border)]/60"
+                    style={{ height: 44 }}
                   >
-                    <td colSpan={8} style={{ backgroundColor: PAGE_BG }} />
+                    <td colSpan={8} className="bg-[var(--enterprise-hover-surface)]/40" />
                   </tr>
                 ))}
               </tbody>
@@ -1254,44 +1336,48 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
       <EnterpriseSlideOver
         open={detailPanelOpen}
         onClose={closeSlide}
+        panelVariant="floating"
+        closeOnBackdrop={false}
         panelMaxWidthClass="max-w-[min(100dvw,560px)] sm:max-w-[560px]"
+        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         bodyClassName={SLIDER_BODY}
-        footerClassName="border-t border-[#e2e8f0] bg-white px-4 py-4 sm:px-5"
+        footerClassName="border-t border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-4 sm:px-5"
         ariaLabelledBy={activeWeekly ? weeklyTitleId : newTitleId}
         header={
           activeWeekly ? (
             <div>
               <p
                 id={weeklyTitleId}
-                className="text-base font-semibold tracking-tight text-[#0f172a]"
+                className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]"
               >
                 {`${activeWeekly.weekLabel} — ${formatWeekEndingLabel(activeWeekly.weekEndingFriday)}`}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-[#0f172a]">
+              <p className="mt-1 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
                 Auto-generated from daily reports in this work week.
               </p>
             </div>
           ) : (
             <div>
-              <p id={newTitleId} className="text-base font-semibold tracking-tight text-[#0f172a]">
+              <p
+                id={newTitleId}
+                className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]"
+              >
                 Field Report #{activeDaily ? (numMap.get(activeDaily.id) ?? "—") : ""}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-[#0f172a]">
+              <p className="mt-1 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
                 Daily · {activeDaily ? formatReportTableDate(activeDaily.reportDate) : ""}
               </p>
               {activeDaily ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                      (activeDaily.status ?? "DRAFT") === "SUBMITTED"
-                        ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/80"
-                        : "bg-slate-100 text-slate-700 ring-1 ring-slate-200/80"
-                    }`}
+                    className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-[11px] font-semibold ${fieldReportStatusBadgeClass(activeDaily.status)}`}
                   >
-                    {(activeDaily.status ?? "DRAFT") === "SUBMITTED" ? "Submitted" : "Draft"}
+                    {FIELD_REPORT_STATUS_LABEL[activeDaily.status ?? "DRAFT"] ??
+                      activeDaily.status ??
+                      "Draft"}
                   </span>
                   {!!activeDaily.lastEmailedAt || (activeDaily.emailSentCount ?? 0) > 0 ? (
-                    <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200/80">
+                    <span className="inline-flex items-center rounded-md border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--enterprise-semantic-info-text)]">
                       Sent to client
                     </span>
                   ) : null}
@@ -1303,17 +1389,16 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
         footer={
           activeWeekly ? (
             <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-              <button
+              <EnterpriseButton
                 type="button"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#e2e8f0] px-3 text-sm font-semibold text-[#0f172a] hover:bg-[#f8fafc]"
+                variant="secondary"
                 onClick={() => toast.message("Weekly PDF export is coming soon.")}
               >
                 <Download className="h-4 w-4" strokeWidth={1.75} />
                 Download Weekly PDF
-              </button>
-              <button
+              </EnterpriseButton>
+              <EnterpriseButton
                 type="button"
-                className="inline-flex h-10 items-center justify-center rounded-lg bg-[#2563eb] px-4 text-sm font-semibold text-white disabled:opacity-60"
                 disabled={!sendTarget || sendTarget.alreadySent}
                 onClick={() => {
                   if (!sendTarget || sendTarget.alreadySent) return;
@@ -1321,15 +1406,15 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 }}
               >
                 Send to Client
-              </button>
+              </EnterpriseButton>
             </div>
           ) : (
             <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-2">
                 {!readOnly && activeDailyId ? (
-                  <button
+                  <EnterpriseButton
                     type="button"
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-700 hover:bg-red-50"
+                    variant="danger"
                     onClick={() => {
                       if (!window.confirm("Delete this report?")) return;
                       deleteMut.mutate(activeDailyId);
@@ -1337,13 +1422,13 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                   >
                     <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                     Delete
-                  </button>
+                  </EnterpriseButton>
                 ) : null}
               </div>
               <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:gap-2">
-                <button
+                <EnterpriseButton
                   type="button"
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#e2e8f0] px-3 text-sm font-semibold text-[#0f172a] hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                  variant="secondary"
                   disabled={!sendTarget || sendTarget.alreadySent}
                   onClick={() => {
                     if (!sendTarget || sendTarget.alreadySent) return;
@@ -1352,26 +1437,26 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 >
                   <Send className="h-4 w-4" strokeWidth={1.75} />
                   Send to Client
-                </button>
+                </EnterpriseButton>
                 {readOnly ? (
-                  <button
+                  <EnterpriseButton
                     type="button"
-                    className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-[#e2e8f0] px-4 text-sm font-semibold text-[#0f172a] hover:bg-[#f8fafc] disabled:opacity-50 sm:w-auto"
-                    disabled={reopenAsDraftMut.isPending}
+                    variant="secondary"
+                    loading={reopenAsDraftMut.isPending}
                     onClick={() => void reopenAsDraftMut.mutate()}
                   >
                     {reopenAsDraftMut.isPending ? "Reopening…" : "Reopen as Draft"}
-                  </button>
+                  </EnterpriseButton>
                 ) : null}
                 {!readOnly ? (
-                  <button
+                  <EnterpriseButton
                     type="button"
-                    className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-[#2563eb] px-4 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto"
                     disabled={saving || !dirty}
+                    loading={saving}
                     onClick={() => void saveDraft(true)}
                   >
                     Save
-                  </button>
+                  </EnterpriseButton>
                 ) : null}
               </div>
             </div>
@@ -1381,20 +1466,20 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
         {activeWeekly ? (
           <WeeklySummaryBody w={activeWeekly} />
         ) : activeDaily ? (
-          <div className="space-y-5 text-[15px] leading-relaxed text-[#0f172a]">
+          <div className="space-y-5 text-[15px] leading-relaxed text-[var(--enterprise-text)]">
             {readOnly ? (
-              <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-white px-4 py-3.5 text-sm text-amber-950 shadow-sm">
+              <div className="rounded-2xl border border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] px-4 py-3.5 text-sm text-[var(--enterprise-semantic-warning-text)] shadow-[var(--enterprise-shadow-xs)]">
                 <p className="font-semibold">Submitted report</p>
-                <p className="mt-1 text-xs leading-relaxed text-amber-950/85">
+                <p className="mt-1 text-xs leading-relaxed opacity-90">
                   Fields are read-only. Use <span className="font-semibold">Reopen as Draft</span>{" "}
                   in the bar below to unlock editing.
                 </p>
               </div>
             ) : null}
             {!!activeDaily.lastEmailedAt || (activeDaily.emailSentCount ?? 0) > 0 ? (
-              <div className="rounded-2xl border border-sky-200/90 bg-gradient-to-br from-sky-50 via-white to-white px-4 py-3.5 text-sm text-sky-950 shadow-sm">
+              <div className="rounded-2xl border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-4 py-3.5 text-sm text-[var(--enterprise-semantic-info-text)] shadow-[var(--enterprise-shadow-xs)]">
                 <p className="font-semibold">Already emailed</p>
-                <p className="mt-1 text-xs leading-relaxed text-sky-950/85">
+                <p className="mt-1 text-xs leading-relaxed opacity-90">
                   Sending again is disabled to avoid duplicates. You can still update the report
                   content.
                 </p>
@@ -1407,33 +1492,33 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               icon={<ClipboardList className="h-4 w-4" strokeWidth={1.75} />}
             >
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-normal text-[#0f172a]">Report type</label>
-                  <select disabled={readOnly} className={`${SLIDER_INPUT} w-full`}>
+                <div>
+                  <label className={MOBILE_FIELD_LABEL}>Report type</label>
+                  <select disabled={readOnly} className={MOBILE_FIELD_SELECT}>
                     <option>Daily</option>
                   </select>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-normal text-[#0f172a]">Written by</label>
+                <div>
+                  <label className={MOBILE_FIELD_LABEL}>Written by</label>
                   <input
                     disabled={readOnly}
                     value={draftMeta.authorLabel}
                     onChange={(e) => setDraftMeta((m) => ({ ...m, authorLabel: e.target.value }))}
-                    className={`${SLIDER_INPUT} w-full`}
+                    className={MOBILE_FIELD_INPUT}
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-normal text-[#0f172a]">Report date</label>
+                <div>
+                  <label className={MOBILE_FIELD_LABEL}>Report date</label>
                   <input
                     type="date"
                     disabled={readOnly}
                     value={draftMeta.reportDate}
                     onChange={(e) => setDraftMeta((m) => ({ ...m, reportDate: e.target.value }))}
-                    className={`${SLIDER_INPUT} w-full`}
+                    className={MOBILE_FIELD_INPUT}
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-normal text-[#0f172a]">Status</label>
+                <div>
+                  <label className={MOBILE_FIELD_LABEL}>Status</label>
                   <select
                     disabled={readOnly}
                     value={draftMeta.status}
@@ -1443,10 +1528,10 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                         status: e.target.value as "DRAFT" | "SUBMITTED",
                       }))
                     }
-                    className={`${SLIDER_INPUT} w-full`}
+                    className={MOBILE_FIELD_SELECT}
                   >
-                    <option value="DRAFT">Draft</option>
-                    <option value="SUBMITTED">Submitted</option>
+                    <option value="DRAFT">{FIELD_REPORT_STATUS_LABEL.DRAFT}</option>
+                    <option value="SUBMITTED">{FIELD_REPORT_STATUS_LABEL.SUBMITTED}</option>
                   </select>
                 </div>
               </div>
@@ -1458,8 +1543,8 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               icon={<CloudSun className="h-4 w-4 text-sky-600" strokeWidth={1.75} />}
             >
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2 rounded-xl bg-[#f8fafc] p-3 ring-1 ring-inset ring-[#eef2f7]">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">
+                <div className="space-y-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3">
+                  <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
                     Morning
                   </p>
                   <div className="flex min-w-0 gap-2">
@@ -1505,8 +1590,8 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                     />
                   </div>
                 </div>
-                <div className="space-y-2 rounded-xl bg-[#f8fafc] p-3 ring-1 ring-inset ring-[#eef2f7]">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">
+                <div className="space-y-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3">
+                  <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
                     Afternoon
                   </p>
                   <div className="flex min-w-0 gap-2">
@@ -1553,11 +1638,11 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                   </div>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-normal text-[#0f172a]">Work conditions</label>
+              <div>
+                <label className={MOBILE_FIELD_LABEL}>Work conditions</label>
                 <select
                   disabled={readOnly}
-                  className={`${SLIDER_INPUT} w-full`}
+                  className={MOBILE_FIELD_SELECT}
                   value={draft.weather?.workConditions ?? ""}
                   onChange={(e) =>
                     setDraft((d) => ({
@@ -1631,7 +1716,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 rows={5}
                 value={draftMeta.notes}
                 onChange={(e) => setDraftMeta((m) => ({ ...m, notes: e.target.value }))}
-                className={`${SLIDER_INPUT} min-h-32 w-full resize-y px-3 py-3 leading-relaxed`}
+                className={MOBILE_FIELD_TEXTAREA}
                 placeholder="Notes for the client team…"
               />
             </SliderSectionCard>
@@ -1639,99 +1724,18 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
         ) : null}
       </EnterpriseSlideOver>
 
-      {/* New report modal — portaled above EnterpriseSlideOver (body-level z-100/101) */}
-      {newModalOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div className="mobile-sheet-host fixed inset-0 z-[200] flex items-center justify-center p-4 max-lg:items-end max-lg:p-0">
-              <button
-                type="button"
-                className="absolute inset-0 bg-[#0f172a]/50 backdrop-blur-[1px]"
-                aria-label="Close"
-                onClick={() => setNewModalOpen(false)}
-              />
-              <div
-                className="relative z-10 w-full max-w-md rounded-xl border bg-white p-5 shadow-xl"
-                style={{ borderColor: BORDER }}
-                role="dialog"
-                aria-labelledby="new-fr-title"
-              >
-                <div className="mb-4 flex items-start justify-between gap-2">
-                  <h2 id="new-fr-title" className="text-lg font-normal text-[#0f172a]">
-                    New Field Report
-                  </h2>
-                  <button
-                    type="button"
-                    className="rounded-lg p-1 text-[#0f172a] hover:bg-[#f1f5f9]"
-                    onClick={() => setNewModalOpen(false)}
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="space-y-4 text-sm">
-                  <div>
-                    <p className="mb-2 text-xs font-normal text-[#0f172a]">Report type</p>
-                    <div className="flex flex-col gap-2">
-                      <label className="flex items-center gap-2">
-                        <input type="radio" name="rt" defaultChecked readOnly />
-                        Daily
-                      </label>
-                      <label className="flex cursor-not-allowed items-center gap-2 text-[#0f172a]">
-                        <input type="radio" name="rt" disabled className="opacity-50" />
-                        Weekly (auto-generated from dailies)
-                      </label>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-[#0f172a]">Date</label>
-                      <input
-                        type="date"
-                        value={newReportDate}
-                        onChange={(e) => setNewReportDate(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-[#e2e8f0] px-2 py-2"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-[#0f172a]">Written by</label>
-                      <select
-                        value={newAuthor}
-                        onChange={(e) => setNewAuthor(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-[#e2e8f0] px-2 py-2"
-                      >
-                        <option value="">—</option>
-                        {members.map((m) => (
-                          <option key={m.userId} value={m.name}>
-                            {m.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  {newMsg ? <p className="text-sm text-red-600">{newMsg}</p> : null}
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-sm font-normal text-[#0f172a]"
-                      onClick={() => setNewModalOpen(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-lg px-4 py-2 text-sm font-normal text-white disabled:opacity-60"
-                      style={{ backgroundColor: PRIMARY }}
-                      disabled={createMut.isPending}
-                      onClick={() => createMut.mutate()}
-                    >
-                      {createMut.isPending ? "Creating…" : "Create Report"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+      <FieldReportCreateSlideOver
+        open={newModalOpen}
+        onClose={() => {
+          setNewModalOpen(false);
+          setCreateDefaultDate(undefined);
+        }}
+        projectId={projectId}
+        members={memberNames}
+        defaultAuthor={defaultAuthor}
+        defaultDate={createDefaultDate}
+        onCreated={(row) => openDaily(normalizeFieldReport(row))}
+      />
 
       {/* Send modal — portaled above slide-over shell */}
       {sendModalOpen && typeof document !== "undefined"
@@ -1739,22 +1743,23 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
             <div className="mobile-sheet-host fixed inset-0 z-[201] flex items-center justify-center p-4 max-lg:items-end max-lg:p-0">
               <button
                 type="button"
-                className="absolute inset-0 bg-[#0f172a]/50 backdrop-blur-[1px]"
+                className="absolute inset-0 bg-[var(--enterprise-text)]/40 backdrop-blur-[1px]"
                 aria-label="Close"
                 onClick={() => setSendModalOpen(false)}
               />
               <div
-                className="relative z-10 w-full max-w-md rounded-xl border bg-white p-5 shadow-xl"
-                style={{ borderColor: BORDER }}
+                className="relative z-10 w-full max-w-md rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 shadow-[var(--enterprise-shadow-floating)]"
+                role="dialog"
+                aria-label="Send report"
               >
                 <div className="mb-4 flex items-start justify-between">
-                  <h2 className="text-lg font-normal text-[#0f172a]">
+                  <h2 className="text-lg font-semibold text-[var(--enterprise-text)]">
                     Send Report
                     {sendTarget?.titleSuffix ?? ""}
                   </h2>
                   <button
                     type="button"
-                    className="rounded-lg p-1 text-[#0f172a] hover:bg-[#f1f5f9]"
+                    className="rounded-lg p-1 text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
                     onClick={() => setSendModalOpen(false)}
                   >
                     ×
@@ -1762,29 +1767,31 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 </div>
                 <div className="space-y-3 text-sm">
                   <div>
-                    <label className="text-xs text-[#0f172a]">Recipients</label>
+                    <label className={MOBILE_FIELD_LABEL}>Recipients</label>
                     <input
                       value={sendRecipients}
                       onChange={(e) => setSendRecipients(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-[#e2e8f0] px-2 py-2"
+                      className={MOBILE_FIELD_INPUT}
                       placeholder="client@example.com, pm@example.com"
                     />
-                    <p className="mt-1 text-xs text-[#0f172a]">
+                    <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
                       Separate multiple addresses with commas, spaces, or semicolons.
                     </p>
                   </div>
                   <div>
-                    <label className="text-xs text-[#0f172a]">Message (optional)</label>
+                    <label className={MOBILE_FIELD_LABEL}>Message (optional)</label>
                     <textarea
                       value={sendMessage}
                       onChange={(e) => setSendMessage(e.target.value)}
                       rows={3}
-                      className="mt-1 w-full rounded-lg border border-[#e2e8f0] px-2 py-2"
+                      className={MOBILE_FIELD_TEXTAREA}
                       placeholder="Daily report for Tower Block A — …"
                     />
                   </div>
                   <div>
-                    <p className="mb-1 text-xs font-normal text-[#0f172a]">Include</p>
+                    <p className="mb-1 text-xs font-medium text-[var(--enterprise-text-muted)]">
+                      Include
+                    </p>
                     {(
                       [
                         ["weather", "Weather summary"],
@@ -1795,7 +1802,10 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                         ["materials", "Materials delivered"],
                       ] as const
                     ).map(([k, label]) => (
-                      <label key={k} className="flex items-center gap-2 py-0.5">
+                      <label
+                        key={k}
+                        className="flex items-center gap-2 py-0.5 text-[var(--enterprise-text)]"
+                      >
                         <input
                           type="checkbox"
                           checked={sendOpts[k as keyof typeof sendOpts]}
@@ -1807,27 +1817,26 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                       </label>
                     ))}
                   </div>
-                  <p className="text-xs leading-relaxed text-[#0f172a]">
+                  <p className="text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
                     The email uses the last saved version of each report on the server (unsaved
                     edits in the panel are not included).
                   </p>
                   {sendTarget?.alreadySent ? (
-                    <p className="text-xs font-normal text-[#b45309]">
+                    <p className="text-xs font-medium text-[var(--enterprise-semantic-warning-text)]">
                       This report was already sent to client and cannot be sent again.
                     </p>
                   ) : null}
                   <div className="flex justify-end gap-2 pt-2">
-                    <button
+                    <EnterpriseButton
                       type="button"
-                      className="rounded-lg border border-[#e2e8f0] px-4 py-2 text-sm font-normal"
+                      variant="secondary"
                       onClick={() => setSendModalOpen(false)}
                     >
                       Cancel
-                    </button>
-                    <button
+                    </EnterpriseButton>
+                    <EnterpriseButton
                       type="button"
-                      className="inline-flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-normal text-white disabled:opacity-60"
-                      style={{ backgroundColor: PRIMARY }}
+                      loading={sendEmailMut.isPending}
                       disabled={
                         sendEmailMut.isPending ||
                         !sendRecipients.trim() ||
@@ -1838,7 +1847,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                       onClick={() => void sendEmailMut.mutate()}
                     >
                       {sendEmailMut.isPending ? "Sending…" : "Send Report →"}
-                    </button>
+                    </EnterpriseButton>
                   </div>
                 </div>
               </div>
@@ -1862,35 +1871,41 @@ function WeeklySummaryBody({ w }: { w: WeeklyVirtual }) {
   const photos = w.days.reduce((a, d) => a + (d.photoCount ?? 0), 0);
   const allSubmitted = weeklyStatus(w) === "SUBMITTED";
   return (
-    <div className="space-y-5 text-[15px] leading-relaxed text-[#0f172a]">
+    <div className="space-y-5 text-[15px] leading-relaxed text-[var(--enterprise-text)]">
       <SliderSectionCard
         kicker="Roll-up"
         title="Week at a glance"
-        icon={<ScrollText className="h-4 w-4 text-[#475569]" strokeWidth={1.75} />}
+        icon={
+          <ScrollText className="h-4 w-4 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
+        }
       >
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl bg-[#f8fafc] px-3.5 py-3 ring-1 ring-inset ring-[#eef2f7]">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">
+          <div className="rounded-xl bg-[var(--enterprise-hover-surface)] px-3.5 py-3 ring-1 ring-inset ring-[var(--enterprise-border)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Working days
             </p>
-            <p className="mt-1 text-xl font-semibold tabular-nums text-[#0f172a]">{workingDays}</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-[var(--enterprise-text)]">
+              {workingDays}
+            </p>
           </div>
-          <div className="rounded-xl bg-[#f8fafc] px-3.5 py-3 ring-1 ring-inset ring-[#eef2f7]">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">
+          <div className="rounded-xl bg-[var(--enterprise-hover-surface)] px-3.5 py-3 ring-1 ring-inset ring-[var(--enterprise-border)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Workers (total)
             </p>
-            <p className="mt-1 text-xl font-semibold tabular-nums text-[#0f172a]">{totalWorkers}</p>
-            <p className="mt-0.5 text-xs text-[#64748b]">Avg {avg} / day</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-[var(--enterprise-text)]">
+              {totalWorkers}
+            </p>
+            <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">Avg {avg} / day</p>
           </div>
-          <div className="rounded-xl bg-[#f8fafc] px-3.5 py-3 ring-1 ring-inset ring-[#eef2f7]">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">
+          <div className="rounded-xl bg-[var(--enterprise-hover-surface)] px-3.5 py-3 ring-1 ring-inset ring-[var(--enterprise-border)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Dailies filed
             </p>
-            <p className="mt-1 text-xl font-semibold tabular-nums text-[#0f172a]">
+            <p className="mt-1 text-xl font-semibold tabular-nums text-[var(--enterprise-text)]">
               {workingDays}
-              <span className="text-sm font-medium text-[#94a3b8]"> / 5</span>
+              <span className="text-sm font-medium text-[var(--enterprise-text-muted)]"> / 5</span>
             </p>
-            <p className="mt-0.5 text-xs text-[#64748b]">
+            <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
               {allSubmitted ? "All submitted" : "Includes drafts"}
             </p>
           </div>
@@ -1900,7 +1915,12 @@ function WeeklySummaryBody({ w }: { w: WeeklyVirtual }) {
       <SliderSectionCard
         kicker="By day"
         title="Daily breakdown"
-        icon={<CalendarDays className="h-4 w-4 text-[#475569]" strokeWidth={1.75} />}
+        icon={
+          <CalendarDays
+            className="h-4 w-4 text-[var(--enterprise-text-muted)]"
+            strokeWidth={1.75}
+          />
+        }
       >
         <ul className="space-y-2.5">
           {w.days.map((d) => {
@@ -1909,16 +1929,18 @@ function WeeklySummaryBody({ w }: { w: WeeklyVirtual }) {
             return (
               <li
                 key={d.id}
-                className="flex flex-col gap-2 rounded-xl border border-[#e8edf3] bg-[#fafbfc] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#0f172a]">
+                  <p className="text-sm font-semibold text-[var(--enterprise-text)]">
                     {formatReportTableDate(d.reportDate)}
                   </p>
-                  <p className="mt-0.5 truncate text-xs text-[#64748b]">{wx === "—" ? "—" : wx}</p>
+                  <p className="mt-0.5 truncate text-xs text-[var(--enterprise-text-muted)]">
+                    {wx === "—" ? "—" : wx}
+                  </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <span className="inline-flex items-center rounded-full bg-white px-2.5 py-0.5 text-[11px] font-semibold text-[#475569] ring-1 ring-[#e2e8f0]">
+                  <span className="inline-flex items-center rounded-full bg-white px-2.5 py-0.5 text-[11px] font-semibold text-[var(--enterprise-text-muted)] ring-1 ring-[var(--enterprise-border)]">
                     {workerCountForDaily(d)} workers
                   </span>
                   {delayHint ? (
@@ -1941,18 +1963,28 @@ function WeeklySummaryBody({ w }: { w: WeeklyVirtual }) {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className={`${SLIDER_CARD} py-3.5 text-center text-sm`}>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">Issues</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums text-[#0f172a]">{issues}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+            Issues
+          </p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-[var(--enterprise-text)]">
+            {issues}
+          </p>
         </div>
         <div className={`${SLIDER_CARD} py-3.5 text-center text-sm`}>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
             Deliveries
           </p>
-          <p className="mt-1 text-lg font-semibold tabular-nums text-[#0f172a]">{deliveries}</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-[var(--enterprise-text)]">
+            {deliveries}
+          </p>
         </div>
         <div className={`${SLIDER_CARD} py-3.5 text-center text-sm`}>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748b]">Photos</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums text-[#0f172a]">{photos}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+            Photos
+          </p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-[var(--enterprise-text)]">
+            {photos}
+          </p>
         </div>
       </div>
     </div>
@@ -1974,9 +2006,11 @@ function CrewSection({
     <SliderSectionCard
       kicker="Labour"
       title="Workers on site"
-      icon={<UsersRound className="h-4 w-4 text-[#475569]" strokeWidth={1.75} />}
+      icon={
+        <UsersRound className="h-4 w-4 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
+      }
     >
-      <div className="grid grid-cols-[1fr_auto_auto] gap-x-2 gap-y-1 text-[11px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+      <div className="grid grid-cols-[1fr_auto_auto] gap-x-2 gap-y-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
         <span>Crew</span>
         <span className="text-center">Count</span>
         <span />
@@ -2014,7 +2048,7 @@ function CrewSection({
           {!readOnly ? (
             <button
               type="button"
-              className="rounded-xl p-2 text-[#94a3b8] transition hover:bg-[#f1f5f9] hover:text-red-600"
+              className="rounded-xl p-2 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-red-600"
               aria-label="Remove crew"
               onClick={() =>
                 setDraft((d) => ({
@@ -2030,14 +2064,14 @@ function CrewSection({
           )}
         </div>
       ))}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#f1f5f9] pt-3">
-        <p className="text-sm font-semibold text-[#475569]">
-          Total <span className="tabular-nums text-[#0f172a]">{total}</span> workers
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--enterprise-border)]/60 pt-3">
+        <p className="text-sm font-semibold text-[var(--enterprise-text-muted)]">
+          Total <span className="tabular-nums text-[var(--enterprise-text)]">{total}</span> workers
         </p>
         {!readOnly ? (
           <button
             type="button"
-            className="text-sm font-semibold text-[#2563eb] hover:underline"
+            className="text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
             onClick={() =>
               setDraft((d) => ({
                 ...d,
@@ -2079,7 +2113,7 @@ function LineSection({
         {items.map((it) => (
           <li
             key={it.id}
-            className="flex items-start gap-2 rounded-xl bg-[#fafbfc] p-2 ring-1 ring-inset ring-[#eef2f7]"
+            className="flex items-start gap-2 rounded-xl bg-[var(--enterprise-hover-surface)] p-2 ring-1 ring-inset ring-[var(--enterprise-border)]"
           >
             <input
               disabled={readOnly}
@@ -2092,7 +2126,7 @@ function LineSection({
                   ),
                 }))
               }
-              className={`${SLIDER_INPUT} min-w-0 flex-1 border-[#e8edf3] bg-white`}
+              className={`${SLIDER_INPUT} min-w-0 flex-1 border-[var(--enterprise-border)] bg-white`}
             />
             {showPercent ? (
               <input
@@ -2101,7 +2135,7 @@ function LineSection({
                 min={0}
                 max={100}
                 placeholder="%"
-                className={`${SLIDER_INPUT} w-[4.25rem] shrink-0 border-[#e8edf3] bg-white px-2 text-center tabular-nums`}
+                className={`${SLIDER_INPUT} w-[4.25rem] shrink-0 border-[var(--enterprise-border)] bg-white px-2 text-center tabular-nums`}
                 value={it.percent ?? ""}
                 onChange={(e) =>
                   setDraft((d) => ({
@@ -2121,7 +2155,7 @@ function LineSection({
             {!readOnly ? (
               <button
                 type="button"
-                className="rounded-xl p-2 text-[#94a3b8] transition hover:bg-white hover:text-red-600"
+                className="rounded-xl p-2 text-[var(--enterprise-text-muted)] transition hover:bg-white hover:text-red-600"
                 aria-label="Remove"
                 onClick={() =>
                   setDraft((d) => ({
@@ -2139,7 +2173,7 @@ function LineSection({
       {!readOnly ? (
         <button
           type="button"
-          className="text-sm font-semibold text-[#2563eb] hover:underline"
+          className="text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
           onClick={() =>
             setDraft((d) => ({
               ...d,
@@ -2199,7 +2233,7 @@ function DelaySection({
               {!readOnly ? (
                 <button
                   type="button"
-                  className="rounded-xl p-2 text-[#94a3b8] transition hover:bg-amber-50/80 hover:text-red-600"
+                  className="rounded-xl p-2 text-[var(--enterprise-text-muted)] transition hover:bg-amber-50/80 hover:text-red-600"
                   onClick={() =>
                     setDraft((d) => ({
                       ...d,
@@ -2229,7 +2263,7 @@ function DelaySection({
               {it.issueId ? (
                 <Link
                   href={`/projects/${projectId}/issues`}
-                  className="inline-flex shrink-0 items-center justify-center rounded-lg bg-[#eff6ff] px-3 py-2 text-xs font-semibold text-[#1e40af] ring-1 ring-sky-200/80 hover:bg-sky-50 hover:underline"
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-semantic-info-text)] hover:underline"
                 >
                   Issue {it.issueId.slice(0, 6)}…
                 </Link>
@@ -2239,10 +2273,10 @@ function DelaySection({
         ))}
       </ul>
       {!readOnly ? (
-        <div className="flex flex-col gap-2 border-t border-[#f1f5f9] pt-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 border-t border-[var(--enterprise-border)]/60 pt-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <button
             type="button"
-            className="text-left text-sm font-semibold text-[#2563eb] hover:underline"
+            className="text-left text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
             onClick={() =>
               setDraft((d) => ({
                 ...d,
@@ -2254,7 +2288,7 @@ function DelaySection({
           </button>
           <button
             type="button"
-            className="text-left text-xs font-semibold text-[#64748b] underline decoration-[#cbd5e1] underline-offset-2 hover:text-[#475569]"
+            className="text-left text-xs font-semibold text-[var(--enterprise-text-muted)] underline decoration-[var(--enterprise-border)] underline-offset-2 hover:text-[var(--enterprise-text)]"
             onClick={() => toast.message("Open Issues to copy an id, then paste above.")}
           >
             How to link a PlanSync issue
@@ -2311,7 +2345,9 @@ function PhotoSection({
     <SliderSectionCard
       kicker="Evidence"
       title="Photos"
-      icon={<ImageIcon className="h-4 w-4 text-[#475569]" strokeWidth={1.75} />}
+      icon={
+        <ImageIcon className="h-4 w-4 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
+      }
     >
       <input
         ref={cameraRef}
@@ -2347,13 +2383,13 @@ function PhotoSection({
         {photos.map((p) => (
           <div
             key={p.id}
-            className="group relative h-28 w-28 shrink-0 overflow-hidden rounded-xl border border-[#e8edf3] bg-[#f8fafc] shadow-sm ring-1 ring-inset ring-white/60"
+            className="group relative h-28 w-28 shrink-0 overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] shadow-sm ring-1 ring-inset ring-white/60"
           >
             {p.previewBase64 ? (
               /* eslint-disable-next-line @next/next/no-img-element -- data URL from report */
               <img src={p.previewBase64} alt="" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-[#94a3b8]">
+              <div className="flex h-full w-full items-center justify-center text-[var(--enterprise-text-muted)]">
                 <ImageIcon className="h-8 w-8 opacity-50" strokeWidth={1.75} />
               </div>
             )}
@@ -2376,11 +2412,11 @@ function PhotoSection({
         ))}
       </div>
       {!readOnly ? (
-        <div className="flex flex-wrap items-center gap-2 border-t border-[#f1f5f9] pt-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--enterprise-border)]/60 pt-3">
           <button
             type="button"
             disabled={busy || photos.length >= MAX_FIELD_REPORT_PHOTOS}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#e2e8f0] bg-white px-4 py-2.5 text-sm font-semibold text-[#0f172a] shadow-sm transition hover:border-[#cbd5e1] hover:bg-[#fafbfc] disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
             onClick={() => cameraRef.current?.click()}
           >
             <Camera className="h-4 w-4" strokeWidth={1.75} />
@@ -2389,7 +2425,7 @@ function PhotoSection({
           <button
             type="button"
             disabled={busy || photos.length >= MAX_FIELD_REPORT_PHOTOS}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#e2e8f0] bg-white px-4 py-2.5 text-sm font-semibold text-[#0f172a] shadow-sm transition hover:border-[#cbd5e1] hover:bg-[#fafbfc] disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
             onClick={() => galleryRef.current?.click()}
           >
             <ImageIcon className="h-4 w-4" strokeWidth={1.75} />
@@ -2398,7 +2434,7 @@ function PhotoSection({
           <button
             type="button"
             disabled={busy || photos.length >= MAX_FIELD_REPORT_PHOTOS}
-            className="min-h-11 text-sm font-semibold text-[#2563eb] hover:underline disabled:opacity-50"
+            className="min-h-11 text-sm font-semibold text-[var(--enterprise-primary)] hover:underline disabled:opacity-50"
             onClick={() =>
               setDraft((d) => ({
                 ...d,

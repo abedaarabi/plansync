@@ -18,6 +18,8 @@ export type ProposalListRow = {
   clientName: string;
   clientEmail: string;
   sentAt: string | null;
+  /** ISO expiry; used for EXPIRING overview filter. */
+  validUntil?: string;
   total: string;
   currency: string;
   createdAt: string;

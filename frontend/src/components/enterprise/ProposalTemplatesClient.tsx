@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { ProposalCoverEditor } from "@/components/enterprise/proposals/editor/ProposalCoverEditor";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
@@ -56,6 +57,7 @@ export function ProposalTemplatesClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
+  const [bodyRevision, setBodyRevision] = useState(0);
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -114,11 +116,12 @@ export function ProposalTemplatesClient({
             <div className="flex gap-2">
               <button
                 type="button"
-                className="text-sm text-[#2563EB]"
+                className="text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
                 onClick={() => {
                   setEditingId(t.id);
                   setName(t.name);
                   setBody(t.body);
+                  setBodyRevision((n) => n + 1);
                 }}
               >
                 Edit
@@ -126,7 +129,7 @@ export function ProposalTemplatesClient({
               {isAdmin && (
                 <button
                   type="button"
-                  className="text-sm text-red-600"
+                  className="text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] hover:underline"
                   onClick={() => {
                     if (confirm("Delete this template?")) delMut.mutate(t.id);
                   }}
@@ -152,49 +155,39 @@ export function ProposalTemplatesClient({
           />
         </label>
         <div className="mt-4">
-          <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-sm text-slate-600">Body</span>
-            <div className="flex flex-wrap gap-1.5">
-              {VARS.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[10px] text-slate-600 hover:bg-slate-100"
-                  onClick={() => setBody((b) => b + v)}
-                  title={`Insert ${v}`}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-          </div>
+          <span className="mb-1.5 block text-sm text-[var(--enterprise-text-muted)]">Body</span>
           <ProposalCoverEditor
             content={body}
+            contentRevision={bodyRevision}
             onChange={(html) => setBody(html)}
-            placeholder="Write your template here. Use variable chips above to insert dynamic values."
+            placeholder="Write your template… Type # to insert a merge field."
+            variables={VARS.map((v) => {
+              const key = v.replace(/^\{\{|\}\}$/g, "");
+              return { key, label: key, value: "" };
+            })}
           />
         </div>
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
+        <div className="mt-4 flex flex-wrap gap-2">
+          <EnterpriseButton
+            size="sm"
             disabled={saveMut.isPending || !name.trim() || !body.trim()}
+            loading={saveMut.isPending}
             onClick={() => saveMut.mutate()}
-            className="rounded-xl bg-[#2563EB] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
             Save template
-          </button>
+          </EnterpriseButton>
           {editingId && (
-            <button
-              type="button"
+            <EnterpriseButton
+              size="sm"
+              variant="ghost"
               onClick={() => {
                 setEditingId(null);
                 setName("");
                 setBody("");
               }}
-              className="text-sm text-slate-600"
             >
               Cancel
-            </button>
+            </EnterpriseButton>
           )}
         </div>
       </div>

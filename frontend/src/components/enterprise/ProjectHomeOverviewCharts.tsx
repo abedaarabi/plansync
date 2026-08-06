@@ -7,17 +7,13 @@ import {
   ISSUE_STATUS_LABEL,
   ISSUE_STATUS_ORDER,
   issueStatusDotSolidFill,
+  PUNCH_STATUS_LABEL,
+  PUNCH_STATUS_ORDER,
+  RFI_STATUS_LABEL,
 } from "@/lib/issueStatusStyle";
 
 type BarSegment = { key: string; label: string; count: number; fill: string };
 
-const PUNCH_ORDER = ["OPEN", "IN_PROGRESS", "READY_FOR_GC", "CLOSED"] as const;
-const PUNCH_LABEL: Record<string, string> = {
-  OPEN: "Open",
-  IN_PROGRESS: "In progress",
-  READY_FOR_GC: "Ready for GC",
-  CLOSED: "Closed",
-};
 const PUNCH_FILL: Record<string, string> = {
   OPEN: "#dc2626",
   IN_PROGRESS: "#d97706",
@@ -26,12 +22,6 @@ const PUNCH_FILL: Record<string, string> = {
 };
 
 const RFI_ORDER = ["OPEN", "IN_REVIEW", "ANSWERED", "CLOSED"] as const;
-const RFI_LABEL: Record<string, string> = {
-  OPEN: "Open",
-  IN_REVIEW: "In review",
-  ANSWERED: "Answered",
-  CLOSED: "Closed",
-};
 const RFI_FILL: Record<string, string> = {
   OPEN: "#2563eb",
   IN_REVIEW: "#d97706",
@@ -77,17 +67,17 @@ function punchSegments(rows: PunchRow[]): BarSegment[] {
     map.set(k, (map.get(k) ?? 0) + 1);
   }
   const out: BarSegment[] = [];
-  for (const key of PUNCH_ORDER) {
+  for (const key of PUNCH_STATUS_ORDER) {
     const count = map.get(key) ?? 0;
     if (count === 0) continue;
     out.push({
       key,
-      label: PUNCH_LABEL[key] ?? key,
+      label: PUNCH_STATUS_LABEL[key] ?? key,
       count,
       fill: PUNCH_FILL[key] ?? "#94a3b8",
     });
   }
-  const punchSet = new Set<string>(PUNCH_ORDER);
+  const punchSet = new Set<string>(PUNCH_STATUS_ORDER);
   let other = 0;
   for (const [k, n] of map) {
     if (!punchSet.has(k)) other += n;
@@ -111,7 +101,7 @@ function rfiSegments(rows: RfiRow[]): BarSegment[] {
     if (count === 0) continue;
     out.push({
       key,
-      label: RFI_LABEL[key] ?? key,
+      label: RFI_STATUS_LABEL[key] ?? key,
       count,
       fill: RFI_FILL[key] ?? "#94a3b8",
     });

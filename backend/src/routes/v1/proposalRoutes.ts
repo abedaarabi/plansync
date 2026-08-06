@@ -233,19 +233,69 @@ function proposalJson(p: ProposalFull, env: Env) {
   };
 }
 
+/**
+ * Cover letter source of truth is always `coverNote` (what the user edited in TipTap).
+ * Templates are applied into `coverNote` on the client when selected — never override at send/preview.
+ */
+function mergedCoverLetter(p: ProposalFull, takeoffTableHtml: string): string {
+  const ctx = buildTemplateContext(p, takeoffTableHtml);
+  const source = (p.coverNote ?? "").trim() || (p.template?.body ?? "");
+  return applyProposalTemplate(source, ctx);
+}
+
 /** Cover text for PDFs: same merge as preview/email, but omit {{takeoff.table}} (shown in breakdown below). */
 function mergedProposalCoverForPdf(p: ProposalFull): string {
-  const ctxIntro = buildTemplateContext(p, "");
-  let bodyText = p.template?.body ?? p.coverNote;
-  if (p.template?.body) {
-    bodyText = applyProposalTemplate(p.template.body, ctxIntro);
-  }
-  const mergedIntro = applyProposalTemplate(bodyText, ctxIntro);
+  const mergedIntro = mergedCoverLetter(p, "");
   try {
     return sanitizeProposalCoverHtml(mergedIntro);
   } catch {
     return mergedIntro;
   }
+}
+
+async function buildProposalPdfForFull(
+  env: Env,
+  p: ProposalFull,
+): Promise<{ buffer: Buffer; filename: string }> {
+  const br = proposalBreakdown(p);
+  const rawLogo = await fetchWorkspaceLogoImageBuffer(env, p.workspace);
+  const logoBuf = await prepareWorkspaceLogoBufferForPdf(rawLogo);
+  const buffer = await buildProposalPdfBuffer({
+    title: p.title,
+    reference: p.reference,
+    workspaceName: p.workspace.name,
+    clientName: p.clientName,
+    clientCompany: p.clientCompany ?? undefined,
+    projectName: p.project.name,
+    validUntilLabel: p.validUntil.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }),
+    coverHtml: mergedProposalCoverForPdf(p),
+    lines: p.items.map((it) => ({
+      itemName: it.itemName,
+      quantity: it.quantity.toString(),
+      unit: it.unit,
+      rate: formatMoneyAmount(it.rate.toString(), p.currency),
+      lineTotal: formatMoneyAmount(it.lineTotal.toString(), p.currency),
+    })),
+    subtotal: formatMoneyAmount(p.subtotal.toString(), p.currency),
+    workFeeLabel: p.workPricePercent.gt(0) ? `Work (${p.workPricePercent.toString()}%)` : undefined,
+    workFeeAmount: p.workPricePercent.gt(0)
+      ? formatMoneyAmount(br.workAmount.toString(), p.currency)
+      : undefined,
+    taxLabel: `Tax (${p.taxPercent.toString()}%)`,
+    taxAmount: formatMoneyAmount(br.taxAmount.toString(), p.currency),
+    discount: formatMoneyAmount(p.discount.toString(), p.currency),
+    total: formatMoneyAmount(p.total.toString(), p.currency),
+    signedAtIso: p.acceptedAt?.toISOString(),
+    signerName: p.signerName ?? undefined,
+    signaturePngBuffer: p.signatureData ? dataUrlToPngBuffer(p.signatureData) : null,
+    logoImageBuffer: logoBuf,
+  });
+  const safeName = p.reference.replace(/[^a-z0-9-_]/gi, "_");
+  return { buffer, filename: `${safeName}-proposal.pdf` };
 }
 
 function buildTemplateContext(p: ProposalFull, takeoffTableHtml: string): TemplateReplaceContext {
@@ -401,6 +451,7 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
         clientName: p.clientName,
         clientEmail: p.clientEmail,
         sentAt: p.sentAt?.toISOString() ?? null,
+        validUntil: p.validUntil.toISOString(),
         total: p.total.toString(),
         currency: p.currency,
         createdAt: p.createdAt.toISOString(),
@@ -525,6 +576,7 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
     return c.json(proposalJson(p, env));
   });
 
+  // fallow-ignore-next-line complexity
   r.patch("/projects/:projectId/proposals/:proposalId", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const proposalId = c.req.param("proposalId")!;
@@ -557,7 +609,7 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
         taxPercent: z.union([z.number(), z.string()]).optional(),
         workPricePercent: z.union([z.number(), z.string()]).optional(),
         discount: z.union([z.number(), z.string()]).optional(),
-        coverNote: z.string().max(200_000).optional(),
+        coverNote: z.string().max(500_000).optional(),
         attachmentFileVersionIds: z.array(z.string()).optional(),
         items: z
           .array(
@@ -827,12 +879,7 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
     if (!p) return c.json({ error: "Not found" }, 404);
 
     const table = takeoffTableHtmlFromProposalFull(p);
-    const ctx = buildTemplateContext(p, table);
-    let bodyText = p.template?.body ?? p.coverNote;
-    if (p.template?.body) {
-      bodyText = applyProposalTemplate(p.template.body, ctx);
-    }
-    const merged = applyProposalTemplate(bodyText, ctx);
+    const merged = mergedCoverLetter(p, table);
     let html: string;
     try {
       html = sanitizeProposalCoverHtml(merged);
@@ -840,12 +887,7 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
       html = merged;
     }
 
-    const ctxNoTable = buildTemplateContext(p, "");
-    let bodyLetter = p.template?.body ?? p.coverNote;
-    if (p.template?.body) {
-      bodyLetter = applyProposalTemplate(p.template.body, ctxNoTable);
-    }
-    const mergedLetterOnly = applyProposalTemplate(bodyLetter, ctxNoTable).trim();
+    const mergedLetterOnly = mergedCoverLetter(p, "").trim();
     let letterHtml: string | null = null;
     let letterMarkdown = mergedLetterOnly;
     if (/^\s*</.test(mergedLetterOnly) && /<[a-z]/i.test(mergedLetterOnly)) {
@@ -866,6 +908,7 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
     });
   });
 
+  // fallow-ignore-next-line complexity
   r.post("/projects/:projectId/proposals/:proposalId/send", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const proposalId = c.req.param("proposalId")!;
@@ -893,9 +936,7 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
 
     const token = p.publicToken ?? newPublicToken();
     const table = takeoffTableHtmlFromProposalFull(p);
-    const ctx = buildTemplateContext(p, table);
-    let letter = p.template?.body ? applyProposalTemplate(p.template.body, ctx) : p.coverNote;
-    letter = applyProposalTemplate(letter, ctx);
+    const letter = mergedCoverLetter(p, table);
     let coverSanitized: string;
     try {
       coverSanitized = sanitizeProposalCoverHtml(letter);
@@ -940,6 +981,16 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
     });
 
     const sender = await prisma.user.findUnique({ where: { id: c.get("user").id } });
+    let pdfAttachment: { filename: string; contentBase64: string } | null = null;
+    try {
+      const pdf = await buildProposalPdfForFull(env, updated);
+      pdfAttachment = {
+        filename: pdf.filename,
+        contentBase64: pdf.buffer.toString("base64"),
+      };
+    } catch (e) {
+      console.error("[proposal] PDF attach for send failed (continuing without attachment)", e);
+    }
     try {
       await sendProposalSentToClient({
         env,
@@ -950,6 +1001,7 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
         senderName: sender?.name ?? "PlanSync user",
         portalUrl: proposalPortalUrl(env, token),
         workspaceLogoUrl: workspaceLogoUrlForClients(env, updated.workspace),
+        pdfAttachment,
       });
     } catch (e) {
       console.error("[proposal] send email failed", e);
@@ -984,10 +1036,7 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
 
     const p = await prisma.proposal.findFirst({
       where: { id: proposalId, projectId },
-      include: {
-        createdBy: { select: { name: true } },
-        workspace: { select: { id: true, logoUrl: true, logoS3Key: true } },
-      },
+      include: proposalFullInclude,
     });
     if (!p) return c.json({ error: "Not found" }, 404);
     if (!p.publicToken) return c.json({ error: "Proposal was never sent" }, 400);
@@ -998,6 +1047,16 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
 
     try {
       assertProposalEmailReady(env);
+      let pdfAttachment: { filename: string; contentBase64: string } | null = null;
+      try {
+        const pdf = await buildProposalPdfForFull(env, p);
+        pdfAttachment = {
+          filename: pdf.filename,
+          contentBase64: pdf.buffer.toString("base64"),
+        };
+      } catch (e) {
+        console.error("[proposal] PDF attach for resend failed (continuing without attachment)", e);
+      }
       await sendProposalSentToClient({
         env,
         toEmail: p.clientEmail,
@@ -1007,6 +1066,7 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
         senderName: p.createdBy.name,
         portalUrl: proposalPortalUrl(env, p.publicToken),
         workspaceLogoUrl: workspaceLogoUrlForClients(env, p.workspace),
+        pdfAttachment,
       });
     } catch (e) {
       console.error("[proposal] resend email failed", e);
@@ -1157,51 +1217,11 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
     });
     if (!p) return c.json({ error: "Not found" }, 404);
 
-    const br = proposalBreakdown(p);
-    const rawLogo = await fetchWorkspaceLogoImageBuffer(env, p.workspace);
-    const logoBuf = await prepareWorkspaceLogoBufferForPdf(rawLogo);
-    const buf = await buildProposalPdfBuffer({
-      title: p.title,
-      reference: p.reference,
-      workspaceName: p.workspace.name,
-      clientName: p.clientName,
-      clientCompany: p.clientCompany ?? undefined,
-      projectName: p.project.name,
-      validUntilLabel: p.validUntil.toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
-      coverHtml: mergedProposalCoverForPdf(p),
-      lines: p.items.map((it) => ({
-        itemName: it.itemName,
-        quantity: it.quantity.toString(),
-        unit: it.unit,
-        rate: formatMoneyAmount(it.rate.toString(), p.currency),
-        lineTotal: formatMoneyAmount(it.lineTotal.toString(), p.currency),
-      })),
-      subtotal: formatMoneyAmount(p.subtotal.toString(), p.currency),
-      workFeeLabel: p.workPricePercent.gt(0)
-        ? `Work (${p.workPricePercent.toString()}%)`
-        : undefined,
-      workFeeAmount: p.workPricePercent.gt(0)
-        ? formatMoneyAmount(br.workAmount.toString(), p.currency)
-        : undefined,
-      taxLabel: `Tax (${p.taxPercent.toString()}%)`,
-      taxAmount: formatMoneyAmount(br.taxAmount.toString(), p.currency),
-      discount: formatMoneyAmount(p.discount.toString(), p.currency),
-      total: formatMoneyAmount(p.total.toString(), p.currency),
-      signedAtIso: p.acceptedAt?.toISOString(),
-      signerName: p.signerName ?? undefined,
-      signaturePngBuffer: p.signatureData ? dataUrlToPngBuffer(p.signatureData) : null,
-      logoImageBuffer: logoBuf,
-    });
-
-    const safeName = p.reference.replace(/[^a-z0-9-_]/gi, "_");
-    return new Response(new Uint8Array(buf), {
+    const { buffer, filename } = await buildProposalPdfForFull(env, p);
+    return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${safeName}-proposal.pdf"`,
+        "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });
   });

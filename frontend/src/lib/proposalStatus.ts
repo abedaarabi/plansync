@@ -40,7 +40,7 @@ export function proposalStatusColor(status: string): string {
     case "SENT":
       return "var(--enterprise-primary)";
     case "VIEWED":
-      return "color-mix(in srgb, var(--enterprise-primary) 70%, #7c3aed)";
+      return "color-mix(in srgb, var(--enterprise-primary) 75%, var(--enterprise-text))";
     case "CHANGE_REQUESTED":
       return "var(--enterprise-semantic-warning-text)";
     case "DECLINED":

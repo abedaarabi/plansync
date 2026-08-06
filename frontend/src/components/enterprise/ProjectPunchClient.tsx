@@ -1,16 +1,25 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
+  Archive,
   ArrowDownAZ,
   ArrowUpAZ,
   Camera,
+  CheckCircle2,
+  CircleDot,
   ClipboardList,
+  Columns3,
   Download,
   ExternalLink,
   FileText,
+  LayoutGrid,
+  LayoutList,
   Loader2,
   Plus,
+  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -18,9 +27,15 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
+import { AssigneeFilterSelect, StatusFilterChips } from "@/components/enterprise/issueListControls";
+import { OmEmptyState } from "@/components/enterprise/OmEmptyState";
+import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
+import { PunchActivityTimeline } from "@/components/enterprise/PunchActivityTimeline";
+import { PunchBoard } from "@/components/enterprise/PunchBoard";
+import { PunchOverview } from "@/components/enterprise/PunchOverview";
 import {
   applyPunchTemplate,
   bulkPatchPunchItems,
@@ -41,43 +56,45 @@ import {
   type PunchReferencePhotoRow,
   type PunchRow,
 } from "@/lib/api-client";
-import type { Project } from "@/types/projects";
-import { OM_COMPACT_INPUT, OM_COMPACT_SELECT, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
+import {
+  PUNCH_PRIORITY_LABEL,
+  PUNCH_STATUS_LABEL,
+  PUNCH_STATUS_ORDER,
+  punchStatusBadgeClass,
+} from "@/lib/issueStatusStyle";
+import {
+  MOBILE_FIELD_INPUT,
+  MOBILE_FIELD_LABEL,
+  MOBILE_FIELD_SELECT,
+  MOBILE_FIELD_TEXTAREA,
+  MOBILE_FORM_SECTION,
+} from "@/lib/mobileFormStyles";
+import { OM_COMPACT_SELECT, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
+import { punchMatchesOverviewFilter, type PunchOverviewFilter } from "@/lib/punchOverviewStats";
 import { qk } from "@/lib/queryKeys";
 import { referencePhotoContentType } from "@/lib/referencePhotoMime";
+import { useTickNowMs } from "@/lib/useTickNowMs";
+import type { Project } from "@/types/projects";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-const STATUSES = ["OPEN", "IN_PROGRESS", "READY_FOR_GC", "CLOSED"] as const;
+const STATUSES = PUNCH_STATUS_ORDER;
 type PunchStatus = (typeof STATUSES)[number];
-
-const STATUS_LABEL: Record<PunchStatus, string> = {
-  OPEN: "Open",
-  IN_PROGRESS: "In progress",
-  READY_FOR_GC: "Ready for GC",
-  CLOSED: "Closed",
-};
-
-/** ACC-style status pills */
-const STATUS_BADGE_CLASS: Record<PunchStatus, string> = {
-  OPEN: "bg-[#fef2f2] text-[#991b1b] ring-1 ring-red-200/80",
-  IN_PROGRESS: "bg-[#fffbeb] text-[#92400e] ring-1 ring-amber-200/80",
-  READY_FOR_GC: "bg-[#eff6ff] text-[#1e40af] ring-1 ring-blue-200/80",
-  CLOSED: "bg-[#f0fdf4] text-[#166534] ring-1 ring-emerald-200/80",
-};
+type StatusChip = "ALL" | PunchStatus;
+type ViewMode = "list" | "board";
 
 const PRIORITIES = ["P1", "P2", "P3"] as const;
-const PRIORITY_LABEL: Record<string, string> = {
-  P1: "High",
-  P2: "Medium",
-  P3: "Low",
-};
 
-const PUNCH_SLIDE_LABEL = "block text-xs font-normal text-[var(--enterprise-text)]";
-const PUNCH_SLIDE_FIELD =
-  "mt-1 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/15";
-const PUNCH_SLIDE_SELECT =
-  "mt-1 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/15";
+const PUNCH_STATUS_FILTER_DEFS: { key: StatusChip; label: string; Icon: LucideIcon }[] = [
+  { key: "ALL", label: "All", Icon: LayoutGrid },
+  { key: "OPEN", label: "Open", Icon: CircleDot },
+  { key: "IN_PROGRESS", label: "In progress", Icon: Activity },
+  { key: "READY_FOR_GC", label: "Ready for GC", Icon: CheckCircle2 },
+  { key: "CLOSED", label: "Closed", Icon: Archive },
+];
+
+const FILTER_LABEL_CLASS =
+  "mb-0.5 flex items-center gap-1 text-xs font-medium text-[var(--enterprise-text-muted)]";
 
 function countPunchTemplateItems(itemsJson: unknown): number {
   if (Array.isArray(itemsJson)) return itemsJson.length;
@@ -183,7 +200,7 @@ function PunchPhotoThumb({
   }, [projectId, punchId, photo.id]);
   if (err || !url) {
     return (
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-[#e2e8f0] bg-[#f8fafc] text-[10px] text-[#94a3b8]">
+      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[10px] text-[var(--enterprise-text-muted)]">
         {err ? "!" : <Loader2 className="h-4 w-4 animate-spin opacity-50" />}
       </div>
     );
@@ -194,7 +211,7 @@ function PunchPhotoThumb({
       <img
         src={url}
         alt=""
-        className="h-16 w-16 shrink-0 rounded-md border border-[#e2e8f0] object-cover"
+        className="h-16 w-16 shrink-0 rounded-md border border-[var(--enterprise-border)] object-cover"
       />
     </>
   );
@@ -215,14 +232,14 @@ function SortHeader({
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-1 text-[11px] font-normal uppercase tracking-wide text-[#0f172a] hover:text-[#111827]"
+      className="inline-flex items-center gap-1 text-[11px] font-normal uppercase tracking-wide text-[var(--enterprise-text)] hover:text-[var(--enterprise-text)]"
     >
       {label}
       {active ? (
         dir === "asc" ? (
-          <ArrowUpAZ className="h-3.5 w-3.5 text-[#2563eb]" />
+          <ArrowUpAZ className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" />
         ) : (
-          <ArrowDownAZ className="h-3.5 w-3.5 text-[#2563eb]" />
+          <ArrowDownAZ className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" />
         )
       ) : (
         <span className="inline-block w-3.5" />
@@ -231,18 +248,24 @@ function SortHeader({
   );
 }
 
+// fallow-ignore-next-line complexity
 export function ProjectPunchClient({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const router = useRouter();
   const searchParams = useSearchParams();
   const focusPunchId = searchParams.get("punch")?.trim() || null;
   const newModalTitleId = useId();
+  const { me } = useEnterpriseWorkspace();
+  const currentUserId = me?.user.id;
+  const nowMs = useTickNowMs();
 
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("ALL");
+  const [overviewFilter, setOverviewFilter] = useState<PunchOverviewFilter>("ALL");
+  const [filterStatus, setFilterStatus] = useState<StatusChip>("ALL");
   const [filterAssignee, setFilterAssignee] = useState<string>("ALL");
   const [filterLocation, setFilterLocation] = useState<string>("ALL");
   const [filterPriority, setFilterPriority] = useState<string>("ALL");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortCol, setSortCol] = useState<SortCol>("punchNumber");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -295,18 +318,6 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
     [projects, projectId],
   );
 
-  const stats = useMemo(() => {
-    const total = items.length;
-    const by = (s: PunchStatus) => items.filter((r) => r.status === s).length;
-    return {
-      total,
-      open: by("OPEN"),
-      inProgress: by("IN_PROGRESS"),
-      readyGc: by("READY_FOR_GC"),
-      closed: by("CLOSED"),
-    };
-  }, [items]);
-
   const locationOptions = useMemo(() => {
     const s = new Set<string>();
     for (const r of items) {
@@ -316,31 +327,77 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [items]);
 
+  const effectiveOverviewFilter: PunchOverviewFilter =
+    overviewFilter === "MINE" && !currentUserId ? "ALL" : overviewFilter;
+
+  const onOverviewFilterChange = (key: PunchOverviewFilter) => {
+    setOverviewFilter(key);
+    if (
+      key === "OPEN" ||
+      key === "IN_PROGRESS" ||
+      key === "READY_FOR_GC" ||
+      key === "CLOSED" ||
+      key === "ALL"
+    ) {
+      setFilterStatus(key);
+    } else {
+      setFilterStatus("ALL");
+    }
+  };
+
+  const onStatusChipChange = (key: StatusChip) => {
+    setFilterStatus(key);
+    setOverviewFilter(key);
+  };
+
+  const clearFilters = () => {
+    setOverviewFilter("ALL");
+    setFilterStatus("ALL");
+    setFilterAssignee("ALL");
+    setFilterLocation("ALL");
+    setFilterPriority("ALL");
+    setSearch("");
+  };
+
+  const filtersActive =
+    overviewFilter !== "ALL" ||
+    filterStatus !== "ALL" ||
+    filterAssignee !== "ALL" ||
+    filterLocation !== "ALL" ||
+    filterPriority !== "ALL" ||
+    Boolean(search.trim());
+
   const filteredSorted = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let rows = items.filter((r) => {
-      if (filterStatus !== "ALL" && r.status !== filterStatus) return false;
-      if (filterPriority !== "ALL" && r.priority !== filterPriority) return false;
-      if (filterLocation !== "ALL" && r.location !== filterLocation) return false;
-      const assigneeIds = punchAssigneeIds(r);
-      if (filterAssignee === "UNASSIGNED") {
-        if (assigneeIds.length > 0) return false;
-      } else if (filterAssignee !== "ALL" && !assigneeIds.includes(filterAssignee)) return false;
-      if (q) {
-        const blob = [
-          r.title,
-          r.location,
-          r.trade,
-          r.notes ?? "",
-          r.assignee?.name ?? "",
-          String(r.punchNumber),
-        ]
-          .join(" ")
-          .toLowerCase();
-        if (!blob.includes(q)) return false;
-      }
-      return true;
-    });
+    let rows = items.filter(
+      // fallow-ignore-next-line complexity
+      (r) => {
+        if (!punchMatchesOverviewFilter(r, effectiveOverviewFilter, nowMs, currentUserId)) {
+          return false;
+        }
+        if (filterStatus !== "ALL" && r.status !== filterStatus) return false;
+        if (filterPriority !== "ALL" && r.priority !== filterPriority) return false;
+        if (filterLocation !== "ALL" && r.location !== filterLocation) return false;
+        const assigneeIds = punchAssigneeIds(r);
+        if (filterAssignee === "UNASSIGNED") {
+          if (assigneeIds.length > 0) return false;
+        } else if (filterAssignee !== "ALL" && !assigneeIds.includes(filterAssignee)) return false;
+        if (q) {
+          const blob = [
+            r.title,
+            r.location,
+            r.trade,
+            r.notes ?? "",
+            r.assignee?.name ?? "",
+            String(r.punchNumber),
+          ]
+            .join(" ")
+            .toLowerCase();
+          if (!blob.includes(q)) return false;
+        }
+        return true;
+      },
+    );
 
     const cmp = (a: PunchRow, b: PunchRow): number => {
       let va: string | number = 0;
@@ -386,6 +443,9 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
   }, [
     items,
     search,
+    effectiveOverviewFilter,
+    nowMs,
+    currentUserId,
     filterStatus,
     filterAssignee,
     filterLocation,
@@ -604,21 +664,6 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
     setPunchQuery(null);
   };
 
-  const progressSegments = useMemo(() => {
-    const t = Math.max(1, stats.total);
-    return [
-      { key: "OPEN", pct: (stats.open / t) * 100, fill: "#dc2626", label: "Open" },
-      {
-        key: "IN_PROGRESS",
-        pct: (stats.inProgress / t) * 100,
-        fill: "#d97706",
-        label: "In progress",
-      },
-      { key: "READY_FOR_GC", pct: (stats.readyGc / t) * 100, fill: "#2563eb", label: "Ready GC" },
-      { key: "CLOSED", pct: (stats.closed / t) * 100, fill: "#16a34a", label: "Closed" },
-    ];
-  }, [stats]);
-
   const allSelected =
     filteredSorted.length > 0 && filteredSorted.every((r) => selectedIds.includes(r.id));
   const toggleAll = () => {
@@ -627,16 +672,13 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div
-      className={OM_PAGE_CLASS}
-      style={{ fontFamily: "var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif" }}
-    >
+    <div className={OM_PAGE_CLASS}>
       <OmSubPageHeader
         icon={ClipboardList}
         title="Punch list"
         description="Track open items, photos, and closeouts."
         action={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
             <a
               href={punchExportCsvUrl(projectId)}
               className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
@@ -656,41 +698,18 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
               <Plus className="h-4 w-4" />
               New item
             </EnterpriseButton>
-          </>
+          </div>
         }
       />
 
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        {(
-          [
-            ["Total", stats.total],
-            ["Open", stats.open],
-            ["In progress", stats.inProgress],
-            ["Ready for GC", stats.readyGc],
-            ["Closed", stats.closed],
-          ] as const
-        ).map(([label, n]) => (
-          <div
-            key={label}
-            className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-xs)]"
-          >
-            <p className="text-lg font-bold tabular-nums text-[var(--enterprise-text)]">{n}</p>
-            <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-              {label}
-            </p>
-          </div>
-        ))}
-      </section>
-      <div className="flex h-2 overflow-hidden rounded-full bg-[var(--enterprise-border)]">
-        {progressSegments.map((s) => (
-          <div
-            key={s.key}
-            title={`${s.label}: ${s.pct.toFixed(0)}%`}
-            className="h-full min-w-0 transition-[width]"
-            style={{ width: `${s.pct}%`, backgroundColor: s.fill }}
-          />
-        ))}
-      </div>
+      {items.length > 0 ? (
+        <PunchOverview
+          rows={items}
+          filter={overviewFilter}
+          onFilterChange={onOverviewFilterChange}
+          currentUserId={currentUserId}
+        />
+      ) : null}
 
       {/* Bulk bar OR filters */}
       {selectedIds.length > 0 ? (
@@ -707,9 +726,9 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
               onApply={(userId) => bulkMut.mutate({ ids: selectedIds, assigneeId: userId })}
             />
             <BulkStatusSelect onApply={(st) => bulkMut.mutate({ ids: selectedIds, status: st })} />
-            <button
-              type="button"
-              className="inline-flex h-9 items-center rounded-lg border border-red-200 bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+            <EnterpriseButton
+              size="sm"
+              variant="danger"
               onClick={() => {
                 if (
                   !window.confirm(
@@ -732,9 +751,9 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                 })();
               }}
             >
-              <Trash2 className="mr-1 inline h-3.5 w-3.5" />
+              <Trash2 className="h-3.5 w-3.5" />
               Delete
-            </button>
+            </EnterpriseButton>
             <button
               type="button"
               className="text-xs font-semibold text-[var(--enterprise-primary)] underline"
@@ -744,132 +763,190 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             </button>
           </div>
         </div>
-      ) : (
-        <section className="enterprise-card flex flex-col gap-2 p-3 sm:flex-row sm:flex-wrap sm:items-center sm:p-4">
-          <input
-            type="search"
-            placeholder="Search items…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={`${OM_COMPACT_INPUT} min-w-[8rem] flex-1 sm:max-w-xs`}
-          />
-          <select
+      ) : items.length > 0 ? (
+        <section className="enterprise-card flex flex-col gap-2 p-3 sm:p-4">
+          <StatusFilterChips
+            defs={PUNCH_STATUS_FILTER_DEFS}
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className={`${OM_COMPACT_SELECT} min-w-[7rem]`}
-          >
-            <option value="ALL">Status</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filterAssignee}
-            onChange={(e) => setFilterAssignee(e.target.value)}
-            className={`${OM_COMPACT_SELECT} min-w-[8rem] flex-1 sm:flex-none`}
-          >
-            <option value="ALL">Assignee</option>
-            <option value="UNASSIGNED">Unassigned</option>
-            {members.map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filterLocation}
-            onChange={(e) => setFilterLocation(e.target.value)}
-            className={`${OM_COMPACT_SELECT} min-w-[8rem] flex-1 sm:flex-none`}
-          >
-            <option value="ALL">Location</option>
-            {locationOptions.map((loc) => (
-              <option key={loc} value={loc}>
-                {loc}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value)}
-            className={`${OM_COMPACT_SELECT} min-w-[7rem]`}
-          >
-            <option value="ALL">Priority</option>
-            {PRIORITIES.map((pr) => (
-              <option key={pr} value={pr}>
-                {PRIORITY_LABEL[pr]}
-              </option>
-            ))}
-          </select>
-          <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:items-center">
-            <button
-              type="button"
-              onClick={() => setChecklistModalOpen(true)}
-              className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-3 text-sm font-semibold text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary)]/15 sm:flex-none"
+            onChange={onStatusChipChange}
+            filtersActive={filtersActive}
+            onReset={clearFilters}
+          />
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="min-w-[11rem] flex-1 sm:max-w-[16rem]">
+              <span className={FILTER_LABEL_CLASS}>
+                <Search className="h-3.5 w-3.5" aria-hidden />
+                Search
+              </span>
+              <input
+                type="search"
+                placeholder="Title, location, assignee…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className={OM_COMPACT_SELECT}
+              />
+            </label>
+            <AssigneeFilterSelect
+              id="punch-assignee-filter"
+              value={filterAssignee}
+              onChange={setFilterAssignee}
+              members={members}
+            />
+            <label className="min-w-[8rem]">
+              <span className={FILTER_LABEL_CLASS}>Location</span>
+              <select
+                value={filterLocation}
+                onChange={(e) => setFilterLocation(e.target.value)}
+                className={OM_COMPACT_SELECT}
+              >
+                <option value="ALL">All locations</option>
+                {locationOptions.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="min-w-[7rem]">
+              <span className={FILTER_LABEL_CLASS}>Priority</span>
+              <select
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value)}
+                className={OM_COMPACT_SELECT}
+              >
+                <option value="ALL">All priorities</option>
+                {PRIORITIES.map((pr) => (
+                  <option key={pr} value={pr}>
+                    {PUNCH_PRIORITY_LABEL[pr] ?? pr}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div
+              className="inline-flex rounded-lg border border-[var(--enterprise-border)] p-0.5"
+              role="group"
+              aria-label="View mode"
             >
-              <FileText className="h-4 w-4 shrink-0" />
-              Add from checklist
-            </button>
-            <button
-              type="button"
-              onClick={() => setManageTemplatesOpen(true)}
-              className="min-h-10 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-normal text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] sm:shrink-0"
-            >
-              Edit checklists
-            </button>
+              <button
+                type="button"
+                aria-pressed={viewMode === "list"}
+                onClick={() => setViewMode("list")}
+                className={`inline-flex min-h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold ${
+                  viewMode === "list"
+                    ? "bg-[var(--enterprise-primary)] text-white"
+                    : "text-[var(--enterprise-text-muted)]"
+                }`}
+              >
+                <LayoutList className="h-3.5 w-3.5" aria-hidden />
+                List
+              </button>
+              <button
+                type="button"
+                aria-pressed={viewMode === "board"}
+                onClick={() => setViewMode("board")}
+                className={`inline-flex min-h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold ${
+                  viewMode === "board"
+                    ? "bg-[var(--enterprise-primary)] text-white"
+                    : "text-[var(--enterprise-text-muted)]"
+                }`}
+              >
+                <Columns3 className="h-3.5 w-3.5" aria-hidden />
+                Board
+              </button>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:items-center">
+              <EnterpriseButton
+                size="sm"
+                variant="secondary"
+                onClick={() => setChecklistModalOpen(true)}
+              >
+                <FileText className="h-4 w-4 shrink-0" />
+                Add from checklist
+              </EnterpriseButton>
+              <EnterpriseButton
+                size="sm"
+                variant="ghost"
+                onClick={() => setManageTemplatesOpen(true)}
+              >
+                Edit checklists
+              </EnterpriseButton>
+            </div>
           </div>
         </section>
-      )}
+      ) : null}
 
-      {/* SECTION 4 — Table */}
       {isPending ? (
         <div className="py-16">
           <EnterpriseLoadingState variant="minimal" message="Loading punch list…" label="Loading" />
         </div>
+      ) : items.length === 0 ? (
+        <OmEmptyState
+          icon={ClipboardList}
+          title="No punch items yet"
+          description="Create punch items for closeout deficiencies, or add a reusable checklist."
+          action={
+            <EnterpriseButton size="sm" onClick={() => setNewModalOpen(true)}>
+              <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
+              New item
+            </EnterpriseButton>
+          }
+        />
+      ) : filteredSorted.length === 0 ? (
+        <OmEmptyState
+          icon={ClipboardList}
+          title="No items match"
+          description="Try clearing filters or searching with different terms."
+          action={
+            <EnterpriseButton size="sm" variant="secondary" onClick={clearFilters}>
+              Reset filters
+            </EnterpriseButton>
+          }
+        />
+      ) : viewMode === "board" ? (
+        <div className="p-1 sm:p-0">
+          <PunchBoard
+            rows={filteredSorted}
+            movingId={patchMut.isPending ? patchMut.variables?.id : null}
+            onOpen={(p) => openRow(p.id)}
+            onMove={(id, status) => patchMut.mutate({ id, body: { status } })}
+          />
+        </div>
       ) : (
         <>
           <ul className="space-y-2 lg:hidden" aria-label="Punch list">
-            {filteredSorted.length === 0 ? (
-              <li className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-10 text-center text-sm text-[var(--enterprise-text-muted)]">
-                No items match your filters.
-              </li>
-            ) : (
-              filteredSorted.map((p) => {
-                const st = p.status as PunchStatus;
-                const active = activePunchId === p.id && slideOpen;
-                return (
-                  <li key={`m-${p.id}`}>
-                    <button
-                      type="button"
-                      onClick={() => openRow(p.id)}
-                      className={`flex min-h-10 w-full items-center gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-left shadow-[var(--enterprise-shadow-xs)] transition-all duration-150 active:scale-[0.99] active:bg-[var(--enterprise-hover-surface)]/60 ${
-                        active
-                          ? "border-[var(--enterprise-primary)]/35 ring-2 ring-[var(--enterprise-primary)]/15"
-                          : ""
-                      }`}
+            {filteredSorted.map((p) => {
+              const active = activePunchId === p.id && slideOpen;
+              return (
+                <li key={`m-${p.id}`}>
+                  <button
+                    type="button"
+                    onClick={() => openRow(p.id)}
+                    className={`flex min-h-10 w-full items-center gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-left shadow-[var(--enterprise-shadow-xs)] transition-all duration-150 active:scale-[0.99] active:bg-[var(--enterprise-hover-surface)]/60 ${
+                      active
+                        ? "border-[var(--enterprise-primary)]/35 ring-2 ring-[var(--enterprise-primary)]/15"
+                        : ""
+                    }`}
+                  >
+                    <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-[var(--enterprise-primary)]">
+                      #{p.punchNumber}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-base font-semibold text-[var(--enterprise-text)]">
+                        {p.title}
+                      </p>
+                      <p className="truncate text-sm text-[var(--enterprise-text-muted)]">
+                        {p.location} · {assigneeLabel(p)}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${punchStatusBadgeClass(p.status)}`}
                     >
-                      <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-[var(--enterprise-primary)]">
-                        #{p.punchNumber}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-base font-semibold text-[var(--enterprise-text)]">
-                          {p.title}
-                        </p>
-                        <p className="truncate text-sm text-[var(--enterprise-text-muted)]">
-                          {p.location} · {assigneeLabel(p)}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE_CLASS[st] ?? "bg-slate-100 text-slate-700"}`}
-                      >
-                        {STATUS_LABEL[st] ?? p.status}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })
-            )}
+                      {PUNCH_STATUS_LABEL[p.status] ?? p.status}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
           <div
             className="hidden lg:block lg:-mx-0 lg:overflow-x-auto"
@@ -879,7 +956,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
               <table className="w-full min-w-[760px] border-collapse rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] md:min-w-[920px]">
                 <thead>
                   <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
-                    <th className="w-10 px-2 py-2 text-left text-[#0f172a]">
+                    <th className="w-10 px-2 py-2 text-left text-[var(--enterprise-text)]">
                       <input
                         type="checkbox"
                         className="h-4 w-4 rounded border-[var(--enterprise-border)]"
@@ -947,80 +1024,68 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSorted.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={8}
-                        className="px-4 py-12 text-center text-sm text-[var(--enterprise-text-muted)]"
+                  {filteredSorted.map((p) => {
+                    const sel = selectedIds.includes(p.id);
+                    const active = activePunchId === p.id && slideOpen;
+                    const rowHi = sel || active;
+                    return (
+                      <tr
+                        key={p.id}
+                        id={`punch-row-${p.id}`}
+                        onClick={() => openRow(p.id)}
+                        className={`h-11 cursor-pointer border-b border-[var(--enterprise-border)] text-sm transition-colors last:border-b-0 ${
+                          rowHi
+                            ? "border-l-4 border-l-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/10"
+                            : "hover:bg-[var(--enterprise-hover-surface)]"
+                        }`}
                       >
-                        No items match your filters.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredSorted.map((p) => {
-                      const sel = selectedIds.includes(p.id);
-                      const active = activePunchId === p.id && slideOpen;
-                      const rowHi = sel || active;
-                      const st = p.status as PunchStatus;
-                      return (
-                        <tr
-                          key={p.id}
-                          id={`punch-row-${p.id}`}
-                          onClick={() => openRow(p.id)}
-                          className={`h-11 cursor-pointer border-b border-[var(--enterprise-border)] text-sm transition-colors last:border-b-0 ${
-                            rowHi
-                              ? "border-l-4 border-l-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/10"
-                              : "hover:bg-[var(--enterprise-hover-surface)]"
-                          }`}
-                        >
-                          <td className="px-2 py-0" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-[var(--enterprise-border)]"
-                              checked={sel}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                setSelectedIds((ids) =>
-                                  e.target.checked ? [...ids, p.id] : ids.filter((x) => x !== p.id),
-                                );
-                              }}
-                              aria-label={`Select #${p.punchNumber}`}
-                            />
-                          </td>
-                          <td className="px-3 font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
-                            {p.punchNumber}
-                          </td>
-                          <td className="max-w-[220px] truncate px-3 font-medium text-[var(--enterprise-text)]">
-                            {p.title}
-                          </td>
-                          <td className="max-w-[160px] truncate px-3 text-[#0f172a]">
-                            {p.location}
-                          </td>
-                          <td className="px-3">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <AssigneeAvatar member={p.assignee} />
-                              <span className="truncate text-[var(--enterprise-text)]/85">
-                                {assigneeLabel(p)}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="whitespace-nowrap px-3 text-[#0f172a]">
-                            {formatTableDate(p.dueDate)}
-                          </td>
-                          <td className="px-3">
-                            <span
-                              className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_BADGE_CLASS[st] ?? "bg-slate-100 text-slate-700"}`}
-                            >
-                              {STATUS_LABEL[st] ?? p.status}
+                        <td className="px-2 py-0" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-[var(--enterprise-border)]"
+                            checked={sel}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setSelectedIds((ids) =>
+                                e.target.checked ? [...ids, p.id] : ids.filter((x) => x !== p.id),
+                              );
+                            }}
+                            aria-label={`Select #${p.punchNumber}`}
+                          />
+                        </td>
+                        <td className="px-3 font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
+                          {p.punchNumber}
+                        </td>
+                        <td className="max-w-[220px] truncate px-3 font-medium text-[var(--enterprise-text)]">
+                          {p.title}
+                        </td>
+                        <td className="max-w-[160px] truncate px-3 text-[var(--enterprise-text)]">
+                          {p.location}
+                        </td>
+                        <td className="px-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <AssigneeAvatar member={p.assignee} />
+                            <span className="truncate text-[var(--enterprise-text)]/85">
+                              {assigneeLabel(p)}
                             </span>
-                          </td>
-                          <td className="px-3 text-[#0f172a]">
-                            {PRIORITY_LABEL[p.priority] ?? p.priority}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-3 text-[var(--enterprise-text)]">
+                          {formatTableDate(p.dueDate)}
+                        </td>
+                        <td className="px-3">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${punchStatusBadgeClass(p.status)}`}
+                          >
+                            {PUNCH_STATUS_LABEL[p.status] ?? p.status}
+                          </span>
+                        </td>
+                        <td className="px-3 text-[var(--enterprise-text)]">
+                          {PUNCH_PRIORITY_LABEL[p.priority] ?? p.priority}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1058,7 +1123,11 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         open={newModalOpen}
         onClose={() => setNewModalOpen(false)}
         overlayZClass="z-[102]"
-        panelMaxWidthClass="max-w-[min(100dvw,560px)] sm:max-w-[560px]"
+        panelVariant="floating"
+        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
+        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+        closeOnBackdrop={false}
+        closeOnEscape={false}
         ariaLabelledBy={newModalTitleId}
         form={{
           onSubmit: (e) => {
@@ -1078,93 +1147,107 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             >
               New punch list item
             </h2>
-            <p className="mt-1 text-sm text-[var(--enterprise-text)]">
+            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
               Required fields: title and location.
             </p>
           </div>
         }
         footer={
           <>
-            <button
+            <EnterpriseButton
               type="button"
+              variant="secondary"
               onClick={() => setNewModalOpen(false)}
-              className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)]"
             >
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={createMut.isPending}
-              className="rounded-xl bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-60"
-            >
+            </EnterpriseButton>
+            <EnterpriseButton type="submit" loading={createMut.isPending}>
               {createMut.isPending ? "Creating…" : "Create Item"}
-            </button>
+            </EnterpriseButton>
           </>
         }
-        bodyClassName="space-y-3 px-4 py-4"
+        bodyClassName="space-y-4 px-5 py-5"
+        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       >
-        <label className={PUNCH_SLIDE_LABEL}>
-          Title (required)
-          <input
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            className={PUNCH_SLIDE_FIELD}
-            required
-          />
-        </label>
-        <label className={PUNCH_SLIDE_LABEL}>
-          Location
-          <input
-            value={newLocation}
-            onChange={(e) => setNewLocation(e.target.value)}
-            className={PUNCH_SLIDE_FIELD}
-            required
-          />
-        </label>
-        <label className={PUNCH_SLIDE_LABEL}>
-          Trade
-          <input
-            value={newTrade}
-            onChange={(e) => setNewTrade(e.target.value)}
-            className={PUNCH_SLIDE_FIELD}
-          />
-        </label>
-        <div className="grid grid-cols-2 gap-3">
-          <label className={PUNCH_SLIDE_LABEL}>
-            Assignees
-            <div className="mt-1">
+        <div className={MOBILE_FORM_SECTION}>
+          <div>
+            <label htmlFor="punch-new-title" className={MOBILE_FIELD_LABEL}>
+              Title (required)
+            </label>
+            <input
+              id="punch-new-title"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              className={MOBILE_FIELD_INPUT}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="punch-new-location" className={MOBILE_FIELD_LABEL}>
+              Location
+            </label>
+            <input
+              id="punch-new-location"
+              value={newLocation}
+              onChange={(e) => setNewLocation(e.target.value)}
+              className={MOBILE_FIELD_INPUT}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="punch-new-trade" className={MOBILE_FIELD_LABEL}>
+              Trade
+            </label>
+            <input
+              id="punch-new-trade"
+              value={newTrade}
+              onChange={(e) => setNewTrade(e.target.value)}
+              className={MOBILE_FIELD_INPUT}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <p className={MOBILE_FIELD_LABEL}>Assignees</p>
               <EnterpriseMemberMultiPicker
                 members={members}
                 value={newAssignees}
                 onChange={setNewAssignees}
               />
             </div>
-          </label>
-          <label className={PUNCH_SLIDE_LABEL}>
-            Priority
-            <select
-              value={newPriority}
-              onChange={(e) => setNewPriority(e.target.value)}
-              className={PUNCH_SLIDE_SELECT}
-            >
-              {PRIORITIES.map((pr) => (
-                <option key={pr} value={pr}>
-                  {PRIORITY_LABEL[pr]}
-                </option>
-              ))}
-            </select>
-          </label>
+            <div>
+              <label htmlFor="punch-new-priority" className={MOBILE_FIELD_LABEL}>
+                Priority
+              </label>
+              <select
+                id="punch-new-priority"
+                value={newPriority}
+                onChange={(e) => setNewPriority(e.target.value)}
+                className={MOBILE_FIELD_SELECT}
+              >
+                {PRIORITIES.map((pr) => (
+                  <option key={pr} value={pr}>
+                    {PUNCH_PRIORITY_LABEL[pr] ?? pr}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="punch-new-due" className={MOBILE_FIELD_LABEL}>
+              Due date
+            </label>
+            <input
+              id="punch-new-due"
+              type="date"
+              value={newDue}
+              onChange={(e) => setNewDue(e.target.value)}
+              className={MOBILE_FIELD_INPUT}
+            />
+          </div>
         </div>
-        <label className={PUNCH_SLIDE_LABEL}>
-          Due date
-          <input
-            type="date"
-            value={newDue}
-            onChange={(e) => setNewDue(e.target.value)}
-            className={PUNCH_SLIDE_FIELD}
-          />
-        </label>
-        {newMsg ? <p className="text-sm text-red-600">{newMsg}</p> : null}
+        {newMsg ? (
+          <p className="text-sm text-[var(--enterprise-semantic-danger-text)]">{newMsg}</p>
+        ) : null}
       </EnterpriseSlideOver>
 
       {/* Add from checklist — slide-over */}
@@ -1172,7 +1255,11 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         open={checklistModalOpen}
         onClose={() => setChecklistModalOpen(false)}
         overlayZClass="z-[102]"
-        panelMaxWidthClass="max-w-[min(100dvw,560px)] sm:max-w-[560px]"
+        panelVariant="floating"
+        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
+        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+        closeOnBackdrop={false}
+        closeOnEscape={false}
         ariaLabelledBy="punch-checklist-slide-title"
         header={
           <div>
@@ -1182,40 +1269,41 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             >
               Add from a checklist
             </h2>
-            <p className="mt-1 text-sm text-[var(--enterprise-text)]">
+            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
               Each line becomes a new punch item (you can edit afterward).
             </p>
           </div>
         }
         footer={
-          <button
+          <EnterpriseButton
             type="button"
-            className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)]"
+            variant="secondary"
+            fullWidth
             onClick={() => {
               setChecklistModalOpen(false);
               setManageTemplatesOpen(true);
             }}
           >
             Create or edit checklists
-          </button>
+          </EnterpriseButton>
         }
-        bodyClassName="space-y-4 px-4 py-4"
+        bodyClassName="space-y-4 px-5 py-5"
+        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       >
         {templates.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-6 text-center">
             <p className="mb-3 text-sm text-[var(--enterprise-text-muted)]">
               You don&apos;t have any saved checklists yet.
             </p>
-            <button
-              type="button"
-              className="rounded-xl bg-[var(--enterprise-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)]"
+            <EnterpriseButton
+              size="sm"
               onClick={() => {
                 setChecklistModalOpen(false);
                 setManageTemplatesOpen(true);
               }}
             >
               Create a checklist
-            </button>
+            </EnterpriseButton>
           </div>
         ) : (
           <ul className="space-y-2">
@@ -1233,14 +1321,14 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                       {t.projectId ? " · This project" : " · All projects"}
                     </p>
                   </div>
-                  <button
-                    type="button"
+                  <EnterpriseButton
+                    size="sm"
                     disabled={applyTplMut.isPending || n === 0}
-                    className="shrink-0 rounded-xl bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50"
+                    loading={applyTplMut.isPending}
                     onClick={() => applyTplMut.mutate(t.id)}
                   >
                     {applyTplMut.isPending ? "Adding…" : "Add to punch list"}
-                  </button>
+                  </EnterpriseButton>
                 </li>
               );
             })}
@@ -1253,7 +1341,11 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         open={manageTemplatesOpen}
         onClose={() => setManageTemplatesOpen(false)}
         overlayZClass="z-[102]"
-        panelMaxWidthClass="max-w-[min(100dvw,720px)] sm:max-w-[720px]"
+        panelVariant="floating"
+        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),720px)]"
+        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+        closeOnBackdrop={false}
+        closeOnEscape={false}
         ariaLabelledBy="punch-manage-checklists-slide-title"
         header={
           <div>
@@ -1263,23 +1355,24 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             >
               Reusable checklists
             </h2>
-            <p className="mt-1 text-sm text-[var(--enterprise-text)]">
+            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
               Saved lists you can apply to this punch list anytime.
             </p>
           </div>
         }
         footer={
           <>
-            <button
+            <EnterpriseButton
               type="button"
+              variant="secondary"
               onClick={() => setManageTemplatesOpen(false)}
-              className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)]"
             >
               Cancel
-            </button>
-            <button
+            </EnterpriseButton>
+            <EnterpriseButton
               type="button"
-              disabled={!tplName.trim() || createTplMut.isPending}
+              disabled={!tplName.trim()}
+              loading={createTplMut.isPending}
               onClick={() => {
                 if (!tplName.trim()) return;
                 if (!tplDraftLines.some((r) => r.title.trim() || r.location.trim())) {
@@ -1288,13 +1381,13 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                 }
                 createTplMut.mutate();
               }}
-              className="rounded-xl bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50"
             >
               {createTplMut.isPending ? "Saving…" : "Save checklist"}
-            </button>
+            </EnterpriseButton>
           </>
         }
-        bodyClassName="space-y-4 px-4 py-4"
+        bodyClassName="space-y-4 px-5 py-5"
+        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       >
         <ul className="max-h-40 space-y-1 overflow-auto rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-2">
           {templates.length === 0 ? (
@@ -1320,15 +1413,18 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
           )}
         </ul>
         <p className="text-xs font-semibold text-[var(--enterprise-text-muted)]">New checklist</p>
-        <label className="block text-xs text-[var(--enterprise-text-muted)]">
-          Name
+        <div>
+          <label htmlFor="punch-tpl-name" className={MOBILE_FIELD_LABEL}>
+            Name
+          </label>
           <input
+            id="punch-tpl-name"
             value={tplName}
             onChange={(e) => setTplName(e.target.value)}
             placeholder="e.g. Level 1 walkthrough"
-            className={PUNCH_SLIDE_FIELD}
+            className={MOBILE_FIELD_INPUT}
           />
-        </label>
+        </div>
         <fieldset className="text-xs text-[var(--enterprise-text-muted)]">
           <legend className="mb-1 font-semibold">Where to save</legend>
           <div className="flex flex-wrap gap-3">
@@ -1450,13 +1546,13 @@ function AssigneeAvatar({ member }: { member: PunchRow["assignee"] }) {
         <img
           src={member.image}
           alt=""
-          className="h-7 w-7 shrink-0 rounded-full border border-[#e2e8f0] object-cover"
+          className="h-7 w-7 shrink-0 rounded-full border border-[var(--enterprise-border)] object-cover"
         />
       </>
     );
   }
   return (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#e2e8f0] bg-[#e0e7ff] text-[10px] font-bold text-[#3730a3]">
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-primary-soft)] text-[10px] font-bold text-[var(--enterprise-primary)]">
       {initial}
     </span>
   );
@@ -1475,7 +1571,7 @@ function BulkAssignSelect({
       <select
         value={v}
         onChange={(e) => setV(e.target.value)}
-        className="h-9 min-w-[8rem] rounded-md border border-[#e2e8f0] bg-white px-2 text-xs"
+        className="h-9 min-w-[8rem] rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 text-xs text-[var(--enterprise-text)]"
       >
         <option value="">Assign…</option>
         <option value="__unassigned">Unassigned</option>
@@ -1485,10 +1581,10 @@ function BulkAssignSelect({
           </option>
         ))}
       </select>
-      <button
-        type="button"
+      <EnterpriseButton
+        size="sm"
+        variant="secondary"
         disabled={!v}
-        className="h-9 rounded-md bg-white px-2 text-xs font-semibold text-[#2563eb] ring-1 ring-[#bfdbfe] disabled:opacity-50"
         onClick={() => {
           if (!v) return;
           const assigneeId = v === "__unassigned" ? null : v;
@@ -1497,7 +1593,7 @@ function BulkAssignSelect({
         }}
       >
         Apply
-      </button>
+      </EnterpriseButton>
     </div>
   );
 }
@@ -1509,30 +1605,31 @@ function BulkStatusSelect({ onApply }: { onApply: (st: string) => void }) {
       <select
         value={v}
         onChange={(e) => setV(e.target.value)}
-        className="h-9 min-w-[8rem] rounded-md border border-[#e2e8f0] bg-white px-2 text-xs"
+        className="h-9 min-w-[8rem] rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 text-xs text-[var(--enterprise-text)]"
       >
         <option value="">Set status…</option>
         {STATUSES.map((s) => (
           <option key={s} value={s}>
-            {STATUS_LABEL[s]}
+            {PUNCH_STATUS_LABEL[s] ?? s}
           </option>
         ))}
       </select>
-      <button
-        type="button"
+      <EnterpriseButton
+        size="sm"
+        variant="secondary"
         disabled={!v}
-        className="h-9 rounded-md bg-white px-2 text-xs font-semibold text-[#2563eb] ring-1 ring-[#bfdbfe] disabled:opacity-50"
         onClick={() => {
           if (v) onApply(v);
           setV("");
         }}
       >
         Apply
-      </button>
+      </EnterpriseButton>
     </div>
   );
 }
 
+// fallow-ignore-next-line complexity
 function PunchDetailSlider({
   open,
   punch,
@@ -1609,6 +1706,14 @@ function PunchDetailSlider({
   const sheetRows = sheetRowsForProject(currentProject);
   const selectedSheet = sheetRows.find((r) => r.fileVersionId === drawingVersionId) ?? null;
   const headerId = "punch-slide-title";
+  const viewerHref = selectedSheet
+    ? `/viewer?${new URLSearchParams({
+        fileId: selectedSheet.fileId,
+        fileVersionId: selectedSheet.fileVersionId,
+        projectId,
+        name: selectedSheet.fileName,
+      }).toString()}`
+    : null;
 
   const save = () => {
     patchMut.mutate(
@@ -1637,114 +1742,169 @@ function PunchDetailSlider({
     );
   };
 
+  const canReadyGc = punch.status === "OPEN" || punch.status === "IN_PROGRESS";
+  const canClose = punch.status === "READY_FOR_GC";
+
   return (
     <EnterpriseSlideOver
       open={open}
       onClose={onClose}
+      panelVariant="floating"
+      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
+      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
       closeOnBackdrop={false}
-      panelMaxWidthClass="max-w-[min(100dvw,560px)] sm:max-w-[560px]"
+      closeOnEscape={false}
       ariaLabelledBy={headerId}
       header={
-        <div>
-          <p id={headerId} className="text-base font-normal text-[#0f172a]">
+        <div className="min-w-0">
+          <p
+            id={headerId}
+            className="text-lg font-semibold tracking-tight text-[var(--enterprise-text)]"
+          >
             Punch List Item #{punch.punchNumber}
           </p>
-          <p className="mt-0.5 text-xs text-[#0f172a]">Edit details below</p>
+          <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">Edit details below</p>
         </div>
       }
       footer={
-        <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-          <button
-            type="button"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-700 hover:bg-red-50"
-            onClick={() => {
-              if (!window.confirm("Delete this punch item?")) return;
-              deleteMut.mutate(punch.id);
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </button>
-          <button
-            type="button"
-            disabled={!dirty || patchMut.isPending}
-            onClick={save}
-            className="inline-flex h-10 items-center justify-center rounded-lg bg-[#2563eb] px-4 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            {patchMut.isPending ? "Saving…" : "Save changes"}
-          </button>
+        <div className="flex w-full flex-col gap-2">
+          {canReadyGc || canClose ? (
+            <div className="flex w-full gap-2">
+              {canReadyGc ? (
+                <EnterpriseButton
+                  type="button"
+                  variant="secondary"
+                  className="flex-1"
+                  disabled={patchMut.isPending || punch.id.startsWith("optimistic-")}
+                  onClick={() =>
+                    patchMut.mutate({ id: punch.id, body: { status: "READY_FOR_GC" } })
+                  }
+                >
+                  Ready for GC
+                </EnterpriseButton>
+              ) : null}
+              {canClose ? (
+                <EnterpriseButton
+                  type="button"
+                  variant="secondary"
+                  className="flex-1"
+                  disabled={patchMut.isPending || punch.id.startsWith("optimistic-")}
+                  onClick={() => patchMut.mutate({ id: punch.id, body: { status: "CLOSED" } })}
+                >
+                  Close
+                </EnterpriseButton>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="flex w-full items-center justify-between gap-2">
+            <EnterpriseButton
+              type="button"
+              variant="danger"
+              onClick={() => {
+                if (!window.confirm("Delete this punch item?")) return;
+                deleteMut.mutate(punch.id);
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </EnterpriseButton>
+            <EnterpriseButton
+              type="button"
+              disabled={!dirty}
+              loading={patchMut.isPending}
+              onClick={save}
+            >
+              {patchMut.isPending ? "Saving…" : "Save"}
+            </EnterpriseButton>
+          </div>
         </div>
       }
-      bodyClassName="px-4 py-4 space-y-4 bg-white"
+      bodyClassName="space-y-4 px-5 py-5"
+      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
     >
-      <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
-        Title
-        <input
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            setDirty(true);
-          }}
-          className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm font-medium text-[#0f172a]"
-        />
-      </label>
-      <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
-        Description / notes
-        <textarea
-          value={description}
-          onChange={(e) => {
-            setDescription(e.target.value);
-            setDirty(true);
-          }}
-          rows={3}
-          className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm"
-        />
-      </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
-          Location
+      <div className={MOBILE_FORM_SECTION}>
+        <div>
+          <label htmlFor={`punch-title-${punch.id}`} className={MOBILE_FIELD_LABEL}>
+            Title
+          </label>
           <input
-            value={location}
+            id={`punch-title-${punch.id}`}
+            value={title}
             onChange={(e) => {
-              setLocation(e.target.value);
+              setTitle(e.target.value);
               setDirty(true);
             }}
-            className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm"
+            className={MOBILE_FIELD_INPUT}
           />
-        </label>
-        <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
-          Priority
-          <select
-            value={priority}
+        </div>
+        <div>
+          <label htmlFor={`punch-notes-${punch.id}`} className={MOBILE_FIELD_LABEL}>
+            Description / notes
+          </label>
+          <textarea
+            id={`punch-notes-${punch.id}`}
+            value={description}
             onChange={(e) => {
-              setPriority(e.target.value);
+              setDescription(e.target.value);
               setDirty(true);
             }}
-            className="mt-1 w-full rounded-md border border-[#e2e8f0] px-2 py-2 text-sm"
-          >
-            {PRIORITIES.map((pr) => (
-              <option key={pr} value={pr}>
-                {PRIORITY_LABEL[pr]}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
-        Trade
-        <input
-          value={trade}
-          onChange={(e) => {
-            setTrade(e.target.value);
-            setDirty(true);
-          }}
-          className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm"
-        />
-      </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
-          Assignees
-          <div className="mt-1">
+            rows={3}
+            className={MOBILE_FIELD_TEXTAREA}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label htmlFor={`punch-loc-${punch.id}`} className={MOBILE_FIELD_LABEL}>
+              Location
+            </label>
+            <input
+              id={`punch-loc-${punch.id}`}
+              value={location}
+              onChange={(e) => {
+                setLocation(e.target.value);
+                setDirty(true);
+              }}
+              className={MOBILE_FIELD_INPUT}
+            />
+          </div>
+          <div>
+            <label htmlFor={`punch-pri-${punch.id}`} className={MOBILE_FIELD_LABEL}>
+              Priority
+            </label>
+            <select
+              id={`punch-pri-${punch.id}`}
+              value={priority}
+              onChange={(e) => {
+                setPriority(e.target.value);
+                setDirty(true);
+              }}
+              className={MOBILE_FIELD_SELECT}
+            >
+              {PRIORITIES.map((pr) => (
+                <option key={pr} value={pr}>
+                  {PUNCH_PRIORITY_LABEL[pr] ?? pr}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label htmlFor={`punch-trade-${punch.id}`} className={MOBILE_FIELD_LABEL}>
+            Trade
+          </label>
+          <input
+            id={`punch-trade-${punch.id}`}
+            value={trade}
+            onChange={(e) => {
+              setTrade(e.target.value);
+              setDirty(true);
+            }}
+            className={MOBILE_FIELD_INPUT}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <p className={MOBILE_FIELD_LABEL}>Assignees</p>
             <EnterpriseMemberMultiPicker
               members={members}
               value={assigneeIds}
@@ -1755,26 +1915,27 @@ function PunchDetailSlider({
               }}
             />
           </div>
-        </label>
-        <label className="block text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
-          Due date
-          <input
-            type="date"
-            value={dueYmd}
-            onChange={(e) => {
-              setDueYmd(e.target.value);
-              setDirty(true);
-            }}
-            className="mt-1 w-full rounded-md border border-[#e2e8f0] px-3 py-2 text-sm"
-          />
-        </label>
+          <div>
+            <label htmlFor={`punch-due-${punch.id}`} className={MOBILE_FIELD_LABEL}>
+              Due date
+            </label>
+            <input
+              id={`punch-due-${punch.id}`}
+              type="date"
+              value={dueYmd}
+              onChange={(e) => {
+                setDueYmd(e.target.value);
+                setDirty(true);
+              }}
+              className={MOBILE_FIELD_INPUT}
+            />
+          </div>
+        </div>
       </div>
 
-      <div>
-        <p className="mb-2 text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
-          Status
-        </p>
-        <div className="flex flex-wrap gap-1">
+      <div className={MOBILE_FORM_SECTION}>
+        <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Status</p>
+        <div className="flex flex-wrap gap-1.5">
           {STATUSES.map((s) => {
             const on = punch.status === s;
             return (
@@ -1787,21 +1948,19 @@ function PunchDetailSlider({
                 }}
                 className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
                   on
-                    ? STATUS_BADGE_CLASS[s]
-                    : "border border-[#e2e8f0] bg-[#f8fafc] text-[#64748b] hover:bg-[#f1f5f9]"
+                    ? punchStatusBadgeClass(s)
+                    : "border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
                 }`}
               >
-                {STATUS_LABEL[s]}
+                {PUNCH_STATUS_LABEL[s] ?? s}
               </button>
             );
           })}
         </div>
       </div>
 
-      <div>
-        <p className="mb-2 text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
-          Photos
-        </p>
+      <div className={MOBILE_FORM_SECTION}>
+        <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Photos</p>
         <input
           id={`slide-photo-${punch.id}`}
           type="file"
@@ -1815,22 +1974,24 @@ function PunchDetailSlider({
               photoMut.mutate({ punchId: punch.id, file });
           }}
         />
-        <button
+        <EnterpriseButton
           type="button"
+          size="sm"
+          variant="secondary"
           disabled={photoMut.isPending || punch.id.startsWith("optimistic-")}
+          loading={photoMut.isPending}
           onClick={() => document.getElementById(`slide-photo-${punch.id}`)?.click()}
-          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#e2e8f0] bg-white px-3 text-xs font-semibold text-[#334155] disabled:opacity-50"
         >
           <Camera className="h-4 w-4" />
           Take / add
-        </button>
+        </EnterpriseButton>
         <div className="mt-2 flex flex-wrap gap-2">
           {photos.map((ph) => (
             <div key={ph.id} className="group relative">
               <PunchPhotoThumb projectId={projectId} punchId={punch.id} photo={ph} />
               <button
                 type="button"
-                className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/75 text-white opacity-100 shadow sm:opacity-0 sm:group-hover:opacity-100"
+                className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--enterprise-text)]/75 text-white opacity-100 shadow sm:opacity-0 sm:group-hover:opacity-100"
                 aria-label="Remove"
                 onClick={() =>
                   removePhotoMut.mutate({
@@ -1846,8 +2007,8 @@ function PunchDetailSlider({
         </div>
       </div>
 
-      <div className="rounded-lg border border-dashed border-[#cbd5e1] bg-[#f8fafc] p-3">
-        <p className="text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">
+      <div className={MOBILE_FORM_SECTION}>
+        <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
           Drawing reference
         </p>
         <select
@@ -1856,7 +2017,7 @@ function PunchDetailSlider({
             setDrawingVersionId(e.target.value);
             setDirty(true);
           }}
-          className="mt-2 w-full rounded-md border border-[#e2e8f0] bg-white px-2 py-2 text-xs text-[#0f172a]"
+          className={MOBILE_FIELD_SELECT}
         >
           <option value="">No drawing reference</option>
           {sheetRows.map((r) => (
@@ -1865,41 +2026,32 @@ function PunchDetailSlider({
             </option>
           ))}
         </select>
-        <Link
-          href={
-            selectedSheet
-              ? `/projects/${projectId}/files?fileVersionId=${encodeURIComponent(selectedSheet.fileVersionId)}`
-              : `/projects/${projectId}/files`
-          }
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-[#e2e8f0] bg-white py-2.5 text-xs font-semibold text-[#2563eb] hover:bg-[#eff6ff]"
-        >
-          <FileText className="h-4 w-4 shrink-0" />
-          {selectedSheet ? "Open selected sheet" : "Drawings & files"}
-          <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
-        </Link>
+        <div className="mt-2 flex flex-col gap-2">
+          {viewerHref ? (
+            <Link
+              href={viewerHref}
+              className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-hover-surface)]"
+            >
+              Open in viewer
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+            </Link>
+          ) : null}
+          <Link
+            href={
+              selectedSheet
+                ? `/projects/${projectId}/files?fileVersionId=${encodeURIComponent(selectedSheet.fileVersionId)}`
+                : `/projects/${projectId}/files`
+            }
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
+          >
+            <FileText className="h-4 w-4 shrink-0" />
+            {selectedSheet ? "Open selected sheet" : "Drawings & files"}
+            <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
+          </Link>
+        </div>
       </div>
 
-      <div className="border-t border-[#e2e8f0] pt-3">
-        <p className="text-[11px] font-normal uppercase tracking-wide text-[#0f172a]">Activity</p>
-        <p className="mt-1 text-xs text-[#0f172a]">
-          Created{" "}
-          {new Date(punch.createdAt).toLocaleString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          })}
-        </p>
-        {punch.updatedAt !== punch.createdAt ? (
-          <p className="text-xs text-[#0f172a]">
-            Last updated{" "}
-            {new Date(punch.updatedAt).toLocaleString("en-GB", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}
-          </p>
-        ) : null}
-      </div>
+      <PunchActivityTimeline punch={punch} />
     </EnterpriseSlideOver>
   );
 }

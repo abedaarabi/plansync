@@ -13,6 +13,7 @@ import {
 import { useMemo } from "react";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { OmEmptyState } from "@/components/enterprise/OmEmptyState";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import {
   fetchProjects,
@@ -64,6 +65,7 @@ function formatDate(iso: string): string {
 
 type ProposalWithProject = ProposalListRow & { projectId: string; projectName: string };
 
+// fallow-ignore-next-line complexity
 export function ProposalsDashboardClient() {
   const { primary, loading } = useEnterpriseWorkspace();
   const workspace = primary?.workspace;
@@ -373,8 +375,12 @@ export function ProposalsDashboardClient() {
 
         <ul className="divide-y divide-[var(--enterprise-border)] md:hidden">
           {recentRows.length === 0 ? (
-            <li className="px-5 py-8 text-center text-sm text-[var(--enterprise-text-muted)]">
-              No proposals yet across your projects.
+            <li className="p-4">
+              <OmEmptyState
+                icon={FileSpreadsheet}
+                title="No proposals yet"
+                description="Create a proposal in any project to see it here across your workspace."
+              />
             </li>
           ) : (
             recentRows.map((proposal) => (
@@ -456,11 +462,12 @@ export function ProposalsDashboardClient() {
               ))}
               {recentRows.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="px-5 py-8 text-center text-sm text-[var(--enterprise-text-muted)] sm:px-6"
-                  >
-                    No proposals yet across your projects.
+                  <td colSpan={6} className="px-5 py-6 sm:px-6">
+                    <OmEmptyState
+                      icon={FileSpreadsheet}
+                      title="No proposals yet"
+                      description="Create a proposal in any project to see it here across your workspace."
+                    />
                   </td>
                 </tr>
               ) : null}

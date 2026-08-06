@@ -2,27 +2,7 @@
 
 import DOMPurify from "isomorphic-dompurify";
 
-let rfiMessagePurifyHooksInstalled = false;
-
-/** Keep only safe `color:` declarations; DOMPurify may drop `style` inconsistently across environments. */
-function ensureRfiMessagePurifyStyleHook() {
-  if (rfiMessagePurifyHooksInstalled) return;
-  rfiMessagePurifyHooksInstalled = true;
-  DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
-    if (data.attrName !== "style") return;
-    const raw = (data.attrValue || "").trim();
-    if (!raw) {
-      data.keepAttr = false;
-      return;
-    }
-    const colorOnly =
-      /^\s*color:\s*(#[0-9a-f]{3,8}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)|rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*[\d.]+\s*\))\s*;?\s*$/i;
-    if (!colorOnly.test(raw)) {
-      data.keepAttr = false;
-    }
-  });
-}
-
+/** Matches TipTap document / proposal cover allowlist used for RFI discussion. */
 const PURIFY_CONFIG: Parameters<typeof DOMPurify.sanitize>[1] = {
   ALLOWED_TAGS: [
     "p",
@@ -34,12 +14,34 @@ const PURIFY_CONFIG: Parameters<typeof DOMPurify.sanitize>[1] = {
     "u",
     "s",
     "strike",
+    "del",
+    "sub",
+    "sup",
+    "mark",
     "span",
     "ul",
     "ol",
     "li",
     "a",
     "blockquote",
+    "div",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "hr",
+    "img",
+    "table",
+    "thead",
+    "tbody",
+    "tfoot",
+    "tr",
+    "th",
+    "td",
+    "colgroup",
+    "col",
+    "input",
+    "label",
   ],
   ALLOWED_ATTR: [
     "href",
@@ -47,9 +49,27 @@ const PURIFY_CONFIG: Parameters<typeof DOMPurify.sanitize>[1] = {
     "rel",
     "style",
     "class",
+    "src",
+    "alt",
+    "title",
+    "width",
+    "height",
+    "colspan",
+    "rowspan",
+    "colwidth",
+    "border",
+    "cellpadding",
+    "cellspacing",
+    "type",
+    "checked",
+    "disabled",
     "data-type",
     "data-id",
     "data-label",
+    "data-checked",
+    "data-indent",
+    "data-color",
+    "data-text-align",
     "data-mention-suggestion-char",
   ],
 };
@@ -72,11 +92,10 @@ export function RfiMessageHtmlBody({ html, className = "" }: Props) {
       </p>
     );
   }
-  ensureRfiMessagePurifyStyleHook();
   const clean = DOMPurify.sanitize(html, PURIFY_CONFIG);
   return (
     <div
-      className={`rfi-rich-body ${top} max-w-none text-sm leading-relaxed text-[var(--enterprise-text)] prose prose-sm dark:prose-invert prose-p:my-1 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1 prose-strong:text-[var(--enterprise-text)] [&_a]:text-[var(--enterprise-primary)] [&_span[style*='color']_strong]:text-inherit [&_span[style*='color']_em]:text-inherit [&_span[style*='color']_s]:text-inherit [&_span[style*='color']_u]:text-inherit [&_[data-type=mention]]:rounded [&_[data-type=mention]]:bg-[var(--enterprise-primary)]/12 [&_[data-type=mention]]:px-1 [&_[data-type=mention]]:font-medium [&_[data-type=mention]]:text-[var(--enterprise-primary)] ${className}`}
+      className={`rfi-rich-body ${top} prose prose-sm max-w-none text-sm leading-relaxed text-[var(--enterprise-text)] dark:prose-invert prose-p:my-1 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1 prose-strong:text-[var(--enterprise-text)] prose-table:my-2 prose-th:border prose-td:border prose-img:max-w-full prose-img:rounded [&_a]:text-[var(--enterprise-primary)] [&_[data-type=mention]]:rounded [&_[data-type=mention]]:bg-[var(--enterprise-primary)]/12 [&_[data-type=mention]]:px-1 [&_[data-type=mention]]:font-medium [&_[data-type=mention]]:text-[var(--enterprise-primary)] ${className}`}
       dangerouslySetInnerHTML={{ __html: clean }}
     />
   );

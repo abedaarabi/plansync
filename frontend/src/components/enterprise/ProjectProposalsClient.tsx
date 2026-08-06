@@ -14,7 +14,9 @@ import {
 } from "lucide-react";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { OmEmptyState } from "@/components/enterprise/OmEmptyState";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
+import { ProposalsOverview } from "@/components/enterprise/ProposalsOverview";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   fetchProposalAnalyticsSummary,
@@ -24,6 +26,10 @@ import {
 } from "@/lib/api-client";
 import { proposalStatusBadgeClass, proposalStatusLabel } from "@/lib/proposalStatus";
 import {
+  proposalMatchesOverviewFilter,
+  type ProposalsOverviewFilter,
+} from "@/lib/proposalsOverviewStats";
+import {
   OM_COMPACT_CHIP_ACTIVE,
   OM_COMPACT_CHIP_IDLE,
   OM_COMPACT_INPUT,
@@ -32,6 +38,7 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { useProjectCurrency } from "@/hooks/useProjectCurrency";
+import { useTickNowMs } from "@/lib/useTickNowMs";
 
 const FILTER_KEYS = [
   "ALL",
@@ -42,7 +49,8 @@ const FILTER_KEYS = [
   "DECLINED",
   "EXPIRED",
   "CHANGE_REQUESTED",
-] as const;
+  "EXPIRING",
+] as const satisfies readonly ProposalsOverviewFilter[];
 
 type StatusFilter = (typeof FILTER_KEYS)[number];
 
@@ -55,6 +63,7 @@ const FILTER_LABEL: Record<StatusFilter, string> = {
   DECLINED: "Declined",
   EXPIRED: "Expired",
   CHANGE_REQUESTED: "Change requested",
+  EXPIRING: "Expiring",
 };
 
 function fmtMoney(amount: string, currency: string) {
@@ -80,6 +89,11 @@ function formatSentDate(iso: string | null): string {
   });
 }
 
+function filterCount(key: StatusFilter, proposals: ProposalListRow[], nowMs: number): number {
+  if (key === "ALL") return proposals.length;
+  return proposals.filter((p) => proposalMatchesOverviewFilter(p, key, nowMs)).length;
+}
+
 // fallow-ignore-next-line complexity
 export function ProjectProposalsClient({
   projectId,
@@ -92,6 +106,7 @@ export function ProjectProposalsClient({
   const wid = primary?.workspace.id;
   const isPro = isWorkspaceProClient(primary?.workspace);
   const { currency: projectCurrency } = useProjectCurrency(projectId);
+  const nowMs = useTickNowMs();
 
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [search, setSearch] = useState("");
@@ -108,21 +123,22 @@ export function ProjectProposalsClient({
     enabled: Boolean(wid && isPro),
   });
 
-  const statusCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    if (!data?.proposals) return m;
-    for (const p of data.proposals) {
-      m.set(p.status, (m.get(p.status) ?? 0) + 1);
-    }
-    return m;
-  }, [data]);
+  const onOverviewFilterChange = (key: ProposalsOverviewFilter) => {
+    setFilter(key);
+  };
+
+  const onStatusChipChange = (key: StatusFilter) => {
+    setFilter(key);
+  };
+
+  const clearFilters = () => {
+    setFilter("ALL");
+    setSearch("");
+  };
 
   const filteredProposals = useMemo(() => {
     if (!data?.proposals) return [];
-    let rows = data.proposals;
-    if (filter !== "ALL") {
-      rows = rows.filter((p) => p.status === filter);
-    }
+    let rows = data.proposals.filter((p) => proposalMatchesOverviewFilter(p, filter, nowMs));
     const q = search.trim().toLowerCase();
     if (q) {
       rows = rows.filter(
@@ -133,7 +149,7 @@ export function ProjectProposalsClient({
       );
     }
     return rows;
-  }, [data, filter, search]);
+  }, [data, filter, search, nowMs]);
 
   if (ctxLoading || (isPro && !wid)) {
     return <EnterpriseLoadingState label="Loading workspace…" />;
@@ -166,13 +182,9 @@ export function ProjectProposalsClient({
             ? error.message
             : "Check that the API is running and try a hard refresh (Cmd+Shift+R)."}
         </p>
-        <button
-          type="button"
-          onClick={() => void refetch()}
-          className="mt-4 rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--enterprise-primary-deep)]"
-        >
+        <EnterpriseButton size="sm" className="mt-4" onClick={() => void refetch()}>
           Try again
-        </button>
+        </EnterpriseButton>
       </div>
     );
   }
@@ -190,9 +202,9 @@ export function ProjectProposalsClient({
   const emptyAfterFilter = totalCount > 0 && filteredProposals.length === 0;
   const completelyEmpty = totalCount === 0;
   const awaitingResponse =
-    (statusCounts.get("SENT") ?? 0) +
-    (statusCounts.get("VIEWED") ?? 0) +
-    (statusCounts.get("CHANGE_REQUESTED") ?? 0);
+    filterCount("SENT", data.proposals, nowMs) +
+    filterCount("VIEWED", data.proposals, nowMs) +
+    filterCount("CHANGE_REQUESTED", data.proposals, nowMs);
 
   return (
     <div className={`${OM_PAGE_CLASS} w-full min-w-0 max-w-full`}>
@@ -221,6 +233,12 @@ export function ProjectProposalsClient({
         }
       />
 
+      <ProposalsOverview
+        rows={data.proposals}
+        filter={filter}
+        onFilterChange={onOverviewFilterChange}
+      />
+
       <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <article className="enterprise-card relative overflow-hidden p-3 sm:col-span-2 xl:col-span-2">
           <div
@@ -243,7 +261,7 @@ export function ProjectProposalsClient({
           icon={Inbox}
           label="Awaiting response"
           value={String(awaitingResponse)}
-          hint={`${data.stats.sent} sent · ${statusCounts.get("VIEWED") ?? 0} viewed`}
+          hint={`${data.stats.sent} sent · ${filterCount("VIEWED", data.proposals, nowMs)} viewed`}
         />
         <MetricCard
           icon={TrendingUp}
@@ -256,16 +274,6 @@ export function ProjectProposalsClient({
                 : "…"
           }
           hint={`${data.stats.accepted} accepted · ${data.stats.declined} declined`}
-        />
-      </section>
-
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <CompactStat label="Accepted" value={String(data.stats.accepted)} />
-        <CompactStat label="Draft" value={String(data.stats.draft)} />
-        <CompactStat label="Declined" value={String(data.stats.declined)} />
-        <CompactStat
-          label="Total"
-          value={analytics != null ? String(analytics.totalProposals) : "…"}
         />
       </section>
 
@@ -301,7 +309,7 @@ export function ProjectProposalsClient({
           aria-label="Filter by status"
         >
           {FILTER_KEYS.map((key) => {
-            const count = key === "ALL" ? totalCount : (statusCounts.get(key) ?? 0);
+            const count = filterCount(key, data.proposals, nowMs);
             const showCount = key === "ALL" || count > 0;
             return (
               <button
@@ -309,7 +317,7 @@ export function ProjectProposalsClient({
                 type="button"
                 role="tab"
                 aria-selected={filter === key}
-                onClick={() => setFilter(key)}
+                onClick={() => onStatusChipChange(key)}
                 className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                   filter === key ? OM_COMPACT_CHIP_ACTIVE : OM_COMPACT_CHIP_IDLE
                 }`}
@@ -325,25 +333,43 @@ export function ProjectProposalsClient({
         </div>
       </section>
 
-      <ul className="space-y-3 md:hidden" aria-label="Proposal list">
-        {completelyEmpty ? (
-          <EmptyProposalsState base={base} />
-        ) : emptyAfterFilter ? (
-          <li className="enterprise-card px-4 py-12 text-center text-sm text-[var(--enterprise-text-muted)]">
-            No proposals match this filter or search.
-          </li>
-        ) : (
-          filteredProposals.map((p) => <ProposalCard key={p.id} p={p} base={base} />)
-        )}
-      </ul>
+      {completelyEmpty ? (
+        <OmEmptyState
+          icon={FileSpreadsheet}
+          title="No proposals yet"
+          description="Create a proposal to send a priced offer to your client and track their response."
+          action={
+            <EnterpriseButton
+              size="sm"
+              onClick={() => {
+                window.location.href = `${base}/new`;
+              }}
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
+              New proposal
+            </EnterpriseButton>
+          }
+        />
+      ) : emptyAfterFilter ? (
+        <OmEmptyState
+          icon={FileSpreadsheet}
+          title="No proposals match"
+          description="Try clearing filters or searching with different terms."
+          action={
+            <EnterpriseButton size="sm" variant="secondary" onClick={clearFilters}>
+              Reset filters
+            </EnterpriseButton>
+          }
+        />
+      ) : (
+        <>
+          <ul className="space-y-3 md:hidden" aria-label="Proposal list">
+            {filteredProposals.map((p) => (
+              <ProposalCard key={p.id} p={p} base={base} />
+            ))}
+          </ul>
 
-      <section className="enterprise-card hidden overflow-hidden md:block">
-        {completelyEmpty ? (
-          <div className="px-6 py-14">
-            <EmptyProposalsState base={base} />
-          </div>
-        ) : (
-          <>
+          <section className="enterprise-card hidden overflow-hidden md:block">
             <div className="hidden grid-cols-[72px_minmax(200px,2fr)_120px_minmax(120px,1fr)_100px_120px] gap-3 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)] lg:grid">
               <span>#</span>
               <span>Proposal</span>
@@ -353,17 +379,13 @@ export function ProjectProposalsClient({
               <span className="text-right">Value</span>
             </div>
             <div className="divide-y divide-[var(--enterprise-border)]">
-              {emptyAfterFilter ? (
-                <p className="px-6 py-14 text-center text-sm text-[var(--enterprise-text-muted)]">
-                  No proposals match this filter or search.
-                </p>
-              ) : (
-                filteredProposals.map((p) => <ProposalTableRow key={p.id} p={p} base={base} />)
-              )}
+              {filteredProposals.map((p) => (
+                <ProposalTableRow key={p.id} p={p} base={base} />
+              ))}
             </div>
-          </>
-        )}
-      </section>
+          </section>
+        </>
+      )}
     </div>
   );
 }
@@ -394,40 +416,6 @@ function MetricCard({
         ) : null}
       </div>
     </article>
-  );
-}
-
-function CompactStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-xs)]">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-        {label}
-      </p>
-      <p className="mt-0.5 text-base font-semibold tabular-nums text-[var(--enterprise-text)]">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function EmptyProposalsState({ base }: { base: string }) {
-  return (
-    <li className="enterprise-card flex flex-col items-center px-6 py-14 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
-        <FileSpreadsheet className="h-6 w-6" strokeWidth={1.5} />
-      </div>
-      <p className="mt-4 text-sm font-medium text-[var(--enterprise-text)]">No proposals yet</p>
-      <p className="mt-1 max-w-sm text-sm text-[var(--enterprise-text-muted)]">
-        Create a proposal to send a priced offer to your client and track their response.
-      </p>
-      <Link
-        href={`${base}/new`}
-        className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)]"
-      >
-        <Plus className="h-4 w-4" />
-        New proposal
-      </Link>
-    </li>
   );
 }
 

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { DeleteProposalConfirmDialog } from "@/components/enterprise/DeleteProposalConfirmDialog";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { ProposalLetterPreviewDialog } from "@/components/enterprise/ProposalLetterPreviewDialog";
 import { ProposalPdfLightbox } from "@/components/enterprise/ProposalPdfLightbox";
@@ -24,6 +25,7 @@ import {
   previewProposalHtml,
   resendProposal,
 } from "@/lib/api-client";
+import { proposalStatusBadgeClass, proposalStatusLabel } from "@/lib/proposalStatus";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 
@@ -40,6 +42,17 @@ function fmtMoney(amount: string, currency: string) {
   }
 }
 
+function formatWhen(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// fallow-ignore-next-line complexity
 export function ProposalDetailClient({
   projectId,
   proposalId,
@@ -178,26 +191,29 @@ export function ProposalDetailClient({
   if (ctxLoading || (isPro && !wid)) return <EnterpriseLoadingState label="Loading…" />;
   if (!isPro)
     return (
-      <div className="text-amber-800">Proposals require a Pro workspace (active or trial).</div>
+      <div className="enterprise-alert-warning p-6 text-sm">
+        Proposals require a Pro workspace (active or trial).
+      </div>
     );
   if (isPending) return <EnterpriseLoadingState label="Loading proposal…" />;
   if (isError || !p) {
     return (
-      <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-red-200 bg-red-50/90 p-6 text-red-900">
-        <p className="font-medium">Could not load this proposal.</p>
-        <p className="text-sm opacity-90">
+      <div className="enterprise-alert-danger mx-auto max-w-lg space-y-4 p-6">
+        <p className="font-medium text-[var(--enterprise-semantic-danger-text)]">
+          Could not load this proposal.
+        </p>
+        <p className="text-sm text-[var(--enterprise-semantic-danger-text)]/90">
           {loadError instanceof Error
             ? loadError.message
             : "Check that the API is running and you are signed in."}
         </p>
-        <button
-          type="button"
-          onClick={() => void refetch()}
-          className="rounded-lg bg-red-900 px-4 py-2 text-sm font-medium text-white hover:bg-red-800"
-        >
+        <EnterpriseButton size="sm" variant="danger" onClick={() => void refetch()}>
           Try again
-        </button>
-        <Link href={base} className="block text-sm font-medium text-red-800 underline">
+        </EnterpriseButton>
+        <Link
+          href={base}
+          className="block text-sm font-medium text-[var(--enterprise-primary)] underline"
+        >
           ← Back to proposals
         </Link>
       </div>
@@ -210,6 +226,9 @@ export function ProposalDetailClient({
     p.status === "SENT" ||
     p.status === "VIEWED";
 
+  const actionsBusy =
+    reviewLoading || pdfLoading || csvLoading || esignLoading || resendMut.isPending;
+
   return (
     <div className="mx-auto max-w-4xl space-y-3">
       <DeleteProposalConfirmDialog
@@ -221,21 +240,25 @@ export function ProposalDetailClient({
         onConfirm={() => delMut.mutate()}
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href={base} className="text-sm font-medium text-[#2563EB] hover:underline">
+        <Link
+          href={base}
+          className="text-sm font-medium text-[var(--enterprise-primary)] hover:underline"
+        >
           ← Proposals
         </Link>
         {editable ? (
-          <Link
-            href={`${base}/${proposalId}/edit`}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#2563EB] px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          <EnterpriseButton
+            size="sm"
+            onClick={() => {
+              router.push(`${base}/${proposalId}/edit`);
+            }}
           >
-            <Loader2 className="hidden h-3.5 w-3.5" aria-hidden />
             Edit proposal
-          </Link>
+          </EnterpriseButton>
         ) : null}
       </div>
 
-      <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+      <div className="enterprise-card p-4 sm:p-5">
         {p.workspaceLogoUrl ? (
           <div className="mb-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -246,33 +269,50 @@ export function ProposalDetailClient({
             />
           </div>
         ) : null}
-        <div className="text-sm font-medium text-slate-500">{p.reference}</div>
-        <h1 className="mt-1 text-xl font-semibold text-[#0F172A] sm:text-2xl">{p.title}</h1>
-        <div className="mt-2 flex flex-wrap gap-2 text-sm">
-          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-700">
-            {p.status.replace(/_/g, " ")}
+        <div className="text-sm font-medium text-[var(--enterprise-text-muted)]">{p.reference}</div>
+        <h1 className="mt-1 text-xl font-semibold text-[var(--enterprise-text)] sm:text-2xl">
+          {p.title}
+        </h1>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className={proposalStatusBadgeClass(p.status)}>
+            {proposalStatusLabel(p.status)}
           </span>
-          <span className="text-slate-600">{fmtMoney(p.total, p.currency)}</span>
+          <span className="font-semibold tabular-nums text-[var(--enterprise-text)]">
+            {fmtMoney(p.total, p.currency)}
+          </span>
+          {p.validUntil ? (
+            <span className="text-[var(--enterprise-text-muted)]">
+              Valid until{" "}
+              {new Date(p.validUntil).toLocaleDateString(undefined, {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </span>
+          ) : null}
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
-          <Milestone label="Sent" at={p.sentAt} />
-          <Milestone label="Viewed" at={p.firstViewedAt} />
-          <Milestone label="Accepted" at={p.acceptedAt} />
+        <div className="mt-6">
+          <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Lifecycle</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            <Milestone label="Sent" at={p.sentAt} />
+            <Milestone label="Viewed" at={p.firstViewedAt} />
+            <Milestone label="Accepted" at={p.acceptedAt} />
+          </div>
         </div>
 
         {p.changeRequestComment ? (
-          <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-amber-950">
-            <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+          <div className="mt-6 rounded-xl border border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] p-4 text-[var(--enterprise-semantic-warning-text)]">
+            <div className="text-xs font-semibold uppercase tracking-wide">
               Client requested changes
             </div>
             {p.changeRequestedAt ? (
-              <div className="mt-1 text-xs text-amber-800/80">
+              <div className="mt-1 text-xs opacity-80">
                 {new Date(p.changeRequestedAt).toLocaleString()}
               </div>
             ) : null}
             <p className="mt-2 whitespace-pre-wrap text-sm">{p.changeRequestComment}</p>
-            <p className="mt-3 text-xs text-amber-800/80">
+            <p className="mt-3 text-xs opacity-80">
               Update the proposal in the editor, then re-send the email from this page when you are
               ready. Ongoing chat with the client is in{" "}
               <span className="font-medium">Client portal messages</span> below.
@@ -283,32 +323,38 @@ export function ProposalDetailClient({
         {p.publicToken ? (
           <div
             id="proposal-portal-messages"
-            className="mt-6 rounded-xl border border-slate-200 bg-slate-50/90 p-4"
+            className="mt-6 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 p-4"
           >
-            <h2 className="text-sm font-semibold text-[#0F172A]">Client portal messages</h2>
-            <p className="mt-1 text-xs text-slate-600">
+            <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
+              Client portal messages
+            </h2>
+            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
               Same thread as on the client&apos;s proposal link. When they write in
               &quot;Messages&quot; there, it appears here.
             </p>
             {portalMsgLoading ? (
-              <p className="mt-3 text-sm text-slate-500">Loading messages…</p>
+              <p className="mt-3 text-sm text-[var(--enterprise-text-muted)]">Loading messages…</p>
             ) : (
               <ul className="mt-3 space-y-2 text-sm">
                 {(portalMsgData?.messages ?? []).length === 0 ? (
-                  <li className="text-slate-500">No messages yet.</li>
+                  <li className="text-[var(--enterprise-text-muted)]">No messages yet.</li>
                 ) : (
                   (portalMsgData?.messages ?? []).map((m) => (
                     <li
                       key={m.id}
                       className={`rounded-lg border px-3 py-2 ${
-                        m.isFromClient ? "border-slate-200 bg-white" : "border-blue-100 bg-blue-50"
+                        m.isFromClient
+                          ? "border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]"
+                          : "border-[color-mix(in_srgb,var(--enterprise-primary)_20%,var(--enterprise-border))] bg-[var(--enterprise-primary-soft)]"
                       }`}
                     >
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-[var(--enterprise-text-muted)]">
                         {m.isFromClient ? p.clientName : "Your team"} ·{" "}
                         {new Date(m.createdAt).toLocaleString()}
                       </div>
-                      <div className="mt-1 whitespace-pre-wrap text-slate-800">{m.body}</div>
+                      <div className="mt-1 whitespace-pre-wrap text-[var(--enterprise-text)]">
+                        {m.body}
+                      </div>
                     </li>
                   ))
                 )}
@@ -317,7 +363,7 @@ export function ProposalDetailClient({
             {p.status === "SENT" || p.status === "VIEWED" || p.status === "CHANGE_REQUESTED" ? (
               <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
                 <textarea
-                  className="min-h-[72px] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:cursor-wait disabled:bg-slate-50 disabled:opacity-70"
+                  className="min-h-[72px] flex-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] disabled:cursor-wait disabled:opacity-70"
                   placeholder={
                     portalPostMut.isPending
                       ? "Sending…"
@@ -328,11 +374,11 @@ export function ProposalDetailClient({
                   aria-busy={portalPostMut.isPending}
                   onChange={(e) => setPortalReply(e.target.value)}
                 />
-                <button
-                  type="button"
+                <EnterpriseButton
+                  size="sm"
                   disabled={!portalReply.trim() || portalPostMut.isPending}
-                  aria-busy={portalPostMut.isPending}
-                  className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white aria-busy:cursor-wait disabled:pointer-events-none disabled:opacity-50 mobile-tappable-row min-h-14 active:scale-[0.99]"
+                  loading={portalPostMut.isPending}
+                  className="shrink-0"
                   onClick={() => {
                     const text = portalReply.trim();
                     if (!text || portalPostMut.isPending || portalReplyLockRef.current) return;
@@ -352,35 +398,34 @@ export function ProposalDetailClient({
                   ) : (
                     "Send reply"
                   )}
-                </button>
+                </EnterpriseButton>
               </div>
             ) : null}
           </div>
         ) : null}
 
-        <div className="mt-6 flex flex-wrap gap-2 border-t border-slate-100 pt-6">
-          {/* Copy share link */}
+        <div className="mt-6 flex flex-wrap gap-2 border-t border-[var(--enterprise-border)] pt-6">
           {p.publicToken && (
-            <button
-              type="button"
+            <EnterpriseButton
+              size="sm"
+              variant="secondary"
               onClick={() => {
                 const url = `${window.location.origin}/proposal/${p.publicToken}`;
                 void navigator.clipboard
                   .writeText(url)
                   .then(() => toast.success("Portal link copied"));
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium transition hover:bg-slate-50"
               title="Copy client portal link"
             >
               <Copy className="h-4 w-4 shrink-0" aria-hidden />
               Copy link
-            </button>
+            </EnterpriseButton>
           )}
-          <button
-            type="button"
-            disabled={
-              reviewLoading || pdfLoading || csvLoading || esignLoading || resendMut.isPending
-            }
+          <EnterpriseButton
+            size="sm"
+            variant="secondary"
+            disabled={actionsBusy}
+            loading={reviewLoading}
             onClick={async () => {
               setReviewLoading(true);
               try {
@@ -397,7 +442,6 @@ export function ProposalDetailClient({
                 setReviewLoading(false);
               }
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium disabled:opacity-60"
           >
             {reviewLoading ? (
               <>
@@ -405,14 +449,14 @@ export function ProposalDetailClient({
                 Loading…
               </>
             ) : (
-              "Review cover letter"
+              "Preview"
             )}
-          </button>
-          <button
-            type="button"
-            disabled={
-              pdfLoading || reviewLoading || csvLoading || esignLoading || resendMut.isPending
-            }
+          </EnterpriseButton>
+          <EnterpriseButton
+            size="sm"
+            variant="secondary"
+            disabled={actionsBusy}
+            loading={pdfLoading}
             onClick={async () => {
               setPdfLoading(true);
               try {
@@ -425,7 +469,6 @@ export function ProposalDetailClient({
                 setPdfLoading(false);
               }
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium disabled:opacity-60"
           >
             {pdfLoading ? (
               <>
@@ -435,13 +478,11 @@ export function ProposalDetailClient({
             ) : (
               "Review PDF"
             )}
-          </button>
-          {/* Download PDF directly */}
-          <button
-            type="button"
-            disabled={
-              pdfLoading || reviewLoading || csvLoading || esignLoading || resendMut.isPending
-            }
+          </EnterpriseButton>
+          <EnterpriseButton
+            size="sm"
+            disabled={actionsBusy}
+            loading={pdfLoading}
             onClick={async () => {
               setPdfLoading(true);
               try {
@@ -458,7 +499,6 @@ export function ProposalDetailClient({
                 setPdfLoading(false);
               }
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium disabled:opacity-60"
           >
             {pdfLoading ? (
               <>
@@ -468,13 +508,13 @@ export function ProposalDetailClient({
             ) : (
               "Download PDF"
             )}
-          </button>
+          </EnterpriseButton>
           {p.status === "ACCEPTED" && (
-            <button
-              type="button"
-              disabled={
-                csvLoading || reviewLoading || pdfLoading || esignLoading || resendMut.isPending
-              }
+            <EnterpriseButton
+              size="sm"
+              variant="secondary"
+              disabled={actionsBusy}
+              loading={csvLoading}
               onClick={async () => {
                 setCsvLoading(true);
                 try {
@@ -485,7 +525,6 @@ export function ProposalDetailClient({
                   setCsvLoading(false);
                 }
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium disabled:opacity-60"
             >
               {csvLoading ? (
                 <>
@@ -495,13 +534,13 @@ export function ProposalDetailClient({
               ) : (
                 "Export CSV"
               )}
-            </button>
+            </EnterpriseButton>
           )}
-          <button
-            type="button"
-            disabled={
-              esignLoading || reviewLoading || pdfLoading || csvLoading || resendMut.isPending
-            }
+          <EnterpriseButton
+            size="sm"
+            variant="secondary"
+            disabled={actionsBusy}
+            loading={esignLoading}
             onClick={async () => {
               setEsignLoading(true);
               try {
@@ -513,7 +552,6 @@ export function ProposalDetailClient({
                 setEsignLoading(false);
               }
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
           >
             {esignLoading ? (
               <>
@@ -523,15 +561,12 @@ export function ProposalDetailClient({
             ) : (
               "E-sign handoff"
             )}
-          </button>
+          </EnterpriseButton>
           {(p.status === "SENT" || p.status === "VIEWED" || p.status === "CHANGE_REQUESTED") && (
-            <button
-              type="button"
-              disabled={
-                resendMut.isPending || reviewLoading || pdfLoading || csvLoading || esignLoading
-              }
-              aria-busy={resendMut.isPending}
-              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium aria-busy:cursor-wait disabled:pointer-events-none disabled:opacity-60 mobile-tappable-row min-h-14 active:scale-[0.99]"
+            <EnterpriseButton
+              size="sm"
+              disabled={actionsBusy}
+              loading={resendMut.isPending}
               onClick={() => {
                 if (resendLockRef.current || resendMut.isPending) return;
                 resendLockRef.current = true;
@@ -548,22 +583,16 @@ export function ProposalDetailClient({
                   Sending…
                 </>
               ) : (
-                "Resend email"
+                "Resend"
               )}
-            </button>
+            </EnterpriseButton>
           )}
-          <button
-            type="button"
+          <EnterpriseButton
+            size="sm"
+            variant="secondary"
             onClick={() => dupMut.mutate()}
-            disabled={
-              dupMut.isPending ||
-              reviewLoading ||
-              pdfLoading ||
-              csvLoading ||
-              esignLoading ||
-              resendMut.isPending
-            }
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium disabled:opacity-60"
+            disabled={dupMut.isPending || actionsBusy}
+            loading={dupMut.isPending}
           >
             {dupMut.isPending ? (
               <>
@@ -573,23 +602,23 @@ export function ProposalDetailClient({
             ) : (
               "Duplicate"
             )}
-          </button>
-          <button
-            type="button"
+          </EnterpriseButton>
+          <EnterpriseButton
+            size="sm"
+            variant="danger"
             onClick={() => setDeleteOpen(true)}
             disabled={delMut.isPending}
-            className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-100 disabled:opacity-50"
           >
             Delete
-          </button>
+          </EnterpriseButton>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
-        <h2 className="font-semibold text-[#0F172A]">Breakdown</h2>
+      <div className="enterprise-card p-4 sm:p-6">
+        <h2 className="font-semibold text-[var(--enterprise-text)]">Breakdown</h2>
         <div className="mobile-table-wrap mt-3 overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
+            <thead className="bg-[var(--enterprise-bg)] text-left text-xs font-semibold uppercase text-[var(--enterprise-text-muted)]">
               <tr>
                 <th className="px-3 py-2">Item</th>
                 <th className="px-3 py-2 text-right">Qty</th>
@@ -600,14 +629,16 @@ export function ProposalDetailClient({
             </thead>
             <tbody>
               {p.items.map((it) => (
-                <tr key={it.id} className="border-t border-slate-100">
-                  <td className="px-3 py-2">{it.itemName}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{it.quantity}</td>
-                  <td className="px-3 py-2">{it.unit}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
+                <tr key={it.id} className="border-t border-[var(--enterprise-border)]">
+                  <td className="px-3 py-2 text-[var(--enterprise-text)]">{it.itemName}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-[var(--enterprise-text)]">
+                    {it.quantity}
+                  </td>
+                  <td className="px-3 py-2 text-[var(--enterprise-text-muted)]">{it.unit}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-[var(--enterprise-text)]">
                     {fmtMoney(it.rate, p.currency)}
                   </td>
-                  <td className="px-3 py-2 text-right font-medium tabular-nums">
+                  <td className="px-3 py-2 text-right font-medium tabular-nums text-[var(--enterprise-text)]">
                     {fmtMoney(it.lineTotal, p.currency)}
                   </td>
                 </tr>
@@ -615,7 +646,7 @@ export function ProposalDetailClient({
             </tbody>
           </table>
         </div>
-        <div className="mt-3 space-y-1 text-right text-sm">
+        <div className="mt-3 space-y-1 text-right text-sm text-[var(--enterprise-text-muted)]">
           <div>Subtotal: {fmtMoney(p.subtotal, p.currency)}</div>
           {Number(p.workPricePercent) > 0 && (
             <div>
@@ -627,20 +658,23 @@ export function ProposalDetailClient({
             Tax ({p.taxPercent}%): {fmtMoney(p.taxAmount, p.currency)}
           </div>
           <div>Discount: {fmtMoney(p.discount, p.currency)}</div>
-          <div className="text-lg font-semibold text-[#2563EB]">
+          <div className="text-lg font-semibold text-[var(--enterprise-primary)]">
             Total: {fmtMoney(p.total, p.currency)}
           </div>
         </div>
       </div>
 
       {(revData?.revisions?.length ?? 0) > 0 && (
-        <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
-          <h2 className="font-semibold text-[#0F172A]">Sent history</h2>
-          <p className="mt-1 text-sm text-slate-600">
+        <div className="enterprise-card p-4 sm:p-6">
+          <h2 className="font-semibold text-[var(--enterprise-text)]">Sent history</h2>
+          <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
             Snapshot saved each time this proposal was emailed to the client.
           </p>
           <div className="relative mt-4 ml-2">
-            <div className="absolute bottom-0 left-1.5 top-0 w-px bg-slate-100" aria-hidden />
+            <div
+              className="absolute bottom-0 left-1.5 top-0 w-px bg-[var(--enterprise-border)]"
+              aria-hidden
+            />
             <ul className="space-y-4">
               {revData!.revisions.map((r, idx) => {
                 const snap = r.snapshot;
@@ -649,15 +683,19 @@ export function ProposalDetailClient({
                   <li key={r.id} className="relative flex gap-4 pl-6">
                     <div
                       className={`absolute left-0 top-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${
-                        isLatest ? "border-[#2563EB] bg-white" : "border-slate-200 bg-slate-100"
+                        isLatest
+                          ? "border-[var(--enterprise-primary)] bg-[var(--enterprise-surface)]"
+                          : "border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]"
                       }`}
                       aria-hidden
                     >
-                      {isLatest && <div className="h-1.5 w-1.5 rounded-full bg-[#2563EB]" />}
+                      {isLatest && (
+                        <div className="h-1.5 w-1.5 rounded-full bg-[var(--enterprise-primary)]" />
+                      )}
                     </div>
-                    <div className="min-w-0 flex-1 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2.5 text-sm">
+                    <div className="min-w-0 flex-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-3 py-2.5 text-sm">
                       <div className="flex flex-wrap items-center justify-between gap-1">
-                        <span className="font-medium text-slate-800">
+                        <span className="font-medium text-[var(--enterprise-text)]">
                           {new Date(r.sentAt).toLocaleString(undefined, {
                             day: "numeric",
                             month: "short",
@@ -667,18 +705,18 @@ export function ProposalDetailClient({
                           })}
                         </span>
                         {isLatest && (
-                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                          <span className="rounded-full bg-[var(--enterprise-primary-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)]">
                             Latest sent
                           </span>
                         )}
                       </div>
-                      <div className="mt-0.5 text-xs text-slate-500">
+                      <div className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
                         {snap?.title ?? p.title}
                         {snap?.total != null && (
                           <>
                             {" "}
                             ·{" "}
-                            <span className="font-medium text-slate-700">
+                            <span className="font-medium text-[var(--enterprise-text)]">
                               {fmtMoney(String(snap.total), p.currency)}
                             </span>
                           </>
@@ -724,18 +762,11 @@ export function ProposalDetailClient({
 
 function Milestone({ label, at }: { label: string; at: string | null }) {
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3 text-center">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 text-sm font-medium text-slate-800">
-        {at
-          ? new Date(at).toLocaleString(undefined, {
-              day: "numeric",
-              month: "short",
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "—"}
+    <div className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 p-3 text-center">
+      <div className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+        {label}
       </div>
+      <div className="mt-1 text-sm font-medium text-[var(--enterprise-text)]">{formatWhen(at)}</div>
     </div>
   );
 }

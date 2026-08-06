@@ -38,17 +38,19 @@ import {
   User,
   X,
 } from "lucide-react";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
+import { RfiRelatedIssuesPicker } from "@/components/enterprise/RfiRelatedIssuesPicker";
 import { DeleteRfiConfirmDialog } from "@/components/enterprise/DeleteRfiConfirmDialog";
 import { DeleteRfiAttachmentConfirmDialog } from "@/components/enterprise/DeleteRfiAttachmentConfirmDialog";
 import { DeleteRecordedAnswerConfirmDialog } from "@/components/enterprise/DeleteRecordedAnswerConfirmDialog";
 import { RfiTimelineDialog } from "@/components/enterprise/RfiTimelineDialog";
 import { RfiAttachmentLightbox } from "@/components/enterprise/RfiAttachmentLightbox";
-import { RfiDiscussionRichEditor } from "@/components/enterprise/RfiDiscussionRichEditor";
 import { RfiDiscussionMessageItem } from "@/components/enterprise/RfiDiscussionMessageItem";
 import { RfiMessageHtmlBody } from "@/components/enterprise/RfiMessageHtmlBody";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
+import { ProposalCoverEditor } from "@/components/enterprise/proposals/editor/ProposalCoverEditor";
 import {
   completeRfiAttachmentUpload,
   deleteProjectRfi,
@@ -65,10 +67,10 @@ import {
   presignReadRfiAttachment,
   presignRfiAttachmentUpload,
   ProRequiredError,
+  viewerHrefForLinkedIssue,
   viewerHrefForRfi,
   type RfiActivityRow,
   type RfiAttachmentRow,
-  type RfiIssueRef,
   type RfiMessageRow,
   type RfiRow,
 } from "@/lib/api-client";
@@ -78,7 +80,6 @@ import {
   rfiStatusBadgeClass,
 } from "@/lib/issueStatusStyle";
 import { qk } from "@/lib/queryKeys";
-import { userInitials } from "@/lib/user-initials";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { useTickNowMs } from "@/lib/useTickNowMs";
 
@@ -88,6 +89,12 @@ function norm(s: string): string {
 
 const OVERDUE_CHIP =
   "border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-semantic-danger-text)]";
+
+/** Match Issue detail header actions (compact icon + label). */
+const RFI_ACTION_BTN =
+  "inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50 max-lg:min-h-11";
+const RFI_DELETE_BTN =
+  "inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-semantic-danger-text)] transition hover:bg-red-100 disabled:opacity-50 max-lg:min-h-11";
 
 function formatFullDate(iso: string | null): string {
   if (!iso) return "—";
@@ -106,21 +113,6 @@ function riskChipClass(risk: string | null): string {
   if (risk === "low")
     return "border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] text-[var(--enterprise-semantic-success-text)]";
   return "border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]";
-}
-
-function viewerHrefForLinkedIssue(
-  projectId: string,
-  issue: RfiIssueRef,
-  fallbackName: string,
-): string {
-  const q = new URLSearchParams();
-  q.set("fileId", issue.fileId);
-  q.set("fileVersionId", issue.fileVersionId);
-  q.set("projectId", projectId);
-  q.set("name", issue.sheetName ?? fallbackName);
-  if (issue.sheetVersion != null) q.set("version", String(issue.sheetVersion));
-  q.set("issueId", issue.id);
-  return `/viewer?${q.toString()}`;
 }
 
 function isOverdue(rfi: RfiRow, nowMs: number): boolean {
@@ -906,6 +898,7 @@ function sameSortedIds(a: string[], b: string[]): boolean {
   return sa.every((id, i) => id === sb[i]);
 }
 
+// fallow-ignore-next-line complexity
 export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId: string }) {
   const qc = useQueryClient();
   const router = useRouter();
@@ -1200,74 +1193,38 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
         onConfirm={() => deleteRfiMut.mutate()}
       />
       <div className="space-y-3">
-        <header
-          id="rfi-overview"
-          className="space-y-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 shadow-[var(--enterprise-shadow-card)] sm:p-4"
-        >
-          <Link
-            href={`/projects/${projectId}/rfi`}
-            className="inline-flex items-center gap-1 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-primary)]"
-          >
-            <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
-            All RFIs
-          </Link>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1 font-mono text-xs font-semibold tabular-nums text-[var(--enterprise-text-muted)]">
-              #{String(rfi.rfiNumber).padStart(3, "0")}
-            </span>
-            <span
-              className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold ${rfiStatusBadgeClass(st)}`}
+        <header id="rfi-overview" className="enterprise-card space-y-3 p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <Link
+              href={`/projects/${projectId}/rfi`}
+              className="inline-flex min-h-9 items-center gap-1 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-primary)]"
             >
-              {RFI_STATUS_LABEL[st] ?? rfi.status}
-            </span>
-            <span
-              className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold ${priorityBadgeClassLight(pri)}`}
-            >
-              {pri === "LOW" ? "Low" : pri === "HIGH" ? "High" : "Medium"} priority
-            </span>
-            {rfi.risk ? (
-              <span
-                className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold capitalize ${riskChipClass(rfi.risk)}`}
-              >
-                Risk: {rfi.risk === "med" ? "Medium" : rfi.risk === "high" ? "High" : "Low"}
-              </span>
-            ) : null}
-            {overdue ? (
-              <span
-                className={`rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${OVERDUE_CHIP}`}
-              >
-                Overdue
-              </span>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setTimelineOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/30 hover:bg-[var(--enterprise-primary-soft)]"
-            >
-              <Activity className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" aria-hidden />
-              Timeline
-              {activityCount > 0 ? (
-                <span className="tabular-nums text-[var(--enterprise-text-muted)]">
-                  ({activityCount})
-                </span>
-              ) : null}
-            </button>
-          </div>
-          <h1 className="text-lg font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-xl">
-            {rfi.title}
-          </h1>
-
-          <div className="mt-4 border-t border-[var(--enterprise-border)]/80 pt-4">
+              <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
+              All RFIs
+            </Link>
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTimelineOpen(true)}
+                className={RFI_ACTION_BTN}
+              >
+                <Activity className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                Timeline
+                {activityCount > 0 ? (
+                  <span className="tabular-nums text-[var(--enterprise-text-muted)]">
+                    ({activityCount})
+                  </span>
+                ) : null}
+              </button>
               {closed && (isCreator || canRespond) ? (
                 <button
                   type="button"
                   disabled={patchMut.isPending}
                   onClick={() => patchMut.mutate({ status: "IN_REVIEW" })}
-                  className="inline-flex items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-60"
+                  className={RFI_ACTION_BTN}
                 >
-                  <RotateCcw className="h-4 w-4" aria-hidden />
-                  Reopen RFI
+                  <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                  Reopen
                 </button>
               ) : null}
               {!closed && st === "OPEN" && isCreator ? (
@@ -1275,9 +1232,9 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                   type="button"
                   disabled={patchMut.isPending}
                   onClick={() => patchMut.mutate({ status: "IN_REVIEW" })}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-60"
+                  className={RFI_ACTION_BTN}
                 >
-                  <Send className="h-4 w-4" aria-hidden />
+                  <Send className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                   Send for review
                 </button>
               ) : null}
@@ -1296,10 +1253,10 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                       answerMessageId: selectedAnswerMessageId,
                     });
                   }}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50"
+                  className={RFI_ACTION_BTN}
                 >
-                  <BadgeCheck className="h-4 w-4" aria-hidden />
-                  Mark as answered
+                  <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                  Mark answered
                 </button>
               ) : null}
               {!closed && st === "ANSWERED" && isCreator ? (
@@ -1307,19 +1264,20 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                   type="button"
                   disabled={patchMut.isPending}
                   onClick={() => patchMut.mutate({ status: "CLOSED" })}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-60"
+                  className={RFI_ACTION_BTN}
                 >
-                  Close RFI
+                  <CircleCheck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                  Close
                 </button>
               ) : null}
               {!closed && (st === "OPEN" || st === "IN_REVIEW") && isCreator ? (
                 <button
                   type="button"
                   onClick={() => setVoidOpen((v) => !v)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-medium text-[var(--enterprise-text-muted)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
+                  className={RFI_ACTION_BTN}
                 >
-                  <X className="h-4 w-4" aria-hidden />
-                  Void / close
+                  <X className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                  Void
                 </button>
               ) : null}
               {canDeleteRfi ? (
@@ -1327,62 +1285,95 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                   type="button"
                   onClick={() => setDeleteRfiOpen(true)}
                   disabled={deleteRfiMut.isPending}
-                  className="inline-flex items-center gap-2 rounded-lg border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] shadow-sm transition hover:opacity-90 disabled:opacity-50"
+                  className={RFI_DELETE_BTN}
                 >
-                  <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
-                  Delete RFI
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                  Delete
                 </button>
               ) : null}
             </div>
-            {!closed && st === "IN_REVIEW" && canRespond ? (
-              <p className="mt-2 max-w-xl text-xs text-[var(--enterprise-text-muted)]">
-                In <span className="font-medium text-[var(--enterprise-text)]">Discussion</span>,
-                click{" "}
-                <span className="font-medium text-[var(--enterprise-text)]">
-                  Use as official answer
-                </span>{" "}
-                on the right message, then press{" "}
-                <span className="font-medium text-[var(--enterprise-text)]">Mark as answered</span>{" "}
-                here.
-              </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1 font-mono text-xs font-semibold tabular-nums text-[var(--enterprise-text-muted)]">
+              #{String(rfi.rfiNumber).padStart(3, "0")}
+            </span>
+            <span
+              className={`inline-flex items-center rounded-lg px-2.5 py-1.5 text-xs font-semibold ${rfiStatusBadgeClass(st)}`}
+            >
+              {RFI_STATUS_LABEL[st] ?? rfi.status}
+            </span>
+            <span
+              className={`inline-flex items-center rounded-lg px-2.5 py-1.5 text-xs font-semibold ${priorityBadgeClassLight(pri)}`}
+            >
+              {pri === "LOW" ? "Low" : pri === "HIGH" ? "High" : "Medium"} priority
+            </span>
+            {rfi.risk ? (
+              <span
+                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold capitalize ${riskChipClass(rfi.risk)}`}
+              >
+                Risk: {rfi.risk === "med" ? "Medium" : rfi.risk === "high" ? "High" : "Low"}
+              </span>
             ) : null}
-            {voidOpen && isCreator && !closed ? (
-              <div className="enterprise-alert-warning mt-4 p-4">
-                <p className="text-sm font-semibold">
-                  Close without a recorded answer in the thread?
-                </p>
-                <textarea
-                  value={voidReason}
-                  onChange={(e) => setVoidReason(e.target.value)}
-                  rows={2}
-                  className={`${inputClass} mt-2 bg-[var(--enterprise-surface)]`}
-                  placeholder="Optional reason (superseded, withdrawn, …)"
-                />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={patchMut.isPending}
-                    onClick={() =>
-                      patchMut.mutate({
-                        status: "CLOSED",
-                        voidReason: voidReason.trim() || null,
-                      })
-                    }
-                    className="rounded-lg bg-[var(--enterprise-semantic-warning-text)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
-                  >
-                    Confirm close
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVoidOpen(false)}
-                    className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)]"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
+            {overdue ? (
+              <span
+                className={`rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${OVERDUE_CHIP}`}
+              >
+                Overdue
+              </span>
             ) : null}
           </div>
+
+          <h1 className="text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
+            {rfi.title}
+          </h1>
+
+          {!closed && st === "IN_REVIEW" && canRespond ? (
+            <p className="max-w-xl text-xs text-[var(--enterprise-text-muted)]">
+              In Discussion, click{" "}
+              <span className="font-medium text-[var(--enterprise-text)]">
+                Use as official answer
+              </span>{" "}
+              on a message, then press{" "}
+              <span className="font-medium text-[var(--enterprise-text)]">Mark answered</span>.
+            </p>
+          ) : null}
+          {voidOpen && isCreator && !closed ? (
+            <div className="enterprise-alert-warning p-4">
+              <p className="text-sm font-semibold">
+                Close without a recorded answer in the thread?
+              </p>
+              <textarea
+                value={voidReason}
+                onChange={(e) => setVoidReason(e.target.value)}
+                rows={2}
+                className={`${inputClass} mt-2 bg-[var(--enterprise-surface)]`}
+                placeholder="Optional reason (superseded, withdrawn, …)"
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={patchMut.isPending}
+                  onClick={() =>
+                    patchMut.mutate({
+                      status: "CLOSED",
+                      voidReason: voidReason.trim() || null,
+                    })
+                  }
+                  className="rounded-lg bg-[var(--enterprise-semantic-warning-text)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
+                >
+                  Confirm close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVoidOpen(false)}
+                  className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
         </header>
 
         {st === "OPEN" && rfiResponderUserIds(rfi).length === 0 && canEditAssignee ? (
@@ -1542,99 +1533,47 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
           )}
         </div>
 
-        <div id="rfi-references" className={`${cardClass} scroll-mt-36`}>
-          <h2 className={sectionTitle}>References</h2>
-          <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-            Link site issues and/or a sheet. Multiple issues are supported when one RFI covers
-            several pins.
-          </p>
-          {rfi.file || rfi.issues[0] ? (
-            <p className="mt-3 text-sm text-[var(--enterprise-text)]">
-              <span className="font-medium">
-                {rfi.file?.name ?? rfi.issues[0]?.sheetName ?? "Sheet"}
-              </span>
-              {rfi.fileVersion ? ` · v${rfi.fileVersion.version}` : null}
-              {rfi.pageNumber != null ? ` · Page ${rfi.pageNumber}` : null}
-            </p>
+        <div id="rfi-linked-issues" className={`${cardClass} scroll-mt-36`}>
+          <h2 className={sectionTitle}>Linked issues</h2>
+          {rfi.issues.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {rfi.issues.map((iss) => (
+                <li key={iss.id} className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 px-2.5 py-1 text-xs text-[var(--enterprise-text)]">
+                    <MapPin className="h-3 w-3 shrink-0" aria-hidden />
+                    {iss.title}
+                  </span>
+                  <Link
+                    href={viewerHrefForLinkedIssue(projectId, iss, rfi.file?.name ?? "Sheet")}
+                    className="text-xs font-medium text-[var(--enterprise-primary)] hover:underline"
+                  >
+                    Open issue
+                  </Link>
+                </li>
+              ))}
+            </ul>
           ) : (
-            <p className="mt-3 text-sm text-[var(--enterprise-text-muted)]">No drawing linked.</p>
+            <p className="mt-3 text-sm text-[var(--enterprise-text-muted)]">No issues linked.</p>
           )}
-          {viewerHref ? (
-            <Link
-              href={viewerHref}
-              className="mt-3 inline-flex text-sm font-medium text-[var(--enterprise-primary)] hover:underline"
-            >
-              Open sheet in viewer
-            </Link>
+
+          {!closed && isCreator ? (
+            <div className="mt-3 space-y-2 border-t border-[var(--enterprise-border)] pt-3">
+              <RfiRelatedIssuesPicker
+                issues={projectIssues}
+                value={issueIdsEdit}
+                onChange={setIssueIdsEdit}
+                disabled={patchMut.isPending}
+              />
+              <EnterpriseButton
+                type="button"
+                size="sm"
+                loading={patchMut.isPending}
+                onClick={() => patchMut.mutate({ issueIds: issueIdsEdit })}
+              >
+                Save linked issues
+              </EnterpriseButton>
+            </div>
           ) : null}
-
-          <div className="mt-4 border-t border-[var(--enterprise-border)] pt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-              Related issues
-            </h3>
-            {rfi.issues.length > 0 ? (
-              <ul className="mt-2 space-y-2">
-                {rfi.issues.map((iss) => (
-                  <li key={iss.id} className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 px-2.5 py-1 text-xs text-[var(--enterprise-text)]">
-                      <MapPin className="h-3 w-3 shrink-0" />
-                      {iss.title}
-                    </span>
-                    <Link
-                      href={viewerHrefForLinkedIssue(projectId, iss, rfi.file?.name ?? "Sheet")}
-                      className="text-xs font-medium text-[var(--enterprise-primary)] hover:underline"
-                    >
-                      Open issue
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">No issues linked.</p>
-            )}
-
-            {!closed && isCreator ? (
-              <div className="mt-3 space-y-2">
-                <p className="text-xs text-[var(--enterprise-text-muted)]">Edit issue references</p>
-                <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-2">
-                  {projectIssues.length === 0 ? (
-                    <p className="text-xs text-[var(--enterprise-text-muted)]">
-                      No issues in project.
-                    </p>
-                  ) : (
-                    projectIssues.map((i) => (
-                      <label
-                        key={i.id}
-                        className="flex cursor-pointer items-start gap-2 text-sm text-[var(--enterprise-text)] mobile-tappable-row min-h-14 active:scale-[0.99]"
-                      >
-                        <input
-                          type="checkbox"
-                          className="mt-0.5"
-                          checked={issueIdsEdit.includes(i.id)}
-                          onChange={() => {
-                            setIssueIdsEdit((prev) =>
-                              prev.includes(i.id)
-                                ? prev.filter((x) => x !== i.id)
-                                : [...prev, i.id],
-                            );
-                          }}
-                        />
-                        <span className="leading-snug">{i.title}</span>
-                      </label>
-                    ))
-                  )}
-                </div>
-                <button
-                  type="button"
-                  disabled={patchMut.isPending}
-                  onClick={() => patchMut.mutate({ issueIds: issueIdsEdit })}
-                  className="rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                >
-                  Save references
-                </button>
-              </div>
-            ) : null}
-          </div>
         </div>
 
         <div id="rfi-attachments" className={`${cardClass} scroll-mt-36`}>
@@ -1687,150 +1626,116 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
           </ul>
         </div>
 
-        <div id="rfi-discussion" className={`${cardClass} scroll-mt-36`}>
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]">
-              <MessageSquare className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+        <div id="rfi-discussion" className="enterprise-card scroll-mt-36 overflow-hidden p-0">
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--enterprise-border)] px-3 py-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <MessageSquare
+                className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-primary)]"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Discussion</h2>
+              <span className="tabular-nums text-[11px] text-[var(--enterprise-text-muted)]">
+                {messagesQuery.data?.length ?? 0}
+              </span>
             </div>
-            <div>
-              <h2 className={sectionTitle}>Discussion thread</h2>
-              <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
-                Rich text and @mentions. While in review, a responder designates one reply as the
-                official answer; participants are notified.
+            {!closed && st === "IN_REVIEW" && canRespond ? (
+              <p className="truncate text-[10px] text-[var(--enterprise-text-muted)]">
+                Tap a reply · Mark answered
               </p>
-            </div>
+            ) : null}
           </div>
 
           {recordedAnswerPreview ? (
-            <div className="mt-2.5 rounded-lg border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] px-2 py-2">
-              <div className="flex items-center justify-between gap-2">
+            <div className="flex items-start gap-2 border-b border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] px-3 py-1.5">
+              <BadgeCheck
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--enterprise-semantic-success-text)]"
+                aria-hidden
+              />
+              <div className="min-w-0 flex-1 [&_.rfi-rich-body]:line-clamp-2 [&_.rfi-rich-body]:text-[11px] [&_.rfi-rich-body]:leading-snug">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-semantic-success-text)]">
-                  Recorded answer
+                  Official answer · {recordedAnswerPreview.authorName}
                 </p>
-                {canRemoveRecordedAnswer ? (
-                  <button
-                    type="button"
-                    onClick={() => setDeleteRecordedAnswerOpen(true)}
-                    className="-my-0.5 -mr-0.5 rounded-md p-1 text-[var(--enterprise-semantic-success-text)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
-                    aria-label="Remove recorded answer"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                  </button>
-                ) : null}
+                <RfiMessageHtmlBody html={recordedAnswerPreview.body} className="mt-0.5" />
               </div>
-              <div className="mt-1.5 flex gap-2">
-                <div className="relative mt-px flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-surface)] text-[9px] font-semibold text-[var(--enterprise-semantic-success-text)]">
-                  {recordedAnswerPreview.authorImage ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- profile URL from auth
-                    <img
-                      src={recordedAnswerPreview.authorImage}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    userInitials(
-                      recordedAnswerPreview.authorName || null,
-                      recordedAnswerPreview.authorEmail,
-                    )
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
-                    <span className="text-xs font-semibold text-[var(--enterprise-text)]">
-                      {recordedAnswerPreview.authorName}
-                    </span>
-                    {recordedAnswerPreview.createdAtIso ? (
-                      <time
-                        className="text-[10px] text-[var(--enterprise-text-muted)]"
-                        dateTime={recordedAnswerPreview.createdAtIso}
-                      >
-                        {formatActivityRelative(recordedAnswerPreview.createdAtIso, nowMs)}
-                      </time>
-                    ) : null}
-                  </div>
-                  <div className="mt-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1.5 [&_.rfi-rich-body]:text-xs [&_.rfi-rich-body]:leading-snug">
-                    <RfiMessageHtmlBody html={recordedAnswerPreview.body} className="mt-0" />
-                  </div>
-                </div>
-              </div>
+              {canRemoveRecordedAnswer ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteRecordedAnswerOpen(true)}
+                  className="rounded-md p-1 text-[var(--enterprise-semantic-success-text)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
+                  aria-label="Remove recorded answer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                </button>
+              ) : null}
             </div>
           ) : null}
           {recordedAnswerLoading ? (
-            <p className="mt-3 text-sm text-[var(--enterprise-text-muted)]">
+            <p className="border-b border-[var(--enterprise-border)] px-3 py-2 text-[11px] text-[var(--enterprise-text-muted)]">
               Loading recorded answer…
             </p>
           ) : null}
           {recordedAnswerMissing ? (
-            <div className="mt-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/40 px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                  Recorded answer
-                </p>
-                {canRemoveRecordedAnswer && rfi.officialResponse?.trim() ? (
-                  <button
-                    type="button"
-                    onClick={() => setDeleteRecordedAnswerOpen(true)}
-                    className="rounded-md p-1 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
-                    aria-label="Remove recorded answer"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                  </button>
-                ) : null}
-              </div>
-              {rfi.officialResponse?.trim() ? (
-                <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--enterprise-text)]">
-                  {rfi.officialResponse}
-                </p>
-              ) : (
-                <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
-                  The original message is no longer in the thread.
-                </p>
-              )}
+            <div className="flex items-start justify-between gap-2 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/40 px-3 py-1.5">
+              <p className="text-[11px] text-[var(--enterprise-text-muted)]">
+                {rfi.officialResponse?.trim()
+                  ? `Official answer (legacy): ${rfi.officialResponse}`
+                  : "Recorded answer is no longer in the thread."}
+              </p>
+              {canRemoveRecordedAnswer && rfi.officialResponse?.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteRecordedAnswerOpen(true)}
+                  className="shrink-0 rounded-md p-1 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
+                  aria-label="Remove recorded answer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                </button>
+              ) : null}
             </div>
           ) : null}
 
           {!rfi.answerMessageId &&
           rfi.officialResponse?.trim() &&
           (st === "ANSWERED" || st === "CLOSED") ? (
-            <div className="enterprise-alert-warning mt-3 px-3 py-2 text-xs">
-              <div className="flex items-center justify-between gap-2">
-                <p className="font-semibold">Recorded answer (legacy)</p>
-                {canRemoveRecordedAnswer ? (
-                  <button
-                    type="button"
-                    onClick={() => setDeleteRecordedAnswerOpen(true)}
-                    className="rounded-md p-1 opacity-80 transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)] hover:opacity-100"
-                    aria-label="Remove recorded answer"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                  </button>
-                ) : null}
-              </div>
-              <p className="mt-1 whitespace-pre-wrap text-[var(--enterprise-text)]">
+            <div className="enterprise-alert-warning flex items-start justify-between gap-2 border-b px-3 py-1.5 text-[11px]">
+              <p className="min-w-0">
+                <span className="font-semibold">Legacy answer: </span>
                 {rfi.officialResponse}
               </p>
+              {canRemoveRecordedAnswer ? (
+                <button
+                  type="button"
+                  onClick={() => setDeleteRecordedAnswerOpen(true)}
+                  className="shrink-0 rounded-md p-1 opacity-80 transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)] hover:opacity-100"
+                  aria-label="Remove recorded answer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                </button>
+              ) : null}
             </div>
           ) : null}
+
           <div
             ref={discussionThreadRef}
             role="region"
-            aria-label="Discussion thread"
-            className="enterprise-scrollbar mt-4 max-h-[min(60vh,28rem)] min-h-[8rem] overflow-y-auto overscroll-y-contain rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] [-webkit-overflow-scrolling:touch]"
+            aria-label="Discussion chat"
+            className="enterprise-scrollbar max-h-[min(42vh,18rem)] min-h-[4.5rem] overflow-y-auto overscroll-y-contain bg-[color-mix(in_srgb,var(--enterprise-bg)_65%,var(--enterprise-surface))] [-webkit-overflow-scrolling:touch]"
           >
             {messagesQuery.isPending ? (
-              <p className="px-4 py-6 text-sm text-[var(--enterprise-text-muted)]">
-                Loading thread…
+              <p className="px-3 py-4 text-center text-[11px] text-[var(--enterprise-text-muted)]">
+                Loading chat…
               </p>
             ) : messagesQuery.isError ? (
-              <p className="px-4 py-6 text-sm text-[var(--enterprise-semantic-danger-text)]">
-                Could not load this thread.
+              <p className="px-3 py-4 text-center text-[11px] text-[var(--enterprise-semantic-danger-text)]">
+                Could not load this chat.
               </p>
             ) : (messagesQuery.data?.length ?? 0) === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-[var(--enterprise-text-muted)]">
-                No replies yet. Add the first comment below.
+              <p className="px-3 py-6 text-center text-[11px] text-[var(--enterprise-text-muted)]">
+                No messages yet. Say hello below.
               </p>
             ) : (
-              <ul className="flex flex-col gap-3 px-3 py-3 sm:gap-3.5 sm:px-4 sm:py-4">
+              <ul className="flex flex-col gap-2.5 px-2.5 py-2.5">
                 {messagesQuery.data!.map((msg) => (
                   <RfiDiscussionMessageItem
                     key={msg.id}
@@ -1840,6 +1745,7 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
                     bodyHtml={msg.body}
                     createdAtIso={msg.createdAt}
                     timeLabel={formatActivityRelative(msg.createdAt, nowMs)}
+                    isMine={Boolean(meId && msg.author?.id === meId)}
                     isRecordedAnswer={Boolean(
                       rfi.answerMessageId && msg.id === rfi.answerMessageId,
                     )}
@@ -1854,13 +1760,16 @@ export function RfiDetailClient({ projectId, rfiId }: { projectId: string; rfiId
             )}
           </div>
           {!closed ? (
-            <div className="mt-4 shrink-0 border-t border-[var(--enterprise-border)] pt-4">
+            <div className="border-t border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
               <label className="sr-only">New discussion message</label>
-              <RfiDiscussionRichEditor
+              <ProposalCoverEditor
                 key={`${rfiId}-${discussionEditorKey}`}
+                variant="discussion"
                 isPending={messageMut.isPending}
                 mentionUsers={discussionMentionUsers}
                 onSubmit={(html) => messageMut.mutate(html)}
+                placeholder="Message… / blocks · @ mention"
+                className="rounded-none border-0 shadow-none"
               />
             </div>
           ) : null}

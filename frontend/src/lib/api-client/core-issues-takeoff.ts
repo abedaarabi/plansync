@@ -5,7 +5,7 @@ import { apiUrl } from "@/lib/api-url";
 import { jsonHeaders, readJsonErrorBody } from "./shared";
 import { HttpError, ProRequiredError } from "./errors";
 import { referencePhotoContentType } from "@/lib/referencePhotoMime";
-import type { RfiRow } from "./core-members-viewer-rfi";
+import type { RfiIssueRef, RfiRow } from "./core-members-viewer-rfi";
 
 // --- Issues (Pro, sheet-scoped) ---
 
@@ -584,6 +584,22 @@ export function viewerHrefForIssue(row: IssueRow): string | null {
     }
   }
   return `${path}?${q.toString()}`;
+}
+
+/** Open a specific linked issue from an RFI in the sheet viewer. */
+export function viewerHrefForLinkedIssue(
+  projectId: string,
+  issue: RfiIssueRef,
+  fallbackName: string,
+): string {
+  const q = new URLSearchParams();
+  q.set("fileId", issue.fileId);
+  q.set("fileVersionId", issue.fileVersionId);
+  q.set("projectId", projectId);
+  q.set("name", issue.sheetName ?? fallbackName);
+  if (issue.sheetVersion != null) q.set("version", String(issue.sheetVersion));
+  q.set("issueId", issue.id);
+  return `/viewer?${q.toString()}`;
 }
 
 /** RFI drawing link; passes `issueId` for the first referenced issue when present (viewer zoom). */

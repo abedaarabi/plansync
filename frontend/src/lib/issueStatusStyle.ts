@@ -58,6 +58,55 @@ export function rfiStatusBadgeClass(status: string | undefined | null): string {
   return RFI_STATUS_BADGE_CLASS[k] ?? RFI_STATUS_BADGE_CLASS.CLOSED;
 }
 
+/** Punch list workflow (ACC / Procore-style). */
+export const PUNCH_STATUS_ORDER = ["OPEN", "IN_PROGRESS", "READY_FOR_GC", "CLOSED"] as const;
+
+export const PUNCH_STATUS_LABEL: Record<string, string> = {
+  OPEN: "Open",
+  IN_PROGRESS: "In progress",
+  READY_FOR_GC: "Ready for GC",
+  CLOSED: "Closed",
+};
+
+const PUNCH_STATUS_BADGE_CLASS: Record<string, string> = {
+  OPEN: "border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-semantic-danger-text)]",
+  IN_PROGRESS:
+    "border border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] text-[var(--enterprise-semantic-warning-text)]",
+  READY_FOR_GC:
+    "border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] text-[var(--enterprise-semantic-info-text)]",
+  CLOSED:
+    "border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] text-[var(--enterprise-semantic-success-text)]",
+};
+
+export function punchStatusBadgeClass(status: string | undefined | null): string {
+  const k = (status ?? "").trim().toUpperCase().replace(/\s+/g, "_");
+  return PUNCH_STATUS_BADGE_CLASS[k] ?? PUNCH_STATUS_BADGE_CLASS.CLOSED;
+}
+
+export const PUNCH_PRIORITY_LABEL: Record<string, string> = {
+  P1: "High",
+  P2: "Medium",
+  P3: "Low",
+};
+
+/** Field report draft / submitted chips. */
+export const FIELD_REPORT_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Draft",
+  SUBMITTED: "Submitted",
+};
+
+const FIELD_REPORT_STATUS_BADGE_CLASS: Record<string, string> = {
+  DRAFT:
+    "border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]",
+  SUBMITTED:
+    "border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] text-[var(--enterprise-semantic-success-text)]",
+};
+
+export function fieldReportStatusBadgeClass(status: string | undefined | null): string {
+  const k = (status ?? "DRAFT").trim().toUpperCase();
+  return FIELD_REPORT_STATUS_BADGE_CLASS[k] ?? FIELD_REPORT_STATUS_BADGE_CLASS.DRAFT;
+}
+
 /** `YYYY-MM-DD` for `<input type="date" />` and sidebar labels from API values. */
 export function issueDateToInputValue(iso: string | null | undefined): string {
   if (iso == null) return "";

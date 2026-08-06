@@ -4,8 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Check,
-  CheckCircle2,
-  ChevronDown,
   Clock,
   Eye,
   FileText,
@@ -14,8 +12,6 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
-  RotateCcw,
-  Send,
   Sparkles,
   Trash2,
   X,
@@ -24,16 +20,28 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { ProposalLetterPreviewDialog } from "@/components/enterprise/ProposalLetterPreviewDialog";
 import { ProposalPdfLightbox } from "@/components/enterprise/ProposalPdfLightbox";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import { ProposalCoverEditor } from "@/components/enterprise/proposals/editor/ProposalCoverEditor";
-import { ProposalVersionHistoryPanel } from "@/components/enterprise/proposals/editor/ProposalVersionHistoryPanel";
+import { ProposalEditorStepBar } from "@/components/enterprise/proposals/editor/ProposalEditorStepBar";
 import { ProposalCommentsPanel } from "@/components/enterprise/proposals/editor/ProposalCommentsPanel";
+import { ProposalReviewStep } from "@/components/enterprise/proposals/editor/ProposalReviewStep";
+import { ProposalSaveStatusBadge } from "@/components/enterprise/proposals/editor/ProposalSaveStatusBadge";
+import { ProposalVersionHistoryPanel } from "@/components/enterprise/proposals/editor/ProposalVersionHistoryPanel";
+import {
+  coverHasMeaningfulContent,
+  fmtMoney,
+  type ActiveSection,
+  type SaveStatus,
+} from "@/components/enterprise/proposals/editor/proposalEditorShared";
 import {
   createProposal,
   fetchProposalDetail,
+  fetchProposalPdfBlob,
   fetchProposalTakeoffFileVersions,
   fetchProposalTemplates,
   fetchProjects,
@@ -41,7 +49,6 @@ import {
   patchProposal,
   previewProposalHtml,
   proposalAiDraft,
-  ProRequiredError,
   saveProposalDocumentVersion,
   sendProposalToClient,
   syncProposalFromTakeoff,
@@ -53,39 +60,8 @@ import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { useProjectCurrency } from "@/hooks/useProjectCurrency";
 
-function fmtMoney(amount: string, currency: string) {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return amount;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency.length === 3 ? currency : "USD",
-    }).format(n);
-  } catch {
-    return amount;
-  }
-}
-
 type AttachmentPick = { fileVersionId: string; label: string; checked: boolean };
-type SaveStatus = "saved" | "saving" | "unsaved" | "error";
 type RightPanel = "details" | "history" | "comments";
-type ActiveSection = "cover" | "pricing" | "client";
-
-const SECTION_LABELS: Record<ActiveSection, string> = {
-  client: "Client Details",
-  pricing: "Scope & Pricing",
-  cover: "Cover Letter",
-};
-
-const VARS = [
-  "{{client.name}}",
-  "{{client.company}}",
-  "{{project.name}}",
-  "{{proposal.total}}",
-  "{{proposal.expiry}}",
-  "{{takeoff.table}}",
-  "{{company.name}}",
-];
 
 // fallow-ignore-next-line complexity
 export function ProposalEditorWorkspace({
@@ -129,6 +105,9 @@ export function ProposalEditorWorkspace({
   const [templateId, setTemplateId] = useState<string>("");
   const [coverHtml, setCoverHtml] = useState("");
   const [coverJson, setCoverJson] = useState<Record<string, unknown>>({});
+  /** Bumped when template/AI replaces cover so TipTap force-syncs. */
+  const [coverContentRevision, setCoverContentRevision] = useState(0);
+  const [pendingTemplateId, setPendingTemplateId] = useState<string>("");
   const [attachments, setAttachments] = useState<AttachmentPick[]>([]);
   const [selectedFvIds, setSelectedFvIds] = useState<string[]>([]);
 
@@ -136,6 +115,7 @@ export function ProposalEditorWorkspace({
   const [activeSection, setActiveSection] = useState<ActiveSection>("client");
   const [rightPanel, setRightPanel] = useState<RightPanel>("details");
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [editHydrating, setEditHydrating] = useState(Boolean(existingProposalId));
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -145,6 +125,12 @@ export function ProposalEditorWorkspace({
     takeoffTableHtml: string;
   } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [reviewPreview, setReviewPreview] = useState<{
+    letterMarkdown: string;
+    letterHtml: string | null;
+    takeoffTableHtml: string;
+  } | null>(null);
+  const [reviewPreviewLoading, setReviewPreviewLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -152,12 +138,10 @@ export function ProposalEditorWorkspace({
   const [debouncedRateHintQ, setDebouncedRateHintQ] = useState("");
   const [versionSummary, setVersionSummary] = useState("");
   const [showVersionSummaryInput, setShowVersionSummaryInput] = useState(false);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
   const sendLockRef = useRef(false);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const newDraftCurrencySyncedFor = useRef<string | null>(null);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   // ---- Queries ----
   const { data: projects = [] } = useQuery({
@@ -219,7 +203,9 @@ export function ProposalEditorWorkspace({
         setWorkPricePercent(d.workPricePercent);
         setDiscount(d.discount);
         setTemplateId(d.templateId ?? "");
+        setPendingTemplateId(d.templateId ?? "");
         setCoverHtml(d.coverNote);
+        setCoverContentRevision((n) => n + 1);
         setSelectedFvIds(
           d.sourceFileVersionIds?.length
             ? d.sourceFileVersionIds
@@ -277,17 +263,32 @@ export function ProposalEditorWorkspace({
     setWorkPricePercent(detail.workPricePercent);
   }, [detail?.id, detail?.workPricePercent]);
 
-  // ---- Close more menu on outside click ----
+  // ---- Auto-fetch letter preview when entering Review ----
   useEffect(() => {
-    if (!moreMenuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
-        setMoreMenuOpen(false);
-      }
+    if (activeSection !== "review" || !proposalId) return;
+    let cancelled = false;
+    setReviewPreviewLoading(true);
+    void previewProposalHtml(projectId, proposalId)
+      .then((prev) => {
+        if (cancelled) return;
+        setReviewPreview({
+          letterMarkdown: prev.letterMarkdown,
+          letterHtml: prev.letterHtml,
+          takeoffTableHtml: prev.takeoffTableHtml,
+        });
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          toast.error(e instanceof Error ? e.message : "Could not load preview.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReviewPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [moreMenuOpen]);
+  }, [activeSection, proposalId, projectId, coverHtml]);
 
   // ---- Autosave cover letter ----
   const scheduleAutosaveCover = useCallback(
@@ -301,8 +302,9 @@ export function ProposalEditorWorkspace({
           await patchProposal(projectId, proposalId, { coverNote: html });
           qc.invalidateQueries({ queryKey: qk.projectProposal(projectId, proposalId) });
           setSaveStatus("saved");
-        } catch {
+        } catch (e) {
           setSaveStatus("error");
+          toast.error(e instanceof Error ? e.message : "Could not save cover letter.");
         }
       }, 1200);
     },
@@ -484,6 +486,111 @@ export function ProposalEditorWorkspace({
     } | null;
     if (defaults?.taxPercent != null) setTaxPercent(String(defaults.taxPercent));
     if (defaults?.workPricePercent != null) setWorkPricePercent(String(defaults.workPricePercent));
+    if (defaults?.validUntilDays != null) {
+      const d = new Date();
+      d.setDate(d.getDate() + defaults.validUntilDays);
+      setValidUntil(d.toISOString().slice(0, 10));
+    }
+  };
+
+  const applyTemplate = (tid: string) => {
+    const t = tmplData?.templates.find((x) => x.id === tid);
+    if (!t || !proposalId) {
+      toast.error("Template not found. Refresh and try again.");
+      return false;
+    }
+    if (coverHasMeaningfulContent(coverHtml)) {
+      const ok = window.confirm(
+        "Replace the current cover letter with this template? Unsaved edits in the letter may be lost.",
+      );
+      if (!ok) {
+        setPendingTemplateId(templateId);
+        return false;
+      }
+    }
+    const bodyHtml = proposalCoverTextToHtml(t.body) || t.body || "<p></p>";
+    setTemplateId(tid);
+    setPendingTemplateId(tid);
+    setCoverHtml(bodyHtml);
+    setCoverContentRevision((n) => n + 1);
+    applyTemplateDefaults(tid);
+    setSaveStatus("saving");
+    void patchProposal(projectId, proposalId, {
+      templateId: tid,
+      coverNote: bodyHtml,
+    })
+      .then((p) => {
+        qc.setQueryData(qk.projectProposal(projectId, p.id), p);
+        setSaveStatus("saved");
+        toast.success(`Applied “${t.name}” to cover letter`);
+      })
+      .catch((e) => {
+        setSaveStatus("error");
+        toast.error(e instanceof Error ? e.message : "Could not apply template.");
+      });
+    return true;
+  };
+
+  const openLetterPreview = async () => {
+    if (!proposalId) return;
+    setPreviewLoading(true);
+    try {
+      const prev = await previewProposalHtml(projectId, proposalId);
+      setPreviewPayload({
+        letterMarkdown: prev.letterMarkdown,
+        letterHtml: prev.letterHtml,
+        takeoffTableHtml: prev.takeoffTableHtml,
+      });
+      setPreviewOpen(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Preview failed.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const openReviewPdf = async () => {
+    if (!proposalId) return;
+    setPdfLoading(true);
+    try {
+      const blob = await fetchProposalPdfBlob(projectId, proposalId);
+      const url = URL.createObjectURL(blob);
+      setPdfObjectUrl(url);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not open PDF.");
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const handleSendToClient = () => {
+    if (!hasItems) {
+      setActiveSection("pricing");
+      toast.error("Add line items in Scope & Pricing before sending.");
+      return;
+    }
+    if (!coverHasMeaningfulContent(coverHtml)) {
+      setActiveSection("cover");
+      toast.error("Add a cover letter before sending.");
+      return;
+    }
+    if (!clientEmail.trim()) {
+      setActiveSection("client");
+      toast.error("Add a client email before sending.");
+      return;
+    }
+    if (sendLockRef.current || sendMut.isPending) return;
+    sendLockRef.current = true;
+    sendMut.mutate(undefined, {
+      onSettled: () => {
+        sendLockRef.current = false;
+      },
+    });
+  };
+
+  const openMobilePanel = (tab: RightPanel) => {
+    setRightPanel(tab);
+    setMobilePanelOpen(true);
   };
 
   if (ctxLoading || (isPro && !wid)) return <EnterpriseLoadingState label="Loading…" />;
@@ -532,78 +639,66 @@ export function ProposalEditorWorkspace({
           </div>
         </div>
 
-        <SaveStatusBadge status={saveStatus} />
+        <ProposalSaveStatusBadge status={saveStatus} />
 
         <div className="flex shrink-0 items-center gap-1.5">
-          {/* Save Version */}
           {proposalId && (
             <div className="relative">
               {showVersionSummaryInput ? (
-                <div className="absolute right-0 top-full z-50 mt-1 flex w-64 flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
+                <div className="absolute right-0 top-full z-50 mt-1 flex w-64 flex-col gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 shadow-lg">
                   <input
                     autoFocus
                     value={versionSummary}
                     onChange={(e) => setVersionSummary(e.target.value)}
                     placeholder="Describe this version…"
-                    className="rounded border border-slate-200 px-2 py-1.5 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                    className="rounded border border-[var(--enterprise-border)] px-2 py-1.5 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") saveVersionMut.mutate();
                       if (e.key === "Escape") setShowVersionSummaryInput(false);
                     }}
                   />
                   <div className="flex gap-2">
-                    <button
+                    <EnterpriseButton
                       type="button"
+                      size="sm"
                       onClick={() => saveVersionMut.mutate()}
                       disabled={saveVersionMut.isPending}
-                      className="flex-1 rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      loading={saveVersionMut.isPending}
+                      className="flex-1"
                     >
                       {saveVersionMut.isPending ? "Saving…" : "Save version"}
-                    </button>
-                    <button
+                    </EnterpriseButton>
+                    <EnterpriseButton
                       type="button"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setShowVersionSummaryInput(false)}
-                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600"
                     >
                       Cancel
-                    </button>
+                    </EnterpriseButton>
                   </div>
                 </div>
               ) : null}
-              <button
+              <EnterpriseButton
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => setShowVersionSummaryInput((v) => !v)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
                 title="Save a named version snapshot"
               >
                 <Clock className="h-3.5 w-3.5" aria-hidden />
                 <span className="hidden sm:inline">Save version</span>
-              </button>
+              </EnterpriseButton>
             </div>
           )}
 
-          {/* Preview */}
-          <button
+          <EnterpriseButton
             type="button"
+            variant="secondary"
+            size="sm"
             disabled={previewLoading || !proposalId}
-            onClick={async () => {
-              if (!proposalId) return;
-              setPreviewLoading(true);
-              try {
-                const prev = await previewProposalHtml(projectId, proposalId);
-                setPreviewPayload({
-                  letterMarkdown: prev.letterMarkdown,
-                  letterHtml: prev.letterHtml,
-                  takeoffTableHtml: prev.takeoffTableHtml,
-                });
-                setPreviewOpen(true);
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Preview failed.");
-              } finally {
-                setPreviewLoading(false);
-              }
-            }}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+            loading={previewLoading}
+            onClick={() => void openLetterPreview()}
           >
             {previewLoading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -611,81 +706,77 @@ export function ProposalEditorWorkspace({
               <Eye className="h-3.5 w-3.5" aria-hidden />
             )}
             <span className="hidden sm:inline">Preview</span>
-          </button>
+          </EnterpriseButton>
 
-          {/* Send */}
-          {proposalId && canSendToClient ? (
-            <button
-              type="button"
-              disabled={sendMut.isPending || !hasItems}
-              aria-busy={sendMut.isPending}
-              title={!hasItems ? "Add line items in Scope & Pricing before sending" : undefined}
-              onClick={() => {
-                if (!hasItems) {
-                  setActiveSection("pricing");
-                  toast.error("Add line items in Scope & Pricing before sending.");
-                  return;
-                }
-                if (sendLockRef.current || sendMut.isPending) return;
-                sendLockRef.current = true;
-                sendMut.mutate(undefined, {
-                  onSettled: () => {
-                    sendLockRef.current = false;
-                  },
-                });
-              }}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] aria-busy:cursor-wait disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {sendMut.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-              ) : (
-                <Send className="h-3.5 w-3.5" aria-hidden />
-              )}
-              <span className="hidden sm:inline">{sendMut.isPending ? "Sending…" : "Send"}</span>
-            </button>
-          ) : proposalId ? (
-            <Link
-              href={`${basePath}/${proposalId}`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-            >
-              <FileText className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden sm:inline">View</span>
-            </Link>
+          {proposalId ? (
+            <>
+              <EnterpriseButton
+                type="button"
+                size="sm"
+                onClick={() => setActiveSection("review")}
+                title="Go to Review & Send"
+              >
+                Review
+              </EnterpriseButton>
+              {!canSendToClient ? (
+                <Link
+                  href={`${basePath}/${proposalId}`}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
+                >
+                  <FileText className="h-3.5 w-3.5" aria-hidden />
+                  <span className="hidden sm:inline">View</span>
+                </Link>
+              ) : null}
+            </>
           ) : null}
 
-          {/* Right panel toggle */}
-          <button
+          <EnterpriseButton
             type="button"
+            variant={rightPanelOpen ? "secondary" : "ghost"}
+            size="sm"
             onClick={() => setRightPanelOpen((v) => !v)}
             title={rightPanelOpen ? "Hide side panel" : "Show side panel"}
-            className={`inline-flex h-7 w-7 items-center justify-center rounded-lg border transition ${
-              rightPanelOpen
-                ? "border-[var(--enterprise-primary)]/30 bg-blue-50 text-[var(--enterprise-primary)]"
-                : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-            }`}
+            className="hidden xl:inline-flex"
+            aria-label={rightPanelOpen ? "Hide side panel" : "Show side panel"}
           >
             <MoreHorizontal className="h-4 w-4" />
-          </button>
+          </EnterpriseButton>
+
+          <div className="flex items-center gap-1 xl:hidden">
+            <EnterpriseButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => openMobilePanel("history")}
+              aria-label="Version history"
+              title="History"
+            >
+              <Clock className="h-4 w-4" />
+            </EnterpriseButton>
+            <EnterpriseButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => openMobilePanel("comments")}
+              aria-label="Notes"
+              title="Notes"
+            >
+              <MessageSquare className="h-4 w-4" />
+            </EnterpriseButton>
+          </div>
         </div>
       </div>
 
-      {/* ─── Section nav tabs ─── */}
-      <div className="flex shrink-0 gap-1 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 sm:px-4">
-        {(["client", "pricing", "cover"] as ActiveSection[]).map((sec) => (
-          <button
-            key={sec}
-            type="button"
-            onClick={() => setActiveSection(sec)}
-            className={`relative pb-2 pt-2.5 text-xs font-medium transition-colors ${
-              activeSection === sec
-                ? "text-[var(--enterprise-primary)] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:rounded-t after:bg-[var(--enterprise-primary)] after:content-['']"
-                : "text-slate-500 hover:text-slate-700"
-            } px-2`}
-          >
-            {SECTION_LABELS[sec]}
-          </button>
-        ))}
-      </div>
+      <ProposalEditorStepBar
+        activeSection={activeSection}
+        onSelect={setActiveSection}
+        unlocked={{
+          client: true,
+          pricing: Boolean(proposalId),
+          cover: Boolean(proposalId),
+          review: Boolean(proposalId),
+        }}
+      />
 
       {/* ─── Main body: doc canvas + right panel ─── */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -726,11 +817,11 @@ export function ProposalEditorWorkspace({
                   </div>
                   <div className="mt-5 flex items-center justify-between">
                     <div />
-                    <button
+                    <EnterpriseButton
                       type="button"
                       disabled={createOrSaveMut.isPending || !title || !clientName || !clientEmail}
+                      loading={createOrSaveMut.isPending}
                       onClick={() => createOrSaveMut.mutate()}
-                      className="inline-flex items-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
                     >
                       {createOrSaveMut.isPending ? (
                         <>
@@ -745,7 +836,7 @@ export function ProposalEditorWorkspace({
                       ) : (
                         "Create draft →"
                       )}
-                    </button>
+                    </EnterpriseButton>
                   </div>
                 </div>
               </section>
@@ -756,12 +847,12 @@ export function ProposalEditorWorkspace({
               <section aria-label="Scope and pricing">
                 <div className="space-y-5">
                   {!proposalId ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-5 text-sm text-amber-900">
+                    <div className="enterprise-alert-warning rounded-xl p-5 text-sm">
                       Complete client details first to enable pricing.
                       <button
                         type="button"
                         onClick={() => setActiveSection("client")}
-                        className="mt-2 block font-semibold text-amber-800 underline"
+                        className="mt-2 block font-semibold underline"
                       >
                         Go to client details →
                       </button>
@@ -820,214 +911,369 @@ export function ProposalEditorWorkspace({
                         </button>
                       </div>
 
-                      {/* Line items table */}
+                      {/* Line items — mobile cards + desktop table */}
                       <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
-                        <div className="overflow-x-auto">
-                          {detailLoading ? (
-                            <div className="flex items-center justify-center py-12">
-                              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-                            </div>
-                          ) : (
-                            <table className="w-full min-w-[700px] text-sm">
-                              <thead className="bg-[var(--enterprise-bg)]/60 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                                <tr>
-                                  <th className="px-4 py-3">Item</th>
-                                  <th className="px-4 py-3 text-right">Qty</th>
-                                  <th className="px-4 py-3">Unit</th>
-                                  <th className="px-4 py-3 text-right">Rate</th>
-                                  <th className="px-4 py-3 text-right">Total</th>
-                                  <th className="px-2 py-3" aria-label="Actions" />
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(d?.items ?? []).length === 0 && !addingItem ? (
-                                  <tr>
-                                    <td
-                                      colSpan={6}
-                                      className="px-4 py-10 text-center text-sm text-[var(--enterprise-text-muted)]"
-                                    >
-                                      Load takeoff items above or click{" "}
-                                      <button
-                                        type="button"
-                                        onClick={() => setAddingItem(true)}
-                                        className="font-medium text-[var(--enterprise-primary)] underline underline-offset-2"
-                                      >
-                                        + Add item
-                                      </button>{" "}
-                                      to add manually.
-                                    </td>
-                                  </tr>
-                                ) : (
-                                  (d?.items ?? []).map((it) => (
-                                    <tr
-                                      key={it.id}
-                                      className="group border-t border-[var(--enterprise-border)]/60"
-                                    >
-                                      <td className="px-4 py-2">
+                        {detailLoading ? (
+                          <div className="flex items-center justify-center py-12">
+                            <Loader2 className="h-5 w-5 animate-spin text-[var(--enterprise-text-muted)]" />
+                          </div>
+                        ) : (
+                          <>
+                            {/* Mobile cards */}
+                            <div className="space-y-3 p-3 lg:hidden">
+                              {(d?.items ?? []).length === 0 && !addingItem ? (
+                                <p className="px-1 py-8 text-center text-sm text-[var(--enterprise-text-muted)]">
+                                  Load takeoff items above or{" "}
+                                  <button
+                                    type="button"
+                                    onClick={() => setAddingItem(true)}
+                                    className="font-medium text-[var(--enterprise-primary)] underline underline-offset-2"
+                                  >
+                                    add an item
+                                  </button>
+                                  .
+                                </p>
+                              ) : (
+                                (d?.items ?? []).map((it) => (
+                                  <div
+                                    key={it.id}
+                                    className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3"
+                                  >
+                                    <input
+                                      className="w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm font-medium text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                      value={it.itemName}
+                                      onChange={(e) =>
+                                        updateLine(it.id, "itemName", e.target.value)
+                                      }
+                                      placeholder="Item name"
+                                    />
+                                    <div className="mt-2 grid grid-cols-3 gap-2">
+                                      <label className="text-xs text-[var(--enterprise-text-muted)]">
+                                        Qty
                                         <input
-                                          className="w-full min-w-[140px] rounded border border-transparent bg-transparent px-2 py-1 font-medium text-[var(--enterprise-text)] focus:border-[var(--enterprise-border)] focus:outline-none group-hover:border-[var(--enterprise-border)]"
-                                          value={it.itemName}
-                                          onChange={(e) =>
-                                            updateLine(it.id, "itemName", e.target.value)
-                                          }
-                                          placeholder="Item name"
-                                        />
-                                      </td>
-                                      <td className="px-4 py-2 text-right">
-                                        <input
-                                          className="w-20 rounded border border-[var(--enterprise-border)] bg-transparent px-2 py-1 text-right text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                          className="mt-0.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1.5 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
                                           value={it.quantity}
                                           onChange={(e) =>
                                             updateLine(it.id, "quantity", e.target.value)
                                           }
                                         />
-                                      </td>
-                                      <td className="px-4 py-2">
+                                      </label>
+                                      <label className="text-xs text-[var(--enterprise-text-muted)]">
+                                        Unit
                                         <input
-                                          className="w-16 rounded border border-transparent bg-transparent px-2 py-1 text-sm text-[var(--enterprise-text-muted)] focus:border-[var(--enterprise-border)] focus:outline-none group-hover:border-[var(--enterprise-border)]"
+                                          className="mt-0.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1.5 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
                                           value={it.unit}
                                           onChange={(e) =>
                                             updateLine(it.id, "unit", e.target.value)
                                           }
-                                          placeholder="ea"
                                         />
-                                      </td>
-                                      <td className="px-4 py-2 text-right">
+                                      </label>
+                                      <label className="text-xs text-[var(--enterprise-text-muted)]">
+                                        Rate
                                         <input
-                                          className="w-28 rounded border border-[var(--enterprise-border)] bg-transparent px-2 py-1 text-right text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                          className="mt-0.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1.5 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
                                           value={it.rate}
                                           onChange={(e) =>
                                             updateLine(it.id, "rate", e.target.value)
                                           }
                                         />
-                                      </td>
-                                      <td className="px-4 py-2 text-right font-medium tabular-nums text-[var(--enterprise-text)]">
+                                      </label>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between">
+                                      <span className="text-sm font-semibold tabular-nums text-[var(--enterprise-text)]">
                                         {fmtMoney(it.lineTotal, d!.currency)}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => deleteLine(it.id)}
+                                        disabled={saveItemsMut.isPending}
+                                        aria-label="Remove line"
+                                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                              {addingItem && (
+                                <div className="rounded-lg border border-[var(--enterprise-primary)]/30 bg-[var(--enterprise-primary-soft)] p-3">
+                                  <input
+                                    autoFocus
+                                    value={newItemDraft.itemName}
+                                    onChange={(e) =>
+                                      setNewItemDraft((p) => ({
+                                        ...p,
+                                        itemName: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="Item name *"
+                                    className="w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm font-medium focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                  />
+                                  <div className="mt-2 grid grid-cols-3 gap-2">
+                                    <input
+                                      value={newItemDraft.quantity}
+                                      onChange={(e) =>
+                                        setNewItemDraft((p) => ({
+                                          ...p,
+                                          quantity: e.target.value,
+                                        }))
+                                      }
+                                      placeholder="Qty"
+                                      className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1.5 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                    />
+                                    <input
+                                      value={newItemDraft.unit}
+                                      onChange={(e) =>
+                                        setNewItemDraft((p) => ({ ...p, unit: e.target.value }))
+                                      }
+                                      placeholder="Unit"
+                                      className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1.5 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                    />
+                                    <input
+                                      value={newItemDraft.rate}
+                                      onChange={(e) =>
+                                        setNewItemDraft((p) => ({ ...p, rate: e.target.value }))
+                                      }
+                                      placeholder="Rate"
+                                      className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1.5 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                    />
+                                  </div>
+                                  <div className="mt-2 flex gap-2">
+                                    <EnterpriseButton
+                                      type="button"
+                                      size="sm"
+                                      onClick={commitNewItem}
+                                      disabled={
+                                        !newItemDraft.itemName.trim() || saveItemsMut.isPending
+                                      }
+                                    >
+                                      Add item
+                                    </EnterpriseButton>
+                                    <EnterpriseButton
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setAddingItem(false);
+                                        setNewItemDraft(emptyDraft());
+                                      }}
+                                    >
+                                      Cancel
+                                    </EnterpriseButton>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Desktop table */}
+                            <div className="hidden overflow-x-auto lg:block">
+                              <table className="w-full min-w-[700px] text-sm">
+                                <thead className="bg-[var(--enterprise-bg)]/60 text-left text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                                  <tr>
+                                    <th className="px-4 py-3">Item</th>
+                                    <th className="px-4 py-3 text-right">Qty</th>
+                                    <th className="px-4 py-3">Unit</th>
+                                    <th className="px-4 py-3 text-right">Rate</th>
+                                    <th className="px-4 py-3 text-right">Total</th>
+                                    <th className="px-2 py-3" aria-label="Actions" />
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(d?.items ?? []).length === 0 && !addingItem ? (
+                                    <tr>
+                                      <td
+                                        colSpan={6}
+                                        className="px-4 py-10 text-center text-sm text-[var(--enterprise-text-muted)]"
+                                      >
+                                        Load takeoff items above or click{" "}
+                                        <button
+                                          type="button"
+                                          onClick={() => setAddingItem(true)}
+                                          className="font-medium text-[var(--enterprise-primary)] underline underline-offset-2"
+                                        >
+                                          + Add item
+                                        </button>{" "}
+                                        to add manually.
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    (d?.items ?? []).map((it) => (
+                                      <tr
+                                        key={it.id}
+                                        className="group border-t border-[var(--enterprise-border)]/60"
+                                      >
+                                        <td className="px-4 py-2">
+                                          <input
+                                            className="w-full min-w-[140px] rounded border border-transparent bg-transparent px-2 py-1 font-medium text-[var(--enterprise-text)] focus:border-[var(--enterprise-border)] focus:outline-none group-hover:border-[var(--enterprise-border)]"
+                                            value={it.itemName}
+                                            onChange={(e) =>
+                                              updateLine(it.id, "itemName", e.target.value)
+                                            }
+                                            placeholder="Item name"
+                                          />
+                                        </td>
+                                        <td className="px-4 py-2 text-right">
+                                          <input
+                                            className="w-20 rounded border border-[var(--enterprise-border)] bg-transparent px-2 py-1 text-right text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                            value={it.quantity}
+                                            onChange={(e) =>
+                                              updateLine(it.id, "quantity", e.target.value)
+                                            }
+                                          />
+                                        </td>
+                                        <td className="px-4 py-2">
+                                          <input
+                                            className="w-16 rounded border border-transparent bg-transparent px-2 py-1 text-sm text-[var(--enterprise-text-muted)] focus:border-[var(--enterprise-border)] focus:outline-none group-hover:border-[var(--enterprise-border)]"
+                                            value={it.unit}
+                                            onChange={(e) =>
+                                              updateLine(it.id, "unit", e.target.value)
+                                            }
+                                            placeholder="ea"
+                                          />
+                                        </td>
+                                        <td className="px-4 py-2 text-right">
+                                          <input
+                                            className="w-28 rounded border border-[var(--enterprise-border)] bg-transparent px-2 py-1 text-right text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                            value={it.rate}
+                                            onChange={(e) =>
+                                              updateLine(it.id, "rate", e.target.value)
+                                            }
+                                          />
+                                        </td>
+                                        <td className="px-4 py-2 text-right font-medium tabular-nums text-[var(--enterprise-text)]">
+                                          {fmtMoney(it.lineTotal, d!.currency)}
+                                        </td>
+                                        <td className="px-2 py-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => deleteLine(it.id)}
+                                            disabled={saveItemsMut.isPending}
+                                            title="Remove this line"
+                                            aria-label="Remove line"
+                                            className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--enterprise-text-muted)] opacity-0 transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)] group-hover:opacity-100 disabled:opacity-40"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))
+                                  )}
+
+                                  {addingItem && (
+                                    <tr className="border-t border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary-soft)]">
+                                      <td className="px-4 py-2">
+                                        <input
+                                          autoFocus
+                                          value={newItemDraft.itemName}
+                                          onChange={(e) =>
+                                            setNewItemDraft((p) => ({
+                                              ...p,
+                                              itemName: e.target.value,
+                                            }))
+                                          }
+                                          placeholder="Item name *"
+                                          className="w-full min-w-[140px] rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-sm font-medium focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") commitNewItem();
+                                            if (e.key === "Escape") {
+                                              setAddingItem(false);
+                                              setNewItemDraft(emptyDraft());
+                                            }
+                                          }}
+                                        />
+                                      </td>
+                                      <td className="px-4 py-2 text-right">
+                                        <input
+                                          value={newItemDraft.quantity}
+                                          onChange={(e) =>
+                                            setNewItemDraft((p) => ({
+                                              ...p,
+                                              quantity: e.target.value,
+                                            }))
+                                          }
+                                          className="w-20 rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-right text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                          placeholder="1"
+                                          onKeyDown={(e) => e.key === "Enter" && commitNewItem()}
+                                        />
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <input
+                                          value={newItemDraft.unit}
+                                          onChange={(e) =>
+                                            setNewItemDraft((p) => ({
+                                              ...p,
+                                              unit: e.target.value,
+                                            }))
+                                          }
+                                          className="w-16 rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                          placeholder="ea"
+                                          onKeyDown={(e) => e.key === "Enter" && commitNewItem()}
+                                        />
+                                      </td>
+                                      <td className="px-4 py-2 text-right">
+                                        <input
+                                          value={newItemDraft.rate}
+                                          onChange={(e) =>
+                                            setNewItemDraft((p) => ({
+                                              ...p,
+                                              rate: e.target.value,
+                                            }))
+                                          }
+                                          className="w-28 rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-right text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                                          placeholder="0.00"
+                                          onKeyDown={(e) => e.key === "Enter" && commitNewItem()}
+                                        />
+                                      </td>
+                                      <td className="px-4 py-2 text-right text-xs tabular-nums text-[var(--enterprise-text-muted)]">
+                                        {fmtMoney(
+                                          (
+                                            Number(newItemDraft.quantity || 1) *
+                                            Number(newItemDraft.rate || 0)
+                                          ).toFixed(2),
+                                          d?.currency ?? "USD",
+                                        )}
                                       </td>
                                       <td className="px-2 py-2">
                                         <button
                                           type="button"
-                                          onClick={() => deleteLine(it.id)}
-                                          disabled={saveItemsMut.isPending}
-                                          title="Remove this line"
-                                          aria-label="Remove line"
-                                          className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 disabled:opacity-40"
+                                          onClick={() => {
+                                            setAddingItem(false);
+                                            setNewItemDraft(emptyDraft());
+                                          }}
+                                          title="Cancel"
+                                          aria-label="Cancel"
+                                          className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
                                         >
-                                          <Trash2 className="h-3.5 w-3.5" />
+                                          <X className="h-3.5 w-3.5" />
                                         </button>
                                       </td>
                                     </tr>
-                                  ))
-                                )}
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                        )}
 
-                                {/* New item input row */}
-                                {addingItem && (
-                                  <tr className="border-t border-[var(--enterprise-primary)]/20 bg-blue-50/30">
-                                    <td className="px-4 py-2">
-                                      <input
-                                        autoFocus
-                                        value={newItemDraft.itemName}
-                                        onChange={(e) =>
-                                          setNewItemDraft((p) => ({
-                                            ...p,
-                                            itemName: e.target.value,
-                                          }))
-                                        }
-                                        placeholder="Item name *"
-                                        className="w-full min-w-[140px] rounded border border-[var(--enterprise-border)] bg-white px-2 py-1 text-sm font-medium focus:border-[var(--enterprise-primary)] focus:outline-none"
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Enter") commitNewItem();
-                                          if (e.key === "Escape") {
-                                            setAddingItem(false);
-                                            setNewItemDraft(emptyDraft());
-                                          }
-                                        }}
-                                      />
-                                    </td>
-                                    <td className="px-4 py-2 text-right">
-                                      <input
-                                        value={newItemDraft.quantity}
-                                        onChange={(e) =>
-                                          setNewItemDraft((p) => ({
-                                            ...p,
-                                            quantity: e.target.value,
-                                          }))
-                                        }
-                                        className="w-20 rounded border border-[var(--enterprise-border)] bg-white px-2 py-1 text-right text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
-                                        placeholder="1"
-                                        onKeyDown={(e) => e.key === "Enter" && commitNewItem()}
-                                      />
-                                    </td>
-                                    <td className="px-4 py-2">
-                                      <input
-                                        value={newItemDraft.unit}
-                                        onChange={(e) =>
-                                          setNewItemDraft((p) => ({ ...p, unit: e.target.value }))
-                                        }
-                                        className="w-16 rounded border border-[var(--enterprise-border)] bg-white px-2 py-1 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
-                                        placeholder="ea"
-                                        onKeyDown={(e) => e.key === "Enter" && commitNewItem()}
-                                      />
-                                    </td>
-                                    <td className="px-4 py-2 text-right">
-                                      <input
-                                        value={newItemDraft.rate}
-                                        onChange={(e) =>
-                                          setNewItemDraft((p) => ({ ...p, rate: e.target.value }))
-                                        }
-                                        className="w-28 rounded border border-[var(--enterprise-border)] bg-white px-2 py-1 text-right text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
-                                        placeholder="0.00"
-                                        onKeyDown={(e) => e.key === "Enter" && commitNewItem()}
-                                      />
-                                    </td>
-                                    <td className="px-4 py-2 text-right text-xs tabular-nums text-slate-400">
-                                      {fmtMoney(
-                                        (
-                                          Number(newItemDraft.quantity || 1) *
-                                          Number(newItemDraft.rate || 0)
-                                        ).toFixed(2),
-                                        d?.currency ?? "USD",
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setAddingItem(false);
-                                          setNewItemDraft(emptyDraft());
-                                        }}
-                                        title="Cancel"
-                                        aria-label="Cancel"
-                                        className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                                      >
-                                        <X className="h-3.5 w-3.5" />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                )}
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
-
-                        {/* Add item button */}
                         {!detailLoading && (
                           <div className="border-t border-[var(--enterprise-border)]/40 px-4 py-2">
                             {!addingItem ? (
                               <button
                                 type="button"
                                 onClick={() => setAddingItem(true)}
-                                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--enterprise-primary)] transition hover:bg-blue-50"
+                                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary-soft)]"
                               >
                                 <Plus className="h-3.5 w-3.5" aria-hidden />
                                 Add item manually
                               </button>
                             ) : (
-                              <button
+                              <EnterpriseButton
                                 type="button"
+                                size="sm"
                                 onClick={commitNewItem}
                                 disabled={!newItemDraft.itemName.trim() || saveItemsMut.isPending}
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                                className="hidden lg:inline-flex"
                               >
                                 {saveItemsMut.isPending ? (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -1035,7 +1281,7 @@ export function ProposalEditorWorkspace({
                                   <Check className="h-3.5 w-3.5" aria-hidden />
                                 )}
                                 Add item
-                              </button>
+                              </EnterpriseButton>
                             )}
                           </div>
                         )}
@@ -1151,14 +1397,10 @@ export function ProposalEditorWorkspace({
                         </div>
                       )}
 
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => setActiveSection("cover")}
-                          className="inline-flex items-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm"
-                        >
+                      <div className="flex justify-end pb-16">
+                        <EnterpriseButton type="button" onClick={() => setActiveSection("cover")}>
                           Cover letter →
-                        </button>
+                        </EnterpriseButton>
                       </div>
                     </>
                   )}
@@ -1171,37 +1413,29 @@ export function ProposalEditorWorkspace({
               <section aria-label="Cover letter">
                 <div className="space-y-4">
                   {!proposalId ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-5 text-sm text-amber-900">
+                    <div className="enterprise-alert-warning rounded-xl p-5 text-sm">
                       Create a draft first.
                       <button
                         type="button"
                         onClick={() => setActiveSection("client")}
-                        className="mt-2 block font-semibold text-amber-800 underline"
+                        className="mt-2 block font-semibold underline"
                       >
                         Go to client details →
                       </button>
                     </div>
                   ) : (
                     <>
-                      {/* Template selector */}
-                      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)]">
-                        <label className="flex items-center gap-2 text-sm">
+                      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)]">
+                        <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-sm sm:max-w-xs">
                           <span className="font-medium text-[var(--enterprise-text)]">
-                            Template
+                            Letter template
                           </span>
                           <select
-                            className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-1.5 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
-                            value={templateId}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setTemplateId(v);
-                              if (v) applyTemplateDefaults(v);
-                              patchProposal(projectId, proposalId!, { templateId: v || null }).then(
-                                (p) => qc.setQueryData(qk.projectProposal(projectId, p.id), p),
-                              );
-                            }}
+                            className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2 text-sm focus:border-[var(--enterprise-primary)] focus:outline-none"
+                            value={pendingTemplateId}
+                            onChange={(e) => setPendingTemplateId(e.target.value)}
                           >
-                            <option value="">No template</option>
+                            <option value="">Blank letter</option>
                             {(tmplData?.templates ?? []).map((t) => (
                               <option key={t.id} value={t.id}>
                                 {t.name}
@@ -1210,37 +1444,38 @@ export function ProposalEditorWorkspace({
                           </select>
                         </label>
 
-                        {/* Variable chips */}
-                        <div className="flex flex-wrap gap-1.5">
-                          {VARS.map((v) => (
-                            <span
-                              key={v}
-                              className="cursor-pointer rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[10px] text-slate-600 hover:bg-slate-100"
-                              title={`Click to insert ${v}`}
-                              onClick={() => {
-                                setCoverHtml((prev) => prev + v);
-                              }}
-                              role="button"
-                              tabIndex={0}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ")
-                                  setCoverHtml((prev) => prev + v);
-                              }}
-                            >
-                              {v}
-                            </span>
-                          ))}
-                        </div>
-
-                        <button
+                        <EnterpriseButton
                           type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={!pendingTemplateId}
+                          onClick={() => {
+                            if (!pendingTemplateId) return;
+                            applyTemplate(pendingTemplateId);
+                          }}
+                        >
+                          Apply template
+                        </EnterpriseButton>
+
+                        {templateId && pendingTemplateId !== templateId ? (
+                          <span className="text-xs text-[var(--enterprise-text-muted)]">
+                            Select Apply to load the letter body
+                          </span>
+                        ) : null}
+
+                        <EnterpriseButton
+                          type="button"
+                          variant="secondary"
+                          size="sm"
                           disabled={aiLoading}
+                          loading={aiLoading}
                           onClick={async () => {
                             setAiLoading(true);
                             try {
                               const { text } = await proposalAiDraft(projectId, proposalId!, {});
                               const html = proposalCoverTextToHtml(text);
                               setCoverHtml(html);
+                              setCoverContentRevision((n) => n + 1);
                               await patchProposal(projectId, proposalId!, { coverNote: html });
                               qc.invalidateQueries({
                                 queryKey: qk.projectProposal(projectId, proposalId!),
@@ -1252,7 +1487,6 @@ export function ProposalEditorWorkspace({
                               setAiLoading(false);
                             }
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 transition hover:bg-violet-100 disabled:opacity-60"
                         >
                           {aiLoading ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -1260,26 +1494,27 @@ export function ProposalEditorWorkspace({
                             <Sparkles className="h-3.5 w-3.5" aria-hidden />
                           )}
                           {aiLoading ? "Working…" : "AI draft"}
-                        </button>
+                        </EnterpriseButton>
+
+                        <ProposalSaveStatusBadge status={saveStatus} className="ml-auto" />
                       </div>
 
-                      {/* TipTap document canvas */}
-                      <div className="overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-white shadow-[var(--enterprise-shadow-xs)]">
-                        {/* Business-letter header */}
-                        <div className="border-b border-slate-100 bg-white px-8 pt-8 pb-5">
-                          {/* From / date row */}
+                      <div className="overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
+                        <div className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-6 pt-8 pb-5 sm:px-8">
                           <div className="flex flex-wrap items-start justify-between gap-4">
                             <div className="flex flex-col gap-0.5">
                               {d?.workspaceName && (
-                                <p className="text-sm font-semibold text-slate-900">
+                                <p className="text-sm font-semibold text-[var(--enterprise-text)]">
                                   {d.workspaceName}
                                 </p>
                               )}
                               {d?.createdBy?.name && (
-                                <p className="text-xs text-slate-500">{d.createdBy.name}</p>
+                                <p className="text-xs text-[var(--enterprise-text-muted)]">
+                                  {d.createdBy.name}
+                                </p>
                               )}
                             </div>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-[var(--enterprise-text-muted)]">
                               {new Date().toLocaleDateString(undefined, {
                                 day: "numeric",
                                 month: "long",
@@ -1288,45 +1523,56 @@ export function ProposalEditorWorkspace({
                             </p>
                           </div>
 
-                          {/* To block */}
                           <div className="mt-5 flex flex-col gap-0.5">
-                            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                            <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
                               To
                             </p>
                             {clientName ? (
-                              <p className="text-sm font-semibold text-slate-900">{clientName}</p>
+                              <p className="text-sm font-semibold text-[var(--enterprise-text)]">
+                                {clientName}
+                              </p>
                             ) : (
-                              <p className="text-sm italic text-slate-400">Client name</p>
+                              <p className="text-sm italic text-[var(--enterprise-text-muted)]">
+                                Client name
+                              </p>
                             )}
                             {clientCompany && (
-                              <p className="text-xs text-slate-500">{clientCompany}</p>
+                              <p className="text-xs text-[var(--enterprise-text-muted)]">
+                                {clientCompany}
+                              </p>
                             )}
                           </div>
 
-                          {/* Subject */}
-                          <div className="mt-4 border-t border-slate-100 pt-4">
-                            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                          <div className="mt-4 border-t border-[var(--enterprise-border)] pt-4">
+                            <span className="enterprise-type-label text-[var(--enterprise-text-muted)]">
                               Re:{" "}
                             </span>
                             {title ? (
-                              <span className="text-sm font-semibold text-slate-800">{title}</span>
+                              <span className="text-sm font-semibold text-[var(--enterprise-text)]">
+                                {title}
+                              </span>
                             ) : (
-                              <span className="text-sm italic text-slate-400">Proposal title</span>
+                              <span className="text-sm italic text-[var(--enterprise-text-muted)]">
+                                Proposal title
+                              </span>
                             )}
                             {d?.reference && (
-                              <span className="ml-2 text-xs text-slate-400">({d.reference})</span>
+                              <span className="ml-2 text-xs text-[var(--enterprise-text-muted)]">
+                                ({d.reference})
+                              </span>
                             )}
                           </div>
                         </div>
 
                         <ProposalCoverEditor
                           content={coverHtml || (d?.coverNote ?? "")}
+                          contentRevision={coverContentRevision}
                           onChange={(html, json) => {
                             setCoverHtml(html);
                             setCoverJson(json);
                             scheduleAutosaveCover(html);
                           }}
-                          placeholder="Write your cover letter here…"
+                          placeholder="Write your cover letter… Type # to insert a merge field."
                           className="rounded-none border-0 shadow-none"
                           variables={[
                             {
@@ -1394,74 +1640,76 @@ export function ProposalEditorWorkspace({
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <button
+                        <EnterpriseButton
                           type="button"
+                          variant="ghost"
+                          size="sm"
                           onClick={() => setActiveSection("pricing")}
-                          className="text-sm font-medium text-slate-500 hover:text-slate-700"
                         >
                           ← Pricing
-                        </button>
-                        {canSendToClient ? (
-                          <div className="flex flex-col items-end gap-2">
-                            {!hasItems && (
-                              <p className="text-xs font-medium text-amber-600">
-                                Go to{" "}
-                                <button
-                                  type="button"
-                                  onClick={() => setActiveSection("pricing")}
-                                  className="underline underline-offset-2 hover:text-amber-700"
-                                >
-                                  Scope &amp; Pricing
-                                </button>{" "}
-                                and load line items before sending.
-                              </p>
-                            )}
-                            <button
-                              type="button"
-                              disabled={sendMut.isPending || !hasItems}
-                              aria-busy={sendMut.isPending}
-                              title={!hasItems ? "Add line items before sending" : undefined}
-                              onClick={() => {
-                                if (!hasItems) {
-                                  setActiveSection("pricing");
-                                  return;
-                                }
-                                if (sendLockRef.current || sendMut.isPending) return;
-                                sendLockRef.current = true;
-                                sendMut.mutate(undefined, {
-                                  onSettled: () => {
-                                    sendLockRef.current = false;
-                                  },
-                                });
-                              }}
-                              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm aria-busy:cursor-wait disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {sendMut.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                              ) : (
-                                <Send className="h-4 w-4" aria-hidden />
-                              )}
-                              {sendMut.isPending ? "Sending…" : "Send to client"}
-                            </button>
-                          </div>
-                        ) : (
-                          <p className="max-w-xs text-right text-xs text-slate-500">
-                            Already sent. Edits auto-update the portal.
-                          </p>
-                        )}
+                        </EnterpriseButton>
+                        <EnterpriseButton type="button" onClick={() => setActiveSection("review")}>
+                          Review & Send →
+                        </EnterpriseButton>
                       </div>
                     </>
                   )}
                 </div>
               </section>
             )}
+
+            {/* Review step */}
+            {activeSection === "review" && (
+              <>
+                {!proposalId ? (
+                  <div className="enterprise-alert-warning rounded-xl p-5 text-sm">
+                    Create a draft first.
+                    <button
+                      type="button"
+                      onClick={() => setActiveSection("client")}
+                      className="mt-2 block font-semibold underline"
+                    >
+                      Go to client details →
+                    </button>
+                  </div>
+                ) : (
+                  <ProposalReviewStep
+                    clientName={clientName}
+                    clientEmail={clientEmail}
+                    clientCompany={clientCompany}
+                    validUntil={validUntil}
+                    currency={d?.currency ?? currency}
+                    subtotal={d?.subtotal}
+                    total={d?.total}
+                    taxPercent={d?.taxPercent}
+                    taxAmount={d?.taxAmount}
+                    workPricePercent={d?.workPricePercent}
+                    workAmount={d?.workAmount}
+                    discount={d?.discount}
+                    coverHtml={coverHtml || d?.coverNote || ""}
+                    hasItems={hasItems}
+                    canSendToClient={Boolean(canSendToClient)}
+                    sendPending={sendMut.isPending}
+                    previewLoading={reviewPreviewLoading || previewLoading}
+                    reviewPreview={reviewPreview}
+                    pdfLoading={pdfLoading}
+                    onBackToCover={() => setActiveSection("cover")}
+                    onOpenPreview={() => void openLetterPreview()}
+                    onReviewPdf={() => void openReviewPdf()}
+                    onSend={handleSendToClient}
+                    onGoToClient={() => setActiveSection("client")}
+                    onGoToPricing={() => setActiveSection("pricing")}
+                    onGoToCover={() => setActiveSection("cover")}
+                  />
+                )}
+              </>
+            )}
           </div>
         </div>
 
-        {/* ─── Right panel ─── */}
+        {/* ─── Right panel (desktop) ─── */}
         {rightPanelOpen && (
           <aside className="hidden w-72 shrink-0 flex-col overflow-hidden border-l border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] xl:flex">
-            {/* Panel tabs */}
             <div className="flex shrink-0 border-b border-[var(--enterprise-border)]">
               {(["details", "history", "comments"] as RightPanel[]).map((tab) => (
                 <button
@@ -1471,7 +1719,7 @@ export function ProposalEditorWorkspace({
                   className={`flex-1 py-2.5 text-xs font-medium capitalize transition ${
                     rightPanel === tab
                       ? "border-b-2 border-[var(--enterprise-primary)] text-[var(--enterprise-primary)]"
-                      : "text-slate-500 hover:text-slate-700"
+                      : "text-[var(--enterprise-text-muted)] hover:text-[var(--enterprise-text)]"
                   }`}
                 >
                   {tab === "history" ? (
@@ -1491,49 +1739,100 @@ export function ProposalEditorWorkspace({
               ))}
             </div>
 
-            {/* Panel content */}
             <div className="flex-1 overflow-y-auto p-4">
-              {rightPanel === "details" && (
-                <ProposalDetailsPanel
-                  detail={d}
-                  fmtMoney={fmtMoney}
-                  basePath={basePath}
-                  proposalId={proposalId}
-                />
-              )}
-              {rightPanel === "history" && proposalId && (
-                <ProposalVersionHistoryPanel
-                  projectId={projectId}
-                  proposalId={proposalId}
-                  onRestored={(v) => {
-                    setCoverHtml(v.contentHtml);
-                    setCoverJson(v.contentJson);
-                  }}
-                />
-              )}
-              {rightPanel === "history" && !proposalId && (
-                <p className="text-center text-sm text-slate-400">
-                  Create a draft first to track versions.
-                </p>
-              )}
-              {rightPanel === "comments" && proposalId && (
-                <ProposalCommentsPanel
-                  projectId={projectId}
-                  proposalId={proposalId}
-                  currentUserId={currentUserId}
-                />
-              )}
-              {rightPanel === "comments" && !proposalId && (
-                <p className="text-center text-sm text-slate-400">
-                  Create a draft first to leave notes.
-                </p>
-              )}
+              <RightPanelBody
+                rightPanel={rightPanel}
+                detail={d}
+                basePath={basePath}
+                proposalId={proposalId}
+                projectId={projectId}
+                currentUserId={currentUserId}
+                onRestored={(v) => {
+                  setCoverHtml(v.contentHtml);
+                  setCoverJson(v.contentJson);
+                }}
+              />
             </div>
           </aside>
         )}
       </div>
 
-      {/* Dialogs */}
+      {/* Sticky pricing totals */}
+      {activeSection === "pricing" && d ? (
+        <div className="mobile-sticky-footer shrink-0 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 shadow-[var(--enterprise-shadow-sm)]">
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 text-sm">
+            <span className="text-[var(--enterprise-text-muted)]">
+              Subtotal{" "}
+              <span className="font-medium text-[var(--enterprise-text)]">
+                {fmtMoney(d.subtotal, d.currency)}
+              </span>
+            </span>
+            <span className="font-semibold text-[var(--enterprise-primary)]">
+              Total {fmtMoney(d.total, d.currency)}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Mobile History / Notes sheet */}
+      <EnterpriseSlideOver
+        open={mobilePanelOpen}
+        onClose={() => setMobilePanelOpen(false)}
+        header={
+          <div>
+            <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
+              {rightPanel === "history"
+                ? "Version history"
+                : rightPanel === "comments"
+                  ? "Notes"
+                  : "Details"}
+            </h2>
+          </div>
+        }
+        footer={
+          <EnterpriseButton
+            type="button"
+            variant="secondary"
+            onClick={() => setMobilePanelOpen(false)}
+            fullWidth
+          >
+            Close
+          </EnterpriseButton>
+        }
+        panelMaxWidthClass="max-w-md"
+      >
+        <div className="space-y-3">
+          <div className="flex gap-1 rounded-lg border border-[var(--enterprise-border)] p-1">
+            {(["details", "history", "comments"] as RightPanel[]).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setRightPanel(tab)}
+                className={`flex-1 rounded-md py-2 text-xs font-medium capitalize ${
+                  rightPanel === tab
+                    ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]"
+                    : "text-[var(--enterprise-text-muted)]"
+                }`}
+              >
+                {tab === "comments" ? "Notes" : tab}
+              </button>
+            ))}
+          </div>
+          <RightPanelBody
+            rightPanel={rightPanel}
+            detail={d}
+            basePath={basePath}
+            proposalId={proposalId}
+            projectId={projectId}
+            currentUserId={currentUserId}
+            onRestored={(v) => {
+              setCoverHtml(v.contentHtml);
+              setCoverJson(v.contentJson);
+            }}
+          />
+        </div>
+      </EnterpriseSlideOver>
+
       {previewPayload ? (
         <ProposalLetterPreviewDialog
           open={previewOpen}
@@ -1563,22 +1862,62 @@ export function ProposalEditorWorkspace({
   );
 }
 
-// ---- Save status badge ----
-function SaveStatusBadge({ status }: { status: SaveStatus }) {
-  if (status === "saving")
+function RightPanelBody({
+  rightPanel,
+  detail,
+  basePath,
+  proposalId,
+  projectId,
+  currentUserId,
+  onRestored,
+}: {
+  rightPanel: RightPanel;
+  detail: DetailSnapshot;
+  basePath: string;
+  proposalId: string | null;
+  projectId: string;
+  currentUserId?: string;
+  onRestored: (v: ProposalDocumentVersionRow) => void;
+}) {
+  if (rightPanel === "details") {
     return (
-      <span className="flex items-center gap-1 text-xs text-slate-400">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        Saving…
-      </span>
+      <ProposalDetailsPanel
+        detail={detail}
+        fmtMoney={fmtMoney}
+        basePath={basePath}
+        proposalId={proposalId}
+      />
     );
-  if (status === "unsaved") return <span className="text-xs text-amber-500">Unsaved</span>;
-  if (status === "error") return <span className="text-xs text-red-500">Save failed</span>;
+  }
+  if (rightPanel === "history") {
+    if (!proposalId) {
+      return (
+        <p className="text-center text-sm text-[var(--enterprise-text-muted)]">
+          Create a draft first to track versions.
+        </p>
+      );
+    }
+    return (
+      <ProposalVersionHistoryPanel
+        projectId={projectId}
+        proposalId={proposalId}
+        onRestored={onRestored}
+      />
+    );
+  }
+  if (!proposalId) {
+    return (
+      <p className="text-center text-sm text-[var(--enterprise-text-muted)]">
+        Create a draft first to leave notes.
+      </p>
+    );
+  }
   return (
-    <span className="flex items-center gap-1 text-xs text-emerald-600">
-      <CheckCircle2 className="h-3.5 w-3.5" />
-      <span className="hidden sm:inline">Saved</span>
-    </span>
+    <ProposalCommentsPanel
+      projectId={projectId}
+      proposalId={proposalId}
+      currentUserId={currentUserId}
+    />
   );
 }
 
