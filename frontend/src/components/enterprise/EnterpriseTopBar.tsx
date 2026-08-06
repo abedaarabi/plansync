@@ -1,12 +1,10 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
-  Bell,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -18,25 +16,17 @@ import {
   Settings,
   Users,
 } from "lucide-react";
+import { EnterpriseNotificationsBell } from "./EnterpriseNotificationsBell";
 import { UserMenu } from "./UserMenu";
-import { EnterpriseIconButton } from "./EnterpriseIconButton";
 import { ProjectPicker } from "./ProjectPicker";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
-import {
-  fetchMeNotifications,
-  fetchProjects,
-  markAllNotificationsRead,
-  markNotificationsRead,
-  type MeNotificationRow,
-} from "@/lib/api-client";
+import { fetchProjects } from "@/lib/api-client";
 import { DEFAULT_ENTERPRISE_PRIMARY_HEX } from "@/lib/enterpriseTheme";
 import { extractProjectIdFromPath } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
-import { userInitials } from "@/lib/user-initials";
 import { isWorkspaceProClient, trialDaysLeft } from "@/lib/workspaceSubscription";
 import { isSuperAdmin } from "@/lib/workspaceRole";
-import { clearAppBadgeSafe, syncAppBadgeFromUnreadCount } from "@/lib/appBadge";
 import Link from "next/link";
 import { markSkipProjectRestore } from "@/lib/lastProject";
 import { useTranslations } from "next-intl";
@@ -86,8 +76,8 @@ function extractToolSegment(pathname: string): string | null {
 // fallow-ignore-next-line complexity
 export function EnterpriseTopBar({
   onOpenCommandPalette,
-  onToggleMobileNav,
-  mobileNavOpen,
+  onToggleMobileNav: _onToggleMobileNav,
+  mobileNavOpen: _mobileNavOpen,
   desktopSidebarCollapsed,
   onToggleDesktopSidebar,
 }: EnterpriseTopBarProps) {
@@ -96,23 +86,6 @@ export function EnterpriseTopBar({
   const tTools = useTranslations("app.topBar.tools");
   const tGlobal = useTranslations("app.topBar.global");
 
-  const formatNotifyTime = useCallback(
-    (iso: string) => {
-      const d = new Date(iso);
-      const diff = Math.max(0, Date.now() - d.getTime());
-      const mins = Math.floor(diff / 60_000);
-      if (mins < 1) return t("timeJustNow");
-      if (mins < 60) return `${mins}m`;
-      const h = Math.floor(mins / 60);
-      if (h < 24) return `${h}h`;
-      const days = Math.floor(h / 24);
-      if (days < 7) return `${days}d`;
-      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    },
-    [t],
-  );
-
-  const qc = useQueryClient();
   const { primary, me } = useEnterpriseWorkspace();
   const pathWid = pathname.match(/^\/workspaces\/([^/]+)/)?.[1];
   const workspaceFromPath =
@@ -126,66 +99,11 @@ export function EnterpriseTopBar({
   const trialDays =
     activeWs?.subscriptionStatus === "trialing" ? trialDaysLeft(activeWs.currentPeriodEnd) : null;
 
-  const [notifOpen, setNotifOpen] = useState(false);
-  const notifWrapRef = useRef<HTMLDivElement>(null);
-
   const { data: projects = [] } = useQuery({
     queryKey: qk.projects(wid ?? ""),
     queryFn: () => fetchProjects(wid!),
     enabled: Boolean(wid && isPro),
   });
-
-  const notifQuery = useQuery({
-    queryKey: qk.meNotifications(),
-    queryFn: () => fetchMeNotifications(30),
-    staleTime: 30_000,
-    refetchOnWindowFocus: true,
-  });
-
-  const unreadCount = notifQuery.data?.unreadCount ?? 0;
-  const notifItems = notifQuery.data?.items ?? [];
-
-  const markReadMut = useMutation({
-    mutationFn: (ids: string[]) => markNotificationsRead(ids),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.meNotifications() }),
-  });
-
-  const markAllMut = useMutation({
-    mutationFn: () => markAllNotificationsRead(),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.meNotifications() }),
-  });
-
-  useEffect(() => {
-    if (!notifOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      const el = notifWrapRef.current;
-      if (el && !el.contains(e.target as Node)) setNotifOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [notifOpen]);
-
-  useEffect(() => {
-    if (!notifOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setNotifOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [notifOpen]);
-
-  useEffect(() => {
-    if (!me) {
-      clearAppBadgeSafe();
-      return;
-    }
-    syncAppBadgeFromUnreadCount(unreadCount);
-  }, [me, unreadCount]);
-
-  function onNotificationNavigate(n: MeNotificationRow) {
-    if (!n.readAt) markReadMut.mutate([n.id]);
-    setNotifOpen(false);
-  }
 
   const projectId = extractProjectIdFromPath(pathname);
   const globalPageTitle = resolveGlobalTitle(pathname, tGlobal);
@@ -343,138 +261,7 @@ export function EnterpriseTopBar({
             </kbd>
           </button>
 
-          {/* Notifications */}
-          <div ref={notifWrapRef} className="relative">
-            <EnterpriseIconButton
-              type="button"
-              className="relative text-[var(--enterprise-text-muted)]"
-              onClick={() => {
-                setNotifOpen((o) => !o);
-                void notifQuery.refetch();
-              }}
-              aria-label={
-                unreadCount > 0
-                  ? t("notificationsUnread", { count: unreadCount })
-                  : t("notifications")
-              }
-              aria-expanded={notifOpen}
-              aria-haspopup="dialog"
-            >
-              <Bell className="h-4 w-4" strokeWidth={1.75} />
-              {unreadCount > 0 ? (
-                <span className="absolute -right-1 -top-1 flex min-h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-[var(--enterprise-primary)] px-1 text-[10px] font-bold leading-none text-white shadow-[0_0_0_2px_var(--enterprise-surface)]">
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              ) : null}
-            </EnterpriseIconButton>
-
-            {notifOpen ? (
-              <div
-                role="dialog"
-                aria-label={t("notifications")}
-                className="fixed left-2 right-2 top-[calc(var(--enterprise-topbar-offset)_+_0.25rem)] z-[100] max-h-[min(24rem,70vh)] w-auto overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-lg sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-[calc(100%+6px)] sm:mt-0 sm:max-h-[min(24rem,70vh)] sm:w-[min(calc(100vw-1.5rem),24rem)] md:w-[26rem]"
-              >
-                <div className="flex items-center justify-between gap-2 border-b border-[var(--enterprise-border)] px-3 py-3">
-                  <span className="text-sm font-semibold text-[var(--enterprise-text)]">
-                    {t("notifications")}
-                  </span>
-                  {unreadCount > 0 ? (
-                    <button
-                      type="button"
-                      disabled={markAllMut.isPending}
-                      onClick={() => markAllMut.mutate()}
-                      className="min-h-10 rounded-md px-2 text-xs font-medium text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
-                    >
-                      {t("markAllRead")}
-                    </button>
-                  ) : null}
-                </div>
-                <div className="max-h-[min(24rem,70vh)] overflow-y-auto">
-                  {notifQuery.isPending ? (
-                    <p className="px-3 py-6 text-center text-sm text-[var(--enterprise-text-muted)]">
-                      {t("notifLoading")}
-                    </p>
-                  ) : notifQuery.isError ? (
-                    <p className="px-3 py-6 text-center text-sm text-red-600">{t("notifError")}</p>
-                  ) : notifItems.length === 0 ? (
-                    <p className="px-3 py-6 text-center text-sm text-[var(--enterprise-text-muted)]">
-                      {t("notifEmpty")}
-                    </p>
-                  ) : (
-                    <ul className="divide-y divide-[var(--enterprise-border)]">
-                      {notifItems.map((n) => (
-                        <li key={n.id}>
-                          <Link
-                            href={n.href}
-                            onClick={() => onNotificationNavigate(n)}
-                            className={`flex min-h-12 gap-2.5 px-3 py-2.5 transition hover:bg-[var(--enterprise-hover-surface)] ${
-                              n.readAt ? "" : "bg-[var(--enterprise-primary)]/[0.06]"
-                            }`}
-                          >
-                            <div className="relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[10px] font-semibold text-[var(--enterprise-text-muted)]">
-                              {n.actor ? (
-                                n.actor.image ? (
-                                  // eslint-disable-next-line @next/next/no-img-element -- profile URL from auth
-                                  <img
-                                    src={n.actor.image}
-                                    alt=""
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  userInitials(n.actor.name, n.actor.email ?? null)
-                                )
-                              ) : (
-                                <Bell
-                                  className="h-4 w-4 opacity-70"
-                                  strokeWidth={1.75}
-                                  aria-hidden
-                                />
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-2">
-                                <p
-                                  className={`text-sm leading-snug ${
-                                    n.readAt
-                                      ? "text-[var(--enterprise-text)]"
-                                      : "font-medium text-[var(--enterprise-text)]"
-                                  }`}
-                                >
-                                  {n.title}
-                                </p>
-                                <span className="shrink-0 text-[10px] text-[var(--enterprise-text-muted)]">
-                                  {formatNotifyTime(n.createdAt)}
-                                </span>
-                              </div>
-                              {n.actor ? (
-                                <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
-                                  {n.actor.name}
-                                </p>
-                              ) : null}
-                              {n.body ? (
-                                <p className="mt-1 line-clamp-2 text-xs text-[var(--enterprise-text-muted)]">
-                                  {n.body}
-                                </p>
-                              ) : null}
-                            </div>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                <div className="border-t border-[var(--enterprise-border)] px-3 py-2.5">
-                  <Link
-                    href="/account"
-                    onClick={() => setNotifOpen(false)}
-                    className="inline-flex min-h-10 items-center rounded-md px-2 text-xs font-medium text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)]"
-                  >
-                    {t("deviceAlertsLink")}
-                  </Link>
-                </div>
-              </div>
-            ) : null}
-          </div>
+          <EnterpriseNotificationsBell />
 
           <UserMenu />
         </div>

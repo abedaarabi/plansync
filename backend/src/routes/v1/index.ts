@@ -765,6 +765,24 @@ export function v1Routes(
     return c.json({ ok: true });
   });
 
+  r.delete("/me/notifications/:id", needUser, async (c) => {
+    const userId = c.get("user").id;
+    const id = c.req.param("id");
+    const result = await prisma.userNotification.deleteMany({
+      where: { userId, id },
+    });
+    if (result.count === 0) return c.json({ error: "Not found" }, 404);
+    return c.json({ ok: true });
+  });
+
+  r.post("/me/notifications/clear-all", needUser, async (c) => {
+    const userId = c.get("user").id;
+    const result = await prisma.userNotification.deleteMany({
+      where: { userId },
+    });
+    return c.json({ ok: true, deleted: result.count });
+  });
+
   const pushSubscriptionBody = z.object({
     endpoint: z.string().url(),
     keys: z.object({

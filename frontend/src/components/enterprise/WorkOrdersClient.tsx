@@ -26,7 +26,6 @@ import { WorkOrderCreateSlideOver } from "@/components/enterprise/WorkOrderCreat
 import { WorkOrderEditSlideOver } from "@/components/enterprise/WorkOrderEditSlideOver";
 import { WorkOrderMobileActionsSheet } from "@/components/enterprise/WorkOrderMobileActionsSheet";
 import { WorkOrdersBoard } from "@/components/enterprise/WorkOrdersBoard";
-import { WorkOrdersMyDayStrip } from "@/components/enterprise/WorkOrdersMyDayStrip";
 import { WorkOrdersOverview } from "@/components/enterprise/WorkOrdersOverview";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
@@ -348,14 +347,6 @@ export function WorkOrdersClient({ projectId }: Props) {
           </div>
         }
       />
-
-      {rows.length > 0 ? (
-        <WorkOrdersMyDayStrip
-          stats={overviewStats}
-          filter={overviewFilter}
-          onSelect={setOverviewFilter}
-        />
-      ) : null}
 
       {rows.length > 0 ? (
         <WorkOrdersOverview

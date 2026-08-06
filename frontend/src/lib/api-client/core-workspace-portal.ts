@@ -56,6 +56,22 @@ export async function markAllNotificationsRead(): Promise<void> {
   if (!res.ok) throw new Error("Could not mark all notifications read.");
 }
 
+export async function clearMeNotification(id: string): Promise<void> {
+  const res = await fetch(apiUrl(`/api/v1/me/notifications/${encodeURIComponent(id)}`), {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Could not clear notification.");
+}
+
+export async function clearAllMeNotifications(): Promise<void> {
+  const res = await fetch(apiUrl("/api/v1/me/notifications/clear-all"), {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Could not clear notifications.");
+}
+
 /** Returns `null` when Web Push is not configured on the server (HTTP 404). */
 export async function fetchVapidPublicKey(): Promise<string | null> {
   const res = await fetch(apiUrl("/api/v1/me/push/vapid-public-key"), { credentials: "include" });
