@@ -118,6 +118,8 @@ import { registerIssuesRoutes } from "./issuesRoutes.js";
 import { registerOmRoutes, registerOccupantPublicRoutes } from "./omRoutes.js";
 import { registerVendorWorkOrderPublicRoutes, registerWorkOrderRoutes } from "./workOrderRoutes.js";
 import { runOmMaintenanceReminders } from "../../lib/omMaintenanceReminders.js";
+import { runOmInspectionReminders } from "../../lib/omInspectionReminders.js";
+import { runOmWorkOrderAgingReminders } from "../../lib/omWorkOrderAgingReminders.js";
 import { registerRfiRoutes } from "./rfiRoutes.js";
 import { registerTakeoffRoutes } from "./takeoffRoutes.js";
 import { registerProposalRoutes } from "./proposalRoutes.js";
@@ -4155,6 +4157,54 @@ export function v1Routes(
       });
     } catch (e) {
       console.error("[om-maintenance-reminders]", e);
+      return c.json({ error: "Internal error" }, 500);
+    }
+  });
+
+  /** Daily cron: email + in-app notifications for inspection templates overdue or due within 7 days (UTC). */
+  r.post("/internal/om-inspection-reminders", async (c) => {
+    const secret = env.INTERNAL_CRON_SECRET?.trim();
+    if (!secret) return c.json({ error: "Not configured" }, 503);
+    const hdr = c.req.header("x-plansync-cron-secret");
+    if (hdr !== secret) return c.json({ error: "Unauthorized" }, 401);
+    try {
+      const result = await runOmInspectionReminders(env);
+      return c.json({
+        ok: true,
+        dayKey: result.dayKey,
+        workspacesEmailed: result.workspacesEmailed,
+        workspacesNotified: result.workspacesNotified,
+        membersEmailed: result.membersEmailed,
+        membersNotified: result.membersNotified,
+        workspacesSkipped: result.workspacesSkipped,
+        skippedNoResend: result.skippedNoResend,
+      });
+    } catch (e) {
+      console.error("[om-inspection-reminders]", e);
+      return c.json({ error: "Internal error" }, 500);
+    }
+  });
+
+  /** Daily cron: email + in-app notifications for open work orders older than 7/30 days. */
+  r.post("/internal/om-work-order-aging-reminders", async (c) => {
+    const secret = env.INTERNAL_CRON_SECRET?.trim();
+    if (!secret) return c.json({ error: "Not configured" }, 503);
+    const hdr = c.req.header("x-plansync-cron-secret");
+    if (hdr !== secret) return c.json({ error: "Unauthorized" }, 401);
+    try {
+      const result = await runOmWorkOrderAgingReminders(env);
+      return c.json({
+        ok: true,
+        dayKey: result.dayKey,
+        workspacesEmailed: result.workspacesEmailed,
+        workspacesNotified: result.workspacesNotified,
+        membersEmailed: result.membersEmailed,
+        membersNotified: result.membersNotified,
+        workspacesSkipped: result.workspacesSkipped,
+        skippedNoResend: result.skippedNoResend,
+      });
+    } catch (e) {
+      console.error("[om-work-order-aging-reminders]", e);
       return c.json({ error: "Internal error" }, 500);
     }
   });

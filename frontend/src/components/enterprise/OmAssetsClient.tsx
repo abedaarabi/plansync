@@ -559,17 +559,23 @@ export function OmAssetsClient({ projectId }: Props) {
         open={showAdd}
         onClose={closeAddSlide}
         ariaLabelledBy="create-asset-title"
-        panelMaxWidthClass="max-w-2xl"
+        panelVariant="floating"
+        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
+        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+        closeOnBackdrop={false}
+        closeOnEscape={false}
         overlayZClass="z-[100]"
+        bodyClassName="px-5 py-5"
+        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
         header={
-          <div>
+          <div className="min-w-0">
             <h2
               id="create-asset-title"
               className="text-lg font-semibold text-[var(--enterprise-text)]"
             >
               {justCreatedAsset ? "Attach documents" : "New asset"}
             </h2>
-            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+            <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
               {justCreatedAsset ? (
                 <>
                   <span className="font-mono font-semibold text-[var(--enterprise-text)]">
@@ -695,10 +701,16 @@ export function OmAssetsClient({ projectId }: Props) {
         open={Boolean(editingAsset)}
         onClose={closeEditSlide}
         ariaLabelledBy="edit-asset-title"
-        panelMaxWidthClass="max-w-2xl"
+        panelVariant="floating"
+        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
+        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+        closeOnBackdrop={false}
+        closeOnEscape={false}
         overlayZClass="z-[100]"
+        bodyClassName="px-5 py-5"
+        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
         header={
-          <div>
+          <div className="min-w-0">
             <h2
               id="edit-asset-title"
               className="text-lg font-semibold text-[var(--enterprise-text)]"
@@ -706,7 +718,7 @@ export function OmAssetsClient({ projectId }: Props) {
               Edit asset
             </h2>
             {editingAsset ? (
-              <p className="mt-1 font-mono text-sm text-[var(--enterprise-text-muted)]">
+              <p className="mt-0.5 font-mono text-xs text-[var(--enterprise-text-muted)]">
                 {editingAsset.tag}
               </p>
             ) : null}
@@ -793,10 +805,16 @@ export function OmAssetsClient({ projectId }: Props) {
         open={Boolean(linkAsset)}
         onClose={closeLinkSlide}
         ariaLabelledBy="link-asset-title"
-        panelMaxWidthClass="max-w-lg"
+        panelVariant="floating"
+        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),460px)]"
+        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+        closeOnBackdrop={false}
+        closeOnEscape={false}
         overlayZClass="z-[100]"
+        bodyClassName="px-5 py-5"
+        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
         header={
-          <div>
+          <div className="min-w-0">
             <h2
               id="link-asset-title"
               className="text-lg font-semibold text-[var(--enterprise-text)]"
@@ -804,7 +822,7 @@ export function OmAssetsClient({ projectId }: Props) {
               Link to drawing
             </h2>
             {linkAsset ? (
-              <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+              <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
                 Search PDFs, attach a revision without a pin, or open the viewer to place the pin
                 for{" "}
                 <span className="font-mono font-semibold text-[var(--enterprise-text)]">

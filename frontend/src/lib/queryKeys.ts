@@ -92,7 +92,13 @@ export const qk = {
   omMaintenanceCompletions: (projectId: string, assetId?: string) =>
     ["om", "maintenanceCompletions", projectId, assetId ?? "all"] as const,
   omInspectionTemplates: (projectId: string) => ["om", "inspectionTemplates", projectId] as const,
+  omWorkspaceInspectionTemplates: (workspaceId: string) =>
+    ["om", "workspaceInspectionTemplates", workspaceId] as const,
+  omWorkspaceWorkOrderTemplates: (workspaceId: string) =>
+    ["om", "workspaceWorkOrderTemplates", workspaceId] as const,
   omInspectionRuns: (projectId: string) => ["om", "inspectionRuns", projectId] as const,
+  omAssetInspections: (projectId: string, assetId: string) =>
+    ["om", "assetInspections", projectId, assetId] as const,
   occupantTokens: (projectId: string) => ["om", "occupantTokens", projectId] as const,
   occupantTokensRevoked: (projectId: string) => ["om", "occupantTokensRevoked", projectId] as const,
   /** Persisted Sheet AI smart sheet + chat (GET cache; invalidate after POST summary/chat). */

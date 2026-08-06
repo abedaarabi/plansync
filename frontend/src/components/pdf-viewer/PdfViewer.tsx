@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import {
   fetchIssue,
+  fetchIssuesForProject,
   fetchMe,
   fetchOmAssets,
   fetchProject,
@@ -17,6 +18,7 @@ import {
   putViewerState,
   ViewerStateConflictError,
 } from "@/lib/api-client";
+import { countOpenWorkOrdersByAssetId, setAssetOpenWoCounts } from "@/lib/assetOpenWoCountsBridge";
 import { rectNormFromAssetPinJson } from "@/lib/assetPinFocus";
 import { findAnnotationById, normRectFromAnnotationPoints } from "@/lib/issueFocus";
 import { takeoffFocusRectForZone, TAKEOFF_FOCUS_FIT_MARGIN } from "@/lib/takeoffFocus";
@@ -176,6 +178,28 @@ export function PdfViewer() {
     st.setTakeoffVertexEditZoneId(null);
     st.setTakeoffInventoryDrawerFromSidebar(false);
   }, [viewerProjectSession, setViewerOperationsMode]);
+
+  const omAssetsEnabled = Boolean(
+    viewerProjectSession?.operationsMode &&
+    !viewerProjectSession?.isExternal &&
+    viewerProjectSession?.settings.modules.omAssets,
+  );
+
+  const { data: sheetWorkOrders = [] } = useQuery({
+    queryKey: qk.workOrders(viewerProjectId ?? "", "all"),
+    queryFn: () => fetchIssuesForProject(viewerProjectId!, { issueKind: "WORK_ORDER" }),
+    enabled: Boolean(viewerProjectId) && omAssetsEnabled,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (!omAssetsEnabled) {
+      setAssetOpenWoCounts({});
+      return;
+    }
+    setAssetOpenWoCounts(countOpenWorkOrdersByAssetId(sheetWorkOrders));
+  }, [sheetWorkOrders, omAssetsEnabled]);
+
   const workspaceCollabEnabled = useMemo(() => {
     if (!viewerProjectForCollab?.workspaceId || !me?.workspaces) return true;
     const row = me.workspaces.find((w) => w.workspaceId === viewerProjectForCollab.workspaceId);

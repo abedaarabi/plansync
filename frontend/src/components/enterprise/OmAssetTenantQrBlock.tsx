@@ -11,6 +11,7 @@ import {
   postOmAssetOccupantScanSecret,
   ProRequiredError,
 } from "@/lib/api-client";
+import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 
@@ -37,9 +38,15 @@ export function OmAssetTenantQrBlock({
   const elementTrimmed = elementLabel?.trim() || "";
   const qc = useQueryClient();
   const { primary } = useEnterpriseWorkspace();
+  const workspaceId = primary?.workspace.id;
   const tenantPortalHref = primary
     ? `/workspaces/${primary.workspace.id}/projects/${projectId}/om/tenant-portal`
     : `/projects/${projectId}/om/tenant-portal`;
+  const createWorkOrderHref = projectScopedHref(
+    projectId,
+    `/om/work-orders?assetId=${encodeURIComponent(assetId)}&create=1`,
+    workspaceId,
+  );
 
   const [portalToken, setPortalToken] = useState<string | null>(null);
   const [scanSecret, setScanSecret] = useState<string | null>(null);
@@ -141,10 +148,18 @@ export function OmAssetTenantQrBlock({
 
   return (
     <section className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-3">
-      <h3 className="mb-2 flex items-center gap-2 border-b border-[var(--enterprise-border)] pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-        <QrCode className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" strokeWidth={2} />
-        Occupant QR (building link + asset{hasElement ? " + element" : ""})
-      </h3>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--enterprise-border)] pb-1">
+        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+          <QrCode className="h-3.5 w-3.5 text-[var(--enterprise-primary)]" strokeWidth={2} />
+          Occupant QR (building link + asset{hasElement ? " + element" : ""})
+        </h3>
+        <Link
+          href={createWorkOrderHref}
+          className="text-xs font-semibold text-[var(--enterprise-primary)] hover:underline"
+        >
+          Create work order
+        </Link>
+      </div>
       {tokensPending ? (
         <p className="text-[13px] text-[var(--enterprise-text-muted)]">Loading portal links…</p>
       ) : tokens.length === 0 ? (

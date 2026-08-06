@@ -535,6 +535,12 @@ export type OmFmDashboardResponse = {
     workOrderBacklogOver7Days: number;
     workOrderBacklogOver30Days: number;
     pmCompliancePct: number;
+    /** Open (draft) inspection runs. */
+    openInspectionDrafts?: number;
+    /** Completed runs in last 30 days with any Fail outcome. */
+    deficientInspectionsLast30Days?: number;
+    /** Templates with nextDueAt in the past. */
+    overdueInspectionTemplates?: number;
   };
   buildingHealthPct: number;
   upcomingMaintenanceThisWeek: {
@@ -559,6 +565,12 @@ export type OmFmDashboardResponse = {
     status: string;
     priority: string;
     updatedAt: string;
+  }[];
+  recentDeficientInspections?: {
+    id: string;
+    templateName: string;
+    completedAt: string | null;
+    failCount?: number;
   }[];
 };
 

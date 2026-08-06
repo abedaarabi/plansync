@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, Clock, Package } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Clock, Package } from "lucide-react";
 import { toast } from "sonner";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   fetchOmPartsInventory,
   postWorkOrderComplete,
@@ -15,7 +16,7 @@ import {
   type WorkOrderPartUsed,
   ProRequiredError,
 } from "@/lib/api-client";
-import { useQuery } from "@tanstack/react-query";
+import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
 import {
   MOBILE_FIELD_INPUT,
@@ -51,6 +52,8 @@ export function WorkOrderCompleteSlideOver({
   onClose,
   onCompleted,
 }: Props) {
+  const { primary } = useEnterpriseWorkspace();
+  const workspaceId = primary?.workspace.id;
   const checklist = issue?.procedureJson ?? [];
   const [results, setResults] = useState<Record<string, WorkOrderChecklistResult>>({});
   const [laborMinutes, setLaborMinutes] = useState("");
@@ -91,8 +94,20 @@ export function WorkOrderCompleteSlideOver({
         completionNotes: completionNotes.trim() || undefined,
       });
     },
-    onSuccess: () => {
-      toast.success("Work order completed.");
+    onSuccess: (res) => {
+      const inspectionsHref = projectScopedHref(projectId, "/om/inspections", workspaceId);
+      if (res.reInspectRunId) {
+        toast.success("Work order completed. A re-inspection was scheduled.", {
+          action: {
+            label: "Open inspections",
+            onClick: () => {
+              window.location.href = inspectionsHref;
+            },
+          },
+        });
+      } else {
+        toast.success("Work order completed.");
+      }
       onCompleted();
       onClose();
     },
@@ -129,33 +144,35 @@ export function WorkOrderCompleteSlideOver({
         },
       }}
       ariaLabelledBy="wo-complete-title"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
+      panelVariant="floating"
+      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),520px)]"
+      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+      closeOnBackdrop={false}
+      closeOnEscape={false}
       bodyClassName="px-5 py-5"
+      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       header={
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)]">
-            <CheckCircle2 className="h-5 w-5 text-[var(--enterprise-semantic-success-text)]" />
-          </div>
-          <div>
-            <p className="enterprise-type-label text-[var(--enterprise-semantic-success-text)]">
-              Complete
-            </p>
-            <h2 id="wo-complete-title" className="text-lg font-bold text-[var(--enterprise-text)]">
-              Close work order
-            </h2>
-            <p className="mt-0.5 text-[13px] text-[var(--enterprise-text-muted)]">{issue.title}</p>
-          </div>
+        <div className="min-w-0">
+          <h2
+            id="wo-complete-title"
+            className="truncate text-lg font-semibold text-[var(--enterprise-text)]"
+          >
+            Close work order
+          </h2>
+          <p className="mt-0.5 truncate text-xs text-[var(--enterprise-text-muted)]">
+            {issue.title}
+          </p>
         </div>
       }
       footer={
-        <>
-          <EnterpriseButton type="button" variant="ghost" onClick={onClose}>
+        <div className="flex w-full justify-end gap-2">
+          <EnterpriseButton type="button" variant="secondary" onClick={onClose}>
             Cancel
           </EnterpriseButton>
           <EnterpriseButton type="submit" loading={completeMut.isPending} disabled={!canSubmit}>
             {completeMut.isPending ? "Saving…" : "Mark complete"}
           </EnterpriseButton>
-        </>
+        </div>
       }
     >
       <div className="space-y-4">

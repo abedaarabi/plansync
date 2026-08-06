@@ -1,5 +1,7 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+import { getAssetOpenWoCount, subscribeAssetOpenWoCounts } from "@/lib/assetOpenWoCountsBridge";
 import {
   ISSUE_PRIORITY_LABEL,
   ISSUE_STATUS_LABEL,
@@ -329,14 +331,16 @@ function AssetLocationPin({
   cssH,
   pinShadowFilterUrl,
   title,
-}: PinBaseProps & { title: string }) {
+  openWoCount = 0,
+}: PinBaseProps & { title: string; openWoCount?: number }) {
   const s = (pinScale(cssW, cssH) * 14) / 11;
-  const fill = "#0d9488";
+  const fill = openWoCount > 0 ? "#d97706" : "#0d9488";
   const stroke = "rgba(15,23,42,0.28)";
   const label = truncatePinLabel(title, 36);
   const fs = Math.max(9, Math.min(13, 6 + s * 0.55));
   const tipY = cy + 10.5 * s;
   const labelY = tipY + fs * 0.65;
+  const badgeR = Math.max(5.5, 4.2 * s);
   return (
     <g>
       <g filter={pinShadowFilterUrl}>
@@ -356,19 +360,43 @@ function AssetLocationPin({
               height="3.6"
               rx="0.45"
               fill="rgba(255,255,255,0.95)"
-              stroke="#0f766e"
+              stroke={openWoCount > 0 ? "#b45309" : "#0f766e"}
               strokeWidth="0.45"
             />
             <path
               d="M-2.4 -1.1 L0 -2.35 L2.4 -1.1"
               fill="none"
-              stroke="#0f766e"
+              stroke={openWoCount > 0 ? "#b45309" : "#0f766e"}
               strokeWidth="0.45"
               strokeLinejoin="round"
             />
           </g>
         </g>
       </g>
+      {openWoCount > 0 ? (
+        <g>
+          <circle
+            cx={cx + 9 * s}
+            cy={cy - 9 * s}
+            r={badgeR}
+            fill="#ea580c"
+            stroke="#fff"
+            strokeWidth={1.1}
+          />
+          <text
+            x={cx + 9 * s}
+            y={cy - 9 * s}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={Math.max(8, badgeR * 1.15)}
+            fontWeight={700}
+            fill="#fff"
+            style={{ fontFamily: "system-ui, -apple-system, Segoe UI, sans-serif" }}
+          >
+            {openWoCount > 9 ? "9+" : openWoCount}
+          </text>
+        </g>
+      ) : null}
       <text
         x={cx}
         y={labelY}
@@ -396,7 +424,9 @@ export function SheetLinkPin({
   cssH,
   pinShadowFilterUrl,
   selected,
+  openWoCount: openWoCountProp,
 }: PinBaseProps & {
+  openWoCount?: number;
   annotation: {
     linkedOmAssetId?: string;
     omAssetDraft?: boolean;
@@ -414,8 +444,14 @@ export function SheetLinkPin({
     author?: string;
   };
 }) {
+  const bridgedCount = useSyncExternalStore(
+    subscribeAssetOpenWoCounts,
+    () => getAssetOpenWoCount(a.linkedOmAssetId),
+    () => 0,
+  );
   if (a.linkedOmAssetId || a.omAssetDraft) {
     const assetTitle = a.linkedOmAssetName?.trim() || a.linkedOmAssetTag?.trim() || "Equipment";
+    const openWoCount = openWoCountProp ?? bridgedCount;
     return (
       <AssetLocationPin
         cx={cx}
@@ -424,6 +460,7 @@ export function SheetLinkPin({
         cssH={cssH}
         pinShadowFilterUrl={pinShadowFilterUrl}
         title={assetTitle}
+        openWoCount={openWoCount}
       />
     );
   }

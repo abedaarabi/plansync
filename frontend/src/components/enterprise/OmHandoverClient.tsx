@@ -22,6 +22,7 @@ import { useEffect, useId, useState, type ComponentType, type ReactNode } from "
 import { toast } from "sonner";
 import {
   fetchOmHandoverSummary,
+  fetchOmPeriodPack,
   fetchProjectSession,
   patchOmHandoverBrief,
   patchProject,
@@ -202,6 +203,12 @@ export function OmHandoverClient({ projectId }: Props) {
   const [notesDraft, setNotesDraft] = useState("");
   const [buildingOwnerEmailDraft, setBuildingOwnerEmailDraft] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [periodFrom, setPeriodFrom] = useState(() => {
+    const d = new Date();
+    d.setUTCMonth(d.getUTCMonth() - 3);
+    return d.toISOString().slice(0, 10);
+  });
+  const [periodTo, setPeriodTo] = useState(() => new Date().toISOString().slice(0, 10));
 
   useEffect(() => {
     if (summary) setNotesDraft(summary.handoverNotes ?? "");
@@ -212,6 +219,31 @@ export function OmHandoverClient({ projectId }: Props) {
       setBuildingOwnerEmailDraft(session.settings.omHandover.buildingOwnerEmail ?? "");
     }
   }, [session?.settings.omHandover?.buildingOwnerEmail]);
+
+  const periodPackMut = useMutation({
+    mutationFn: async () => {
+      const from = `${periodFrom}T00:00:00.000Z`;
+      const to = `${periodTo}T23:59:59.999Z`;
+      const data = await fetchOmPeriodPack(projectId, from, to);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      try {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `period-pack-${projectId.slice(0, 8)}-${periodFrom}_${periodTo}.json`;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    },
+    onSuccess: () => toast.success("Period pack downloaded."),
+    onError: (e: Error) => {
+      toast.error(e instanceof ProRequiredError ? "Pro subscription required." : e.message);
+    },
+  });
 
   const saveNotesMut = useMutation({
     mutationFn: () => patchOmHandoverBrief(projectId, { notes: notesDraft }),
@@ -667,6 +699,53 @@ export function OmHandoverClient({ projectId }: Props) {
                 No recipient — PDF only in-app.
               </span>
             )}
+          </div>
+        </div>
+
+        <div className="mt-4 border-t border-[var(--enterprise-border)] pt-4">
+          <h3 className="text-xs font-semibold text-[var(--enterprise-text)]">
+            Download period pack
+          </h3>
+          <p className="mt-1 max-w-prose text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
+            JSON export of assets, completed inspections, maintenance completions, and closed work
+            orders for a date range.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+            <div>
+              <label htmlFor="period-from" className={OM_COMPACT_LABEL}>
+                From
+              </label>
+              <input
+                id="period-from"
+                type="date"
+                value={periodFrom}
+                onChange={(e) => setPeriodFrom(e.target.value)}
+                className={`${OM_COMPACT_INPUT} mt-1`}
+              />
+            </div>
+            <div>
+              <label htmlFor="period-to" className={OM_COMPACT_LABEL}>
+                To
+              </label>
+              <input
+                id="period-to"
+                type="date"
+                value={periodTo}
+                onChange={(e) => setPeriodTo(e.target.value)}
+                className={`${OM_COMPACT_INPUT} mt-1`}
+              />
+            </div>
+            <EnterpriseButton
+              variant="secondary"
+              size="sm"
+              fullWidth
+              className="sm:w-auto"
+              disabled={periodPackMut.isPending || !periodFrom || !periodTo}
+              loading={periodPackMut.isPending}
+              onClick={() => periodPackMut.mutate()}
+            >
+              Download period pack
+            </EnterpriseButton>
           </div>
         </div>
       </section>

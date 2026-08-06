@@ -8,6 +8,7 @@ import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import {
   ASSET_METER_TYPE_LABEL,
+  fetchOmAssetInspections,
   fetchOmMaintenanceCompletions,
   fetchOmMaintenance,
   fetchIssuesForProject,
@@ -19,6 +20,7 @@ import {
 import { sortedVersions } from "@/components/file-explorer/fileExplorerUtils";
 import { assetHasSheetPin } from "@/lib/assetPinFocus";
 import { openBimViewer } from "@/lib/bim/openBimViewer";
+import { ISSUE_STATUS_LABEL } from "@/lib/issueStatusStyle";
 import {
   omAssetBimViewerHref,
   omAssetCanOpenBim,
@@ -34,6 +36,7 @@ import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorksp
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetDocumentsBlock } from "@/components/enterprise/OmAssetDocumentsBlock";
 import { OmAssetImageThumb } from "@/components/enterprise/OmAssetImageThumb";
+import { OmAssetInspectionTimeline } from "@/components/enterprise/OmAssetInspectionTimeline";
 import { OmAssetMeterReadingsBlock } from "@/components/enterprise/OmAssetMeterReadingsBlock";
 import { OmAssetTenantQrBlock } from "@/components/enterprise/OmAssetTenantQrBlock";
 
@@ -92,6 +95,12 @@ export function OmAssetDetailSlide({
     queryKey: qk.issuesForProject(projectId, undefined, assetIssuesKey, assetId),
     queryFn: () =>
       fetchIssuesForProject(projectId, { issueKinds: ["WORK_ORDER", "OCCUPANT"], assetId }),
+    enabled: open && Boolean(assetId),
+  });
+
+  const { data: assetInspections = [] } = useQuery({
+    queryKey: qk.omAssetInspections(projectId, assetId),
+    queryFn: () => fetchOmAssetInspections(projectId, assetId),
     enabled: open && Boolean(assetId),
   });
 
@@ -157,9 +166,10 @@ export function OmAssetDetailSlide({
   }, [asset, projectFiles, projectId, onClose]);
 
   const maintenanceHref = projectScopedHref(projectId, "/om/maintenance", workspaceId);
+  const inspectionsHref = projectScopedHref(projectId, "/om/inspections", workspaceId);
   const workOrdersHref = projectScopedHref(
     projectId,
-    `/om/work-orders?assetId=${encodeURIComponent(assetId)}`,
+    `/om/work-orders?assetId=${encodeURIComponent(assetId)}&create=1`,
     workspaceId,
   );
 
@@ -170,19 +180,27 @@ export function OmAssetDetailSlide({
       open={open}
       onClose={onClose}
       ariaLabelledBy="asset-detail-title"
-      panelMaxWidthClass="max-w-lg"
+      panelVariant="floating"
+      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),460px)]"
+      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+      closeOnBackdrop={false}
+      closeOnEscape={false}
       overlayZClass="z-[100]"
+      bodyClassName="px-5 py-5"
+      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       header={
-        <div>
+        <div className="min-w-0">
           <h2
             id="asset-detail-title"
-            className="text-lg font-semibold leading-snug text-[var(--enterprise-text)]"
+            className="truncate text-lg font-semibold leading-snug text-[var(--enterprise-text)]"
           >
             <span className="font-mono text-[var(--enterprise-primary)]">{asset.tag}</span>
           </h2>
-          <p className="mt-1 text-sm font-medium text-[var(--enterprise-text)]">{asset.name}</p>
+          <p className="mt-0.5 truncate text-sm font-medium text-[var(--enterprise-text)]">
+            {asset.name}
+          </p>
           {asset.category?.trim() ? (
-            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">{asset.category}</p>
+            <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">{asset.category}</p>
           ) : null}
         </div>
       }
@@ -191,20 +209,12 @@ export function OmAssetDetailSlide({
           <Link
             href={workOrdersHref}
             onClick={onClose}
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white hover:opacity-95"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white hover:opacity-95"
           >
             <Plus className="h-4 w-4" strokeWidth={2} />
             Create work order
           </Link>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onEdit}
-              className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-[var(--enterprise-border)] px-3 text-sm font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]"
-            >
-              <Pencil className="h-4 w-4" strokeWidth={2} />
-              Edit asset
-            </button>
+          <div className="flex w-full justify-end gap-2">
             <button
               type="button"
               onClick={() => onDelete(asset)}
@@ -213,11 +223,19 @@ export function OmAssetDetailSlide({
               <Trash2 className="h-4 w-4" strokeWidth={2} />
               Delete
             </button>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-[var(--enterprise-border)] px-3 text-sm font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]"
+            >
+              <Pencil className="h-4 w-4" strokeWidth={2} />
+              Edit asset
+            </button>
           </div>
         </div>
       }
     >
-      <div className="space-y-5 text-sm text-[var(--enterprise-text)]">
+      <div className="space-y-7 text-sm text-[var(--enterprise-text)]">
         <div className="overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]">
           {asset.hasImage ? (
             <OmAssetImageThumb
@@ -272,7 +290,7 @@ export function OmAssetDetailSlide({
                   onClick={openDrawingViewer}
                   className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-teal-700 hover:underline dark:text-teal-300"
                 >
-                  {assetHasSheetPin(asset) ? "Zoom to equipment pin" : "Open linked drawing"}
+                  {asset.fileId ? "Show on plan" : "Open linked drawing"}
                   <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
                 </button>
               ) : null}
@@ -282,7 +300,7 @@ export function OmAssetDetailSlide({
                   onClick={openBimViewerForAsset}
                   className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-sky-700 hover:underline dark:text-sky-300"
                 >
-                  Open in 3D viewer
+                  {asset.fileId && !canOpenDrawing ? "Show on plan" : "Open in 3D viewer"}
                   <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
                 </button>
               ) : null}
@@ -432,6 +450,31 @@ export function OmAssetDetailSlide({
           )}
         </section>
 
+        <section>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
+                Inspection timeline
+              </h3>
+              <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
+                Who ran each check and the result
+              </p>
+            </div>
+            <Link
+              href={inspectionsHref}
+              onClick={onClose}
+              className="text-[11px] font-semibold text-[var(--enterprise-primary)] hover:underline"
+            >
+              All
+            </Link>
+          </div>
+          <OmAssetInspectionTimeline
+            runs={assetInspections}
+            inspectionsHref={inspectionsHref}
+            onNavigate={onClose}
+          />
+        </section>
+
         <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
             Open work orders &amp; tenant requests
@@ -444,8 +487,20 @@ export function OmAssetDetailSlide({
             <ul className="space-y-2">
               {openWorkOrders.map((wo: IssueRow) => (
                 <li key={wo.id} className="text-[13px]">
-                  <span className="font-medium text-[var(--enterprise-text)]">{wo.title}</span>
-                  <span className="ml-2 text-[var(--enterprise-text-muted)]">({wo.status})</span>
+                  <Link
+                    href={projectScopedHref(
+                      projectId,
+                      `/om/work-orders?wo=${encodeURIComponent(wo.id)}`,
+                      workspaceId,
+                    )}
+                    onClick={onClose}
+                    className="font-medium text-[var(--enterprise-primary)] hover:underline"
+                  >
+                    {wo.title}
+                  </Link>
+                  <span className="ml-2 text-[var(--enterprise-text-muted)]">
+                    ({ISSUE_STATUS_LABEL[wo.status] ?? wo.status})
+                  </span>
                 </li>
               ))}
             </ul>

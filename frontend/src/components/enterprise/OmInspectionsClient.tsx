@@ -7,28 +7,45 @@ import {
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
+  CloudOff,
   FileText,
+  Library,
   Loader2,
+  MoreHorizontal,
+  Pencil,
   PencilLine,
+  Play,
   Plus,
+  Search,
   Trash2,
+  Upload,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
   deleteOmInspectionRun,
   deleteOmInspectionTemplate,
+  deleteOmWorkspaceInspectionTemplate,
   fetchOmInspectionRuns,
   fetchOmInspectionTemplates,
+  fetchOmWorkspaceInspectionTemplates,
   omInspectionRunReportPdfUrl,
   postOmInspectionRun,
+  postOmInspectionTemplateFromWorkspace,
+  postOmWorkspaceInspectionTemplate,
   ProRequiredError,
+  type OmInspectionChecklistItem,
   type OmInspectionRunRow,
   type OmInspectionTemplateRow,
+  type OmWorkspaceInspectionTemplateRow,
 } from "@/lib/api-client";
+import { listOmInspectionOfflineDrafts } from "@/lib/omInspectionOfflineDraft";
 import { qk } from "@/lib/queryKeys";
+import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { OmAssigneeAvatar } from "@/components/enterprise/OmAssigneePicker";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
@@ -36,155 +53,293 @@ import { OmInspectionRunSlideOver } from "@/components/enterprise/OmInspectionRu
 import { OmInspectionTemplateSlideOver } from "@/components/enterprise/OmInspectionTemplateSlideOver";
 
 type Props = { projectId: string };
+type RunFilter = "all" | "open" | "closed" | "deficient";
 
-function checklistItemCount(checklistJson: unknown): number {
-  if (!Array.isArray(checklistJson)) return 0;
-  return checklistJson.filter(
-    (x) => x && typeof x === "object" && typeof (x as { id?: unknown }).id === "string",
+function checklistStats(checklistJson: unknown): { items: number; sections: number } {
+  if (!Array.isArray(checklistJson)) return { items: 0, sections: 0 };
+  const levels = new Set<string>();
+  let items = 0;
+  for (const x of checklistJson) {
+    if (!x || typeof x !== "object") continue;
+    const o = x as { id?: unknown; level?: unknown };
+    if (typeof o.id !== "string") continue;
+    items += 1;
+    const level = typeof o.level === "string" && o.level.trim() ? o.level.trim() : "1";
+    levels.add(level);
+  }
+  return { items, sections: levels.size };
+}
+
+function runHasFail(r: OmInspectionRunRow): boolean {
+  if (!Array.isArray(r.resultJson)) return false;
+  return r.resultJson.some(
+    (x) => x && typeof x === "object" && (x as { outcome?: string }).outcome === "fail",
+  );
+}
+
+function runProgress(r: OmInspectionRunRow): number | null {
+  if (r.status !== "DRAFT" || !Array.isArray(r.resultJson)) return null;
+  const rows = r.resultJson.filter((x) => x && typeof x === "object") as {
+    outcome?: string | null;
+  }[];
+  if (rows.length === 0) return 0;
+  const answered = rows.filter(
+    (x) => x.outcome === "pass" || x.outcome === "fail" || x.outcome === "na",
   ).length;
+  return Math.round((answered / rows.length) * 100);
 }
 
 function runStatusUi(r: OmInspectionRunRow): {
   Icon: typeof CheckCircle2;
   label: string;
-  className: string;
+  badgeClass: string;
 } {
-  const s = r.status.toUpperCase();
-  if (s === "DRAFT") {
+  if (r.status.toUpperCase() === "DRAFT") {
     return {
       Icon: PencilLine,
-      label: "In progress",
-      className: "text-amber-600 dark:text-amber-400",
+      label: "Open",
+      badgeClass: "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200",
     };
   }
-  if (s === "COMPLETED") {
-    const results = Array.isArray(r.resultJson) ? r.resultJson : [];
-    const hasFail = results.some(
-      (x) => x && typeof x === "object" && (x as { outcome?: string }).outcome === "fail",
-    );
-    if (hasFail) {
-      return {
-        Icon: AlertTriangle,
-        label: "Issues found",
-        className: "text-amber-600 dark:text-amber-400",
-      };
-    }
+  if (runHasFail(r)) {
     return {
-      Icon: CheckCircle2,
-      label: "Passed",
-      className: "text-emerald-600 dark:text-emerald-400",
+      Icon: AlertTriangle,
+      label: "Deficient",
+      badgeClass: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
     };
   }
   return {
-    Icon: ClipboardList,
-    label: r.status,
-    className: "text-[var(--enterprise-text-muted)]",
+    Icon: CheckCircle2,
+    label: "Conforming",
+    badgeClass: "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
   };
 }
 
-function InspectionRunMobileCard({
-  r,
-  num,
-  projectId,
-  onOpen,
-  onDelete,
-  deleting,
-}: {
-  r: OmInspectionRunRow;
-  num: number;
-  projectId: string;
-  onOpen: (run: OmInspectionRunRow) => void;
-  onDelete: (runId: string) => void;
-  deleting: boolean;
-}) {
+function StatusBadge({ r }: { r: OmInspectionRunRow }) {
   const st = runStatusUi(r);
   const StIcon = st.Icon;
-  const by = r.createdBy?.name ?? "—";
-  const dateStr = new Date(r.updatedAt).toLocaleDateString(undefined, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-
   return (
-    <li className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)]">
-      <button
-        type="button"
-        onClick={() => onOpen(r)}
-        className="flex w-full items-start gap-3 text-left active:opacity-90"
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
-              #{num}
-            </span>
-            <p className="text-base font-semibold leading-snug text-[var(--enterprise-text)]">
-              {r.template.name}
-            </p>
-          </div>
-          <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
-            {by} · {dateStr}
-          </p>
-        </div>
-        <span
-          className={`inline-flex shrink-0 items-center gap-1 text-xs font-semibold ${st.className}`}
-        >
-          <StIcon className="h-4 w-4" strokeWidth={2} aria-hidden />
-          {st.label}
-        </span>
-        <ChevronRight
-          className="h-5 w-5 shrink-0 text-[var(--enterprise-text-muted)]"
-          aria-hidden
-        />
-      </button>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <EnterpriseButton size="sm" onClick={() => onOpen(r)}>
-          {r.status === "DRAFT" ? "Continue" : "View"}
-        </EnterpriseButton>
-        {r.status !== "DRAFT" ? (
-          <a
-            href={omInspectionRunReportPdfUrl(projectId, r.id)}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] transition active:scale-[0.98] hover:bg-[var(--enterprise-hover-surface)]"
-          >
-            <FileText className="h-4 w-4" aria-hidden />
-            PDF
-          </a>
-        ) : null}
-        <button
-          type="button"
-          disabled={deleting}
-          title="Delete inspection"
-          aria-label="Delete inspection"
-          onClick={() => {
-            if (
-              !window.confirm(
-                "Delete this inspection? PDF and data will be removed. This cannot be undone.",
-              )
-            )
-              return;
-            onDelete(r.id);
-          }}
-          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-200 px-3 text-sm font-semibold text-red-600 transition active:scale-[0.98] disabled:opacity-40 dark:border-red-900/50"
-        >
-          {deleting ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <Trash2 className="h-4 w-4" strokeWidth={2} />
-          )}
-        </button>
-      </div>
-    </li>
+    <span
+      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${st.badgeClass}`}
+    >
+      <StIcon className="h-3 w-3" strokeWidth={2} aria-hidden />
+      {st.label}
+    </span>
   );
 }
 
+function matchesSearch(
+  q: string,
+  opts: { templateName?: string; inspector?: string; statusLabel?: string },
+) {
+  if (!q) return true;
+  const hay = [opts.templateName, opts.inspector, opts.statusLabel]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
+}
+
+function templateDueBadge(t: OmInspectionTemplateRow): {
+  label: string;
+  className: string;
+} | null {
+  if (!t.nextDueAt) return null;
+  const due = new Date(t.nextDueAt);
+  if (Number.isNaN(due.getTime())) return null;
+  const now = Date.now();
+  const dueMs = due.getTime();
+  const label = due.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+  if (dueMs < now) {
+    return {
+      label: `Overdue · ${label}`,
+      className: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
+    };
+  }
+  const week = 7 * 24 * 60 * 60 * 1000;
+  if (dueMs - now <= week) {
+    return {
+      label: `Due ${label}`,
+      className: "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+    };
+  }
+  return {
+    label: `Next ${label}`,
+    className:
+      "border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)]",
+  };
+}
+
+function TemplateMenu({
+  template,
+  onEdit,
+  onDelete,
+  onPublish,
+  deleting,
+  publishing,
+}: {
+  template: OmInspectionTemplateRow;
+  onEdit: () => void;
+  onDelete: () => void;
+  onPublish: () => void;
+  deleting: boolean;
+  publishing: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const update = () => {
+      const rect = btnRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const menuW = 176;
+      const menuH = 132;
+      const pad = 8;
+      let top = rect.bottom + 4;
+      if (top + menuH > window.innerHeight - pad) {
+        top = Math.max(pad, rect.top - menuH - 4);
+      }
+      const left = Math.min(Math.max(pad, rect.right - menuW), window.innerWidth - menuW - pad);
+      setPos({ top, left });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      // fallow-ignore-next-line code-duplication
+      setOpen(false);
+    };
+    // fallow-ignore-next-line code-duplication
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const menu =
+    open && pos && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            className="fixed z-[200] min-w-[11rem] overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] py-1 shadow-[var(--enterprise-shadow-floating)]"
+            style={{ top: pos.top, left: pos.left }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onEdit();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={publishing}
+              onClick={() => {
+                setOpen(false);
+                onPublish();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-40"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Publish to company
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={deleting}
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label={`More actions for ${template.name}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+      {menu}
+    </>
+  );
+}
+
+// fallow-ignore-next-line complexity
 export function OmInspectionsClient({ projectId }: Props) {
   const qc = useQueryClient();
+  const { primary } = useEnterpriseWorkspace();
+  const workspaceId = primary?.workspace.id;
   const [templateSlideOpen, setTemplateSlideOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<OmInspectionTemplateRow | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQ, setPickerQ] = useState("");
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [companyTemplateSlideOpen, setCompanyTemplateSlideOpen] = useState(false);
   const [activeRun, setActiveRun] = useState<OmInspectionRunRow | null>(null);
   const [runSlideOpen, setRunSlideOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [runFilter, setRunFilter] = useState<RunFilter>("all");
+  const [offlineDraftCount, setOfflineDraftCount] = useState(0);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(searchInput.trim().toLowerCase()), 250);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    const refresh = () => setOfflineDraftCount(listOmInspectionOfflineDrafts(projectId).length);
+    refresh();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, [projectId, runSlideOpen]);
 
   const { data: templates = [], isPending: tp } = useQuery({
     queryKey: qk.omInspectionTemplates(projectId),
@@ -196,12 +351,19 @@ export function OmInspectionsClient({ projectId }: Props) {
     queryFn: () => fetchOmInspectionRuns(projectId),
   });
 
+  const { data: workspaceTemplates = [], isPending: wtp } = useQuery({
+    queryKey: qk.omWorkspaceInspectionTemplates(workspaceId ?? ""),
+    queryFn: () => fetchOmWorkspaceInspectionTemplates(workspaceId!),
+    enabled: Boolean(workspaceId) && libraryOpen,
+  });
+
   const startRun = useMutation({
     mutationFn: (templateId: string) =>
       postOmInspectionRun(projectId, { templateId, resultJson: [] }),
     onSuccess: async (row) => {
       await qc.invalidateQueries({ queryKey: qk.omInspectionRuns(projectId) });
       setPickerOpen(false);
+      setPickerQ("");
       setActiveRun(row);
       setRunSlideOpen(true);
       toast.success("Inspection started.");
@@ -223,6 +385,58 @@ export function OmInspectionsClient({ projectId }: Props) {
     },
   });
 
+  const publishToCompanyMut = useMutation({
+    mutationFn: (t: OmInspectionTemplateRow) => {
+      if (!workspaceId) throw new Error("No workspace selected.");
+      const checklistJson = Array.isArray(t.checklistJson)
+        ? (t.checklistJson as OmInspectionChecklistItem[])
+        : [];
+      return postOmWorkspaceInspectionTemplate(workspaceId, {
+        name: t.name,
+        description: t.description,
+        frequency: t.frequency,
+        checklistJson,
+      });
+    },
+    onSuccess: async () => {
+      if (workspaceId) {
+        await qc.invalidateQueries({ queryKey: qk.omWorkspaceInspectionTemplates(workspaceId) });
+      }
+      toast.success("Published to company library.");
+    },
+    onError: (e: Error) => {
+      toast.error(e instanceof ProRequiredError ? "Pro subscription required." : e.message);
+    },
+  });
+
+  const cloneFromWorkspaceMut = useMutation({
+    mutationFn: (workspaceTemplateId: string) =>
+      postOmInspectionTemplateFromWorkspace(projectId, { workspaceTemplateId }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: qk.omInspectionTemplates(projectId) });
+      toast.success("Imported into this project.");
+    },
+    onError: (e: Error) => {
+      toast.error(e instanceof ProRequiredError ? "Pro subscription required." : e.message);
+    },
+  });
+
+  const deleteWorkspaceTplMut = useMutation({
+    mutationFn: (templateId: string) => {
+      if (!workspaceId) throw new Error("No workspace selected.");
+      return deleteOmWorkspaceInspectionTemplate(workspaceId, templateId);
+    },
+    onSuccess: async () => {
+      if (workspaceId) {
+        await qc.invalidateQueries({ queryKey: qk.omWorkspaceInspectionTemplates(workspaceId) });
+      }
+      toast.success("Removed from company library.");
+    },
+    onError: (e: Error) => {
+      toast.error(e instanceof ProRequiredError ? "Pro subscription required." : e.message);
+    },
+  });
+
   const deleteRunMut = useMutation({
     mutationFn: (runId: string) => deleteOmInspectionRun(projectId, runId),
     onSuccess: async (_, runId) => {
@@ -238,22 +452,88 @@ export function OmInspectionsClient({ projectId }: Props) {
     },
   });
 
-  const recentRows = useMemo(() => {
+  const runsByTemplate = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of runs) m.set(r.templateId, (m.get(r.templateId) ?? 0) + 1);
+    return m;
+  }, [runs]);
+
+  const filteredTemplates = useMemo(
+    () =>
+      templates.filter((t) =>
+        matchesSearch(debouncedQ, {
+          templateName: t.name,
+          inspector: t.description ?? undefined,
+          statusLabel: t.frequency ?? undefined,
+        }),
+      ),
+    [templates, debouncedQ],
+  );
+
+  const numberedRuns = useMemo(() => {
     const sorted = [...runs].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
     return sorted.map((r, i) => ({ r, num: sorted.length - i }));
   }, [runs]);
 
-  const draftCount = useMemo(() => runs.filter((r) => r.status === "DRAFT").length, [runs]);
+  const filteredRunRows = useMemo(() => {
+    return numberedRuns.filter(({ r }) => {
+      const st = runStatusUi(r);
+      if (
+        !matchesSearch(debouncedQ, {
+          templateName: r.template.name,
+          inspector: r.createdBy?.name ?? undefined,
+          statusLabel: st.label,
+        })
+      ) {
+        return false;
+      }
+      if (runFilter === "open") return r.status === "DRAFT";
+      if (runFilter === "closed") return r.status !== "DRAFT";
+      if (runFilter === "deficient") return r.status !== "DRAFT" && runHasFail(r);
+      return true;
+    });
+  }, [numberedRuns, debouncedQ, runFilter]);
+
+  const openCount = useMemo(() => runs.filter((r) => r.status === "DRAFT").length, [runs]);
+  const deficientCount = useMemo(
+    () => runs.filter((r) => r.status !== "DRAFT" && runHasFail(r)).length,
+    [runs],
+  );
 
   const openRun = (r: OmInspectionRunRow) => {
     setActiveRun(r);
     setRunSlideOpen(true);
   };
 
-  const isPending = tp || rp;
+  const openCreateTemplate = () => {
+    setEditingTemplate(null);
+    setTemplateSlideOpen(true);
+  };
 
+  const openEditTemplate = (t: OmInspectionTemplateRow) => {
+    setEditingTemplate(t);
+    setTemplateSlideOpen(true);
+  };
+
+  const openNewInspection = () => {
+    if (templates.length === 0) openCreateTemplate();
+    else setPickerOpen(true);
+  };
+
+  const pickerFiltered = useMemo(() => {
+    const q = pickerQ.trim().toLowerCase();
+    if (!q) return templates;
+    return templates.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        (t.frequency ?? "").toLowerCase().includes(q) ||
+        (t.description ?? "").toLowerCase().includes(q),
+    );
+  }, [templates, pickerQ]);
+
+  const isPending = tp || rp;
   if (isPending) {
     return <EnterpriseLoadingState message="Loading inspections…" label="Loading" />;
   }
@@ -262,19 +542,30 @@ export function OmInspectionsClient({ projectId }: Props) {
     ? templates.find((t) => t.id === activeRun.templateId)
     : undefined;
 
-  const openNewInspection = () => {
-    if (templates.length === 0) setTemplateSlideOpen(true);
-    else setPickerOpen(true);
-  };
+  const searchActive = Boolean(debouncedQ);
+  const noMatches = searchActive && filteredTemplates.length === 0 && filteredRunRows.length === 0;
+
+  const filterChips: { id: RunFilter; label: string; count?: number }[] = [
+    { id: "all", label: "All", count: runs.length },
+    { id: "open", label: "Open", count: openCount },
+    { id: "closed", label: "Closed", count: runs.length - openCount },
+    { id: "deficient", label: "Deficient", count: deficientCount },
+  ];
 
   return (
     <div className={OM_PAGE_CLASS}>
       <OmSubPageHeader
         icon={ClipboardCheck}
         title="Inspections"
-        description="Field checklists and sign-off — drafts, photos, PDF reports."
+        description="Run field checklists from templates — record pass/fail, photos, and PDF reports."
         action={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
+            {workspaceId ? (
+              <EnterpriseButton size="sm" variant="secondary" onClick={() => setLibraryOpen(true)}>
+                <Library className="h-4 w-4" strokeWidth={2} />
+                Company library
+              </EnterpriseButton>
+            ) : null}
             <EnterpriseButton
               size="sm"
               disabled={startRun.isPending}
@@ -282,261 +573,406 @@ export function OmInspectionsClient({ projectId }: Props) {
               onClick={openNewInspection}
             >
               {!startRun.isPending ? <Plus className="h-4 w-4" strokeWidth={2.5} /> : null}
-              New inspection
+              Create inspection
             </EnterpriseButton>
-            <EnterpriseButton
-              variant="secondary"
-              size="sm"
-              onClick={() => setTemplateSlideOpen(true)}
-            >
-              <Plus className="h-4 w-4" strokeWidth={2} />
-              Template
-            </EnterpriseButton>
-          </>
+          </div>
         }
-      >
-        <div className="grid grid-cols-3 gap-2 sm:max-w-sm">
-          {(
-            [
-              { label: "Templates", value: templates.length },
-              { label: "Runs", value: runs.length },
-              { label: "Drafts", value: draftCount },
-            ] as const
-          ).map((s) => (
-            <div
-              key={s.label}
-              className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1.5 text-center"
-            >
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                {s.label}
-              </p>
-              <p className="text-sm font-bold tabular-nums text-[var(--enterprise-text)]">
-                {s.value}
+      />
+
+      {offlineDraftCount > 0 ? (
+        <div className="enterprise-alert-info flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm">
+          <CloudOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <p>
+            {offlineDraftCount} offline draft{offlineDraftCount === 1 ? "" : "s"} on this device —
+            open the inspection to sync when online.
+          </p>
+        </div>
+      ) : null}
+
+      {templates.length > 0 || runs.length > 0 ? (
+        <div className="enterprise-card flex items-center gap-2 px-3 py-2 sm:px-4">
+          <Search className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]" aria-hidden />
+          <label className="sr-only" htmlFor="insp-list-search">
+            Search inspections
+          </label>
+          <input
+            id="insp-list-search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search templates or inspections…"
+            className="min-h-10 w-full bg-transparent text-sm text-[var(--enterprise-text)] outline-none placeholder:text-[var(--enterprise-text-muted)]"
+          />
+        </div>
+      ) : null}
+
+      {noMatches ? (
+        <div className="enterprise-card px-4 py-8 text-center text-sm text-[var(--enterprise-text-muted)]">
+          No templates or inspections match your search.
+        </div>
+      ) : null}
+
+      {/* Compact template library (Procore/Dalux style) */}
+      {!noMatches ? (
+        <section className="enterprise-card flex flex-col overflow-hidden">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--enterprise-border)] px-3 py-3 sm:px-4">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
+                Checklist templates
+              </h2>
+              <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
+                Reusable forms used to start inspections
+                {searchActive ? " · matching search" : ""}
               </p>
             </div>
-          ))}
-        </div>
-      </OmSubPageHeader>
-
-      {/* Templates */}
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
-          <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Your templates</h2>
-        </div>
-        <p className="mb-4 text-sm text-[var(--enterprise-text-muted)]">
-          Reusable checklists. Each template defines levels, pass/fail items, and how often you run
-          it.
-        </p>
-
-        {templates.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]/60 px-5 py-10 text-center">
-            <ClipboardList
-              className="mx-auto h-10 w-10 text-[var(--enterprise-text-muted)]"
-              strokeWidth={1.25}
-            />
-            <p className="mt-3 text-sm font-medium text-[var(--enterprise-text)]">
-              No templates yet
-            </p>
-            <p className="mx-auto mt-1 max-w-sm text-sm text-[var(--enterprise-text-muted)]">
-              Create your first template to define checklist items and cadence (e.g. monthly fire
-              walk).
-            </p>
             <button
               type="button"
-              onClick={() => setTemplateSlideOpen(true)}
-              className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white"
+              onClick={openCreateTemplate}
+              className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 text-xs font-semibold text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] hover:bg-[var(--enterprise-hover-surface)]"
             >
-              <Plus className="h-4 w-4" />
-              Create template
+              <Plus className="h-3.5 w-3.5" />
+              New
             </button>
           </div>
-        ) : (
-          <ul className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-            {templates.map((t: OmInspectionTemplateRow) => {
-              const n = checklistItemCount(t.checklistJson);
-              return (
-                <li
-                  key={t.id}
-                  className="flex min-h-[4.5rem] items-start gap-3 rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)] transition active:scale-[0.98]"
-                >
-                  <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]"
-                    aria-hidden
+
+          {templates.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
+                <ClipboardList className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+              </div>
+              <p className="mt-3 text-sm font-medium text-[var(--enterprise-text)]">
+                No templates yet
+              </p>
+              <p className="mx-auto mt-1 max-w-sm text-xs text-[var(--enterprise-text-muted)]">
+                Create a checklist template with sections and line items, then start inspections
+                from it.
+              </p>
+              <EnterpriseButton size="sm" className="mt-3" onClick={openCreateTemplate}>
+                <Plus className="h-4 w-4" />
+                Create template
+              </EnterpriseButton>
+            </div>
+          ) : filteredTemplates.length === 0 ? (
+            <p className="px-4 py-5 text-sm text-[var(--enterprise-text-muted)]">
+              No templates match your search.
+            </p>
+          ) : (
+            <ul className="enterprise-scrollbar max-h-[min(42vh,360px)] space-y-1.5 overflow-y-auto overscroll-contain p-2 sm:p-3">
+              {filteredTemplates.map((t) => {
+                const stats = checklistStats(t.checklistJson);
+                const used = runsByTemplate.get(t.id) ?? 0;
+                const due = templateDueBadge(t);
+                return (
+                  <li
+                    key={t.id}
+                    className="flex items-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-2.5 py-2.5 shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/25 hover:bg-[var(--enterprise-hover-surface)]/60 sm:gap-3 sm:px-3"
                   >
-                    <FileText className="h-5 w-5" strokeWidth={1.5} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-[var(--enterprise-text)]">{t.name}</p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      {t.frequency ? (
-                        <span className="inline-flex rounded-full bg-[var(--enterprise-surface)] px-2.5 py-0.5 text-xs font-medium text-[var(--enterprise-text-muted)] ring-1 ring-[var(--enterprise-border)]">
-                          {t.frequency}
-                        </span>
-                      ) : null}
-                      <span className="text-xs text-[var(--enterprise-text-muted)]">
-                        {n} checklist item{n === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={deleteTemplateMut.isPending}
-                    title="Delete template"
-                    aria-label={`Delete template ${t.name}`}
-                    onClick={() => {
-                      if (
-                        !window.confirm(
-                          `Delete template “${t.name}”? All inspection runs that use it will be removed. This cannot be undone.`,
+                    <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)] sm:inline-flex">
+                      <ClipboardList className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openEditTemplate(t)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">
+                          {t.name}
+                        </p>
+                        {due ? (
+                          <span
+                            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${due.className}`}
+                          >
+                            {due.label}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-0.5 truncate text-[11px] text-[var(--enterprise-text-muted)]">
+                        {[
+                          t.frequency || null,
+                          stats.sections
+                            ? `${stats.sections} section${stats.sections === 1 ? "" : "s"}`
+                            : null,
+                          `${stats.items} item${stats.items === 1 ? "" : "s"}`,
+                          used > 0 ? `${used} run${used === 1 ? "" : "s"}` : "Unused",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={startRun.isPending}
+                      title="Start inspection"
+                      onClick={() => startRun.mutate(t.id)}
+                      className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-[var(--enterprise-primary)] px-3 text-[11px] font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
+                    >
+                      <Play className="h-3 w-3" fill="currentColor" />
+                      Start
+                    </button>
+                    <TemplateMenu
+                      template={t}
+                      onEdit={() => openEditTemplate(t)}
+                      publishing={publishToCompanyMut.isPending}
+                      onPublish={() => publishToCompanyMut.mutate(t)}
+                      deleting={deleteTemplateMut.isPending}
+                      onDelete={() => {
+                        if (
+                          !window.confirm(
+                            `Delete template “${t.name}”? All inspection runs that use it will be removed.`,
+                          )
                         )
-                      )
-                        return;
-                      deleteTemplateMut.mutate(t.id);
-                    }}
-                    className="mobile-touch-target shrink-0 rounded-xl p-2 text-[var(--enterprise-text-muted)] transition active:scale-[0.98] hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-                  >
-                    <Trash2 className="h-4 w-4" strokeWidth={2} />
-                  </button>
-                </li>
+                          return;
+                        deleteTemplateMut.mutate(t.id);
+                      }}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {/* Inspection activity — primary work surface */}
+      {!noMatches ? (
+        <section className="enterprise-card flex flex-col overflow-hidden p-3 sm:p-4">
+          <div className="flex shrink-0 flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Inspections</h2>
+              <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
+                Open drafts and closed reports
+                {searchActive ? " · matching search" : ""}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 flex shrink-0 flex-wrap gap-1.5">
+            {filterChips.map((chip) => {
+              const active = runFilter === chip.id;
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => setRunFilter(chip.id)}
+                  className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${
+                    active
+                      ? "border-[var(--enterprise-primary)] bg-[var(--enterprise-primary)] text-white"
+                      : "border-[var(--enterprise-border)] text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
+                  }`}
+                >
+                  {chip.label}
+                  {typeof chip.count === "number" ? (
+                    <span
+                      className={`tabular-nums ${active ? "text-white/80" : "text-[var(--enterprise-text-muted)]"}`}
+                    >
+                      {chip.count}
+                    </span>
+                  ) : null}
+                </button>
               );
             })}
-          </ul>
-        )}
-      </section>
+          </div>
 
-      {/* Recent runs */}
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <ClipboardCheck className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
-          <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Recent activity</h2>
-        </div>
-        <p className="mb-4 text-sm text-[var(--enterprise-text-muted)]">
-          Continue a draft or open a finished run for the PDF. Status reflects pass/fail outcomes.
-        </p>
-
-        {runs.length === 0 ? (
-          <p className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-10 text-center text-sm text-[var(--enterprise-text-muted)]">
-            No runs yet — start with New inspection.
-          </p>
-        ) : (
-          <>
-            <ul className="space-y-3 lg:hidden" aria-label="Recent inspection runs">
-              {recentRows.slice(0, 25).map(({ r, num }) => (
-                <InspectionRunMobileCard
-                  key={r.id}
-                  r={r}
-                  num={num}
-                  projectId={projectId}
-                  onOpen={openRun}
-                  onDelete={(id) => deleteRunMut.mutate(id)}
-                  deleting={deleteRunMut.isPending && deleteRunMut.variables === r.id}
-                />
-              ))}
-            </ul>
-            <div className="mobile-table-wrap hidden overflow-x-auto rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] shadow-[var(--enterprise-shadow-xs)] lg:block">
-              <table className="w-full min-w-[540px] border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]/80 text-xs font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                    <th className="py-3 pl-4 pr-2">#</th>
-                    <th className="px-3 py-3">Checklist</th>
-                    <th className="px-3 py-3">Updated</th>
-                    <th className="px-3 py-3">Inspector</th>
-                    <th className="px-3 py-3">Outcome</th>
-                    <th className="py-3 pl-3 pr-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentRows.slice(0, 25).map(({ r, num }) => {
-                    const st = runStatusUi(r);
-                    const by = r.createdBy?.name ?? "—";
-                    const dateStr = new Date(r.updatedAt).toLocaleDateString(undefined, {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    });
-                    const StIcon = st.Icon;
-                    return (
-                      <tr
-                        key={r.id}
-                        className="border-b border-[var(--enterprise-border)] last:border-0 hover:bg-[var(--enterprise-surface)]/50"
+          {runs.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-4 py-8 text-center">
+              <p className="text-sm font-medium text-[var(--enterprise-text)]">
+                No inspections yet
+              </p>
+              <p className="mx-auto mt-1 max-w-sm text-xs text-[var(--enterprise-text-muted)]">
+                Start from a template, walk the checklist in the field, then close with a PDF
+                report.
+              </p>
+              {templates.length > 0 ? (
+                <EnterpriseButton size="sm" className="mt-3" onClick={openNewInspection}>
+                  <Plus className="h-4 w-4" />
+                  Create inspection
+                </EnterpriseButton>
+              ) : null}
+            </div>
+          ) : filteredRunRows.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--enterprise-text-muted)]">
+              No inspections in this filter.
+            </p>
+          ) : (
+            <>
+              <ul className="enterprise-scrollbar mt-3 max-h-[min(52vh,520px)] space-y-2 overflow-y-auto overscroll-contain pr-0.5 lg:hidden">
+                {filteredRunRows.slice(0, 50).map(({ r, num }) => {
+                  const by = r.createdBy?.name ?? "—";
+                  const dateStr = new Date(r.updatedAt).toLocaleDateString(undefined, {
+                    day: "2-digit",
+                    month: "short",
+                  });
+                  const progress = runProgress(r);
+                  return (
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        onClick={() => openRun(r)}
+                        className="flex w-full items-center gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-3 text-left active:opacity-90"
                       >
-                        <td className="py-3 pl-4 pr-2 font-mono text-xs text-[var(--enterprise-text-muted)]">
-                          {num}
-                        </td>
-                        <td className="px-3 py-3 font-medium text-[var(--enterprise-text)]">
-                          {r.template.name}
-                        </td>
-                        <td className="px-3 py-3 text-[var(--enterprise-text-muted)]">{dateStr}</td>
-                        <td className="px-3 py-3 text-[var(--enterprise-text)]">{by}</td>
-                        <td className="px-3 py-3">
-                          <span
-                            className={`inline-flex items-center gap-1.5 text-sm ${st.className}`}
-                          >
-                            <StIcon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                            {st.label}
-                          </span>
-                        </td>
-                        <td className="py-3 pl-3 pr-4 text-right">
-                          <div className="flex items-center justify-end gap-2 sm:gap-3">
-                            {r.status !== "DRAFT" && (
-                              <a
-                                href={omInspectionRunReportPdfUrl(projectId, r.id)}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--enterprise-text-muted)] hover:text-[var(--enterprise-primary)]"
-                              >
-                                <FileText className="h-3.5 w-3.5" aria-hidden />
-                                View PDF
-                              </a>
-                            )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-[10px] font-semibold text-[var(--enterprise-text-muted)]">
+                              #{num}
+                            </span>
+                            <StatusBadge r={r} />
+                            {progress != null ? (
+                              <span className="text-[10px] font-semibold tabular-nums text-[var(--enterprise-text-muted)]">
+                                {progress}%
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 truncate text-sm font-semibold text-[var(--enterprise-text)]">
+                            {r.template.name}
+                          </p>
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--enterprise-text-muted)]">
+                            <OmAssigneeAvatar member={r.createdBy} />
+                            <span className="truncate">
+                              {by} · {dateStr}
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronRight
+                          className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]"
+                          aria-hidden
+                        />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <div className="enterprise-scrollbar mobile-table-wrap mt-3 hidden max-h-[min(52vh,520px)] overflow-auto overscroll-contain lg:block">
+                <table className="w-full min-w-[700px] border-collapse text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-[var(--enterprise-surface)]">
+                    <tr className="border-b border-[var(--enterprise-border)] text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
+                      <th className="px-2 py-2">#</th>
+                      <th className="px-2 py-2">Inspection</th>
+                      <th className="px-2 py-2">Status</th>
+                      <th className="px-2 py-2">Inspector</th>
+                      <th className="px-2 py-2">Updated</th>
+                      <th className="px-2 py-2 text-right"> </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRunRows.slice(0, 50).map(({ r, num }) => {
+                      const by = r.createdBy?.name ?? "—";
+                      const dateStr = new Date(r.updatedAt).toLocaleDateString(undefined, {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      });
+                      const progress = runProgress(r);
+                      return (
+                        <tr
+                          key={r.id}
+                          className="border-b border-[var(--enterprise-border)]/70 hover:bg-[var(--enterprise-hover-surface)]/40"
+                        >
+                          <td className="px-2 py-2.5 font-mono text-xs text-[var(--enterprise-text-muted)]">
+                            {num}
+                          </td>
+                          <td className="px-2 py-2.5">
                             <button
                               type="button"
                               onClick={() => openRun(r)}
-                              className="text-xs font-semibold text-[var(--enterprise-primary)] hover:underline"
+                              className="text-left font-medium text-[var(--enterprise-text)] hover:underline"
                             >
-                              {r.status === "DRAFT" ? "Continue" : "View"}
+                              {r.template.name}
                             </button>
-                            <button
-                              type="button"
-                              disabled={deleteRunMut.isPending && deleteRunMut.variables === r.id}
-                              title="Delete inspection"
-                              aria-label="Delete inspection"
-                              onClick={() => {
-                                if (
-                                  !window.confirm(
-                                    "Delete this inspection? PDF and data will be removed. This cannot be undone.",
+                            {progress != null ? (
+                              <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
+                                {progress}% complete
+                              </p>
+                            ) : null}
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <StatusBadge r={r} />
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <OmAssigneeAvatar member={r.createdBy} />
+                              <span className="truncate text-xs text-[var(--enterprise-text-muted)]">
+                                {by}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-2 py-2.5 tabular-nums text-xs text-[var(--enterprise-text-muted)]">
+                            {dateStr}
+                          </td>
+                          <td className="px-2 py-2.5 text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              {r.status !== "DRAFT" ? (
+                                <a
+                                  href={omInspectionRunReportPdfUrl(projectId, r.id)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-primary)]"
+                                >
+                                  <FileText className="h-3.5 w-3.5" />
+                                  PDF
+                                </a>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => openRun(r)}
+                                className="inline-flex h-8 items-center rounded-lg px-2 text-xs font-semibold text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)]"
+                              >
+                                {r.status === "DRAFT" ? "Continue" : "Open"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={deleteRunMut.isPending && deleteRunMut.variables === r.id}
+                                aria-label="Delete inspection"
+                                onClick={() => {
+                                  if (
+                                    !window.confirm(
+                                      "Delete this inspection? PDF and data will be removed.",
+                                    )
                                   )
-                                )
-                                  return;
-                                deleteRunMut.mutate(r.id);
-                              }}
-                              className="rounded-md p-1.5 text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-                            >
-                              {deleteRunMut.isPending && deleteRunMut.variables === r.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                              ) : (
-                                <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-                              )}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </section>
+                                    return;
+                                  deleteRunMut.mutate(r.id);
+                                }}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                              >
+                                {deleteRunMut.isPending && deleteRunMut.variables === r.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </section>
+      ) : null}
 
       <OmInspectionTemplateSlideOver
         projectId={projectId}
         open={templateSlideOpen}
-        onClose={() => setTemplateSlideOpen(false)}
+        template={editingTemplate}
+        onClose={() => {
+          setTemplateSlideOpen(false);
+          setEditingTemplate(null);
+        }}
       />
 
-      {activeRun && (
+      {workspaceId ? (
+        <OmInspectionTemplateSlideOver
+          scope="company"
+          workspaceId={workspaceId}
+          open={companyTemplateSlideOpen}
+          onClose={() => setCompanyTemplateSlideOpen(false)}
+        />
+      ) : null}
+
+      {activeRun ? (
         <OmInspectionRunSlideOver
           projectId={projectId}
           run={activeRun}
@@ -547,69 +983,206 @@ export function OmInspectionsClient({ projectId }: Props) {
             setActiveRun(null);
           }}
         />
-      )}
+      ) : null}
 
       <EnterpriseSlideOver
         open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        panelMaxWidthClass="max-w-[400px]"
+        onClose={() => {
+          setPickerOpen(false);
+          setPickerQ("");
+        }}
+        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),400px)]"
+        panelVariant="floating"
+        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+        closeOnBackdrop={false}
+        closeOnEscape={false}
         overlayZClass="z-[110]"
         ariaLabelledBy="pick-tpl-title"
         header={
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]">
-                <Plus className="h-4 w-4" strokeWidth={2.5} />
-              </div>
-              <h2
-                id="pick-tpl-title"
-                className="text-lg font-semibold text-[var(--enterprise-text)]"
-              >
-                New inspection
-              </h2>
-            </div>
-            <p className="mt-2 text-xs text-[var(--enterprise-text-muted)]">
-              Choose a template. You can save a draft and finish later.
+            <h2 id="pick-tpl-title" className="text-lg font-semibold text-[var(--enterprise-text)]">
+              Create inspection
+            </h2>
+            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
+              Choose a checklist template to start a new run.
             </p>
           </div>
         }
-        bodyClassName="px-2 py-2"
+        bodyClassName="px-3 py-3"
         footerClassName="border-t border-[var(--enterprise-border)] px-4 py-3"
         footer={
           <EnterpriseButton
             variant="secondary"
             size="lg"
             fullWidth
-            onClick={() => setPickerOpen(false)}
+            onClick={() => {
+              setPickerOpen(false);
+              setPickerQ("");
+            }}
           >
             Cancel
           </EnterpriseButton>
         }
       >
-        <ul className="max-h-[min(60vh,420px)] overflow-y-auto mobile-scroll">
-          {templates.map((t) => (
-            <li key={t.id}>
-              <button
-                type="button"
-                disabled={startRun.isPending}
-                onClick={() => startRun.mutate(t.id)}
-                className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-base font-medium text-[var(--enterprise-text)] transition active:scale-[0.98] active:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
-                  <FileText className="h-4 w-4" strokeWidth={1.75} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate">{t.name}</span>
-                  {t.frequency ? (
-                    <span className="mt-0.5 block text-xs font-normal text-[var(--enterprise-text-muted)]">
-                      {t.frequency}
-                    </span>
-                  ) : null}
-                </span>
-              </button>
+        <div className="mb-2 flex items-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-1.5">
+          <Search className="h-4 w-4 text-[var(--enterprise-text-muted)]" aria-hidden />
+          <input
+            value={pickerQ}
+            onChange={(e) => setPickerQ(e.target.value)}
+            placeholder="Search templates…"
+            className="min-h-9 w-full bg-transparent text-sm outline-none placeholder:text-[var(--enterprise-text-muted)]"
+            aria-label="Search templates"
+          />
+        </div>
+        <ul className="max-h-[min(50vh,360px)] overflow-y-auto mobile-scroll">
+          {pickerFiltered.length === 0 ? (
+            <li className="px-2 py-6 text-center text-sm text-[var(--enterprise-text-muted)]">
+              No templates match.
             </li>
-          ))}
+          ) : (
+            pickerFiltered.map((t) => {
+              const stats = checklistStats(t.checklistJson);
+              return (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    disabled={startRun.isPending}
+                    onClick={() => startRun.mutate(t.id)}
+                    className="flex min-h-12 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-[var(--enterprise-text)]">
+                        {t.name}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-[var(--enterprise-text-muted)]">
+                        {[
+                          t.frequency,
+                          `${stats.sections} section${stats.sections === 1 ? "" : "s"}`,
+                          `${stats.items} items`,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                    <ChevronRight
+                      className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]"
+                      aria-hidden
+                    />
+                  </button>
+                </li>
+              );
+            })
+          )}
         </ul>
+      </EnterpriseSlideOver>
+
+      <EnterpriseSlideOver
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),420px)]"
+        panelVariant="floating"
+        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+        closeOnBackdrop={false}
+        closeOnEscape={false}
+        overlayZClass="z-[110]"
+        ariaLabelledBy="company-lib-title"
+        header={
+          <div className="min-w-0">
+            <h2
+              id="company-lib-title"
+              className="text-lg font-semibold text-[var(--enterprise-text)]"
+            >
+              Company library
+            </h2>
+            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
+              Create shared checklists here, then import them into any project.
+            </p>
+          </div>
+        }
+        bodyClassName="px-3 py-3"
+        footerClassName="border-t border-[var(--enterprise-border)] px-4 py-3"
+        footer={
+          <div className="flex w-full flex-col gap-2">
+            <EnterpriseButton size="lg" fullWidth onClick={() => setCompanyTemplateSlideOpen(true)}>
+              <Plus className="h-4 w-4" strokeWidth={2.5} />
+              Create company template
+            </EnterpriseButton>
+            <EnterpriseButton
+              variant="secondary"
+              size="lg"
+              fullWidth
+              onClick={() => setLibraryOpen(false)}
+            >
+              Done
+            </EnterpriseButton>
+          </div>
+        }
+      >
+        {wtp ? (
+          <p className="px-2 py-6 text-center text-sm text-[var(--enterprise-text-muted)]">
+            Loading company templates…
+          </p>
+        ) : workspaceTemplates.length === 0 ? (
+          <div className="px-2 py-6 text-center">
+            <p className="text-sm font-medium text-[var(--enterprise-text)]">
+              No company templates yet
+            </p>
+            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
+              Create one below, or publish a project template with “Publish to company”.
+            </p>
+            <EnterpriseButton
+              className="mt-4"
+              size="sm"
+              onClick={() => setCompanyTemplateSlideOpen(true)}
+            >
+              <Plus className="h-4 w-4" strokeWidth={2.5} />
+              Create company template
+            </EnterpriseButton>
+          </div>
+        ) : (
+          <ul className="max-h-[min(50vh,360px)] space-y-1 overflow-y-auto mobile-scroll">
+            {workspaceTemplates.map((t: OmWorkspaceInspectionTemplateRow) => {
+              const stats = checklistStats(t.checklistJson);
+              return (
+                <li
+                  key={t.id}
+                  className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-[var(--enterprise-hover-surface)]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">
+                      {t.name}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
+                      {[t.frequency, `${stats.items} item${stats.items === 1 ? "" : "s"}`]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={cloneFromWorkspaceMut.isPending}
+                    onClick={() => cloneFromWorkspaceMut.mutate(t.id)}
+                    className="inline-flex min-h-8 items-center rounded-lg border border-[var(--enterprise-border)] px-2.5 text-[11px] font-semibold text-[var(--enterprise-primary)] disabled:opacity-50"
+                  >
+                    Import
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${t.name}`}
+                    disabled={deleteWorkspaceTplMut.isPending}
+                    onClick={() => {
+                      if (!window.confirm(`Remove “${t.name}” from the company library?`)) return;
+                      deleteWorkspaceTplMut.mutate(t.id);
+                    }}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </EnterpriseSlideOver>
     </div>
   );

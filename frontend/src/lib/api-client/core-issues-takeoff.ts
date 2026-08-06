@@ -75,6 +75,8 @@ export type IssueRow = {
   title: string;
   description: string | null;
   status: string;
+  /** ISO timestamp when status last changed (work orders / issues). */
+  statusChangedAt?: string | null;
   priority?: string;
   startDate?: string | null;
   dueDate?: string | null;
@@ -137,10 +139,14 @@ export type IssueRow = {
   vendorId?: string | null;
   vendor?: { id: string; name: string; email: string | null; trade: string | null } | null;
   sourceOccupantIssueId?: string | null;
+  /** Inspection run that spawned this work order (follow-ups). */
+  sourceInspectionRunId?: string | null;
   completionEvidenceRequired?: boolean;
   hasVendorAccessLink?: boolean;
   /** 1-based project issue number (from API). */
   displayNumber?: number | null;
+  /** 1-based work-order number among project WOs (from API). */
+  workOrderNumber?: number | null;
   commentCount?: number;
 };
 

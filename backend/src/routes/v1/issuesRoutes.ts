@@ -228,6 +228,16 @@ async function issueDisplayNumbersForProject(projectId: string): Promise<Map<str
   return new Map(chron.map((row, i) => [row.id, i + 1]));
 }
 
+/** WO-scoped display number among issueKind = WORK_ORDER only (1-based, chronological). */
+async function workOrderNumbersForProject(projectId: string): Promise<Map<string, number>> {
+  const chron = await prisma.issue.findMany({
+    where: { projectId, issueKind: IssueKind.WORK_ORDER },
+    select: { id: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+  return new Map(chron.map((row, i) => [row.id, i + 1]));
+}
+
 type BimAnchorRecord = {
   fileVersionId?: unknown;
   fileId?: unknown;
@@ -282,21 +292,32 @@ async function hydrateIssueBimAnchors(rows: IssueRow[]): Promise<IssueRow[]> {
 }
 
 async function issueRowJsonWithDisplay(row: IssueRow, opts?: { maskPortalReporter?: boolean }) {
-  const displayNums = await issueDisplayNumbersForProject(row.projectId);
+  const [displayNums, woNums] = await Promise.all([
+    issueDisplayNumbersForProject(row.projectId),
+    row.issueKind === IssueKind.WORK_ORDER
+      ? workOrderNumbersForProject(row.projectId)
+      : Promise.resolve(new Map<string, number>()),
+  ]);
   const [hydrated] = await hydrateIssueBimAnchors([row]);
   return issueRowJson(hydrated ?? row, {
     ...opts,
     displayNumber: displayNums.get(row.id) ?? null,
+    workOrderNumber: woNums.get(row.id) ?? null,
   });
 }
 
 async function issueRowsToJson(rows: IssueRow[], projectId: string, maskPortalReporter: boolean) {
-  const displayNums = await issueDisplayNumbersForProject(projectId);
+  const needsWo = rows.some((r) => r.issueKind === IssueKind.WORK_ORDER);
+  const [displayNums, woNums] = await Promise.all([
+    issueDisplayNumbersForProject(projectId),
+    needsWo ? workOrderNumbersForProject(projectId) : Promise.resolve(new Map<string, number>()),
+  ]);
   const hydrated = await hydrateIssueBimAnchors(rows);
   return hydrated.map((row) =>
     issueRowJson(row, {
       maskPortalReporter,
       displayNumber: displayNums.get(row.id) ?? null,
+      workOrderNumber: row.issueKind === IssueKind.WORK_ORDER ? (woNums.get(row.id) ?? null) : null,
     }),
   );
 }
@@ -366,7 +387,11 @@ async function loadIssueCommentAccess(
 // fallow-ignore-next-line complexity
 function issueRowJson(
   row: IssueRow,
-  opts?: { maskPortalReporter?: boolean; displayNumber?: number | null },
+  opts?: {
+    maskPortalReporter?: boolean;
+    displayNumber?: number | null;
+    workOrderNumber?: number | null;
+  },
 ) {
   const mask =
     Boolean(opts?.maskPortalReporter) &&
@@ -381,6 +406,7 @@ function issueRowJson(
     title: row.title,
     description: row.description,
     status: row.status,
+    statusChangedAt: row.statusChangedAt ? row.statusChangedAt.toISOString() : null,
     priority: row.priority,
     startDate: row.startDate ? row.startDate.toISOString() : null,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
@@ -455,9 +481,12 @@ function issueRowJson(
         }
       : null,
     sourceOccupantIssueId: row.sourceOccupantIssueId,
+    sourceInspectionRunId: row.sourceInspectionRunId,
     completionEvidenceRequired: row.completionEvidenceRequired,
     hasVendorAccessLink: Boolean(row.vendorAccessToken),
     displayNumber: opts?.displayNumber ?? null,
+    workOrderNumber:
+      row.issueKind === IssueKind.WORK_ORDER ? (opts?.workOrderNumber ?? null) : null,
     commentCount: row._count?.comments ?? 0,
   };
 }
@@ -671,7 +700,11 @@ export function registerIssuesRoutes(
     const clashIssueIds = new Set(
       clashLinks.map((c) => c.issueId).filter((id): id is string => Boolean(id)),
     );
-    const displayNums = await issueDisplayNumbersForProject(projectId);
+    const needsWo = rows.some((r) => r.issueKind === IssueKind.WORK_ORDER);
+    const [displayNums, woNums] = await Promise.all([
+      issueDisplayNumbersForProject(projectId),
+      needsWo ? workOrderNumbersForProject(projectId) : Promise.resolve(new Map<string, number>()),
+    ]);
     const ranked = [...rows].sort((a, b) => catalogRank(b, nowMs) - catalogRank(a, nowMs));
     const catalogRows = ranked.slice(0, ISSUES_CHAT_CATALOG_LIMIT);
     const byId = new Map(rows.map((r) => [r.id, r]));
@@ -737,6 +770,8 @@ export function registerIssuesRoutes(
         issueRowJson(row, {
           maskPortalReporter: mask,
           displayNumber: displayNums.get(row.id) ?? null,
+          workOrderNumber:
+            row.issueKind === IssueKind.WORK_ORDER ? (woNums.get(row.id) ?? null) : null,
         }),
       );
       return c.json({ reply, issues: issuesJson });
@@ -1239,6 +1274,7 @@ export function registerIssuesRoutes(
       body.data.attachedMarkupAnnotationIds ?? [],
     ).filter((id) => !primaryAnnId || id !== primaryAnnId);
 
+    // fallow-ignore-next-line complexity
     const issue = await prisma.$transaction(async (tx) => {
       const iss = await tx.issue.create({
         data: {
@@ -1261,6 +1297,7 @@ export function registerIssuesRoutes(
           assigneeId: body.data.assigneeId,
           creatorId: c.get("user").id,
           status: body.data.status ?? IssueStatus.OPEN,
+          statusChangedAt: new Date(),
           priority: body.data.priority ?? IssuePriority.MEDIUM,
           ...(startDate !== undefined ? { startDate } : {}),
           ...(dueDate !== undefined ? { dueDate } : {}),
@@ -1430,6 +1467,7 @@ export function registerIssuesRoutes(
               title: issue.title,
               description: issue.description,
               status: issue.status,
+              statusChangedAt: issue.statusChangedAt ?? new Date(),
               priority: issue.priority,
               startDate: issue.startDate,
               dueDate: issue.dueDate,
@@ -1758,6 +1796,7 @@ export function registerIssuesRoutes(
     const nextStatus = body.data.status;
     const shouldStampResolved =
       nextStatus === IssueStatus.RESOLVED || nextStatus === IssueStatus.CLOSED;
+    const statusChanging = body.data.status !== undefined && body.data.status !== issue.status;
 
     const updated = await prisma.$transaction(async (tx) => {
       if (bytesRemovedFromPhotos > 0n) {
@@ -1772,6 +1811,7 @@ export function registerIssuesRoutes(
           sheetName: fileFresh?.name ?? issue.file?.name ?? issue.sheetName,
           sheetVersion: fvFresh?.version ?? issue.fileVersion?.version ?? issue.sheetVersion,
           ...(body.data.status !== undefined ? { status: body.data.status } : {}),
+          ...(statusChanging ? { statusChangedAt: new Date() } : {}),
           ...(body.data.title !== undefined ? { title: body.data.title } : {}),
           ...(body.data.description !== undefined ? { description: body.data.description } : {}),
           ...(nextAssigneeId !== undefined ? { assigneeId: nextAssigneeId } : {}),

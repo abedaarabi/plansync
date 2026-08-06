@@ -45,10 +45,12 @@ This page helps integration teams separate supported public routes from internal
 These are intended for trusted infrastructure (scheduled jobs/ops) only:
 
 - `GET /api/v1/internal/collab-metrics`
-- `POST /api/v1/internal/om-maintenance-reminders`
+- `POST /api/v1/internal/om-maintenance-reminders` — daily PPM email + push digests (assignees + workspace managers; meter-threshold schedules labeled Meter/calendar). Authenticate with header `x-plansync-cron-secret: INTERNAL_CRON_SECRET`.
+- `POST /api/v1/internal/om-inspection-reminders` — daily inspection template digests (managers) for templates overdue or due within 7 days (UTC). Same cron secret header.
+- `POST /api/v1/internal/om-work-order-aging-reminders` — daily manager digests for open/in-progress work orders older than 7 and 30 days. Same cron secret header.
 - `POST /api/v1/internal/proposal-reminders`
 
-Use secret-based protection and private network controls for these routes.
+Use secret-based protection and private network controls for these routes. Schedule the OM reminder jobs once per day in your deploy environment.
 
 ## Stripe webhook route
 

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Package, Search, Wrench } from "lucide-react";
+import { Package, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   IssueReferencePhotosField,
@@ -17,12 +17,14 @@ import {
   createIssue,
   fetchOmAssets,
   fetchOmVendors,
+  fetchOmWorkspaceWorkOrderTemplates,
   formatIssueLockHint,
   ProRequiredError,
   uploadIssueReferencePhotoFile,
   type IssueRow,
   type OmAssetRow,
   type WorkOrderChecklistItem,
+  type WorkspaceWorkOrderTemplateRow,
 } from "@/lib/api-client";
 import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
@@ -39,6 +41,8 @@ import {
   MOBILE_FIELD_TEXTAREA,
   MOBILE_FORM_SECTION,
 } from "@/lib/mobileFormStyles";
+import { filterOmAssetsBySearch } from "@/lib/filterOmAssetsBySearch";
+
 type WorkspaceMember = { userId: string; name: string | null; email: string | null };
 
 const WO_TYPES = [
@@ -108,6 +112,7 @@ export function WorkOrderCreateSlideOver({
   const [locationTouched, setLocationTouched] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<IssuePendingPhoto[]>([]);
+  const [templateId, setTemplateId] = useState("");
 
   const reset = useCallback(() => {
     setPendingPhotos((prev) => {
@@ -131,6 +136,7 @@ export function WorkOrderCreateSlideOver({
     setDueDate("");
     setLocation(prefill?.location ?? "");
     setLocationTouched(Boolean(prefill?.location));
+    setTemplateId("");
     setMsg(null);
   }, [initialAssetId, prefill]);
 
@@ -156,23 +162,43 @@ export function WorkOrderCreateSlideOver({
     enabled: open,
   });
 
+  const { data: companyTemplates = [] } = useQuery({
+    queryKey: qk.omWorkspaceWorkOrderTemplates(workspaceId ?? ""),
+    queryFn: () => fetchOmWorkspaceWorkOrderTemplates(workspaceId!),
+    enabled: open && Boolean(workspaceId),
+  });
+
   const { data: assets = [], isPending: assetsPending } = useQuery({
     queryKey: qk.omAssets(projectId, assetSearch),
     queryFn: () => fetchOmAssets(projectId, { q: assetSearch }),
     enabled: open,
   });
 
-  const filteredAssets = useMemo(() => {
-    const q = assetSearch.trim().toLowerCase();
-    if (!q) return assets;
-    return assets.filter((a) => {
-      const hay = [a.tag, a.name, a.category, a.locationLabel, a.manufacturer, a.model]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
+  function applyCompanyTemplate(tpl: WorkspaceWorkOrderTemplateRow) {
+    setTemplateId(tpl.id);
+    setWorkOrderType(tpl.workOrderType || "CORRECTIVE");
+    if (tpl.priority) setPriority(tpl.priority);
+    const steps = Array.isArray(tpl.procedureJson)
+      ? tpl.procedureJson.map((item) => ({
+          id: item.id,
+          label: item.label,
+          type: item.type ?? ("checkbox" as const),
+          required: item.required,
+        }))
+      : [];
+    setProcedure(steps);
+    setTitle((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return tpl.name;
+      if (trimmed.startsWith(`${tpl.name}:`) || trimmed.startsWith(`${tpl.name} —`)) return prev;
+      return `${tpl.name}: ${trimmed}`;
     });
-  }, [assets, assetSearch]);
+  }
+
+  const filteredAssets = useMemo(
+    () => filterOmAssetsBySearch(assets, assetSearch),
+    [assets, assetSearch],
+  );
 
   const selectedAsset = assets.find((a) => a.id === assetId) ?? null;
 
@@ -248,30 +274,29 @@ export function WorkOrderCreateSlideOver({
         },
       }}
       ariaLabelledBy="wo-create-title"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
+      panelVariant="floating"
+      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),520px)]"
+      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+      closeOnBackdrop={false}
+      closeOnEscape={false}
       bodyClassName="px-5 py-5"
+      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       header={
-        <div className="flex items-start gap-3 pr-1">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
-            <Wrench className="h-5 w-5 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0">
-            <p className="enterprise-type-label text-[var(--enterprise-primary)]">O&amp;M</p>
-            <h2
-              id="wo-create-title"
-              className="text-lg font-bold tracking-tight text-[var(--enterprise-text)]"
-            >
-              New work order
-            </h2>
-            <p className="mt-0.5 text-[13px] leading-snug text-[var(--enterprise-text-muted)]">
-              Maintenance or repair tied to project equipment. Asset and title required.
-            </p>
-          </div>
+        <div className="min-w-0">
+          <h2
+            id="wo-create-title"
+            className="truncate text-lg font-semibold tracking-tight text-[var(--enterprise-text)]"
+          >
+            New work order
+          </h2>
+          <p className="mt-0.5 text-xs leading-snug text-[var(--enterprise-text-muted)]">
+            Maintenance or repair tied to equipment. Asset and title required.
+          </p>
         </div>
       }
       footer={
-        <>
-          <EnterpriseButton type="button" variant="ghost" onClick={handleClose}>
+        <div className="flex w-full justify-end gap-2">
+          <EnterpriseButton type="button" variant="secondary" onClick={handleClose}>
             Cancel
           </EnterpriseButton>
           <EnterpriseButton
@@ -281,7 +306,7 @@ export function WorkOrderCreateSlideOver({
           >
             {createMut.isPending ? "Creating…" : "Create work order"}
           </EnterpriseButton>
-        </>
+        </div>
       }
     >
       <div className="space-y-4">
@@ -404,6 +429,37 @@ export function WorkOrderCreateSlideOver({
 
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Work scope</p>
+          {workspaceId && companyTemplates.length > 0 ? (
+            <div>
+              <label htmlFor="wo-company-template" className={MOBILE_FIELD_LABEL}>
+                From company template
+              </label>
+              <select
+                id="wo-company-template"
+                value={templateId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (!id) {
+                    setTemplateId("");
+                    return;
+                  }
+                  const tpl = companyTemplates.find((t) => t.id === id);
+                  if (tpl) applyCompanyTemplate(tpl);
+                }}
+                className={MOBILE_FIELD_SELECT}
+              >
+                <option value="">None — start blank</option>
+                {companyTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.workOrderType
+                      ? ` (${t.workOrderType.replaceAll("_", " ").toLowerCase()})`
+                      : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div>
             <label htmlFor="wo-type" className={MOBILE_FIELD_LABEL}>
               Work order type

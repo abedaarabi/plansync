@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Package, Pencil, Search, Wrench } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Package, Search, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { IssueReferencePhotosField } from "@/components/enterprise/IssueReferencePhotosField";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { formatOmAssetLocation } from "@/components/enterprise/WorkOrderCreateSlideOver";
+import { WorkOrderActivityTimeline } from "@/components/enterprise/WorkOrderActivityTimeline";
 import { WorkOrderAssetDocsPanel } from "@/components/enterprise/WorkOrderAssetDocsPanel";
 import { WorkOrderProcedureField } from "@/components/enterprise/WorkOrderProcedureField";
 import {
@@ -16,6 +17,7 @@ import {
   fetchOmVendors,
   formatIssueLockHint,
   patchIssue,
+  postOmWorkspaceWorkOrderTemplate,
   ProRequiredError,
   type IssueReferencePhotoRow,
   type IssueRow,
@@ -35,6 +37,7 @@ import {
   MOBILE_FIELD_TEXTAREA,
   MOBILE_FORM_SECTION,
 } from "@/lib/mobileFormStyles";
+import { filterOmAssetsBySearch } from "@/lib/filterOmAssetsBySearch";
 import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
 
@@ -59,6 +62,7 @@ export function WorkOrderEditSlideOver({
   members,
   onSaved,
 }: Props) {
+  const qc = useQueryClient();
   const [assetId, setAssetId] = useState("");
   const [assetSearch, setAssetSearch] = useState("");
   const [title, setTitle] = useState("");
@@ -114,17 +118,10 @@ export function WorkOrderEditSlideOver({
     enabled: open,
   });
 
-  const filteredAssets = useMemo(() => {
-    const q = assetSearch.trim().toLowerCase();
-    if (!q) return assets;
-    return assets.filter((a) => {
-      const hay = [a.tag, a.name, a.category, a.locationLabel, a.manufacturer, a.model]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
-  }, [assets, assetSearch]);
+  const filteredAssets = useMemo(
+    () => filterOmAssetsBySearch(assets, assetSearch),
+    [assets, assetSearch],
+  );
 
   const selectedAsset = assets.find((a) => a.id === assetId) ?? null;
 
@@ -169,6 +166,30 @@ export function WorkOrderEditSlideOver({
     },
   });
 
+  const publishProcMut = useMutation({
+    mutationFn: () => {
+      if (!workspaceId) throw new Error("No workspace selected.");
+      return postOmWorkspaceWorkOrderTemplate(workspaceId, {
+        name: title.trim() || "Work order procedure",
+        description: description.trim() || null,
+        workOrderType: (workOrderType as "CORRECTIVE") || "CORRECTIVE",
+        priority,
+        procedureJson: procedure,
+      });
+    },
+    onSuccess: async () => {
+      if (workspaceId) {
+        await qc.invalidateQueries({
+          queryKey: qk.omWorkspaceWorkOrderTemplates(workspaceId),
+        });
+      }
+      toast.success("Saved to company procedures.");
+    },
+    onError: (e: Error) => {
+      toast.error(e instanceof ProRequiredError ? "Pro subscription required." : e.message);
+    },
+  });
+
   if (!issue) return null;
 
   const assetsHref = projectScopedHref(projectId, "/om/assets", workspaceId);
@@ -185,40 +206,52 @@ export function WorkOrderEditSlideOver({
         },
       }}
       ariaLabelledBy="wo-edit-title"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
+      panelVariant="floating"
+      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),520px)]"
+      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+      closeOnBackdrop={false}
+      closeOnEscape={false}
       bodyClassName="px-5 py-5"
+      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       header={
-        <div className="flex items-start gap-3 pr-1">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
-            <Pencil className="h-5 w-5 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0">
-            <p className="enterprise-type-label text-[var(--enterprise-primary)]">O&amp;M</p>
-            <h2
-              id="wo-edit-title"
-              className="text-lg font-bold tracking-tight text-[var(--enterprise-text)]"
-            >
-              Edit work order
-            </h2>
-            <p className="mt-0.5 text-[13px] leading-snug text-[var(--enterprise-text-muted)]">
-              Update equipment, scope, and execution details.
-            </p>
-          </div>
+        <div className="min-w-0">
+          <h2
+            id="wo-edit-title"
+            className="truncate text-lg font-semibold tracking-tight text-[var(--enterprise-text)]"
+          >
+            Edit work order
+          </h2>
+          <p className="mt-0.5 text-xs leading-snug text-[var(--enterprise-text-muted)]">
+            Update equipment, scope, and execution details.
+          </p>
         </div>
       }
       footer={
-        <>
-          <EnterpriseButton type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </EnterpriseButton>
-          <EnterpriseButton
-            type="submit"
-            loading={saveMut.isPending}
-            disabled={!title.trim() || !assetId}
-          >
-            {saveMut.isPending ? "Saving…" : "Save changes"}
-          </EnterpriseButton>
-        </>
+        <div className="flex w-full flex-col gap-2">
+          {workspaceId && procedure.length > 0 ? (
+            <EnterpriseButton
+              type="button"
+              variant="secondary"
+              fullWidth
+              loading={publishProcMut.isPending}
+              onClick={() => publishProcMut.mutate()}
+            >
+              Save as company procedure
+            </EnterpriseButton>
+          ) : null}
+          <div className="flex w-full justify-end gap-2">
+            <EnterpriseButton type="button" variant="secondary" onClick={onClose}>
+              Cancel
+            </EnterpriseButton>
+            <EnterpriseButton
+              type="submit"
+              loading={saveMut.isPending}
+              disabled={!title.trim() || !assetId}
+            >
+              {saveMut.isPending ? "Saving…" : "Save changes"}
+            </EnterpriseButton>
+          </div>
+        </div>
       }
     >
       <div className="space-y-4">
@@ -546,6 +579,8 @@ export function WorkOrderEditSlideOver({
             />
           </div>
         </div>
+
+        <WorkOrderActivityTimeline issue={issue} enabled={open} />
       </div>
     </EnterpriseSlideOver>
   );

@@ -25,7 +25,12 @@ export type WorkOrderPartUsed = {
   inventoryItemId?: string;
 };
 
-type WorkOrderTypeApi = "CORRECTIVE" | "PREVENTIVE" | "INSPECTION_FOLLOWUP" | "TENANT" | "OCCUPANT";
+export type WorkOrderTypeApi =
+  | "CORRECTIVE"
+  | "PREVENTIVE"
+  | "INSPECTION_FOLLOWUP"
+  | "TENANT"
+  | "OCCUPANT";
 
 export type OmVendorRow = {
   id: string;
@@ -271,6 +276,72 @@ export async function postWorkOrderFromOccupant(
   return j as { id: string; title: string; sourceOccupantIssueId: string };
 }
 
+export type WorkspaceWorkOrderTemplateRow = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  workOrderType: WorkOrderTypeApi;
+  priority: string | null;
+  procedureJson: WorkOrderChecklistItem[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function fetchOmWorkspaceWorkOrderTemplates(
+  workspaceId: string,
+): Promise<WorkspaceWorkOrderTemplateRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/om/work-order-templates`),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load company work-order templates.");
+  return res.json() as Promise<WorkspaceWorkOrderTemplateRow[]>;
+}
+
+export async function postOmWorkspaceWorkOrderTemplate(
+  workspaceId: string,
+  body: {
+    name: string;
+    description?: string | null;
+    workOrderType?: WorkOrderTypeApi;
+    priority?: string | null;
+    procedureJson: WorkOrderChecklistItem[];
+  },
+): Promise<WorkspaceWorkOrderTemplateRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/om/work-order-templates`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = await readJsonOrEmpty(res);
+  if (!res.ok) throw new Error(readJsonErrorBody(j, res, "Could not create company template."));
+  return j as WorkspaceWorkOrderTemplateRow;
+}
+
+export async function deleteOmWorkspaceWorkOrderTemplate(
+  workspaceId: string,
+  templateId: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/om/work-order-templates/${encodeURIComponent(templateId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = await readJsonOrEmpty(res);
+    throw new Error(readJsonErrorBody(j, res, "Could not delete company template."));
+  }
+}
+
 export async function postWorkOrderComplete(
   projectId: string,
   issueId: string,
@@ -280,7 +351,12 @@ export async function postWorkOrderComplete(
     partsUsedJson?: WorkOrderPartUsed[];
     completionNotes?: string;
   },
-): Promise<{ id: string; status: string; resolvedAt: string | null }> {
+): Promise<{
+  id: string;
+  status: string;
+  resolvedAt: string | null;
+  reInspectRunId: string | null;
+}> {
   const res = await fetch(
     apiUrl(
       `/api/v1/projects/${encodeURIComponent(projectId)}/om/work-orders/${encodeURIComponent(issueId)}/complete`,
@@ -295,7 +371,18 @@ export async function postWorkOrderComplete(
   if (res.status === 402) throw new ProRequiredError();
   const j = await readJsonOrEmpty(res);
   if (!res.ok) throw new Error(readJsonErrorBody(j, res, "Could not complete work order."));
-  return j as { id: string; status: string; resolvedAt: string | null };
+  const row = j as {
+    id: string;
+    status: string;
+    resolvedAt: string | null;
+    reInspectRunId?: string | null;
+  };
+  return {
+    id: row.id,
+    status: row.status,
+    resolvedAt: row.resolvedAt,
+    reInspectRunId: row.reInspectRunId ?? null,
+  };
 }
 
 export async function postWorkOrderVendorLink(

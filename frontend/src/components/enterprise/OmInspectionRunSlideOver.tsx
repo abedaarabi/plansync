@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, ChevronRight, Upload, X } from "lucide-react";
+import { Camera, CheckSquare, ChevronRight, Square, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -17,8 +18,17 @@ import {
   type OmInspectionTemplateRow,
   ProRequiredError,
 } from "@/lib/api-client";
+import { failEvidenceErrors } from "@/lib/omInspectionFailEvidence";
+import {
+  clearOmInspectionOfflineDraft,
+  loadOmInspectionOfflineDraft,
+  saveOmInspectionOfflineDraft,
+} from "@/lib/omInspectionOfflineDraft";
+import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
+import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { OmInspectionSignaturePad } from "@/components/enterprise/OmInspectionSignaturePad";
 
 /* ── Types ─────────────────────────────────────────── */
 
@@ -32,6 +42,13 @@ type ItemResult = {
 };
 
 /* ── Helpers ────────────────────────────────────────── */
+
+function isLikelyNetworkError(e: unknown): boolean {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return true;
+  if (e instanceof TypeError) return true;
+  const msg = e instanceof Error ? e.message : String(e);
+  return /failed to fetch|networkerror|load failed|network request failed/i.test(msg);
+}
 
 function buildInspectionResultPayload(
   checklist: OmInspectionChecklistItem[],
@@ -128,8 +145,11 @@ type Props = {
   onClose: () => void;
 };
 
+// fallow-ignore-next-line complexity
 export function OmInspectionRunSlideOver({ projectId, run, template, open, onClose }: Props) {
   const qc = useQueryClient();
+  const { primary } = useEnterpriseWorkspace();
+  const workspaceId = primary?.workspace.id;
   const checklist = useMemo(
     () => parseChecklist(template?.checklistJson),
     [template?.checklistJson],
@@ -137,7 +157,10 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
   const [results, setResults] = useState<Record<string, ItemResult>>(() =>
     resultsFromRunJson(checklist, run.resultJson),
   );
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const [showEvidenceErrors, setShowEvidenceErrors] = useState(false);
   const uploadInputs = useRef<Record<string, HTMLInputElement | null>>({});
+  const skipNextOfflineSave = useRef(false);
 
   const { data: project } = useQuery({
     queryKey: qk.project(projectId),
@@ -147,14 +170,40 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
 
   useEffect(() => {
     if (!open) return;
-    setResults(resultsFromRunJson(checklist, run.resultJson));
-  }, [open, run.id, run.updatedAt, checklist]);
+    skipNextOfflineSave.current = true;
+    setShowEvidenceErrors(false);
+    setSignatureDataUrl(
+      run.signatureDataUrl?.startsWith("data:image") ? run.signatureDataUrl : null,
+    );
+    const serverMap = resultsFromRunJson(checklist, run.resultJson);
+    const draft = loadOmInspectionOfflineDraft(projectId, run.id);
+    if (draft && new Date(draft.savedAt).getTime() > new Date(run.updatedAt).getTime()) {
+      setResults(resultsFromRunJson(checklist, draft.resultJson));
+    } else {
+      setResults(serverMap);
+    }
+  }, [open, run.id, run.updatedAt, run.resultJson, run.signatureDataUrl, checklist, projectId]);
 
   const isDraft = run.status === "DRAFT";
+  const requireFailEvidence = template?.requireFailEvidence !== false;
 
   const setField = useCallback((itemId: string, patch: Partial<ItemResult>) => {
     setResults((prev) => ({ ...prev, [itemId]: { ...prev[itemId]!, ...patch } }));
   }, []);
+
+  const buildPayloadRows = useCallback(
+    () => buildInspectionResultPayload(checklist, results),
+    [checklist, results],
+  );
+
+  useEffect(() => {
+    if (!open || !isDraft) return;
+    if (skipNextOfflineSave.current) {
+      skipNextOfflineSave.current = false;
+      return;
+    }
+    saveOmInspectionOfflineDraft(projectId, run.id, buildPayloadRows());
+  }, [results, open, isDraft, projectId, run.id, buildPayloadRows]);
 
   const [cameraItemId, setCameraItemId] = useState<string | null>(null);
   const [cameraFacing, setCameraFacing] = useState<"environment" | "user">("environment");
@@ -266,11 +315,6 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
     if (!open) setCameraItemId(null);
   }, [open]);
 
-  const buildPayloadRows = useCallback(
-    () => buildInspectionResultPayload(checklist, results),
-    [checklist, results],
-  );
-
   const answeredCount = useMemo(
     () =>
       checklist.filter((it) => (it.type === "text" ? true : results[it.id]?.outcome != null))
@@ -283,27 +327,54 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
     [checklist, results],
   );
 
+  const evidenceErrorByItem = useMemo(
+    () => failEvidenceErrors(requireFailEvidence, checklist, results),
+    [requireFailEvidence, checklist, results],
+  );
+  const hasEvidenceErrors = Object.keys(evidenceErrorByItem).length > 0;
+
+  const woBase = projectScopedHref(projectId, "/om/work-orders", workspaceId);
+
   /* ── Mutations ── */
 
   const patchMut = useMutation({
     mutationFn: (resultJson: ReturnType<typeof buildPayloadRows>) =>
       patchOmInspectionRun(projectId, run.id, { resultJson }),
     onSuccess: async () => {
+      clearOmInspectionOfflineDraft(projectId, run.id);
       await qc.invalidateQueries({ queryKey: qk.omInspectionRuns(projectId) });
       toast.success("Draft saved.");
     },
     onError: (e: Error) => {
+      if (isLikelyNetworkError(e)) {
+        saveOmInspectionOfflineDraft(projectId, run.id, buildPayloadRows());
+        toast.message("Saved offline — will sync when online");
+        return;
+      }
       toast.error(e instanceof ProRequiredError ? "Pro subscription required." : e.message);
     },
   });
+
+  useEffect(() => {
+    if (!open || !isDraft) return;
+    const onOnline = () => {
+      const draft = loadOmInspectionOfflineDraft(projectId, run.id);
+      if (!draft || patchMut.isPending) return;
+      patchMut.mutate(draft.resultJson as ReturnType<typeof buildPayloadRows>);
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [open, isDraft, projectId, run.id, patchMut]);
 
   const completeMut = useMutation({
     mutationFn: () =>
       postOmInspectionRunComplete(projectId, run.id, {
         resultJson: buildPayloadRows(),
         createWorkOrdersForFailures: true,
+        signatureDataUrl: signatureDataUrl || null,
       }),
     onSuccess: async (data) => {
+      clearOmInspectionOfflineDraft(projectId, run.id);
       await qc.invalidateQueries({ queryKey: qk.omInspectionRuns(projectId) });
       await qc.invalidateQueries({ queryKey: qk.issuesForProject(projectId), exact: false });
       const n = data.workOrderIds.length;
@@ -311,10 +382,21 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
       if (data.buildingOwnerNotify.sent) emailHint = " Report emailed to the building owner.";
       else if (data.buildingOwnerNotify.skippedReason === "no_recipient")
         emailHint = " Set a building owner email under Handover to auto-email PDF reports.";
+      const firstWo = data.workOrderIds[0];
       toast.success(
         n > 0
           ? `Inspection completed. ${n} work order(s) created.${emailHint}`
           : `Inspection completed.${emailHint}`,
+        firstWo
+          ? {
+              action: {
+                label: "Open work order",
+                onClick: () => {
+                  window.location.href = `${woBase}?wo=${encodeURIComponent(firstWo)}`;
+                },
+              },
+            }
+          : undefined,
       );
       window.open(omInspectionRunReportPdfUrl(projectId, run.id), "_blank", "noopener,noreferrer");
       onClose();
@@ -327,6 +409,7 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
   const deleteRunMut = useMutation({
     mutationFn: () => deleteOmInspectionRun(projectId, run.id),
     onSuccess: async () => {
+      clearOmInspectionOfflineDraft(projectId, run.id);
       await qc.invalidateQueries({ queryKey: qk.omInspectionRuns(projectId) });
       toast.success("Inspection deleted.");
       onClose();
@@ -351,9 +434,13 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
       if (payload) {
         try {
           await patchOmInspectionRun(projectId, run.id, { resultJson: payload });
+          clearOmInspectionOfflineDraft(projectId, run.id);
           await qc.invalidateQueries({ queryKey: qk.omInspectionRuns(projectId) });
-        } catch {
-          /* saved locally */
+        } catch (e) {
+          if (isLikelyNetworkError(e) && payload) {
+            saveOmInspectionOfflineDraft(projectId, run.id, payload);
+            toast.message("Saved offline — will sync when online");
+          }
         }
       }
       await qc.invalidateQueries({ queryKey: qk.issuesForProject(projectId), exact: false });
@@ -377,6 +464,15 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
     },
     [setField],
   );
+
+  const tryComplete = () => {
+    if (hasEvidenceErrors) {
+      setShowEvidenceErrors(true);
+      toast.error("Add a photo and note for each Fail item before completing.");
+      return;
+    }
+    completeMut.mutate();
+  };
 
   /* ── Derived ── */
 
@@ -462,7 +558,11 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
       <EnterpriseSlideOver
         open={open}
         onClose={onClose}
-        panelMaxWidthClass="max-w-[580px]"
+        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),460px)]"
+        panelVariant="floating"
+        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
+        closeOnBackdrop={false}
+        closeOnEscape={false}
         ariaLabelledBy="run-slide-title"
         header={
           <div className="min-w-0 pr-2">
@@ -474,6 +574,7 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
             </h2>
             <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
               {buildingName} · {dateLabel}
+              {isDraft ? " · Open" : " · Closed"}
             </p>
           </div>
         }
@@ -510,7 +611,7 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                 <button
                   type="button"
                   disabled={completeMut.isPending || !allAnswered}
-                  onClick={() => completeMut.mutate()}
+                  onClick={tryComplete}
                   className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   Complete Inspection
@@ -554,7 +655,6 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
             </p>
           ) : (
             <>
-              {/* ── Progress bar ── */}
               <div>
                 <div className="mb-1.5 flex items-center justify-between text-xs text-[var(--enterprise-text-muted)]">
                   <span>Progress</span>
@@ -570,195 +670,252 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                 </div>
               </div>
 
-              {/* ── Levels ── */}
               {grouped.map(([levelKey, items]) => (
-                <section key={levelKey}>
-                  <h3 className="border-b border-[var(--enterprise-border)] pb-1 text-xs font-bold uppercase tracking-widest text-[var(--enterprise-text-muted)]">
+                <section key={levelKey} className="space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
                     {Number.isFinite(Number(levelKey)) &&
                     String(Number(levelKey)) === levelKey.trim()
-                      ? `LEVEL ${levelKey}`
-                      : levelKey.toUpperCase()}
+                      ? `Section ${levelKey}`
+                      : levelKey}
                   </h3>
 
-                  <ul className="mt-4 space-y-5">
-                    {items.map((it) => {
-                      const r = results[it.id] ?? { outcome: null, note: "" };
-                      const answered = it.type === "text" ? true : r.outcome != null;
-                      return (
-                        <li
-                          key={it.id}
-                          className="space-y-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 shadow-[var(--enterprise-shadow-xs)]"
-                        >
-                          {/* Row: checkbox + label */}
-                          <div className="flex items-start gap-2">
-                            <span className="mt-0.5 text-base leading-none" aria-hidden>
-                              {answered ? "☑" : "⬜"}
-                            </span>
-                            <span className="text-sm font-medium text-[var(--enterprise-text)]">
-                              {it.label}
-                            </span>
-                          </div>
-
-                          {/* Pass / Fail / N/A */}
-                          {it.type !== "text" && (
-                            <div className="ml-7 flex flex-wrap gap-2 text-sm">
-                              {(["pass", "fail", "na"] as const).map((o) => (
-                                <label
-                                  key={o}
-                                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1.5 transition ${
-                                    r.outcome === o
-                                      ? "border-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]"
-                                      : "border-[var(--enterprise-border)] text-[var(--enterprise-text-muted)]"
-                                  }`}
-                                >
-                                  <span className="text-sm">{r.outcome === o ? "●" : "○"}</span>
-                                  <input
-                                    type="radio"
-                                    name={`outcome-${run.id}-${it.id}`}
-                                    checked={r.outcome === o}
-                                    disabled={!isDraft}
-                                    onChange={() => setField(it.id, { outcome: o })}
-                                    className="sr-only"
-                                  />
-                                  <span className="capitalize">
-                                    {o === "na" ? "N/A" : o === "pass" ? "Pass" : "Fail"}
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Note */}
-                          <div className="ml-7">
-                            {it.type === "text" ? (
-                              <textarea
-                                value={r.note}
-                                onChange={(e) => setField(it.id, { note: e.target.value })}
-                                disabled={!isDraft}
-                                rows={3}
-                                placeholder="Notes…"
-                                className="w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2.5 py-1.5 text-sm disabled:opacity-60"
-                              />
-                            ) : r.note || isDraft ? (
-                              <input
-                                type="text"
-                                value={r.note}
-                                onChange={(e) => setField(it.id, { note: e.target.value })}
-                                disabled={!isDraft}
-                                placeholder="Note (optional)"
-                                className="w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2.5 py-1.5 text-sm text-[var(--enterprise-text-muted)] disabled:opacity-60"
-                              />
-                            ) : null}
-                          </div>
-
-                          {/* Photo */}
-                          {it.type !== "text" && (
-                            <div className="ml-7 flex flex-wrap items-center gap-2">
-                              <input
-                                ref={(el) => {
-                                  uploadInputs.current[it.id] = el;
-                                }}
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                disabled={!isDraft}
-                                onChange={(e) => onPickPhoto(it.id, e.target.files)}
-                              />
-                              <button
-                                type="button"
-                                disabled={!isDraft}
-                                onClick={() => setCameraItemId(it.id)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm disabled:opacity-50"
-                              >
-                                <Camera className="h-3.5 w-3.5" />
-                                Use camera
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!isDraft}
-                                onClick={() => uploadInputs.current[it.id]?.click()}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm disabled:opacity-50"
-                              >
-                                <Upload className="h-3.5 w-3.5" />
-                                Upload file
-                              </button>
-                              <span className="w-full text-[11px] text-[var(--enterprise-text-muted)] sm:w-auto">
-                                Opens live camera (phone, tablet, desktop). Requires HTTPS and
-                                permission.
+                  <ul className="space-y-3">
+                    {items.map(
+                      // fallow-ignore-next-line complexity
+                      (it) => {
+                        const r = results[it.id] ?? { outcome: null, note: "" };
+                        const answered = it.type === "text" ? true : r.outcome != null;
+                        const evidenceErr =
+                          showEvidenceErrors && evidenceErrorByItem[it.id]
+                            ? evidenceErrorByItem[it.id]
+                            : null;
+                        return (
+                          <li
+                            key={it.id}
+                            className={`space-y-3 rounded-xl border bg-[var(--enterprise-bg)] p-3.5 ${
+                              evidenceErr
+                                ? "border-red-400/70"
+                                : "border-[var(--enterprise-border)]"
+                            }`}
+                          >
+                            <div className="flex items-start gap-2.5">
+                              {answered ? (
+                                <CheckSquare
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-[var(--enterprise-primary)]"
+                                  strokeWidth={2}
+                                  aria-hidden
+                                />
+                              ) : (
+                                <Square
+                                  className="mt-0.5 h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]"
+                                  strokeWidth={2}
+                                  aria-hidden
+                                />
+                              )}
+                              <span className="text-sm font-medium text-[var(--enterprise-text)]">
+                                {it.label}
                               </span>
-                              {r.photoDataUrl && (
-                                <>
-                                  <span className="max-w-[200px] truncate text-xs text-[var(--enterprise-text-muted)]">
-                                    {r.photoFileName ? r.photoFileName : "Photo attached"}
-                                  </span>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={r.photoDataUrl}
-                                    alt=""
-                                    className="h-12 w-12 rounded-md border border-[var(--enterprise-border)] object-cover"
-                                  />
-                                  {isDraft && (
+                            </div>
+
+                            {it.type !== "text" && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {(
+                                  [
+                                    {
+                                      o: "pass" as const,
+                                      label: "Pass",
+                                      active:
+                                        "border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
+                                    },
+                                    {
+                                      o: "fail" as const,
+                                      label: "Fail",
+                                      active:
+                                        "border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-300",
+                                    },
+                                    {
+                                      o: "na" as const,
+                                      label: "N/A",
+                                      active:
+                                        "border-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]",
+                                    },
+                                  ] as const
+                                ).map(({ o, label, active }) => (
+                                  <label
+                                    key={o}
+                                    className={`inline-flex min-h-9 cursor-pointer items-center rounded-lg border px-3 text-xs font-semibold transition ${
+                                      r.outcome === o
+                                        ? active
+                                        : "border-[var(--enterprise-border)] text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
+                                    }`}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={`outcome-${run.id}-${it.id}`}
+                                      checked={r.outcome === o}
+                                      disabled={!isDraft}
+                                      onChange={() => setField(it.id, { outcome: o })}
+                                      className="sr-only"
+                                    />
+                                    {label}
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+
+                            <div>
+                              {it.type === "text" ? (
+                                <textarea
+                                  value={r.note}
+                                  onChange={(e) => setField(it.id, { note: e.target.value })}
+                                  disabled={!isDraft}
+                                  rows={3}
+                                  placeholder="Notes…"
+                                  className="w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-sm disabled:opacity-60"
+                                />
+                              ) : r.note || isDraft || r.outcome === "fail" ? (
+                                <input
+                                  type="text"
+                                  value={r.note}
+                                  onChange={(e) => setField(it.id, { note: e.target.value })}
+                                  disabled={!isDraft}
+                                  placeholder={
+                                    r.outcome === "fail" && requireFailEvidence
+                                      ? "Note (required for Fail)"
+                                      : "Note (optional)"
+                                  }
+                                  className={`w-full rounded-lg border bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-sm disabled:opacity-60 ${
+                                    evidenceErr && !r.note.trim()
+                                      ? "border-red-400"
+                                      : "border-[var(--enterprise-border)]"
+                                  }`}
+                                />
+                              ) : null}
+                            </div>
+
+                            {it.type !== "text" && (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                  ref={(el) => {
+                                    uploadInputs.current[it.id] = el;
+                                  }}
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  disabled={!isDraft}
+                                  onChange={(e) => onPickPhoto(it.id, e.target.files)}
+                                />
+                                {isDraft ? (
+                                  <>
                                     <button
                                       type="button"
-                                      onClick={() =>
-                                        setField(it.id, {
-                                          photoDataUrl: undefined,
-                                          photoFileName: undefined,
-                                        })
-                                      }
-                                      className="text-xs text-red-600"
+                                      onClick={() => setCameraItemId(it.id)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-2 text-xs font-semibold text-[var(--enterprise-text)]"
                                     >
-                                      Remove
+                                      <Camera className="h-3.5 w-3.5" />
+                                      Camera
                                     </button>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          )}
+                                    <button
+                                      type="button"
+                                      onClick={() => uploadInputs.current[it.id]?.click()}
+                                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-2 text-xs font-semibold text-[var(--enterprise-text)]"
+                                    >
+                                      <Upload className="h-3.5 w-3.5" />
+                                      Upload
+                                    </button>
+                                  </>
+                                ) : null}
+                                {r.photoDataUrl ? (
+                                  <div className="flex items-center gap-2">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={r.photoDataUrl}
+                                      alt=""
+                                      className="h-14 w-14 rounded-lg border border-[var(--enterprise-border)] object-cover"
+                                    />
+                                    {isDraft ? (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setField(it.id, {
+                                            photoDataUrl: undefined,
+                                            photoFileName: undefined,
+                                          })
+                                        }
+                                        className="text-xs font-semibold text-red-600"
+                                      >
+                                        Remove
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                            )}
 
-                          {/* Create Work Order → (failed items) */}
-                          {isDraft && r.outcome === "fail" && (
-                            <div className="ml-7">
-                              {r.followUpIssueId ? (
-                                <span className="text-xs text-[var(--enterprise-text-muted)]">
-                                  Work order linked ({r.followUpIssueId.slice(0, 8)}…)
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={woMut.isPending}
-                                  onClick={() =>
-                                    woMut.mutate({
-                                      itemId: it.id,
-                                      title: `Work order: ${it.label}`,
-                                    })
-                                  }
-                                  className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--enterprise-primary)]"
-                                >
-                                  Create Work Order
-                                  <ChevronRight className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
+                            {evidenceErr ? (
+                              <p className="text-xs font-medium text-red-600" role="alert">
+                                {evidenceErr}
+                              </p>
+                            ) : null}
+
+                            {r.outcome === "fail" || r.followUpIssueId ? (
+                              <div>
+                                {r.followUpIssueId ? (
+                                  <Link
+                                    href={`${woBase}?wo=${encodeURIComponent(r.followUpIssueId)}`}
+                                    className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--enterprise-primary)] hover:underline"
+                                  >
+                                    Open work order
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                  </Link>
+                                ) : isDraft ? (
+                                  <button
+                                    type="button"
+                                    disabled={woMut.isPending}
+                                    onClick={() =>
+                                      woMut.mutate({
+                                        itemId: it.id,
+                                        title: `Work order: ${it.label}`,
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--enterprise-primary)]"
+                                  >
+                                    Create work order
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </li>
+                        );
+                      },
+                    )}
                   </ul>
                 </section>
               ))}
 
-              {/* On-complete note */}
-              {isDraft && (
-                <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
-                  <p className="font-semibold text-[var(--enterprise-text)]">On complete:</p>
-                  <ul className="mt-1 list-inside list-disc space-y-0.5">
-                    <li>PDF report generated</li>
-                    <li>Failed items → work orders created</li>
-                    <li>Report sent to building owner</li>
-                  </ul>
+              {isDraft ? (
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
+                      Signature
+                    </h3>
+                    <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
+                      Optional sign-off before completing.
+                    </p>
+                    <OmInspectionSignaturePad className="mt-2" onChange={setSignatureDataUrl} />
+                  </div>
+                  <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
+                    <p className="font-semibold text-[var(--enterprise-text)]">On complete:</p>
+                    <ul className="mt-1 list-inside list-disc space-y-0.5">
+                      <li>PDF report generated</li>
+                      <li>Failed items → work orders created</li>
+                      <li>Report sent to building owner</li>
+                      {requireFailEvidence ? <li>Fail items need a photo and note</li> : null}
+                    </ul>
+                  </div>
                 </div>
-              )}
+              ) : null}
             </>
           )}
         </div>

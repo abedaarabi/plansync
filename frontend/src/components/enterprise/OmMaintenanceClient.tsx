@@ -8,14 +8,12 @@ import {
   ClipboardList,
   Pencil,
   Plus,
-  ScrollText,
+  Search,
 } from "lucide-react";
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   ASSET_METER_TYPE_LABEL,
-  fetchOmMaintenanceCompletions,
   fetchOmMaintenance,
   type OmMaintenanceRow,
   postOmMaintenanceCreateWorkOrder,
@@ -26,6 +24,8 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { OmAssigneeAvatar } from "@/components/enterprise/OmAssigneePicker";
+import { OmAssetImageThumb } from "@/components/enterprise/OmAssetImageThumb";
 import { OmMaintenanceScheduleSlideOver } from "@/components/enterprise/OmMaintenanceScheduleSlideOver";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
@@ -61,6 +61,19 @@ function assigneeLabel(r: OmMaintenanceRow): string {
   if (r.assignedTo?.email) return r.assignedTo.email;
   if (r.assignedVendorLabel?.trim()) return r.assignedVendorLabel.trim();
   return "—";
+}
+
+function AssigneeCell({ row }: { row: OmMaintenanceRow }) {
+  const label = assigneeLabel(row);
+  if (label === "—") {
+    return <span className="text-[var(--enterprise-text-muted)]">—</span>;
+  }
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      {row.assignedTo ? <OmAssigneeAvatar member={row.assignedTo} /> : null}
+      <span className="truncate text-[var(--enterprise-text-muted)]">{label}</span>
+    </div>
+  );
 }
 
 function meterTriggerLabel(r: OmMaintenanceRow): string | null {
@@ -99,19 +112,66 @@ function addDaysUtc(d: Date, n: number) {
   return x;
 }
 
+function matchesScheduleSearch(r: OmMaintenanceRow, q: string): boolean {
+  if (!q) return true;
+  const hay = [
+    r.title,
+    r.frequency,
+    r.asset.tag,
+    r.asset.name,
+    r.assignedVendorLabel,
+    r.assignedTo?.name,
+    r.assignedTo?.email,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
+}
+
+function AssetCell({ projectId, row }: { projectId: string; row: OmMaintenanceRow }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="hidden h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] sm:block">
+        <OmAssetImageThumb
+          projectId={projectId}
+          assetId={row.asset.id}
+          hasImage={row.asset.hasImage}
+          alt={row.asset.name}
+          fallbackClassName="flex h-10 w-10 items-center justify-center bg-[var(--enterprise-bg)]"
+        />
+      </span>
+      <div className="min-w-0">
+        <p className="font-mono text-xs font-semibold text-[var(--enterprise-primary)]">
+          {row.asset.tag}
+        </p>
+        <p className="truncate text-xs text-[var(--enterprise-text-muted)]">{row.asset.name}</p>
+      </div>
+    </div>
+  );
+}
+
 async function refreshMaintenanceViews(qc: ReturnType<typeof useQueryClient>, projectId: string) {
   await Promise.all([
     qc.invalidateQueries({ queryKey: qk.omMaintenance(projectId) }),
-    qc.invalidateQueries({ queryKey: qk.omMaintenanceCompletions(projectId) }),
     qc.invalidateQueries({ queryKey: qk.projectAuditRoot(projectId) }),
   ]);
 }
 
+// fallow-ignore-next-line complexity
 export function OmMaintenanceClient({ projectId }: Props) {
   const qc = useQueryClient();
   const [slideOpen, setSlideOpen] = useState(false);
   const [editing, setEditing] = useState<OmMaintenanceRow | null>(null);
   const [formSession, setFormSession] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(searchInput.trim().toLowerCase()), 250);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
+
   const {
     data: rows = [],
     isPending,
@@ -119,10 +179,6 @@ export function OmMaintenanceClient({ projectId }: Props) {
   } = useQuery({
     queryKey: qk.omMaintenance(projectId),
     queryFn: () => fetchOmMaintenance(projectId),
-  });
-  const { data: completions = [], isPending: completionsPending } = useQuery({
-    queryKey: qk.omMaintenanceCompletions(projectId),
-    queryFn: () => fetchOmMaintenanceCompletions(projectId, { limit: 20 }),
   });
 
   const openCreate = () => {
@@ -188,14 +244,20 @@ export function OmMaintenanceClient({ projectId }: Props) {
     },
   });
 
-  const { dueNowRows, upcomingRows } = useMemo(() => {
+  const filteredRows = useMemo(
+    () => rows.filter((r) => matchesScheduleSearch(r, debouncedQ)),
+    [rows, debouncedQ],
+  );
+
+  const { dueNowRows, upcomingRows, inactiveRows } = useMemo(() => {
     const start = startOfTodayUtc();
     const dueCutoff = endOfDayUtc(addDaysUtc(start, 7));
-    const active = rows.filter((r) => r.isActive && r.nextDueAt);
+    const active = filteredRows.filter((r) => r.isActive && r.nextDueAt);
     const dueNowRows = active.filter((r) => new Date(r.nextDueAt!) <= dueCutoff);
     const upcomingRows = active.filter((r) => new Date(r.nextDueAt!) > dueCutoff);
-    return { dueNowRows, upcomingRows };
-  }, [rows]);
+    const inactiveRows = filteredRows.filter((r) => !r.isActive);
+    return { dueNowRows, upcomingRows, inactiveRows };
+  }, [filteredRows]);
 
   if (isPending) {
     return <EnterpriseLoadingState message="Loading maintenance…" label="Loading" />;
@@ -209,12 +271,15 @@ export function OmMaintenanceClient({ projectId }: Props) {
     );
   }
 
+  const searchActive = Boolean(debouncedQ);
+  const noSearchMatches = searchActive && filteredRows.length === 0;
+
   return (
     <div className={OM_PAGE_CLASS}>
       <OmSubPageHeader
         icon={CalendarRange}
         title="Maintenance (PPM)"
-        description="Recurring schedules, due work orders, and completion history."
+        description="Recurring schedules, due work orders, and assignee reminders."
         action={
           <EnterpriseButton size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
@@ -222,6 +287,22 @@ export function OmMaintenanceClient({ projectId }: Props) {
           </EnterpriseButton>
         }
       />
+
+      {rows.length > 0 ? (
+        <div className="enterprise-card flex items-center gap-2 px-3 py-2 sm:px-4">
+          <Search className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]" aria-hidden />
+          <label className="sr-only" htmlFor="ppm-list-search">
+            Search schedules
+          </label>
+          <input
+            id="ppm-list-search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by asset, title, or assignee…"
+            className="min-h-10 w-full bg-transparent text-sm text-[var(--enterprise-text)] outline-none placeholder:text-[var(--enterprise-text-muted)]"
+          />
+        </div>
+      ) : null}
 
       {rows.length === 0 ? (
         <div className="enterprise-card flex flex-col items-center gap-3 px-4 py-8 text-center text-sm text-[var(--enterprise-text-muted)]">
@@ -235,13 +316,20 @@ export function OmMaintenanceClient({ projectId }: Props) {
         </div>
       ) : null}
 
-      {rows.length > 0 ? (
+      {noSearchMatches ? (
+        <div className="enterprise-card px-4 py-8 text-center text-sm text-[var(--enterprise-text-muted)]">
+          No schedules match your search.
+        </div>
+      ) : null}
+
+      {rows.length > 0 && !noSearchMatches ? (
         <section className="enterprise-card p-3 sm:p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
             <div>
               <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Due now</h2>
               <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
                 Overdue, due today, and due in the next 7 days.
+                {searchActive ? " · matching search" : ""}
               </p>
             </div>
             <button
@@ -273,7 +361,10 @@ export function OmMaintenanceClient({ projectId }: Props) {
                 <tbody>
                   {dueNowRows.map((r) => (
                     <tr key={r.id} className="border-b border-[var(--enterprise-border)]/80">
-                      <td className="px-3 py-2 font-mono text-xs font-semibold">{r.asset.tag}</td>
+                      // fallow-ignore-next-line code-duplication
+                      <td className="px-3 py-2">
+                        <AssetCell projectId={projectId} row={r} />
+                      </td>
                       <td className="px-3 py-2 text-[var(--enterprise-text)]">
                         <button
                           type="button"
@@ -283,7 +374,7 @@ export function OmMaintenanceClient({ projectId }: Props) {
                           {r.title || r.frequency}
                         </button>
                         {meterTriggerLabel(r) ? (
-                          <p className="mt-0.5 text-[11px] text-violet-700 dark:text-violet-300">
+                          <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
                             {meterTriggerLabel(r)}
                           </p>
                         ) : null}
@@ -292,8 +383,8 @@ export function OmMaintenanceClient({ projectId }: Props) {
                         {formatScheduleDate(r.nextDueAt)}
                       </td>
                       <td className="px-3 py-2">{healthBadge(r.health)}</td>
-                      <td className="px-3 py-2 text-[var(--enterprise-text-muted)]">
-                        {assigneeLabel(r)}
+                      <td className="px-3 py-2">
+                        <AssigneeCell row={r} />
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex justify-end gap-1.5">
@@ -340,6 +431,7 @@ export function OmMaintenanceClient({ projectId }: Props) {
           </h2>
           <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
             Active recurring schedules beyond the next 7 days.
+            {searchActive ? " · matching search" : ""}
           </p>
           <div className="mobile-table-wrap mt-3 overflow-x-auto">
             <table className="w-full min-w-[920px] border-collapse text-left text-sm">
@@ -358,8 +450,9 @@ export function OmMaintenanceClient({ projectId }: Props) {
               <tbody>
                 {upcomingRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--enterprise-border)]/80">
-                    <td className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-3 py-2 font-mono text-xs font-semibold">
-                      {r.asset.tag}
+                    // fallow-ignore-next-line code-duplication
+                    <td className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-3 py-2">
+                      <AssetCell projectId={projectId} row={r} />
                     </td>
                     <td className="px-3 py-2 text-[var(--enterprise-text)]">
                       <button
@@ -370,7 +463,7 @@ export function OmMaintenanceClient({ projectId }: Props) {
                         {r.title || r.frequency}
                       </button>
                       {meterTriggerLabel(r) ? (
-                        <p className="mt-0.5 text-[11px] text-violet-700 dark:text-violet-300">
+                        <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
                           {meterTriggerLabel(r)}
                         </p>
                       ) : null}
@@ -381,8 +474,8 @@ export function OmMaintenanceClient({ projectId }: Props) {
                     <td className="px-3 py-2 tabular-nums text-[var(--enterprise-text-muted)]">
                       {formatScheduleDate(r.lastCompletedAt)}
                     </td>
-                    <td className="px-3 py-2 text-[var(--enterprise-text-muted)]">
-                      {assigneeLabel(r)}
+                    <td className="px-3 py-2">
+                      <AssigneeCell row={r} />
                     </td>
                     <td className="px-3 py-2 text-right">
                       <button
@@ -402,83 +495,38 @@ export function OmMaintenanceClient({ projectId }: Props) {
         </section>
       ) : null}
 
-      <section className="enterprise-card p-3 sm:p-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
-              Completed history
-            </h2>
-            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-              Recorded maintenance completions with actor and linked work orders.
-            </p>
-          </div>
-          <Link
-            href={`/projects/${encodeURIComponent(projectId)}/audit`}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]"
-          >
-            <ScrollText className="h-3.5 w-3.5" aria-hidden />
-            Audit log
-          </Link>
-        </div>
-        {completionsPending ? (
-          <p className="mt-4 text-sm text-[var(--enterprise-text-muted)]">
-            Loading completion history…
-          </p>
-        ) : completions.length === 0 ? (
-          <p className="mt-4 text-sm text-[var(--enterprise-text-muted)]">
-            No maintenance completion history yet.
-          </p>
-        ) : (
-          <ul className="mt-4 divide-y divide-[var(--enterprise-border)]/80">
-            {completions.map((c) => (
-              <li
-                key={c.id}
-                className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm first:pt-0 last:pb-0"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-[var(--enterprise-text)]">
-                    <span className="font-mono text-xs">{c.asset.tag}</span>
-                    <span className="text-[var(--enterprise-text-muted)]"> · </span>
-                    {c.schedule.title || c.schedule.frequency}
-                  </p>
-                  <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
-                    Completed by {c.completedBy?.name || c.completedBy?.email || "Unknown"} · Next
-                    due {formatScheduleDate(c.nextDueAt)}
-                    {c.workOrder ? ` · WO: ${c.workOrder.title}` : ""}
-                  </p>
-                </div>
-                <span className="shrink-0 tabular-nums text-xs font-semibold text-[var(--enterprise-text-muted)]">
-                  {formatScheduleDate(c.completedAt)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {rows.some((r) => !r.isActive) ? (
+      {inactiveRows.length > 0 ? (
         <section className="enterprise-card p-3 sm:p-4">
           <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
             Inactive schedules
           </h2>
           <ul className="mt-3 space-y-2 text-sm">
-            {rows
-              .filter((r) => !r.isActive)
-              .map((r) => (
-                <li key={r.id} className="flex items-center justify-between gap-2">
-                  <span className="text-[var(--enterprise-text-muted)]">
+            {inactiveRows.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="hidden h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] sm:block">
+                    <OmAssetImageThumb
+                      projectId={projectId}
+                      assetId={r.asset.id}
+                      hasImage={r.asset.hasImage}
+                      alt={r.asset.name}
+                      fallbackClassName="flex h-9 w-9 items-center justify-center bg-[var(--enterprise-bg)]"
+                    />
+                  </span>
+                  <span className="truncate text-[var(--enterprise-text-muted)]">
                     <span className="font-mono text-xs">{r.asset.tag}</span> ·{" "}
                     {r.title || r.frequency}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(r)}
-                    className="inline-flex min-h-9 items-center rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)]"
-                  >
-                    Edit
-                  </button>
-                </li>
-              ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openEdit(r)}
+                  className="inline-flex min-h-9 shrink-0 items-center rounded-lg border border-[var(--enterprise-border)] px-3 text-xs font-semibold text-[var(--enterprise-text)]"
+                >
+                  Edit
+                </button>
+              </li>
+            ))}
           </ul>
         </section>
       ) : null}

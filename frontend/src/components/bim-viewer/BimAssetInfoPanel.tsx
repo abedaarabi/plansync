@@ -1,8 +1,12 @@
 "use client";
 
-import { Pencil } from "lucide-react";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { Pencil, Wrench } from "lucide-react";
 import { OmAssetImageThumb } from "@/components/enterprise/OmAssetImageThumb";
-import type { OmAssetRow } from "@/lib/api-client";
+import { OmAssetInspectionTimeline } from "@/components/enterprise/OmAssetInspectionTimeline";
+import { fetchIssuesForProject, fetchOmAssetInspections, type OmAssetRow } from "@/lib/api-client";
+import { qk } from "@/lib/queryKeys";
 import { BimAssetDocumentsSection } from "./BimAssetDocumentsSection";
 import { BimGlassDock } from "./BimGlassDock";
 
@@ -31,6 +35,22 @@ export function BimAssetInfoPanel(props: {
     .map((s) => s?.trim())
     .filter(Boolean)
     .join(" · ");
+
+  const { data: inspections = [], isPending: inspectionsPending } = useQuery({
+    queryKey: qk.omAssetInspections(projectId, asset.id),
+    queryFn: () => fetchOmAssetInspections(projectId, asset.id),
+  });
+
+  const { data: assetWos = [] } = useQuery({
+    queryKey: qk.issuesForProject(projectId, undefined, "WORK_ORDER", asset.id),
+    queryFn: () => fetchIssuesForProject(projectId, { issueKind: "WORK_ORDER", assetId: asset.id }),
+  });
+  const openWoCount = assetWos.filter(
+    (w) => w.status === "OPEN" || w.status === "IN_PROGRESS",
+  ).length;
+
+  const inspectionsHref = `/projects/${encodeURIComponent(projectId)}/om/inspections`;
+  const workOrdersHref = `/projects/${encodeURIComponent(projectId)}/om/work-orders?assetId=${encodeURIComponent(asset.id)}`;
 
   return (
     <BimGlassDock
@@ -79,6 +99,53 @@ export function BimAssetInfoPanel(props: {
               <InfoRow label="Model" value={asset.model} />
               <InfoRow label="Serial" value={asset.serialNumber} />
             </dl>
+          </section>
+
+          <section className="space-y-2 rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_35%,transparent)] p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]">
+                Open work orders
+              </p>
+              <Link
+                href={workOrdersHref}
+                className="text-[10px] font-semibold text-[var(--bim-accent)] hover:underline"
+              >
+                View
+              </Link>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-sm font-bold tabular-nums ${
+                  openWoCount > 0
+                    ? "bg-amber-500/20 text-amber-100 ring-1 ring-amber-400/40"
+                    : "bg-[color-mix(in_srgb,var(--bim-panel)_50%,transparent)] text-[var(--bim-text-muted)]"
+                }`}
+              >
+                <Wrench className="mr-1 h-3.5 w-3.5 opacity-80" aria-hidden />
+                {openWoCount}
+              </span>
+              <p className="text-[12px] text-[var(--bim-text-muted)]">
+                {openWoCount === 0
+                  ? "No open WOs on this asset"
+                  : `${openWoCount} open / in progress`}
+              </p>
+            </div>
+          </section>
+
+          <section className="space-y-2 rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_35%,transparent)] p-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]">
+              Inspection timeline
+            </p>
+            {inspectionsPending ? (
+              <p className="text-[12px] text-[var(--bim-text-muted)]">Loading inspections…</p>
+            ) : (
+              <OmAssetInspectionTimeline
+                tone="bim"
+                runs={inspections}
+                inspectionsHref={inspectionsHref}
+                limit={8}
+              />
+            )}
           </section>
 
           <BimAssetDocumentsSection projectId={projectId} assetId={asset.id} />

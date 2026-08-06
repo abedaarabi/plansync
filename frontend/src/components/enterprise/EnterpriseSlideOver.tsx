@@ -35,18 +35,24 @@ function panelMotionClass(
   panelMaxWidthClass: string,
   panelChromeClassName: string,
   panelZClass: string,
+  panelVariant: "edge" | "floating",
 ) {
   const motion = panelActive
     ? "max-lg:translate-y-0 lg:translate-x-0"
     : "max-lg:translate-y-full lg:translate-x-full";
+  const desktopDock =
+    panelVariant === "floating"
+      ? "lg:inset-y-3 lg:right-3 lg:left-auto lg:h-auto lg:max-h-[calc(100dvh-1.5rem)] lg:rounded-2xl lg:border"
+      : "lg:inset-y-0 lg:right-0 lg:left-auto lg:h-dvh lg:max-h-dvh lg:rounded-none";
   return [
-    "w-full min-w-0 max-w-full",
+    // Do not set max-w-full here — it fights panelMaxWidthClass in the CSS cascade.
+    "w-full min-w-0",
     panelMaxWidthClass,
     SLIDE_OVER_PANEL_TRANSITION,
     `fixed ${panelZClass} flex flex-col overflow-x-hidden`,
     panelChromeClassName,
     "max-lg:inset-x-0 max-lg:bottom-0 max-lg:top-auto max-lg:max-h-[min(92dvh,920px)] max-lg:rounded-t-2xl max-lg:border-l-0 max-lg:border-t",
-    "lg:inset-y-0 lg:right-0 lg:left-auto lg:h-dvh lg:max-h-dvh lg:rounded-none",
+    desktopDock,
     motion,
   ].join(" ");
 }
@@ -68,6 +74,11 @@ export type EnterpriseSlideOverProps = {
   ariaLabelledBy?: string;
   /** Tailwind max-width classes for the panel (default: `max-w-[520px]`). */
   panelMaxWidthClass?: string;
+  /**
+   * Desktop layout: `edge` docks full-height to the right (default);
+   * `floating` is a compact inset card so the page stays visible.
+   */
+  panelVariant?: "edge" | "floating";
   /** Replace default panel border / background / shadow (Tailwind classes). */
   panelChromeClassName?: string;
   /** Extra classes for the scrollable body (padding, max-width wrapper). */
@@ -100,6 +111,7 @@ export function EnterpriseSlideOver({
   panelZClass = "z-[101]",
   ariaLabelledBy,
   panelMaxWidthClass = ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W,
+  panelVariant = "edge",
   panelChromeClassName = "border-l border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]",
   bodyClassName,
   footerClassName,
@@ -164,6 +176,7 @@ export function EnterpriseSlideOver({
     panelMaxWidthClass,
     panelChromeClassName,
     panelZClass,
+    panelVariant,
   );
 
   const panelInner = (

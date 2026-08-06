@@ -22,7 +22,7 @@ export type OmMaintenanceRow = {
   health: "overdue" | "dueSoon" | "onTrack";
   meterType: string | null;
   meterThreshold: number | null;
-  asset: { id: string; tag: string; name: string };
+  asset: { id: string; tag: string; name: string; hasImage: boolean };
   createdAt: string;
   updatedAt: string;
 };
@@ -218,6 +218,22 @@ export type OmInspectionTemplateRow = {
   name: string;
   description: string | null;
   frequency: string | null;
+  intervalDays?: number | null;
+  nextDueAt?: string | null;
+  lastCompletedAt?: string | null;
+  /** When false, Fail items do not require photo + note. Default true. */
+  requireFailEvidence?: boolean;
+  checklistJson: unknown;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OmWorkspaceInspectionTemplateRow = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  frequency: string | null;
   checklistJson: unknown;
   createdAt: string;
   updatedAt: string;
@@ -239,11 +255,14 @@ export type OmInspectionRunRow = {
   id: string;
   projectId: string;
   templateId: string;
+  assetId?: string | null;
+  dueAt?: string | null;
   status: string;
   resultJson: unknown;
   completedAt: string | null;
+  signatureDataUrl?: string | null;
   template: { id: string; name: string };
-  createdBy: { id: string; name: string } | null;
+  createdBy: { id: string; name: string; email?: string | null; image?: string | null } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -290,6 +309,7 @@ export async function postOmInspectionTemplate(
     name: string;
     description?: string | null;
     frequency?: string | null;
+    requireFailEvidence?: boolean;
     checklistJson: OmInspectionChecklistItem[];
   },
 ): Promise<OmInspectionTemplateRow> {
@@ -312,9 +332,46 @@ export async function postOmInspectionTemplate(
   return j as OmInspectionTemplateRow;
 }
 
+export async function patchOmInspectionTemplate(
+  projectId: string,
+  templateId: string,
+  body: {
+    name?: string;
+    description?: string | null;
+    frequency?: string | null;
+    requireFailEvidence?: boolean;
+    checklistJson?: OmInspectionChecklistItem[];
+  },
+): Promise<OmInspectionTemplateRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-templates/${encodeURIComponent(templateId)}`,
+    ),
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(
+      typeof j.error === "string" ? j.error : "Could not update inspection template.",
+    );
+  }
+  return j as OmInspectionTemplateRow;
+}
+
 export async function postOmInspectionRun(
   projectId: string,
-  body: { templateId: string; resultJson?: unknown[] },
+  body: {
+    templateId: string;
+    resultJson?: unknown[];
+    assetId?: string | null;
+    dueAt?: string | null;
+  },
 ): Promise<OmInspectionRunRow> {
   const res = await fetch(
     apiUrl(`/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-runs`),
@@ -400,6 +457,7 @@ export async function postOmInspectionRunComplete(
       followUpIssueId?: string;
     }>;
     createWorkOrdersForFailures?: boolean;
+    signatureDataUrl?: string | null;
   },
 ): Promise<OmInspectionRunCompleteResult> {
   const res = await fetch(
@@ -425,6 +483,121 @@ export function omInspectionRunReportPdfUrl(projectId: string, runId: string): s
   return apiUrl(
     `/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-runs/${encodeURIComponent(runId)}/report.pdf`,
   );
+}
+
+export async function fetchOmWorkspaceInspectionTemplates(
+  workspaceId: string,
+): Promise<OmWorkspaceInspectionTemplateRow[]> {
+  const res = await fetch(
+    apiUrl(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/om/inspection-templates`),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load company inspection templates.");
+  return res.json() as Promise<OmWorkspaceInspectionTemplateRow[]>;
+}
+
+export async function postOmWorkspaceInspectionTemplate(
+  workspaceId: string,
+  body: {
+    name: string;
+    description?: string | null;
+    frequency?: string | null;
+    checklistJson: OmInspectionChecklistItem[];
+  },
+): Promise<OmWorkspaceInspectionTemplateRow> {
+  const res = await fetch(
+    apiUrl(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/om/inspection-templates`),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not create company template.");
+  }
+  return j as OmWorkspaceInspectionTemplateRow;
+}
+
+export async function deleteOmWorkspaceInspectionTemplate(
+  workspaceId: string,
+  templateId: string,
+): Promise<void> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/om/inspection-templates/${encodeURIComponent(templateId)}`,
+    ),
+    { method: "DELETE", credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not delete company template.");
+  }
+}
+
+export async function postOmInspectionTemplateFromWorkspace(
+  projectId: string,
+  body: { workspaceTemplateId: string },
+): Promise<OmInspectionTemplateRow> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/inspection-templates/from-workspace`,
+    ),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
+    },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+  if (!res.ok) {
+    throw new Error(typeof j.error === "string" ? j.error : "Could not import company template.");
+  }
+  return j as OmInspectionTemplateRow;
+}
+
+export async function fetchOmAssetInspections(
+  projectId: string,
+  assetId: string,
+): Promise<OmInspectionRunRow[]> {
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/assets/${encodeURIComponent(assetId)}/inspections`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) throw new Error("Could not load asset inspections.");
+  const j = (await res.json()) as { runs?: OmInspectionRunRow[] } | OmInspectionRunRow[];
+  if (Array.isArray(j)) return j;
+  return Array.isArray(j.runs) ? j.runs : [];
+}
+
+export async function fetchOmPeriodPack(
+  projectId: string,
+  from: string,
+  to: string,
+): Promise<Record<string, unknown>> {
+  const params = new URLSearchParams({ from, to });
+  const res = await fetch(
+    apiUrl(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/om/reports/period-pack.json?${params}`,
+    ),
+    { credentials: "include" },
+  );
+  if (res.status === 402) throw new ProRequiredError();
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+    throw new Error(typeof j.error === "string" ? j.error : "Could not download period pack.");
+  }
+  return res.json() as Promise<Record<string, unknown>>;
 }
 
 export type OccupantTokenRow = {

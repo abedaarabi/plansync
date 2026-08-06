@@ -8,6 +8,7 @@ import {
   ArrowRight,
   Building2,
   CalendarRange,
+  ClipboardCheck,
   ClipboardList,
   Download,
   Inbox,
@@ -21,6 +22,7 @@ import {
   omAssetRegisterCsvUrl,
   omOccupantAssetQrCsvUrl,
 } from "@/lib/api-client";
+import { ISSUE_STATUS_LABEL } from "@/lib/issueStatusStyle";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
@@ -67,7 +69,7 @@ function Kpi({
 
 function ActivityRow({ title, meta, badge }: { title: string; meta: string; badge?: ReactNode }) {
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-xs)]">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-xs)]">
       <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold leading-snug text-[var(--enterprise-text)]">{title}</p>
         <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
@@ -75,7 +77,7 @@ function ActivityRow({ title, meta, badge }: { title: string; meta: string; badg
         </p>
       </div>
       {badge}
-    </li>
+    </div>
   );
 }
 
@@ -282,6 +284,21 @@ export function OmFmDashboardClient({ projectId }: Props) {
             hint="Completed on or before due"
             tone={dash.kpis.pmCompliancePct >= 80 ? "emerald" : "amber"}
           />
+          <Kpi
+            label="Open inspections"
+            value={dash.kpis.openInspectionDrafts ?? 0}
+            tone={(dash.kpis.openInspectionDrafts ?? 0) > 0 ? "amber" : "emerald"}
+          />
+          <Kpi
+            label="Deficient (30d)"
+            value={dash.kpis.deficientInspectionsLast30Days ?? 0}
+            tone={(dash.kpis.deficientInspectionsLast30Days ?? 0) > 0 ? "red" : "emerald"}
+          />
+          <Kpi
+            label="Overdue inspection templates"
+            value={dash.kpis.overdueInspectionTemplates ?? 0}
+            tone={(dash.kpis.overdueInspectionTemplates ?? 0) > 0 ? "red" : "emerald"}
+          />
           <div className="enterprise-card col-span-2 rounded-xl border-l-4 border-l-emerald-600 p-3 lg:col-span-2">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Building health
@@ -325,19 +342,20 @@ export function OmFmDashboardClient({ projectId }: Props) {
           ) : (
             <ul className="space-y-2">
               {dash.upcomingMaintenanceThisWeek.map((m) => (
-                <ActivityRow
-                  key={m.id}
-                  title={`${m.assetTag} · ${m.title || "Maintenance"}`}
-                  meta={`${new Date(m.nextDueAt).toLocaleDateString(undefined, { dateStyle: "medium" })}${m.vendor ? ` · ${m.vendor}` : ""}`}
-                  badge={
-                    m.health === "overdue" ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 ring-1 ring-red-200/80">
-                        <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-                        Overdue
-                      </span>
-                    ) : null
-                  }
-                />
+                <li key={m.id}>
+                  <ActivityRow
+                    title={`${m.assetTag} · ${m.title || "Maintenance"}`}
+                    meta={`${new Date(m.nextDueAt).toLocaleDateString(undefined, { dateStyle: "medium" })}${m.vendor ? ` · ${m.vendor}` : ""}`}
+                    badge={
+                      m.health === "overdue" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 ring-1 ring-red-200/80">
+                          <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+                          Overdue
+                        </span>
+                      ) : null
+                    }
+                  />
+                </li>
               ))}
             </ul>
           )}
@@ -361,11 +379,62 @@ export function OmFmDashboardClient({ projectId }: Props) {
           ) : (
             <ul className="space-y-2">
               {dash.recentWorkOrders.map((w) => (
-                <ActivityRow
-                  key={w.id}
-                  title={w.title}
-                  meta={`${w.status.replace(/_/g, " ")} · ${w.priority} · ${new Date(w.updatedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
-                />
+                <li key={w.id}>
+                  <Link
+                    href={`${pBase}/om/work-orders?wo=${encodeURIComponent(w.id)}`}
+                    className="block transition hover:opacity-90"
+                  >
+                    <ActivityRow
+                      title={w.title}
+                      meta={`${ISSUE_STATUS_LABEL[w.status] ?? w.status} · ${w.priority} · ${new Date(w.updatedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3">
+          <div className="mb-2 flex min-h-9 items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
+              <ClipboardCheck className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
+              Recent deficient
+            </h2>
+            <Link
+              href={`${pBase}/om/inspections`}
+              className="mobile-touch-target shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-[var(--enterprise-primary)]"
+            >
+              All
+            </Link>
+          </div>
+          {(dash.recentDeficientInspections ?? []).length === 0 ? (
+            <p className="py-4 text-sm text-[var(--enterprise-text-muted)]">
+              No deficient inspections recently.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {(dash.recentDeficientInspections ?? []).map((r) => (
+                <li key={r.id}>
+                  <Link
+                    href={`${pBase}/om/inspections`}
+                    className="block transition hover:opacity-90"
+                  >
+                    <ActivityRow
+                      title={r.templateName}
+                      meta={`Deficient${r.failCount != null ? ` · ${r.failCount} fail` : ""}${
+                        r.completedAt
+                          ? ` · ${new Date(r.completedAt).toLocaleDateString(undefined, { dateStyle: "medium" })}`
+                          : ""
+                      }`}
+                      badge={
+                        <span className="inline-flex items-center rounded-md border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-red-700 dark:text-red-300">
+                          Deficient
+                        </span>
+                      }
+                    />
+                  </Link>
+                </li>
               ))}
             </ul>
           )}
@@ -391,11 +460,12 @@ export function OmFmDashboardClient({ projectId }: Props) {
           ) : (
             <ul className="space-y-2">
               {dash.recentTenantRequests.map((w) => (
-                <ActivityRow
-                  key={w.id}
-                  title={w.title}
-                  meta={`${w.status.replace(/_/g, " ")} · ${w.priority} · ${new Date(w.updatedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
-                />
+                <li key={w.id}>
+                  <ActivityRow
+                    title={w.title}
+                    meta={`${ISSUE_STATUS_LABEL[w.status] ?? w.status} · ${w.priority} · ${new Date(w.updatedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}`}
+                  />
+                </li>
               ))}
             </ul>
           )}
