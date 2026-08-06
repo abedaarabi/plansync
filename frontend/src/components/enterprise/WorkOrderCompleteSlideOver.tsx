@@ -177,7 +177,7 @@ export function WorkOrderCompleteSlideOver({
     >
       <div className="space-y-4">
         {issue.completionEvidenceRequired && (issue.referencePhotos?.length ?? 0) === 0 ? (
-          <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
+          <p className="enterprise-alert-warning rounded-xl px-3 py-2 text-sm">
             Add at least one completion photo before closing (required for this work order).
           </p>
         ) : null}
@@ -195,7 +195,9 @@ export function WorkOrderCompleteSlideOver({
                   >
                     <p className="text-sm font-semibold text-[var(--enterprise-text)]">
                       {it.label}
-                      {it.required ? <span className="text-red-500"> *</span> : null}
+                      {it.required ? (
+                        <span className="text-[var(--enterprise-semantic-danger-text)]"> *</span>
+                      ) : null}
                     </p>
                     {it.type === "passfail" ? (
                       <div className="mt-2 flex gap-2">

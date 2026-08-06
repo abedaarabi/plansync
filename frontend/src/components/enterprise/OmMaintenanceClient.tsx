@@ -35,7 +35,7 @@ type Props = { projectId: string };
 function healthBadge(h: "overdue" | "dueSoon" | "onTrack") {
   if (h === "overdue") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300">
+      <span className="enterprise-badge-danger inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold">
         <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
         Overdue
       </span>
@@ -43,13 +43,13 @@ function healthBadge(h: "overdue" | "dueSoon" | "onTrack") {
   }
   if (h === "dueSoon") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-200">
+      <span className="enterprise-badge-warning inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold">
         Due soon
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:text-emerald-200">
+    <span className="enterprise-badge-success inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold">
       <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
       On track
     </span>
@@ -265,7 +265,7 @@ export function OmMaintenanceClient({ projectId }: Props) {
 
   if (error) {
     return (
-      <p className="text-sm text-red-600">
+      <p className="text-sm text-[var(--enterprise-semantic-danger-text)]">
         {error instanceof Error ? error.message : "Could not load schedules."}
       </p>
     );

@@ -473,7 +473,7 @@ export function OmMaintenanceScheduleSlideOver({
         <p className="px-5 py-5 text-sm text-[var(--enterprise-text-muted)]">Loading assets…</p>
       ) : assets.length === 0 ? (
         <div className="px-5 py-5">
-          <div className="rounded-xl border border-amber-200/90 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+          <div className="enterprise-alert-warning rounded-xl px-4 py-3 text-sm">
             <p className="font-medium">No assets yet</p>
             <p className="mt-1 text-xs leading-relaxed opacity-90">
               Add equipment in the asset register before creating a PPM schedule.

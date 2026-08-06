@@ -125,7 +125,7 @@ export function OmAssetDocumentsBlock({ projectId, assetId, enabled = true }: Pr
                 onClick={() => {
                   if (confirm("Remove this document?")) deleteMut.mutate(doc.id);
                 }}
-                className="shrink-0 self-center rounded p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                className="shrink-0 self-center rounded p-1.5 text-[var(--enterprise-semantic-danger-text)] hover:bg-[var(--enterprise-semantic-danger-bg)]"
                 aria-label="Delete document"
               >
                 <Trash2 className="h-4 w-4" strokeWidth={2} />

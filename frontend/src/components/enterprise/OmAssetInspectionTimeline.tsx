@@ -14,8 +14,7 @@ function inspectionStatus(r: OmInspectionRunRow): {
   if (r.status.toUpperCase() === "DRAFT") {
     return {
       label: "Open",
-      enterpriseClass:
-        "border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)]",
+      enterpriseClass: "enterprise-badge-warning",
       bimClass:
         "border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_40%,transparent)] text-[var(--bim-text-muted)]",
     };
@@ -26,14 +25,13 @@ function inspectionStatus(r: OmInspectionRunRow): {
   if (deficient) {
     return {
       label: "Deficient",
-      enterpriseClass: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
+      enterpriseClass: "enterprise-badge-danger",
       bimClass: "border-red-400/40 bg-red-500/15 text-red-200",
     };
   }
   return {
     label: "Conforming",
-    enterpriseClass:
-      "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    enterpriseClass: "enterprise-badge-success",
     bimClass: "border-emerald-400/40 bg-emerald-500/15 text-emerald-200",
   };
 }
@@ -82,8 +80,8 @@ export function OmAssetInspectionTimeline({
     ? "text-[10px] text-[var(--bim-text-muted)]"
     : "text-[11px] text-[var(--enterprise-text-muted)]";
   const linkClass = isBim
-    ? "text-[var(--bim-accent)] hover:underline"
-    : "text-[var(--enterprise-primary)] hover:underline";
+    ? "text-[12px] font-semibold text-[var(--bim-accent)] hover:underline"
+    : "text-[13px] font-semibold text-[var(--enterprise-primary)] hover:underline";
 
   return (
     <ol className="relative ms-3 space-y-0 border-s border-transparent ps-0">
@@ -122,19 +120,15 @@ export function OmAssetInspectionTimeline({
             <div className="min-w-0 flex-1 pt-0.5">
               <div className="flex flex-wrap items-center gap-1.5">
                 {inspectionsHref ? (
-                  <Link
-                    href={inspectionsHref}
-                    onClick={onNavigate}
-                    className={`${titleClass} ${linkClass}`}
-                  >
+                  <Link href={inspectionsHref} onClick={onNavigate} className={linkClass}>
                     {title}
                   </Link>
                 ) : (
                   <p className={titleClass}>{title}</p>
                 )}
                 <span
-                  className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${
-                    isBim ? status.bimClass : status.enterpriseClass
+                  className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold ${
+                    isBim ? `rounded-md border ${status.bimClass}` : status.enterpriseClass
                   }`}
                 >
                   {status.label}

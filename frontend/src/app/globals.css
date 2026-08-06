@@ -3575,6 +3575,12 @@ button:active:not(:disabled),
   background: var(--enterprise-semantic-danger-bg);
   color: var(--enterprise-semantic-danger-text);
 }
+.enterprise-badge-info {
+  border-radius: 0.375rem;
+  border: 1px solid var(--enterprise-semantic-info-border);
+  background: var(--enterprise-semantic-info-bg);
+  color: var(--enterprise-semantic-info-text);
+}
 .enterprise-badge-neutral {
   border-radius: 0.375rem;
   border: 1px solid var(--enterprise-border);

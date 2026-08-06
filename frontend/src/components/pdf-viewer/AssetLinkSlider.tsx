@@ -207,20 +207,24 @@ export function AssetLinkSlider({ onClose }: Props) {
               </div>
             </div>
 
-            <div className="flex items-start gap-3 rounded-lg border border-teal-500/20 bg-teal-950/30 px-3 py-3">
+            <div className="flex items-start gap-3 rounded-lg border border-[var(--viewer-primary)]/25 bg-[var(--viewer-primary)]/10 px-3 py-3">
               <Link2
-                className="mt-0.5 h-4 w-4 shrink-0 text-teal-400/90"
+                className="mt-0.5 h-4 w-4 shrink-0 text-[var(--viewer-primary)]"
                 strokeWidth={2}
                 aria-hidden
               />
               <div>
-                <p className="text-[13px] font-semibold leading-snug text-teal-100">{assetTitle}</p>
+                <p className="text-[13px] font-semibold leading-snug text-[var(--viewer-text)]">
+                  {assetTitle}
+                </p>
                 {ann.linkedOmAssetName?.trim() && tag !== ann.linkedOmAssetName.trim() ? (
-                  <p className="mt-0.5 font-mono text-[11px] text-teal-200/80">{tag}</p>
+                  <p className="mt-0.5 font-mono text-[11px] text-[var(--viewer-text-muted)]">
+                    {tag}
+                  </p>
                 ) : null}
                 <p className="mt-1 text-[11px] leading-snug text-slate-400">
-                  The teal pin on the sheet will stay with this PDF revision. You can move the pin
-                  with the Select tool before saving.
+                  The pin on the sheet will stay with this PDF revision. You can move the pin with
+                  the Select tool before saving.
                 </p>
               </div>
             </div>
@@ -230,7 +234,7 @@ export function AssetLinkSlider({ onClose }: Props) {
                 type="button"
                 disabled={saveMut.isPending || !cloudFileVersionId}
                 onClick={() => saveMut.mutate()}
-                className="inline-flex min-h-10 min-w-[7rem] items-center justify-center rounded-lg bg-teal-600 px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-10 min-w-[7rem] items-center justify-center rounded-lg bg-[var(--viewer-primary)] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--viewer-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saveMut.isPending ? "Saving…" : "Save link"}
               </button>

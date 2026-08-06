@@ -142,7 +142,7 @@ export function OmAssetImageField({
               type="button"
               disabled={disabled}
               onClick={clearImage}
-              className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-lg px-3 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50"
+              className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-lg px-3 text-sm font-medium text-[var(--enterprise-semantic-danger-text)] hover:bg-[var(--enterprise-semantic-danger-bg)] disabled:opacity-50"
             >
               <Trash2 className="h-4 w-4" strokeWidth={2} />
               Remove photo

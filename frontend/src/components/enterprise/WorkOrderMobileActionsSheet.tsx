@@ -83,7 +83,7 @@ export function WorkOrderMobileActionsSheet({
               onClose();
             }}
           >
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <CheckCircle2 className="h-4 w-4 text-[var(--enterprise-semantic-success-text)]" />
             Complete
           </button>
         ) : null}

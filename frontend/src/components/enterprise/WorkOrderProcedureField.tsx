@@ -84,7 +84,7 @@ export function WorkOrderProcedureField({ items, onChange, disabled }: Props) {
                 type="button"
                 onClick={() => remove(it.id)}
                 disabled={disabled}
-                className="rounded-lg p-2 text-[var(--enterprise-text-muted)] hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50"
+                className="rounded-lg p-2 text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)] disabled:opacity-50"
                 aria-label="Remove step"
               >
                 <Trash2 className="h-4 w-4" />

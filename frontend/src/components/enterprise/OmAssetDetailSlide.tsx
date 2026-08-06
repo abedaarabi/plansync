@@ -33,6 +33,7 @@ import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
 import type { CloudFile } from "@/types/projects";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetDocumentsBlock } from "@/components/enterprise/OmAssetDocumentsBlock";
 import { OmAssetImageThumb } from "@/components/enterprise/OmAssetImageThumb";
@@ -215,22 +216,26 @@ export function OmAssetDetailSlide({
             Create work order
           </Link>
           <div className="flex w-full justify-end gap-2">
-            <button
+            <EnterpriseButton
               type="button"
+              variant="danger"
+              size="sm"
+              className="flex-1"
               onClick={() => onDelete(asset)}
-              className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-950/40"
             >
               <Trash2 className="h-4 w-4" strokeWidth={2} />
               Delete
-            </button>
-            <button
+            </EnterpriseButton>
+            <EnterpriseButton
               type="button"
+              variant="secondary"
+              size="sm"
+              className="flex-1"
               onClick={onEdit}
-              className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-[var(--enterprise-border)] px-3 text-sm font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]"
             >
               <Pencil className="h-4 w-4" strokeWidth={2} />
               Edit asset
-            </button>
+            </EnterpriseButton>
           </div>
         </div>
       }
@@ -254,12 +259,12 @@ export function OmAssetDetailSlide({
           <div className="space-y-2 border-t border-[var(--enterprise-border)] p-4">
             <div className="flex flex-wrap items-center gap-2">
               {omAssetHasBimLink(asset) ? (
-                <span className="inline-flex items-center rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-sky-800 dark:text-sky-200">
+                <span className="enterprise-badge-info inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold">
                   Linked in 3D
                 </span>
               ) : null}
               {assetHasSheetPin(asset) ? (
-                <span className="inline-flex items-center rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-200">
+                <span className="enterprise-badge-success inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold">
                   Pin on drawing
                 </span>
               ) : canOpenDrawing ? (
@@ -288,7 +293,7 @@ export function OmAssetDetailSlide({
                 <button
                   type="button"
                   onClick={openDrawingViewer}
-                  className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-teal-700 hover:underline dark:text-teal-300"
+                  className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-[var(--enterprise-primary)] hover:underline"
                 >
                   {asset.fileId ? "Show on plan" : "Open linked drawing"}
                   <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
@@ -298,7 +303,7 @@ export function OmAssetDetailSlide({
                 <button
                   type="button"
                   onClick={openBimViewerForAsset}
-                  className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-sky-700 hover:underline dark:text-sky-300"
+                  className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-[var(--enterprise-primary)] hover:underline"
                 >
                   {asset.fileId && !canOpenDrawing ? "Show on plan" : "Open in 3D viewer"}
                   <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
@@ -379,7 +384,7 @@ export function OmAssetDetailSlide({
                   key={row.id}
                   className="flex flex-wrap items-baseline gap-x-2 text-[13px] leading-snug"
                 >
-                  <span className="text-emerald-600 dark:text-emerald-400" aria-hidden>
+                  <span className="text-[var(--enterprise-semantic-success-text)]" aria-hidden>
                     ✓
                   </span>
                   <span className="tabular-nums text-[var(--enterprise-text-muted)]">

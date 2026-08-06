@@ -690,7 +690,7 @@ export function WorkOrdersClient({ projectId }: Props) {
                       if (!window.confirm(`Remove “${t.name}” from company procedures?`)) return;
                       deleteTemplateMut.mutate(t.id);
                     }}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

@@ -73,7 +73,7 @@ export function AssetRowActions({
             assetHasSheetPin(asset) ? `View pin for ${asset.tag}` : `Open drawing for ${asset.tag}`
           }
           Icon={Package}
-          teal
+          link
           onClick={() => onViewDrawing(asset)}
         />
       ) : null}
@@ -81,7 +81,7 @@ export function AssetRowActions({
         <AssetRowActionButton
           label={`Open 3D for ${asset.tag}`}
           Icon={Boxes}
-          teal
+          link
           onClick={() => onViewBim(asset)}
         />
       ) : null}
@@ -113,21 +113,21 @@ const ASSET_ROW_ACTION_CLASS =
 const ASSET_ROW_ACTION_DANGER_CLASS =
   "hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]";
 
-const ASSET_ROW_ACTION_TEAL_CLASS =
-  "text-teal-700 hover:bg-teal-500/10 hover:text-teal-800 dark:text-teal-300 dark:hover:bg-teal-950/40 dark:hover:text-teal-200";
+const ASSET_ROW_ACTION_LINK_CLASS =
+  "text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-primary-soft)] hover:text-[var(--enterprise-primary-deep)]";
 
 function AssetRowActionButton({
   label,
   Icon,
   danger,
-  teal,
+  link,
   disabled,
   onClick,
 }: {
   label: string;
   Icon: LucideIcon;
   danger?: boolean;
-  teal?: boolean;
+  link?: boolean;
   disabled?: boolean;
   onClick: () => void;
 }) {
@@ -138,7 +138,7 @@ function AssetRowActionButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={`${ASSET_ROW_ACTION_CLASS} ${danger ? ASSET_ROW_ACTION_DANGER_CLASS : ""} ${teal ? ASSET_ROW_ACTION_TEAL_CLASS : ""}`}
+      className={`${ASSET_ROW_ACTION_CLASS} ${danger ? ASSET_ROW_ACTION_DANGER_CLASS : ""} ${link ? ASSET_ROW_ACTION_LINK_CLASS : ""}`}
     >
       <Icon className="h-4 w-4" strokeWidth={1.75} aria-hidden />
     </button>
@@ -150,21 +150,21 @@ export function DrawingStatusBadge({ asset }: { asset: OmAssetRow }) {
   const hasSheet = Boolean(asset.fileId) || assetHasSheetPin(asset);
   if (hasBim && hasSheet) {
     return (
-      <span className="inline-flex items-center rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:text-sky-200">
+      <span className="enterprise-badge-info inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold">
         3D + sheet
       </span>
     );
   }
   if (hasBim) {
     return (
-      <span className="inline-flex items-center rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:text-sky-200">
+      <span className="enterprise-badge-info inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold">
         3D model
       </span>
     );
   }
   if (assetHasSheetPin(asset)) {
     return (
-      <span className="inline-flex items-center rounded-full border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 text-[10px] font-semibold text-teal-800 dark:text-teal-200">
+      <span className="enterprise-badge-success inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold">
         Pin on sheet
       </span>
     );

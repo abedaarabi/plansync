@@ -390,7 +390,7 @@ export function OmInspectionTemplateSlideOver({
                   type="button"
                   aria-label="Remove item"
                   onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

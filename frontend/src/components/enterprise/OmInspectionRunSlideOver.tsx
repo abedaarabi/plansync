@@ -595,7 +595,7 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                     return;
                   deleteRunMut.mutate();
                 }}
-                className="inline-flex min-h-10 items-center justify-center rounded-lg px-3 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                className="inline-flex min-h-10 items-center justify-center rounded-lg px-3 text-sm font-medium text-[var(--enterprise-semantic-danger-text)] hover:bg-[var(--enterprise-semantic-danger-bg)] disabled:opacity-50"
               >
                 Delete inspection
               </button>
@@ -632,7 +632,7 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                     return;
                   deleteRunMut.mutate();
                 }}
-                className="inline-flex min-h-10 items-center justify-center rounded-lg px-3 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                className="inline-flex min-h-10 items-center justify-center rounded-lg px-3 text-sm font-medium text-[var(--enterprise-semantic-danger-text)] hover:bg-[var(--enterprise-semantic-danger-bg)] disabled:opacity-50"
               >
                 Delete inspection
               </button>
@@ -694,7 +694,7 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                             key={it.id}
                             className={`space-y-3 rounded-xl border bg-[var(--enterprise-bg)] p-3.5 ${
                               evidenceErr
-                                ? "border-red-400/70"
+                                ? "border-[var(--enterprise-semantic-danger-border)]"
                                 : "border-[var(--enterprise-border)]"
                             }`}
                           >
@@ -725,19 +725,19 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                                       o: "pass" as const,
                                       label: "Pass",
                                       active:
-                                        "border-emerald-500/50 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
+                                        "border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] text-[var(--enterprise-semantic-success-text)]",
                                     },
                                     {
                                       o: "fail" as const,
                                       label: "Fail",
                                       active:
-                                        "border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-300",
+                                        "border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-semantic-danger-text)]",
                                     },
                                     {
                                       o: "na" as const,
                                       label: "N/A",
                                       active:
-                                        "border-[var(--enterprise-primary)] bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]",
+                                        "border-[var(--enterprise-primary)] bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]",
                                     },
                                   ] as const
                                 ).map(({ o, label, active }) => (
@@ -786,7 +786,7 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                                   }
                                   className={`w-full rounded-lg border bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-sm disabled:opacity-60 ${
                                     evidenceErr && !r.note.trim()
-                                      ? "border-red-400"
+                                      ? "border-[var(--enterprise-semantic-danger-border)]"
                                       : "border-[var(--enterprise-border)]"
                                   }`}
                                 />
@@ -842,7 +842,7 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                                             photoFileName: undefined,
                                           })
                                         }
-                                        className="text-xs font-semibold text-red-600"
+                                        className="text-xs font-semibold text-[var(--enterprise-semantic-danger-text)]"
                                       >
                                         Remove
                                       </button>
@@ -853,7 +853,10 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                             )}
 
                             {evidenceErr ? (
-                              <p className="text-xs font-medium text-red-600" role="alert">
+                              <p
+                                className="text-xs font-medium text-[var(--enterprise-semantic-danger-text)]"
+                                role="alert"
+                              >
                                 {evidenceErr}
                               </p>
                             ) : null}

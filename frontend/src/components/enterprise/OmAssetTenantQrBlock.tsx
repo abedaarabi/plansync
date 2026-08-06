@@ -212,7 +212,9 @@ export function OmAssetTenantQrBlock({
           {ensureSecretPending && !scanSecret ? (
             <p className="text-[13px] text-[var(--enterprise-text-muted)]">Preparing QR code…</p>
           ) : ensureSecretError ? (
-            <p className="text-[13px] text-red-600">Could not load equipment link.</p>
+            <p className="text-[13px] text-[var(--enterprise-semantic-danger-text)]">
+              Could not load equipment link.
+            </p>
           ) : qrDataUrl ? (
             <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
               {/* eslint-disable-next-line @next/next/no-img-element -- data URL from qrcode */}
@@ -257,7 +259,7 @@ export function OmAssetTenantQrBlock({
                     type="button"
                     onClick={() => ensureScanSecret(true)}
                     disabled={ensureSecretPending}
-                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-amber-200 px-3 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-900/50 dark:text-amber-200 dark:hover:bg-amber-950/40"
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] px-3 text-xs font-semibold text-[var(--enterprise-semantic-warning-text)] hover:opacity-90 disabled:opacity-50"
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
                     Regenerate secret

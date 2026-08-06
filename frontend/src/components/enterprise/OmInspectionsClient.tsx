@@ -98,20 +98,20 @@ function runStatusUi(r: OmInspectionRunRow): {
     return {
       Icon: PencilLine,
       label: "Open",
-      badgeClass: "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+      badgeClass: "enterprise-badge-warning",
     };
   }
   if (runHasFail(r)) {
     return {
       Icon: AlertTriangle,
       label: "Deficient",
-      badgeClass: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
+      badgeClass: "enterprise-badge-danger",
     };
   }
   return {
     Icon: CheckCircle2,
     label: "Conforming",
-    badgeClass: "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
+    badgeClass: "enterprise-badge-success",
   };
 }
 
@@ -120,7 +120,7 @@ function StatusBadge({ r }: { r: OmInspectionRunRow }) {
   const StIcon = st.Icon;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${st.badgeClass}`}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-semibold ${st.badgeClass}`}
     >
       <StIcon className="h-3 w-3" strokeWidth={2} aria-hidden />
       {st.label}
@@ -153,20 +153,19 @@ function templateDueBadge(t: OmInspectionTemplateRow): {
   if (dueMs < now) {
     return {
       label: `Overdue · ${label}`,
-      className: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
+      className: "enterprise-badge-danger",
     };
   }
   const week = 7 * 24 * 60 * 60 * 1000;
   if (dueMs - now <= week) {
     return {
       label: `Due ${label}`,
-      className: "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+      className: "enterprise-badge-warning",
     };
   }
   return {
     label: `Next ${label}`,
-    className:
-      "border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)]",
+    className: "enterprise-badge-neutral",
   };
 }
 
@@ -279,7 +278,7 @@ function TemplateMenu({
                 setOpen(false);
                 onDelete();
               }}
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs font-medium text-[var(--enterprise-semantic-danger-text)] hover:bg-[var(--enterprise-semantic-danger-bg)] disabled:opacity-40"
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete
@@ -680,7 +679,7 @@ export function OmInspectionsClient({ projectId }: Props) {
                         </p>
                         {due ? (
                           <span
-                            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${due.className}`}
+                            className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold ${due.className}`}
                           >
                             {due.label}
                           </span>
@@ -932,7 +931,7 @@ export function OmInspectionsClient({ projectId }: Props) {
                                     return;
                                   deleteRunMut.mutate(r.id);
                                 }}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)] disabled:opacity-40"
                               >
                                 {deleteRunMut.isPending && deleteRunMut.variables === r.id ? (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1174,7 +1173,7 @@ export function OmInspectionsClient({ projectId }: Props) {
                       if (!window.confirm(`Remove “${t.name}” from the company library?`)) return;
                       deleteWorkspaceTplMut.mutate(t.id);
                     }}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)] disabled:opacity-40"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

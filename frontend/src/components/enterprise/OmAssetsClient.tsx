@@ -394,7 +394,7 @@ export function OmAssetsClient({ projectId }: Props) {
 
   if (error) {
     return (
-      <p className="text-sm text-red-600">
+      <p className="text-sm text-[var(--enterprise-semantic-danger-text)]">
         {error instanceof Error ? error.message : "Could not load assets."}
       </p>
     );
@@ -604,7 +604,7 @@ export function OmAssetsClient({ projectId }: Props) {
                   className="sm:w-auto"
                   onClick={() => startPlacePinForAsset(justCreatedAsset)}
                 >
-                  <Package className="h-4 w-4 text-teal-600" strokeWidth={2} />
+                  <Package className="h-4 w-4 text-[var(--enterprise-primary)]" strokeWidth={2} />
                   Place on drawing
                 </EnterpriseButton>
                 <EnterpriseButton
@@ -668,7 +668,7 @@ export function OmAssetsClient({ projectId }: Props) {
       >
         {justCreatedAsset ? (
           <div className="space-y-4">
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+            <div className="enterprise-alert-success rounded-2xl p-4">
               <p className="text-sm font-semibold text-[var(--enterprise-text)]">Asset saved</p>
               <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
                 <span className="font-mono font-semibold text-[var(--enterprise-primary)]">
@@ -924,7 +924,7 @@ export function OmAssetsClient({ projectId }: Props) {
                             }
                             className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50"
                           >
-                            <Package className="h-3.5 w-3.5 text-teal-600" strokeWidth={2} />
+                            <Package className="h-3.5 w-3.5" strokeWidth={2} />
                             Place equipment pin
                           </button>
                         </div>

@@ -156,7 +156,7 @@ export function WorkOrderCard({
               </span>
             ) : null}
             {isOverdue ? (
-              <span className="inline-flex items-center gap-1 rounded-md border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-300">
+              <span className="enterprise-badge-danger inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold">
                 <AlertTriangle className="h-3 w-3" aria-hidden />
                 Overdue
               </span>
