@@ -38,9 +38,7 @@ export function BimClashDetailPanel(props: {
       .then((rows) => {
         if (!cancelled) setComments(rows);
       })
-      .catch(() => {
-        if (!cancelled) toast.error("Could not load comments");
-      })
+      .catch(() => {})
       .finally(() => {
         if (!cancelled) setLoadingComments(false);
       });
