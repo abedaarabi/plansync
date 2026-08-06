@@ -42,12 +42,15 @@ export function StatusFilterChips<K extends string>({
   onChange,
   filtersActive,
   onReset,
+  counts,
 }: {
   defs: readonly StatusChipDef<K>[];
   value: K;
   onChange: (key: K) => void;
   filtersActive: boolean;
   onReset: () => void;
+  /** Optional per-chip counts (DualX / Procore-style filter density). */
+  counts?: Partial<Record<K, number>>;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -59,6 +62,7 @@ export function StatusFilterChips<K extends string>({
         {defs.map((f) => {
           const TabIcon = f.Icon;
           const selected = value === f.key;
+          const count = counts?.[f.key];
           return (
             <button
               key={f.key}
@@ -66,13 +70,20 @@ export function StatusFilterChips<K extends string>({
               role="tab"
               aria-selected={selected}
               onClick={() => onChange(f.key)}
-              className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
+              className={`inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition active:scale-[0.97] ${
                 selected ? OM_COMPACT_CHIP_ACTIVE : OM_COMPACT_CHIP_IDLE
               }`}
               style={selected ? { backgroundColor: "var(--enterprise-primary)" } : undefined}
             >
               <TabIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
               {f.label}
+              {count != null ? (
+                <span
+                  className={`tabular-nums ${selected ? "text-white/80" : "text-[var(--enterprise-text-muted)]"}`}
+                >
+                  {count}
+                </span>
+              ) : null}
             </button>
           );
         })}
@@ -81,7 +92,7 @@ export function StatusFilterChips<K extends string>({
         <button
           type="button"
           onClick={onReset}
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-text)]"
+          className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 text-xs font-semibold text-[var(--enterprise-text-muted)] transition hover:text-[var(--enterprise-text)]"
         >
           <RotateCcw className="h-3 w-3 opacity-80" strokeWidth={2} aria-hidden />
           Reset
