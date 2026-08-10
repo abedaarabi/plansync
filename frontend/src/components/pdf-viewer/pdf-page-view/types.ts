@@ -24,11 +24,9 @@ export type PdfPageViewProps = {
    * Use the first stacked pane as the unmodified reference; the second pane is the working view.
    */
   compareReferenceOnly?: boolean;
-  /** Revision compare: object URL of magenta/cyan composite over the page raster. */
+  /** Revision compare: object URL of magenta/cyan tint over the live page raster. */
   revisionDiffImageUrl?: string | null;
   revisionDiffOpacity?: number;
-  /** When true, cover the PDF paint with the composite (diff overlay layout). */
-  revisionDiffCoverPdf?: boolean;
 };
 
 /** Active resize/transform session for a selected annotation (handles + bounds). */

@@ -239,6 +239,7 @@ export function PdfViewer() {
     pdfDoc,
     currentPage,
     revisionCompareActive && Boolean(revisionBasePdf.doc && pdfDoc),
+    scale,
   );
 
   const revisionSideBySide = revisionCompareActive && revisionCompareLayout === "sideBySide";
@@ -1326,7 +1327,6 @@ export function PdfViewer() {
                                 revisionCompareShowTintOnSideBySide ? revisionDiff.url : null
                               }
                               revisionDiffOpacity={revisionCompareTintOpacity}
-                              revisionDiffCoverPdf={false}
                             />
                           </div>
                         </div>
@@ -1346,7 +1346,6 @@ export function PdfViewer() {
                             pageWrapperRef={pageWrapperRef}
                             revisionDiffImageUrl={revisionDiff.url}
                             revisionDiffOpacity={revisionCompareTintOpacity}
-                            revisionDiffCoverPdf
                           />
                         </div>
                       </div>

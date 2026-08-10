@@ -115,7 +115,6 @@ export function PdfPageView({
   compareReferenceOnly = false,
   revisionDiffImageUrl = null,
   revisionDiffOpacity = 0.85,
-  revisionDiffCoverPdf = false,
 }: PdfPageViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const printCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -3136,14 +3135,9 @@ export function PdfPageView({
           style={{
             width: cssW,
             height: cssH,
-            opacity: revisionDiffCoverPdf && revisionDiffImageUrl ? 0 : 1,
           }}
         />
-        <RevisionDiffOverlay
-          imageUrl={revisionDiffImageUrl}
-          opacity={revisionDiffOpacity}
-          coverPdf={revisionDiffCoverPdf}
-        />
+        <RevisionDiffOverlay imageUrl={revisionDiffImageUrl} opacity={revisionDiffOpacity} />
         <div
           ref={overlayRef}
           title={
