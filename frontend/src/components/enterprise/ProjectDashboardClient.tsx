@@ -4,23 +4,6 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import type { LucideIcon } from "lucide-react";
-import {
-  AlertCircle,
-  CalendarClock,
-  CalendarDays,
-  ClipboardCheck,
-  Clock3,
-  FileText,
-  FolderOpen,
-  Gauge,
-  Layers,
-  MapPin,
-  MessageSquareQuote,
-  Pencil,
-  Play,
-  Target,
-} from "lucide-react";
 import {
   fetchProjects,
   fetchProject,
@@ -33,66 +16,27 @@ import { parseProjectCoords } from "@/lib/projectGeo";
 import { geocodeLocationName } from "@/lib/openMeteoGeocode";
 import { DashboardActivityChart } from "@/components/enterprise/DashboardActivityChart";
 import { ProjectHomeOverviewCharts } from "@/components/enterprise/ProjectHomeOverviewCharts";
+import { ProjectHomeHero } from "@/components/enterprise/project-home/ProjectHomeHero";
+import { ProjectHomeKpiStrip } from "@/components/enterprise/project-home/ProjectHomeKpiStrip";
+import { ProjectHomeQuickActions } from "@/components/enterprise/project-home/ProjectHomeQuickActions";
+import { ProjectHomeSiteSection } from "@/components/enterprise/project-home/ProjectHomeSiteSection";
+import { ProjectHomeRecentFiles } from "@/components/enterprise/project-home/ProjectHomeRecentFiles";
+import { ProjectHomeRecentPunch } from "@/components/enterprise/project-home/ProjectHomeRecentPunch";
+import { ProjectHomeHealthCards } from "@/components/enterprise/project-home/ProjectHomeHealthCards";
+import {
+  fileRecencySortKey,
+  sortedFileVersions,
+} from "@/components/enterprise/project-home/projectHomeUtils";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { IfcFileIcon } from "@/components/icons/IfcFileIcon";
-import { PdfFileIcon } from "@/components/icons/PdfFileIcon";
 import type { CloudFile } from "@/types/projects";
 import { openBimViewer } from "@/lib/bim/openBimViewer";
-import { isIfcFile, isPdfFile } from "@/lib/isPdfFile";
+import { isIfcFile } from "@/lib/isPdfFile";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
-import { ProjectLogo } from "./ProjectLogo";
-import { ProjectLocationMap } from "./ProjectLocationMap";
-import { ProjectWeatherAtLocation } from "./ProjectWeatherAtLocation";
 import { ProjectEditSlideOver } from "./ProjectEditSlideOver";
 import { useTickNowMs } from "@/lib/useTickNowMs";
 import { isWorkspaceProClient } from "@/lib/workspaceSubscription";
 import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
-
-function sortedFileVersions(f: CloudFile) {
-  return [...f.versions].sort((a, b) => b.version - a.version);
-}
-
-function relativeTime(iso: string, nowMs: number): string {
-  const diff = nowMs - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} hours ago`;
-  const days = Math.floor(hours / 24);
-  if (days === 1) return "Yesterday";
-  if (days < 7) return `${days} days ago`;
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function formatDateLabel(iso?: string | null): string {
-  if (!iso) return "Not set";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "Not set";
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-/** Sort key: prefer last viewer open, then upload/update, then created. */
-function fileRecencySortKey(f: CloudFile): number {
-  const iso = f.lastOpenedAt ?? f.updatedAt ?? f.createdAt;
-  if (!iso) return 0;
-  const t = new Date(iso).getTime();
-  return Number.isNaN(t) ? 0 : t;
-}
-
-function fileActivityLabel(f: CloudFile, nowMs: number): string | null {
-  const iso = f.lastOpenedAt ?? f.updatedAt;
-  if (!iso) return null;
-  return relativeTime(iso, nowMs);
-}
 
 type Props = {
   projectId: string;
@@ -214,48 +158,6 @@ export function ProjectDashboardClient({ projectId }: Props) {
   const folderCount = project.folders.length;
   const progress = typeof project.progressPercent === "number" ? project.progressPercent : 0;
 
-  const quickStats: {
-    label: string;
-    value: number;
-    href: string;
-    icon: LucideIcon;
-    iconWrap: string;
-    iconColor: string;
-  }[] = [
-    {
-      label: "Issues open",
-      value: openIssues,
-      href: `/projects/${projectId}/issues`,
-      icon: AlertCircle,
-      iconWrap: "bg-red-500/12 ring-1 ring-red-500/15",
-      iconColor: "text-red-600 dark:text-red-400",
-    },
-    {
-      label: "Overdue",
-      value: overdueIssues,
-      href: `/projects/${projectId}/issues`,
-      icon: Clock3,
-      iconWrap: "bg-orange-500/12 ring-1 ring-orange-500/15",
-      iconColor: "text-orange-600 dark:text-orange-400",
-    },
-    {
-      label: "Files",
-      value: fileCount,
-      href: `/projects/${projectId}/files`,
-      icon: FileText,
-      iconWrap: "bg-[var(--enterprise-primary)]/10 ring-1 ring-[var(--enterprise-primary)]/15",
-      iconColor: "text-[var(--enterprise-primary)]",
-    },
-    {
-      label: "Open RFIs",
-      value: openRfis,
-      href: `/projects/${projectId}/rfi`,
-      icon: MessageSquareQuote,
-      iconWrap: "bg-amber-500/12 ring-1 ring-amber-500/20",
-      iconColor: "text-amber-700 dark:text-amber-400",
-    },
-  ];
-
   const recentFiles = [...project.files]
     .sort((a, b) => fileRecencySortKey(b) - fileRecencySortKey(a))
     .slice(0, 5);
@@ -265,215 +167,56 @@ export function ProjectDashboardClient({ projectId }: Props) {
       ? recentFiles[0]
       : null;
 
-  const recentIssues = [...punchItems]
+  const recentPunch = [...punchItems]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 5);
 
+  const activitySeries = projectDash?.activityLast14Days ?? [];
+  const last7Total = activitySeries.slice(-7).reduce((a, x) => a + x.count, 0);
+
   return (
     <div className={`min-w-0 max-w-full ${OM_PAGE_CLASS}`}>
-      <div className="enterprise-card relative min-w-0 overflow-hidden p-3 sm:p-4">
-        <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
-          <div className="relative shrink-0">
-            <div className="relative rounded-lg bg-[var(--enterprise-surface)] p-0.5 ring-1 ring-[var(--enterprise-border)]/80">
-              <ProjectLogo name={project.name} logoUrl={project.logoUrl} size={40} />
-            </div>
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="break-words text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
-              {project.name}
-            </h1>
-            {(project.projectNumber?.trim() || project.location?.trim()) && (
-              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[var(--enterprise-text-muted)]">
-                {project.projectNumber?.trim() ? (
-                  <span className="inline-flex items-center gap-1 rounded-md bg-[var(--enterprise-bg)] px-2 py-0.5 font-medium text-[var(--enterprise-text)] ring-1 ring-[var(--enterprise-border)]/80">
-                    #{project.projectNumber.trim()}
-                  </span>
-                ) : null}
-                {project.location?.trim() ? (
-                  <span className="inline-flex min-w-0 items-center gap-1">
-                    <MapPin
-                      className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-primary)]"
-                      strokeWidth={2}
-                      aria-hidden
-                    />
-                    <span className="truncate">{project.location.trim()}</span>
-                  </span>
-                ) : null}
-              </p>
-            )}
-          </div>
-        </div>
+      <ProjectHomeHero
+        projectId={projectId}
+        name={project.name}
+        logoUrl={project.logoUrl}
+        projectNumber={project.projectNumber}
+        location={project.location}
+        stage={project.stage}
+        startDate={project.startDate}
+        endDate={project.endDate}
+        fileCount={fileCount}
+        folderCount={folderCount}
+        onEdit={() => setEditOpen(true)}
+      />
 
-        <div className="relative mt-3 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="flex gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/12 text-violet-600 ring-1 ring-violet-500/15 dark:text-violet-400">
-              <Layers className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                Stage
-              </p>
-              <p className="mt-0.5 truncate text-sm font-semibold text-[var(--enterprise-text)]">
-                {project.stage ?? "Not set"}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/12 text-blue-600 ring-1 ring-blue-500/15 dark:text-blue-400">
-              <CalendarDays className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                Start date
-              </p>
-              <p className="mt-0.5 truncate text-sm font-semibold text-[var(--enterprise-text)]">
-                {formatDateLabel(project.startDate)}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-600 ring-1 ring-emerald-500/15 dark:text-emerald-400">
-              <CalendarClock className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                End date
-              </p>
-              <p className="mt-0.5 truncate text-sm font-semibold text-[var(--enterprise-text)]">
-                {formatDateLabel(project.endDate)}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/35 p-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/12 text-sky-600 ring-1 ring-sky-500/15 dark:text-sky-400">
-              <MapPin className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
-                Location
-              </p>
-              <p className="mt-0.5 truncate text-sm font-semibold text-[var(--enterprise-text)]">
-                {project.location?.trim() || "Not set"}
-              </p>
-            </div>
-          </div>
-        </div>
+      <ProjectHomeKpiStrip
+        projectId={projectId}
+        openIssues={openIssues}
+        overdueIssues={overdueIssues}
+        fileCount={fileCount}
+        openRfis={openRfis}
+      />
 
-        <nav
-          aria-label="Project summary"
-          className="relative mt-3 grid min-w-0 grid-cols-2 gap-2 border-t border-[var(--enterprise-border)]/80 pt-3 sm:flex sm:flex-wrap sm:gap-2"
-        >
-          {quickStats.map((s) => (
-            <Link
-              key={s.label}
-              href={s.href}
-              className="group inline-flex min-w-0 items-center gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/90 px-2 py-2 transition hover:border-[var(--enterprise-primary)]/28 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 sm:min-w-[7rem] sm:flex-1 sm:px-2.5 md:min-w-0 md:flex-none lg:min-w-[6.5rem] lg:flex-1"
-            >
-              <span
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${s.iconWrap}`}
-              >
-                <s.icon className={`h-3.5 w-3.5 ${s.iconColor}`} strokeWidth={2} aria-hidden />
-              </span>
-              <span className="min-w-0 text-left">
-                <span className="block text-sm font-bold tabular-nums leading-none text-[var(--enterprise-text)] group-hover:text-[var(--enterprise-primary)]">
-                  {s.value}
-                </span>
-                <span className="mt-0.5 block text-[10px] font-medium leading-snug text-[var(--enterprise-text-muted)] sm:mt-1 sm:text-[11px] sm:leading-tight">
-                  {s.label}
-                </span>
-              </span>
-            </Link>
-          ))}
-        </nav>
-      </div>
+      <ProjectHomeQuickActions projectId={projectId} />
 
-      <section className="enterprise-card min-w-0 overflow-hidden p-3 sm:p-4">
-        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
-              Site map &amp; weather
-            </h2>
-            <p className="mt-1 text-[12px] leading-snug text-[var(--enterprise-text-muted)]">
-              OpenStreetMap pin and current conditions (Open-Meteo). Set the pin in{" "}
-              <span className="font-medium text-[var(--enterprise-text)]">Edit project</span>.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setEditOpen(true)}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-[12px] font-semibold text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-hover-surface)]"
-          >
-            <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-            Edit location
-          </button>
-        </div>
-        {mapCoords ? (
-          <div className="mt-4 space-y-3">
-            {isApproximateLocation ? (
-              <p className="rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-[12px] leading-snug text-amber-950/90 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100/90">
-                Approximate position from your location text. Open{" "}
-                <span className="font-medium">Edit location</span> and click the map to save an
-                exact pin.
-              </p>
-            ) : null}
-            <div className="grid min-w-0 gap-4 lg:grid-cols-5">
-              <div className="min-h-[200px] min-w-0 lg:col-span-3">
-                <ProjectLocationMap
-                  height={240}
-                  latitude={mapCoords.lat}
-                  longitude={mapCoords.lng}
-                  zoom={14}
-                />
-              </div>
-              <div className="flex flex-col justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 p-4 lg:col-span-2">
-                <ProjectWeatherAtLocation latitude={mapCoords.lat} longitude={mapCoords.lng} />
-              </div>
-            </div>
-          </div>
-        ) : (locationText && !savedCoords && projectMetaPending) || geocodePending ? (
-          <div className="mt-4 flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
-            <p className="text-sm text-[var(--enterprise-text-muted)]">Loading map and weather…</p>
-          </div>
-        ) : locationText && !savedCoords && !geocodePending ? (
-          <div className="mt-4 flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
-            <MapPin
-              className="h-10 w-10 text-[var(--enterprise-text-muted)]"
-              strokeWidth={1.25}
-              aria-hidden
-            />
-            <p className="max-w-sm text-sm text-[var(--enterprise-text-muted)]">
-              We couldn&apos;t place that address on the map. Set a pin on the map in Edit project,
-              or try a clearer city or address.
-            </p>
-            <button
-              type="button"
-              onClick={() => setEditOpen(true)}
-              className="text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
-            >
-              Edit location
-            </button>
-          </div>
-        ) : (
-          <div className="mt-4 flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
-            <MapPin
-              className="h-10 w-10 text-[var(--enterprise-text-muted)]"
-              strokeWidth={1.25}
-              aria-hidden
-            />
-            <p className="max-w-sm text-sm text-[var(--enterprise-text-muted)]">
-              Add a location name or click the map in Edit project to set a site pin — then the map
-              and weather appear here.
-            </p>
-            <button
-              type="button"
-              onClick={() => setEditOpen(true)}
-              className="text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
-            >
-              Set location
-            </button>
-          </div>
-        )}
-      </section>
+      <ProjectHomeHealthCards
+        projectId={projectId}
+        progress={progress}
+        highPriorityIssues={highPriorityIssues}
+        folderCount={folderCount}
+        fileCount={fileCount}
+      />
+
+      <ProjectHomeSiteSection
+        mapCoords={mapCoords}
+        isApproximateLocation={isApproximateLocation}
+        locationText={locationText}
+        savedCoords={savedCoords}
+        projectMetaPending={projectMetaPending}
+        geocodePending={geocodePending}
+        onEdit={() => setEditOpen(true)}
+      />
 
       <ProjectEditSlideOver
         open={editOpen}
@@ -486,7 +229,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
         onClose={() => setEditOpen(false)}
       />
 
-      <div className="grid min-w-0 gap-4 lg:grid-cols-2 lg:items-stretch lg:gap-6">
+      <div className="grid min-w-0 gap-3 lg:grid-cols-2 lg:items-stretch">
         <ProjectHomeOverviewCharts
           projectId={projectId}
           issues={issues}
@@ -494,16 +237,24 @@ export function ProjectDashboardClient({ projectId }: Props) {
           rfis={rfis}
         />
 
-        <section className="enterprise-card flex min-h-[15rem] min-w-0 flex-col p-4 sm:min-h-[17rem] sm:p-6 lg:h-full lg:min-h-0">
-          <div className="shrink-0 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
-              Project activity
-            </h2>
-            <p className="text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
-              Audit events for this project · hover or tap the chart for each day
+        <section className="enterprise-card flex min-h-[15rem] min-w-0 flex-col overflow-hidden p-0 sm:min-h-[17rem] lg:h-full lg:min-h-0">
+          <div className="flex shrink-0 flex-col gap-1 border-b border-[var(--enterprise-border)] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
+                Project activity
+              </h2>
+              <p className="enterprise-type-caption mt-0.5">
+                Audit events for this project · last 14 days
+              </p>
+            </div>
+            <p className="text-xs text-[var(--enterprise-text-muted)]">
+              Last 7 days{" "}
+              <strong className="font-semibold tabular-nums text-[var(--enterprise-text)]">
+                {last7Total}
+              </strong>
             </p>
           </div>
-          <div className="mt-4 flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col p-3.5 sm:p-4">
             {projectDashPending && !projectDash ? (
               <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 text-sm text-[var(--enterprise-text-muted)]">
                 Loading activity…
@@ -513,7 +264,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
                 compact
                 fillHeight
                 className="min-h-0"
-                data={projectDash?.activityLast14Days ?? []}
+                data={activitySeries}
                 ariaLabel="14-day project activity chart"
                 caption="Only events recorded for this project (not the whole workspace)."
               />
@@ -522,218 +273,15 @@ export function ProjectDashboardClient({ projectId }: Props) {
         </section>
       </div>
 
-      <div className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-2">
-        <section className="enterprise-card min-w-0 p-3 sm:p-4">
-          <div className="flex min-w-0 items-start justify-between gap-2 sm:gap-3">
-            <div className="min-w-0 pr-1">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
-                Recently opened
-              </h2>
-              <p className="mt-1 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
-                Last open time is shared for the project (any teammate)
-              </p>
-            </div>
-            <Link
-              href={`/projects/${projectId}/files`}
-              className="shrink-0 text-[12px] font-semibold text-[var(--enterprise-primary)] transition hover:text-[var(--enterprise-primary-deep)] hover:underline"
-            >
-              View all
-            </Link>
-          </div>
-          {continueFile ? (
-            <button
-              type="button"
-              onClick={() => openFile(continueFile)}
-              className="mt-4 flex w-full min-w-0 flex-col items-stretch gap-2 rounded-md border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-3 py-3 text-left transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-primary-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 sm:flex-row sm:items-center sm:gap-3 sm:px-4"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]">
-                  <Play className="h-5 w-5" fill="currentColor" aria-hidden />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-semantic-info-text)]">
-                    Continue viewing
-                  </span>
-                  <span className="mt-0.5 block break-words text-sm font-semibold text-[var(--enterprise-text)] sm:truncate">
-                    {continueFile.name}
-                  </span>
-                </span>
-              </div>
-              <span className="w-full shrink-0 text-right text-xs text-[var(--enterprise-text-muted)] sm:w-auto sm:text-left">
-                {continueFile.lastOpenedAt ? relativeTime(continueFile.lastOpenedAt, nowMs) : ""}
-              </span>
-            </button>
-          ) : null}
-          {recentFiles.length > 0 ? (
-            <ul
-              className={`divide-y divide-[var(--enterprise-border)] ${continueFile ? "mt-3" : "mt-4"}`}
-            >
-              {recentFiles.map((f) => (
-                <li key={f.id}>
-                  <button
-                    type="button"
-                    onClick={() => openFile(f)}
-                    aria-label={`Open ${f.name} in viewer`}
-                    className="flex w-full min-w-0 cursor-pointer items-start gap-2 py-2 text-left transition first:pt-0 last:pb-0 hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:items-center sm:gap-3 mobile-tappable-row min-h-10 active:scale-[0.99]"
-                  >
-                    {isPdfFile(f) ? (
-                      <PdfFileIcon className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
-                    ) : isIfcFile(f) ? (
-                      <IfcFileIcon className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
-                    ) : (
-                      <FileText
-                        className="mt-0.5 h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)] sm:mt-0"
-                        aria-hidden
-                      />
-                    )}
-                    <span className="min-w-0 flex-1 break-words text-sm font-medium text-[var(--enterprise-text)] sm:truncate">
-                      {f.name}
-                    </span>
-                    <span className="shrink-0 self-end text-xs text-[var(--enterprise-sidebar-muted)] sm:self-auto">
-                      {fileActivityLabel(f, nowMs) ?? "—"}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="mt-6 flex flex-col items-center py-6 text-center">
-              <FileText
-                className="h-10 w-10 text-[var(--enterprise-sidebar-muted)]"
-                strokeWidth={1.25}
-                aria-hidden
-              />
-              <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
-                No files uploaded yet.
-              </p>
-              <Link
-                href={`/projects/${projectId}/files`}
-                className="mt-4 text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
-              >
-                Go to Files &amp; Drawings
-              </Link>
-            </div>
-          )}
-        </section>
-
-        <section className="enterprise-card min-w-0 p-3 sm:p-4">
-          <div className="flex min-w-0 items-start justify-between gap-2 sm:gap-3">
-            <div className="min-w-0 pr-1">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
-                Recent punch items
-              </h2>
-              <p className="mt-1 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
-                Latest updates on the punch list
-              </p>
-            </div>
-            <Link
-              href={`/projects/${projectId}/punch`}
-              className="shrink-0 text-[12px] font-semibold text-[var(--enterprise-primary)] transition hover:text-[var(--enterprise-primary-deep)] hover:underline"
-            >
-              View all
-            </Link>
-          </div>
-          {recentIssues.length > 0 ? (
-            <ul className="mt-4 divide-y divide-[var(--enterprise-border)]">
-              {recentIssues.map((issue) => {
-                const statusColor =
-                  issue.status === "OPEN"
-                    ? "bg-[var(--enterprise-error)]"
-                    : issue.status === "IN_PROGRESS"
-                      ? "bg-amber-400"
-                      : "bg-[var(--enterprise-success)]";
-                const statusLabel =
-                  issue.status === "OPEN"
-                    ? "Open"
-                    : issue.status === "IN_PROGRESS"
-                      ? "In Progress"
-                      : "Resolved";
-                return (
-                  <li
-                    key={issue.id}
-                    className="flex min-w-0 flex-col gap-1.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-3"
-                  >
-                    <div className="flex min-w-0 items-center gap-2 sm:flex-1 sm:gap-3">
-                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusColor}`} />
-                      <span className="min-w-0 flex-1 text-sm text-[var(--enterprise-text)] sm:truncate">
-                        {issue.location}
-                      </span>
-                      <span className="shrink-0 rounded-md bg-[var(--enterprise-bg)] px-2 py-0.5 text-xs font-medium text-[var(--enterprise-text-muted)] sm:hidden">
-                        {statusLabel}
-                      </span>
-                    </div>
-                    <div className="flex min-w-0 items-center justify-between gap-2 pl-4 sm:flex-1 sm:justify-end sm:pl-0">
-                      <span className="min-w-0 truncate text-xs text-[var(--enterprise-sidebar-muted)] sm:max-w-[40%]">
-                        {issue.trade}
-                      </span>
-                      <span className="hidden shrink-0 rounded-md bg-[var(--enterprise-bg)] px-2 py-0.5 text-xs font-medium text-[var(--enterprise-text-muted)] sm:inline-block">
-                        {statusLabel}
-                      </span>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <div className="mt-6 flex flex-col items-center py-6 text-center">
-              <ClipboardCheck
-                className="h-8 w-8 text-[var(--enterprise-sidebar-muted)]"
-                strokeWidth={1.25}
-              />
-              <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
-                No punch items yet.
-              </p>
-              <Link
-                href={`/projects/${projectId}/punch`}
-                className="mt-4 text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
-              >
-                Open punch list
-              </Link>
-            </div>
-          )}
-        </section>
-      </div>
-
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <section className="enterprise-card min-w-0 p-3 sm:p-4">
-          <div className="flex items-center gap-2">
-            <Gauge className="h-4 w-4 text-[var(--enterprise-primary)]" />
-            <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">Progress</h3>
-          </div>
-          <p className="mt-2 text-2xl font-bold tabular-nums text-[var(--enterprise-text)]">
-            {progress}%
-          </p>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--enterprise-border)]">
-            <div
-              className="h-full rounded-full bg-[var(--enterprise-primary)]"
-              style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
-            />
-          </div>
-        </section>
-        <section className="enterprise-card min-w-0 p-3 sm:p-4">
-          <div className="flex items-center gap-2">
-            <Target className="h-4 w-4 text-[var(--enterprise-error)]" />
-            <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">Issue risk</h3>
-          </div>
-          <p className="mt-2 text-2xl font-bold tabular-nums text-[var(--enterprise-text)]">
-            {highPriorityIssues}
-          </p>
-          <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-            High-priority issues need attention.
-          </p>
-        </section>
-        <section className="enterprise-card min-w-0 p-3 sm:p-4">
-          <div className="flex items-center gap-2">
-            <FolderOpen className="h-4 w-4 text-violet-500" />
-            <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">Project assets</h3>
-          </div>
-          <p className="mt-2 text-2xl font-bold tabular-nums text-[var(--enterprise-text)]">
-            {folderCount}
-          </p>
-          <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-            Folders organizing project drawings and files.
-          </p>
-        </section>
+      <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+        <ProjectHomeRecentFiles
+          projectId={projectId}
+          recentFiles={recentFiles}
+          continueFile={continueFile}
+          nowMs={nowMs}
+          onOpenFile={openFile}
+        />
+        <ProjectHomeRecentPunch projectId={projectId} items={recentPunch} />
       </div>
     </div>
   );

@@ -122,7 +122,7 @@ function StackedBar({ segments }: { segments: BarSegment[] }) {
   if (total === 0) {
     return (
       <div
-        className="flex h-7 w-full items-center justify-center rounded-lg border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 text-[10px] text-[var(--enterprise-text-muted)]"
+        className="flex h-7 w-full items-center justify-center rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 text-xs text-[var(--enterprise-text-muted)]"
         aria-hidden
       >
         No data
@@ -131,15 +131,15 @@ function StackedBar({ segments }: { segments: BarSegment[] }) {
   }
   return (
     <div
-      className="w-full rounded-lg bg-[var(--enterprise-bg)] p-px ring-1 ring-[var(--enterprise-border)]/80"
+      className="w-full rounded-md bg-[var(--enterprise-bg)] p-px ring-1 ring-[var(--enterprise-border)]/80"
       role="img"
       aria-label={`Status distribution, ${total} total`}
     >
-      <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-md sm:h-3">
+      <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-[5px] sm:h-3">
         {segments.map((s) => (
           <div
             key={s.key}
-            className="min-h-full min-w-1 rounded-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition-[flex-grow] duration-200 first:rounded-l-sm last:rounded-sm sm:first:rounded-md sm:last:rounded-md"
+            className="min-h-full min-w-1 rounded-sm first:rounded-l-sm last:rounded-sm"
             style={{
               flexGrow: Math.max(s.count, 0.001),
               backgroundColor: s.fill,
@@ -191,28 +191,28 @@ export function ProjectHomeOverviewCharts({ projectId, issues, punchItems, rfis 
   ];
 
   return (
-    <section className="enterprise-card flex h-full min-h-0 min-w-0 flex-col p-4 sm:p-6">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
-          Project overview
-        </h2>
-        <p className="text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
-          Live counts from issues, punch list, and RFIs
-        </p>
+    <section className="enterprise-card flex h-full min-h-0 min-w-0 flex-col overflow-hidden p-0">
+      <div className="flex flex-col gap-0.5 border-b border-[var(--enterprise-border)] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+        <div>
+          <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">Project overview</h2>
+          <p className="enterprise-type-caption mt-0.5">
+            Live counts from issues, punch list, and RFIs
+          </p>
+        </div>
       </div>
-      <div className="mt-5 flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col gap-0 p-3.5 sm:p-4">
         {cards.map((c) => {
           const total = c.segments.reduce((a, s) => a + s.count, 0);
           return (
             <div
               key={c.title}
-              className="min-w-0 border-b border-[var(--enterprise-border)] pb-4 last:border-b-0 last:pb-0"
+              className="min-w-0 border-b border-[var(--enterprise-border)] py-3.5 first:pt-0 last:border-b-0 last:pb-0"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-[var(--enterprise-text)]">{c.title}</h3>
                   {c.segments.length > 0 ? (
-                    <p className="mt-0.5 text-[11px] tabular-nums text-[var(--enterprise-text-muted)]">
+                    <p className="mt-0.5 text-xs tabular-nums text-[var(--enterprise-text-muted)]">
                       <span className="font-semibold text-[var(--enterprise-text)]">{total}</span>{" "}
                       total
                     </p>
@@ -220,26 +220,26 @@ export function ProjectHomeOverviewCharts({ projectId, issues, punchItems, rfis 
                 </div>
                 <Link
                   href={c.href}
-                  className="shrink-0 rounded-lg px-2 py-1 text-[12px] font-semibold text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary-soft)] hover:underline"
+                  className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary-soft)] hover:underline"
                 >
                   Open
                 </Link>
               </div>
-              <div className="mt-2">
+              <div className="mt-2.5">
                 {c.segments.length > 0 ? (
                   <StackedBar segments={c.segments} />
                 ) : (
-                  <p className="text-[12px] leading-relaxed text-[var(--enterprise-text-muted)]">
+                  <p className="text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
                     {c.emptyHint}
                   </p>
                 )}
               </div>
               {c.segments.length > 0 && (
-                <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] text-[var(--enterprise-text-muted)] sm:text-[11px]">
+                <ul className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-[var(--enterprise-text-muted)]">
                   {c.segments.map((s) => (
                     <li key={s.key} className="flex min-w-0 max-w-full items-center gap-1.5">
                       <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-sm ring-1 ring-black/5"
+                        className="h-2 w-2 shrink-0 rounded-sm ring-1 ring-black/5"
                         style={{ backgroundColor: s.fill }}
                         aria-hidden
                       />
