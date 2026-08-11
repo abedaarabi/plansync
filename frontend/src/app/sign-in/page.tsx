@@ -11,7 +11,10 @@ import { SocialAuthButtons } from "@/components/SocialAuthButtons";
 import { authClient } from "@/lib/auth-client";
 import { workspaceGateUrl } from "@/lib/workspacePreference";
 
-const CARD_RADIUS = "16px";
+const fieldIcon =
+  "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400";
+const fieldInput =
+  "enterprise-field-input enterprise-field-input--icon min-h-11 py-2.5 pr-3 text-[0.9375rem]";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -112,7 +115,7 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] w-full flex-1 flex-col overflow-hidden font-[family-name:var(--font-inter)] lg:grid lg:h-[100dvh] lg:max-h-[100dvh] lg:min-h-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:grid-rows-1">
+    <div className="flex min-h-[100dvh] w-full flex-1 flex-col overflow-hidden font-[family-name:var(--font-inter)] lg:grid lg:h-[100dvh] lg:max-h-[100dvh] lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-rows-1">
       <div className="hidden min-h-0 lg:block lg:h-full">
         <BrandStoryPanel backHref="/" backLabel="← Back to site" />
       </div>
@@ -121,48 +124,45 @@ export default function SignInPage() {
         <MarketingHeroBackdrop showImageOnLarge={false} />
 
         <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pt-[env(safe-area-inset-top,0px)]">
-          <div className="shrink-0 border-b border-white/10 bg-[#0F172A]/95 px-4 py-3 backdrop-blur-sm lg:hidden">
+          <div className="shrink-0 border-b border-white/10 px-4 py-3 lg:hidden">
             <Link
               href="/"
-              className="mx-auto flex w-fit max-w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 ring-1 ring-white/[0.06]"
+              className="mx-auto flex w-fit max-w-full items-center justify-center gap-2.5 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2"
             >
               <Image
                 src="/logo.svg"
                 alt="PlanSync"
-                width={32}
-                height={32}
-                className="h-8 w-8 shrink-0"
+                width={28}
+                height={28}
+                className="h-7 w-7 shrink-0"
                 priority
                 unoptimized
               />
-              <span className="text-sm font-bold tracking-tight text-white">PlanSync</span>
+              <span className="text-sm font-semibold tracking-tight text-white">PlanSync</span>
             </Link>
           </div>
 
           <div className="flex flex-1 flex-col items-center justify-center px-4 py-6 sm:px-6 sm:py-10">
-            <div className="my-auto w-full max-w-[420px]">
-              <div className="mb-5 flex flex-col items-center text-center sm:mb-6">
-                <h1 className="text-2xl font-bold text-white sm:text-3xl">
-                  {mode === "sign-in" ? "Welcome back" : "Create your account"}
+            <div className="my-auto w-full max-w-[400px]">
+              <div className="mb-6 flex flex-col items-center text-center">
+                <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                  {mode === "sign-in" ? "Sign in to PlanSync" : "Create your workspace"}
                 </h1>
                 {mode === "sign-up" ? (
-                  <p className="mt-2 text-sm text-slate-400 sm:text-base">
-                    14-day trial · No credit card
+                  <p className="mt-2 text-sm text-slate-400">
+                    14-day Pro trial · No credit card required
                   </p>
                 ) : (
-                  <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-400 sm:text-base">
-                    Workspace dashboard and cloud projects.
+                  <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-400">
+                    Access projects, drawings, and field workflows.
                   </p>
                 )}
               </div>
 
-              <div
-                className="border border-slate-200/10 bg-white p-5 shadow-2xl shadow-black/40 sm:p-6"
-                style={{ borderRadius: CARD_RADIUS }}
-              >
-                <div className="space-y-3 sm:space-y-4">
+              <div className="enterprise-auth-card">
+                <div className="space-y-4">
                   <div
-                    className="flex rounded-xl bg-slate-100 p-1"
+                    className="flex rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] p-0.5"
                     role="tablist"
                     aria-label="Authentication mode"
                   >
@@ -174,10 +174,10 @@ export default function SignInPage() {
                         setError(null);
                         setMode("sign-in");
                       }}
-                      className={`relative min-h-11 flex-1 rounded-lg py-2.5 text-sm font-semibold transition sm:text-base ${
+                      className={`relative min-h-10 flex-1 rounded-[5px] py-2 text-sm font-semibold transition ${
                         mode === "sign-in"
-                          ? "bg-white text-[#0F172A] shadow-sm"
-                          : "text-slate-600 hover:text-slate-800"
+                          ? "bg-white text-[var(--enterprise-text)]"
+                          : "text-[var(--enterprise-text-muted)] hover:text-[var(--enterprise-text)]"
                       }`}
                     >
                       Sign in
@@ -190,33 +190,27 @@ export default function SignInPage() {
                         setError(null);
                         setMode("sign-up");
                       }}
-                      className={`relative min-h-11 flex-1 rounded-lg py-2.5 text-sm font-semibold transition sm:text-base ${
+                      className={`relative min-h-10 flex-1 rounded-[5px] py-2 text-sm font-semibold transition ${
                         mode === "sign-up"
-                          ? "bg-white text-[#0F172A] shadow-sm"
-                          : "text-slate-600 hover:text-slate-800"
+                          ? "bg-white text-[var(--enterprise-text)]"
+                          : "text-[var(--enterprise-text-muted)] hover:text-[var(--enterprise-text)]"
                       }`}
                     >
                       Create account
                     </button>
                   </div>
 
-                  <form onSubmit={onSubmit} className="space-y-3 sm:space-y-4">
+                  <form onSubmit={onSubmit} className="space-y-3.5">
                     {mode === "sign-up" && (
                       <div>
-                        <label
-                          htmlFor="auth-name"
-                          className="mb-1.5 block text-sm font-medium text-[#64748B]"
-                        >
+                        <label htmlFor="auth-name" className="enterprise-field-label">
                           Full name
                         </label>
                         <div className="relative">
-                          <User
-                            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                            aria-hidden
-                          />
+                          <User className={fieldIcon} aria-hidden />
                           <input
                             id="auth-name"
-                            className="w-full min-h-12 rounded-xl border border-[#E2E8F0] bg-white py-3 pl-10 pr-3 text-base text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                            className={fieldInput}
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             autoComplete="name"
@@ -228,22 +222,16 @@ export default function SignInPage() {
                     )}
 
                     <div>
-                      <label
-                        htmlFor="auth-email"
-                        className="mb-1.5 block text-sm font-medium text-[#64748B]"
-                      >
+                      <label htmlFor="auth-email" className="enterprise-field-label">
                         {mode === "sign-up" ? "Work email" : "Email"}
                       </label>
                       <div className="relative">
-                        <Mail
-                          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                          aria-hidden
-                        />
+                        <Mail className={fieldIcon} aria-hidden />
                         <input
                           id="auth-email"
                           type="email"
                           required
-                          className="w-full min-h-12 rounded-xl border border-[#E2E8F0] bg-white py-3 pl-10 pr-3 text-base text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                          className={fieldInput}
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           autoComplete="email"
@@ -253,23 +241,17 @@ export default function SignInPage() {
                     </div>
 
                     <div>
-                      <label
-                        htmlFor="auth-password"
-                        className="mb-1.5 block text-sm font-medium text-[#64748B]"
-                      >
+                      <label htmlFor="auth-password" className="enterprise-field-label">
                         Password
                       </label>
                       <div className="relative">
-                        <Lock
-                          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                          aria-hidden
-                        />
+                        <Lock className={fieldIcon} aria-hidden />
                         <input
                           id="auth-password"
                           type="password"
                           required
                           minLength={8}
-                          className="w-full min-h-12 rounded-xl border border-[#E2E8F0] bg-white py-3 pl-10 pr-3 text-base text-[#0F172A] placeholder:text-slate-400 transition focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                          className={fieldInput}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
@@ -282,7 +264,7 @@ export default function SignInPage() {
                       <div className="-mt-1 text-right">
                         <Link
                           href="/forgot-password"
-                          className="text-sm font-medium text-[#2563EB] hover:underline"
+                          className="text-sm font-medium text-[var(--enterprise-primary)] hover:underline"
                         >
                           Forgot password?
                         </Link>
@@ -291,7 +273,7 @@ export default function SignInPage() {
 
                     {error && (
                       <div
-                        className="flex gap-2 rounded-xl border border-red-200 bg-red-50/90 px-3 py-2.5 text-sm text-red-800"
+                        className="flex gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800"
                         role="alert"
                       >
                         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
@@ -299,7 +281,7 @@ export default function SignInPage() {
                       </div>
                     )}
                     {unverifiedEmail ? (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
                         <p>
                           Your account is not verified yet. Check your inbox for{" "}
                           <span className="font-medium">{unverifiedEmail}</span>.
@@ -319,7 +301,6 @@ export default function SignInPage() {
                       variant="primary"
                       fullWidth
                       loading={loading}
-                      className="shadow-md shadow-blue-600/25 ring-0 focus-visible:ring-[#2563EB]/50"
                     >
                       {loading ? (
                         <>
@@ -328,7 +309,7 @@ export default function SignInPage() {
                         </>
                       ) : (
                         <>
-                          {mode === "sign-in" ? "Sign in" : "Start Free Trial"}
+                          {mode === "sign-in" ? "Sign in" : "Start free trial"}
                           <ArrowRight
                             className="h-4 w-4 transition group-hover:translate-x-0.5"
                             aria-hidden
@@ -340,10 +321,12 @@ export default function SignInPage() {
 
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center" aria-hidden>
-                      <div className="w-full border-t border-slate-200" />
+                      <div className="w-full border-t border-[var(--enterprise-border)]" />
                     </div>
                     <div className="relative flex justify-center text-xs">
-                      <span className="bg-white px-2 text-[#64748B]">Or continue with</span>
+                      <span className="bg-white px-2 text-[var(--enterprise-text-muted)]">
+                        Or continue with
+                      </span>
                     </div>
                   </div>
 
@@ -354,7 +337,7 @@ export default function SignInPage() {
                 </div>
               </div>
 
-              <p className="mt-4 text-center text-sm text-slate-500">
+              <p className="mt-5 text-center text-sm text-slate-500">
                 {mode === "sign-up" ? (
                   <>
                     Already have an account?{" "}
@@ -364,7 +347,7 @@ export default function SignInPage() {
                         setError(null);
                         setMode("sign-in");
                       }}
-                      className="font-medium text-[#64748B] underline underline-offset-2 hover:text-white"
+                      className="font-medium text-slate-300 underline underline-offset-2 hover:text-white"
                     >
                       Sign in
                     </button>
@@ -378,7 +361,7 @@ export default function SignInPage() {
                         setError(null);
                         setMode("sign-up");
                       }}
-                      className="font-medium text-[#64748B] underline underline-offset-2 hover:text-white"
+                      className="font-medium text-slate-300 underline underline-offset-2 hover:text-white"
                     >
                       Start free trial
                     </button>
@@ -395,12 +378,6 @@ export default function SignInPage() {
                 </span>
                 <Link href="/viewer" className="transition hover:text-slate-300">
                   Free local viewer
-                </Link>
-                <span className="text-slate-600" aria-hidden>
-                  ·
-                </span>
-                <Link href="/dashboard" className="transition hover:text-slate-300">
-                  Dashboard
                 </Link>
               </nav>
             </div>

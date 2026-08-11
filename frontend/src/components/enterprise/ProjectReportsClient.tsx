@@ -36,7 +36,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { FieldReportCreateSlideOver } from "@/components/enterprise/FieldReportCreateSlideOver";
 import { FieldReportsOverview } from "@/components/enterprise/FieldReportsOverview";
 import { StatusFilterChips } from "@/components/enterprise/issueListControls";
@@ -125,7 +125,7 @@ function SliderSectionCard({
     <section className={SLIDER_CARD}>
       <div className="mb-4 flex items-start gap-3 border-b border-[var(--enterprise-border)]/60 pb-3.5">
         {icon ? (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)]">
             {icon}
           </span>
         ) : null}
@@ -865,7 +865,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
       ) : null}
 
       {overviewFilter === "MISSING" && missingDateKeys.length > 0 ? (
-        <div className="enterprise-alert-warning rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-3 shadow-[var(--enterprise-shadow-xs)]">
+        <div className="enterprise-alert-warning rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-3 ">
           <p className="text-sm font-semibold text-[var(--enterprise-semantic-danger-text)]">
             Missing daily reports ({missingDateKeys.length} day
             {missingDateKeys.length === 1 ? "" : "s"} in the last 14)
@@ -888,7 +888,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
 
       {selectedIds.length > 0 ? (
         <div
-          className="sticky top-0 z-20 flex flex-col gap-3 rounded-xl border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-4 py-3 shadow-[var(--enterprise-shadow-xs)] sm:flex-row sm:items-center sm:justify-between"
+          className="sticky top-0 z-20 flex flex-col gap-3 rounded-md border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
           style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
         >
           <p className="text-sm font-semibold text-[var(--enterprise-primary)]">
@@ -1336,54 +1336,43 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
       <EnterpriseSlideOver
         open={detailPanelOpen}
         onClose={closeSlide}
-        panelVariant="floating"
-        closeOnBackdrop={false}
-        panelMaxWidthClass="max-w-[min(100dvw,560px)] sm:max-w-[560px]"
-        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         bodyClassName={SLIDER_BODY}
-        footerClassName="border-t border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-4 sm:px-5"
         ariaLabelledBy={activeWeekly ? weeklyTitleId : newTitleId}
         header={
           activeWeekly ? (
-            <div>
-              <p
-                id={weeklyTitleId}
-                className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]"
-              >
-                {`${activeWeekly.weekLabel} — ${formatWeekEndingLabel(activeWeekly.weekEndingFriday)}`}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
-                Auto-generated from daily reports in this work week.
-              </p>
-            </div>
+            <SlideOverHeader
+              icon={ScrollText}
+              titleId={weeklyTitleId}
+              title={`${activeWeekly.weekLabel} — ${formatWeekEndingLabel(activeWeekly.weekEndingFriday)}`}
+              description="Auto-generated from daily reports in this work week."
+            />
           ) : (
-            <div>
-              <p
-                id={newTitleId}
-                className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]"
-              >
-                Field Report #{activeDaily ? (numMap.get(activeDaily.id) ?? "—") : ""}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
-                Daily · {activeDaily ? formatReportTableDate(activeDaily.reportDate) : ""}
-              </p>
-              {activeDaily ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span
-                    className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-[11px] font-semibold ${fieldReportStatusBadgeClass(activeDaily.status)}`}
-                  >
-                    {FIELD_REPORT_STATUS_LABEL[activeDaily.status ?? "DRAFT"] ??
-                      activeDaily.status ??
-                      "Draft"}
-                  </span>
-                  {!!activeDaily.lastEmailedAt || (activeDaily.emailSentCount ?? 0) > 0 ? (
-                    <span className="inline-flex items-center rounded-md border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--enterprise-semantic-info-text)]">
-                      Sent to client
+            <SlideOverHeader
+              icon={ScrollText}
+              titleId={newTitleId}
+              title={`Field report #${activeDaily ? (numMap.get(activeDaily.id) ?? "—") : ""}`}
+              description={
+                activeDaily ? `Daily · ${formatReportTableDate(activeDaily.reportDate)}` : undefined
+              }
+              meta={
+                activeDaily ? (
+                  <>
+                    <span
+                      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${fieldReportStatusBadgeClass(activeDaily.status)}`}
+                    >
+                      {FIELD_REPORT_STATUS_LABEL[activeDaily.status ?? "DRAFT"] ??
+                        activeDaily.status ??
+                        "Draft"}
                     </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+                    {!!activeDaily.lastEmailedAt || (activeDaily.emailSentCount ?? 0) > 0 ? (
+                      <span className="inline-flex items-center rounded border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-semantic-info-text)]">
+                        Sent to client
+                      </span>
+                    ) : null}
+                  </>
+                ) : undefined
+              }
+            />
           )
         }
         footer={
@@ -1468,7 +1457,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
         ) : activeDaily ? (
           <div className="space-y-5 text-[15px] leading-relaxed text-[var(--enterprise-text)]">
             {readOnly ? (
-              <div className="rounded-2xl border border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] px-4 py-3.5 text-sm text-[var(--enterprise-semantic-warning-text)] shadow-[var(--enterprise-shadow-xs)]">
+              <div className="rounded-lg border border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] px-4 py-3.5 text-sm text-[var(--enterprise-semantic-warning-text)] ">
                 <p className="font-semibold">Submitted report</p>
                 <p className="mt-1 text-xs leading-relaxed opacity-90">
                   Fields are read-only. Use <span className="font-semibold">Reopen as Draft</span>{" "}
@@ -1477,7 +1466,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               </div>
             ) : null}
             {!!activeDaily.lastEmailedAt || (activeDaily.emailSentCount ?? 0) > 0 ? (
-              <div className="rounded-2xl border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-4 py-3.5 text-sm text-[var(--enterprise-semantic-info-text)] shadow-[var(--enterprise-shadow-xs)]">
+              <div className="rounded-lg border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-4 py-3.5 text-sm text-[var(--enterprise-semantic-info-text)] ">
                 <p className="font-semibold">Already emailed</p>
                 <p className="mt-1 text-xs leading-relaxed opacity-90">
                   Sending again is disabled to avoid duplicates. You can still update the report
@@ -1543,7 +1532,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
               icon={<CloudSun className="h-4 w-4 text-sky-600" strokeWidth={1.75} />}
             >
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3">
+                <div className="space-y-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3">
                   <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
                     Morning
                   </p>
@@ -1590,7 +1579,7 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                     />
                   </div>
                 </div>
-                <div className="space-y-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3">
+                <div className="space-y-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3">
                   <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
                     Afternoon
                   </p>
@@ -1748,12 +1737,12 @@ export function ProjectReportsClient({ projectId }: { projectId: string }) {
                 onClick={() => setSendModalOpen(false)}
               />
               <div
-                className="relative z-10 w-full max-w-md rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 shadow-[var(--enterprise-shadow-floating)]"
+                className="relative z-10 w-full max-w-md rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 shadow-[var(--enterprise-shadow-floating)]"
                 role="dialog"
                 aria-label="Send report"
               >
                 <div className="mb-4 flex items-start justify-between">
-                  <h2 className="text-lg font-semibold text-[var(--enterprise-text)]">
+                  <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
                     Send Report
                     {sendTarget?.titleSuffix ?? ""}
                   </h2>
@@ -1880,7 +1869,7 @@ function WeeklySummaryBody({ w }: { w: WeeklyVirtual }) {
         }
       >
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl bg-[var(--enterprise-hover-surface)] px-3.5 py-3 ring-1 ring-inset ring-[var(--enterprise-border)]">
+          <div className="rounded-md bg-[var(--enterprise-hover-surface)] px-3.5 py-3 ring-1 ring-inset ring-[var(--enterprise-border)]">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Working days
             </p>
@@ -1888,7 +1877,7 @@ function WeeklySummaryBody({ w }: { w: WeeklyVirtual }) {
               {workingDays}
             </p>
           </div>
-          <div className="rounded-xl bg-[var(--enterprise-hover-surface)] px-3.5 py-3 ring-1 ring-inset ring-[var(--enterprise-border)]">
+          <div className="rounded-md bg-[var(--enterprise-hover-surface)] px-3.5 py-3 ring-1 ring-inset ring-[var(--enterprise-border)]">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Workers (total)
             </p>
@@ -1897,7 +1886,7 @@ function WeeklySummaryBody({ w }: { w: WeeklyVirtual }) {
             </p>
             <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">Avg {avg} / day</p>
           </div>
-          <div className="rounded-xl bg-[var(--enterprise-hover-surface)] px-3.5 py-3 ring-1 ring-inset ring-[var(--enterprise-border)]">
+          <div className="rounded-md bg-[var(--enterprise-hover-surface)] px-3.5 py-3 ring-1 ring-inset ring-[var(--enterprise-border)]">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Dailies filed
             </p>
@@ -1929,7 +1918,7 @@ function WeeklySummaryBody({ w }: { w: WeeklyVirtual }) {
             return (
               <li
                 key={d.id}
-                className="flex flex-col gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[var(--enterprise-text)]">
@@ -2048,7 +2037,7 @@ function CrewSection({
           {!readOnly ? (
             <button
               type="button"
-              className="rounded-xl p-2 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-red-600"
+              className="rounded-md p-2 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-red-600"
               aria-label="Remove crew"
               onClick={() =>
                 setDraft((d) => ({
@@ -2113,7 +2102,7 @@ function LineSection({
         {items.map((it) => (
           <li
             key={it.id}
-            className="flex items-start gap-2 rounded-xl bg-[var(--enterprise-hover-surface)] p-2 ring-1 ring-inset ring-[var(--enterprise-border)]"
+            className="flex items-start gap-2 rounded-md bg-[var(--enterprise-hover-surface)] p-2 ring-1 ring-inset ring-[var(--enterprise-border)]"
           >
             <input
               disabled={readOnly}
@@ -2155,7 +2144,7 @@ function LineSection({
             {!readOnly ? (
               <button
                 type="button"
-                className="rounded-xl p-2 text-[var(--enterprise-text-muted)] transition hover:bg-white hover:text-red-600"
+                className="rounded-md p-2 text-[var(--enterprise-text-muted)] transition hover:bg-white hover:text-red-600"
                 aria-label="Remove"
                 onClick={() =>
                   setDraft((d) => ({
@@ -2210,7 +2199,7 @@ function DelaySection({
         {delays.map((it) => (
           <li
             key={it.id}
-            className="space-y-3 rounded-xl border border-amber-100/90 bg-gradient-to-br from-amber-50/40 via-white to-white p-3.5 shadow-sm shadow-amber-900/[0.03]"
+            className="space-y-3 rounded-md border border-amber-100/90 bg-gradient-to-br from-amber-50/40 via-white to-white p-3.5 shadow-amber-900/[0.03]"
           >
             <div className="flex items-start gap-2">
               <AlertTriangle
@@ -2233,7 +2222,7 @@ function DelaySection({
               {!readOnly ? (
                 <button
                   type="button"
-                  className="rounded-xl p-2 text-[var(--enterprise-text-muted)] transition hover:bg-amber-50/80 hover:text-red-600"
+                  className="rounded-md p-2 text-[var(--enterprise-text-muted)] transition hover:bg-amber-50/80 hover:text-red-600"
                   onClick={() =>
                     setDraft((d) => ({
                       ...d,
@@ -2383,7 +2372,7 @@ function PhotoSection({
         {photos.map((p) => (
           <div
             key={p.id}
-            className="group relative h-28 w-28 shrink-0 overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] shadow-sm ring-1 ring-inset ring-white/60"
+            className="group relative h-28 w-28 shrink-0 overflow-hidden rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] ring-1 ring-inset ring-white/60"
           >
             {p.previewBase64 ? (
               /* eslint-disable-next-line @next/next/no-img-element -- data URL from report */
@@ -2416,7 +2405,7 @@ function PhotoSection({
           <button
             type="button"
             disabled={busy || photos.length >= MAX_FIELD_REPORT_PHOTOS}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[var(--enterprise-border)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
             onClick={() => cameraRef.current?.click()}
           >
             <Camera className="h-4 w-4" strokeWidth={1.75} />
@@ -2425,7 +2414,7 @@ function PhotoSection({
           <button
             type="button"
             disabled={busy || photos.length >= MAX_FIELD_REPORT_PHOTOS}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[var(--enterprise-border)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
             onClick={() => galleryRef.current?.click()}
           >
             <ImageIcon className="h-4 w-4" strokeWidth={1.75} />

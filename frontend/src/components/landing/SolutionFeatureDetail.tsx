@@ -17,12 +17,11 @@ type SolutionFeatureDetailProps = {
   className?: string;
 };
 
-/** Text column — glass card aligned with solution page system. */
-const PANEL =
-  "relative overflow-hidden rounded-3xl border border-slate-200/75 bg-white p-7 shadow-[0_24px_48px_-20px_rgba(15,23,42,0.12),0_0_0_1px_rgba(15,23,42,0.03)] ring-1 ring-slate-900/[0.03] sm:p-8 before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-linear-to-r before:from-transparent before:via-slate-200/70 before:to-transparent lg:p-9";
+/** Text column — landing card aligned with design system. */
+const PANEL = "landing-card landing-card-lg relative overflow-hidden";
 
-/** Shared "check" icon for bullet lists — takes accent color class as a prop. */
-function BulletCheck({ colorClass }: { colorClass: string }) {
+/** Shared "check" icon for bullet lists — restrained slate line mark. */
+function BulletCheck({ colorClass = "text-slate-500" }: { colorClass?: string }) {
   return (
     <svg
       className={`mt-0.5 h-4 w-4 shrink-0 ${colorClass}`}
@@ -34,7 +33,7 @@ function BulletCheck({ colorClass }: { colorClass: string }) {
       <path
         d="M5 8.5l2 2 4-4"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -42,31 +41,31 @@ function BulletCheck({ colorClass }: { colorClass: string }) {
   );
 }
 
-/** Primary CTA button for detail pages. */
+/** Primary CTA button for detail pages — brand blue only. */
 function DetailCta({
   href,
   onClick,
   label,
-  colorBg,
 }: {
   href?: string;
   onClick?: () => void;
   label: string;
-  colorBg: string;
+  /** Ignored — kept so existing call sites stay valid. */
+  colorBg?: string;
 }) {
-  const cls = `mt-7 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90 active:scale-[0.98] ${colorBg}`;
+  const cls = "landing-btn-primary mt-7";
   if (onClick) {
     return (
       <button type="button" onClick={onClick} className={cls}>
         {label}
-        <ArrowRight className="h-4 w-4 shrink-0" />
+        <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2} />
       </button>
     );
   }
   return (
     <Link href={href ?? "/sign-in"} className={cls}>
       {label}
-      <ArrowRight className="h-4 w-4 shrink-0" />
+      <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2} />
     </Link>
   );
 }

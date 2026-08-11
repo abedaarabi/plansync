@@ -834,14 +834,14 @@ export function TakeoffFormSlider() {
 
   const panel = (
     <div
-      className="no-print fixed inset-0 z-[85] flex justify-end overflow-x-hidden overscroll-x-none bg-black/40 backdrop-blur-[2px]"
+      className="no-print fixed inset-0 z-[85] flex justify-end overflow-x-hidden overscroll-x-none bg-black/45"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) closeTakeoffSlider();
       }}
     >
       <aside
-        className="flex h-full w-full min-w-0 max-w-md flex-col overflow-x-hidden border-l border-[#334155] bg-[#0f172a] shadow-2xl"
+        className="flex h-full w-full min-w-0 max-w-md flex-col overflow-x-hidden border-l border-[#334155] bg-[#0f172a] shadow-none"
         role="dialog"
         aria-label={
           editZone
@@ -852,8 +852,8 @@ export function TakeoffFormSlider() {
         }
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#334155] px-4 py-3">
-          <h2 className="text-[13px] font-semibold text-[#f8fafc]">
+        <div className="flex items-center justify-between border-b border-[#334155] px-4 py-2.5">
+          <h2 className="text-sm font-semibold tracking-tight text-[#f8fafc]">
             {editZone
               ? editZone.noSheetGeometry
                 ? "Manual takeoff line"
@@ -864,7 +864,7 @@ export function TakeoffFormSlider() {
           </h2>
           <button
             type="button"
-            className="rounded-md p-1.5 text-[#94a3b8] hover:bg-[#334155] hover:text-white"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-[#94a3b8] hover:bg-[#334155] hover:text-white"
             aria-label="Close"
             onClick={() => closeTakeoffSlider()}
           >

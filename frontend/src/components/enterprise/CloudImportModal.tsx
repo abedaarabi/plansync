@@ -273,7 +273,7 @@ export function CloudImportModal({
         className={
           provider === p
             ? "rounded-md bg-white/15 p-0.5 ring-1 ring-white/25"
-            : "rounded-md bg-white p-0.5 shadow-sm ring-1 ring-slate-200/80"
+            : "rounded-md bg-white p-0.5 ring-1 ring-slate-200/80"
         }
       >
         <CloudProviderBrandIcon provider={p} className="h-4 w-4" />
@@ -288,20 +288,20 @@ export function CloudImportModal({
       onClose={onClose}
       ariaLabelledBy="cloud-import-title"
       panelMaxWidthClass="max-w-[640px]"
-      bodyClassName="px-5 py-4"
+      bodyClassName="px-4 py-3.5"
       header={
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 p-1.5 ring-1 ring-slate-200/80">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-100 p-1.5 ring-1 ring-slate-200/80">
             <CloudProviderBrandIcon provider={provider} className="h-7 w-7" />
           </div>
           <div>
             <h2
               id="cloud-import-title"
-              className="text-lg font-semibold text-[var(--enterprise-text)]"
+              className="text-base font-semibold text-[var(--enterprise-text)]"
             >
               Import from cloud
             </h2>
-            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+            <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
               Connect Google Drive, OneDrive, or Dropbox, then choose PDFs or images to copy into
               this project — or open a file in the provider’s site without importing.
             </p>
@@ -317,7 +317,7 @@ export function CloudImportModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)]"
+              className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
             >
               Cancel
             </button>
@@ -325,7 +325,7 @@ export function CloudImportModal({
               type="button"
               disabled={!isConnected || !isConfigured || importing || selected.size === 0}
               onClick={() => void runImport()}
-              className="inline-flex items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-md bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               {importing ? (
                 <>
@@ -355,7 +355,7 @@ export function CloudImportModal({
         ) : null}
 
         {!isConfigured ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             <p className="font-medium">Server env is missing OAuth credentials</p>
             <p className="mt-2 leading-relaxed">
               Add these to the <strong>repo root</strong>{" "}
@@ -421,7 +421,7 @@ export function CloudImportModal({
         ) : null}
 
         {isConfigured && !isConnected ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
             <p className="font-medium">Not connected</p>
             <p className="mt-1 text-slate-600">
               Sign in to{" "}
@@ -435,7 +435,7 @@ export function CloudImportModal({
             <button
               type="button"
               onClick={connect}
-              className="mt-3 rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white"
+              className="mt-3 rounded-md bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white"
             >
               Connect
             </button>
@@ -487,7 +487,7 @@ export function CloudImportModal({
               <span className="min-w-0 truncate text-sm text-slate-700">{breadcrumb}</span>
             </div>
 
-            <div className="max-h-[min(52vh,420px)] overflow-auto rounded-xl border border-slate-200">
+            <div className="max-h-[min(52vh,420px)] overflow-auto rounded-md border border-slate-200">
               {listLoading ? (
                 <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-600">
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden />

@@ -211,7 +211,7 @@ function ProjectAccessDropdown({
         aria-haspopup="listbox"
         aria-label={ariaLabel}
         onClick={() => setOpen((o) => !o)}
-        className="flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-left text-sm font-medium text-[var(--enterprise-text)] shadow-sm transition hover:border-[var(--enterprise-border)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+        className="flex h-11 w-full items-center justify-between gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-left text-sm font-medium text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-border)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
       >
         <span className="min-w-0 truncate">{summary}</span>
         <ChevronDown
@@ -554,7 +554,7 @@ export function WorkspaceTeamClient({
                   block: "start",
                 })
               }
-              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2"
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--enterprise-primary-deep)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2"
             >
               <UserPlus className="h-4 w-4" />
               Invite Member
@@ -569,7 +569,7 @@ export function WorkspaceTeamClient({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex min-w-0 items-start gap-3">
                 <div
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] ring-1 ring-[var(--enterprise-border)]"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] ring-1 ring-[var(--enterprise-border)]"
                   aria-hidden
                 >
                   <Users className="h-5 w-5" strokeWidth={1.75} />
@@ -591,7 +591,7 @@ export function WorkspaceTeamClient({
               {isAdmin && embedded ? (
                 <Link
                   href="/organization?tab=invite-member"
-                  className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 text-sm font-semibold"
+                  className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-3.5 py-2.5 text-sm font-semibold"
                 >
                   <UserPlus className="h-4 w-4" aria-hidden />
                   Invite member
@@ -863,7 +863,7 @@ export function WorkspaceTeamClient({
               </ul>
               {otherMembers.length === 0 ? (
                 <div className="px-6 py-10">
-                  <div className="mx-auto max-w-md rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-6 py-8 text-center">
+                  <div className="mx-auto max-w-md rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-6 py-8 text-center">
                     <p className="text-sm font-medium text-[var(--enterprise-text)]">
                       You&apos;re the only member so far
                     </p>
@@ -923,7 +923,7 @@ export function WorkspaceTeamClient({
                     value={inviteListSearch}
                     onChange={(e) => setInviteListSearch(e.target.value)}
                     placeholder="Search email, name, company, trade, project…"
-                    className="h-10 w-full rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] py-2 pl-9 pr-3 text-sm text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)] shadow-sm focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+                    className="h-10 w-full rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] py-2 pl-10 pr-3 text-sm text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
                     aria-label="Filter invites by keyword"
                   />
                 </div>
@@ -931,7 +931,7 @@ export function WorkspaceTeamClient({
                   <select
                     value={inviteListKindFilter}
                     onChange={(e) => setInviteListKindFilter(e.target.value as InviteKindFilter)}
-                    className="h-10 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-medium text-[var(--enterprise-text)] shadow-sm focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+                    className="h-10 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-medium text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
                     aria-label="Filter by invite type"
                   >
                     <option value="all">All types</option>
@@ -945,7 +945,7 @@ export function WorkspaceTeamClient({
                     onChange={(e) =>
                       setInviteListStatusFilter(e.target.value as InviteStatusFilter)
                     }
-                    className="h-10 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-medium text-[var(--enterprise-text)] shadow-sm focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+                    className="h-10 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-medium text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
                     aria-label="Filter by status"
                   >
                     <option value="all">All statuses</option>
@@ -961,7 +961,7 @@ export function WorkspaceTeamClient({
                         setInviteListStatusFilter("all");
                         setInviteListSearch("");
                       }}
-                      className="h-10 rounded-xl border border-transparent px-3 text-sm font-medium text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-primary-soft)]"
+                      className="h-10 rounded-md border border-transparent px-3 text-sm font-medium text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-primary-soft)]"
                     >
                       Clear filters
                     </button>
@@ -974,7 +974,7 @@ export function WorkspaceTeamClient({
             <div className="space-y-0 divide-y divide-[var(--enterprise-border)]">
               {[0, 1].map((i) => (
                 <div key={i} className="flex animate-pulse gap-4 px-5 py-5 sm:px-6">
-                  <div className="h-12 w-12 shrink-0 rounded-xl bg-[var(--enterprise-border)]" />
+                  <div className="h-12 w-12 shrink-0 rounded-md bg-[var(--enterprise-border)]" />
                   <div className="min-w-0 flex-1 space-y-2 pt-1">
                     <div className="h-4 w-48 max-w-full rounded bg-[var(--enterprise-border)]" />
                     <div className="h-3 w-64 max-w-full rounded bg-[var(--enterprise-hover-surface)]" />
@@ -984,7 +984,7 @@ export function WorkspaceTeamClient({
             </div>
           ) : emailInvites.length === 0 ? (
             <div className="px-6 py-14 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]">
                 <Mail className="h-5 w-5" />
               </div>
               <p className="mt-4 text-sm font-medium text-[var(--enterprise-text)]">
@@ -1030,7 +1030,7 @@ export function WorkspaceTeamClient({
                     >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="flex min-w-0 gap-4">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--enterprise-primary-soft)] to-[var(--enterprise-primary-soft)] text-sm font-bold text-[var(--enterprise-primary-deep)]">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-[var(--enterprise-primary-soft)] to-[var(--enterprise-primary-soft)] text-sm font-bold text-[var(--enterprise-primary-deep)]">
                             {inviteInitials(inv)}
                           </div>
                           <div className="min-w-0 flex-1">
@@ -1105,7 +1105,7 @@ export function WorkspaceTeamClient({
                                   setInviteDraftProjectIds(inv.projects.map((p) => p.id));
                                 }
                               }}
-                              className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-bg)]"
+                              className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-bg)]"
                             >
                               {editingThisInvite ? "Close" : "Edit projects"}
                             </button>
@@ -1113,7 +1113,7 @@ export function WorkspaceTeamClient({
                               type="button"
                               onClick={() => resendMutation.mutate(inv.id)}
                               disabled={resendMutation.isPending}
-                              className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-bg)] disabled:opacity-50"
+                              className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-bg)] disabled:opacity-50"
                             >
                               Resend
                             </button>
@@ -1121,7 +1121,7 @@ export function WorkspaceTeamClient({
                               type="button"
                               onClick={() => revokeEmailMutation.mutate(inv.id)}
                               disabled={revokeEmailMutation.isPending}
-                              className="rounded-xl px-3 py-2 text-xs font-semibold text-[var(--enterprise-semantic-danger-text)] hover:bg-red-50 disabled:opacity-50"
+                              className="rounded-md px-3 py-2 text-xs font-semibold text-[var(--enterprise-semantic-danger-text)] hover:bg-red-50 disabled:opacity-50"
                             >
                               Cancel
                             </button>
@@ -1129,7 +1129,7 @@ export function WorkspaceTeamClient({
                         ) : null}
                       </div>
                       {canAct && editingThisInvite ? (
-                        <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-4">
+                        <div className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-4">
                           <p className="mb-2 text-xs text-[var(--enterprise-text-muted)]">
                             Changes apply to this pending invite. Resend the email so they see the
                             updated project list.
@@ -1156,7 +1156,7 @@ export function WorkspaceTeamClient({
                                 })
                               }
                               disabled={updateInviteProjectsMutation.isPending}
-                              className="rounded-xl bg-[var(--enterprise-primary)] px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50"
+                              className="rounded-md bg-[var(--enterprise-primary)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50"
                             >
                               {updateInviteProjectsMutation.isPending ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1167,7 +1167,7 @@ export function WorkspaceTeamClient({
                             <button
                               type="button"
                               onClick={() => setEditingInviteId(null)}
-                              className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)]"
+                              className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)]"
                             >
                               Cancel
                             </button>
@@ -1189,7 +1189,7 @@ export function WorkspaceTeamClient({
             <div className="border-b border-[var(--enterprise-border)] bg-[linear-gradient(135deg,var(--enterprise-primary-soft),transparent_55%)] px-4 py-5 sm:px-6">
               <div className="flex flex-wrap items-start gap-3">
                 <div
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] ring-1 ring-[var(--enterprise-border)]"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] ring-1 ring-[var(--enterprise-border)]"
                   aria-hidden
                 >
                   <UserPlus className="h-5 w-5" strokeWidth={1.75} />
@@ -1394,7 +1394,7 @@ export function WorkspaceTeamClient({
                   Grant access to
                 </span>
                 {projectOptions.length === 0 ? (
-                  <p className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-4 py-4 text-sm text-[var(--enterprise-text-muted)]">
+                  <p className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-4 py-4 text-sm text-[var(--enterprise-text-muted)]">
                     No projects in workspace.
                   </p>
                 ) : (
@@ -1432,7 +1432,7 @@ export function WorkspaceTeamClient({
                 <button
                   type="submit"
                   disabled={sending}
-                  className="enterprise-btn-primary inline-flex h-11 items-center gap-2 rounded-xl px-5 text-sm font-semibold disabled:opacity-60"
+                  className="enterprise-btn-primary inline-flex h-11 items-center gap-2 rounded-md px-5 text-sm font-semibold disabled:opacity-60"
                 >
                   {sending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

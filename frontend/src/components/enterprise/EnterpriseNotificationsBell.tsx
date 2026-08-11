@@ -147,7 +147,7 @@ export function EnterpriseNotificationsBell() {
         <div
           role="dialog"
           aria-label={t("notifications")}
-          className="fixed left-2 right-2 top-[calc(var(--enterprise-topbar-offset)_+_0.25rem)] z-[100] flex max-h-[min(28rem,75vh)] w-auto flex-col overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)] sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-[calc(100%+8px)] sm:mt-0 sm:w-[min(calc(100vw-1.5rem),22.5rem)] md:w-[24rem]"
+          className="fixed left-2 right-2 top-[calc(var(--enterprise-topbar-offset)_+_0.25rem)] z-[100] flex max-h-[min(28rem,75vh)] w-auto flex-col overflow-hidden rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-lg sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-[calc(100%+8px)] sm:mt-0 sm:w-[min(calc(100vw-1.5rem),22.5rem)] md:w-[24rem]"
         >
           <div className="flex shrink-0 items-start justify-between gap-2 border-b border-[var(--enterprise-border)] px-3.5 py-3">
             <div className="min-w-0">
@@ -199,10 +199,10 @@ export function EnterpriseNotificationsBell() {
               </p>
             ) : items.length === 0 ? (
               <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]">
+                <div className="flex h-8 w-8 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
                   <Bell
-                    className="h-5 w-5 text-[var(--enterprise-text-muted)]"
-                    strokeWidth={1.5}
+                    className="h-4 w-4 text-[var(--enterprise-text-muted)]"
+                    strokeWidth={1.75}
                     aria-hidden
                   />
                 </div>

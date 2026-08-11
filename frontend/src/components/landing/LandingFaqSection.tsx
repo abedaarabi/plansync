@@ -29,7 +29,7 @@ export function LandingFaqSection() {
           </p>
         </AnimateIn>
 
-        <div className="mt-12 rounded-2xl border border-slate-200/90 bg-white p-1 shadow-[var(--enterprise-shadow-card)] sm:mt-14 sm:p-2">
+        <div className="landing-card landing-card-flush mt-12 overflow-hidden sm:mt-14">
           {items.map((item, i) => (
             <AnimateIn key={item.q} delay={i * 40}>
               <details className="group border-b border-slate-100 last:border-0 first:rounded-t-xl last:rounded-b-xl open:bg-slate-50/50">

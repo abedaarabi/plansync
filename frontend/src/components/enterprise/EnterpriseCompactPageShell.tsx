@@ -27,7 +27,7 @@ export function EnterpriseCompactPageShell({
     return (
       <div className="mobile-app-page mobile-viewport-pane flex min-h-0 w-full max-w-full flex-1 flex-col overflow-hidden">
         <div
-          className={`mx-auto flex min-h-0 w-full ${maxClass} flex-1 flex-col px-4 pb-4 pt-3 sm:px-5 sm:pb-6 sm:pt-4 lg:px-8`}
+          className={`mx-auto flex min-h-0 w-full ${maxClass} flex-1 flex-col px-3 pb-3 pt-2.5 sm:px-4 sm:pb-4 sm:pt-3 lg:px-6`}
         >
           {children}
         </div>
@@ -36,7 +36,7 @@ export function EnterpriseCompactPageShell({
   }
 
   return (
-    <div className="mobile-app-page w-full min-w-0 max-w-full px-4 pb-6 pt-3 sm:px-5 sm:pb-8 sm:pt-4 lg:px-8">
+    <div className="mobile-app-page w-full min-w-0 max-w-full px-3 pb-5 pt-2.5 sm:px-4 sm:pb-6 sm:pt-3 lg:px-6">
       <div className={`mx-auto w-full ${maxClass} pb-[env(safe-area-inset-bottom,0px)]`}>
         {children}
       </div>

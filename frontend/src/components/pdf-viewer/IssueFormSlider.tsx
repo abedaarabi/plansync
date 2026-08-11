@@ -1038,7 +1038,7 @@ export function IssueFormSlider(props: Props) {
     ? "flex h-full min-h-0 w-full flex-col overflow-x-hidden bg-transparent text-[var(--bim-text)]"
     : isDocked
       ? "flex h-full min-h-0 w-full flex-col overflow-x-hidden bg-slate-950"
-      : "absolute right-0 top-0 flex h-full w-full min-w-0 max-w-[min(640px,calc(100dvw-1rem))] flex-col overflow-x-hidden border-l border-slate-700/80 bg-slate-950 shadow-[-16px_0_48px_-12px_rgba(0,0,0,0.55)]";
+      : "absolute right-0 top-0 flex h-full w-full min-w-0 max-w-[min(480px,calc(100dvw-1rem))] flex-col overflow-x-hidden border-l border-slate-700/80 bg-slate-950 shadow-none";
 
   const panelBody = (
     <aside
@@ -1738,7 +1738,7 @@ export function IssueFormSlider(props: Props) {
         className={
           embedded
             ? "flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--bim-chrome-border)] bg-transparent px-3 py-2.5"
-            : `flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-sm supports-[backdrop-filter]:bg-slate-950/80 ${isDocked ? "px-3 py-2.5" : "px-5 py-3.5"}`
+            : `flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-800/90 bg-slate-950 ${isDocked ? "px-3 py-2.5" : "px-4 py-2.5"}`
         }
       >
         {variant === "edit" ? (
@@ -1894,7 +1894,7 @@ export function IssueFormSlider(props: Props) {
         <button
           type="button"
           aria-label={`Close ${entityLabel} form`}
-          className="absolute inset-0 bg-slate-950/60 backdrop-blur-[3px] transition hover:bg-slate-950/70"
+          className="absolute inset-0 bg-slate-950/55 transition hover:bg-slate-950/65"
           onClick={onCancel}
           onMouseDown={(e) => e.preventDefault()}
         />

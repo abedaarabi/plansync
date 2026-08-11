@@ -50,7 +50,7 @@ export function UserMenu() {
   if (isPending) {
     return (
       <div
-        className="h-9 w-9 shrink-0 animate-pulse rounded-full border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]"
+        className="h-8 w-8 shrink-0 animate-pulse rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]"
         aria-hidden
       />
     );
@@ -60,7 +60,7 @@ export function UserMenu() {
     return (
       <Link
         href="/sign-in?next=/dashboard"
-        className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/40 hover:bg-[var(--enterprise-hover-surface)]"
+        className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
       >
         {t("signIn")}
       </Link>
@@ -72,11 +72,11 @@ export function UserMenu() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-10 min-h-10 max-w-[200px] items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-white pl-1 pr-1.5 text-left shadow-sm transition hover:border-[var(--enterprise-primary)]/40 sm:gap-2 sm:pr-2"
+        className="flex h-8 min-h-8 max-w-[200px] items-center gap-1.5 rounded-md border border-[var(--enterprise-border)] bg-white pl-1 pr-1.5 text-left transition hover:bg-[var(--enterprise-hover-surface)] sm:gap-2 sm:pr-2"
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        <span className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--enterprise-border)] bg-gradient-to-br from-blue-100 to-slate-100 text-[10px] font-semibold text-slate-800">
+        <span className="relative flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--enterprise-hover-surface)] text-[10px] font-semibold text-slate-800">
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element -- user-controlled URL / data URL
             <img src={image} alt="" className="h-full w-full object-cover" />
@@ -97,7 +97,7 @@ export function UserMenu() {
       {open ? (
         <div
           role="menu"
-          className="fixed right-2 top-[3.5rem] z-50 w-[min(16rem,calc(100vw-1rem))] overflow-hidden rounded-xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)] py-1 shadow-[var(--enterprise-shadow-floating)] sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-[calc(100%+8px)] sm:mt-0 sm:w-[18rem]"
+          className="fixed right-2 top-[3.25rem] z-50 w-[min(16rem,calc(100vw-1rem))] overflow-hidden rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] py-1 shadow-lg sm:absolute sm:inset-x-auto sm:left-auto sm:right-0 sm:top-[calc(100%+6px)] sm:mt-0 sm:w-[17rem]"
         >
           <div className="border-b border-[var(--enterprise-border)]/80 bg-[var(--enterprise-bg)]/50 px-3 py-2.5">
             <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">

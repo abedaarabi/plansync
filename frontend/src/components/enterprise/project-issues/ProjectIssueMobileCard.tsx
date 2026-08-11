@@ -68,7 +68,7 @@ function MobileCardFields({
           value={issue.status}
           onChange={(e) => onStatusChange(issue.id, e.target.value)}
           disabled={isPatching}
-          className={`${MOBILE_FIELD_SELECT} cursor-pointer border-0 py-2.5 text-sm font-semibold shadow-sm disabled:opacity-50 ${issueStatusBadgeClassLight(issue.status)}`}
+          className={`${MOBILE_FIELD_SELECT} cursor-pointer border-0 py-2.5 text-sm font-semibold disabled:opacity-50 ${issueStatusBadgeClassLight(issue.status)}`}
         >
           {ISSUE_STATUS_ORDER.map((s) => (
             <option key={s} value={s}>
@@ -81,7 +81,7 @@ function MobileCardFields({
         <span className="mb-1 block text-xs font-medium text-[var(--enterprise-text-muted)]">
           Assignee
         </span>
-        <p className="flex min-h-12 items-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]">
+        <p className="flex min-h-12 items-center gap-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 text-sm text-[var(--enterprise-text)]">
           <UserRound
             className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]"
             strokeWidth={1.75}
@@ -118,7 +118,7 @@ function MobileCardDue({ issue, nowMs }: Pick<IssueRowProps, "issue" | "nowMs">)
 }
 
 const MOBILE_ACTION_CLASS =
-  "inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-semibold text-[var(--enterprise-text)] transition active:scale-[0.98] disabled:opacity-50";
+  "inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 text-sm font-semibold text-[var(--enterprise-text)] transition active:scale-[0.98] disabled:opacity-50";
 
 function MobileCardActions({
   issue,
@@ -148,7 +148,7 @@ function MobileCardActions({
       {viewerHref ? (
         <Link
           href={viewerHref}
-          className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white transition active:scale-[0.98]"
+          className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white transition active:scale-[0.98]"
         >
           Open in viewer
           <ExternalLink className="h-4 w-4 opacity-90" strokeWidth={2} />
@@ -158,7 +158,7 @@ function MobileCardActions({
         type="button"
         disabled={isDeleting}
         onClick={() => onDeleteClick(issue)}
-        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] transition active:scale-[0.98] disabled:opacity-50"
+        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] transition active:scale-[0.98] disabled:opacity-50"
       >
         <Trash2 className="h-4 w-4" aria-hidden />
         Delete
@@ -183,7 +183,7 @@ export const ProjectIssueMobileCard = memo(function ProjectIssueMobileCard(props
   const viewerHref = viewerHrefForIssue(issue);
 
   return (
-    <li className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 shadow-[var(--enterprise-shadow-xs)]">
+    <li className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 ">
       <MobileCardHead issue={issue} />
       {issue.pageNumber != null ? (
         <p className="mt-2 text-xs tabular-nums text-[var(--enterprise-text-muted)]">

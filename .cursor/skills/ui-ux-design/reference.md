@@ -37,16 +37,44 @@ values. If something is genuinely missing, add it there in the correct namespace
 `--enterprise-sidebar-active` `#ffffff`, `--enterprise-sidebar-active-bg`,
 `--enterprise-sidebar-hover`, `--enterprise-sidebar-edge`.
 
-### Elevation & focus
+### Elevation, radius & focus
 
-`--enterprise-shadow-xs|sm|md|card|floating|inner`,
-`--enterprise-ring-focus` (focus ring). Tailwind `shadow-sm|md|lg|xl|2xl` are
-overridden to slate-tinted versions — safe to use directly.
+Shadows are minimal (border-first UI):
+
+| Token                          | Use                              |
+| ------------------------------ | -------------------------------- |
+| `--enterprise-shadow-card`     | **none** — default cards         |
+| `--enterprise-shadow-xs/sm/md` | hairline / short lift only       |
+| `--enterprise-shadow-floating` | dropdowns, popovers, modals only |
+| `--enterprise-radius-control`  | **6px** buttons/inputs           |
+| `--enterprise-radius-card`     | **8px** cards/panels             |
+| `--enterprise-radius-panel`    | **10px** large dialogs           |
+
+`--enterprise-ring-focus` for focus. Tailwind `shadow-*` and `rounded-xl/2xl/3xl`
+are tightened globally in `@theme` — prefer tokens over ad-hoc shadows.
 
 ### Semantic (status only)
 
 `--enterprise-semantic-{success|warning|info|danger}-{bg|border|text}` plus
 `--enterprise-semantic-danger-muted`.
+
+### Typography
+
+Font stack (app shell): `var(--font-inter)`, Geist, system-ui. Base **15px**,
+line-height **1.5**, letter-spacing **−0.011em**, antialiased.
+
+| Class                                  | Role                                | Approx size             |
+| -------------------------------------- | ----------------------------------- | ----------------------- |
+| `.enterprise-type-title`               | Page / panel titles                 | 20px / semibold / tight |
+| `.enterprise-type-subtitle`            | Supporting line under titles        | 14px / muted            |
+| `.enterprise-type-body`                | Body copy                           | 14px / lh 1.5           |
+| `.enterprise-type-nav` / `-nav-strong` | Nav & list primary text             | 14px                    |
+| `.enterprise-type-label`               | Section / table headers (uppercase) | 12px / tracking 0.07em  |
+| `.enterprise-type-caption`             | Meta, timestamps                    | 12px / muted            |
+| `.enterprise-field-label`              | Form labels                         | 14px                    |
+| `.enterprise-field-input`              | Inputs                              | 15px                    |
+
+Avoid `text-[10px]` / `text-[11px]` in enterprise UI. Viewer/BIM chrome may stay denser.
 
 ### Component classes
 
@@ -58,7 +86,7 @@ overridden to slate-tinted versions — safe to use directly.
   `.enterprise-sidebar-nav-link`
 - Misc: `.enterprise-breadcrumb-pill`, `.enterprise-dashed-add` (add tiles),
   `.enterprise-hint-tip` (`data-hint="..."` tooltip)
-- Type: `.enterprise-type-{label|caption|nav|nav-strong|body}`
+- Type: `.enterprise-type-{title|subtitle|label|caption|nav|nav-strong|body}`
 - Canvas/shell: `.enterprise-main-canvas`, `.enterprise-main-inner`
 - Scroll: `.enterprise-scrollbar`, `.enterprise-sidebar-scrollbar`
 - Loading: `.enterprise-skeleton` (shimmer)
@@ -85,10 +113,27 @@ type `.viewer-type-{label|caption}`.
 
 Tokens: `--landing-bg-deep`, `--landing-bg-mid`, `--landing-paper`,
 `--landing-ink` `#0f172a`, `--landing-ink-{muted|soft|faint}`,
-`--landing-line` / `-strong`, `--landing-label` `#3b82f6`, `--landing-cta`
-(= enterprise primary), `--landing-glass` / `-strong`.
+`--landing-line` / `-strong`, `--landing-label` / `--landing-cta` `#2563eb`,
+`--landing-cta-bright` `#1d4ed8`, `--landing-glass` / `-strong`.
 
-Classes: `.landing-atmosphere`, `.landing-band-{white|pricing|features}`,
+### Cards (use selectively — not every section)
+
+`.landing-card` — white, subtle border, 16px radius, 24–32px padding.
+Modifiers: `.landing-card-lg`, `.landing-card-flush`, `.landing-card-hover`,
+`.landing-card-featured`. Prefer editorial product UI over grids of identical cards.
+
+### Buttons (not pill-shaped)
+
+`.landing-btn-primary` (`#2563EB` → hover `#1D4ED8`), `.landing-btn-secondary`,
+`.landing-btn-ghost` (on dark/hero), `.landing-btn-block`, `.landing-btn-sm`.
+Height 44–48px, x-pad 20–24px, radius ~9px, 14–15px / weight 600.
+
+### Icons (lucide line only)
+
+`.landing-icon`, `.landing-icon-sm`, `.landing-icon-lg`, `.landing-icon-accent`.
+Restrained slate wells — icons support content, not rainbow feature art.
+
+Other: `.landing-atmosphere`, `.landing-band-{white|pricing|features}`,
 `.landing-dots`, `.text-gradient-blue`, `.btn-shine`, `.landing-grain`,
 `.landing-vignette`, `.landing-value-pop`, type `.landing-type-{label|nav|body|caption}`.
 

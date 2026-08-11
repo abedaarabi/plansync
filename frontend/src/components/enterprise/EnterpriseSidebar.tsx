@@ -573,8 +573,8 @@ export function EnterpriseSidebar({
           <div
             className={
               sidebarLogoSrc && !workspaceLogoFailed
-                ? "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/95 shadow-[0_1px_2px_rgba(0,0,0,0.12)] ring-1 ring-black/5"
-                : "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/[0.08] bg-slate-900/35 ring-1 ring-white/[0.06]"
+                ? "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/15 bg-white"
+                : "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/10 bg-white/[0.04]"
             }
             aria-hidden
           >
@@ -584,16 +584,16 @@ export function EnterpriseSidebar({
                 src={sidebarLogoSrc}
                 alt=""
                 referrerPolicy={isGoogleFaviconUrl(sidebarLogoSrc) ? "no-referrer" : undefined}
-                className="h-full w-full object-contain p-1.5"
+                className="h-full w-full object-contain p-1"
                 onError={() => setWorkspaceLogoFailed(true)}
               />
             ) : (
               <Image
                 src="/logo.svg"
                 alt=""
-                width={40}
-                height={40}
-                className="h-10 w-10 rounded-[10px] object-cover"
+                width={36}
+                height={36}
+                className="h-9 w-9 object-cover"
               />
             )}
           </div>
@@ -660,7 +660,7 @@ export function EnterpriseSidebar({
 
         {useTwoLevelNav ? (
           <div className="enterprise-scrollbar enterprise-sidebar-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5">
-            <div className="enterprise-scrollbar enterprise-sidebar-scrollbar min-h-0 flex-1 space-y-1.5 overflow-y-auto rounded-md bg-slate-800/35 p-1.5">
+            <div className="enterprise-scrollbar enterprise-sidebar-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto p-0.5">
               {
                 // fallow-ignore-next-line complexity
                 SIDEBAR_NAV_SECTIONS.map((section, sectionIndex) => {
@@ -723,22 +723,24 @@ export function EnterpriseSidebar({
                                 title={navItemTitle(item, sectionHeading, t)}
                                 className={`group flex min-h-9 items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
                                   active
-                                    ? "bg-[var(--enterprise-primary)]/90 text-white"
+                                    ? "enterprise-nav-active"
                                     : disabled
                                       ? "cursor-not-allowed text-[var(--enterprise-sidebar-muted)]/45 opacity-55"
-                                      : "text-slate-100 hover:bg-white/10 hover:text-white"
+                                      : "text-[var(--enterprise-sidebar-muted)] hover:bg-[var(--enterprise-sidebar-hover)] hover:text-[var(--enterprise-sidebar-active)]"
                                 }`}
                               >
                                 <ItemIcon
                                   className={`h-4 w-4 shrink-0 ${
-                                    active ? "text-white" : "text-slate-400 group-hover:text-white"
+                                    active
+                                      ? "text-white"
+                                      : "text-[var(--enterprise-sidebar-muted)] group-hover:text-[var(--enterprise-sidebar-active)]"
                                   }`}
                                   strokeWidth={1.75}
                                 />
                                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
                                 {item.badge ? (
                                   <span
-                                    className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
+                                    className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
                                   >
                                     {item.badge}
                                   </span>
@@ -818,7 +820,7 @@ export function EnterpriseSidebar({
                             </span>
                             {!railCollapsed && item.badge ? (
                               <span
-                                className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
+                                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
                               >
                                 {item.badge}
                               </span>
@@ -871,7 +873,7 @@ export function EnterpriseSidebar({
                           </span>
                           {!railCollapsed && item.badge ? (
                             <span
-                              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
+                              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${sidebarNavBadgeClass(active)}`}
                             >
                               {item.badge}
                             </span>

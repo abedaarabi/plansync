@@ -42,7 +42,7 @@ function IssuesHeaderAction({
       ) : null}
       <Link
         href={isWorkOrders ? `/projects/${projectId}/om/assets` : `/projects/${projectId}/files`}
-        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
+        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
       >
         {isWorkOrders ? (
           <Wrench className="h-4 w-4 shrink-0" strokeWidth={1.75} />
@@ -121,7 +121,7 @@ export function IssuesTopBanners({
   return (
     <>
       {showProGate ? (
-        <div className="enterprise-alert-info flex items-start gap-3 px-4 py-3 shadow-[var(--enterprise-shadow-xs)]">
+        <div className="enterprise-alert-info flex items-start gap-3 px-4 py-3 ">
           <div
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]"
             aria-hidden
@@ -141,7 +141,7 @@ export function IssuesTopBanners({
           {clearAssetFilterHref ? (
             <Link
               href={clearAssetFilterHref}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-primary)]/35"
             >
               <RotateCcw className="h-3.5 w-3.5 opacity-80" strokeWidth={2} aria-hidden />
               Show all
@@ -203,7 +203,7 @@ export function IssuesMsgBanner({ msg, onDismiss }: { msg: string | null; onDism
   if (!msg) return null;
   return (
     <div
-      className="flex items-start justify-between gap-3 rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-3 text-sm text-red-900"
+      className="flex items-start justify-between gap-3 rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-3 text-sm text-red-900"
       role="alert"
     >
       <span className="min-w-0 flex-1 leading-relaxed">{msg}</span>

@@ -455,7 +455,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-text)]"
                       : "text-[var(--enterprise-text)]"
                 }`
-              : `rounded-xl px-3 py-2.5 text-sm ${
+              : `rounded-md px-3 py-2 text-sm ${
                   dead
                     ? "cursor-not-allowed opacity-40"
                     : active
@@ -532,7 +532,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-start justify-center bg-[#0c1222]/55 pt-[min(16vh,140px)] backdrop-blur-md"
+      className="fixed inset-0 z-[200] flex items-start justify-center bg-[#0c1222]/45 pt-[min(14vh,120px)]"
       role="dialog"
       aria-modal
       aria-label="Command palette"
@@ -541,7 +541,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       }}
     >
       <div
-        className="enterprise-animate-in w-full max-w-xl overflow-hidden rounded-2xl border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/95 shadow-[var(--enterprise-shadow-floating)] backdrop-blur-xl"
+        className="enterprise-animate-in w-full max-w-xl overflow-hidden rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-lg"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-[var(--enterprise-border)]/90 bg-[var(--enterprise-bg)]/40 px-4 py-3">

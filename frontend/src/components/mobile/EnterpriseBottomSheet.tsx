@@ -112,7 +112,7 @@ export function EnterpriseBottomSheet({
 
   const backdropClass = chrome.backdropBase + (sheetActive ? "opacity-100" : "opacity-0");
   const panelClass = [
-    "fixed inset-x-0 bottom-0 z-[111] flex w-full flex-col overflow-hidden rounded-t-2xl border border-b-0",
+    "fixed inset-x-0 bottom-0 z-[111] flex w-full flex-col overflow-hidden rounded-t-lg border border-b-0",
     chrome.panelTheme,
     maxHeightClass,
     SHEET_TRANSITION,

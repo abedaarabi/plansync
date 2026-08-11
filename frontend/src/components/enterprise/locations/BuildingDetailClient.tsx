@@ -80,13 +80,13 @@ function statusBadgeClass(status: BuildingPublishStatus): string {
 }
 
 const BTN_SECONDARY =
-  "enterprise-btn-secondary mobile-touch-target inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium";
+  "enterprise-btn-secondary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium";
 const BTN_GHOST =
-  "mobile-touch-target inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary-soft)]";
+  "mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary-soft)]";
 const BTN_PRIMARY =
-  "enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold";
+  "enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-semibold";
 const BTN_WARNING =
-  "mobile-touch-target inline-flex items-center gap-1.5 rounded-lg border border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] px-3 py-1.5 text-sm font-medium text-[var(--enterprise-semantic-warning-text)] transition hover:opacity-90";
+  "mobile-touch-target inline-flex items-center gap-1.5 rounded-md border border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] px-3 py-1.5 text-sm font-medium text-[var(--enterprise-semantic-warning-text)] transition hover:opacity-90";
 
 type BuildingTab = "overview" | "clashes";
 
@@ -349,48 +349,44 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
 
   return (
     <div className="enterprise-animate-in space-y-4 pb-8">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
+      <header className="mb-1 flex flex-col gap-3 border-b border-[var(--enterprise-border)] pb-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-2.5">
           <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)]"
+            className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]"
             aria-hidden
           >
-            <Building2 className="h-5 w-5 text-[var(--enterprise-primary)]" />
+            <Building2 className="h-4 w-4 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
           </div>
           <div className="min-w-0">
-            <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Building</p>
+            <p className="enterprise-type-label">Building</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-xl font-semibold tracking-tight text-[var(--enterprise-text)]">
-                {building?.name}
-              </h1>
+              <h1 className="enterprise-type-title truncate">{building?.name}</h1>
               {building?.code ? (
-                <span className="rounded-md bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)]">
+                <span className="enterprise-badge-neutral rounded px-1.5 py-0.5 text-xs font-semibold">
                   {building.code}
                 </span>
               ) : null}
               <span
-                className={`${statusBadgeClass(publishStatus)} inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold`}
+                className={`${statusBadgeClass(publishStatus)} inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold`}
               >
                 {buildingStatusLabel(publishStatus)}
               </span>
               {openClashCount > 0 ? (
                 <button
                   type="button"
-                  className="enterprise-badge-warning inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold transition hover:opacity-90"
+                  className="enterprise-badge-warning inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold transition hover:opacity-90"
                   onClick={() => setActiveTab("clashes")}
                 >
                   {openClashCount} open clash{openClashCount === 1 ? "" : "es"}
                 </button>
               ) : null}
             </div>
-            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+            <p className="enterprise-type-subtitle mt-1">
               {identityParts.length > 0 ? `${identityParts.join(" · ")} · ` : ""}
               {statusLine}
             </p>
             {assets.length > 0 ? (
-              <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-                {metaParts.join(" · ")}
-              </p>
+              <p className="enterprise-type-caption mt-1">{metaParts.join(" · ")}</p>
             ) : null}
           </div>
         </div>
@@ -450,15 +446,19 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
       </header>
 
       {assets.length === 0 ? (
-        <div className="enterprise-card flex flex-col items-center gap-3 rounded-xl px-5 py-10 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)]">
-            <Upload className="h-6 w-6 text-[var(--enterprise-primary)]" aria-hidden />
+        <div className="enterprise-card flex flex-col items-center gap-3 px-5 py-10 text-center">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
+            <Upload
+              className="h-4 w-4 text-[var(--enterprise-text-muted)]"
+              strokeWidth={1.75}
+              aria-hidden
+            />
           </div>
-          <div className="max-w-sm space-y-1">
-            <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
+          <div className="max-w-sm space-y-1.5">
+            <h2 className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]">
               Add your first files
             </h2>
-            <p className="text-sm text-[var(--enterprise-text-muted)]">
+            <p className="enterprise-type-subtitle text-[0.9375rem] leading-relaxed">
               Upload an IFC model and PDF drawings. Setup opens when the model is ready.
             </p>
           </div>
@@ -494,7 +494,7 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
             <nav
               aria-label="Building sections"
               role="tablist"
-              className="grid w-full grid-cols-2 gap-1 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/90 p-1"
+              className="grid w-full grid-cols-2 gap-0.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] p-0.5"
             >
               {(
                 [
@@ -515,8 +515,8 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
                     onClick={() => setActiveTab(tab.id)}
                     className={
                       active
-                        ? "flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all duration-150"
-                        : "flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-[var(--enterprise-text-muted)] transition-all duration-150 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+                        ? "flex min-h-10 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold text-white transition-colors duration-150"
+                        : "flex min-h-10 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold text-[var(--enterprise-text-muted)] transition-colors duration-150 hover:bg-[var(--enterprise-surface)] hover:text-[var(--enterprise-text)]"
                     }
                     style={active ? { backgroundColor: "var(--enterprise-primary)" } : undefined}
                   >
@@ -528,7 +528,7 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
                     <span>{tab.label}</span>
                     {tab.id === "clashes" && openClashCount > 0 ? (
                       <span
-                        className={`rounded-md px-1.5 py-px text-[10px] font-bold tabular-nums ${
+                        className={`rounded-md px-1.5 py-px text-xs font-bold tabular-nums ${
                           active
                             ? "bg-white/20 text-white"
                             : "bg-[var(--enterprise-semantic-warning-bg)] text-[var(--enterprise-semantic-warning-text)]"
@@ -551,7 +551,7 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
               className="space-y-4"
             >
               {primaryReadyIfc ? (
-                <section className="enterprise-card space-y-3 rounded-xl p-4">
+                <section className="enterprise-card space-y-3 p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <div>
                       <h2 className="text-base font-semibold text-[var(--enterprise-text)]">

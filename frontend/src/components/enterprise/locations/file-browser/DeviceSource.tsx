@@ -187,7 +187,7 @@ export function DeviceSource({ onFiles, compact = false, title, subtitle }: Prop
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col">
       <div
-        className={`flex h-full min-h-0 w-full flex-1 flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition sm:px-10 ${
+        className={`flex h-full min-h-0 w-full flex-1 flex-col items-center justify-center gap-5 rounded-md border-2 border-dashed px-6 py-10 text-center transition sm:px-10 ${
           dragActive
             ? "border-[var(--enterprise-primary)] bg-[var(--enterprise-primary-soft)]"
             : "border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/40"
@@ -211,7 +211,7 @@ export function DeviceSource({ onFiles, compact = false, title, subtitle }: Prop
               ) : null}
             </div>
           ) : null}
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--enterprise-primary-soft)]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
             <HardDriveUpload className="h-7 w-7 text-[var(--enterprise-primary)]" aria-hidden />
           </div>
           <div className="space-y-1">

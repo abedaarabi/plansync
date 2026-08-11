@@ -492,7 +492,7 @@ function StoryDeckInner() {
           <button
             type="button"
             onClick={() => void togglePresent()}
-            className="inline-flex items-center gap-2 rounded-xl bg-[var(--landing-cta)] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
+            className="landing-btn-primary"
           >
             <Maximize2 className="h-4 w-4" aria-hidden />
             {msg("present", "Present")}

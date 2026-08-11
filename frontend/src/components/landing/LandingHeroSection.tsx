@@ -112,14 +112,14 @@ export function LandingHeroSection({
                 {heroSub}
               </p>
 
-              <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-4 lg:justify-start">
+              <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-3.5 lg:justify-start">
                 <button
                   type="button"
                   onClick={() => onGoToFreeViewer("hero_primary_cta")}
-                  className="landing-type-nav btn-shine relative inline-flex min-h-13 flex-1 min-w-0 items-center justify-center gap-2 overflow-hidden rounded-xl bg-(--landing-cta) px-8 py-3.5 font-semibold text-(--landing-cta-text) shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)] transition hover:bg-(--landing-cta-bright) hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta) focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 active:scale-[0.98] sm:flex-none sm:px-9"
+                  className="landing-btn-primary flex-1 sm:flex-none"
                 >
                   {t("openViewer")}
-                  <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+                  <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
                 </button>
                 <Link
                   href="/sign-in"
@@ -131,7 +131,7 @@ export function LandingHeroSection({
                       variant: heroVariant,
                     })
                   }
-                  className="landing-type-nav inline-flex min-h-13 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-white/40 bg-white/5 px-8 py-3.5 font-semibold text-white shadow-sm backdrop-blur-sm transition hover:border-white/65 hover:bg-white/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:flex-none sm:px-9"
+                  className="landing-btn-ghost flex-1 sm:flex-none"
                 >
                   {t("startTrial")}
                 </Link>

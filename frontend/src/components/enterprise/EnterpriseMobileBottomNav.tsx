@@ -10,8 +10,7 @@ type EnterpriseMobileBottomNavProps = {
 };
 
 /**
- * Primary mobile navigation — fixed tab bar above the home indicator.
- * Replaces hamburger-only navigation on viewports below `lg`.
+ * Primary mobile navigation — solid tab bar (no glass), field-tool hierarchy.
  */
 export function EnterpriseMobileBottomNav({ onOpenMore }: EnterpriseMobileBottomNavProps) {
   const router = useRouter();
@@ -19,7 +18,7 @@ export function EnterpriseMobileBottomNav({ onOpenMore }: EnterpriseMobileBottom
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--enterprise-border)]/90 bg-[color-mix(in_srgb,var(--enterprise-surface)_94%,transparent)] pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-8px_32px_-16px_rgba(15,23,42,0.12)] backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] pb-[env(safe-area-inset-bottom,0px)] lg:hidden"
       aria-label="Main navigation"
       style={{ height: "var(--enterprise-bottomnav-offset)" }}
     >
@@ -37,9 +36,9 @@ export function EnterpriseMobileBottomNav({ onOpenMore }: EnterpriseMobileBottom
                     hapticTap();
                     onOpenMore();
                   }}
-                  className="flex min-h-[44px] w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[var(--enterprise-text-muted)] transition-all duration-150 active:scale-[0.97] active:bg-[var(--enterprise-hover-surface)]"
+                  className="flex min-h-[44px] w-full flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 text-[var(--enterprise-text-muted)] transition-colors active:bg-[var(--enterprise-hover-surface)]"
                 >
-                  <Icon className="h-6 w-6 shrink-0" strokeWidth={1.75} aria-hidden />
+                  <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden />
                   <span className="max-w-full truncate text-[10px] font-medium leading-tight tracking-tight">
                     {tab.label}
                   </span>
@@ -66,19 +65,15 @@ export function EnterpriseMobileBottomNav({ onOpenMore }: EnterpriseMobileBottom
                 }}
                 aria-current={active ? "page" : undefined}
                 aria-disabled={tab.disabled || undefined}
-                className={`flex min-h-[44px] w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 transition-all duration-150 active:scale-[0.97] ${
+                className={`flex min-h-[44px] w-full flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 transition-colors ${
                   active
                     ? "text-[var(--enterprise-primary)]"
                     : "text-[var(--enterprise-text-muted)] active:bg-[var(--enterprise-hover-surface)]"
                 } ${tab.disabled ? "pointer-events-none opacity-40" : ""}`}
               >
-                <Icon
-                  className={`h-6 w-6 shrink-0 ${active ? "scale-105" : ""}`}
-                  strokeWidth={active ? 2.25 : 1.75}
-                  aria-hidden
-                />
+                <Icon className="h-5 w-5 shrink-0" strokeWidth={active ? 2.25 : 1.75} aria-hidden />
                 <span
-                  className={`max-w-full truncate text-[10px] leading-tight tracking-tight ${active ? "font-semibold" : "font-medium opacity-80"}`}
+                  className={`max-w-full truncate text-[10px] leading-tight tracking-tight ${active ? "font-semibold" : "font-medium"}`}
                 >
                   {tab.label}
                 </span>

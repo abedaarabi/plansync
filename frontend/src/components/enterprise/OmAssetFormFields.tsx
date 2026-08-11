@@ -411,7 +411,7 @@ export function OmAssetFormFields({
             value={drawingSearch}
             onChange={(e) => onDrawingSearchChange(e.target.value)}
             placeholder="Search project PDFs…"
-            className={`${field} pl-10`}
+            className={`${field} enterprise-field-input--icon`}
             aria-label="Search drawings"
           />
         </div>

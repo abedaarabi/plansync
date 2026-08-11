@@ -50,7 +50,7 @@ export type FileExplorerTopBarProps = {
 const FILE_EXPLORER_SEARCH_INPUT_ID = "file-explorer-search";
 
 const actionBtn =
-  "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 text-xs font-medium text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-ring-focus)] max-xl:w-8 max-xl:px-0";
+  "inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 text-xs font-medium text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-ring-focus)] max-xl:w-8 max-xl:px-0";
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -94,14 +94,14 @@ export function FileExplorerTopBar({
   }, []);
 
   return (
-    <header className="flex flex-col gap-2 border-b border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)]/95 px-3 py-2.5 backdrop-blur-sm sm:px-4 lg:flex-row lg:items-center lg:justify-between lg:gap-3 lg:px-5">
+    <header className="flex flex-col gap-2 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between lg:gap-3 lg:px-5">
       <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
         <div className="flex min-w-0 items-center gap-1 lg:hidden">
           {parent ? (
             <button
               type="button"
               onClick={() => onNavigate(parent.id)}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-ring-focus)]"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-ring-focus)]"
               aria-label={`Back to ${parent.label}`}
             >
               <ChevronLeft className="h-4 w-4" strokeWidth={2} aria-hidden />
@@ -113,15 +113,13 @@ export function FileExplorerTopBar({
             <p className="truncate text-sm font-semibold leading-tight text-[var(--enterprise-text)]">
               {current?.label ?? "Files"}
             </p>
-            <p className="truncate text-[10px] text-[var(--enterprise-text-muted)]">
-              In this folder
-            </p>
+            <p className="truncate text-xs text-[var(--enterprise-text-muted)]">In this folder</p>
           </div>
           {onOpenFolderTree ? (
             <button
               type="button"
               onClick={onOpenFolderTree}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-ring-focus)]"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-ring-focus)]"
               aria-label="Browse all folders"
             >
               <PanelLeft className="h-4 w-4" strokeWidth={2} aria-hidden />
@@ -179,7 +177,7 @@ export function FileExplorerTopBar({
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search folders & files… (/)"
-            className="w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] py-1.5 pl-8 pr-2.5 text-xs text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)] focus:border-[var(--enterprise-primary)] focus:bg-[var(--enterprise-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+            className="enterprise-field-input enterprise-field-input--icon-sm min-h-8 py-1.5 text-xs"
             aria-label="Search files and folders in this location and subfolders. Press slash to focus."
           />
         </div>
@@ -251,7 +249,7 @@ export function FileExplorerTopBar({
           ) : null}
           <label
             htmlFor={uploadInputId}
-            className={`inline-flex h-8 min-w-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-2.5 text-xs font-semibold text-white transition hover:bg-[var(--enterprise-primary-deep)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--enterprise-primary)]/35 max-xl:px-2 ${
+            className={`enterprise-btn-primary inline-flex h-8 min-w-8 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-semibold max-xl:px-2 ${
               uploadDisabled ? "pointer-events-none opacity-70" : ""
             }`}
             aria-label={uploadLabel}

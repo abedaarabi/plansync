@@ -48,7 +48,7 @@ import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadin
 import { OmAssigneeAvatar } from "@/components/enterprise/OmAssigneePicker";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmInspectionRunSlideOver } from "@/components/enterprise/OmInspectionRunSlideOver";
 import { OmInspectionTemplateSlideOver } from "@/components/enterprise/OmInspectionTemplateSlideOver";
 
@@ -242,7 +242,7 @@ function TemplateMenu({
           <div
             ref={menuRef}
             role="menu"
-            className="fixed z-[200] min-w-[11rem] overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] py-1 shadow-[var(--enterprise-shadow-floating)]"
+            className="fixed z-[200] min-w-[11rem] overflow-hidden rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] py-1 shadow-[var(--enterprise-shadow-floating)]"
             style={{ top: pos.top, left: pos.left }}
           >
             <button
@@ -579,7 +579,7 @@ export function OmInspectionsClient({ projectId }: Props) {
       />
 
       {offlineDraftCount > 0 ? (
-        <div className="enterprise-alert-info flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm">
+        <div className="enterprise-alert-info flex items-start gap-2 rounded-md px-3 py-2.5 text-sm">
           <CloudOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <p>
             {offlineDraftCount} offline draft{offlineDraftCount === 1 ? "" : "s"} on this device —
@@ -626,7 +626,7 @@ export function OmInspectionsClient({ projectId }: Props) {
             <button
               type="button"
               onClick={openCreateTemplate}
-              className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 text-xs font-semibold text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] hover:bg-[var(--enterprise-hover-surface)]"
+              className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 text-xs font-semibold text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)]"
             >
               <Plus className="h-3.5 w-3.5" />
               New
@@ -635,7 +635,7 @@ export function OmInspectionsClient({ projectId }: Props) {
 
           {templates.length === 0 ? (
             <div className="px-4 py-8 text-center">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-md bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
                 <ClipboardList className="h-5 w-5" strokeWidth={1.75} aria-hidden />
               </div>
               <p className="mt-3 text-sm font-medium text-[var(--enterprise-text)]">
@@ -663,7 +663,7 @@ export function OmInspectionsClient({ projectId }: Props) {
                 return (
                   <li
                     key={t.id}
-                    className="flex items-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-2.5 py-2.5 shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/25 hover:bg-[var(--enterprise-hover-surface)]/60 sm:gap-3 sm:px-3"
+                    className="flex items-center gap-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-2.5 py-2.5 transition hover:border-[var(--enterprise-primary)]/25 hover:bg-[var(--enterprise-hover-surface)]/60 sm:gap-3 sm:px-3"
                   >
                     <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)] sm:inline-flex">
                       <ClipboardList className="h-4 w-4" strokeWidth={1.75} aria-hidden />
@@ -703,7 +703,7 @@ export function OmInspectionsClient({ projectId }: Props) {
                       disabled={startRun.isPending}
                       title="Start inspection"
                       onClick={() => startRun.mutate(t.id)}
-                      className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-[var(--enterprise-primary)] px-3 text-[11px] font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
+                      className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-[var(--enterprise-primary)] px-3 text-[11px] font-semibold text-white hover:opacity-95 disabled:opacity-50"
                     >
                       <Play className="h-3 w-3" fill="currentColor" />
                       Start
@@ -773,7 +773,7 @@ export function OmInspectionsClient({ projectId }: Props) {
           </div>
 
           {runs.length === 0 ? (
-            <div className="mt-4 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-4 py-8 text-center">
+            <div className="mt-4 rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-4 py-8 text-center">
               <p className="text-sm font-medium text-[var(--enterprise-text)]">
                 No inspections yet
               </p>
@@ -807,7 +807,7 @@ export function OmInspectionsClient({ projectId }: Props) {
                       <button
                         type="button"
                         onClick={() => openRun(r)}
-                        className="flex w-full items-center gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-3 text-left active:opacity-90"
+                        className="flex w-full items-center gap-3 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-3 text-left active:opacity-90"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
@@ -990,30 +990,22 @@ export function OmInspectionsClient({ projectId }: Props) {
           setPickerOpen(false);
           setPickerQ("");
         }}
-        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),400px)]"
-        panelVariant="floating"
-        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         closeOnBackdrop={false}
         closeOnEscape={false}
         overlayZClass="z-[110]"
         ariaLabelledBy="pick-tpl-title"
         header={
-          <div className="min-w-0">
-            <h2 id="pick-tpl-title" className="text-lg font-semibold text-[var(--enterprise-text)]">
-              Create inspection
-            </h2>
-            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-              Choose a checklist template to start a new run.
-            </p>
-          </div>
+          <SlideOverHeader
+            icon={ClipboardCheck}
+            titleId="pick-tpl-title"
+            title="Create inspection"
+            description="Choose a checklist template to start a new run."
+          />
         }
-        bodyClassName="px-3 py-3"
-        footerClassName="border-t border-[var(--enterprise-border)] px-4 py-3"
         footer={
           <EnterpriseButton
             variant="secondary"
-            size="lg"
-            fullWidth
+            size="sm"
             onClick={() => {
               setPickerOpen(false);
               setPickerQ("");
@@ -1023,7 +1015,7 @@ export function OmInspectionsClient({ projectId }: Props) {
           </EnterpriseButton>
         }
       >
-        <div className="mb-2 flex items-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-1.5">
+        <div className="mb-2 flex items-center gap-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-1.5">
           <Search className="h-4 w-4 text-[var(--enterprise-text-muted)]" aria-hidden />
           <input
             value={pickerQ}
@@ -1047,7 +1039,7 @@ export function OmInspectionsClient({ projectId }: Props) {
                     type="button"
                     disabled={startRun.isPending}
                     onClick={() => startRun.mutate(t.id)}
-                    className="flex min-h-12 w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
+                    className="flex min-h-12 w-full items-center gap-3 rounded-md px-2 py-2 text-left transition hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-[var(--enterprise-text)]">
@@ -1078,31 +1070,21 @@ export function OmInspectionsClient({ projectId }: Props) {
       <EnterpriseSlideOver
         open={libraryOpen}
         onClose={() => setLibraryOpen(false)}
-        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),420px)]"
-        panelVariant="floating"
-        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         closeOnBackdrop={false}
         closeOnEscape={false}
         overlayZClass="z-[110]"
         ariaLabelledBy="company-lib-title"
         header={
-          <div className="min-w-0">
-            <h2
-              id="company-lib-title"
-              className="text-lg font-semibold text-[var(--enterprise-text)]"
-            >
-              Company library
-            </h2>
-            <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
-              Create shared checklists here, then import them into any project.
-            </p>
-          </div>
+          <SlideOverHeader
+            icon={Library}
+            titleId="company-lib-title"
+            title="Company library"
+            description="Create shared checklists here, then import them into any project."
+          />
         }
-        bodyClassName="px-3 py-3"
-        footerClassName="border-t border-[var(--enterprise-border)] px-4 py-3"
         footer={
           <div className="flex w-full flex-col gap-2">
-            <EnterpriseButton size="lg" fullWidth onClick={() => setCompanyTemplateSlideOpen(true)}>
+            <EnterpriseButton size="sm" onClick={() => setCompanyTemplateSlideOpen(true)}>
               <Plus className="h-4 w-4" strokeWidth={2.5} />
               Create company template
             </EnterpriseButton>
@@ -1145,7 +1127,7 @@ export function OmInspectionsClient({ projectId }: Props) {
               return (
                 <li
                   key={t.id}
-                  className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-[var(--enterprise-hover-surface)]"
+                  className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-[var(--enterprise-hover-surface)]"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">

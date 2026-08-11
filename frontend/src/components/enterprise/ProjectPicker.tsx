@@ -118,14 +118,14 @@ export function ProjectPicker() {
             }}
           >
             <div className="relative mb-1.5 px-2 pt-1">
-              <Search className="pointer-events-none absolute left-5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--enterprise-text-muted)]" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--enterprise-text-muted)]" />
               <input
                 autoFocus
                 type="text"
                 placeholder="Search projects..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="enterprise-type-nav h-9 w-full rounded-lg border-none bg-[var(--enterprise-bg)] pl-9 pr-3 text-[var(--enterprise-text)] outline-none placeholder:text-[var(--enterprise-text-muted)]/60 focus:ring-2 focus:ring-[var(--enterprise-primary)]/25"
+                className="enterprise-type-nav h-9 w-full rounded-lg border-none bg-[var(--enterprise-bg)] pl-10 pr-3 text-[var(--enterprise-text)] outline-none placeholder:text-[var(--enterprise-text-muted)]/60 focus:ring-2 focus:ring-[var(--enterprise-primary)]/25"
               />
             </div>
 

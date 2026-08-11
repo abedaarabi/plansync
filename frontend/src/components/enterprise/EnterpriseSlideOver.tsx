@@ -2,30 +2,35 @@
 
 import { useEffect, useRef, useState, type FormHTMLAttributes, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import type { LucideIcon } from "lucide-react";
 import { X } from "lucide-react";
 import { useBodyScrollLock, useEscapeToClose } from "@/hooks/useOverlayLock";
 
 const SLIDE_OVER_PANEL_TRANSITION =
-  "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]";
+  "transition-transform duration-250 ease-[cubic-bezier(0.32,0.72,0,1)]";
 
 /** Default width; use `panelMaxWidthClass` on `EnterpriseSlideOver` to override. */
-const ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W = "max-w-[520px]";
+const ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W = "max-w-[min(100%,560px)]";
 
-/** All enterprise slide-overs use this width for a consistent layout. */
-const ENTERPRISE_SLIDE_OVER_PANEL_CLASS = `w-full ${ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W} ${SLIDE_OVER_PANEL_TRANSITION}`;
+const TRANSITION_MS = 250;
 
-const TRANSITION_MS = 300;
+/** Solid edge panel — border-first, no soft glass. */
+const DEFAULT_PANEL_CHROME =
+  "border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-none lg:border-l lg:shadow-[-6px_0_24px_-14px_rgba(12,18,34,0.14)]";
 
 const FOOTER_CLASS =
-  "flex shrink-0 flex-col-reverse gap-2 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 py-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] lg:flex-row lg:justify-end lg:gap-3 lg:py-4";
+  "flex shrink-0 flex-col-reverse gap-2 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/40 py-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:py-3 lg:flex-row lg:items-center lg:justify-end lg:gap-2";
 
 const BODY_CLASS =
-  "mobile-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain overscroll-x-none";
+  "enterprise-scrollbar mobile-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain overscroll-x-none bg-[var(--enterprise-surface)]";
+
+const HEADER_CLASS =
+  "flex shrink-0 items-start justify-between gap-2 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] py-3.5";
 
 function MobileSheetHandle() {
   return (
-    <div className="flex shrink-0 justify-center pt-2.5 pb-1 lg:hidden" aria-hidden>
-      <div className="h-1 w-10 rounded-full bg-[var(--enterprise-border)]" />
+    <div className="flex shrink-0 justify-center pt-2 pb-0.5 lg:hidden" aria-hidden>
+      <div className="h-1 w-9 rounded-full bg-[var(--enterprise-border)]" />
     </div>
   );
 }
@@ -42,16 +47,15 @@ function panelMotionClass(
     : "max-lg:translate-y-full lg:translate-x-full";
   const desktopDock =
     panelVariant === "floating"
-      ? "lg:inset-y-3 lg:right-3 lg:left-auto lg:h-auto lg:max-h-[calc(100dvh-1.5rem)] lg:rounded-2xl lg:border"
-      : "lg:inset-y-0 lg:right-0 lg:left-auto lg:h-dvh lg:max-h-dvh lg:rounded-none";
+      ? "lg:inset-y-2 lg:right-2 lg:left-auto lg:h-auto lg:max-h-[calc(100dvh-1rem)] lg:rounded-lg lg:border"
+      : "lg:inset-y-0 lg:right-0 lg:left-auto lg:h-dvh lg:max-h-dvh lg:rounded-none lg:border-y-0 lg:border-r-0";
   return [
-    // Do not set max-w-full here — it fights panelMaxWidthClass in the CSS cascade.
     "w-full min-w-0",
     panelMaxWidthClass,
     SLIDE_OVER_PANEL_TRANSITION,
     `fixed ${panelZClass} flex flex-col overflow-x-hidden`,
     panelChromeClassName,
-    "max-lg:inset-x-0 max-lg:bottom-0 max-lg:top-auto max-lg:max-h-[min(92dvh,920px)] max-lg:rounded-t-2xl max-lg:border-l-0 max-lg:border-t",
+    "max-lg:inset-x-0 max-lg:bottom-0 max-lg:top-auto max-lg:max-h-[min(92dvh,920px)] max-lg:rounded-t-lg max-lg:border max-lg:border-b-0",
     desktopDock,
     motion,
   ].join(" ");
@@ -60,7 +64,7 @@ function panelMotionClass(
 export type EnterpriseSlideOverProps = {
   open: boolean;
   onClose: () => void;
-  /** Left side of the header row (title, subtitle, icons). */
+  /** Left side of the header row (title, subtitle, icons). Prefer `SlideOverHeader`. */
   header: ReactNode;
   children: ReactNode;
   footer: ReactNode;
@@ -72,7 +76,7 @@ export type EnterpriseSlideOverProps = {
   panelZClass?: string;
   /** For `role="dialog"` + `aria-labelledby` on the panel. */
   ariaLabelledBy?: string;
-  /** Tailwind max-width classes for the panel (default: `max-w-[520px]`). */
+  /** Tailwind max-width classes for the panel (default: `max-w-[min(100%,560px)]`). */
   panelMaxWidthClass?: string;
   /**
    * Desktop layout: `edge` docks full-height to the right (default);
@@ -96,8 +100,65 @@ export type EnterpriseSlideOverProps = {
 };
 
 /**
+ * Compact title block for enterprise slide-overs (AEC console density).
+ * Use inside `header` for consistent typography and optional status/meta.
+ */
+export function SlideOverHeader({
+  title,
+  description,
+  titleId,
+  icon: Icon,
+  meta,
+  badge,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  titleId?: string;
+  icon?: LucideIcon;
+  /** Secondary line under title (id, status chips, etc.) */
+  meta?: ReactNode;
+  badge?: ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 items-start gap-2.5 pr-1">
+      {Icon ? (
+        <div
+          className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]"
+          aria-hidden
+        >
+          <Icon className="h-4 w-4 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
+        </div>
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2
+            id={titleId}
+            className="truncate text-lg font-semibold tracking-tight text-[var(--enterprise-text)]"
+          >
+            {title}
+          </h2>
+          {badge}
+        </div>
+        {meta ? (
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">{meta}</div>
+        ) : null}
+        {description ? <p className="enterprise-type-subtitle mt-1">{description}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+/** Secondary footer action (Cancel). */
+export const SLIDE_OVER_BTN_SECONDARY =
+  "inline-flex min-h-9 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)] disabled:cursor-not-allowed disabled:opacity-55";
+
+/** Primary footer action (Save / Create). */
+export const SLIDE_OVER_BTN_PRIMARY =
+  "inline-flex min-h-9 items-center justify-center rounded-md border border-transparent bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--enterprise-primary-deep)] disabled:cursor-not-allowed disabled:opacity-55";
+
+/**
  * Right-edge slide-over with backdrop and body scroll lock.
- * By default: backdrop click, Escape, and header X call `onClose` — disable via props.
+ * Solid enterprise chrome — dense header/footer, hairline borders, no glass.
  * Portals to `document.body` for correct stacking above app chrome.
  */
 export function EnterpriseSlideOver({
@@ -112,7 +173,7 @@ export function EnterpriseSlideOver({
   ariaLabelledBy,
   panelMaxWidthClass = ENTERPRISE_SLIDE_OVER_DEFAULT_MAX_W,
   panelVariant = "edge",
-  panelChromeClassName = "border-l border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]",
+  panelChromeClassName = DEFAULT_PANEL_CHROME,
   bodyClassName,
   footerClassName,
   headerClassName,
@@ -165,10 +226,9 @@ export function EnterpriseSlideOver({
 
   if (!shouldRender || typeof document === "undefined") return null;
 
-  // Keep pointer-events on while mounted so clicks cannot fall through to the page during
-  // open/close transitions (otherwise a backdrop "close" can immediately trigger UI underneath).
+  // Keep pointer-events on while mounted so clicks cannot fall through during transitions.
   const backdropClass =
-    "pointer-events-auto absolute inset-0 bg-[var(--enterprise-text)]/40 backdrop-blur-[2px] transition-opacity duration-300 ease-out " +
+    "pointer-events-auto absolute inset-0 bg-[#0b1220]/40 transition-opacity duration-250 ease-out " +
     (panelActive ? "opacity-100" : "opacity-0");
 
   const panelMotion = panelMotionClass(
@@ -188,10 +248,8 @@ export function EnterpriseSlideOver({
         showCloseButton={showHeaderCloseButton}
         className={headerClassName}
       />
-      <div className={`${BODY_CLASS} ${bodyClassName ?? "px-4 py-4 lg:px-5 lg:py-5"}`}>
-        {children}
-      </div>
-      <div className={`${FOOTER_CLASS} ${footerClassName ?? "px-4 lg:px-5"}`}>{footer}</div>
+      <div className={`${BODY_CLASS} ${bodyClassName ?? "px-5 py-4"}`}>{children}</div>
+      <div className={`${FOOTER_CLASS} ${footerClassName ?? "px-5"}`}>{footer}</div>
     </>
   );
 
@@ -263,18 +321,16 @@ function HeaderRow({
   className?: string;
 }) {
   return (
-    <div
-      className={`flex shrink-0 items-start justify-between gap-3 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 py-4 ${className ?? "px-5"}`}
-    >
+    <div className={`${HEADER_CLASS} ${className ?? "px-5"}`}>
       <div className="min-w-0 flex-1">{header}</div>
       {showCloseButton ? (
         <button
           type="button"
           onClick={onClose}
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl text-[var(--enterprise-text-muted)] transition-all duration-150 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] active:scale-[0.97]"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition-colors hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
           aria-label="Close"
         >
-          <X className="h-5 w-5" strokeWidth={1.75} />
+          <X className="h-4 w-4" strokeWidth={1.75} />
         </button>
       ) : null}
     </div>

@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ScrollText } from "lucide-react";
 import { toast } from "sonner";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { createFieldReport, ProRequiredError, type FieldReportRow } from "@/lib/api-client";
 import { emptyDetails } from "@/lib/fieldReportUtils";
 import {
@@ -104,54 +104,34 @@ export function FieldReportCreateSlideOver({
         },
       }}
       ariaLabelledBy="fr-create-title"
-      panelVariant="floating"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),480px)]"
-      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
-      closeOnBackdrop={false}
-      closeOnEscape={false}
-      bodyClassName="px-5 py-5"
-      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       header={
-        <div className="flex items-start gap-3 pr-1">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
-            <ScrollText
-              className="h-5 w-5 text-[var(--enterprise-primary)]"
-              strokeWidth={1.75}
-              aria-hidden
-            />
-          </div>
-          <div className="min-w-0">
-            <h2
-              id="fr-create-title"
-              className="text-lg font-semibold tracking-tight text-[var(--enterprise-text)]"
-            >
-              New field report
-            </h2>
-            <p className="mt-0.5 text-xs leading-snug text-[var(--enterprise-text-muted)]">
-              Daily site log. Weekly rollups are generated from dailies.
-            </p>
-          </div>
-        </div>
+        <SlideOverHeader
+          icon={ScrollText}
+          titleId="fr-create-title"
+          title="New field report"
+          description="Daily site log. Weekly rollups are generated from dailies."
+        />
       }
       footer={
-        <div className="flex w-full justify-end gap-2">
-          <EnterpriseButton type="button" variant="secondary" onClick={handleClose}>
+        <>
+          <EnterpriseButton type="button" variant="secondary" size="sm" onClick={handleClose}>
             Cancel
           </EnterpriseButton>
           <EnterpriseButton
             type="submit"
+            size="sm"
             loading={createMut.isPending}
             disabled={!reportDate.trim()}
           >
             {createMut.isPending ? "Creating…" : "Create"}
           </EnterpriseButton>
-        </div>
+        </>
       }
     >
       <div className="space-y-4">
         {msg ? (
           <div
-            className="rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
+            className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
             role="alert"
           >
             {msg}

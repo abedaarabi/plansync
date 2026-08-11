@@ -166,7 +166,7 @@ export function OrganizationBrandingPanel({
         <div className="border-b border-[var(--enterprise-border)] bg-[linear-gradient(135deg,var(--enterprise-primary-soft),transparent_55%)] px-4 py-5 sm:px-6 sm:py-6">
           <div className="flex flex-wrap items-start gap-4">
             <div
-              className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] ring-1 ring-[var(--enterprise-border)]"
+              className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--enterprise-surface)] ring-1 ring-[var(--enterprise-border)]"
               style={{ color: previewColor }}
             >
               {ws.logoUrl ? (
@@ -287,7 +287,7 @@ export function OrganizationBrandingPanel({
                   type="color"
                   value={previewColor}
                   onChange={(e) => setPrimaryColor(e.target.value.toUpperCase())}
-                  className="h-11 w-14 cursor-pointer rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-1 shadow-[var(--enterprise-shadow-xs)]"
+                  className="h-11 w-14 cursor-pointer rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-1 "
                   aria-label="Choose primary brand color"
                 />
                 <input
@@ -371,7 +371,7 @@ export function OrganizationBrandingPanel({
                   {websiteFieldError}
                 </p>
               ) : websitePreviewHost ? (
-                <div className="mt-2 flex items-center gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5">
+                <div className="mt-2 flex items-center gap-3 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={faviconUrlFromHostname(websitePreviewHost)}
@@ -475,7 +475,7 @@ export function OrganizationBrandingPanel({
             <button
               type="submit"
               disabled={saveMutation.isPending}
-              className="enterprise-btn-primary rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
+              className="enterprise-btn-primary rounded-md px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
             >
               {saveMutation.isPending ? "Saving…" : "Save branding"}
             </button>
@@ -545,7 +545,7 @@ export function OrganizationBrandingPanel({
                 setDeleteConfirmName("");
                 setDeleteOpen(true);
               }}
-              className="rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] transition hover:bg-[var(--enterprise-semantic-danger-bg)]"
+              className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] transition hover:bg-[var(--enterprise-semantic-danger-bg)]"
             >
               Delete workspace…
             </button>
@@ -560,7 +560,7 @@ export function OrganizationBrandingPanel({
           aria-modal="true"
           aria-labelledby="delete-ws-title"
         >
-          <div className="w-full max-w-md rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 shadow-lg sm:p-6">
+          <div className="w-full max-w-md rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 shadow-lg sm:p-6">
             <h3
               id="delete-ws-title"
               className="text-base font-semibold text-[var(--enterprise-semantic-danger-text)]"
@@ -584,7 +584,7 @@ export function OrganizationBrandingPanel({
                 type="button"
                 disabled={deleteBusy}
                 onClick={() => setDeleteOpen(false)}
-                className="enterprise-btn-secondary rounded-xl px-3 py-2.5 text-sm font-medium disabled:opacity-60"
+                className="enterprise-btn-secondary rounded-md px-3 py-2.5 text-sm font-medium disabled:opacity-60"
               >
                 Cancel
               </button>
@@ -605,7 +605,7 @@ export function OrganizationBrandingPanel({
                     setDeleteBusy(false);
                   }
                 }}
-                className="rounded-xl bg-[var(--enterprise-semantic-danger-text)] px-3 py-2.5 text-sm font-semibold text-white hover:opacity-95 disabled:opacity-50"
+                className="rounded-md bg-[var(--enterprise-semantic-danger-text)] px-3 py-2.5 text-sm font-semibold text-white hover:opacity-95 disabled:opacity-50"
               >
                 {deleteBusy ? "Deleting…" : "Delete permanently"}
               </button>

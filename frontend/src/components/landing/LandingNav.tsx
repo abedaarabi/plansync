@@ -111,7 +111,7 @@ export function LandingNav({
                   destination: "/sign-in",
                 })
               }
-              className="landing-type-nav rounded-lg border border-slate-200 bg-white px-3.5 py-2 font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              className="landing-btn-secondary landing-btn-sm"
             >
               {t("signIn")}
             </Link>
@@ -119,7 +119,7 @@ export function LandingNav({
           <button
             type="button"
             onClick={() => onGoToFreeViewer("nav_desktop_start_free")}
-            className="landing-type-nav btn-shine relative overflow-hidden rounded-full bg-(--landing-cta) px-5 py-2.5 font-semibold text-white shadow-[0_10px_24px_-12px_color-mix(in_srgb,var(--landing-cta)_55%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_35%,transparent)] transition hover:bg-(--landing-cta-bright) hover:ring-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)]"
+            className="landing-btn-primary landing-btn-sm"
           >
             {t("startFree")}
           </button>
@@ -136,7 +136,7 @@ export function LandingNav({
                   destination: "/sign-in",
                 })
               }
-              className="landing-type-nav inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="landing-btn-secondary landing-btn-sm"
             >
               {t("signIn")}
             </Link>
@@ -261,7 +261,7 @@ export function LandingNav({
                       destination: "/sign-in",
                     });
                   }}
-                  className="landing-type-nav inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition hover:bg-slate-50"
+                  className="landing-btn-secondary flex-1"
                 >
                   {t("signIn")}
                 </Link>
@@ -273,7 +273,7 @@ export function LandingNav({
                 setMobileOpen(false);
                 onGoToFreeViewer("nav_mobile_start_free");
               }}
-              className="landing-type-nav btn-shine relative overflow-hidden rounded-xl bg-(--landing-cta) px-5 py-3 text-center font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-(--landing-cta-bright)"
+              className="landing-btn-primary landing-btn-block"
             >
               {t("startFree")}
             </button>

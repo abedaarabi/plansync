@@ -103,11 +103,11 @@ export function DashboardClient() {
 
   if (!me) {
     return (
-      <div className="enterprise-card p-8 text-center">
-        <p className="text-[var(--enterprise-text)]">{td("signInPrompt")}</p>
+      <div className="enterprise-card px-4 py-8 text-center">
+        <p className="text-sm font-semibold text-[var(--enterprise-text)]">{td("signInPrompt")}</p>
         <Link
           href="/sign-in?next=/dashboard"
-          className="mt-4 inline-flex rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-medium text-white"
+          className="mt-3 inline-flex rounded-md bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[var(--enterprise-primary-deep)]"
         >
           {td("signInCta")}
         </Link>
@@ -148,43 +148,42 @@ export function DashboardClient() {
 
   if (!hasWorkspace) {
     return (
-      <div className="mobile-app-page enterprise-animate-in w-full min-w-0 max-w-full space-y-6">
-        <section className="enterprise-card max-w-2xl p-6 sm:p-8">
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--enterprise-text)]">
+      <div className="mobile-app-page enterprise-animate-in w-full min-w-0 max-w-full">
+        <section className="enterprise-card max-w-lg p-4 sm:p-5">
+          <h1 className="text-lg font-semibold tracking-tight text-[var(--enterprise-text)]">
             {td("createWorkspaceTitle")}
           </h1>
-          <p className="enterprise-type-body mt-2 text-[var(--enterprise-text-muted)]">
+          <p className="mt-1 text-xs text-[var(--enterprise-text-muted)] sm:text-sm">
             {td("createWorkspaceBody")}
           </p>
-          <form onSubmit={onCreateWorkspace} className="mt-6 space-y-4">
+          <form onSubmit={onCreateWorkspace} className="mt-4 space-y-3">
             <div>
-              <label
-                htmlFor="workspace-name"
-                className="enterprise-type-label text-[var(--enterprise-text-muted)]"
-              >
+              <label htmlFor="workspace-name" className="enterprise-field-label">
                 {td("workspaceNameLabel")}
               </label>
               <input
                 id="workspace-name"
                 value={workspaceName}
                 onChange={(e) => setWorkspaceName(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+                className="enterprise-field-input"
                 placeholder={td("workspaceNamePlaceholder")}
                 required
               />
             </div>
             {createWorkspaceError ? (
-              <p className="enterprise-alert-danger px-3 py-2 text-sm">{createWorkspaceError}</p>
+              <p className="enterprise-alert-danger rounded-md px-3 py-2 text-sm">
+                {createWorkspaceError}
+              </p>
             ) : null}
             <button
               type="submit"
               disabled={creatingWorkspace}
-              className="inline-flex rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--enterprise-primary-deep)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex rounded-md bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[var(--enterprise-primary-deep)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {creatingWorkspace ? td("creating") : td("createWorkspaceCta")}
             </button>
           </form>
-          <p className="enterprise-type-caption mt-4 text-[var(--enterprise-text-muted)]">
+          <p className="mt-3 text-xs text-[var(--enterprise-text-muted)]">
             {td("redirectPrefix")}
             <strong className="text-[var(--enterprise-text)]">{td("redirectEmphasis")}</strong>
             {td("redirectSuffix")}
@@ -292,116 +291,78 @@ export function DashboardClient() {
     },
   ];
 
+  const actionLinkClass =
+    "flex min-h-10 items-center justify-between gap-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm font-medium text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]";
+
   return (
-    <div className="mobile-app-page enterprise-animate-in w-full min-w-0 max-w-full space-y-6 md:space-y-8">
-      {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-gradient-to-br from-[var(--enterprise-surface)] via-white to-blue-50/40 p-5 shadow-[var(--enterprise-shadow-card)] sm:p-6 lg:p-8">
-        <div
-          className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[var(--enterprise-primary)]/8 blur-3xl"
-          aria-hidden
-        />
-        <div className="relative flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
-              {td("workspaceEyebrow")}
-            </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-[var(--enterprise-text)] sm:text-[28px]">
-              {td("welcomeBack", { name: firstName })}
-            </h1>
-            <p className="enterprise-type-body mt-2 max-w-xl text-[var(--enterprise-subtitle)] sm:text-base">
-              {dash?.workspace?.name ? (
-                <>
-                  <span className="font-medium text-[var(--enterprise-text)]">
-                    {dash.workspace.name}
-                  </span>
-                  {" · "}
-                </>
-              ) : null}
-              {td("heroSubtitle")}
-            </p>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              {sub === "active" ? (
-                <span className="enterprise-badge-success enterprise-type-caption px-3 py-1">
-                  {td("subActive")}
-                </span>
-              ) : sub === "trialing" && isPro ? (
-                <span className="enterprise-badge-warning enterprise-type-caption px-3 py-1">
-                  {td("subTrial")}
-                </span>
-              ) : sub === "trialing" && !isPro ? (
-                <span className="enterprise-badge-neutral enterprise-type-caption px-3 py-1">
-                  {td("subTrialEnded")}
-                </span>
-              ) : (
-                <span className="enterprise-badge-neutral enterprise-type-caption px-3 py-1">
-                  {td("subFree")}
-                </span>
-              )}
-              <Link
-                href={
-                  isSuperAdmin(membership?.role) ? "/organization?tab=billing" : "/organization"
-                }
-                className="enterprise-type-caption inline-flex items-center rounded-full border border-[var(--enterprise-border)] bg-white/80 px-3 py-1 text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35"
-              >
-                {td("billingAndPlan")}
-              </Link>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 flex-col items-stretch gap-3 sm:flex-row md:max-w-[340px] md:flex-col">
-            <div className="enterprise-card flex min-w-0 items-center gap-4 px-4 py-4 sm:px-5">
-              <div
-                className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/15 to-blue-600/5 ring-1 ring-blue-500/20"
-                aria-hidden
-              >
-                <Heart className="h-7 w-7 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
-                <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-white text-lg font-bold tabular-nums text-[var(--enterprise-text)] shadow-sm ring-1 ring-[var(--enterprise-border)]">
-                  {healthScore}
-                </span>
-              </div>
-              <div>
-                <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
-                  {td("healthScore")}
-                </p>
-                <p className="enterprise-type-body mt-0.5 text-[var(--enterprise-text-muted)]">
-                  {td("healthScoreHint")}
-                </p>
-              </div>
-            </div>
-            <div className="enterprise-type-body flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-emerald-900">
-              <TrendingUp className="h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2} />
-              <span>
-                <strong className="font-semibold">
-                  {momentum >= 0 ? "+" : ""}
-                  {momentum}%
-                </strong>
-                <span className="text-emerald-800/90"> {td("momentumVsPrior")}</span>
-              </span>
-            </div>
-          </div>
+    <div className="mobile-app-page enterprise-animate-in w-full min-w-0 max-w-full space-y-4">
+      <header className="flex flex-col gap-3 border-b border-[var(--enterprise-border)] pb-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
+            {dash?.workspace?.name ?? td("workspaceEyebrow")}
+          </p>
+          <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
+            {td("welcomeBack", { name: firstName })}
+          </h1>
+          <p className="mt-1 text-xs text-[var(--enterprise-text-muted)] sm:text-sm">
+            {td("heroSubtitle")}
+          </p>
         </div>
-      </section>
-
-      {/* KPI strip */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {kpiRows.map((k) => (
-          <div
-            key={k.key}
-            className="enterprise-card enterprise-card-hover flex gap-4 p-4 transition duration-200 hover:-translate-y-0.5 sm:p-5"
-          >
-            <div
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-bg)] ${k.tone}`}
+        <div className="flex flex-wrap items-center gap-2">
+          {sub === "active" ? (
+            <span className="enterprise-badge-success rounded px-2 py-0.5 text-[11px] font-semibold">
+              {td("subActive")}
+            </span>
+          ) : sub === "trialing" && isPro ? (
+            <span className="enterprise-badge-warning rounded px-2 py-0.5 text-[11px] font-semibold">
+              {td("subTrial")}
+            </span>
+          ) : sub === "trialing" && !isPro ? (
+            <span className="enterprise-badge-neutral rounded px-2 py-0.5 text-[11px] font-semibold">
+              {td("subTrialEnded")}
+            </span>
+          ) : (
+            <span className="enterprise-badge-neutral rounded px-2 py-0.5 text-[11px] font-semibold">
+              {td("subFree")}
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2.5 py-1 text-xs font-medium text-[var(--enterprise-text)]">
+            <Heart className="h-3.5 w-3.5 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
+            {td("healthScore")}{" "}
+            <strong className="tabular-nums text-[var(--enterprise-text)]">{healthScore}</strong>
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] px-2.5 py-1 text-xs font-medium text-[var(--enterprise-semantic-success-text)]">
+            <TrendingUp className="h-3.5 w-3.5" strokeWidth={2} />
+            {momentum >= 0 ? "+" : ""}
+            {momentum}%
+          </span>
+          {isSuperAdmin(membership?.role) ? (
+            <Link
+              href="/organization?tab=billing"
+              className="text-xs font-medium text-[var(--enterprise-text-muted)] underline-offset-2 hover:text-[var(--enterprise-text)] hover:underline"
             >
-              <k.icon className="h-5 w-5" strokeWidth={1.75} />
+              {td("billingAndPlan")}
+            </Link>
+          ) : null}
+        </div>
+      </header>
+
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {kpiRows.map((k) => (
+          <div key={k.key} className="enterprise-card flex gap-3 p-3">
+            <div
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-hover-surface)] ${k.tone}`}
+            >
+              <k.icon className="h-4 w-4" strokeWidth={1.75} />
             </div>
             <div className="min-w-0">
-              <p className="enterprise-type-caption text-[var(--enterprise-text-muted)]">
+              <p className="text-[11px] font-medium text-[var(--enterprise-text-muted)]">
                 {k.label}
               </p>
-              <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-[var(--enterprise-text)] sm:text-2xl">
+              <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight text-[var(--enterprise-text)]">
                 {k.value}
               </p>
-              <p className="enterprise-type-caption mt-1 text-[var(--enterprise-text-muted)]">
+              <p className="mt-0.5 truncate text-[11px] text-[var(--enterprise-text-muted)]">
                 {k.hint}
               </p>
             </div>
@@ -410,14 +371,11 @@ export function DashboardClient() {
       </div>
 
       {isAdmin && hasWorkspace && wid ? (
-        <section className="enterprise-card p-5 sm:p-6">
-          <h2 className="enterprise-type-label text-[var(--enterprise-text-muted)]">
+        <section className="enterprise-card p-3.5 sm:p-4">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--enterprise-text-muted)]">
             {td("workspaceUsage")}
           </h2>
-          <p className="enterprise-type-body mt-1 text-[var(--enterprise-text-muted)]">
-            {td("workspaceUsageDesc")}
-          </p>
-          <div className="mt-4 max-w-md">
+          <div className="mt-3 max-w-md">
             <WorkspaceUsageMeter
               label={td("usageLabelStorage")}
               usedLabel={`${formatGiB(storageUsed)} / ${formatGiB(storageQuota)} GB`}
@@ -456,30 +414,24 @@ export function DashboardClient() {
         </section>
       ) : null}
 
-      {/* Chart + team snapshot */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-3">
         <section className="enterprise-card overflow-hidden p-0 lg:col-span-2">
-          <div className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-5 py-4 sm:px-6">
-            <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
-              {td("chartTitle")}
-            </h2>
-            <p className="enterprise-type-body mt-1 text-[var(--enterprise-text-muted)]">
-              {td("chartSubtitle")}
-            </p>
-          </div>
-          <div className="p-5 pt-4 sm:p-6 sm:pt-4">
-            <DashboardActivityChart data={activitySeries} />
-            <div className="enterprise-type-body mt-4 flex flex-wrap gap-6 border-t border-[var(--enterprise-border)]/80 pt-4 text-[var(--enterprise-text-muted)]">
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden />
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--enterprise-border)] px-3.5 py-2.5">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--enterprise-text)]">
+                {td("chartTitle")}
+              </h2>
+              <p className="text-xs text-[var(--enterprise-text-muted)]">{td("chartSubtitle")}</p>
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs text-[var(--enterprise-text-muted)]">
+              <span>
                 {td("last7Days")}{" "}
                 <strong className="font-semibold text-[var(--enterprise-text)]">
                   {last7Total}
-                </strong>{" "}
-                {td("events")}
+                </strong>
               </span>
-              <span className="inline-flex items-center gap-2">
-                <Users className="h-4 w-4 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
+              <span className="inline-flex items-center gap-1">
+                <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
                 <strong className="font-semibold text-[var(--enterprise-text)]">
                   {memberCount}
                 </strong>{" "}
@@ -487,85 +439,82 @@ export function DashboardClient() {
               </span>
             </div>
           </div>
+          <div className="p-3.5 sm:p-4">
+            <DashboardActivityChart data={activitySeries} />
+          </div>
         </section>
 
-        <section className="enterprise-card flex flex-col p-5 sm:p-6">
-          <h2 className="enterprise-type-label text-[var(--enterprise-text-muted)]">
+        <section className="enterprise-card flex flex-col p-3.5 sm:p-4">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--enterprise-text-muted)]">
             {td("quickActions")}
           </h2>
-          <ul className="mt-4 flex flex-1 flex-col gap-2">
+          <ul className="mt-2.5 flex flex-1 flex-col gap-1.5">
             <li>
-              <Link
-                href="/projects"
-                className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)]"
-              >
+              <Link href="/projects" className={actionLinkClass}>
                 <span className="flex items-center gap-2">
                   <FileStack
-                    className="h-4 w-4 text-[var(--enterprise-primary)]"
+                    className="h-4 w-4 text-[var(--enterprise-text-muted)]"
                     strokeWidth={1.75}
                   />
                   {td("actionNewProject")}
                 </span>
-                <ArrowUpRight className="h-4 w-4 opacity-50" />
+                <ArrowUpRight className="h-3.5 w-3.5 opacity-50" />
               </Link>
             </li>
             <li>
-              <Link
-                href="/projects"
-                className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)]"
-              >
+              <Link href="/projects" className={actionLinkClass}>
                 <span className="flex items-center gap-2">
-                  <Upload className="h-4 w-4 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
+                  <Upload
+                    className="h-4 w-4 text-[var(--enterprise-text-muted)]"
+                    strokeWidth={1.75}
+                  />
                   {td("actionUploadPdf")}
                 </span>
-                <ArrowUpRight className="h-4 w-4 opacity-50" />
+                <ArrowUpRight className="h-3.5 w-3.5 opacity-50" />
               </Link>
             </li>
             <li>
-              <Link
-                href="/organization?tab=people"
-                className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)]"
-              >
+              <Link href="/organization?tab=people" className={actionLinkClass}>
                 <span className="flex items-center gap-2">
                   <UserPlus
-                    className="h-4 w-4 text-[var(--enterprise-primary)]"
+                    className="h-4 w-4 text-[var(--enterprise-text-muted)]"
                     strokeWidth={1.75}
                   />
                   {td("actionInviteTeam")}
                 </span>
-                <ArrowUpRight className="h-4 w-4 opacity-50" />
+                <ArrowUpRight className="h-3.5 w-3.5 opacity-50" />
               </Link>
             </li>
           </ul>
         </section>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <section className="enterprise-card p-5 sm:p-6">
+      <div className="grid gap-3 md:grid-cols-2">
+        <section className="enterprise-card p-3.5 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="enterprise-type-label text-[var(--enterprise-text-muted)]">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--enterprise-text-muted)]">
               {td("gettingStarted")}
             </h2>
-            <span className="enterprise-type-nav text-[var(--enterprise-text-muted)]">
+            <span className="text-xs text-[var(--enterprise-text-muted)]">
               {td("progressCount", { done: doneCount, total: checklist.length })}
             </span>
           </div>
-          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-sm bg-[var(--enterprise-hover-surface)]">
             <div
-              className="h-full rounded-full bg-[var(--enterprise-primary)] transition-all duration-500"
+              className="h-full bg-[var(--enterprise-primary)] transition-all duration-300"
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          <ul className="mt-5 space-y-3">
+          <ul className="mt-3 space-y-2">
             {checklist.map((row) => (
-              <li key={row.id} className="flex items-center gap-3 text-sm">
+              <li key={row.id} className="flex items-center gap-2.5 text-sm">
                 {row.done ? (
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--enterprise-semantic-success-bg)] text-[var(--enterprise-semantic-success-text)]">
-                    <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-semantic-success-bg)] text-[var(--enterprise-semantic-success-text)]">
+                    <Check className="h-3 w-3" strokeWidth={2.5} />
                   </span>
                 ) : (
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-300">
-                    <Circle className="h-4 w-4" />
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] text-[var(--enterprise-text-muted)]">
+                    <Circle className="h-3 w-3" />
                   </span>
                 )}
                 <span
@@ -582,46 +531,50 @@ export function DashboardClient() {
           </ul>
         </section>
 
-        <section>
-          <h2 className="enterprise-type-label text-[var(--enterprise-text-muted)]">
-            {td("yourProjects")}
-          </h2>
+        <section className="enterprise-card p-3.5 sm:p-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--enterprise-text-muted)]">
+              {td("yourProjects")}
+            </h2>
+            <Link
+              href="/projects"
+              className="text-xs font-medium text-[var(--enterprise-primary)] hover:underline"
+            >
+              {td("goToProjects")}
+            </Link>
+          </div>
           {firstProject ? (
             <Link
               href="/projects"
-              className="enterprise-card enterprise-card-hover mt-3 block p-5 transition hover:border-[var(--enterprise-primary)]/35"
+              className="mt-2.5 flex items-center gap-3 rounded-md border border-[var(--enterprise-border)] px-3 py-2.5 transition hover:bg-[var(--enterprise-hover-surface)]"
             >
-              <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
-                  <FileStack className="h-5 w-5" strokeWidth={1.75} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-[var(--enterprise-text)]">{firstProject.name}</p>
-                  <p className="enterprise-type-body mt-0.5 text-[var(--enterprise-text-muted)]">
-                    {td("projectFilesIssues", {
-                      files: firstProject.files.length,
-                      issues: issueTotal,
-                    })}
-                  </p>
-                </div>
-                <ArrowUpRight className="h-4 w-4 shrink-0 text-[var(--enterprise-text-muted)]" />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]">
+                <FileStack className="h-4 w-4" strokeWidth={1.75} />
               </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">
+                  {firstProject.name}
+                </p>
+                <p className="text-xs text-[var(--enterprise-text-muted)]">
+                  {td("projectFilesIssues", {
+                    files: firstProject.files.length,
+                    issues: issueTotal,
+                  })}
+                </p>
+              </div>
+              <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)]" />
             </Link>
           ) : (
-            <div className="enterprise-card mt-3 border-2 border-dashed border-[var(--enterprise-border-muted)] px-6 py-10 text-center">
-              <FileStack
-                className="mx-auto h-10 w-10 text-[var(--enterprise-primary)] opacity-80"
-                strokeWidth={1.25}
-              />
-              <p className="mt-3 font-semibold text-[var(--enterprise-text)]">
+            <div className="mt-2.5 rounded-md border border-dashed border-[var(--enterprise-border)] px-4 py-6 text-center">
+              <p className="text-sm font-semibold text-[var(--enterprise-text)]">
                 {td("noProjectsYet")}
               </p>
-              <p className="enterprise-type-body mt-1 text-[var(--enterprise-text-muted)]">
+              <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
                 {td("noProjectsBody")}
               </p>
               <Link
                 href="/projects"
-                className="mt-5 inline-flex rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--enterprise-primary-deep)]"
+                className="mt-3 inline-flex rounded-md bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[var(--enterprise-primary-deep)]"
               >
                 {td("goToProjects")}
               </Link>
@@ -630,42 +583,42 @@ export function DashboardClient() {
         </section>
       </div>
 
-      <section className="enterprise-card p-5 sm:p-6 lg:max-w-md">
-        <h2 className="enterprise-type-nav-strong text-[var(--enterprise-text)]">
+      <section className="enterprise-card p-3.5 sm:max-w-md sm:p-4">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--enterprise-text-muted)]">
           {td("shortcuts")}
         </h2>
-        <ul className="mt-4 space-y-2">
+        <ul className="mt-2 divide-y divide-[var(--enterprise-border)]">
           <li>
             <Link
               href="/projects"
-              className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2.5 text-sm text-[var(--enterprise-text-muted)] transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+              className="flex items-center justify-between py-2 text-sm text-[var(--enterprise-text)] transition hover:text-[var(--enterprise-primary)]"
             >
               <span className="flex items-center gap-2">
                 <FileStack
-                  className="h-4 w-4 text-[var(--enterprise-primary)]"
+                  className="h-4 w-4 text-[var(--enterprise-text-muted)]"
                   strokeWidth={1.75}
                 />
                 {td("shortcutProjectsUploads")}
               </span>
-              <ArrowUpRight className="h-4 w-4 opacity-50" />
+              <ArrowUpRight className="h-3.5 w-3.5 opacity-50" />
             </Link>
           </li>
           <li>
             <Link
               href="/account"
-              className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2.5 text-sm text-[var(--enterprise-text-muted)] transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+              className="flex items-center justify-between py-2 text-sm text-[var(--enterprise-text)] transition hover:text-[var(--enterprise-primary)]"
             >
               {td("shortcutAccountSettings")}
-              <ArrowUpRight className="h-4 w-4 opacity-50" />
+              <ArrowUpRight className="h-3.5 w-3.5 opacity-50" />
             </Link>
           </li>
           <li>
             <Link
               href="/organization"
-              className="flex items-center justify-between rounded-lg border border-transparent px-3 py-2.5 text-sm text-[var(--enterprise-text-muted)] transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+              className="flex items-center justify-between py-2 text-sm text-[var(--enterprise-text)] transition hover:text-[var(--enterprise-primary)]"
             >
               {td("shortcutOrganization")}
-              <ArrowUpRight className="h-4 w-4 opacity-50" />
+              <ArrowUpRight className="h-3.5 w-3.5 opacity-50" />
             </Link>
           </li>
         </ul>

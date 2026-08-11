@@ -279,7 +279,7 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
       />
 
       {!isPro ? (
-        <div className="enterprise-alert-info flex items-start gap-3 px-4 py-3 shadow-[var(--enterprise-shadow-xs)]">
+        <div className="enterprise-alert-info flex items-start gap-3 px-4 py-3 ">
           <div
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10 text-[var(--enterprise-primary)]"
             aria-hidden
@@ -423,7 +423,7 @@ export function ProjectRfisClient({ projectId }: { projectId: string }) {
                       <button
                         type="button"
                         onClick={() => openEdit(r)}
-                        className={`w-full rounded-xl border bg-[var(--enterprise-surface)] p-4 text-left shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/25 hover:shadow-[var(--enterprise-shadow-sm)] active:scale-[0.99] ${
+                        className={`w-full rounded-md border bg-[var(--enterprise-surface)] p-4 text-left transition hover:border-[var(--enterprise-primary)]/25 hover: active:scale-[0.99] ${
                           active
                             ? "border-[var(--enterprise-primary)]/35 ring-2 ring-[var(--enterprise-primary)]/15"
                             : "border-[var(--enterprise-border)]"

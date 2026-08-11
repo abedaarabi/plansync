@@ -28,7 +28,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import { AssigneeFilterSelect, StatusFilterChips } from "@/components/enterprise/issueListControls";
 import { OmEmptyState } from "@/components/enterprise/OmEmptyState";
@@ -681,7 +681,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <a
               href={punchExportCsvUrl(projectId)}
-              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
+              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
             >
               <Download className="h-4 w-4" />
               Export
@@ -714,7 +714,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
       {/* Bulk bar OR filters */}
       {selectedIds.length > 0 ? (
         <div
-          className="sticky top-0 z-20 flex flex-col gap-3 rounded-xl border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-4 py-3 shadow-[var(--enterprise-shadow-xs)] sm:flex-row sm:items-center sm:justify-between"
+          className="sticky top-0 z-20 flex flex-col gap-3 rounded-md border border-[var(--enterprise-primary)]/20 bg-[var(--enterprise-primary)]/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
           style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
         >
           <p className="text-sm font-semibold text-[var(--enterprise-primary)]">
@@ -921,7 +921,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
                   <button
                     type="button"
                     onClick={() => openRow(p.id)}
-                    className={`flex min-h-10 w-full items-center gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-left shadow-[var(--enterprise-shadow-xs)] transition-all duration-150 active:scale-[0.99] active:bg-[var(--enterprise-hover-surface)]/60 ${
+                    className={`flex min-h-10 w-full items-center gap-3 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-left transition-all duration-150 active:scale-[0.99] active:bg-[var(--enterprise-hover-surface)]/60 ${
                       active
                         ? "border-[var(--enterprise-primary)]/35 ring-2 ring-[var(--enterprise-primary)]/15"
                         : ""
@@ -953,7 +953,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             style={{ WebkitOverflowScrolling: "touch" }}
           >
             <div className="inline-block min-w-full align-middle">
-              <table className="w-full min-w-[760px] border-collapse rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] md:min-w-[920px]">
+              <table className="w-full min-w-[760px] border-collapse rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] md:min-w-[920px]">
                 <thead>
                   <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
                     <th className="w-10 px-2 py-2 text-left text-[var(--enterprise-text)]">
@@ -1123,9 +1123,6 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         open={newModalOpen}
         onClose={() => setNewModalOpen(false)}
         overlayZClass="z-[102]"
-        panelVariant="floating"
-        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
-        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         closeOnBackdrop={false}
         closeOnEscape={false}
         ariaLabelledBy={newModalTitleId}
@@ -1140,34 +1137,29 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
           },
         }}
         header={
-          <div>
-            <h2
-              id={newModalTitleId}
-              className="text-lg font-semibold text-[var(--enterprise-text)]"
-            >
-              New punch list item
-            </h2>
-            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
-              Required fields: title and location.
-            </p>
-          </div>
+          <SlideOverHeader
+            icon={ClipboardList}
+            titleId={newModalTitleId}
+            title="New punch list item"
+            description="Title and location required."
+          />
         }
         footer={
           <>
             <EnterpriseButton
               type="button"
               variant="secondary"
+              size="sm"
               onClick={() => setNewModalOpen(false)}
             >
               Cancel
             </EnterpriseButton>
-            <EnterpriseButton type="submit" loading={createMut.isPending}>
-              {createMut.isPending ? "Creating…" : "Create Item"}
+            <EnterpriseButton type="submit" size="sm" loading={createMut.isPending}>
+              {createMut.isPending ? "Creating…" : "Create item"}
             </EnterpriseButton>
           </>
         }
-        bodyClassName="space-y-4 px-5 py-5"
-        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
+        bodyClassName="space-y-4"
       >
         <div className={MOBILE_FORM_SECTION}>
           <div>
@@ -1255,30 +1247,22 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         open={checklistModalOpen}
         onClose={() => setChecklistModalOpen(false)}
         overlayZClass="z-[102]"
-        panelVariant="floating"
-        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
-        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         closeOnBackdrop={false}
         closeOnEscape={false}
         ariaLabelledBy="punch-checklist-slide-title"
         header={
-          <div>
-            <h2
-              id="punch-checklist-slide-title"
-              className="text-lg font-semibold text-[var(--enterprise-text)]"
-            >
-              Add from a checklist
-            </h2>
-            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
-              Each line becomes a new punch item (you can edit afterward).
-            </p>
-          </div>
+          <SlideOverHeader
+            icon={ClipboardList}
+            titleId="punch-checklist-slide-title"
+            title="Add from a checklist"
+            description="Each line becomes a new punch item (edit afterward)."
+          />
         }
         footer={
           <EnterpriseButton
             type="button"
             variant="secondary"
-            fullWidth
+            size="sm"
             onClick={() => {
               setChecklistModalOpen(false);
               setManageTemplatesOpen(true);
@@ -1287,11 +1271,10 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             Create or edit checklists
           </EnterpriseButton>
         }
-        bodyClassName="space-y-4 px-5 py-5"
-        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
+        bodyClassName="space-y-4"
       >
         {templates.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-6 text-center">
+          <div className="rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-6 text-center">
             <p className="mb-3 text-sm text-[var(--enterprise-text-muted)]">
               You don&apos;t have any saved checklists yet.
             </p>
@@ -1312,7 +1295,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
               return (
                 <li
                   key={t.id}
-                  className="flex flex-col gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
                     <p className="font-medium text-[var(--enterprise-text)]">{t.name}</p>
@@ -1341,36 +1324,31 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         open={manageTemplatesOpen}
         onClose={() => setManageTemplatesOpen(false)}
         overlayZClass="z-[102]"
-        panelVariant="floating"
         panelMaxWidthClass="max-w-[min(calc(100dvw-16px),720px)]"
-        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         closeOnBackdrop={false}
         closeOnEscape={false}
         ariaLabelledBy="punch-manage-checklists-slide-title"
         header={
-          <div>
-            <h2
-              id="punch-manage-checklists-slide-title"
-              className="text-lg font-semibold text-[var(--enterprise-text)]"
-            >
-              Reusable checklists
-            </h2>
-            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
-              Saved lists you can apply to this punch list anytime.
-            </p>
-          </div>
+          <SlideOverHeader
+            icon={ClipboardList}
+            titleId="punch-manage-checklists-slide-title"
+            title="Reusable checklists"
+            description="Saved lists you can apply to this punch list anytime."
+          />
         }
         footer={
           <>
             <EnterpriseButton
               type="button"
               variant="secondary"
+              size="sm"
               onClick={() => setManageTemplatesOpen(false)}
             >
               Cancel
             </EnterpriseButton>
             <EnterpriseButton
               type="button"
+              size="sm"
               disabled={!tplName.trim()}
               loading={createTplMut.isPending}
               onClick={() => {
@@ -1386,8 +1364,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
             </EnterpriseButton>
           </>
         }
-        bodyClassName="space-y-4 px-5 py-5"
-        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
+        bodyClassName="space-y-4"
       >
         <ul className="max-h-40 space-y-1 overflow-auto rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-2">
           {templates.length === 0 ? (
@@ -1525,7 +1502,7 @@ export function ProjectPunchClient({ projectId }: { projectId: string }) {
         </div>
         <button
           type="button"
-          className="w-full rounded-xl border border-dashed border-[var(--enterprise-border)] py-2.5 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)]"
+          className="w-full rounded-md border border-dashed border-[var(--enterprise-border)] py-2.5 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)]"
           onClick={() =>
             setTplDraftLines((lines) => [...lines, { title: "", location: "", trade: "General" }])
           }
@@ -1749,22 +1726,16 @@ function PunchDetailSlider({
     <EnterpriseSlideOver
       open={open}
       onClose={onClose}
-      panelVariant="floating"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
-      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
       closeOnBackdrop={false}
       closeOnEscape={false}
       ariaLabelledBy={headerId}
       header={
-        <div className="min-w-0">
-          <p
-            id={headerId}
-            className="text-lg font-semibold tracking-tight text-[var(--enterprise-text)]"
-          >
-            Punch List Item #{punch.punchNumber}
-          </p>
-          <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">Edit details below</p>
-        </div>
+        <SlideOverHeader
+          icon={ClipboardList}
+          titleId={headerId}
+          title={`Punch item #${punch.punchNumber}`}
+          description="Update status, location, and photos."
+        />
       }
       footer={
         <div className="flex w-full flex-col gap-2">
@@ -1774,6 +1745,7 @@ function PunchDetailSlider({
                 <EnterpriseButton
                   type="button"
                   variant="secondary"
+                  size="sm"
                   className="flex-1"
                   disabled={patchMut.isPending || punch.id.startsWith("optimistic-")}
                   onClick={() =>
@@ -1787,6 +1759,7 @@ function PunchDetailSlider({
                 <EnterpriseButton
                   type="button"
                   variant="secondary"
+                  size="sm"
                   className="flex-1"
                   disabled={patchMut.isPending || punch.id.startsWith("optimistic-")}
                   onClick={() => patchMut.mutate({ id: punch.id, body: { status: "CLOSED" } })}
@@ -1800,6 +1773,7 @@ function PunchDetailSlider({
             <EnterpriseButton
               type="button"
               variant="danger"
+              size="sm"
               onClick={() => {
                 if (!window.confirm("Delete this punch item?")) return;
                 deleteMut.mutate(punch.id);
@@ -1810,6 +1784,7 @@ function PunchDetailSlider({
             </EnterpriseButton>
             <EnterpriseButton
               type="button"
+              size="sm"
               disabled={!dirty}
               loading={patchMut.isPending}
               onClick={save}
@@ -1819,8 +1794,7 @@ function PunchDetailSlider({
           </div>
         </div>
       }
-      bodyClassName="space-y-4 px-5 py-5"
-      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
+      bodyClassName="space-y-4"
     >
       <div className={MOBILE_FORM_SECTION}>
         <div>
@@ -2030,7 +2004,7 @@ function PunchDetailSlider({
           {viewerHref ? (
             <Link
               href={viewerHref}
-              className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-hover-surface)]"
+              className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-hover-surface)]"
             >
               Open in viewer
               <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
@@ -2042,7 +2016,7 @@ function PunchDetailSlider({
                 ? `/projects/${projectId}/files?fileVersionId=${encodeURIComponent(selectedSheet.fileVersionId)}`
                 : `/projects/${projectId}/files`
             }
-            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
           >
             <FileText className="h-4 w-4 shrink-0" />
             {selectedSheet ? "Open selected sheet" : "Drawings & files"}

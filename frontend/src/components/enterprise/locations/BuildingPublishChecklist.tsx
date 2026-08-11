@@ -16,7 +16,7 @@ export function BuildingPublishChecklist({ checklist }: Props) {
       {items.map((item) => (
         <li key={item.id} className="flex items-start gap-2.5">
           <span
-            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${
               item.done
                 ? "bg-[var(--enterprise-semantic-success-bg)] text-[var(--enterprise-semantic-success-text)]"
                 : item.warn
@@ -37,9 +37,7 @@ export function BuildingPublishChecklist({ checklist }: Props) {
               {item.label}
             </span>
             {item.detail ? (
-              <span className="block text-xs text-[var(--enterprise-text-muted)]">
-                {item.detail}
-              </span>
+              <span className="enterprise-type-caption mt-0.5 block">{item.detail}</span>
             ) : null}
           </span>
         </li>

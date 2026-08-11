@@ -34,7 +34,11 @@ import { qk } from "@/lib/queryKeys";
 import type { CloudFile } from "@/types/projects";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import {
+  EnterpriseSlideOver,
+  SlideOverHeader,
+  SLIDE_OVER_BTN_PRIMARY,
+} from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetDocumentsBlock } from "@/components/enterprise/OmAssetDocumentsBlock";
 import { OmAssetImageThumb } from "@/components/enterprise/OmAssetImageThumb";
 import { OmAssetInspectionTimeline } from "@/components/enterprise/OmAssetInspectionTimeline";
@@ -181,36 +185,28 @@ export function OmAssetDetailSlide({
       open={open}
       onClose={onClose}
       ariaLabelledBy="asset-detail-title"
-      panelVariant="floating"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),460px)]"
-      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
       closeOnBackdrop={false}
       closeOnEscape={false}
       overlayZClass="z-[100]"
-      bodyClassName="px-5 py-5"
-      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       header={
-        <div className="min-w-0">
-          <h2
-            id="asset-detail-title"
-            className="truncate text-lg font-semibold leading-snug text-[var(--enterprise-text)]"
-          >
-            <span className="font-mono text-[var(--enterprise-primary)]">{asset.tag}</span>
-          </h2>
-          <p className="mt-0.5 truncate text-sm font-medium text-[var(--enterprise-text)]">
-            {asset.name}
-          </p>
-          {asset.category?.trim() ? (
-            <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">{asset.category}</p>
-          ) : null}
-        </div>
+        <SlideOverHeader
+          icon={Package}
+          titleId="asset-detail-title"
+          title={<span className="font-mono">{asset.tag}</span>}
+          description={
+            <>
+              {asset.name}
+              {asset.category?.trim() ? ` · ${asset.category}` : ""}
+            </>
+          }
+        />
       }
       footer={
         <div className="flex w-full flex-col gap-2">
           <Link
             href={workOrdersHref}
             onClick={onClose}
-            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-4 text-sm font-semibold text-white hover:opacity-95"
+            className={`${SLIDE_OVER_BTN_PRIMARY} w-full gap-1.5`}
           >
             <Plus className="h-4 w-4" strokeWidth={2} />
             Create work order
@@ -241,7 +237,7 @@ export function OmAssetDetailSlide({
       }
     >
       <div className="space-y-7 text-sm text-[var(--enterprise-text)]">
-        <div className="overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]">
+        <div className="overflow-hidden rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]">
           {asset.hasImage ? (
             <OmAssetImageThumb
               projectId={projectId}
@@ -313,7 +309,7 @@ export function OmAssetDetailSlide({
           </div>
         </div>
 
-        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
+        <section className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
             Details
           </h3>
@@ -369,7 +365,7 @@ export function OmAssetDetailSlide({
           <OmAssetMeterReadingsBlock projectId={projectId} assetId={asset.id} enabled={open} />
         </section>
 
-        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
+        <section className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
             Service history
           </h3>
@@ -410,7 +406,7 @@ export function OmAssetDetailSlide({
           )}
         </section>
 
-        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
+        <section className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
             Next scheduled
           </h3>
@@ -480,7 +476,7 @@ export function OmAssetDetailSlide({
           />
         </section>
 
-        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
+        <section className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
             Open work orders &amp; tenant requests
           </h3>

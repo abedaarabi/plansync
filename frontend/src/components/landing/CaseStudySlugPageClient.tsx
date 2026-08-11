@@ -49,7 +49,7 @@ function CaseStudySlugInner({ slug }: CaseStudySlugPageClientProps) {
       <section className="landing-band-pricing py-14 sm:py-18">
         <div className="mx-auto grid max-w-5xl gap-6 px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
           <AnimateIn>
-            <article className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
+            <article className="landing-card">
               <h2 className="text-lg font-semibold text-slate-900">{t("results")}</h2>
               <ul className="mt-4 space-y-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 text-sm text-slate-700">
                 <li>{t(`cards.${slug}.metric1`)}</li>
@@ -78,7 +78,7 @@ function CaseStudySlugInner({ slug }: CaseStudySlugPageClientProps) {
           </AnimateIn>
 
           <AnimateIn delay={100}>
-            <aside className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
+            <aside className="landing-card">
               <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">
                 {t("nextSteps")}
               </h2>
@@ -99,7 +99,7 @@ function CaseStudySlugInner({ slug }: CaseStudySlugPageClientProps) {
               <button
                 type="button"
                 onClick={() => goToFreeViewer(`case_study_${slug}_open_viewer`)}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--landing-cta)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--landing-cta-bright)]"
+                className="landing-btn-primary landing-btn-block mt-5"
               >
                 {t("openViewer")}
                 <ArrowRight className="h-4 w-4" aria-hidden />

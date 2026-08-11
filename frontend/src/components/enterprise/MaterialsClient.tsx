@@ -399,7 +399,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                   id={catalogHelpDescriptionId}
                   role="region"
                   aria-label="Materials catalog help"
-                  className="absolute left-0 top-full z-50 mt-2 w-[min(calc(100vw-2rem),22rem)] rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 text-xs leading-relaxed text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-floating)]"
+                  className="absolute left-0 top-full z-50 mt-2 w-[min(calc(100vw-2rem),22rem)] rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3 text-xs leading-relaxed text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-floating)]"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="min-w-0 flex-1">{MATERIALS_CATALOG_HELP}</p>
@@ -477,12 +477,12 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
       />
 
       {loadError && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {loadError}
         </div>
       )}
 
-      <div className="enterprise-card flex min-h-0 flex-1 flex-col overflow-hidden p-0 shadow-[var(--enterprise-shadow-xs)]">
+      <div className="enterprise-card flex min-h-0 flex-1 flex-col overflow-hidden p-0">
         <div className="shrink-0 flex flex-col gap-2 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-3 sm:flex-row sm:items-end sm:justify-between sm:px-4">
           <div className="relative max-w-lg flex-1">
             <label className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
@@ -494,7 +494,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Name, SKU, supplier, specification…"
-                className={`${OM_COMPACT_INPUT} pl-9`}
+                className={`${OM_COMPACT_INPUT} enterprise-field-input--icon`}
               />
             </div>
             {sortedTplFields.length > 0 ? (
@@ -531,7 +531,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
         <div className="mobile-table-wrap min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="sticky top-0 z-[1]">
-              <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)] shadow-sm">
+              <tr className="border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
                 <th className="whitespace-nowrap px-3 py-2">Type</th>
                 <th className="min-w-[8rem] px-3 py-2">Material</th>
                 <th className="px-3 py-2">SKU</th>
@@ -557,7 +557,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                     colSpan={7 + sortedTplFields.length}
                     className="px-3 py-10 text-center text-[var(--enterprise-text-muted)]"
                   >
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--enterprise-primary-soft)]/80 text-[var(--enterprise-primary)]">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-[var(--enterprise-primary-soft)]/80 text-[var(--enterprise-primary)]">
                       <FileSpreadsheet className="h-7 w-7 opacity-90" strokeWidth={1.5} />
                     </div>
                     <p className="mt-4 font-semibold text-[var(--enterprise-text)]">
@@ -674,7 +674,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                 type="button"
                 disabled={!paged || paged.page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Previous
               </button>
@@ -685,7 +685,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                 type="button"
                 disabled={!paged || paged.page >= paged.totalPages}
                 onClick={() => setPage((p) => (paged ? Math.min(paged.totalPages, p + 1) : p))}
-                className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)] disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next
               </button>
@@ -709,7 +709,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
         }}
         header={
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
               {editing ? (
                 <Pencil className="h-5 w-5" strokeWidth={1.75} />
               ) : (
@@ -719,7 +719,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
             <div className="min-w-0">
               <h2
                 id="materials-panel-title"
-                className="text-lg font-semibold tracking-tight text-[var(--enterprise-text)]"
+                className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]"
               >
                 {editing ? "Edit material" : "Add material"}
               </h2>
@@ -737,14 +737,14 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
                 setPanelOpen(false);
                 setEditing(null);
               }}
-              className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:bg-[var(--enterprise-hover-surface)]"
+              className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-medium text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)]"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saveMutation.isPending}
-              className="rounded-xl bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-60"
+              className="rounded-md bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-60"
             >
               {saveMutation.isPending ? "Saving…" : editing ? "Save changes" : "Add material"}
             </button>
@@ -861,7 +861,7 @@ export function MaterialsClient({ workspaceId: forcedWorkspaceId }: { workspaceI
             />
           </div>
           {sortedTplFields.length > 0 ? (
-            <div className="sm:col-span-2 rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/45 p-4 shadow-[var(--enterprise-shadow-xs)] ring-1 ring-black/[0.02] dark:ring-white/[0.04]">
+            <div className="sm:col-span-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/45 p-4 ring-1 ring-black/[0.02] dark:ring-white/[0.04]">
               <div className="flex items-center gap-2">
                 <LayoutList
                   className="h-4 w-4 text-[var(--enterprise-primary)]"

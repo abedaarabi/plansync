@@ -62,13 +62,14 @@ export function LandingFinalCtaSection({ onGoToFreeViewer }: LandingFinalCtaSect
             {t("bodyLine2")}
           </p>
 
-          <div className="mt-10 flex min-w-0 flex-col items-center justify-center gap-4 sm:flex-row">
+          <div className="mt-10 flex min-w-0 flex-col items-center justify-center gap-3.5 sm:flex-row">
             <button
               type="button"
               onClick={() => onGoToFreeViewer("final_cta_open_viewer")}
-              className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-xl bg-(--landing-cta) px-7 py-3.5 text-base font-semibold text-(--landing-cta-text) shadow-lg shadow-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] transition hover:bg-(--landing-cta-bright) hover:shadow-[color-mix(in_srgb,var(--landing-cta)_38%,transparent)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta) focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              className="landing-btn-primary min-w-0 max-w-full"
             >
-              {t("openViewer")} <ArrowRight className="h-4 w-4 shrink-0" />
+              {t("openViewer")}
+              <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
             </button>
             <Link
               href="/sign-in"
@@ -79,7 +80,7 @@ export function LandingFinalCtaSection({ onGoToFreeViewer }: LandingFinalCtaSect
                   destination: "/sign-in",
                 })
               }
-              className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-xl border border-white/45 bg-white/5 px-7 py-3.5 text-base font-semibold text-white/95 backdrop-blur-sm transition hover:border-white/80 hover:bg-white/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+              className="landing-btn-ghost min-w-0 max-w-full"
             >
               {t("startTrial")}
             </Link>

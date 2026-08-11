@@ -12,6 +12,6 @@ describe("EnterpriseIconButton", () => {
     );
     const btn = screen.getByRole("button", { name: "Search" });
     expect(btn.className).toContain("focus-visible:ring-2");
-    expect(btn.className).toContain("min-h-9");
+    expect(btn.className).toContain("min-h-8");
   });
 });

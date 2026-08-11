@@ -68,7 +68,7 @@ export function PlanPickPane({
         </div>
       )}
       {engine && planLoading ? (
-        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[var(--enterprise-surface)]/75 p-6 text-center backdrop-blur-[2px]">
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[var(--enterprise-surface)]/75 p-6 text-center">
           <Loader2 className="h-6 w-6 animate-spin text-[var(--enterprise-primary)]" aria-hidden />
           <p className="text-sm text-[var(--enterprise-text-muted)]">
             Extracting plan from 3D model…

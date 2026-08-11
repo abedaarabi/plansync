@@ -84,7 +84,7 @@ type Props = {
 const BILLING_MODAL_OVERLAY =
   "mobile-sheet-host fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[3px] max-lg:items-end max-lg:p-0 sm:p-6";
 const BILLING_MODAL_PANEL =
-  "relative w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-6 shadow-2xl ring-1 ring-slate-900/[0.06] max-h-[min(92dvh,32rem)]";
+  "relative w-full max-w-lg overflow-y-auto rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-6 shadow-lg max-h-[min(92dvh,32rem)]";
 
 // fallow-ignore-next-line complexity
 export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin }: Props) {
@@ -242,7 +242,7 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin }: P
                   <span className="font-medium text-[var(--enterprise-text)]">proration</span> to
                   your default payment method.
                 </p>
-                <ul className="mt-4 space-y-1.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 px-3 py-3 text-sm text-[var(--enterprise-text)]">
+                <ul className="mt-4 space-y-1.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 px-3 py-3 text-sm text-[var(--enterprise-text)]">
                   {targetPlan.features.slice(0, 4).map((f) => (
                     <li key={f} className="leading-snug">
                       · {f}
@@ -254,7 +254,7 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin }: P
                     type="button"
                     disabled={busy !== null}
                     onClick={() => setPlanChangeOpen(false)}
-                    className="enterprise-btn-secondary min-h-11 rounded-xl px-4 py-2.5 text-sm font-medium disabled:opacity-60 sm:min-h-0"
+                    className="enterprise-btn-secondary min-h-11 rounded-md px-4 py-2.5 text-sm font-medium disabled:opacity-60 sm:min-h-0"
                   >
                     Not now
                   </button>
@@ -289,7 +289,7 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin }: P
                         setBusy(null);
                       }
                     }}
-                    className="enterprise-btn-primary min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-60 sm:min-h-0"
+                    className="enterprise-btn-primary min-h-11 rounded-md px-4 py-2.5 text-sm font-semibold disabled:opacity-60 sm:min-h-0"
                   >
                     {busy === "change-plan" ? "Processing…" : "Yes, change plan"}
                   </button>
@@ -320,7 +320,7 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin }: P
                   plan ends. You can also end billing immediately; project access may drop right
                   away if your plan was the only source of paid features.
                 </p>
-                <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--enterprise-border)] bg-white/80 px-3 py-3 text-sm text-[var(--enterprise-text)]">
+                <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-md border border-[var(--enterprise-border)] bg-white/80 px-3 py-3 text-sm text-[var(--enterprise-text)]">
                   <input
                     type="checkbox"
                     checked={cancelImmediate}
@@ -334,7 +334,7 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin }: P
                     type="button"
                     disabled={cancelBusy}
                     onClick={() => setCancelOpen(false)}
-                    className="enterprise-btn-secondary min-h-11 rounded-xl px-4 py-2.5 text-sm font-medium disabled:opacity-60 sm:min-h-0"
+                    className="enterprise-btn-secondary min-h-11 rounded-md px-4 py-2.5 text-sm font-medium disabled:opacity-60 sm:min-h-0"
                   >
                     Keep subscription
                   </button>
@@ -362,7 +362,7 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin }: P
                         setCancelBusy(false);
                       }
                     }}
-                    className="min-h-11 rounded-xl bg-[var(--enterprise-semantic-danger-text)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-60 sm:min-h-0"
+                    className="min-h-11 rounded-md bg-[var(--enterprise-semantic-danger-text)] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95 disabled:opacity-60 sm:min-h-0"
                   >
                     {cancelBusy ? "Working…" : "Confirm cancel"}
                   </button>

@@ -5,7 +5,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Clock, Package } from "lucide-react";
 import { toast } from "sonner";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { CheckCircle2 } from "lucide-react";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   fetchOmPartsInventory,
@@ -144,40 +145,33 @@ export function WorkOrderCompleteSlideOver({
         },
       }}
       ariaLabelledBy="wo-complete-title"
-      panelVariant="floating"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),520px)]"
-      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
-      closeOnBackdrop={false}
-      closeOnEscape={false}
-      bodyClassName="px-5 py-5"
-      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       header={
-        <div className="min-w-0">
-          <h2
-            id="wo-complete-title"
-            className="truncate text-lg font-semibold text-[var(--enterprise-text)]"
-          >
-            Close work order
-          </h2>
-          <p className="mt-0.5 truncate text-xs text-[var(--enterprise-text-muted)]">
-            {issue.title}
-          </p>
-        </div>
+        <SlideOverHeader
+          icon={CheckCircle2}
+          titleId="wo-complete-title"
+          title="Close work order"
+          description={issue.title}
+        />
       }
       footer={
-        <div className="flex w-full justify-end gap-2">
-          <EnterpriseButton type="button" variant="secondary" onClick={onClose}>
+        <>
+          <EnterpriseButton type="button" variant="secondary" size="sm" onClick={onClose}>
             Cancel
           </EnterpriseButton>
-          <EnterpriseButton type="submit" loading={completeMut.isPending} disabled={!canSubmit}>
+          <EnterpriseButton
+            type="submit"
+            size="sm"
+            loading={completeMut.isPending}
+            disabled={!canSubmit}
+          >
             {completeMut.isPending ? "Saving…" : "Mark complete"}
           </EnterpriseButton>
-        </div>
+        </>
       }
     >
       <div className="space-y-4">
         {issue.completionEvidenceRequired && (issue.referencePhotos?.length ?? 0) === 0 ? (
-          <p className="enterprise-alert-warning rounded-xl px-3 py-2 text-sm">
+          <p className="enterprise-alert-warning rounded-md px-3 py-2 text-sm">
             Add at least one completion photo before closing (required for this work order).
           </p>
         ) : null}
@@ -191,7 +185,7 @@ export function WorkOrderCompleteSlideOver({
                 return (
                   <li
                     key={it.id}
-                    className="rounded-xl border border-[var(--enterprise-border)] p-3"
+                    className="rounded-md border border-[var(--enterprise-border)] p-3"
                   >
                     <p className="text-sm font-semibold text-[var(--enterprise-text)]">
                       {it.label}

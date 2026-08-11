@@ -39,8 +39,8 @@ function Stat({
         ? "text-[var(--enterprise-semantic-success-text)]"
         : "text-[var(--enterprise-text)]";
   return (
-    <div className="min-w-0 rounded-lg bg-[var(--enterprise-bg)] px-2 py-1.5 ring-1 ring-[var(--enterprise-border)]">
-      <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--enterprise-text-muted)]">
+    <div className="min-w-0 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-2 py-1.5">
+      <div className="flex items-center gap-1 text-xs font-medium text-[var(--enterprise-text-muted)]">
         <Icon className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
         <span className="truncate">{label}</span>
       </div>
@@ -68,8 +68,12 @@ export function BuildingCard({ building: b, projectId, locationId, onEdit, onDel
         className="flex flex-1 flex-col p-4 transition-colors hover:bg-[var(--enterprise-hover-surface)]/50"
       >
         <div className="flex gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)]">
-            <Building2 className="h-5 w-5 text-[var(--enterprise-primary)]" aria-hidden />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
+            <Building2
+              className="h-4 w-4 text-[var(--enterprise-text-muted)]"
+              strokeWidth={1.75}
+              aria-hidden
+            />
           </div>
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="flex items-start justify-between gap-2">
@@ -78,7 +82,7 @@ export function BuildingCard({ building: b, projectId, locationId, onEdit, onDel
                   {b.name}
                 </h2>
                 {b.code ? (
-                  <span className="rounded-md bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)]">
+                  <span className="enterprise-badge-neutral rounded px-1.5 py-0.5 text-xs font-semibold">
                     {b.code}
                   </span>
                 ) : null}
@@ -87,7 +91,7 @@ export function BuildingCard({ building: b, projectId, locationId, onEdit, onDel
                 <BuildingCardStatus building={b} />
               </div>
             </div>
-            <p className="text-[13px] leading-relaxed text-[var(--enterprise-text-muted)]">
+            <p className="text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
               {buildingMetaLine(b)}
             </p>
           </div>
@@ -103,13 +107,13 @@ export function BuildingCard({ building: b, projectId, locationId, onEdit, onDel
         {showAttention ? (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             {openClashCount > 0 ? (
-              <span className="enterprise-badge-warning inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold">
+              <span className="enterprise-badge-warning inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold">
                 <Crosshair className="h-3 w-3" aria-hidden />
                 {openClashCount} open clash{openClashCount === 1 ? "" : "es"}
               </span>
             ) : null}
             {unmappedPdfCount > 0 ? (
-              <span className="enterprise-badge-neutral inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold">
+              <span className="enterprise-badge-neutral inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold">
                 {unmappedPdfCount} PDF to match
               </span>
             ) : null}
@@ -117,10 +121,10 @@ export function BuildingCard({ building: b, projectId, locationId, onEdit, onDel
         ) : null}
       </Link>
 
-      <div className="flex items-center justify-end gap-0.5 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 px-2 py-1.5">
+      <div className="flex items-center justify-end gap-0.5 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/40 px-2 py-1.5">
         <button
           type="button"
-          className="mobile-touch-target inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+          className="mobile-touch-target inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
           aria-label={`Edit ${b.name}`}
           onClick={onEdit}
         >
@@ -128,7 +132,7 @@ export function BuildingCard({ building: b, projectId, locationId, onEdit, onDel
         </button>
         <button
           type="button"
-          className="mobile-touch-target inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
+          className="mobile-touch-target inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
           aria-label={`Delete ${b.name}`}
           onClick={onDelete}
         >

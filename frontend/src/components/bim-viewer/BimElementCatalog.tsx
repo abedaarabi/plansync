@@ -82,7 +82,7 @@ export function BimElementCatalog(props: {
             value={props.searchQuery != null ? props.searchQuery : search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by type, name, GUID…"
-            className="bim-input pl-8"
+            className="bim-input bim-input--icon"
             aria-label="Search elements"
           />
         </div>

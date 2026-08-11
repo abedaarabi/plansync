@@ -119,14 +119,14 @@ export function EnterpriseTopBar({
   const projectHomeHref = projectId ? `/projects/${projectId}/home` : "/projects";
 
   return (
-    <header className="sticky top-0 z-50 flex shrink-0 flex-col border-b border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_88%,transparent)] pt-[env(safe-area-inset-top,0px)] shadow-[0_1px_0_0_rgba(255,255,255,0.72)_inset,0_8px_36px_-22px_rgba(15,23,42,0.04)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-[color-mix(in_srgb,var(--enterprise-surface)_78%,transparent)]">
-      <div className="flex h-[var(--enterprise-topbar-h)] min-h-[var(--enterprise-topbar-h)] w-full items-center justify-between gap-1.5 px-2 sm:gap-2.5 sm:px-3 md:gap-3 md:px-4 lg:gap-4 lg:px-6">
+    <header className="enterprise-topbar sticky top-0 z-50 flex shrink-0 flex-col pt-[env(safe-area-inset-top,0px)]">
+      <div className="flex h-[var(--enterprise-topbar-h)] min-h-[var(--enterprise-topbar-h)] w-full items-center justify-between gap-1.5 px-2 sm:gap-2.5 sm:px-3 md:gap-3 md:px-4 lg:gap-4 lg:px-5">
         <div className="enterprise-type-nav flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 md:gap-3">
           {/* Mobile back — parent screen with chevron */}
           {isProjectContext && toolLabel ? (
             <Link
               href={projectHomeHref}
-              className="flex min-h-11 max-w-[min(42vw,11rem)] shrink-0 items-center gap-0.5 rounded-xl px-1 text-[var(--enterprise-primary)] transition-all duration-150 active:scale-[0.97] active:bg-[var(--enterprise-hover-surface)] lg:hidden"
+              className="flex min-h-11 max-w-[min(42vw,11rem)] shrink-0 items-center gap-0.5 rounded-md px-1 text-[var(--enterprise-primary)] transition-colors duration-150 active:bg-[var(--enterprise-hover-surface)] lg:hidden"
             >
               <ChevronLeft className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
               <span className="enterprise-type-nav-strong truncate leading-tight">
@@ -148,7 +148,7 @@ export function EnterpriseTopBar({
             <button
               type="button"
               onClick={onToggleDesktopSidebar}
-              className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 lg:flex"
+              className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 lg:flex"
               aria-label={desktopSidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
               title={desktopSidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
             >
@@ -229,7 +229,7 @@ export function EnterpriseTopBar({
           {activeWs?.subscriptionStatus === "trialing" ? (
             <Link
               href={isSuperAdmin(primary?.role) ? "/organization?tab=billing" : "/organization"}
-              className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 md:inline-flex"
+              className="hidden rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 md:inline-flex"
             >
               {activeWs.stripeSubscriptionId
                 ? trialDays === 0
@@ -252,11 +252,11 @@ export function EnterpriseTopBar({
             type="button"
             onClick={onOpenCommandPalette}
             aria-label={t("search")}
-            className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)]/95 bg-[var(--enterprise-surface)]/90 text-[var(--enterprise-text-muted)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:w-auto sm:max-w-[min(48vw,220px)] sm:justify-start sm:gap-2 sm:px-2.5 sm:text-left sm:text-[13px] lg:max-w-[min(100%,280px)] lg:px-3"
+            className="group flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text-muted)] transition hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/25 sm:w-auto sm:max-w-[min(48vw,220px)] sm:justify-start sm:gap-2 sm:px-2.5 sm:text-left sm:text-[13px] lg:max-w-[min(100%,260px)] lg:px-3"
           >
             <Search className="h-3.5 w-3.5 shrink-0 opacity-80" strokeWidth={1.75} />
             <span className="hidden flex-1 sm:inline">{t("searchEllipsis")}</span>
-            <kbd className="ml-auto hidden rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--enterprise-text-muted)] lg:inline">
+            <kbd className="ml-auto hidden rounded border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-1.5 py-0.5 font-mono text-[10px] font-medium text-[var(--enterprise-text-muted)] lg:inline">
               {t("searchShortcut")}
             </kbd>
           </button>

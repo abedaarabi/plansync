@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Package, Search } from "lucide-react";
+import { ClipboardList, Package, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   IssueReferencePhotosField,
   type IssuePendingPhoto,
 } from "@/components/enterprise/IssueReferencePhotosField";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { WorkOrderAssetDocsPanel } from "@/components/enterprise/WorkOrderAssetDocsPanel";
 import { WorkOrderProcedureField } from "@/components/enterprise/WorkOrderProcedureField";
 import {
@@ -274,45 +274,34 @@ export function WorkOrderCreateSlideOver({
         },
       }}
       ariaLabelledBy="wo-create-title"
-      panelVariant="floating"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),520px)]"
-      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
-      closeOnBackdrop={false}
-      closeOnEscape={false}
-      bodyClassName="px-5 py-5"
-      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       header={
-        <div className="min-w-0">
-          <h2
-            id="wo-create-title"
-            className="truncate text-lg font-semibold tracking-tight text-[var(--enterprise-text)]"
-          >
-            New work order
-          </h2>
-          <p className="mt-0.5 text-xs leading-snug text-[var(--enterprise-text-muted)]">
-            Maintenance or repair tied to equipment. Asset and title required.
-          </p>
-        </div>
+        <SlideOverHeader
+          icon={ClipboardList}
+          titleId="wo-create-title"
+          title="New work order"
+          description="Maintenance or repair tied to equipment. Asset and title required."
+        />
       }
       footer={
-        <div className="flex w-full justify-end gap-2">
-          <EnterpriseButton type="button" variant="secondary" onClick={handleClose}>
+        <>
+          <EnterpriseButton type="button" variant="secondary" size="sm" onClick={handleClose}>
             Cancel
           </EnterpriseButton>
           <EnterpriseButton
             type="submit"
+            size="sm"
             loading={createMut.isPending}
             disabled={!title.trim() || !assetId}
           >
             {createMut.isPending ? "Creating…" : "Create work order"}
           </EnterpriseButton>
-        </div>
+        </>
       }
     >
       <div className="space-y-4">
         {msg ? (
           <div
-            className="rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
+            className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
             role="alert"
           >
             {msg}
@@ -320,7 +309,7 @@ export function WorkOrderCreateSlideOver({
         ) : null}
 
         <div
-          className={`${MOBILE_FORM_SECTION} rounded-xl border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] p-3`}
+          className={`${MOBILE_FORM_SECTION} rounded-md border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] p-3`}
         >
           <p className="enterprise-type-label text-[var(--enterprise-semantic-info-text)]">
             Equipment
@@ -338,7 +327,7 @@ export function WorkOrderCreateSlideOver({
                 id="wo-asset-search"
                 value={assetSearch}
                 onChange={(e) => setAssetSearch(e.target.value)}
-                className={`${MOBILE_FIELD_INPUT} pl-9`}
+                className={`${MOBILE_FIELD_INPUT} enterprise-field-input--icon`}
                 placeholder="Tag, name, location…"
                 autoComplete="off"
               />

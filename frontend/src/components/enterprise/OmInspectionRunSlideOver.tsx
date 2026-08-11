@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, CheckSquare, ChevronRight, Square, Upload, X } from "lucide-react";
+import { Camera, CheckSquare, ChevronRight, ClipboardCheck, Square, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -27,7 +27,7 @@ import {
 import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmInspectionSignaturePad } from "@/components/enterprise/OmInspectionSignaturePad";
 
 /* ── Types ─────────────────────────────────────────── */
@@ -509,7 +509,7 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="mt-3 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-black">
+            <div className="mt-3 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md bg-black">
               <video
                 ref={cameraVideoRef}
                 className="max-h-full max-w-full object-contain"
@@ -525,21 +525,21 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                 onClick={() =>
                   setCameraFacing((f) => (f === "environment" ? "user" : "environment"))
                 }
-                className="rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white"
+                className="rounded-md border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white"
               >
                 Flip camera
               </button>
               <button
                 type="button"
                 onClick={captureCameraFrame}
-                className="rounded-xl bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white"
+                className="rounded-md bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white"
               >
                 Capture photo
               </button>
               <button
                 type="button"
                 onClick={() => setCameraItemId(null)}
-                className="rounded-xl border border-white/25 px-4 py-2.5 text-sm font-medium text-white"
+                className="rounded-md border border-white/25 px-4 py-2.5 text-sm font-medium text-white"
               >
                 Cancel
               </button>
@@ -558,28 +558,17 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
       <EnterpriseSlideOver
         open={open}
         onClose={onClose}
-        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),460px)]"
-        panelVariant="floating"
-        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         closeOnBackdrop={false}
         closeOnEscape={false}
         ariaLabelledBy="run-slide-title"
         header={
-          <div className="min-w-0 pr-2">
-            <h2
-              id="run-slide-title"
-              className="truncate text-lg font-semibold text-[var(--enterprise-text)]"
-            >
-              {inspectionTitle}
-            </h2>
-            <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
-              {buildingName} · {dateLabel}
-              {isDraft ? " · Open" : " · Closed"}
-            </p>
-          </div>
+          <SlideOverHeader
+            icon={ClipboardCheck}
+            titleId="run-slide-title"
+            title={inspectionTitle}
+            description={`${buildingName} · ${dateLabel}${isDraft ? " · Open" : " · Closed"}`}
+          />
         }
-        bodyClassName="px-5 py-5"
-        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
         footer={
           isDraft ? (
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -692,7 +681,7 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                         return (
                           <li
                             key={it.id}
-                            className={`space-y-3 rounded-xl border bg-[var(--enterprise-bg)] p-3.5 ${
+                            className={`space-y-3 rounded-md border bg-[var(--enterprise-bg)] p-3.5 ${
                               evidenceErr
                                 ? "border-[var(--enterprise-semantic-danger-border)]"
                                 : "border-[var(--enterprise-border)]"
@@ -908,7 +897,7 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                     </p>
                     <OmInspectionSignaturePad className="mt-2" onChange={setSignatureDataUrl} />
                   </div>
-                  <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
+                  <div className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-4 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
                     <p className="font-semibold text-[var(--enterprise-text)]">On complete:</p>
                     <ul className="mt-1 list-inside list-disc space-y-0.5">
                       <li>PDF report generated</li>

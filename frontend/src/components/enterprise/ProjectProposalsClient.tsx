@@ -283,7 +283,7 @@ export function ProjectProposalsClient({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by title, reference, or client"
-              className={`${OM_COMPACT_INPUT} pl-9`}
+              className={`${OM_COMPACT_INPUT} enterprise-field-input--icon`}
               autoComplete="off"
             />
           </label>

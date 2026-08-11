@@ -65,7 +65,7 @@ function KpiTile({
           ? "text-[var(--enterprise-text-muted)]"
           : "text-[var(--enterprise-text)]";
   return (
-    <div className="rounded-xl bg-[var(--enterprise-bg)] px-3 py-2.5 ring-1 ring-[var(--enterprise-border)]">
+    <div className="rounded-md bg-[var(--enterprise-bg)] px-3 py-2.5 ring-1 ring-[var(--enterprise-border)]">
       <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">{label}</p>
       <p className={`mt-1 text-xl font-semibold tabular-nums tracking-tight ${valueClass}`}>
         {value}
@@ -77,7 +77,7 @@ function KpiTile({
 function TypeChip({ label, count }: { label: string; count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-[var(--enterprise-hover-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--enterprise-text)]">
+    <span className="inline-flex items-center gap-1 rounded-md bg-[var(--enterprise-hover-surface)] px-2 py-0.5 text-xs font-medium text-[var(--enterprise-text)]">
       <span className="tabular-nums">{count}</span>
       <span className="text-[var(--enterprise-text-muted)]">{label}</span>
     </span>
@@ -155,7 +155,7 @@ function ClearClashesConfirmDialog({
       }
     >
       <div className="flex items-start gap-3">
-        <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-semantic-danger-text)]">
+        <span className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-semantic-danger-text)]">
           <AlertTriangle className="h-5 w-5" strokeWidth={2} aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
@@ -214,7 +214,7 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
 
   if (error instanceof ProRequiredError) {
     return (
-      <section className="enterprise-card space-y-3 rounded-xl p-4 sm:p-5">
+      <section className="enterprise-card space-y-3 rounded-md p-4 sm:p-5">
         <HeaderIcon />
         <div>
           <h2 className="text-base font-semibold text-[var(--enterprise-text)]">Clash health</h2>
@@ -228,19 +228,19 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
 
   if (isPending && !data) {
     return (
-      <section className="enterprise-card space-y-4 rounded-xl p-4 sm:p-5">
+      <section className="enterprise-card space-y-4 rounded-md p-4 sm:p-5">
         <div className="flex items-center gap-3">
-          <div className="enterprise-skeleton h-10 w-10 rounded-xl" />
+          <div className="enterprise-skeleton h-10 w-10 rounded-md" />
           <div className="space-y-2">
             <div className="enterprise-skeleton h-5 w-32 rounded" />
             <div className="enterprise-skeleton h-3.5 w-48 rounded" />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div className="enterprise-skeleton h-16 rounded-xl" />
-          <div className="enterprise-skeleton h-16 rounded-xl" />
-          <div className="enterprise-skeleton h-16 rounded-xl" />
-          <div className="enterprise-skeleton h-16 rounded-xl" />
+          <div className="enterprise-skeleton h-16 rounded-md" />
+          <div className="enterprise-skeleton h-16 rounded-md" />
+          <div className="enterprise-skeleton h-16 rounded-md" />
+          <div className="enterprise-skeleton h-16 rounded-md" />
         </div>
       </section>
     );
@@ -248,7 +248,7 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
 
   if (error || !data) {
     return (
-      <section className="enterprise-card space-y-3 rounded-xl p-4 sm:p-5">
+      <section className="enterprise-card space-y-3 rounded-md p-4 sm:p-5">
         <HeaderIcon />
         <div>
           <h2 className="text-base font-semibold text-[var(--enterprise-text)]">Clash health</h2>
@@ -265,7 +265,7 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
   const isClear = hasTests && data.openCount === 0;
 
   return (
-    <section className="enterprise-card space-y-4 rounded-xl p-4 sm:p-5">
+    <section className="enterprise-card space-y-4 rounded-md p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <HeaderIcon tone={data.openCount > 0 ? "warn" : isClear ? "success" : "neutral"} />
@@ -275,11 +275,11 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
                 Clash health
               </h2>
               {data.openCount > 0 ? (
-                <span className="enterprise-badge-warning inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold">
+                <span className="enterprise-badge-warning inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold">
                   {data.openCount} open
                 </span>
               ) : isClear ? (
-                <span className="enterprise-badge-success inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold">
+                <span className="enterprise-badge-success inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold">
                   Clear
                 </span>
               ) : null}
@@ -323,7 +323,7 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
       </div>
 
       {data.stale ? (
-        <div className="enterprise-alert-warning flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm">
+        <div className="enterprise-alert-warning flex items-start gap-2 rounded-md px-3 py-2.5 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <p>
             Models were updated after the last clash run. Stored results may be for previous IFC
@@ -355,7 +355,7 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
             <TypeChip label="duplicate" count={data.byType.DUPLICATE} />
           </div>
 
-          <ul className="overflow-hidden rounded-xl ring-1 ring-[var(--enterprise-border)]">
+          <ul className="overflow-hidden rounded-md ring-1 ring-[var(--enterprise-border)]">
             {data.tests.map((t, i) => {
               const delta = t.lastRunStats?.newCount ?? 0;
               const samples = t.sampleClashes ?? [];
@@ -376,7 +376,7 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
                       <p className="truncate text-sm font-medium text-[var(--enterprise-text)]">
                         {t.name}
                       </p>
-                      <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
+                      <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
                         {t.clashCount} clash{t.clashCount === 1 ? "" : "es"}
                         {t.lastRunAt ? ` · ${relativeTime(t.lastRunAt)}` : ""}
                         {delta > 0 ? (
@@ -388,7 +388,7 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
                     </button>
                     <div className="flex shrink-0 items-center gap-1.5">
                       <span
-                        className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                        className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
                           t.openCount > 0 ? "enterprise-badge-warning" : "enterprise-badge-success"
                         }`}
                       >
@@ -397,7 +397,7 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
                       {t.clashCount > 0 ? (
                         <button
                           type="button"
-                          className="mobile-touch-target inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-medium text-[var(--enterprise-semantic-danger-text)] transition hover:bg-[var(--enterprise-semantic-danger-bg)]"
+                          className="mobile-touch-target inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-[var(--enterprise-semantic-danger-text)] transition hover:bg-[var(--enterprise-semantic-danger-bg)]"
                           aria-label={`Delete clashes for ${t.name}`}
                           title="Delete clashes for this model pair"
                           onClick={() =>
@@ -416,7 +416,7 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
                       {onOpenTest ? (
                         <button
                           type="button"
-                          className="enterprise-btn-secondary mobile-touch-target inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-medium"
+                          className="enterprise-btn-secondary mobile-touch-target inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium"
                           onClick={() => onOpenTest(t.id)}
                         >
                           <PanelsTopLeft className="h-3 w-3" aria-hidden />
@@ -441,7 +441,7 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
                                   " × " +
                                   (c.nameB ?? c.guidB.slice(0, 8))}
                               </span>
-                              <span className="text-[11px] text-[var(--enterprise-text-muted)]">
+                              <span className="text-xs text-[var(--enterprise-text-muted)]">
                                 {clashTypeLabel(c.clashType)} ·{" "}
                                 {formatClashDistanceDetail(c.clashType, c.distanceMm)}
                               </span>
@@ -456,7 +456,7 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
                     </ul>
                   ) : null}
                   {expanded && samples.length === 0 && t.openCount === 0 ? (
-                    <p className="border-t border-[var(--enterprise-border)] px-3.5 py-2 text-[11px] text-[var(--enterprise-text-muted)]">
+                    <p className="border-t border-[var(--enterprise-border)] px-3.5 py-2 text-xs text-[var(--enterprise-text-muted)]">
                       No open clashes in this test.
                     </p>
                   ) : null}
@@ -466,8 +466,8 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
           </ul>
         </>
       ) : (
-        <div className="flex flex-col items-center gap-3 rounded-xl bg-[var(--enterprise-bg)] px-4 py-8 text-center ring-1 ring-[var(--enterprise-border)]">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--enterprise-primary-soft)]">
+        <div className="flex flex-col items-center gap-3 rounded-md bg-[var(--enterprise-bg)] px-4 py-8 text-center ring-1 ring-[var(--enterprise-border)]">
+          <div className="flex h-12 w-12 items-center justify-center rounded-md bg-[var(--enterprise-primary-soft)]">
             <Crosshair className="h-6 w-6 text-[var(--enterprise-primary)]" aria-hidden />
           </div>
           <div className="max-w-sm space-y-1">
@@ -513,7 +513,7 @@ function HeaderIcon({ tone = "neutral" }: { tone?: "warn" | "success" | "neutral
         : "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]";
   return (
     <div
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${wrap}`}
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${wrap}`}
       aria-hidden
     >
       <Crosshair className="h-5 w-5" />

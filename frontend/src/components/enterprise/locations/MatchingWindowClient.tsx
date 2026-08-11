@@ -43,7 +43,7 @@ const RegistrationWorkspace = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="col-span-full flex min-h-[min(42dvh,380px)] flex-1 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
+      <div className="col-span-full flex min-h-[min(42dvh,380px)] flex-1 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
         <Loader2 className="h-6 w-6 animate-spin text-[var(--enterprise-text-muted)]" aria-hidden />
       </div>
     ),
@@ -470,12 +470,12 @@ export function MatchingWindowClient({
   return (
     <div className="registration-workspace flex h-full min-h-0 flex-col overflow-hidden">
       {!readOnly ? (
-        <header className="z-10 shrink-0 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]/95 px-2.5 py-1 backdrop-blur-sm">
+        <header className="z-10 shrink-0 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]/95 px-2.5 py-1">
           <div className="mb-1 flex items-center gap-2">
             {shell === "workspace" && onCancel ? (
               <button
                 type="button"
-                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-0.5 text-[10px] font-medium text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-0.5 text-xs font-medium text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
                 onClick={onCancel}
               >
                 <X className="h-3 w-3" aria-hidden />
@@ -520,7 +520,7 @@ export function MatchingWindowClient({
               className={`h-3 w-3 shrink-0 ${pdfPickActive || planPickActive ? "text-[var(--enterprise-primary)]" : "text-[var(--enterprise-primary)]/65"}`}
               aria-hidden
             />
-            <p className="text-[11px] leading-snug text-[var(--enterprise-text)]">{instruction}</p>
+            <p className="text-xs leading-snug text-[var(--enterprise-text)]">{instruction}</p>
           </div>
         </header>
       ) : null}
@@ -555,7 +555,7 @@ export function MatchingWindowClient({
                 onPlanPick={alignmentProps.onPlanPick}
               />
             </div>
-            <div className="flex min-h-0 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-6 text-center shadow-sm">
+            <div className="flex min-h-0 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-6 text-center shadow-sm">
               <p className="text-sm font-medium text-[var(--enterprise-text)]">No IFC model yet</p>
               <p className="max-w-xs text-xs text-[var(--enterprise-text-muted)]">
                 Upload an IFC for this building to extract the level plan.
@@ -566,9 +566,9 @@ export function MatchingWindowClient({
       </div>
 
       {!readOnly ? (
-        <footer className="z-10 shrink-0 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]/95 px-2.5 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+        <footer className="z-10 shrink-0 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]/95 px-2.5 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto flex max-w-5xl flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-            <label className="flex min-w-0 flex-1 items-center gap-1.5 text-[10px] text-[var(--enterprise-text-muted)]">
+            <label className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-[var(--enterprise-text-muted)]">
               <span className="shrink-0 whitespace-nowrap">PDF opacity</span>
               <input
                 type="range"
@@ -579,7 +579,7 @@ export function MatchingWindowClient({
                 value={overlayOpacity}
                 onChange={(e) => setOverlayOpacity(Number(e.target.value))}
               />
-              <span className="w-7 shrink-0 text-right text-[10px] tabular-nums text-[var(--enterprise-text)]">
+              <span className="w-7 shrink-0 text-right text-xs tabular-nums text-[var(--enterprise-text)]">
                 {Math.round(overlayOpacity * 100)}%
               </span>
             </label>
@@ -588,7 +588,7 @@ export function MatchingWindowClient({
               {existingMappingId ? (
                 <button
                   type="button"
-                  className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-[10px] font-medium text-[var(--enterprise-semantic-danger-text)] hover:bg-[var(--enterprise-semantic-danger-bg)] disabled:opacity-50"
+                  className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-xs font-medium text-[var(--enterprise-semantic-danger-text)] hover:bg-[var(--enterprise-semantic-danger-bg)] disabled:opacity-50"
                   disabled={unmapMut.isPending || saveMut.isPending}
                   onClick={() => unmapMut.mutate()}
                 >
@@ -597,7 +597,7 @@ export function MatchingWindowClient({
               ) : null}
               <button
                 type="button"
-                className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-[10px] font-medium text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
+                className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-xs font-medium text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
                 onClick={() => {
                   setPdfPoints([]);
                   setPlanPoints([]);
@@ -609,7 +609,7 @@ export function MatchingWindowClient({
               </button>
               <button
                 type="button"
-                className="enterprise-btn-primary rounded-md px-2.5 py-1 text-[10px] disabled:opacity-50"
+                className="enterprise-btn-primary rounded-md px-2.5 py-1 text-xs disabled:opacity-50"
                 disabled={!calibration || saveMut.isPending || unmapMut.isPending}
                 onClick={() => saveMut.mutate()}
               >
@@ -638,7 +638,7 @@ function SaveSuccessPanel({
 }) {
   return (
     <div className="registration-workspace flex h-full min-h-0 flex-col items-center justify-center gap-5 p-6 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--enterprise-primary-soft)]">
+      <div className="flex h-14 w-14 items-center justify-center rounded-md bg-[var(--enterprise-primary-soft)]">
         <CheckCircle2 className="h-7 w-7 text-[var(--enterprise-primary)]" aria-hidden />
       </div>
       <div className="max-w-sm space-y-1.5">

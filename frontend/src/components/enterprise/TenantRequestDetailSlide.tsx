@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetSummaryCard } from "@/components/enterprise/OmAssetSummaryCard";
 import {
   presignReadIssueReferencePhoto,
@@ -66,7 +66,7 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-[var(--enterprise-border)]/70 bg-[var(--enterprise-hover-surface)]/25 p-3.5">
+    <section className="rounded-md border border-[var(--enterprise-border)]/70 bg-[var(--enterprise-hover-surface)]/25 p-3.5">
       <h3 className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
         {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden /> : null}
         {title}
@@ -132,49 +132,40 @@ export function TenantRequestDetailSlide({
       open={open}
       onClose={onClose}
       ariaLabelledBy="tenant-detail-title"
-      panelVariant="floating"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),520px)]"
-      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
       overlayZClass="z-[100]"
-      bodyClassName="px-5 py-5"
-      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       header={
-        <div className="min-w-0 pr-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
-              {promotedAway ? "Work order" : "Request"}
-            </p>
-            {issue && !promotedAway ? (
-              <span
-                className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${issueStatusBadgeClassLight(issue.status)}`}
-              >
-                {ISSUE_STATUS_LABEL[issue.status] ?? issue.status}
-              </span>
-            ) : null}
-            {issue && !promotedAway ? (
-              <span
-                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold ${priorityBadgeClassLight(pri)}`}
-              >
-                <Flag className="h-3 w-3" aria-hidden />
-                {ISSUE_PRIORITY_LABEL[pri] ?? pri}
-              </span>
-            ) : null}
-          </div>
-          <h2
-            id="tenant-detail-title"
-            className="mt-1 line-clamp-2 text-lg font-semibold leading-snug tracking-tight text-[var(--enterprise-text)]"
-          >
-            {issue?.title ?? (loading ? "Loading…" : "Request")}
-          </h2>
-          {issue?.createdAt ? (
-            <p className="mt-0.5 text-xs tabular-nums text-[var(--enterprise-text-muted)]">
-              {new Date(issue.createdAt).toLocaleString(undefined, {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            </p>
-          ) : null}
-        </div>
+        <SlideOverHeader
+          icon={MapPin}
+          titleId="tenant-detail-title"
+          title={issue?.title ?? (loading ? "Loading…" : "Request")}
+          description={
+            issue?.createdAt
+              ? new Date(issue.createdAt).toLocaleString(undefined, {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })
+              : promotedAway
+                ? "Work order"
+                : "Occupant request"
+          }
+          meta={
+            issue && !promotedAway ? (
+              <>
+                <span
+                  className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${issueStatusBadgeClassLight(issue.status)}`}
+                >
+                  {ISSUE_STATUS_LABEL[issue.status] ?? issue.status}
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${priorityBadgeClassLight(pri)}`}
+                >
+                  <Flag className="h-3 w-3" aria-hidden />
+                  {ISSUE_PRIORITY_LABEL[pri] ?? pri}
+                </span>
+              </>
+            ) : undefined
+          }
+        />
       }
       footer={
         <div className="flex w-full flex-col gap-2">
@@ -222,7 +213,7 @@ export function TenantRequestDetailSlide({
           Loading…
         </div>
       ) : issue && promotedAway ? (
-        <div className="space-y-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/40 p-4 text-sm leading-relaxed text-[var(--enterprise-text)]">
+        <div className="space-y-3 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/40 p-4 text-sm leading-relaxed text-[var(--enterprise-text)]">
           <p>
             Promoted to an internal <strong className="font-semibold">work order</strong> — tracked
             outside the occupant inbox.

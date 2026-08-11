@@ -200,7 +200,7 @@ export function LandingBimShowcaseSection() {
                   destination: "/sign-in",
                 })
               }
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-(--landing-cta) px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:bg-(--landing-cta-bright)"
+              className="landing-btn-primary"
             >
               {t("cta")}
               <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />

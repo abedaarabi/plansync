@@ -37,10 +37,7 @@ import type { MoveDragPayload } from "@/store/uploadQueueStore";
 
 function SearchPathHint({ path }: { path: string }) {
   return (
-    <p
-      className="mt-0.5 truncate text-[10px] leading-tight text-[var(--enterprise-text-muted)]"
-      title={path}
-    >
+    <p className="enterprise-type-caption mt-0.5 truncate" title={path}>
       {path}
     </p>
   );
@@ -204,7 +201,7 @@ export function FileExplorerContent({
     const badge = uiStatus?.label ?? ifcPublishBadge?.(f);
     const spinning = ifcStatusSpinning(uiStatus);
     const btnClass = compact
-      ? "rounded-md border border-[var(--enterprise-border)] px-1.5 py-1 text-[10px] font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]"
+      ? "rounded-md border border-[var(--enterprise-border)] px-1.5 py-1 text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]"
       : "inline-flex items-center gap-1 rounded-md border border-[var(--enterprise-border)] px-2 py-1 text-xs font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]";
     const badgeClass =
       uiStatus?.kind === "failed"
@@ -218,7 +215,7 @@ export function FileExplorerContent({
       <div className={`flex flex-wrap items-center gap-1 ${compact ? "mt-1.5" : ""}`}>
         {badge ? (
           <span
-            className={`${badgeClass} inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] sm:text-[10px]`}
+            className={`${badgeClass} inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] sm:text-xs`}
           >
             {spinning ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
             {badge}
@@ -287,17 +284,17 @@ export function FileExplorerContent({
                 className="hidden h-4 w-px bg-[var(--enterprise-border)] sm:inline"
                 aria-hidden
               />
-              <span className="rounded-md bg-[var(--enterprise-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--enterprise-text-muted)] sm:text-xs">
+              <span className="rounded-md bg-[var(--enterprise-bg)] px-2 py-0.5 text-xs font-medium text-[var(--enterprise-text-muted)] sm:text-xs">
                 {visibleFolderCount} folder{visibleFolderCount === 1 ? "" : "s"}
               </span>
-              <span className="rounded-md bg-[var(--enterprise-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--enterprise-text-muted)] sm:text-xs">
+              <span className="rounded-md bg-[var(--enterprise-bg)] px-2 py-0.5 text-xs font-medium text-[var(--enterprise-text-muted)] sm:text-xs">
                 {visibleFileCount} file{visibleFileCount === 1 ? "" : "s"}
               </span>
             </>
           ) : null}
         </div>
         <div
-          className="inline-flex shrink-0 rounded-lg border border-slate-200/80 bg-slate-50/80 p-0.5 shadow-inner shadow-slate-200/20"
+          className="inline-flex shrink-0 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] p-0.5"
           role="group"
           aria-label="View layout"
         >
@@ -307,8 +304,8 @@ export function FileExplorerContent({
             onClick={() => onViewModeChange("grid")}
             className={`hidden min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 transition lg:inline-flex ${
               viewMode === "grid"
-                ? "bg-white text-[var(--enterprise-primary)] shadow-sm"
-                : "text-slate-400 hover:text-slate-600"
+                ? "bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]"
+                : "text-[var(--enterprise-text-muted)] hover:text-[var(--enterprise-subtitle)]"
             }`}
           >
             <LayoutGrid className="h-4 w-4" strokeWidth={2} />
@@ -319,8 +316,8 @@ export function FileExplorerContent({
             onClick={() => onViewModeChange("list")}
             className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 transition ${
               viewMode === "list"
-                ? "bg-white text-[var(--enterprise-primary)] shadow-sm"
-                : "text-slate-400 hover:text-slate-600"
+                ? "bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]"
+                : "text-[var(--enterprise-text-muted)] hover:text-[var(--enterprise-subtitle)]"
             }`}
           >
             <List className="h-4 w-4" strokeWidth={2} />
@@ -329,7 +326,7 @@ export function FileExplorerContent({
       </div>
 
       <div
-        className={`mobile-scroll relative min-h-0 flex-1 overflow-auto bg-slate-50/90 px-0 py-0 sm:px-4 sm:py-4 lg:px-7 ${
+        className={`mobile-scroll relative min-h-0 flex-1 overflow-auto bg-[var(--enterprise-bg)] px-0 py-0 sm:px-4 sm:py-4 lg:px-7 ${
           isDragOver
             ? "bg-[var(--enterprise-primary-soft)]/60 ring-2 ring-inset ring-[var(--enterprise-primary)]/30"
             : ""
@@ -340,7 +337,7 @@ export function FileExplorerContent({
         onDrop={onDrop}
       >
         {isDragOver ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl border-2 border-dashed border-[var(--enterprise-primary)]/50 bg-white/40 backdrop-blur-[1px]">
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-[var(--enterprise-primary)]/50 bg-[var(--enterprise-surface)]/70 ">
             <p className="text-sm font-semibold text-[var(--enterprise-primary-deep)]">
               Drop files here or onto a folder
             </p>
@@ -384,7 +381,7 @@ export function FileExplorerContent({
                         onDragLeaveFolder ? (e) => onDragLeaveFolder(e, fol.id) : undefined
                       }
                       onDrop={onDropOnFolder ? (e) => onDropOnFolder(e, fol.id) : undefined}
-                      className={`group relative overflow-hidden rounded-lg border bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/30 hover:shadow-sm ${
+                      className={`group relative overflow-hidden rounded-lg border bg-[var(--enterprise-surface)] transition hover:border-[var(--enterprise-primary)]/30 hover:${
                         selected
                           ? "border-[var(--enterprise-primary)]/45 ring-2 ring-[var(--enterprise-primary)]/20"
                           : "border-[var(--enterprise-border)]"
@@ -424,12 +421,12 @@ export function FileExplorerContent({
                           {searchActive ? (
                             <SearchPathHint path={folderPathLabel(project.folders, fol.parentId)} />
                           ) : null}
-                          <span className="mt-0.5 block truncate text-[10px] leading-tight text-[var(--enterprise-text-muted)]">
+                          <span className="mt-0.5 block truncate text-xs leading-tight text-[var(--enterprise-text-muted)]">
                             {inside.total} item{inside.total !== 1 ? "s" : ""}
                             {" · "}
                             {lastOpenedLabel}
                           </span>
-                          <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] leading-tight text-[var(--enterprise-text-muted)]">
+                          <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs leading-tight text-[var(--enterprise-text-muted)]">
                             <UserRound className="h-3 w-3 shrink-0" aria-hidden />
                             <span className="truncate">{fol.lastOpenedBy?.trim() || "—"}</span>
                           </span>
@@ -441,13 +438,13 @@ export function FileExplorerContent({
                       </button>
                       {dropTarget ? (
                         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-lg bg-[var(--enterprise-primary)]/10">
-                          <span className="rounded-md bg-[var(--enterprise-surface)]/95 px-2 py-1 text-[10px] font-semibold text-[var(--enterprise-primary-deep)] shadow-sm">
+                          <span className="rounded-md bg-[var(--enterprise-surface)]/95 px-2 py-1 text-xs font-semibold text-[var(--enterprise-primary-deep)]">
                             Drop here
                           </span>
                         </div>
                       ) : null}
                       <div className="pointer-events-none absolute right-1.5 top-1.5 z-20 hidden opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 lg:block">
-                        <div className="flex items-center gap-0.5 rounded-lg bg-[var(--enterprise-surface)]/92 p-0.5 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
+                        <div className="flex items-center gap-0.5 rounded-lg bg-[var(--enterprise-surface)]/92 p-0.5 ">
                           {onDownloadFolder ? (
                             <button
                               type="button"
@@ -503,7 +500,7 @@ export function FileExplorerContent({
                   return (
                     <div
                       key={f.id}
-                      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)] transition duration-150 hover:border-[var(--enterprise-primary)]/30 hover:shadow-sm ${
+                      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-[var(--enterprise-surface)] transition duration-150 hover:border-[var(--enterprise-primary)]/30 hover:${
                         selected
                           ? federationIfcIds?.has(f.id)
                             ? "border-emerald-500/40 ring-2 ring-emerald-500/25"
@@ -542,21 +539,21 @@ export function FileExplorerContent({
                           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10" />
                           {(f.commentCount ?? 0) > 0 ? (
                             <div className="pointer-events-none absolute left-1.5 top-1.5 z-10">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-md">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary)] px-1.5 py-0.5 text-xs font-semibold text-white">
                                 <MessageSquare className="h-3 w-3" strokeWidth={2.25} aria-hidden />
                                 {f.commentCount}
                               </span>
                             </div>
                           ) : null}
                           {isPdfFile(f) || isIfcFile(f) ? (
-                            <div className="pointer-events-none absolute bottom-1.5 left-1.5 z-10 drop-shadow-md">
+                            <div className="pointer-events-none absolute bottom-1.5 left-1.5 z-10 ">
                               {isPdfFile(f) ? (
                                 <PdfFileIcon className="h-6 w-6 rounded-[5px]" />
                               ) : (
                                 <span className="relative inline-flex">
                                   <IfcFileIcon className="h-6 w-6 rounded-[5px]" />
                                   {ifcStatusSpinning(ifcModelStatus?.(f)) ? (
-                                    <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--enterprise-surface)] shadow-sm ring-1 ring-[var(--enterprise-border)]">
+                                    <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--enterprise-surface)] ring-1 ring-[var(--enterprise-border)]">
                                       <Loader2
                                         className="h-2.5 w-2.5 animate-spin text-[var(--enterprise-primary)]"
                                         aria-hidden
@@ -568,7 +565,7 @@ export function FileExplorerContent({
                             </div>
                           ) : null}
                           <div className="absolute bottom-1.5 right-1.5 z-20 opacity-100 transition duration-150 lg:translate-y-0.5 lg:opacity-0 lg:group-hover:translate-y-0 lg:group-hover:opacity-100 lg:group-focus-within:translate-y-0 lg:group-focus-within:opacity-100">
-                            <div className="flex items-center gap-0.5 rounded-lg bg-[var(--enterprise-surface)]/92 p-0.5 shadow-md ring-1 ring-black/5 backdrop-blur-sm">
+                            <div className="flex items-center gap-0.5 rounded-lg bg-[var(--enterprise-surface)]/92 p-0.5 ">
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -576,7 +573,7 @@ export function FileExplorerContent({
                                   if (!onOpenViewer) return;
                                   onOpenViewer(f);
                                 }}
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[var(--enterprise-primary)] text-white shadow-sm transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[var(--enterprise-primary)] text-white transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-50"
                                 disabled={!onOpenViewer}
                                 title="Open"
                                 aria-label={`Open ${f.name}`}
@@ -600,7 +597,7 @@ export function FileExplorerContent({
                           <div className="absolute right-1.5 top-1.5 z-20 opacity-100 transition duration-150 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100">
                             <button
                               type="button"
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--enterprise-surface)]/92 text-[var(--enterprise-text-muted)] shadow-md ring-1 ring-black/5 backdrop-blur-sm transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--enterprise-surface)]/92 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
                               disabled={deletingKey === `file:${f.id}`}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -626,7 +623,7 @@ export function FileExplorerContent({
                           {searchActive ? (
                             <SearchPathHint path={folderPathLabel(project.folders, f.folderId)} />
                           ) : null}
-                          <p className="truncate text-[10px] leading-tight text-[var(--enterprise-text-muted)]">
+                          <p className="truncate text-xs leading-tight text-[var(--enterprise-text-muted)]">
                             {displayVer ? (
                               <>
                                 <span className="tabular-nums">v{displayVer.version}</span>
@@ -653,7 +650,7 @@ export function FileExplorerContent({
                         >
                           <select
                             id={`file-version-${f.id}`}
-                            className="w-full rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] py-0.5 pl-1.5 pr-5 text-[10px] text-[var(--enterprise-text)]"
+                            className="w-full rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] py-0.5 pl-1.5 pr-5 text-xs text-[var(--enterprise-text)]"
                             value={String(selectedVersionForFile(f))}
                             onChange={(e) => {
                               onFileVersionPick(f.id, Number(e.target.value));
@@ -676,8 +673,8 @@ export function FileExplorerContent({
           </div>
         ) : (
           <>
-            <div className="overflow-hidden rounded-none border-0 bg-white shadow-none ring-0 lg:hidden">
-              <ul className="divide-y divide-slate-100">
+            <div className="overflow-hidden rounded-none border-0 bg-[var(--enterprise-surface)] shadow-none ring-0 lg:hidden">
+              <ul className="divide-y divide-[var(--enterprise-border)]">
                 {subfolders.map((fol) => {
                   const { inside, selected, dropTarget, folderLastOpenedIso } = folderListMeta(
                     project,
@@ -740,7 +737,10 @@ export function FileExplorerContent({
                             <p className="inline-flex items-center gap-1 truncate text-[13px] font-normal text-[var(--enterprise-text)] sm:text-base">
                               <span className="truncate">{fol.name}</span>
                               {fol.canAccess === false ? (
-                                <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                                <Lock
+                                  className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)]"
+                                  aria-hidden
+                                />
                               ) : null}
                             </p>
                             {searchActive ? (
@@ -748,12 +748,12 @@ export function FileExplorerContent({
                                 path={folderPathLabel(project.folders, fol.parentId)}
                               />
                             ) : null}
-                            <p className="truncate text-[11px] text-slate-500 sm:text-sm">
+                            <p className="truncate text-xs text-[var(--enterprise-text-muted)] sm:text-sm">
                               {fol.canAccess === false
                                 ? "Restricted folder · request access"
                                 : `Folder · ${inside.total} item${inside.total !== 1 ? "s" : ""}`}
                             </p>
-                            <p className="mt-0.5 inline-flex max-w-full items-center gap-1.5 overflow-hidden text-[10px] text-slate-500 sm:mt-1 sm:text-xs">
+                            <p className="mt-0.5 inline-flex max-w-full items-center gap-1.5 overflow-hidden text-xs text-[var(--enterprise-text-muted)] sm:mt-1 sm:text-xs">
                               <span className="inline-flex min-w-0 items-center gap-1 truncate">
                                 <Clock3 className="h-3.5 w-3.5" aria-hidden />
                                 Last open{" "}
@@ -765,7 +765,10 @@ export function FileExplorerContent({
                               </span>
                             </p>
                           </div>
-                          <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" aria-hidden />
+                          <ChevronRight
+                            className="h-5 w-5 shrink-0 text-[var(--enterprise-border)]"
+                            aria-hidden
+                          />
                         </div>
                       </SwipeableListRow>
                     </li>
@@ -810,7 +813,7 @@ export function FileExplorerContent({
                               : ""
                           }`}
                         >
-                          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200/60">
+                          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[var(--enterprise-hover-surface)] ring-1 ring-[var(--enterprise-border)]">
                             <PdfFileThumbnail
                               fileId={f.id}
                               fileName={f.name}
@@ -827,11 +830,11 @@ export function FileExplorerContent({
                             {searchActive ? (
                               <SearchPathHint path={folderPathLabel(project.folders, f.folderId)} />
                             ) : null}
-                            <p className="inline-flex max-w-full items-center gap-1 truncate text-[11px] text-slate-500 sm:text-sm">
+                            <p className="inline-flex max-w-full items-center gap-1 truncate text-xs text-[var(--enterprise-text-muted)] sm:text-sm">
                               {displayVer ? `Rev ${displayVer.version}` : "—"}
                               {(f.commentCount ?? 0) > 0 ? (
                                 <>
-                                  <span className="text-slate-300">•</span>
+                                  <span className="text-[var(--enterprise-border)]">•</span>
                                   <span className="inline-flex items-center gap-1 font-medium text-[var(--enterprise-primary)]">
                                     <MessageSquare className="h-3.5 w-3.5" aria-hidden />
                                     {f.commentCount}
@@ -869,7 +872,7 @@ export function FileExplorerContent({
                             </div>
                             {versionUi && sv.length > 1 && onFileVersionPick ? (
                               <select
-                                className="mt-1 h-8 rounded-md border border-slate-200/90 bg-white px-2 text-xs text-[var(--enterprise-text)]"
+                                className="mt-1 h-8 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 text-xs text-[var(--enterprise-text)]"
                                 value={String(selectedVersionForFile(f))}
                                 onClick={(ev) => ev.stopPropagation()}
                                 onChange={(e) => {
@@ -886,7 +889,10 @@ export function FileExplorerContent({
                               </select>
                             ) : null}
                           </div>
-                          <ChevronRight className="h-5 w-5 shrink-0 text-slate-300" aria-hidden />
+                          <ChevronRight
+                            className="h-5 w-5 shrink-0 text-[var(--enterprise-border)]"
+                            aria-hidden
+                          />
                         </div>
                       </SwipeableListRow>
                     </li>
@@ -895,10 +901,10 @@ export function FileExplorerContent({
               </ul>
             </div>
 
-            <div className="enterprise-scrollbar hidden overflow-x-auto rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-sm lg:block">
+            <div className="enterprise-scrollbar enterprise-card hidden overflow-x-auto lg:block">
               <table className="w-full min-w-[720px] text-left text-[13px]">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  <tr className="enterprise-type-label border-b border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
                     <th className="py-2.5 pl-4 pr-3" scope="col">
                       Name
                     </th>
@@ -941,10 +947,10 @@ export function FileExplorerContent({
                           }
                           onDragStartMove?.(e, { kind: "folder", id: fol.id });
                         }}
-                        className={`cursor-pointer border-b border-slate-50 transition-colors last:border-b-0 ${
+                        className={`cursor-pointer border-b border-[var(--enterprise-border-subtle)] transition-colors last:border-b-0 ${
                           selected
                             ? "bg-[var(--enterprise-primary-soft)]/80"
-                            : "hover:bg-slate-50/90"
+                            : "hover:bg-[var(--enterprise-bg)]"
                         } ${dropTarget ? "bg-blue-50/80" : ""}`}
                         onClick={() => {
                           onSelectItem(itemKeyForFolder(fol.id));
@@ -969,11 +975,14 @@ export function FileExplorerContent({
                               <span className="inline-flex items-center gap-1 truncate">
                                 <span className="truncate font-normal">{fol.name}</span>
                                 {fol.canAccess === false ? (
-                                  <Lock className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
+                                  <Lock
+                                    className="h-3 w-3 shrink-0 text-[var(--enterprise-text-muted)]"
+                                    aria-hidden
+                                  />
                                 ) : null}
                               </span>
                               <ChevronRight
-                                className="h-3 w-3 shrink-0 text-slate-300"
+                                className="h-3 w-3 shrink-0 text-[var(--enterprise-border)]"
                                 aria-hidden
                               />
                             </span>
@@ -984,21 +993,21 @@ export function FileExplorerContent({
                             ) : null}
                           </div>
                         </td>
-                        <td className="py-2.5 text-slate-500">Folder</td>
-                        <td className="py-2.5 text-slate-400">—</td>
-                        <td className="py-2.5 text-slate-600">
+                        <td className="py-2.5 text-[var(--enterprise-text-muted)]">Folder</td>
+                        <td className="py-2.5 text-[var(--enterprise-text-muted)]">—</td>
+                        <td className="py-2.5 text-[var(--enterprise-subtitle)]">
                           {formatItemDateOrDash(fol.createdAt ?? fol.updatedAt)}
                         </td>
-                        <td className="py-2.5 text-slate-600">
+                        <td className="py-2.5 text-[var(--enterprise-subtitle)]">
                           <div className="space-y-0.5">
                             <p>{formatItemDateOrDash(fol.lastOpenedAt ?? folderLastOpenedIso)}</p>
-                            <p className="inline-flex max-w-full items-center gap-1 truncate text-xs text-slate-500">
+                            <p className="inline-flex max-w-full items-center gap-1 truncate text-xs text-[var(--enterprise-text-muted)]">
                               <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
                               <span className="truncate">{fol.lastOpenedBy?.trim() || "—"}</span>
                             </p>
                           </div>
                         </td>
-                        <td className="py-2.5 text-slate-500">
+                        <td className="py-2.5 text-[var(--enterprise-text-muted)]">
                           {inside.total} item{inside.total !== 1 ? "s" : ""}
                         </td>
                         <td className="py-2">
@@ -1006,7 +1015,7 @@ export function FileExplorerContent({
                             {onDownloadFolder ? (
                               <button
                                 type="button"
-                                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                className="rounded-md p-1 text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
                                 disabled={downloadingKey === `folder-download:${fol.id}`}
                                 onClick={(ev) => {
                                   ev.stopPropagation();
@@ -1023,7 +1032,7 @@ export function FileExplorerContent({
                             ) : null}
                             <button
                               type="button"
-                              className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              className="rounded-md p-1 text-[var(--enterprise-text-muted)] hover:bg-red-50 hover:text-red-600"
                               disabled={deletingKey === `folder:${fol.id}`}
                               onClick={(ev) => {
                                 ev.stopPropagation();
@@ -1065,12 +1074,12 @@ export function FileExplorerContent({
                             }
                             onDragStartMove?.(e, { kind: "file", id: f.id });
                           }}
-                          className={`cursor-pointer border-b border-slate-50 transition-colors last:border-b-0 ${
+                          className={`cursor-pointer border-b border-[var(--enterprise-border-subtle)] transition-colors last:border-b-0 ${
                             selected
                               ? federationIfcIds?.has(f.id)
                                 ? "bg-emerald-50/90"
                                 : "bg-[var(--enterprise-primary-soft)]/80"
-                              : "hover:bg-slate-50/90"
+                              : "hover:bg-[var(--enterprise-bg)]"
                           }`}
                           onClick={(e) => {
                             const federationToggle =
@@ -1103,7 +1112,7 @@ export function FileExplorerContent({
                                 )}
                                 <span className="truncate">{f.name}</span>
                                 {(f.commentCount ?? 0) > 0 ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)]">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-xs font-semibold text-[var(--enterprise-primary)]">
                                     <MessageSquare className="h-3 w-3" aria-hidden />
                                     {f.commentCount}
                                   </span>
@@ -1117,13 +1126,13 @@ export function FileExplorerContent({
                               {renderIfcActions(f)}
                             </div>
                           </td>
-                          <td className="py-2.5 text-slate-500">
+                          <td className="py-2.5 text-[var(--enterprise-text-muted)]">
                             {isPdfFile(f) ? "PDF" : isIfcFile(f) ? "IFC" : "File"}
                           </td>
-                          <td className="py-2.5 text-slate-600">
+                          <td className="py-2.5 text-[var(--enterprise-subtitle)]">
                             {versionUi && sv.length > 1 && onFileVersionPick ? (
                               <select
-                                className="max-w-[140px] rounded-md border border-slate-200/90 bg-white px-1.5 py-1 text-[11px] text-[var(--enterprise-text)]"
+                                className="max-w-[140px] rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-1.5 py-1 text-xs text-[var(--enterprise-text)]"
                                 value={String(selectedVersionForFile(f))}
                                 onClick={(ev) => ev.stopPropagation()}
                                 onChange={(e) => {
@@ -1139,18 +1148,20 @@ export function FileExplorerContent({
                                 ))}
                               </select>
                             ) : latest ? (
-                              <span className="text-slate-500">v{latest.version}</span>
+                              <span className="text-[var(--enterprise-text-muted)]">
+                                v{latest.version}
+                              </span>
                             ) : (
                               "—"
                             )}
                           </td>
-                          <td className="py-2.5 text-slate-600">
+                          <td className="py-2.5 text-[var(--enterprise-subtitle)]">
                             {formatItemDateOrDash(displayVer?.createdAt ?? f.updatedAt)}
                           </td>
-                          <td className="py-2.5 text-slate-600">
+                          <td className="py-2.5 text-[var(--enterprise-subtitle)]">
                             {formatItemDateOrDash(f.lastOpenedAt)}
                           </td>
-                          <td className="py-2.5 text-slate-500">
+                          <td className="py-2.5 text-[var(--enterprise-text-muted)]">
                             {displayVer ? formatBytes(displayVer.sizeBytes) : "—"}
                           </td>
                           <td className="py-2">

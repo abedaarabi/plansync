@@ -427,7 +427,7 @@ export function BimAddToTakeoffDialog(props: {
                   value={materialSearch}
                   onChange={(e) => setMaterialSearch(e.target.value)}
                   placeholder="Search by name, category, SKU…"
-                  className={`${fieldInput} pl-9`}
+                  className={`${fieldInput} pl-10`}
                 />
               </div>
               <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-[var(--enterprise-border)] enterprise-scrollbar">

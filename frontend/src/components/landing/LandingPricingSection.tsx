@@ -138,12 +138,12 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                 <div
                   className={
                     card.popular
-                      ? "relative flex h-full min-w-0 flex-col rounded-3xl border-2 border-[var(--landing-cta)] bg-white p-6 shadow-[0_28px_56px_-24px_rgba(37,99,235,0.11),var(--enterprise-shadow-card)] ring-4 ring-[color-mix(in_srgb,var(--landing-cta)_12%,transparent)] sm:p-7"
-                      : "flex h-full min-w-0 flex-col rounded-3xl border border-slate-200/90 bg-white p-6 shadow-[var(--enterprise-shadow-card)] sm:p-7"
+                      ? "landing-card landing-card-featured relative flex h-full min-w-0 flex-col"
+                      : "landing-card relative flex h-full min-w-0 flex-col"
                   }
                 >
                   {card.popular ? (
-                    <div className="absolute -top-3.5 start-1/2 -translate-x-1/2 rounded-full bg-[var(--landing-cta)] px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-blue-600/25">
+                    <div className="absolute -top-3 start-1/2 -translate-x-1/2 rounded-md bg-[var(--landing-cta)] px-2.5 py-1 text-[11px] font-semibold text-white">
                       {t("popular")}
                     </div>
                   ) : null}
@@ -151,8 +151,8 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                     <div
                       className={
                         card.popular
-                          ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--landing-cta)_10%,white)] text-[var(--landing-cta)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_22%,transparent)]"
-                          : "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 ring-1 ring-slate-200/80"
+                          ? "landing-icon landing-icon-lg landing-icon-accent"
+                          : "landing-icon landing-icon-lg"
                       }
                       aria-hidden
                     >
@@ -210,9 +210,10 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                         });
                         onGoToFreeViewer();
                       }}
-                      className="mt-7 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
+                      className="landing-btn-secondary landing-btn-block mt-7"
                     >
-                      {t("openViewer")} <ArrowRight className="h-4 w-4 shrink-0" />
+                      {t("openViewer")}
+                      <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
                     </button>
                   ) : (
                     <Link
@@ -225,11 +226,12 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
                       }
                       className={
                         card.popular
-                          ? "btn-shine relative mt-7 flex min-h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[var(--landing-cta)] py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
-                          : "mt-7 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                          ? "landing-btn-primary landing-btn-block mt-7"
+                          : "landing-btn-secondary landing-btn-block mt-7"
                       }
                     >
-                      {t("startTrial14")} <ArrowRight className="h-4 w-4 shrink-0" />
+                      {t("startTrial14")}
+                      <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
                     </Link>
                   )}
                 </div>
@@ -246,7 +248,7 @@ export function LandingPricingSection({ onGoToFreeViewer }: LandingPricingSectio
             {t("compareSubtitle")}
           </p>
 
-          <div className="mt-8 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-[var(--enterprise-shadow-card)]">
+          <div className="landing-card landing-card-flush mt-8 overflow-x-auto">
             <table className="w-full min-w-[640px] border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/90">

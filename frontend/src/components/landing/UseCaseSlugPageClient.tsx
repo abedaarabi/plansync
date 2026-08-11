@@ -58,7 +58,7 @@ function UseCaseSlugInner({ slug }: UseCaseSlugPageClientProps) {
       <section className="landing-band-pricing py-14 sm:py-18">
         <div className="mx-auto grid max-w-5xl gap-6 px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
           <AnimateIn>
-            <article className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
+            <article className="landing-card">
               <h2 className="text-lg font-semibold text-slate-900">{t("deliveryBlueprint")}</h2>
               <ul className="mt-4 space-y-3 text-sm leading-relaxed text-slate-700">
                 {[1, 2, 3, 4].map((stepNumber) => (
@@ -79,7 +79,7 @@ function UseCaseSlugInner({ slug }: UseCaseSlugPageClientProps) {
           </AnimateIn>
 
           <AnimateIn delay={100}>
-            <aside className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
+            <aside className="landing-card">
               <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">
                 {t("linkedSolutions")}
               </h2>
@@ -104,7 +104,7 @@ function UseCaseSlugInner({ slug }: UseCaseSlugPageClientProps) {
                 <button
                   type="button"
                   onClick={() => goToFreeViewer(`use_case_${slug}_open_viewer`)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--landing-cta)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--landing-cta-bright)]"
+                  className="landing-btn-primary landing-btn-block"
                 >
                   {t("openViewer")}
                   <ArrowRight className="h-4 w-4" aria-hidden />

@@ -14,7 +14,12 @@ import { qk } from "@/lib/queryKeys";
 import type { Project } from "@/types/projects";
 import { ConfirmProjectSaveDialog } from "./ConfirmProjectSaveDialog";
 import { DeleteProjectConfirmDialog } from "./DeleteProjectConfirmDialog";
-import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
+import {
+  EnterpriseSlideOver,
+  SlideOverHeader,
+  SLIDE_OVER_BTN_PRIMARY,
+  SLIDE_OVER_BTN_SECONDARY,
+} from "./EnterpriseSlideOver";
 import { ProjectCurrencyPicker } from "./ProjectCurrencyPicker";
 import { ProjectMeasurementSystemPicker } from "./ProjectMeasurementSystemPicker";
 import { ProjectProgressBar } from "./ProjectProgressBar";
@@ -24,7 +29,7 @@ import { geocodeLocationName } from "@/lib/openMeteoGeocode";
 import { parseCoord } from "@/lib/projectGeo";
 
 const inputClass =
-  "mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] placeholder:text-[var(--enterprise-text-muted)]/75 transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20";
+  "mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)]  placeholder:text-[var(--enterprise-text-muted)]/75 transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20";
 
 const labelClass = "block text-[13px] font-medium text-[var(--enterprise-text-muted)]";
 
@@ -376,31 +381,21 @@ export function ProjectEditSlideOver({
         }}
         ariaLabelledBy="edit-project-slide-title"
         header={
-          <div>
-            <h2
-              id="edit-project-slide-title"
-              className="text-lg font-semibold text-[var(--enterprise-text)]"
-            >
-              Edit project
-            </h2>
-            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
-              Update details, website (logo), stage, and progress.
-            </p>
-          </div>
+          <SlideOverHeader
+            titleId="edit-project-slide-title"
+            title="Edit project"
+            description="Update details, website, stage, and progress."
+          />
         }
         footer={
           <>
-            <button
-              type="button"
-              onClick={handleClose}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)]"
-            >
+            <button type="button" onClick={handleClose} className={SLIDE_OVER_BTN_SECONDARY}>
               Cancel
             </button>
             <button
               type="submit"
               disabled={!formDirty || !nameEd.trim() || saveMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-[var(--enterprise-primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className={SLIDE_OVER_BTN_PRIMARY}
             >
               Save changes
             </button>
@@ -421,7 +416,7 @@ export function ProjectEditSlideOver({
             />
           </div>
 
-          <div className="rounded-xl border border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/25 p-4">
+          <div className="rounded-md border border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/25 p-4">
             <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
               Currency &amp; units
             </p>

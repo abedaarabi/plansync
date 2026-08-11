@@ -1129,7 +1129,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
 
   if (!project) {
     return (
-      <div className="rounded-xl border border-[var(--enterprise-border)] bg-white p-6 text-center text-sm text-[var(--enterprise-text-muted)] shadow-sm">
+      <div className="rounded-md border border-[var(--enterprise-border)] bg-white p-6 text-center text-sm text-[var(--enterprise-text-muted)]">
         {isPro
           ? "Project not found."
           : "Files & drawings require a Pro plan. Upgrade this workspace to access documents."}
@@ -1139,7 +1139,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
 
   if (!canViewDrawings) {
     return (
-      <div className="rounded-xl border border-[var(--enterprise-border)] bg-white p-6 text-center text-sm text-[var(--enterprise-text-muted)] shadow-sm">
+      <div className="rounded-md border border-[var(--enterprise-border)] bg-white p-6 text-center text-sm text-[var(--enterprise-text-muted)]">
         Drawings are hidden for clients in this project.
       </div>
     );
@@ -1175,7 +1175,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         }
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-card)]">
+      <div className="enterprise-card flex min-h-0 flex-1 flex-col overflow-hidden p-0">
         <FileExplorerTopBar
           breadcrumbs={breadcrumbItems}
           onNavigate={openFolderOrRequest}
@@ -1205,7 +1205,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         />
 
         <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="hidden min-h-0 shrink-0 flex-col border-r border-slate-200/70 bg-slate-50 lg:flex">
+          <aside className="hidden min-h-0 shrink-0 flex-col border-r border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/50 lg:flex">
             <FileExplorerTree
               className="h-full"
               folders={project.folders}
@@ -1282,11 +1282,11 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           <button
             type="button"
             aria-label="Close folder list"
-            className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-[1px] lg:hidden"
+            className="fixed inset-0 z-[60] bg-[#0b1220]/40 lg:hidden"
             onClick={() => setMobileFolderTreeOpen(false)}
           />
           <div
-            className="fixed inset-y-0 left-0 z-[70] flex w-[min(100%,20rem)] flex-col border-r border-slate-200/80 bg-slate-50 shadow-xl lg:hidden"
+            className="fixed inset-y-0 left-0 z-[70] flex w-[min(100%,20rem)] flex-col border-r border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] lg:hidden"
             role="dialog"
             aria-modal="true"
             aria-label="Folders"
@@ -1296,7 +1296,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
               <button
                 type="button"
                 onClick={() => setMobileFolderTreeOpen(false)}
-                className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100"
+                className="rounded-md p-2 text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)]"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" strokeWidth={2} aria-hidden />
@@ -1376,7 +1376,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         open={folderModal && canManage}
         onClose={closeNewFolderModal}
         ariaLabelledBy="project-files-new-folder-title"
-        panelClassName="max-w-xl rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-0"
+        panelClassName="max-w-xl rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-0"
         bodyClassName="p-0"
         footerClassName="border-t border-[var(--enterprise-border)] px-4 py-3 lg:px-5"
         footer={
@@ -1384,7 +1384,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             <button
               type="button"
               onClick={closeNewFolderModal}
-              className="rounded-lg border border-[var(--enterprise-border)] px-4 py-2 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)]"
+              className="rounded-md border border-[var(--enterprise-border)] px-4 py-2 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)]"
             >
               Cancel
             </button>
@@ -1392,7 +1392,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
               type="button"
               onClick={() => void onCreateFolder()}
               disabled={saving || !folderName.trim()}
-              className="rounded-lg bg-[var(--enterprise-primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-md bg-[var(--enterprise-primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
               {saving ? "Creating..." : "Create folder"}
             </button>
@@ -1404,7 +1404,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             id="project-files-new-folder-title"
             className="inline-flex items-center gap-2 text-base font-semibold text-[var(--enterprise-text)]"
           >
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
               <FolderPlus className="h-4 w-4" aria-hidden />
             </span>
             New folder
@@ -1414,7 +1414,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           </p>
         </div>
         <div className="space-y-4 px-4 py-4 lg:px-5">
-          <div className="space-y-2 rounded-xl border border-[var(--enterprise-border)] bg-white p-3">
+          <div className="space-y-2 rounded-md border border-[var(--enterprise-border)] bg-white p-3">
             <label
               htmlFor="project-files-folder-name"
               className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]"
@@ -1432,19 +1432,19 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
                   void onCreateFolder();
                 }
               }}
-              className="mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
+              className="mt-1.5 w-full rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
               placeholder="e.g. Architectural"
               required
               autoFocus
             />
           </div>
 
-          <div className="space-y-2 rounded-xl border border-[var(--enterprise-border)] bg-slate-50/70 p-3">
+          <div className="space-y-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] p-3">
             <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
               Access control
             </p>
-            <label className="flex items-center gap-2 rounded-lg border border-transparent bg-white/70 px-2.5 py-2 text-sm text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-border)]">
+            <label className="flex items-center gap-2 rounded-md border border-transparent bg-white/70 px-2.5 py-2 text-sm text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-border)]">
               <input
                 type="radio"
                 checked={newFolderAccessMode === "all"}
@@ -1453,7 +1453,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
               <Globe2 className="h-4 w-4 text-slate-500" aria-hidden />
               <span>All users can use this folder</span>
             </label>
-            <label className="flex items-center gap-2 rounded-lg border border-transparent bg-white/70 px-2.5 py-2 text-sm text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-border)]">
+            <label className="flex items-center gap-2 rounded-md border border-transparent bg-white/70 px-2.5 py-2 text-sm text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-border)]">
               <input
                 type="radio"
                 checked={newFolderAccessMode === "selected"}
@@ -1465,7 +1465,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           </div>
 
           {newFolderAccessMode === "selected" ? (
-            <div className="rounded-xl border border-[var(--enterprise-border)] bg-white p-2">
+            <div className="rounded-md border border-[var(--enterprise-border)] bg-white p-2">
               <p className="inline-flex items-center gap-1.5 px-2 pb-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
                 <Users className="h-3.5 w-3.5" aria-hidden />
                 Select users
@@ -1476,10 +1476,10 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
                   return (
                     <label
                       key={`new-folder-access-${member.userId}`}
-                      className={`flex items-center gap-3 rounded-lg border px-2.5 py-2 text-sm transition ${
+                      className={`flex items-center gap-3 rounded-md border px-2.5 py-2 text-sm transition ${
                         selected
                           ? "border-[var(--enterprise-primary)]/35 bg-[var(--enterprise-primary-soft)]/60"
-                          : "border-transparent hover:border-[var(--enterprise-border)] hover:bg-slate-50"
+                          : "border-transparent hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)]"
                       }`}
                     >
                       <input
@@ -1502,7 +1502,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
                           className="h-7 w-7 rounded-full object-cover ring-1 ring-slate-200"
                         />
                       ) : (
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-700">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--enterprise-hover-surface)] text-xs font-semibold text-[var(--enterprise-text)]">
                           {userInitials(member.name, member.email)}
                         </span>
                       )}
@@ -1531,7 +1531,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         open={folderAccessOpen && Boolean(selectedFolder)}
         onClose={() => setFolderAccessOpen(false)}
         ariaLabelledBy="project-files-folder-access-title"
-        panelClassName="max-w-xl rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-0"
+        panelClassName="max-w-xl rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-0"
         bodyClassName="p-0"
         footerClassName="border-t border-[var(--enterprise-border)] px-4 py-3 lg:px-5"
         footer={
@@ -1539,7 +1539,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             <button
               type="button"
               onClick={() => setFolderAccessOpen(false)}
-              className="rounded-lg border border-[var(--enterprise-border)] px-4 py-2 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)]"
+              className="rounded-md border border-[var(--enterprise-border)] px-4 py-2 text-sm font-medium text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)]"
             >
               Cancel
             </button>
@@ -1547,7 +1547,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
               type="button"
               onClick={() => void onSaveFolderAccess()}
               disabled={savingFolderAccess}
-              className="rounded-lg bg-[var(--enterprise-primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-md bg-[var(--enterprise-primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
               {savingFolderAccess ? "Saving..." : "Save access"}
             </button>
@@ -1559,7 +1559,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             id="project-files-folder-access-title"
             className="inline-flex items-center gap-2 text-base font-semibold text-[var(--enterprise-text)]"
           >
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)]">
               <ShieldCheck className="h-4 w-4" aria-hidden />
             </span>
             Folder access
@@ -1574,12 +1574,12 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         </div>
 
         <div className="space-y-4 px-4 py-4 lg:px-5">
-          <div className="space-y-2 rounded-xl border border-[var(--enterprise-border)] bg-slate-50/70 p-3">
+          <div className="space-y-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] p-3">
             <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
               Access control
             </p>
-            <label className="flex items-center gap-2 rounded-lg border border-transparent bg-white/70 px-2.5 py-2 text-sm text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-border)]">
+            <label className="flex items-center gap-2 rounded-md border border-transparent bg-white/70 px-2.5 py-2 text-sm text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-border)]">
               <input
                 type="radio"
                 checked={folderAccessMode === "all"}
@@ -1588,7 +1588,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
               <Globe2 className="h-4 w-4 text-slate-500" aria-hidden />
               <span>All users can use this folder</span>
             </label>
-            <label className="flex items-center gap-2 rounded-lg border border-transparent bg-white/70 px-2.5 py-2 text-sm text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-border)]">
+            <label className="flex items-center gap-2 rounded-md border border-transparent bg-white/70 px-2.5 py-2 text-sm text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-border)]">
               <input
                 type="radio"
                 checked={folderAccessMode === "selected"}
@@ -1600,7 +1600,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
           </div>
 
           {folderAccessMode === "selected" ? (
-            <div className="rounded-xl border border-[var(--enterprise-border)] bg-white p-2">
+            <div className="rounded-md border border-[var(--enterprise-border)] bg-white p-2">
               <p className="inline-flex items-center gap-1.5 px-2 pb-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]">
                 <Users className="h-3.5 w-3.5" aria-hidden />
                 Select users
@@ -1611,10 +1611,10 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
                   return (
                     <label
                       key={member.userId}
-                      className={`flex items-center gap-3 rounded-lg border px-2.5 py-2 text-sm transition ${
+                      className={`flex items-center gap-3 rounded-md border px-2.5 py-2 text-sm transition ${
                         selected
                           ? "border-[var(--enterprise-primary)]/35 bg-[var(--enterprise-primary-soft)]/60"
-                          : "border-transparent hover:border-[var(--enterprise-border)] hover:bg-slate-50"
+                          : "border-transparent hover:border-[var(--enterprise-border)] hover:bg-[var(--enterprise-hover-surface)]"
                       }`}
                     >
                       <input
@@ -1661,13 +1661,13 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         open={Boolean(accessRequestFolder)}
         onClose={() => setAccessRequestFolder(null)}
         ariaLabelledBy="project-files-request-access-title"
-        panelClassName="max-w-md rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]"
+        panelClassName="max-w-md rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]"
         footer={
           <>
             <button
               type="button"
               onClick={() => setAccessRequestFolder(null)}
-              className="rounded-lg border border-[var(--enterprise-border)] px-4 py-2 text-sm font-medium text-[var(--enterprise-text-muted)]"
+              className="rounded-md border border-[var(--enterprise-border)] px-4 py-2 text-sm font-medium text-[var(--enterprise-text-muted)]"
             >
               Cancel
             </button>
@@ -1675,7 +1675,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
               type="button"
               onClick={() => void onRequestFolderAccess()}
               disabled={requestingAccess}
-              className="rounded-lg bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-md bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
               {requestingAccess ? "Sending..." : "Request access"}
             </button>
@@ -1731,21 +1731,21 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
 
       {federationIfcIds.size >= 2 ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
-          <div className="pointer-events-auto flex max-w-lg flex-wrap items-center justify-center gap-2 rounded-xl border border-slate-200/90 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm">
+          <div className="pointer-events-auto flex max-w-lg flex-wrap items-center justify-center gap-2 rounded-md border border-slate-200/90 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm">
             <p className="text-[13px] font-medium text-[var(--enterprise-text)]">
               {federationIfcIds.size} IFC models selected
             </p>
             <button
               type="button"
               onClick={openFederationInViewer}
-              className="rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:opacity-90"
+              className="rounded-md bg-[var(--enterprise-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:opacity-90"
             >
               Open federated view
             </button>
             <button
               type="button"
               onClick={() => setFederationIfcIds(new Set())}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-[12px] font-medium text-slate-600 hover:bg-[var(--enterprise-hover-surface)]"
             >
               Clear
             </button>

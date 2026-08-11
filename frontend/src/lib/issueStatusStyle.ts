@@ -158,12 +158,15 @@ export function issueStatusBadgeClass(status: string): string {
   return ISSUE_STATUS_BADGE_CLASS[status] ?? ISSUE_STATUS_BADGE_CLASS.CLOSED;
 }
 
-/** Badges on light backgrounds (e.g. enterprise tables). */
+/** Badges on light backgrounds (e.g. enterprise tables) — border-first chips. */
 const ISSUE_STATUS_BADGE_CLASS_LIGHT: Record<string, string> = {
-  OPEN: "bg-red-50 text-red-800 ring-1 ring-red-200/80",
-  IN_PROGRESS: "bg-amber-50 text-amber-900 ring-1 ring-amber-200/80",
-  RESOLVED: "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200/80",
-  CLOSED: "bg-slate-100 text-slate-700 ring-1 ring-slate-200/90",
+  OPEN: "border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] text-[var(--enterprise-semantic-danger-text)]",
+  IN_PROGRESS:
+    "border border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] text-[var(--enterprise-semantic-warning-text)]",
+  RESOLVED:
+    "border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] text-[var(--enterprise-semantic-success-text)]",
+  CLOSED:
+    "border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]",
 };
 
 export function issueStatusBadgeClassLight(status: string): string {

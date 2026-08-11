@@ -55,9 +55,9 @@ function GateState({
   children: ReactNode;
 }) {
   return (
-    <div className="enterprise-card mx-auto w-full max-w-md rounded-xl px-4 py-6 text-center shadow-[var(--enterprise-shadow-card)] sm:px-6">
+    <div className="enterprise-card mx-auto w-full max-w-md rounded-md px-4 py-6 text-center shadow-[var(--enterprise-shadow-card)] sm:px-6">
       <div
-        className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]"
+        className="mx-auto flex h-10 w-10 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] "
         aria-hidden
       >
         <Icon className="h-5 w-5 text-[var(--enterprise-primary)]" strokeWidth={1.5} />
@@ -86,7 +86,7 @@ function StatCard({
   const accent = ok ? "border-l-emerald-500" : "border-l-amber-500";
   const inner = (
     <div
-      className={`enterprise-card flex flex-col justify-between gap-1.5 rounded-xl border-l-4 p-3 ${accent} ${
+      className={`enterprise-card flex flex-col justify-between gap-1.5 rounded-md border-l-4 p-3 ${accent} ${
         href ? "enterprise-card-hover group transition duration-200 active:scale-[0.98]" : ""
       }`}
     >
@@ -341,7 +341,7 @@ export function OmHandoverClient({ projectId }: Props) {
         </p>
         <Link
           href={`/projects/${projectId}/settings`}
-          className="inline-flex w-full min-h-12 max-w-sm items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2 sm:w-auto"
+          className="inline-flex w-full min-h-12 max-w-sm items-center justify-center gap-2 rounded-md bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2 sm:w-auto"
         >
           Open project settings
           <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
@@ -367,7 +367,7 @@ export function OmHandoverClient({ projectId }: Props) {
         {superAdmin ? (
           <Link
             href="/organization?tab=billing"
-            className="inline-flex w-full min-h-12 max-w-sm items-center justify-center gap-2 rounded-xl bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2 sm:w-auto"
+            className="inline-flex w-full min-h-12 max-w-sm items-center justify-center gap-2 rounded-md bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2 sm:w-auto"
           >
             Open Plan & billing
             <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
@@ -385,7 +385,7 @@ export function OmHandoverClient({ projectId }: Props) {
     if (error) {
       return (
         <div
-          className="enterprise-alert-danger mx-auto w-full max-w-lg rounded-2xl px-4 py-5 text-center sm:px-6"
+          className="enterprise-alert-danger mx-auto w-full max-w-lg rounded-lg px-4 py-5 text-center sm:px-6"
           role="alert"
         >
           <p className="text-sm font-medium leading-snug">
@@ -395,7 +395,7 @@ export function OmHandoverClient({ projectId }: Props) {
             type="button"
             onClick={() => void refetch()}
             disabled={isFetching}
-            className="mt-4 inline-flex min-h-12 w-full max-w-xs items-center justify-center gap-2 rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-white px-4 text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] shadow-sm hover:bg-white/90 disabled:opacity-60 sm:w-auto"
+            className="mt-4 inline-flex min-h-12 w-full max-w-xs items-center justify-center gap-2 rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-white px-4 text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] hover:bg-white/90 disabled:opacity-60 sm:w-auto"
           >
             {isFetching ? (
               <>
@@ -498,14 +498,14 @@ export function OmHandoverClient({ projectId }: Props) {
       </OmSubPageHeader>
 
       {summary.handoverCompletedAt ? (
-        <div className="enterprise-alert-success rounded-xl px-3 py-2.5 text-xs">
+        <div className="enterprise-alert-success rounded-md px-3 py-2.5 text-xs">
           Handover date recorded — keep the FM brief below updated.
         </div>
       ) : null}
 
       <section
         aria-labelledby="readiness-heading"
-        className="rounded-xl border border-[var(--enterprise-border)]/80 bg-[var(--enterprise-bg)]/50 p-3 shadow-[var(--enterprise-shadow-xs)]"
+        className="rounded-md border border-[var(--enterprise-border)]/80 bg-[var(--enterprise-bg)]/50 p-3 "
       >
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
@@ -767,7 +767,7 @@ export function OmHandoverClient({ projectId }: Props) {
             <li key={label} className="min-w-0">
               <Link
                 href={`${pBase}${path}`}
-                className="enterprise-card enterprise-card-hover group flex min-h-10 items-center gap-2.5 rounded-xl p-2.5 outline-none ring-[var(--enterprise-primary)]/40 transition-transform focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--enterprise-bg)] active:scale-[0.98]"
+                className="enterprise-card enterprise-card-hover group flex min-h-10 items-center gap-2.5 rounded-md p-2.5 outline-none ring-[var(--enterprise-primary)]/40 transition-transform focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--enterprise-bg)] active:scale-[0.98]"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
                   <Icon className="h-4 w-4" aria-hidden />

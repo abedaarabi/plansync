@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { SolutionSlug } from "@/lib/landingContent";
 
+/** Single icon library (lucide) — simple line icons only. */
 export const SOLUTION_ICONS = {
   viewer: FileSearch,
   issues: AlertTriangle,
@@ -38,115 +39,44 @@ export const SOLUTION_ICONS = {
 } as const;
 
 export type SolutionIconColor = {
-  /** Icon container bg — use on white/light backgrounds */
+  /** Icon container bg — restrained slate, not rainbow feature art */
   bg: string;
   /** Icon color */
   text: string;
   /** Ring/border accent */
   ring: string;
-  /** Solid fill — use when placed on a dark/gradient card */
+  /** Solid fill — soft brand blue only (no per-feature rainbow) */
   solidBg: string;
 };
 
 /**
- * Fully-spelled Tailwind class strings so Tailwind's tree-shaker
- * always includes them in the bundle.
+ * Shared restrained palette for all solutions.
+ * Icons support content; they are not the visual identity.
+ * Fully-spelled Tailwind class strings so the tree-shaker keeps them.
  */
+const RESTRAINED_ICON: SolutionIconColor = {
+  bg: "bg-slate-50",
+  text: "text-slate-600",
+  ring: "ring-slate-200",
+  /** Brand blue only — never a rainbow of per-feature fills */
+  solidBg: "bg-blue-600",
+};
+
 export const SOLUTION_ICON_COLORS: Record<SolutionSlug, SolutionIconColor> = {
-  viewer: {
-    bg: "bg-sky-50",
-    text: "text-sky-600",
-    ring: "ring-sky-200",
-    solidBg: "bg-sky-500",
-  },
-  issues: {
-    bg: "bg-amber-50",
-    text: "text-amber-600",
-    ring: "ring-amber-200",
-    solidBg: "bg-amber-500",
-  },
-  rfis: {
-    bg: "bg-violet-50",
-    text: "text-violet-600",
-    ring: "ring-violet-200",
-    solidBg: "bg-violet-500",
-  },
-  takeoff: {
-    bg: "bg-emerald-50",
-    text: "text-emerald-600",
-    ring: "ring-emerald-200",
-    solidBg: "bg-emerald-500",
-  },
-  audit: {
-    bg: "bg-lime-50",
-    text: "text-lime-700",
-    ring: "ring-lime-200",
-    solidBg: "bg-lime-600",
-  },
-  proposal: {
-    bg: "bg-purple-50",
-    text: "text-purple-600",
-    ring: "ring-purple-200",
-    solidBg: "bg-purple-600",
-  },
-  "cloud-storage": {
-    bg: "bg-blue-50",
-    text: "text-blue-700",
-    ring: "ring-blue-200",
-    solidBg: "bg-blue-600",
-  },
-  "pdf-version-control": {
-    bg: "bg-indigo-50",
-    text: "text-indigo-700",
-    ring: "ring-indigo-200",
-    solidBg: "bg-indigo-600",
-  },
-  schedule: {
-    bg: "bg-pink-50",
-    text: "text-pink-700",
-    ring: "ring-pink-200",
-    solidBg: "bg-pink-600",
-  },
-  "om-handover": {
-    bg: "bg-teal-50",
-    text: "text-teal-600",
-    ring: "ring-teal-200",
-    solidBg: "bg-teal-500",
-  },
-  "om-assets": {
-    bg: "bg-indigo-50",
-    text: "text-indigo-600",
-    ring: "ring-indigo-200",
-    solidBg: "bg-indigo-500",
-  },
-  "om-maintenance": {
-    bg: "bg-orange-50",
-    text: "text-orange-600",
-    ring: "ring-orange-200",
-    solidBg: "bg-orange-500",
-  },
-  "om-work-orders": {
-    bg: "bg-rose-50",
-    text: "text-rose-600",
-    ring: "ring-rose-200",
-    solidBg: "bg-rose-500",
-  },
-  "om-inspections": {
-    bg: "bg-yellow-50",
-    text: "text-yellow-600",
-    ring: "ring-yellow-200",
-    solidBg: "bg-yellow-500",
-  },
-  "om-tenant-portal": {
-    bg: "bg-blue-50",
-    text: "text-blue-600",
-    ring: "ring-blue-200",
-    solidBg: "bg-blue-500",
-  },
-  "om-fm-dashboard": {
-    bg: "bg-cyan-50",
-    text: "text-cyan-600",
-    ring: "ring-cyan-200",
-    solidBg: "bg-cyan-500",
-  },
+  viewer: RESTRAINED_ICON,
+  issues: RESTRAINED_ICON,
+  rfis: RESTRAINED_ICON,
+  takeoff: RESTRAINED_ICON,
+  audit: RESTRAINED_ICON,
+  proposal: RESTRAINED_ICON,
+  "cloud-storage": RESTRAINED_ICON,
+  "pdf-version-control": RESTRAINED_ICON,
+  schedule: RESTRAINED_ICON,
+  "om-handover": RESTRAINED_ICON,
+  "om-assets": RESTRAINED_ICON,
+  "om-maintenance": RESTRAINED_ICON,
+  "om-work-orders": RESTRAINED_ICON,
+  "om-inspections": RESTRAINED_ICON,
+  "om-tenant-portal": RESTRAINED_ICON,
+  "om-fm-dashboard": RESTRAINED_ICON,
 };

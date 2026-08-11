@@ -104,9 +104,7 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
                   {/* Copy column */}
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-3">
-                      <span
-                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] ring-1 ${colors.bg} ${colors.text} ${colors.ring}`}
-                      >
+                      <span className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
                         {categoryMeta.label}
                       </span>
                       <span className="text-xs font-medium text-slate-400">
@@ -116,10 +114,10 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
 
                     <div className="mt-6 flex items-start gap-4">
                       <span
-                        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl shadow-lg shadow-slate-900/10 ring-2 ring-white ${colors.bg} ${colors.text} ${colors.ring}`}
+                        className="landing-icon landing-icon-lg landing-icon-accent"
                         aria-hidden
                       >
-                        <Icon className="h-7 w-7" strokeWidth={1.5} />
+                        <Icon className="h-6 w-6" strokeWidth={1.5} />
                       </span>
                       <div className="min-w-0 flex-1 pt-0.5">
                         <h1 className="text-balance text-3xl font-bold tracking-[-0.02em] text-slate-900 sm:text-4xl lg:text-[2.65rem] lg:leading-[1.08]">
@@ -132,16 +130,14 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
                       {solution.description}
                     </p>
 
-                    <ul className="mt-8 flex flex-col gap-3 sm:max-w-xl">
+                    <ul className="mt-8 flex flex-col gap-2.5 sm:max-w-xl">
                       {solution.bullets.map((b) => (
                         <li
                           key={b}
-                          className={`flex gap-3 rounded-2xl border border-slate-200/80 bg-white/95 px-4 py-3.5 text-sm leading-relaxed text-slate-800 shadow-sm ${colors.ring}`}
+                          className="flex gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3.5 text-sm leading-relaxed text-slate-800"
                         >
-                          <span
-                            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/90 ${colors.text} shadow-sm ring-1 ring-slate-200/80`}
-                          >
-                            <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-600">
+                            <Check className="h-3 w-3" strokeWidth={2.5} aria-hidden />
                           </span>
                           <span>{b}</span>
                         </li>
@@ -152,10 +148,10 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
                       <button
                         type="button"
                         onClick={() => goToFreeViewer(`solution_${slug}_open_viewer`)}
-                        className="btn-shine inline-flex items-center gap-2 rounded-xl bg-(--landing-cta) px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-(--landing-cta-bright) active:scale-[0.99]"
+                        className="landing-btn-primary"
                       >
                         {t("openViewer")}
-                        <ArrowRight className="h-4 w-4" aria-hidden />
+                        <ArrowRight className="h-4 w-4" strokeWidth={2} aria-hidden />
                       </button>
                       <Link
                         href="/sign-in"
@@ -166,7 +162,7 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
                             destination: "/sign-in",
                           })
                         }
-                        className={`inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-6 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:shadow-md`}
+                        className="landing-btn-secondary"
                       >
                         {t("startTrial")}
                       </Link>
@@ -217,13 +213,9 @@ function SolutionSlugInner({ slug }: SolutionSlugPageClientProps) {
             />
             <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
               <div className="mb-12 flex flex-col items-center gap-4 text-center sm:mb-16">
-                <span
-                  className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-[0.14em] ${colors.bg} ${colors.text} ring-1 ${colors.ring}`}
-                >
-                  <span
-                    className={`flex h-6 w-6 items-center justify-center rounded-md bg-white/80 ${colors.text} shadow-sm`}
-                  >
-                    <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+                <span className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
+                  <span className="landing-icon landing-icon-sm" aria-hidden>
+                    <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
                   </span>
                   {t("deepDive")}
                 </span>

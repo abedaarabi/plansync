@@ -47,13 +47,13 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
 
   if (isError && !data) {
     return (
-      <div className="enterprise-card flex flex-col items-center gap-3 rounded-2xl px-6 py-12 text-center">
+      <div className="enterprise-card flex flex-col items-center gap-3 rounded-md px-6 py-12 text-center">
         <p className="text-sm font-medium text-[var(--enterprise-text)]">
           Couldn’t load this location
         </p>
         <button
           type="button"
-          className="enterprise-btn-primary mobile-touch-target rounded-lg px-4 py-2 text-sm"
+          className="enterprise-btn-primary mobile-touch-target rounded-md px-4 py-2 text-sm"
           onClick={() => void refetch()}
         >
           Try again
@@ -68,25 +68,27 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
   const saving = createMut.isPending || updateMut.isPending;
 
   return (
-    <div className="enterprise-animate-in space-y-5 pb-8">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)]">
-            <MapPin className="h-5 w-5 text-[var(--enterprise-primary)]" aria-hidden />
+    <div className="enterprise-animate-in space-y-4 pb-8">
+      <header className="mb-1 flex flex-col gap-3 border-b border-[var(--enterprise-border)] pb-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
+            <MapPin
+              className="h-4 w-4 text-[var(--enterprise-text-muted)]"
+              strokeWidth={1.75}
+              aria-hidden
+            />
           </div>
           <div className="min-w-0">
-            <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Location</p>
+            <p className="enterprise-type-label">Location</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-xl font-semibold tracking-tight text-[var(--enterprise-text)]">
-                {location?.name}
-              </h1>
+              <h1 className="enterprise-type-title truncate">{location?.name}</h1>
               {location?.code ? (
-                <span className="rounded-md bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)]">
+                <span className="enterprise-badge-neutral rounded px-1.5 py-0.5 text-xs font-semibold">
                   {location.code}
                 </span>
               ) : null}
             </div>
-            <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+            <p className="enterprise-type-subtitle mt-1">
               {place ?? "No address yet"}
               {" · "}
               {buildings.length} building{buildings.length === 1 ? "" : "s"}
@@ -96,7 +98,7 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
         {buildings.length > 0 ? (
           <button
             type="button"
-            className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold"
+            className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-semibold"
             onClick={() => {
               setEditing(null);
               setFormOpen(true);
@@ -109,21 +111,25 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
       </header>
 
       {buildings.length === 0 ? (
-        <div className="enterprise-card flex flex-col items-center gap-4 rounded-2xl px-6 py-12 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--enterprise-primary-soft)]">
-            <Building2 className="h-7 w-7 text-[var(--enterprise-primary)]" aria-hidden />
+        <div className="enterprise-card flex flex-col items-center gap-3 px-5 py-10 text-center sm:py-12">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
+            <Building2
+              className="h-4 w-4 text-[var(--enterprise-text-muted)]"
+              strokeWidth={1.75}
+              aria-hidden
+            />
           </div>
-          <div className="max-w-sm space-y-1">
-            <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
+          <div className="max-w-sm space-y-1.5">
+            <h2 className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]">
               Add your first building
             </h2>
-            <p className="text-sm text-[var(--enterprise-text-muted)]">
+            <p className="enterprise-type-subtitle text-[0.9375rem] leading-relaxed">
               Create a building, then upload an IFC model and PDF drawings to start setup.
             </p>
           </div>
           <button
             type="button"
-            className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold"
+            className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold"
             onClick={() => {
               setEditing(null);
               setFormOpen(true);
@@ -151,19 +157,17 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
 
           <button
             type="button"
-            className="enterprise-dashed-add flex h-full min-h-[200px] flex-col items-center justify-center gap-1.5 rounded-2xl p-5 text-center"
+            className="enterprise-dashed-add flex h-full min-h-[12.5rem] flex-col items-center justify-center gap-1.5 rounded-md p-5 text-center"
             onClick={() => {
               setEditing(null);
               setFormOpen(true);
             }}
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)]">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)]">
               <Plus className="h-5 w-5" aria-hidden />
             </div>
             <p className="text-sm font-semibold text-[var(--enterprise-text)]">Add building</p>
-            <p className="text-[11px] text-[var(--enterprise-text-muted)]">
-              Upload IFC and drawings
-            </p>
+            <p className="text-xs text-[var(--enterprise-text-muted)]">Upload IFC and drawings</p>
           </button>
         </div>
       )}

@@ -106,7 +106,7 @@ function SolutionsIndexPageInner() {
                       <button
                         type="button"
                         onClick={() => goToFreeViewer("solutions_index_open_viewer")}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-(--landing-cta) px-5 py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-(--landing-cta-bright)"
+                        className="landing-btn-primary"
                       >
                         {t("openViewer")}
                       </button>
@@ -153,10 +153,7 @@ function SolutionsIndexPageInner() {
               <SolutionsDirectory />
             </div>
             <div className="mt-12 grid gap-4 md:grid-cols-3">
-              <Link
-                href="/use-cases"
-                className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-              >
+              <Link href="/use-cases" className="landing-card landing-card-hover transition">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                   {t("cards.useCases.label")}
                 </p>
@@ -171,10 +168,7 @@ function SolutionsIndexPageInner() {
                   <ArrowRight className="h-4 w-4" />
                 </span>
               </Link>
-              <Link
-                href="/case-studies"
-                className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-              >
+              <Link href="/case-studies" className="landing-card landing-card-hover transition">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                   {t("cards.caseStudies.label")}
                 </p>
@@ -189,10 +183,7 @@ function SolutionsIndexPageInner() {
                   <ArrowRight className="h-4 w-4" />
                 </span>
               </Link>
-              <Link
-                href="/pricing"
-                className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-              >
+              <Link href="/pricing" className="landing-card landing-card-hover transition">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                   {t("cards.pricing.label")}
                 </p>

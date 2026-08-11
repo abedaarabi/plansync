@@ -111,7 +111,7 @@ export function BimModelTreePanel(props: {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search levels, types…"
               aria-label="Search model tree"
-              className="bim-input pl-8"
+              className="bim-input bim-input--icon"
             />
           </div>
         </div>
@@ -128,7 +128,7 @@ export function BimModelTreePanel(props: {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search levels, types…"
               aria-label="Search model tree"
-              className="bim-input pl-8"
+              className="bim-input bim-input--icon"
             />
           </div>
         </div>

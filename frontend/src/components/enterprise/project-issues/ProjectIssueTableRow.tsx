@@ -130,7 +130,7 @@ function IssueTitleCell({
                 type="button"
                 disabled={promoteBusy}
                 onClick={() => onPromoteToWorkOrder(issue.id)}
-                className="inline-flex items-center gap-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)] shadow-sm hover:bg-[var(--enterprise-primary-soft)] disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-primary-soft)] disabled:opacity-50"
               >
                 <ArrowUpCircle className="h-3 w-3" aria-hidden />
                 Promote to work order
@@ -156,7 +156,7 @@ function IssueStatusCell({
           value={issue.status}
           onChange={(e) => onStatusChange(issue.id, e.target.value)}
           disabled={isPatching}
-          className={`w-full max-w-[14rem] cursor-pointer rounded-lg border-0 px-2.5 py-2 text-xs font-semibold shadow-sm outline-none transition focus:ring-2 focus:ring-blue-500/25 disabled:cursor-not-allowed disabled:opacity-50 ${issueStatusBadgeClassLight(issue.status)}`}
+          className={`w-full max-w-[14rem] cursor-pointer rounded-lg border-0 px-2.5 py-2 text-xs font-semibold outline-none transition focus:ring-2 focus:ring-blue-500/25 disabled:cursor-not-allowed disabled:opacity-50 ${issueStatusBadgeClassLight(issue.status)}`}
         >
           {ISSUE_STATUS_ORDER.map((s) => (
             <option key={s} value={s}>

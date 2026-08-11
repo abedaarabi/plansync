@@ -50,12 +50,12 @@ export function BillingPlanCards({
             key={plan.id}
             className={
               plan.highlight
-                ? "relative flex flex-col rounded-2xl border-2 border-[var(--enterprise-primary)]/40 bg-[var(--enterprise-surface)] p-5 shadow-[var(--enterprise-shadow-card)] ring-1 ring-[color-mix(in_srgb,var(--enterprise-primary)_14%,transparent)] sm:p-6"
-                : "relative flex flex-col rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 shadow-[var(--enterprise-shadow-xs)] sm:p-6"
+                ? "relative flex flex-col rounded-lg border border-[var(--enterprise-primary)] bg-[var(--enterprise-surface)] p-5 sm:p-6"
+                : "relative flex flex-col rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 sm:p-6"
             }
           >
             {plan.highlight && plan.highlightLabel ? (
-              <div className="absolute -top-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-[var(--enterprise-primary)] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
+              <div className="absolute -top-2.5 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-md bg-[var(--enterprise-primary)] px-2 py-0.5 text-[11px] font-semibold text-white">
                 <Sparkles className="h-3 w-3" aria-hidden />
                 {plan.highlightLabel}
               </div>
@@ -110,10 +110,10 @@ export function BillingPlanCards({
               onClick={onClick}
               className={
                 isCurrent
-                  ? "mt-6 w-full cursor-default rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5 text-sm font-semibold text-[var(--enterprise-text-muted)]"
+                  ? "mt-6 w-full cursor-default rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5 text-sm font-semibold text-[var(--enterprise-text-muted)]"
                   : plan.highlight
-                    ? "enterprise-btn-primary mt-6 w-full rounded-xl px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
-                    : "enterprise-btn-secondary mt-6 w-full rounded-xl px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
+                    ? "enterprise-btn-primary mt-6 w-full rounded-md px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
+                    : "enterprise-btn-secondary mt-6 w-full rounded-md px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
               }
             >
               {ctaLabel(plan, currentPlan, busy, canChangePlan)}

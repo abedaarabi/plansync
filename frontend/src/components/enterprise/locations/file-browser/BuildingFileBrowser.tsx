@@ -86,7 +86,7 @@ function UploadRowCard({
   return (
     <li className="mobile-list-row flex flex-col gap-3 border-b border-[var(--enterprise-border)] px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:gap-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
-        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-hover-surface)]">
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-hover-surface)]">
           <Icon className={iconClassForKind(row.kind)} aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
@@ -99,14 +99,14 @@ function UploadRowCard({
           </p>
           {row.status === "uploading" ? (
             <div
-              className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--enterprise-hover-surface)]"
+              className="mt-2 h-1.5 overflow-hidden rounded-sm bg-[var(--enterprise-hover-surface)]"
               role="progressbar"
               aria-valuenow={row.progress}
               aria-valuemin={0}
               aria-valuemax={100}
             >
               <div
-                className="h-full rounded-full bg-[var(--enterprise-primary)] transition-[width] duration-150"
+                className="h-full rounded-md bg-[var(--enterprise-primary)] transition-[width] duration-150"
                 style={{ width: `${row.progress}%` }}
               />
             </div>
@@ -218,7 +218,7 @@ export function BuildingFileBrowser({
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3 md:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-primary-soft)]"
             aria-hidden
           >
             <Building2 className="h-5 w-5 text-[var(--enterprise-primary)]" />
@@ -291,7 +291,7 @@ export function BuildingFileBrowser({
 
               {awaitingUpload ? (
                 <div
-                  className="flex flex-col gap-3 rounded-2xl border border-[var(--enterprise-primary)]/25 bg-[var(--enterprise-primary-soft)] p-4 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-3 rounded-md border border-[var(--enterprise-primary)]/25 bg-[var(--enterprise-primary-soft)] p-4 sm:flex-row sm:items-center sm:justify-between"
                   role="status"
                 >
                   <div className="min-w-0">
@@ -316,7 +316,7 @@ export function BuildingFileBrowser({
 
               {uploadDone ? (
                 <div
-                  className="flex items-start gap-3 rounded-2xl border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] p-4"
+                  className="flex items-start gap-3 rounded-md border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-semantic-success-bg)] p-4"
                   role="status"
                 >
                   <CheckCircle2
@@ -336,7 +336,7 @@ export function BuildingFileBrowser({
 
               <div
                 ref={listRef}
-                className="overflow-hidden rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-sm"
+                className="overflow-hidden rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-sm"
               >
                 <div className="flex items-center justify-between gap-2 border-b border-[var(--enterprise-border)] px-4 py-3">
                   <p className="text-sm font-medium text-[var(--enterprise-text)]">

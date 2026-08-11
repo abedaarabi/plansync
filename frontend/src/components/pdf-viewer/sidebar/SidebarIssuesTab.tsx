@@ -781,7 +781,7 @@ export function SidebarIssuesTab() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search issues…"
-            className="viewer-focus-ring w-full rounded-md border border-[#334155] bg-[#1E293B] py-1.5 pl-7 pr-2 text-[11px] text-[#F8FAFC] placeholder:text-[#64748B]"
+            className="viewer-focus-ring w-full rounded-md border border-[#334155] bg-[#1E293B] py-1.5 pl-8 pr-2 text-[11px] text-[#F8FAFC] placeholder:text-[#64748B]"
             aria-label="Search issues"
           />
         </div>

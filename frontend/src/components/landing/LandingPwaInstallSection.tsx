@@ -11,11 +11,7 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 function StepIcon({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-200/80 bg-linear-to-br from-slate-50 to-blue-50 text-blue-700 shadow-sm">
-      {children}
-    </div>
-  );
+  return <div className="landing-icon landing-icon-lg landing-icon-accent">{children}</div>;
 }
 
 export function LandingPwaInstallSection() {
@@ -68,7 +64,7 @@ export function LandingPwaInstallSection() {
             />
 
             <li className="relative flex gap-4 pb-10 sm:gap-5">
-              <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-md shadow-blue-600/25 ring-4 ring-white">
+              <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-semibold tabular-nums text-(--landing-cta) ring-4 ring-white">
                 1
               </span>
               <div className="min-w-0 flex-1 pt-0.5">
@@ -118,7 +114,7 @@ export function LandingPwaInstallSection() {
                       <button
                         type="button"
                         onClick={handleInstall}
-                        className="mt-5 inline-flex min-h-11 w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-(--landing-cta) px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-(--landing-cta-bright) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta) focus-visible:ring-offset-2 sm:w-auto"
+                        className="landing-btn-primary mt-5 w-full max-w-sm sm:w-auto"
                       >
                         <Download className="h-4 w-4 shrink-0" aria-hidden />
                         {t("installApp")}
@@ -132,7 +128,7 @@ export function LandingPwaInstallSection() {
             </li>
 
             <li className="relative flex gap-4 pb-10 sm:gap-5">
-              <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-md shadow-blue-600/25 ring-4 ring-white">
+              <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-semibold tabular-nums text-(--landing-cta) ring-4 ring-white">
                 2
               </span>
               <div className="min-w-0 flex-1 pt-0.5">
@@ -149,7 +145,7 @@ export function LandingPwaInstallSection() {
             </li>
 
             <li className="relative flex gap-4 sm:gap-5">
-              <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white shadow-md shadow-blue-600/25 ring-4 ring-white">
+              <span className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-semibold tabular-nums text-(--landing-cta) ring-4 ring-white">
                 3
               </span>
               <div className="min-w-0 flex-1 pt-0.5">

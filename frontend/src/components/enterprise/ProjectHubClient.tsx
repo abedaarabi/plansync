@@ -429,14 +429,14 @@ export function ProjectHubClient() {
       <OmSubPageHeader
         icon={FolderKanban}
         title={`${visibleProjects.length} Project${visibleProjects.length === 1 ? "" : "s"}`}
-        description="View, search, and manage your workspace projects."
+        description="Open a project to work drawings, issues, and field items."
         action={
           isAdmin ? (
             <EnterpriseAddPulseWrap>
               <button
                 type="button"
                 onClick={() => setProjectModal(true)}
-                className="hidden min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-[var(--enterprise-shadow-sm)] transition hover:bg-[var(--enterprise-primary-deep)] lg:inline-flex"
+                className="hidden min-h-9 items-center justify-center gap-1.5 rounded-md bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--enterprise-primary-deep)] lg:inline-flex"
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                 New project
@@ -457,7 +457,7 @@ export function ProjectHubClient() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by name, type, or location"
-              className="min-h-9 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] pl-8 pr-2.5 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] outline-none transition placeholder:text-[var(--enterprise-text-muted)] focus:border-[var(--enterprise-primary)] focus:bg-[var(--enterprise-surface)] focus:ring-1 focus:ring-[var(--enterprise-primary)]/20"
+              className="enterprise-field-input enterprise-field-input--icon-sm min-h-9 w-full bg-[var(--enterprise-bg)] pr-2.5 text-sm focus:bg-[var(--enterprise-surface)]"
             />
           </label>
           <div
@@ -725,25 +725,25 @@ export function ProjectHubClient() {
       )}
 
       {projects.length === 0 && !isAdmin && (
-        <div className="enterprise-card p-6 text-center">
+        <div className="enterprise-card px-4 py-8 text-center">
           <FileText
-            className="mx-auto h-8 w-8 text-[var(--enterprise-primary)] opacity-70"
-            strokeWidth={1.25}
+            className="mx-auto h-5 w-5 text-[var(--enterprise-text-muted)]"
+            strokeWidth={1.75}
           />
           <p className="mt-2 text-sm font-semibold text-[var(--enterprise-text)]">
             No projects yet
           </p>
           <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
-            Ask your admin to create a project.
+            Ask a workspace admin to create a project.
           </p>
         </div>
       )}
 
       {projects.length > 0 && visibleProjects.length === 0 ? (
-        <div className="enterprise-card border-2 border-dashed border-[var(--enterprise-border-muted)] p-6 text-center">
+        <div className="enterprise-card border border-dashed border-[var(--enterprise-border)] px-4 py-8 text-center">
           <Search
-            className="mx-auto h-8 w-8 text-[var(--enterprise-primary)] opacity-70"
-            strokeWidth={1.5}
+            className="mx-auto h-5 w-5 text-[var(--enterprise-text-muted)]"
+            strokeWidth={1.75}
           />
           <p className="mt-2 text-sm font-semibold text-[var(--enterprise-text)]">
             No matching projects

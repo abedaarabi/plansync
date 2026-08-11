@@ -57,7 +57,7 @@ export function CookieConsentDialog() {
             <button
               type="button"
               onClick={() => saveConsent("accepted")}
-              className="inline-flex min-h-[52px] w-full items-center justify-center rounded-xl bg-[var(--landing-cta)] px-4 text-base font-bold text-white transition-all duration-150 active:scale-[0.97] hover:bg-[var(--landing-cta-bright)] sm:min-h-11 sm:w-auto sm:text-sm"
+              className="landing-btn-primary min-h-[52px] w-full sm:min-h-11 sm:w-auto"
             >
               Accept all
             </button>

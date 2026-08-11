@@ -35,7 +35,7 @@ export function IssueReferencePhotoThumb(props: {
         <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
       )}
       {extra > 0 ? (
-        <span className="absolute bottom-0.5 right-0.5 rounded bg-[var(--enterprise-surface)]/95 px-1 text-[9px] font-semibold tabular-nums text-[var(--enterprise-text)] shadow-sm">
+        <span className="absolute bottom-0.5 right-0.5 rounded bg-[var(--enterprise-surface)]/95 px-1 text-[9px] font-semibold tabular-nums text-[var(--enterprise-text)]">
           +{extra}
         </span>
       ) : null}

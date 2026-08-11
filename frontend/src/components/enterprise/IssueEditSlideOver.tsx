@@ -5,7 +5,12 @@ import { useMutation } from "@tanstack/react-query";
 import { MapPin, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { IssueReferencePhotosField } from "@/components/enterprise/IssueReferencePhotosField";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import {
+  EnterpriseSlideOver,
+  SlideOverHeader,
+  SLIDE_OVER_BTN_PRIMARY,
+  SLIDE_OVER_BTN_SECONDARY,
+} from "@/components/enterprise/EnterpriseSlideOver";
 import {
   formatIssueLockHint,
   patchIssue,
@@ -117,39 +122,23 @@ export function IssueEditSlideOver({ open, issue, onClose, members, onSaved }: P
         },
       }}
       ariaLabelledBy="issue-edit-title"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),520px)]"
-      bodyClassName="px-5 py-5"
       header={
-        <div className="flex items-start gap-3 pr-1">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
-            <Pencil className="h-5 w-5 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0">
-            <h2
-              id="issue-edit-title"
-              className="text-lg font-bold tracking-tight text-[var(--enterprise-text)]"
-            >
-              Edit issue
-            </h2>
-            <p className="mt-0.5 text-[13px] leading-snug text-[var(--enterprise-text-muted)]">
-              Update coordination issue details.
-            </p>
-          </div>
-        </div>
+        <SlideOverHeader
+          icon={Pencil}
+          titleId="issue-edit-title"
+          title="Edit issue"
+          description="Update status, assignee, and coordination details."
+        />
       }
       footer={
         <>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2.5 text-sm font-semibold text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
-          >
+          <button type="button" onClick={onClose} className={SLIDE_OVER_BTN_SECONDARY}>
             Cancel
           </button>
           <button
             type="submit"
             disabled={saveMut.isPending || !title.trim()}
-            className="rounded-lg bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-[var(--enterprise-primary-deep)] disabled:opacity-60"
+            className={SLIDE_OVER_BTN_PRIMARY}
           >
             {saveMut.isPending ? "Saving…" : "Save changes"}
           </button>
@@ -159,7 +148,7 @@ export function IssueEditSlideOver({ open, issue, onClose, members, onSaved }: P
       <div className="space-y-4">
         {msg ? (
           <div
-            className="rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
+            className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
             role="alert"
           >
             {msg}

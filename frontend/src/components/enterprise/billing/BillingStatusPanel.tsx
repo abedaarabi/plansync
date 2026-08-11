@@ -57,14 +57,14 @@ export function BillingStatusPanel({
 
   return (
     <div className="enterprise-card overflow-hidden">
-      <div className="border-b border-[var(--enterprise-border)] bg-[linear-gradient(135deg,var(--enterprise-primary-soft),transparent_55%)] px-4 py-5 sm:px-6 sm:py-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
+      <div className="border-b border-[var(--enterprise-border)] px-4 py-4 sm:px-5 sm:py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-2.5">
             <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] ring-1 ring-[var(--enterprise-border)]"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]"
               aria-hidden
             >
-              <CreditCard className="h-5 w-5" strokeWidth={1.75} />
+              <CreditCard className="h-4 w-4" strokeWidth={1.75} />
             </div>
             <div className="min-w-0">
               <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
@@ -106,7 +106,7 @@ export function BillingStatusPanel({
                 type="button"
                 disabled={busy !== null}
                 onClick={onManageBilling}
-                className="enterprise-btn-secondary mobile-touch-target inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2.5 text-sm font-semibold disabled:opacity-60"
+                className="enterprise-btn-secondary mobile-touch-target inline-flex items-center justify-center gap-1.5 rounded-md px-3.5 py-2.5 text-sm font-semibold disabled:opacity-60"
               >
                 {busy === "portal" ? "Opening…" : "Manage billing"}
               </button>
@@ -115,7 +115,7 @@ export function BillingStatusPanel({
                   type="button"
                   disabled={busy !== null}
                   onClick={onCancel}
-                  className="mobile-touch-target inline-flex items-center justify-center rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-surface)] px-3.5 py-2.5 text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] disabled:opacity-60"
+                  className="mobile-touch-target inline-flex items-center justify-center rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-surface)] px-3.5 py-2.5 text-sm font-semibold text-[var(--enterprise-semantic-danger-text)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] disabled:opacity-60"
                 >
                   Cancel…
                 </button>

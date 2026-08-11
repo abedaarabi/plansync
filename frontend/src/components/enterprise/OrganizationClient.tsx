@@ -72,17 +72,17 @@ export function OrganizationClient() {
 
   if (!primary || !ws || !wid) {
     return (
-      <div className="enterprise-card p-8">
-        <p className="text-sm text-[var(--enterprise-text-muted)]">
-          You are not in a workspace yet. Create one from the API or ask an admin for an invite
-          link.
+      <div className="enterprise-card px-4 py-8 text-center">
+        <p className="text-sm font-semibold text-[var(--enterprise-text)]">No workspace yet</p>
+        <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
+          Create a workspace from onboarding, or ask an admin for an invite.
         </p>
       </div>
     );
   }
 
   const roleLabel =
-    primary.role === "SUPER_ADMIN" ? "Super Admin" : primary.role === "ADMIN" ? "Admin" : "Member";
+    primary.role === "SUPER_ADMIN" ? "Super admin" : primary.role === "ADMIN" ? "Admin" : "Member";
 
   const tabs: { id: OrgTab; label: string; icon: typeof Building2; show: boolean }[] = [
     { id: "organization", label: "Branding", icon: Building2, show: true },
@@ -93,7 +93,12 @@ export function OrganizationClient() {
 
   return (
     <div className={OM_PAGE_CLASS}>
-      <OmSubPageHeader icon={Building2} title="Organization" description={TAB_COPY[tab]} />
+      <OmSubPageHeader
+        icon={Building2}
+        title="Organization"
+        badge={roleLabel}
+        description={TAB_COPY[tab]}
+      />
 
       <div
         className="flex gap-1 overflow-x-auto border-b border-[var(--enterprise-border)] pb-px [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"

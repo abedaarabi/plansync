@@ -35,7 +35,7 @@ import { qk } from "@/lib/queryKeys";
 import type { CloudFile, FileVersion } from "@/types/projects";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetDetailSlide } from "@/components/enterprise/OmAssetDetailSlide";
 import { OmAssetDocumentsBlock } from "@/components/enterprise/OmAssetDocumentsBlock";
 import {
@@ -462,7 +462,7 @@ export function OmAssetsClient({ projectId }: Props) {
               value={listSearchInput}
               onChange={(e) => setListSearchInput(e.target.value)}
               placeholder="Search tag, name, location…"
-              className={`${OM_COMPACT_INPUT} pl-8`}
+              className={`${OM_COMPACT_INPUT} enterprise-field-input--icon-sm`}
             />
           </div>
           {rows.length > 0 ? (
@@ -559,39 +559,28 @@ export function OmAssetsClient({ projectId }: Props) {
         open={showAdd}
         onClose={closeAddSlide}
         ariaLabelledBy="create-asset-title"
-        panelVariant="floating"
-        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
-        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         closeOnBackdrop={false}
         closeOnEscape={false}
         overlayZClass="z-[100]"
-        bodyClassName="px-5 py-5"
-        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
         header={
-          <div className="min-w-0">
-            <h2
-              id="create-asset-title"
-              className="text-lg font-semibold text-[var(--enterprise-text)]"
-            >
-              {justCreatedAsset ? "Attach documents" : "New asset"}
-            </h2>
-            <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
-              {justCreatedAsset ? (
+          <SlideOverHeader
+            icon={Package}
+            titleId="create-asset-title"
+            title={justCreatedAsset ? "Attach documents" : "New asset"}
+            description={
+              justCreatedAsset ? (
                 <>
                   <span className="font-mono font-semibold text-[var(--enterprise-text)]">
                     {justCreatedAsset.tag}
                   </span>
-                  <span className="text-[var(--enterprise-text-muted)]"> — </span>
-                  {justCreatedAsset.name}. Add files for this asset (any type, optional), then Done.
+                  {" — "}
+                  {justCreatedAsset.name}. Optional files, then Done.
                 </>
               ) : (
-                <>
-                  Add equipment details and optionally link a drawing revision, then save to upload
-                  documents.
-                </>
-              )}
-            </p>
-          </div>
+                "Add equipment details, optionally link a drawing, then save to upload documents."
+              )
+            }
+          />
         }
         footer={
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
@@ -670,7 +659,7 @@ export function OmAssetsClient({ projectId }: Props) {
           <div className="space-y-4">
             <div className="enterprise-alert-success rounded-2xl p-4">
               <p className="text-sm font-semibold text-[var(--enterprise-text)]">Asset saved</p>
-              <p className="mt-1 text-sm text-[var(--enterprise-text-muted)]">
+              <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
                 <span className="font-mono font-semibold text-[var(--enterprise-primary)]">
                   {justCreatedAsset.tag}
                 </span>{" "}
@@ -701,28 +690,16 @@ export function OmAssetsClient({ projectId }: Props) {
         open={Boolean(editingAsset)}
         onClose={closeEditSlide}
         ariaLabelledBy="edit-asset-title"
-        panelVariant="floating"
-        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),560px)]"
-        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         closeOnBackdrop={false}
         closeOnEscape={false}
         overlayZClass="z-[100]"
-        bodyClassName="px-5 py-5"
-        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
         header={
-          <div className="min-w-0">
-            <h2
-              id="edit-asset-title"
-              className="text-lg font-semibold text-[var(--enterprise-text)]"
-            >
-              Edit asset
-            </h2>
-            {editingAsset ? (
-              <p className="mt-0.5 font-mono text-xs text-[var(--enterprise-text-muted)]">
-                {editingAsset.tag}
-              </p>
-            ) : null}
-          </div>
+          <SlideOverHeader
+            icon={Package}
+            titleId="edit-asset-title"
+            title="Edit asset"
+            description={editingAsset ? editingAsset.tag : undefined}
+          />
         }
         footer={
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -805,33 +782,26 @@ export function OmAssetsClient({ projectId }: Props) {
         open={Boolean(linkAsset)}
         onClose={closeLinkSlide}
         ariaLabelledBy="link-asset-title"
-        panelVariant="floating"
-        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),460px)]"
-        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         closeOnBackdrop={false}
         closeOnEscape={false}
         overlayZClass="z-[100]"
-        bodyClassName="px-5 py-5"
-        footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
         header={
-          <div className="min-w-0">
-            <h2
-              id="link-asset-title"
-              className="text-lg font-semibold text-[var(--enterprise-text)]"
-            >
-              Link to drawing
-            </h2>
-            {linkAsset ? (
-              <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
-                Search PDFs, attach a revision without a pin, or open the viewer to place the pin
-                for{" "}
-                <span className="font-mono font-semibold text-[var(--enterprise-text)]">
-                  {linkAsset.tag}
-                </span>
-                .
-              </p>
-            ) : null}
-          </div>
+          <SlideOverHeader
+            icon={Package}
+            titleId="link-asset-title"
+            title="Link to drawing"
+            description={
+              linkAsset ? (
+                <>
+                  Attach a PDF revision or place a pin for{" "}
+                  <span className="font-mono font-semibold text-[var(--enterprise-text)]">
+                    {linkAsset.tag}
+                  </span>
+                  .
+                </>
+              ) : undefined
+            }
+          />
         }
         footer={
           <p className="w-full text-center text-xs text-[var(--enterprise-text-muted)] sm:text-left">
@@ -849,7 +819,7 @@ export function OmAssetsClient({ projectId }: Props) {
               value={linkDrawingSearch}
               onChange={(e) => setLinkDrawingSearch(e.target.value)}
               placeholder="Search documents…"
-              className={`${MOBILE_FIELD_INPUT} pl-11`}
+              className={`${MOBILE_FIELD_INPUT} enterprise-field-input--icon`}
             />
           </div>
           {!wid || !project ? (

@@ -182,7 +182,7 @@ export function BimIssueDockFiltersBar(props: {
             value={props.query}
             onChange={(e) => props.onQueryChange(e.target.value)}
             placeholder="Search issues…"
-            className="w-full rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] py-1.5 pl-7 pr-2 text-[12px] text-[var(--bim-text)] outline-none focus:border-[var(--bim-accent)]"
+            className="w-full rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] py-1.5 pl-8 pr-2 text-[12px] text-[var(--bim-text)] outline-none focus:border-[var(--bim-accent)]"
           />
         </div>
         <button

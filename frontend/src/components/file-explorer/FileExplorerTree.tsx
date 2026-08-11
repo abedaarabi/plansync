@@ -52,13 +52,13 @@ function TreeRow({
   return (
     <div className="flex min-w-0 items-stretch gap-0">
       <div
-        className="flex shrink-0 items-center justify-center text-slate-400"
+        className="flex shrink-0 items-center justify-center text-[var(--enterprise-text-muted)]"
         style={{ width: CHEVRON_W }}
       >
         {hasChildren ? (
           <button
             type="button"
-            className="flex h-5 w-5 items-center justify-center rounded text-slate-500 transition hover:bg-slate-200/70 hover:text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--enterprise-primary)]"
+            className="flex h-5 w-5 items-center justify-center rounded text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--enterprise-primary)]"
             aria-label={isOpen ? "Collapse folder" : "Expand folder"}
             onClick={(e) => {
               e.stopPropagation();
@@ -99,10 +99,10 @@ function TreeRow({
         onDrop={onDropTarget}
         className={`group flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-[13px] leading-tight transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--enterprise-primary)] ${
           isSelected
-            ? "bg-[var(--enterprise-primary-soft)] font-medium text-[var(--enterprise-primary-deep)] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]"
+            ? "bg-[var(--enterprise-primary-soft)] font-medium text-[var(--enterprise-primary-deep)] ring-1 ring-inset ring-[var(--enterprise-primary)]/15"
             : isLocked
-              ? "text-[var(--enterprise-text-muted)] hover:bg-slate-100/90"
-              : "text-[var(--enterprise-text)] hover:bg-slate-100/90"
+              ? "text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
+              : "text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]"
         } ${isDropTarget ? "ring-2 ring-[var(--enterprise-primary)]/35 ring-inset bg-[var(--enterprise-primary-soft)]/60" : ""}`}
         aria-current={isSelected ? "true" : undefined}
       >
@@ -112,7 +112,7 @@ function TreeRow({
               className={`h-4 w-4 ${
                 isSelected
                   ? "text-[var(--enterprise-primary)]"
-                  : "text-slate-400 group-hover:text-slate-600"
+                  : "text-[var(--enterprise-text-muted)] group-hover:text-[var(--enterprise-subtitle)]"
               }`}
               strokeWidth={1.75}
               aria-hidden
@@ -123,7 +123,7 @@ function TreeRow({
                 isSelected
                   ? "text-[var(--enterprise-primary-deep)]"
                   : isLocked
-                    ? "text-slate-400"
+                    ? "text-[var(--enterprise-text-muted)]"
                     : "text-[var(--enterprise-primary)]"
               } fill-current`}
               strokeWidth={1.5}
@@ -132,7 +132,9 @@ function TreeRow({
           )}
         </span>
         <span className="truncate">{label}</span>
-        {isLocked ? <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
+        {isLocked ? (
+          <Lock className="h-3.5 w-3.5 shrink-0 text-[var(--enterprise-text-muted)]" aria-hidden />
+        ) : null}
       </button>
     </div>
   );
@@ -144,7 +146,7 @@ function TreeChildrenGuide({ depth, children }: { depth: number; children: React
   const pl = guidePaddingLeft();
   return (
     <div
-      className="border-l border-slate-300/90 bg-transparent"
+      className="border-l border-[var(--enterprise-border)] bg-transparent"
       style={{ marginLeft: ml, paddingLeft: pl }}
     >
       {children}
@@ -293,10 +295,8 @@ export function FileExplorerTree({
       aria-label="Folder tree"
     >
       {showSectionLabel ? (
-        <div className="border-b border-slate-200/70 px-3 py-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-            Folders
-          </p>
+        <div className="border-b border-[var(--enterprise-border)] px-3 py-2">
+          <p className="enterprise-type-label">Folders</p>
         </div>
       ) : null}
       <div

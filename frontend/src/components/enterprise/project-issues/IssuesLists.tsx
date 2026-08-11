@@ -111,7 +111,7 @@ function IssuesMobileList({
   return (
     <ul className="space-y-3 lg:hidden" aria-label={listTitle}>
       {filtered.length === 0 ? (
-        <li className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
+        <li className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
           {empty}
         </li>
       ) : (
@@ -131,7 +131,7 @@ function IssuesDesktopTable({
   rowPropsFor: (issue: IssueRow) => IssueRowProps;
 }) {
   return (
-    <div className="enterprise-card hidden overflow-hidden rounded-2xl p-0 lg:block">
+    <div className="enterprise-card hidden overflow-hidden rounded-lg p-0 lg:block">
       <div className="mobile-table-wrap max-h-[calc(100dvh-15rem)] overflow-auto">
         <table className="w-full min-w-[720px] text-left">
           <IssuesTableHead />

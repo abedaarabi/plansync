@@ -34,14 +34,11 @@ function UseCasesPageInner() {
               <button
                 type="button"
                 onClick={() => goToFreeViewer("use_cases_hero_open_viewer")}
-                className="inline-flex items-center gap-2 rounded-xl bg-[var(--landing-cta)] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
+                className="landing-btn-primary"
               >
                 {t("openViewer")}
               </button>
-              <Link
-                href="/pricing"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-              >
+              <Link href="/pricing" className="landing-btn-secondary">
                 {t("seePricing")}
               </Link>
             </div>
@@ -55,10 +52,10 @@ function UseCasesPageInner() {
             const Icon = useCaseIcons[index % useCaseIcons.length];
             return (
               <AnimateIn key={useCase.slug} delay={index * 60}>
-                <article className="h-full rounded-2xl border border-slate-200/90 bg-white p-6 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.25)]">
-                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 ring-1 ring-blue-200/70">
-                    <Icon className="h-5 w-5" aria-hidden />
-                  </div>
+                <article className="landing-card h-full">
+                  <span className="landing-icon landing-icon-accent" aria-hidden>
+                    <Icon className="h-4 w-4" strokeWidth={1.75} />
+                  </span>
                   <h2 className="mt-4 text-xl font-semibold tracking-tight text-slate-900">
                     {t(`cards.${useCase.slug}.title`)}
                   </h2>
@@ -73,7 +70,7 @@ function UseCasesPageInner() {
                       <li key={solutionSlug}>
                         <Link
                           href={`/solutions/${solutionSlug}`}
-                          className="inline-flex rounded-full border border-slate-200/90 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
+                          className="inline-flex rounded-md border border-slate-200/90 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
                         >
                           {getSolutionTitle(solutionSlug)}
                         </Link>

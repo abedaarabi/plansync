@@ -103,14 +103,12 @@ function FileRow({
         <p className="truncate text-sm font-medium text-[var(--enterprise-text)]">
           {asset.fileName}
         </p>
-        <p className="truncate text-[11px] text-[var(--enterprise-text-muted)]">
-          {assetMeta(asset)}
-        </p>
+        <p className="enterprise-type-caption truncate">{assetMeta(asset)}</p>
       </div>
       <ProcessingStatusPill status={asset.status} />
       <button
         type="button"
-        className="mobile-touch-target inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)] focus-visible:bg-[var(--enterprise-semantic-danger-bg)] focus-visible:text-[var(--enterprise-semantic-danger-text)] disabled:opacity-50"
+        className="mobile-touch-target inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)] focus-visible:bg-[var(--enterprise-semantic-danger-bg)] focus-visible:text-[var(--enterprise-semantic-danger-text)] disabled:opacity-50"
         aria-label={`Remove ${asset.fileName}`}
         disabled={busy}
         onClick={(e) => {
@@ -151,7 +149,7 @@ export function BuildingFilesList({
   const hiddenCount = sorted.length - PREVIEW_COUNT;
 
   return (
-    <div className="enterprise-card overflow-hidden rounded-xl">
+    <div className="enterprise-card overflow-hidden">
       <ul className="divide-y divide-[var(--enterprise-border)]">
         {visible.map((asset) => (
           <FileRow
@@ -168,7 +166,7 @@ export function BuildingFilesList({
       {canCollapse ? (
         <button
           type="button"
-          className="flex w-full items-center justify-center gap-1.5 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2 text-sm font-medium text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary-soft)]"
+          className="flex w-full items-center justify-center gap-1.5 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/40 px-3 py-2 text-sm font-medium text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary-soft)]"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
         >

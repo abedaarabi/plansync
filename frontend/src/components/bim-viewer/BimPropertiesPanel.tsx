@@ -293,7 +293,7 @@ export function BimPropertiesPanel(props: {
   if (variant === "sheet") {
     return (
       <aside
-        className="absolute z-20 flex flex-col overflow-hidden rounded-t-2xl border border-[var(--bim-border)] bg-[var(--bim-panel)] shadow-[var(--bim-panel-shadow)] inset-x-0 bottom-0 max-h-[55%] sm:bottom-3 sm:right-3 sm:top-3 sm:w-80 sm:rounded-lg"
+        className="absolute z-20 flex flex-col overflow-hidden rounded-t-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] shadow-none inset-x-0 bottom-0 max-h-[55%] sm:bottom-3 sm:right-3 sm:top-3 sm:w-80 sm:rounded-md"
         role="dialog"
         aria-label="Object properties"
       >

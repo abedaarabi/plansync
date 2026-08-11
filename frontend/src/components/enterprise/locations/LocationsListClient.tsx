@@ -32,11 +32,11 @@ export function LocationsListClient({ projectId }: Props) {
 
   if (isError && !data) {
     return (
-      <div className="enterprise-card flex flex-col items-center gap-3 rounded-2xl px-6 py-12 text-center">
+      <div className="enterprise-card flex flex-col items-center gap-3 rounded-md px-6 py-12 text-center">
         <p className="text-sm font-medium text-[var(--enterprise-text)]">Couldn’t load locations</p>
         <button
           type="button"
-          className="enterprise-btn-primary mobile-touch-target rounded-lg px-4 py-2 text-sm"
+          className="enterprise-btn-primary mobile-touch-target rounded-md px-4 py-2 text-sm"
           onClick={() => void refetch()}
         >
           Try again
@@ -49,18 +49,20 @@ export function LocationsListClient({ projectId }: Props) {
   const saving = createMut.isPending || updateMut.isPending;
 
   return (
-    <div className="enterprise-animate-in space-y-5 pb-8">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)]">
-            <MapPin className="h-5 w-5 text-[var(--enterprise-primary)]" aria-hidden />
+    <div className="enterprise-animate-in space-y-4 pb-8">
+      <header className="mb-1 flex flex-wrap items-start justify-between gap-3 border-b border-[var(--enterprise-border)] pb-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]">
+            <MapPin
+              className="h-4 w-4 text-[var(--enterprise-text-muted)]"
+              strokeWidth={1.75}
+              aria-hidden
+            />
           </div>
           <div className="min-w-0">
-            <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Portfolio</p>
-            <h1 className="text-xl font-semibold tracking-tight text-[var(--enterprise-text)]">
-              Locations
-            </h1>
-            <p className="mt-0.5 text-sm text-[var(--enterprise-text-muted)]">
+            <p className="enterprise-type-label">Portfolio</p>
+            <h1 className="enterprise-type-title">Locations</h1>
+            <p className="enterprise-type-subtitle mt-1">
               Sites and campuses — each location holds one or more buildings.
             </p>
           </div>
@@ -68,7 +70,7 @@ export function LocationsListClient({ projectId }: Props) {
         {locations.length > 0 ? (
           <button
             type="button"
-            className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold"
+            className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-semibold"
             onClick={() => {
               setEditing(null);
               setDialogOpen(true);
@@ -81,21 +83,25 @@ export function LocationsListClient({ projectId }: Props) {
       </header>
 
       {locations.length === 0 ? (
-        <div className="enterprise-card relative flex flex-col items-center gap-4 overflow-hidden rounded-2xl px-6 py-12 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--enterprise-primary-soft)]">
-            <MapPin className="h-7 w-7 text-[var(--enterprise-primary)]" aria-hidden />
+        <div className="enterprise-card flex flex-col items-center gap-3 px-5 py-10 text-center sm:py-12">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
+            <MapPin
+              className="h-4 w-4 text-[var(--enterprise-text-muted)]"
+              strokeWidth={1.75}
+              aria-hidden
+            />
           </div>
-          <div className="max-w-sm space-y-1">
-            <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
+          <div className="max-w-sm space-y-1.5">
+            <h2 className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]">
               Add your first location
             </h2>
-            <p className="text-sm text-[var(--enterprise-text-muted)]">
+            <p className="enterprise-type-subtitle text-[0.9375rem] leading-relaxed">
               Create a site to organize buildings, upload IFC models, and match drawings to levels.
             </p>
           </div>
           <button
             type="button"
-            className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold"
+            className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold"
             onClick={() => {
               setEditing(null);
               setDialogOpen(true);
@@ -119,8 +125,12 @@ export function LocationsListClient({ projectId }: Props) {
                   className="flex flex-1 flex-col p-4 transition-colors hover:bg-[var(--enterprise-hover-surface)]/50"
                 >
                   <div className="flex gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)]">
-                      <MapPin className="h-5 w-5 text-[var(--enterprise-primary)]" aria-hidden />
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
+                      <MapPin
+                        className="h-4 w-4 text-[var(--enterprise-text-muted)]"
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -128,27 +138,27 @@ export function LocationsListClient({ projectId }: Props) {
                           {loc.name}
                         </h2>
                         {loc.code ? (
-                          <span className="rounded-md bg-[var(--enterprise-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--enterprise-primary)]">
+                          <span className="enterprise-badge-neutral rounded px-1.5 py-0.5 text-xs font-semibold">
                             {loc.code}
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-[var(--enterprise-text-muted)]">
+                      <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
                         {place ?? "No address yet"}
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[var(--enterprise-border)] pt-2.5 text-[11px] text-[var(--enterprise-text-muted)]">
+                  <div className="enterprise-type-caption mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[var(--enterprise-border)] pt-2.5">
                     <span className="inline-flex items-center gap-1">
                       <Building2 className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
                       {loc.buildingCount} building{loc.buildingCount === 1 ? "" : "s"}
                     </span>
                   </div>
                 </Link>
-                <div className="flex items-center justify-end gap-0.5 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 px-2 py-1.5">
+                <div className="flex items-center justify-end gap-0.5 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/40 px-2 py-1.5">
                   <button
                     type="button"
-                    className="mobile-touch-target inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+                    className="mobile-touch-target inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
                     aria-label={`Edit ${loc.name}`}
                     onClick={() => {
                       setEditing(loc);
@@ -159,7 +169,7 @@ export function LocationsListClient({ projectId }: Props) {
                   </button>
                   <button
                     type="button"
-                    className="mobile-touch-target inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
+                    className="mobile-touch-target inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-semantic-danger-bg)] hover:text-[var(--enterprise-semantic-danger-text)]"
                     aria-label={`Delete ${loc.name}`}
                     onClick={() => setDeleteTarget(loc)}
                   >
@@ -172,17 +182,17 @@ export function LocationsListClient({ projectId }: Props) {
 
           <button
             type="button"
-            className="enterprise-dashed-add flex h-full min-h-[168px] flex-col items-center justify-center gap-1.5 rounded-2xl p-5 text-center"
+            className="enterprise-dashed-add flex h-full min-h-[10.5rem] flex-col items-center justify-center gap-1.5 rounded-md p-5 text-center"
             onClick={() => {
               setEditing(null);
               setDialogOpen(true);
             }}
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)]">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)]">
               <Plus className="h-5 w-5" aria-hidden />
             </div>
             <p className="text-sm font-semibold text-[var(--enterprise-text)]">Add location</p>
-            <p className="text-[11px] text-[var(--enterprise-text-muted)]">
+            <p className="text-xs text-[var(--enterprise-text-muted)]">
               Create a site for buildings
             </p>
           </button>

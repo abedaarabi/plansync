@@ -24,16 +24,13 @@ function CaseStudiesPageInner() {
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600">{t("body")}</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/use-cases"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-              >
+              <Link href="/use-cases" className="landing-btn-secondary">
                 {t("viewUseCases")}
               </Link>
               <button
                 type="button"
                 onClick={() => goToFreeViewer("case_studies_hero_open_viewer")}
-                className="inline-flex items-center gap-2 rounded-xl bg-[var(--landing-cta)] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
+                className="landing-btn-primary"
               >
                 {t("openViewer")}
               </button>
@@ -46,10 +43,10 @@ function CaseStudiesPageInner() {
         <div className="mx-auto grid max-w-6xl gap-5 px-6 lg:grid-cols-3">
           {LANDING_CASE_STUDIES.map((study, index) => (
             <AnimateIn key={study.slug} delay={index * 70}>
-              <article className="h-full rounded-2xl border border-slate-200/90 bg-white p-6 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.25)]">
-                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 ring-1 ring-blue-200/70">
-                  <BarChart3 className="h-5 w-5" aria-hidden />
-                </div>
+              <article className="landing-card h-full">
+                <span className="landing-icon landing-icon-accent" aria-hidden>
+                  <BarChart3 className="h-4 w-4" strokeWidth={1.75} />
+                </span>
                 <h2 className="mt-4 text-lg font-semibold tracking-tight text-slate-900">
                   {t(`cards.${study.slug}.title`)}
                 </h2>

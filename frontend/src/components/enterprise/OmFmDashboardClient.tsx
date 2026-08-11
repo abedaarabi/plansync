@@ -52,7 +52,7 @@ function Kpi({
           : "border-l-slate-400";
   return (
     <div
-      className={`enterprise-card rounded-xl border-l-4 p-2.5 transition-transform duration-150 active:scale-[0.98] ${border}`}
+      className={`enterprise-card rounded-md border-l-4 p-2.5 transition-transform duration-150 active:scale-[0.98] ${border}`}
     >
       <p className="text-lg font-bold tabular-nums tracking-tight text-[var(--enterprise-text)]">
         {value}
@@ -69,7 +69,7 @@ function Kpi({
 
 function ActivityRow({ title, meta, badge }: { title: string; meta: string; badge?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-xs)]">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 ">
       <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold leading-snug text-[var(--enterprise-text)]">{title}</p>
         <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
@@ -93,7 +93,7 @@ function QuickNavLink({
   return (
     <Link
       href={href}
-      className="enterprise-card enterprise-card-hover flex min-h-10 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm font-medium text-[var(--enterprise-text)] transition active:scale-[0.98]"
+      className="enterprise-card enterprise-card-hover flex min-h-10 w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium text-[var(--enterprise-text)] transition active:scale-[0.98]"
     >
       <span className="flex items-center gap-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
@@ -204,7 +204,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
           <>
             <a
               href={omAssetRegisterCsvUrl(projectId)}
-              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-bg)]"
+              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-bg)]"
             >
               Asset CSV
             </a>
@@ -213,7 +213,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
             (session.workspaceRole === "SUPER_ADMIN" || session.workspaceRole === "ADMIN") ? (
               <a
                 href={omOccupantAssetQrCsvUrl(projectId)}
-                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] shadow-sm transition hover:bg-[var(--enterprise-bg)]"
+                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-bg)]"
               >
                 <Download className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 QR CSV
@@ -221,7 +221,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
             ) : null}
             <Link
               href={`${pBase}/om/handover`}
-              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-95"
+              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-95"
             >
               Handover
               <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -299,7 +299,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
             value={dash.kpis.overdueInspectionTemplates ?? 0}
             tone={(dash.kpis.overdueInspectionTemplates ?? 0) > 0 ? "red" : "emerald"}
           />
-          <div className="enterprise-card col-span-2 rounded-xl border-l-4 border-l-emerald-600 p-3 lg:col-span-2">
+          <div className="enterprise-card col-span-2 rounded-md border-l-4 border-l-emerald-600 p-3 lg:col-span-2">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--enterprise-text-muted)]">
               Building health
             </p>
@@ -322,7 +322,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
       </section>
 
       <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-        <section className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3">
+        <section className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3">
           <div className="mb-2 flex min-h-9 items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
               <CalendarRange className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
@@ -361,7 +361,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
           )}
         </section>
 
-        <section className="rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-4 sm:p-5">
+        <section className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-4 sm:p-5">
           <div className="mb-3 flex min-h-11 items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
               <Wrench className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
@@ -395,7 +395,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
           )}
         </section>
 
-        <section className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3">
+        <section className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3">
           <div className="mb-2 flex min-h-9 items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
               <ClipboardCheck className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />
@@ -440,7 +440,7 @@ export function OmFmDashboardClient({ projectId }: Props) {
           )}
         </section>
 
-        <section className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3 lg:col-span-2 xl:col-span-1">
+        <section className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 p-3 lg:col-span-2 xl:col-span-1">
           <div className="mb-2 flex min-h-9 items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--enterprise-text)]">
               <Inbox className="h-4 w-4 text-[var(--enterprise-primary)]" aria-hidden />

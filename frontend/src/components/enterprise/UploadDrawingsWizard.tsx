@@ -253,7 +253,7 @@ export function UploadDrawingsWizard(props: {
           <>
             <button
               type="button"
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm"
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm"
               onClick={resetAndClose}
             >
               Cancel
@@ -261,7 +261,7 @@ export function UploadDrawingsWizard(props: {
             <button
               type="button"
               disabled={loadingPreview || staged.length === 0}
-              className="rounded-xl bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-md bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
               onClick={() => void runPreview()}
             >
               {loadingPreview ? "Checking..." : "Next →"}
@@ -271,7 +271,7 @@ export function UploadDrawingsWizard(props: {
           <>
             <button
               type="button"
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm"
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm"
               onClick={() => setStep(1)}
               disabled={publishing}
             >
@@ -279,7 +279,7 @@ export function UploadDrawingsWizard(props: {
             </button>
             <button
               type="button"
-              className="rounded-xl bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-md bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
               onClick={() => (hasCarryCandidates ? setStep(3) : void publish())}
               disabled={publishing}
             >
@@ -290,7 +290,7 @@ export function UploadDrawingsWizard(props: {
           <>
             <button
               type="button"
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm"
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm"
               onClick={() => setStep(2)}
               disabled={publishing}
             >
@@ -298,7 +298,7 @@ export function UploadDrawingsWizard(props: {
             </button>
             <button
               type="button"
-              className="rounded-xl bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-md bg-[var(--enterprise-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
               onClick={() => void publish()}
               disabled={publishing}
             >
@@ -308,21 +308,21 @@ export function UploadDrawingsWizard(props: {
         )
       }
     >
-      <div className="mb-4 grid grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-2 text-xs">
+      <div className="mb-4 grid grid-cols-3 gap-2 rounded-md border border-slate-200 bg-slate-50/60 p-2 text-xs">
         <div
-          className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 ${step === 1 ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}
+          className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 ${step === 1 ? "bg-white text-slate-900" : "text-slate-600"}`}
         >
           <FileUp className="h-3.5 w-3.5" />
           Upload
         </div>
         <div
-          className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 ${step === 2 ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}
+          className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 ${step === 2 ? "bg-white text-slate-900" : "text-slate-600"}`}
         >
           <SearchCheck className="h-3.5 w-3.5" />
           Detect
         </div>
         <div
-          className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 ${step === 3 ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}
+          className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 ${step === 3 ? "bg-white text-slate-900" : "text-slate-600"}`}
         >
           <GitBranchPlus className="h-3.5 w-3.5" />
           Carry
@@ -331,12 +331,12 @@ export function UploadDrawingsWizard(props: {
 
       {step === 1 ? (
         <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
             <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-3 text-sm font-medium text-slate-700">
               Add files
             </div>
             <div className="p-4">
-              <label className="block rounded-xl border-2 border-dashed border-slate-300 bg-white p-7 text-center text-sm text-slate-600 transition hover:border-slate-400">
+              <label className="block rounded-md border-2 border-dashed border-slate-300 bg-white p-7 text-center text-sm text-slate-600 transition hover:border-slate-400">
                 <input
                   type="file"
                   multiple
@@ -359,7 +359,7 @@ export function UploadDrawingsWizard(props: {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
             <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-3 text-sm font-medium text-slate-700">
               Selected files ({staged.length})
             </div>
@@ -386,7 +386,7 @@ export function UploadDrawingsWizard(props: {
           </div>
         </div>
       ) : step === 2 ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
           <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] gap-3 border-b border-slate-200 bg-slate-50/70 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <span>Uploaded file</span>
             <span>Detected</span>
@@ -394,7 +394,7 @@ export function UploadDrawingsWizard(props: {
           </div>
           <div className="space-y-2 p-3">
             {previewRows.map((row) => (
-              <div key={row.stageId} className="rounded-xl border border-slate-200 p-3 text-sm">
+              <div key={row.stageId} className="rounded-md border border-slate-200 p-3 text-sm">
                 <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] items-start gap-3">
                   <div className="min-w-0 font-medium text-[var(--enterprise-text)]">
                     {row.clientName}
@@ -525,7 +525,7 @@ export function UploadDrawingsWizard(props: {
         </div>
       )}
 
-      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-xs text-slate-700">
+      <div className="mt-4 rounded-md border border-slate-200 bg-slate-50/70 p-3 text-xs text-slate-700">
         <p className="mb-2 font-semibold text-slate-800">Rules guaranteed</p>
         <div className="grid gap-1 md:grid-cols-2">
           <span className="inline-flex items-center gap-1.5">

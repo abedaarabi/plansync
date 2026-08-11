@@ -10,20 +10,23 @@ type Props = {
   action?: ReactNode;
 };
 
+/** Operational empty state — short copy + single action, no marketing chrome. */
 export function OmEmptyState({ icon: Icon, title, description, action }: Props) {
   return (
-    <div className="enterprise-card flex flex-col items-center gap-3 px-5 py-10 text-center sm:py-12">
+    <div className="enterprise-card flex flex-col items-center gap-2.5 px-4 py-8 text-center sm:py-10">
       <div
-        className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]"
+        className="flex h-9 w-9 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]"
         aria-hidden
       >
-        <Icon className="h-5 w-5 text-[var(--enterprise-primary)]/60" strokeWidth={1.5} />
+        <Icon className="h-4 w-4 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
       </div>
-      <div className="max-w-md space-y-1">
-        <p className="text-sm font-semibold text-[var(--enterprise-text)]">{title}</p>
-        <p className="text-xs leading-relaxed text-[var(--enterprise-text-muted)]">{description}</p>
+      <div className="max-w-sm space-y-1.5">
+        <p className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]">
+          {title}
+        </p>
+        <p className="enterprise-type-subtitle text-[0.9375rem] leading-relaxed">{description}</p>
       </div>
-      {action ? <div className="pt-1">{action}</div> : null}
+      {action ? <div className="pt-0.5">{action}</div> : null}
     </div>
   );
 }

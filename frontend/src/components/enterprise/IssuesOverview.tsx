@@ -219,7 +219,7 @@ function AttentionList({
           <li key={issue.id}>
             <Link
               href={hrefFor(issue.id)}
-              className="flex items-center gap-2.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-primary-soft)]/40"
+              className="flex items-center gap-2.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-primary-soft)]/40"
             >
               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--enterprise-text)]">
                 {issue.title}
@@ -254,7 +254,7 @@ function RecentList({
         <li key={issue.id}>
           <Link
             href={hrefFor(issue.id)}
-            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-primary-soft)]/40"
+            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-primary-soft)]/40"
           >
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold leading-snug text-[var(--enterprise-text)]">

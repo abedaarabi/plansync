@@ -289,7 +289,7 @@ export function ProjectAuditClient({ projectId, subhead }: { projectId: string; 
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Summary, details, user…"
-                      className={`${OM_COMPACT_INPUT} pl-8`}
+                      className={`${OM_COMPACT_INPUT} enterprise-field-input--icon-sm`}
                     />
                   </span>
                 </label>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { ClipboardCheck, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -14,7 +14,12 @@ import {
 } from "@/lib/api-client";
 import { MOBILE_FIELD_INPUT, MOBILE_FIELD_LABEL } from "@/lib/mobileFormStyles";
 import { qk } from "@/lib/queryKeys";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import {
+  EnterpriseSlideOver,
+  SlideOverHeader,
+  SLIDE_OVER_BTN_PRIMARY,
+  SLIDE_OVER_BTN_SECONDARY,
+} from "@/components/enterprise/EnterpriseSlideOver";
 import { OmFormSection } from "@/components/enterprise/OmFormSection";
 
 const FREQUENCY_OPTIONS = [
@@ -204,44 +209,30 @@ export function OmInspectionTemplateSlideOver({
     <EnterpriseSlideOver
       open={open}
       onClose={onClose}
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),440px)]"
-      panelVariant="floating"
-      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
-      closeOnBackdrop={false}
-      closeOnEscape={false}
       overlayZClass={isCompany ? "z-[120]" : undefined}
       ariaLabelledBy="tpl-slide-title"
       header={
-        <div className="min-w-0">
-          <h2
-            id="tpl-slide-title"
-            className="truncate text-lg font-semibold text-[var(--enterprise-text)]"
-          >
-            {title}
-          </h2>
-          <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">{subtitle}</p>
-        </div>
+        <SlideOverHeader
+          icon={ClipboardCheck}
+          titleId="tpl-slide-title"
+          title={title}
+          description={subtitle}
+        />
       }
-      bodyClassName="px-5 py-5"
-      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       footer={
-        <div className="flex w-full justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex min-h-10 items-center rounded-lg border border-[var(--enterprise-border)] px-4 text-sm font-medium text-[var(--enterprise-text)]"
-          >
+        <>
+          <button type="button" onClick={onClose} className={SLIDE_OVER_BTN_SECONDARY}>
             Cancel
           </button>
           <button
             type="button"
             disabled={mut.isPending}
             onClick={() => mut.mutate()}
-            className="inline-flex min-h-10 items-center rounded-lg bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white disabled:opacity-50"
+            className={SLIDE_OVER_BTN_PRIMARY}
           >
             {isEdit ? "Save changes" : isCompany ? "Create company template" : "Create template"}
           </button>
-        </div>
+        </>
       }
     >
       <div className="space-y-7">
@@ -317,7 +308,7 @@ export function OmInspectionTemplateSlideOver({
             ) : null}
           </div>
           {!isCompany ? (
-            <label className="flex min-h-10 cursor-pointer items-start gap-2.5 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5">
+            <label className="flex min-h-10 cursor-pointer items-start gap-2.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5">
               <input
                 type="checkbox"
                 checked={requireFailEvidence}
@@ -353,7 +344,7 @@ export function OmInspectionTemplateSlideOver({
             {rows.map((row, i) => (
               <li
                 key={row.id}
-                className="flex items-start gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-2.5"
+                className="flex items-start gap-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-2.5"
               >
                 <div className="w-[4.5rem] shrink-0">
                   <label className="sr-only" htmlFor={`tpl-lvl-${row.id}`}>
@@ -400,7 +391,7 @@ export function OmInspectionTemplateSlideOver({
           <button
             type="button"
             onClick={addRow}
-            className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[var(--enterprise-border)] text-sm font-semibold text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)]"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--enterprise-border)] text-sm font-semibold text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)]"
           >
             <Plus className="h-4 w-4" />
             Add checklist item

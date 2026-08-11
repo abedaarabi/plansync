@@ -522,7 +522,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                     value={inviteListSearch}
                     onChange={(e) => setInviteListSearch(e.target.value)}
                     placeholder="Search email, name, company, trade, project…"
-                    className={`${OM_COMPACT_INPUT} pl-8`}
+                    className={`${OM_COMPACT_INPUT} enterprise-field-input--icon-sm`}
                     aria-label="Filter invites by keyword"
                   />
                 </div>
@@ -573,7 +573,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
             <div className="space-y-0 divide-y divide-[#E2E8F0]">
               {[0, 1].map((i) => (
                 <div key={i} className="flex animate-pulse gap-3 px-3 py-3 sm:px-4">
-                  <div className="h-12 w-12 shrink-0 rounded-xl bg-[#E2E8F0]" />
+                  <div className="h-12 w-12 shrink-0 rounded-md bg-[#E2E8F0]" />
                   <div className="min-w-0 flex-1 space-y-2 pt-1">
                     <div className="h-4 w-48 max-w-full rounded bg-[#E2E8F0]" />
                     <div className="h-3 w-64 max-w-full rounded bg-[#F1F5F9]" />
@@ -583,7 +583,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
             </div>
           ) : invites.length === 0 ? (
             <div className="px-4 py-8 text-center">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)]">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-text-muted)]">
                 <Mail className="h-4 w-4" />
               </div>
               <p className="mt-3 text-sm font-medium text-[var(--enterprise-text)]">
@@ -624,7 +624,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="flex min-w-0 gap-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#EEF2FF] to-[#E0E7FF] text-sm font-bold text-[#3730A3]">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-[#EEF2FF] to-[#E0E7FF] text-sm font-bold text-[#3730A3]">
                           {inviteInitials(inv)}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -687,7 +687,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                             type="button"
                             onClick={() => resendMutation.mutate(inv.id)}
                             disabled={resendMutation.isPending}
-                            className="rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#0F172A] shadow-sm transition hover:bg-[#F8FAFC] disabled:opacity-50"
+                            className="rounded-md border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#0F172A] transition hover:bg-[#F8FAFC] disabled:opacity-50"
                           >
                             Resend
                           </button>
@@ -695,7 +695,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
                             type="button"
                             onClick={() => revokeEmailMutation.mutate(inv.id)}
                             disabled={revokeEmailMutation.isPending}
-                            className="rounded-xl px-3 py-2 text-xs font-semibold text-[#DC2626] hover:bg-red-50 disabled:opacity-50"
+                            className="rounded-md px-3 py-2 text-xs font-semibold text-[#DC2626] hover:bg-red-50 disabled:opacity-50"
                           >
                             Cancel
                           </button>

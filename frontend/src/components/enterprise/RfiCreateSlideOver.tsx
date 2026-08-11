@@ -2,9 +2,10 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MessageSquareText } from "lucide-react";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { RfiRelatedIssuesPicker } from "@/components/enterprise/RfiRelatedIssuesPicker";
 import {
   groupSheetRows,
@@ -155,39 +156,28 @@ export function RfiCreateSlideOver({
         },
       }}
       ariaLabelledBy="rfi-create-title"
-      panelVariant="floating"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),520px)]"
-      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
-      closeOnBackdrop={false}
-      closeOnEscape={false}
-      bodyClassName="px-5 py-5"
-      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       header={
-        <div className="min-w-0">
-          <h2
-            id="rfi-create-title"
-            className="truncate text-lg font-semibold tracking-tight text-[var(--enterprise-text)]"
-          >
-            New RFI
-          </h2>
-          <p className="mt-0.5 text-xs leading-snug text-[var(--enterprise-text-muted)]">
-            Title and question required. Assign responders before sending for review.
-          </p>
-        </div>
+        <SlideOverHeader
+          icon={MessageSquareText}
+          titleId="rfi-create-title"
+          title="New RFI"
+          description="Title and question required. Assign responders before review."
+        />
       }
       footer={
-        <div className="flex w-full justify-end gap-2">
-          <EnterpriseButton type="button" variant="secondary" onClick={handleClose}>
+        <>
+          <EnterpriseButton type="button" variant="secondary" size="sm" onClick={handleClose}>
             Cancel
           </EnterpriseButton>
           <EnterpriseButton
             type="submit"
+            size="sm"
             loading={createMut.isPending}
             disabled={!title.trim() || !question.trim()}
           >
             {createMut.isPending ? "Creating…" : "Create RFI"}
           </EnterpriseButton>
-        </div>
+        </>
       }
     >
       <div className="space-y-4">

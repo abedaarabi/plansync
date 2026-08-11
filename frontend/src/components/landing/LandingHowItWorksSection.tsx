@@ -37,24 +37,21 @@ export function LandingHowItWorksSection() {
           </p>
         </AnimateIn>
 
-        <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+        {/* Editorial numbered list — not a grid of identical icon cards */}
+        <div className="mt-14 divide-y divide-slate-200/80 overflow-hidden rounded-2xl border border-slate-200/80 bg-white sm:mt-16">
           {STEPS.map((step, i) => (
-            <AnimateIn key={step.titleKey} delay={60 + i * 50}>
-              <div
-                className={`relative flex h-full flex-col rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm ${
-                  i % 2 === 1 ? "lg:translate-y-4" : ""
-                }`}
-              >
+            <AnimateIn key={step.titleKey} delay={40 + i * 40}>
+              <div className="grid gap-4 px-6 py-7 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-8 sm:px-8 sm:py-8 lg:grid-cols-[5rem_minmax(0,14rem)_minmax(0,1fr)] lg:items-baseline lg:gap-10">
                 <span
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--landing-cta)_12%,white)] text-sm font-bold text-(--landing-cta) ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_25%,transparent)]"
+                  className="font-mono text-sm font-semibold tabular-nums tracking-tight text-(--landing-cta)"
                   aria-hidden
                 >
-                  {i + 1}
+                  {String(i + 1).padStart(2, "0")}
                 </span>
-                <h3 className="mt-4 text-[1.04rem] font-bold tracking-tight text-slate-900">
+                <h3 className="text-[1.05rem] font-semibold tracking-tight text-slate-900 sm:text-[1.1rem]">
                   {t(step.titleKey)}
                 </h3>
-                <p className="mt-2 text-[0.95rem] leading-relaxed text-slate-600">
+                <p className="text-[0.95rem] leading-relaxed text-slate-600 sm:col-span-2 lg:col-span-1">
                   {t(step.bodyKey)}
                 </p>
               </div>

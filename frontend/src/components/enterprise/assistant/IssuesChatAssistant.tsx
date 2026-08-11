@@ -71,7 +71,7 @@ function MessageBubble({
 }) {
   if (sender === "user") {
     return (
-      <div className="rounded-2xl rounded-br-md bg-[var(--enterprise-primary)] px-4 py-3 text-white shadow-sm">
+      <div className="rounded-lg rounded-br-md bg-[var(--enterprise-primary)] px-4 py-3 text-white">
         <IssuesChatMarkdown content={content} variant="user" />
       </div>
     );
@@ -79,7 +79,7 @@ function MessageBubble({
 
   if (isError) {
     return (
-      <div className="flex gap-2.5 rounded-2xl rounded-bl-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-3">
+      <div className="flex gap-2.5 rounded-lg rounded-bl-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-4 py-3">
         <AlertCircle
           className="mt-0.5 h-4 w-4 shrink-0 text-[var(--enterprise-semantic-danger-text)]"
           aria-hidden
@@ -90,7 +90,7 @@ function MessageBubble({
   }
 
   return (
-    <div className="rounded-2xl rounded-bl-md border border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)] px-4 py-3 shadow-[var(--enterprise-shadow-xs)]">
+    <div className="rounded-lg rounded-bl-md border border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)] px-4 py-3 ">
       <IssuesChatMarkdown content={content} variant="assistant" />
     </div>
   );
@@ -279,7 +279,7 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="issues-chat-assistant-title"
-            className={`pointer-events-auto flex h-[min(92dvh,calc(100dvh-var(--enterprise-topbar-offset)-0.5rem))] w-full flex-col overflow-hidden rounded-t-3xl border border-[var(--enterprise-border)] bg-[color-mix(in_srgb,var(--enterprise-surface)_97%,transparent)] shadow-[var(--enterprise-shadow-floating)] backdrop-blur-xl max-lg:pb-[env(safe-area-inset-bottom,0px)] lg:h-[min(720px,calc(100dvh-5rem))] lg:w-[min(28rem,calc(100vw-2rem))] lg:rounded-3xl ${panelMotion}`}
+            className={`pointer-events-auto flex h-[min(92dvh,calc(100dvh-var(--enterprise-topbar-offset)-0.5rem))] w-full flex-col overflow-hidden rounded-t-3xl border border-[var(--enterprise-border)] bg-[color-mix(in_srgb,var(--enterprise-surface)_97%,transparent)] shadow-[var(--enterprise-shadow-floating)] backdrop-blur-xl max-lg:pb-[env(safe-area-inset-bottom,0px)] lg:h-[min(720px,calc(100dvh-5rem))] lg:w-[min(28rem,calc(100vw-2rem))] lg:rounded-lg ${panelMotion}`}
           >
             <div
               className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-[var(--enterprise-border)] lg:hidden"
@@ -293,7 +293,7 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
               />
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--enterprise-primary)] to-[var(--enterprise-primary-deep)] text-white shadow-[0_8px_20px_-8px_rgba(37,99,235,0.65)]">
+                  <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--enterprise-primary)] to-[var(--enterprise-primary-deep)] text-white shadow-[0_8px_20px_-8px_rgba(37,99,235,0.65)]">
                     <Bot className="h-5 w-5" aria-hidden />
                     <span
                       className="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-[var(--enterprise-surface)] bg-emerald-500"
@@ -317,7 +317,7 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
                     type="button"
                     onClick={clearChat}
                     disabled={!canClearChat}
-                    className="mobile-touch-target inline-flex h-10 w-10 items-center justify-center rounded-xl text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30 disabled:pointer-events-none disabled:opacity-35"
+                    className="mobile-touch-target inline-flex h-10 w-10 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30 disabled:pointer-events-none disabled:opacity-35"
                     aria-label="Clear chat"
                     title="Clear chat"
                   >
@@ -326,7 +326,7 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
                   <button
                     type="button"
                     onClick={closePanel}
-                    className="mobile-touch-target inline-flex h-10 w-10 items-center justify-center rounded-xl text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30"
+                    className="mobile-touch-target inline-flex h-10 w-10 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30"
                     aria-label="Close Issues assistant"
                   >
                     <X className="h-5 w-5" aria-hidden />
@@ -342,7 +342,7 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
               {showWelcome ? (
                 <div className="flex h-full min-h-[12rem] flex-col justify-center gap-5 py-2">
                   <div className="mx-auto flex max-w-sm flex-col items-center text-center">
-                    <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)] ring-1 ring-[var(--enterprise-primary)]/15">
+                    <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)] ring-1 ring-[var(--enterprise-primary)]/15">
                       <Sparkles className="h-5 w-5" aria-hidden />
                     </span>
                     <h2 className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]">
@@ -359,7 +359,7 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
                         key={item.prompt}
                         type="button"
                         onClick={() => void handleSubmit(item.prompt)}
-                        className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-3 text-left text-sm font-medium text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-primary-soft)]/40 hover:text-[var(--enterprise-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30"
+                        className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-3 text-left text-sm font-medium text-[var(--enterprise-text)] transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-primary-soft)]/40 hover:text-[var(--enterprise-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/30"
                       >
                         {item.label}
                       </button>
@@ -374,7 +374,7 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
                       className={`flex gap-2.5 ${message.sender === "user" ? "justify-end" : "justify-start"}`}
                     >
                       {message.sender === "bot" ? (
-                        <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)] ring-1 ring-[var(--enterprise-primary)]/12">
+                        <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)] ring-1 ring-[var(--enterprise-primary)]/12">
                           <Bot className="h-4 w-4" aria-hidden />
                         </span>
                       ) : null}
@@ -404,10 +404,10 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
                   ))}
                   {sending ? (
                     <div className="flex items-center gap-2.5" aria-live="polite">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)] ring-1 ring-[var(--enterprise-primary)]/12">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary)] ring-1 ring-[var(--enterprise-primary)]/12">
                         <Bot className="h-4 w-4" aria-hidden />
                       </span>
-                      <div className="rounded-2xl rounded-bl-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3.5 shadow-[var(--enterprise-shadow-xs)]">
+                      <div className="rounded-lg rounded-bl-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3.5 ">
                         <TypingIndicator />
                         <span className="sr-only">Thinking</span>
                       </div>
@@ -419,7 +419,7 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
 
             <div className="shrink-0 border-t border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_92%,transparent)] px-3 pt-3 pb-3 sm:px-4 sm:pb-4">
               <form
-                className="flex items-end gap-2 rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-2 shadow-[var(--enterprise-shadow-xs)] transition focus-within:border-[var(--enterprise-primary)]/45 focus-within:ring-2 focus-within:ring-[var(--enterprise-primary)]/15"
+                className="flex items-end gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-2 transition focus-within:border-[var(--enterprise-primary)]/45 focus-within:ring-2 focus-within:ring-[var(--enterprise-primary)]/15"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void handleSubmit(inputValue);
@@ -450,7 +450,7 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
                 <button
                   type="submit"
                   disabled={sending || !inputValue.trim()}
-                  className="enterprise-btn-primary inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/40"
+                  className="enterprise-btn-primary inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/40"
                   aria-label="Send"
                 >
                   <Send className="h-4 w-4" aria-hidden />

@@ -23,7 +23,7 @@ import {
   MOBILE_FIELD_SELECT,
 } from "@/lib/mobileFormStyles";
 import { qk } from "@/lib/queryKeys";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetPicker } from "@/components/enterprise/OmAssetPicker";
 import { OmAssigneePicker } from "@/components/enterprise/OmAssigneePicker";
 import { OmFormSection } from "@/components/enterprise/OmFormSection";
@@ -317,7 +317,7 @@ function MaintenanceScheduleFormFields({
           title="Meter trigger"
           description="Optional — in addition to calendar due dates."
         >
-          <div className="space-y-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-4">
+          <div className="space-y-3 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-4">
             <label className="flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
@@ -373,7 +373,7 @@ function MaintenanceScheduleFormFields({
         </OmFormSection>
 
         {isEdit ? (
-          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3">
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3">
             <input
               type="checkbox"
               checked={form.isActive}
@@ -444,9 +444,6 @@ export function OmMaintenanceScheduleSlideOver({
     <EnterpriseSlideOver
       open={open}
       onClose={onClose}
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),420px)]"
-      panelVariant="floating"
-      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
       ariaLabelledBy="ppm-slide-title"
       bodyClassName="p-0"
       footer={null}
@@ -454,26 +451,22 @@ export function OmMaintenanceScheduleSlideOver({
       closeOnBackdrop={false}
       closeOnEscape={false}
       header={
-        <div className="min-w-0">
-          <h2
-            id="ppm-slide-title"
-            className="truncate text-lg font-semibold text-[var(--enterprise-text)]"
-          >
-            {isEdit ? "Edit maintenance schedule" : "New maintenance schedule"}
-          </h2>
-          <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
-            {isEdit
+        <SlideOverHeader
+          titleId="ppm-slide-title"
+          title={isEdit ? "Edit maintenance schedule" : "New maintenance schedule"}
+          description={
+            isEdit
               ? "Update frequency, due date, assignee, or vendor. Asset cannot be changed here."
-              : "Link a preventive task to an asset. Assignees get email and push reminders when due."}
-          </p>
-        </div>
+              : "Link a preventive task to an asset. Assignees get email and push when due."
+          }
+        />
       }
     >
       {assetsLoading ? (
         <p className="px-5 py-5 text-sm text-[var(--enterprise-text-muted)]">Loading assets…</p>
       ) : assets.length === 0 ? (
         <div className="px-5 py-5">
-          <div className="enterprise-alert-warning rounded-xl px-4 py-3 text-sm">
+          <div className="enterprise-alert-warning rounded-md px-4 py-3 text-sm">
             <p className="font-medium">No assets yet</p>
             <p className="mt-1 text-xs leading-relaxed opacity-90">
               Add equipment in the asset register before creating a PPM schedule.

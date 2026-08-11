@@ -27,15 +27,12 @@ function PricingPageInner() {
               <button
                 type="button"
                 onClick={() => goToFreeViewer("pricing_hero_open_viewer")}
-                className="inline-flex items-center gap-2 rounded-xl bg-[var(--landing-cta)] px-5 py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-[var(--landing-cta-bright)]"
+                className="landing-btn-primary"
               >
                 {t("openViewer")}
                 <ArrowRight className="h-4 w-4" aria-hidden />
               </button>
-              <Link
-                href="/sign-in"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-              >
+              <Link href="/sign-in" className="landing-btn-secondary">
                 {t("startTrial")}
               </Link>
             </div>

@@ -274,7 +274,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
       <div className="enterprise-card relative min-w-0 overflow-hidden p-3 sm:p-4">
         <div className="relative flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
           <div className="relative shrink-0">
-            <div className="relative rounded-lg bg-[var(--enterprise-surface)] p-0.5 shadow-sm ring-1 ring-[var(--enterprise-border)]/80">
+            <div className="relative rounded-lg bg-[var(--enterprise-surface)] p-0.5 ring-1 ring-[var(--enterprise-border)]/80">
               <ProjectLogo name={project.name} logoUrl={project.logoUrl} size={40} />
             </div>
           </div>
@@ -367,7 +367,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
             <Link
               key={s.label}
               href={s.href}
-              className="group inline-flex min-w-0 items-center gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/90 px-2 py-2 shadow-sm transition hover:border-[var(--enterprise-primary)]/28 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 sm:min-w-[7rem] sm:flex-1 sm:px-2.5 md:min-w-0 md:flex-none lg:min-w-[6.5rem] lg:flex-1"
+              className="group inline-flex min-w-0 items-center gap-2 rounded-lg border border-[var(--enterprise-border)]/90 bg-[var(--enterprise-surface)]/90 px-2 py-2 transition hover:border-[var(--enterprise-primary)]/28 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 sm:min-w-[7rem] sm:flex-1 sm:px-2.5 md:min-w-0 md:flex-none lg:min-w-[6.5rem] lg:flex-1"
             >
               <span
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${s.iconWrap}`}
@@ -401,7 +401,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
           <button
             type="button"
             onClick={() => setEditOpen(true)}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-[12px] font-semibold text-[var(--enterprise-primary)] shadow-sm transition hover:bg-[var(--enterprise-hover-surface)]"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-[12px] font-semibold text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-hover-surface)]"
           >
             <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
             Edit location
@@ -425,17 +425,17 @@ export function ProjectDashboardClient({ projectId }: Props) {
                   zoom={14}
                 />
               </div>
-              <div className="flex flex-col justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 p-4 lg:col-span-2">
+              <div className="flex flex-col justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 p-4 lg:col-span-2">
                 <ProjectWeatherAtLocation latitude={mapCoords.lat} longitude={mapCoords.lng} />
               </div>
             </div>
           </div>
         ) : (locationText && !savedCoords && projectMetaPending) || geocodePending ? (
-          <div className="mt-4 flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
+          <div className="mt-4 flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
             <p className="text-sm text-[var(--enterprise-text-muted)]">Loading map and weather…</p>
           </div>
         ) : locationText && !savedCoords && !geocodePending ? (
-          <div className="mt-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
+          <div className="mt-4 flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
             <MapPin
               className="h-10 w-10 text-[var(--enterprise-text-muted)]"
               strokeWidth={1.25}
@@ -454,7 +454,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
             </button>
           </div>
         ) : (
-          <div className="mt-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
+          <div className="mt-4 flex flex-col items-center justify-center gap-3 rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-10 text-center">
             <MapPin
               className="h-10 w-10 text-[var(--enterprise-text-muted)]"
               strokeWidth={1.25}
@@ -505,7 +505,7 @@ export function ProjectDashboardClient({ projectId }: Props) {
           </div>
           <div className="mt-4 flex min-h-0 flex-1 flex-col">
             {projectDashPending && !projectDash ? (
-              <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 text-sm text-[var(--enterprise-text-muted)]">
+              <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/80 text-sm text-[var(--enterprise-text-muted)]">
                 Loading activity…
               </div>
             ) : (
@@ -544,10 +544,10 @@ export function ProjectDashboardClient({ projectId }: Props) {
             <button
               type="button"
               onClick={() => openFile(continueFile)}
-              className="mt-4 flex w-full min-w-0 flex-col items-stretch gap-2 rounded-xl border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-3 py-3 text-left transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-primary-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 sm:flex-row sm:items-center sm:gap-3 sm:px-4"
+              className="mt-4 flex w-full min-w-0 flex-col items-stretch gap-2 rounded-md border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] px-3 py-3 text-left transition hover:border-[var(--enterprise-primary)]/35 hover:bg-[var(--enterprise-primary-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/35 sm:flex-row sm:items-center sm:gap-3 sm:px-4"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-sm">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)]">
                   <Play className="h-5 w-5" fill="currentColor" aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1">

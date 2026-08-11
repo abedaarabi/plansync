@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, MapPin } from "lucide-react";
+import { ExternalLink, MapPin, MessageSquareText } from "lucide-react";
 import { toast } from "sonner";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { RfiRelatedIssuesPicker } from "@/components/enterprise/RfiRelatedIssuesPicker";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
@@ -194,36 +194,26 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
         },
       }}
       ariaLabelledBy="rfi-edit-title"
-      panelVariant="floating"
-      panelMaxWidthClass="max-w-[min(calc(100dvw-16px),520px)]"
-      panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
-      closeOnBackdrop={false}
-      closeOnEscape={false}
-      bodyClassName="px-5 py-5"
-      footerClassName="border-t border-[var(--enterprise-border)] px-5 py-3"
       header={
-        <div className="min-w-0">
-          <p className="font-mono text-xs font-semibold tabular-nums text-[var(--enterprise-text-muted)]">
-            {numLabel}
-          </p>
-          <h2
-            id="rfi-edit-title"
-            className="truncate text-lg font-semibold tracking-tight text-[var(--enterprise-text)]"
-          >
-            {title.trim() || "Edit RFI"}
-          </h2>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <SlideOverHeader
+          icon={MessageSquareText}
+          titleId="rfi-edit-title"
+          title={title.trim() || "Edit RFI"}
+          description={
+            <>
+              <span className="font-mono font-semibold tabular-nums">{numLabel}</span>
+              {" · Ball in court: "}
+              <span className="font-medium text-[var(--enterprise-text)]">{ballInCourt}</span>
+            </>
+          }
+          badge={
             <span
-              className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${rfiStatusBadgeClass(st)}`}
+              className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${rfiStatusBadgeClass(st)}`}
             >
               {RFI_STATUS_LABEL[st] ?? st.replace(/_/g, " ")}
             </span>
-            <span className="text-xs text-[var(--enterprise-text-muted)]">
-              Ball in court:{" "}
-              <span className="font-medium text-[var(--enterprise-text)]">{ballInCourt}</span>
-            </span>
-          </div>
-        </div>
+          }
+        />
       }
       footer={
         <div className="flex w-full flex-col gap-2">
@@ -297,7 +287,7 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
       <div className="space-y-4">
         {msg ? (
           <div
-            className="rounded-xl border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
+            className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
             role="alert"
           >
             {msg}

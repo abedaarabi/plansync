@@ -129,10 +129,10 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
               desktopCollapsed={false}
             />
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              <header className="flex h-[var(--enterprise-topbar-h)] shrink-0 items-center justify-between gap-3 border-b border-[var(--enterprise-border)]/80 bg-[color-mix(in_srgb,var(--enterprise-surface)_88%,transparent)] px-4 pt-[env(safe-area-inset-top,0px)] shadow-[0_1px_0_0_rgba(255,255,255,0.72)_inset] backdrop-blur-xl sm:px-6">
+              <header className="enterprise-topbar flex h-[var(--enterprise-topbar-h)] shrink-0 items-center justify-between gap-3 px-4 pt-[env(safe-area-inset-top,0px)] sm:px-5">
                 <Link
                   href="/projects"
-                  className="select-none text-[17px] font-bold tracking-tight text-[var(--enterprise-text)] lg:text-[15px]"
+                  className="select-none text-[15px] font-semibold tracking-tight text-[var(--enterprise-text)]"
                 >
                   Plan<span style={{ color: DEFAULT_ENTERPRISE_PRIMARY_HEX }}>Sync</span>
                 </Link>
@@ -163,7 +163,7 @@ export function EnterpriseShell({ children }: { children: React.ReactNode }) {
               onCloseMobile={closeMobileNav}
               desktopCollapsed={desktopSidebarCollapsed}
             />
-            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:border-l lg:border-[var(--enterprise-border-subtle)]/80 lg:shadow-[var(--enterprise-shadow-inner)]">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <EnterpriseTopBar
                 onOpenCommandPalette={openPalette}
                 onToggleMobileNav={toggleMobileNav}

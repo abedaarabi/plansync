@@ -9,7 +9,12 @@ import { logoUrlFromWebsiteInput } from "@/lib/websiteUrl";
 import { PROJECT_STAGES, type ProjectStageValue } from "@/lib/projectStage";
 import type { ProjectCurrencyCode } from "@/lib/projectCurrency";
 import type { ProjectMeasurementSystem } from "@/lib/projectMeasurement";
-import { EnterpriseSlideOver } from "./EnterpriseSlideOver";
+import {
+  EnterpriseSlideOver,
+  SlideOverHeader,
+  SLIDE_OVER_BTN_PRIMARY,
+  SLIDE_OVER_BTN_SECONDARY,
+} from "./EnterpriseSlideOver";
 import { ProjectCurrencyPicker } from "./ProjectCurrencyPicker";
 import { ProjectMeasurementSystemPicker } from "./ProjectMeasurementSystemPicker";
 import { ProjectTypeSelect } from "./ProjectTypeSelect";
@@ -57,12 +62,12 @@ const FLOW_STEPS = [
 ] as const;
 
 const inputClass =
-  "mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] placeholder:text-[var(--enterprise-text-muted)]/75 transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20";
+  "mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)]  placeholder:text-[var(--enterprise-text-muted)]/75 transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20";
 
 const labelClass = "block text-[13px] font-medium text-[var(--enterprise-text-muted)]";
 
 const sectionCard =
-  "rounded-2xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5 shadow-[var(--enterprise-shadow-xs)] sm:p-6";
+  "rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-5  sm:p-6";
 
 function SectionHeader({
   step,
@@ -78,7 +83,7 @@ function SectionHeader({
   return (
     <div className="mb-5 flex gap-4">
       <div
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-primary)]/35 bg-[var(--enterprise-primary-soft)] text-base font-bold text-[var(--enterprise-primary)]"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-primary)]/35 bg-[var(--enterprise-primary-soft)] text-base font-bold text-[var(--enterprise-primary)]"
         aria-hidden
       >
         {step}
@@ -133,43 +138,24 @@ export function NewProjectDialog({
       closeOnEscape={false}
       showHeaderCloseButton
       header={
-        <div className="flex items-start gap-4 pr-1">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-xs)]">
-            <Building2 className="h-6 w-6 text-[var(--enterprise-primary)]" strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0">
-            <h2
-              id="new-project-dialog-title"
-              className="text-xl font-bold tracking-tight text-[var(--enterprise-text)]"
-            >
-              New project
-            </h2>
-            <p className="mt-0.5 text-[13px] leading-snug text-[var(--enterprise-text-muted)]">
-              Work through the three steps: essentials first, then details, then optional folders.
-              You can change almost everything later in project settings.
-            </p>
-          </div>
-        </div>
+        <SlideOverHeader
+          icon={Building2}
+          titleId="new-project-dialog-title"
+          title="New project"
+          description="Essentials, details, then optional folders. Most fields can be edited later."
+        />
       }
       footer={
         <>
-          <p className="mr-auto hidden max-w-md text-[12px] leading-snug text-[var(--enterprise-text-muted)] sm:block">
+          <p className="mr-auto hidden max-w-md text-xs leading-snug text-[var(--enterprise-text-muted)] sm:block">
             <span className="font-medium text-[var(--enterprise-text)]">Tip:</span> Folder templates
             and copy-from apply only at creation — you can still rename folders anytime.
           </p>
-          <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="rounded-lg px-5 py-2.5 text-sm font-semibold text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
-            >
+          <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
+            <button type="button" onClick={onCancel} className={SLIDE_OVER_BTN_SECONDARY}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-[var(--enterprise-primary)] px-6 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-[var(--enterprise-primary-deep)] hover:shadow-lg disabled:opacity-60"
-            >
+            <button type="submit" disabled={saving} className={SLIDE_OVER_BTN_PRIMARY}>
               {saving ? "Creating…" : submitLabel}
             </button>
           </div>
@@ -182,9 +168,9 @@ export function NewProjectDialog({
             <div
               key={s.n}
               role="listitem"
-              className="flex gap-3 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-3 py-3 sm:flex-col sm:px-4 sm:py-4"
+              className="flex gap-3 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-3 py-3 sm:flex-col sm:px-4 sm:py-4"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] text-sm font-bold text-white shadow-sm">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] text-sm font-bold text-white">
                 {s.n}
               </div>
               <div className="min-w-0">
@@ -253,7 +239,7 @@ export function NewProjectDialog({
               </div>
             </div>
 
-            <div className="rounded-xl border border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/35 p-4 sm:p-5">
+            <div className="rounded-md border border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/35 p-4 sm:p-5">
               <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
                 Currency &amp; units
               </p>
@@ -373,7 +359,7 @@ export function NewProjectDialog({
                   autoComplete="off"
                 />
                 {websiteLogoPreview ? (
-                  <div className="flex shrink-0 items-center gap-2.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 shadow-[var(--enterprise-shadow-xs)]">
+                  <div className="flex shrink-0 items-center gap-2.5 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 ">
                     <span className="text-[11px] font-medium text-[var(--enterprise-text-muted)]">
                       Logo
                     </span>
@@ -445,7 +431,7 @@ export function NewProjectDialog({
           />
 
           <div className="space-y-3">
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-transparent p-2 transition hover:bg-[var(--enterprise-bg)]/60">
+            <label className="flex cursor-pointer items-start gap-3 rounded-md border border-transparent p-2 transition hover:bg-[var(--enterprise-bg)]/60">
               <input
                 type="radio"
                 name="new-project-ifs"
@@ -462,7 +448,7 @@ export function NewProjectDialog({
             </label>
 
             <label
-              className={`flex cursor-pointer items-start gap-3 rounded-xl border border-transparent p-2 transition hover:bg-[var(--enterprise-bg)]/60 ${!canUseTemplate ? "cursor-not-allowed opacity-60" : ""}`}
+              className={`flex cursor-pointer items-start gap-3 rounded-md border border-transparent p-2 transition hover:bg-[var(--enterprise-bg)]/60 ${!canUseTemplate ? "cursor-not-allowed opacity-60" : ""}`}
             >
               <input
                 type="radio"
@@ -488,7 +474,7 @@ export function NewProjectDialog({
             </label>
 
             <label
-              className={`flex cursor-pointer items-start gap-3 rounded-xl border border-transparent p-2 transition hover:bg-[var(--enterprise-bg)]/60 ${!canCopyFromProject ? "cursor-not-allowed opacity-60" : ""}`}
+              className={`flex cursor-pointer items-start gap-3 rounded-md border border-transparent p-2 transition hover:bg-[var(--enterprise-bg)]/60 ${!canCopyFromProject ? "cursor-not-allowed opacity-60" : ""}`}
             >
               <input
                 type="radio"
@@ -519,7 +505,7 @@ export function NewProjectDialog({
               {templates.map((t) => (
                 <label
                   key={t.id}
-                  className={`flex cursor-pointer flex-col rounded-xl border px-3 py-3 transition ${
+                  className={`flex cursor-pointer flex-col rounded-md border px-3 py-3 transition ${
                     values.folderTemplateId === t.id
                       ? "border-[var(--enterprise-primary)] bg-[var(--enterprise-primary-soft)] ring-1 ring-[var(--enterprise-primary)]/25"
                       : "border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] hover:border-slate-300"

@@ -255,7 +255,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
         <div className="border-b border-[var(--enterprise-border)] bg-[linear-gradient(135deg,var(--enterprise-primary-soft),transparent_55%)] px-4 py-5 sm:px-6">
           <div className="flex flex-wrap items-start gap-4">
             <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] shadow-[var(--enterprise-shadow-xs)] ring-1 ring-[var(--enterprise-border)]"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[var(--enterprise-surface)] text-[var(--enterprise-primary)] ring-1 ring-[var(--enterprise-border)]"
               aria-hidden
             >
               <Building2 className="h-6 w-6" strokeWidth={1.75} />
@@ -319,7 +319,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
           </p>
         ) : (
           <>
-            <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 px-3.5 py-3">
+            <div className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/60 px-3.5 py-3">
               <p className="text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
                 <span className="font-medium text-[var(--enterprise-text)]">
                   Data center profile
@@ -459,7 +459,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
           </button>
         </div>
 
-        <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 p-3">
+        <div className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 p-3">
           <p className="mb-2 text-xs font-medium text-[var(--enterprise-text-muted)]">
             Scopes — leave empty for full project access
           </p>
@@ -496,7 +496,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
             apiKeysQuery.data.items.map((k) => (
               <div
                 key={k.id}
-                className="flex flex-col gap-2 rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3.5 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-3.5 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-[var(--enterprise-text)]">
@@ -536,7 +536,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
               </div>
             ))
           ) : !apiKeysQuery.isLoading ? (
-            <p className="rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-6 text-center text-xs text-[var(--enterprise-text-muted)]">
+            <p className="rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-6 text-center text-xs text-[var(--enterprise-text-muted)]">
               No API keys yet. Create one to connect external tools.
             </p>
           ) : null}
@@ -595,7 +595,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
             webhooksQuery.data.items.map((w) => (
               <div
                 key={w.id}
-                className="flex flex-col gap-2 rounded-xl border border-[var(--enterprise-border)] p-3.5 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-md border border-[var(--enterprise-border)] p-3.5 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -640,7 +640,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
               </div>
             ))
           ) : (
-            <p className="rounded-xl border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-6 text-center text-xs text-[var(--enterprise-text-muted)]">
+            <p className="rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-4 py-6 text-center text-xs text-[var(--enterprise-text-muted)]">
               No webhooks configured yet.
             </p>
           )}
@@ -711,7 +711,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
         ) : null}
 
         {om ? (
-          <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-3.5 py-3">
+          <div className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 px-3.5 py-3">
             <p className="text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
               Existing issues stay in this project and are listed under{" "}
               <strong className="font-semibold text-[var(--enterprise-text)]">
@@ -759,7 +759,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
             {m.omTenantPortal ? (
               <>
                 <OccupantPortalLinksSettings projectId={projectId} />
-                <div className="rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-3.5 py-3">
+                <div className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/40 px-3.5 py-3">
                   <label className="block text-sm font-medium text-[var(--enterprise-text)]">
                     Occupant page headline
                   </label>

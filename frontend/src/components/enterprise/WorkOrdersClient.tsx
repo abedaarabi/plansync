@@ -29,7 +29,7 @@ import { WorkOrdersBoard } from "@/components/enterprise/WorkOrdersBoard";
 import { WorkOrdersOverview } from "@/components/enterprise/WorkOrdersOverview";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   deleteOmWorkspaceWorkOrderTemplate,
@@ -609,34 +609,19 @@ export function WorkOrdersClient({ projectId }: Props) {
       <EnterpriseSlideOver
         open={templateLibOpen}
         onClose={() => setTemplateLibOpen(false)}
-        panelVariant="floating"
-        panelMaxWidthClass="max-w-[min(calc(100dvw-16px),420px)]"
-        panelChromeClassName="border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-[var(--enterprise-shadow-floating)]"
         closeOnBackdrop={false}
         closeOnEscape={false}
         ariaLabelledBy="wo-proc-lib-title"
-        bodyClassName="px-3 py-3"
-        footerClassName="border-t border-[var(--enterprise-border)] px-4 py-3"
         header={
-          <div className="min-w-0">
-            <h2
-              id="wo-proc-lib-title"
-              className="text-lg font-semibold text-[var(--enterprise-text)]"
-            >
-              Company procedures
-            </h2>
-            <p className="mt-0.5 text-xs text-[var(--enterprise-text-muted)]">
-              Shared checklists for corrective work. Apply when creating a work order.
-            </p>
-          </div>
+          <SlideOverHeader
+            icon={Library}
+            titleId="wo-proc-lib-title"
+            title="Company procedures"
+            description="Shared checklists for corrective work. Apply when creating a work order."
+          />
         }
         footer={
-          <EnterpriseButton
-            variant="secondary"
-            size="lg"
-            fullWidth
-            onClick={() => setTemplateLibOpen(false)}
-          >
+          <EnterpriseButton variant="secondary" size="sm" onClick={() => setTemplateLibOpen(false)}>
             Done
           </EnterpriseButton>
         }

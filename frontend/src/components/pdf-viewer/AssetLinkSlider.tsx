@@ -146,7 +146,7 @@ export function AssetLinkSlider({ onClose }: Props) {
         <button
           type="button"
           aria-label="Close asset link"
-          className="absolute inset-0 bg-slate-950/60 backdrop-blur-[3px] transition hover:bg-slate-950/70"
+          className="absolute inset-0 bg-slate-950/55 transition hover:bg-slate-950/65"
           onClick={onCancel}
           onMouseDown={(e) => e.preventDefault()}
         />
@@ -154,29 +154,26 @@ export function AssetLinkSlider({ onClose }: Props) {
           role="dialog"
           aria-modal
           aria-labelledby="asset-link-title"
-          className="absolute right-0 top-0 flex h-full w-full min-w-0 max-w-[min(480px,calc(100dvw-1rem))] flex-col overflow-x-hidden border-l border-slate-700/80 bg-slate-950 shadow-[-16px_0_48px_-12px_rgba(0,0,0,0.55)]"
+          className="absolute right-0 top-0 flex h-full w-full min-w-0 max-w-[min(420px,calc(100dvw-1rem))] flex-col overflow-x-hidden border-l border-slate-700/80 bg-slate-950 shadow-none"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-800/90 bg-slate-950 px-5 py-3.5">
-            <div className="min-w-0 space-y-0.5 pr-2">
-              <h2
-                id="asset-link-title"
-                className="text-[15px] font-semibold tracking-tight text-white"
-              >
+          <header className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-800/90 bg-slate-950 px-4 py-3">
+            <div className="min-w-0 space-y-0.5 pr-1">
+              <h2 id="asset-link-title" className="text-sm font-semibold tracking-tight text-white">
                 Link asset to sheet
               </h2>
-              <p className="text-[11px] leading-relaxed text-slate-500">
-                Save this pin so the equipment register opens the right drawing and location.
+              <p className="text-[11px] leading-snug text-slate-500">
+                Pin equipment so the register opens the right drawing and location.
               </p>
             </div>
             <button
               type="button"
               onClick={onCancel}
               disabled={saveMut.isPending}
-              className="viewer-focus-ring shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40"
+              className="viewer-focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40"
               aria-label="Close"
             >
-              <X className="h-4 w-4" strokeWidth={2} />
+              <X className="h-4 w-4" strokeWidth={1.75} />
             </button>
           </header>
 
