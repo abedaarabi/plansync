@@ -761,6 +761,7 @@ export function OmAssetsClient({ projectId }: Props) {
               pdfFiles={pdfFiles}
               drawingSearch={editDrawingSearch}
               onDrawingSearchChange={setEditDrawingSearch}
+              levelName={editingAsset.levelName}
               imageField={{
                 assetId: editingAsset.id,
                 hasExistingImage: editingAsset.hasImage,

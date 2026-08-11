@@ -192,6 +192,8 @@ type Props = {
   pdfFiles: CloudFile[];
   drawingSearch: string;
   onDrawingSearchChange: (q: string) => void;
+  /** Resolved building level name when asset is linked to a level. */
+  levelName?: string | null;
   imageField?: {
     assetId?: string;
     hasExistingImage?: boolean;
@@ -207,6 +209,7 @@ export function OmAssetFormFields({
   draft,
   onChange,
   formKey,
+  levelName,
   projectId,
   pdfFiles,
   drawingSearch,
@@ -308,8 +311,14 @@ export function OmAssetFormFields({
 
       <FormSection
         title="Location"
-        description="Use a free-text label and/or structured hall / row / rack fields."
+        description="Use a free-text label and/or structured hall / row / rack fields. Linking a drawing assigned to a building level sets the level automatically."
       >
+        {levelName ? (
+          <p className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] sm:col-span-2">
+            <span className="font-medium text-[var(--enterprise-text-muted)]">Level · </span>
+            {levelName}
+          </p>
+        ) : null}
         <label className="block text-sm sm:col-span-2">
           <span className={label}>Location label</span>
           <input

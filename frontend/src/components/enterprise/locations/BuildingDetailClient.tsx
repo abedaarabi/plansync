@@ -7,6 +7,7 @@ import {
   Crosshair,
   FileText,
   FolderOpen,
+  Layers,
   PanelsTopLeft,
   Pencil,
   Plus,
@@ -46,10 +47,14 @@ import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 import { EnterpriseLoadingState } from "../EnterpriseLoadingState";
 import { useEnterpriseWorkspace } from "../EnterpriseWorkspaceContext";
+import { OmEmptyState } from "../OmEmptyState";
+import { OmSubPageHeader } from "../OmSubPageHeader";
 import { PlanUpgradeCallout } from "../PlanUpgradeCallout";
 import { BimPipelineProgress } from "../BimPipelineProgress";
 import { BuildingClashHealth } from "./BuildingClashHealth";
+import { BuildingDetailStats } from "./BuildingDetailStats";
 import { BuildingFilesList } from "./BuildingFilesList";
+import { BuildingLevelsSection } from "./BuildingLevelsSection";
 import { BuildingPublishChecklist } from "./BuildingPublishChecklist";
 import { BuildingPublishDialog } from "./BuildingPublishDialog";
 import { DeleteBuildingAssetDialog } from "./DeleteBuildingAssetDialog";
@@ -88,7 +93,7 @@ const BTN_PRIMARY =
 const BTN_WARNING =
   "mobile-touch-target inline-flex items-center gap-1.5 rounded-md border border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] px-3 py-1.5 text-sm font-medium text-[var(--enterprise-semantic-warning-text)] transition hover:opacity-90";
 
-type BuildingTab = "overview" | "clashes";
+type BuildingTab = "overview" | "levels" | "clashes";
 
 // fallow-ignore-next-line complexity
 export function BuildingDetailClient({ projectId, locationId, buildingId, workspaceId }: Props) {
@@ -110,6 +115,7 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
   });
   const assets = useMemo(() => assetsData?.assets ?? [], [assetsData]);
   const ifcAssets = useMemo(() => assets.filter((a) => a.type === "IFC"), [assets]);
+  const pdfAssets = useMemo(() => assets.filter((a) => a.type === "PDF"), [assets]);
   const readyIfc = useMemo(() => ifcAssets.filter((a) => a.status === "READY"), [ifcAssets]);
   const processingIfc = useMemo(
     () => ifcAssets.filter((a) => a.status === "PENDING" || a.status === "PROCESSING"),
@@ -190,7 +196,6 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
       panel?: string | null;
       testId?: string | null;
       clashId?: string | null;
-      /** Prefer these file version ids when opening a specific clash/test. */
       partnerFileVersionIds?: string[];
     },
   ) => {
@@ -209,7 +214,6 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
         .map((fv) => byFv.get(fv))
         .filter((a): a is BuildingAsset => Boolean(a));
       if (partnerAssets.length > 0) {
-        // Keep any already-selected extras that aren't the pair.
         const extra = chosen.filter((a) => a.fileVersionId && !partners.includes(a.fileVersionId));
         chosen = [...partnerAssets, ...extra];
       }
@@ -297,6 +301,10 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
   });
   const openClashCount = clashSummary?.openCount ?? 0;
 
+  useEffect(() => {
+    if (!showClashHub && activeTab === "clashes") setActiveTab("overview");
+  }, [showClashHub, activeTab]);
+
   const confirmDeleteAsset = () => {
     if (!assetToDelete) return;
     const name = assetToDelete.fileName;
@@ -315,159 +323,127 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
     return <EnterpriseLoadingState label="Loading building…" />;
   }
 
-  if (!isProPlus) {
-    return (
-      <PlanUpgradeCallout
-        feature="BIM & clash detection"
-        detail="Upgrade to Pro to upload IFC models, publish buildings, and run clash detection."
-      />
-    );
-  }
-
   const isReady = publishStatus === "ready";
   const needsUpdate = publishStatus === "needs_update";
   const canPublish = canPublishBuilding(checklist);
-
-  const metaParts = [
-    `${levels.length} level${levels.length === 1 ? "" : "s"}`,
-    `${assets.length} file${assets.length === 1 ? "" : "s"}`,
-  ];
-  if (unmapped.length > 0) {
-    metaParts.push(`${unmapped.length} unmapped`);
-  }
+  const hasIfc = ifcAssets.length > 0;
+  const mappedLevelCount = levels.filter((l) => l.mappedDrawingCount > 0).length;
 
   const identityParts = [
     buildingTypeLabel(building?.buildingType),
     building?.floorsApprox != null ? `~${building.floorsApprox} floors` : null,
+    building?.code ? building.code : null,
   ].filter(Boolean);
 
-  const statusLine = isReady
-    ? "Published — open 3D or edit mappings anytime."
-    : needsUpdate
-      ? "Mappings changed since last publish."
-      : "Upload an IFC, match drawings, then publish.";
+  const statusLine = !isProPlus
+    ? "Create levels and assign PDF drawings. Upgrade to Pro for IFC and 3D."
+    : isReady
+      ? "Published — open 3D or edit mappings anytime."
+      : needsUpdate
+        ? "Mappings changed since last publish."
+        : hasIfc
+          ? "Upload an IFC, match drawings, then publish."
+          : "Create levels and assign PDFs, or upload an IFC for 3D.";
+
+  const headerDescription = (
+    <span className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <span
+          className={`${statusBadgeClass(publishStatus)} inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold`}
+        >
+          {buildingStatusLabel(publishStatus)}
+        </span>
+        {openClashCount > 0 ? (
+          <button
+            type="button"
+            className="enterprise-badge-warning inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold transition hover:opacity-90"
+            onClick={() => setActiveTab("clashes")}
+          >
+            {openClashCount} open clash{openClashCount === 1 ? "" : "es"}
+          </button>
+        ) : null}
+      </span>
+      <span className="hidden text-[var(--enterprise-border-strong,var(--enterprise-border))] sm:inline">
+        ·
+      </span>
+      <span>
+        {identityParts.length > 0 ? `${identityParts.join(" · ")} · ` : ""}
+        {statusLine}
+      </span>
+    </span>
+  );
+
+  const headerActions =
+    assets.length > 0 ? (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button type="button" className={BTN_GHOST} onClick={() => setBrowserOpen(true)}>
+          <Upload className="h-3.5 w-3.5" aria-hidden />
+          Add files
+        </button>
+        {primaryReadyIfc && (isReady || needsUpdate) ? (
+          <>
+            <button type="button" className={BTN_SECONDARY} onClick={() => openWorkspace("edit")}>
+              <Pencil className="h-3.5 w-3.5" aria-hidden />
+              Edit mappings
+            </button>
+            <button type="button" className={BTN_PRIMARY} onClick={() => openWorkspace("view")}>
+              <PanelsTopLeft className="h-3.5 w-3.5" aria-hidden />
+              {selectedReadyIfc.length >= 2
+                ? `Open federated (${selectedReadyIfc.length})`
+                : "Open 3D"}
+            </button>
+          </>
+        ) : primaryReadyIfc ? (
+          <>
+            <button type="button" className={BTN_SECONDARY} onClick={() => openWorkspace("edit")}>
+              <Pencil className="h-3.5 w-3.5" aria-hidden />
+              Continue setup
+            </button>
+            <button
+              type="button"
+              className={BTN_PRIMARY}
+              disabled={!canPublish}
+              onClick={() => setPublishOpen(true)}
+            >
+              <Rocket className="h-3.5 w-3.5" aria-hidden />
+              Publish
+            </button>
+          </>
+        ) : null}
+        {needsUpdate && primaryReadyIfc ? (
+          <button type="button" className={BTN_WARNING} onClick={() => setPublishOpen(true)}>
+            <Rocket className="h-3.5 w-3.5" aria-hidden />
+            Publish update
+          </button>
+        ) : null}
+      </div>
+    ) : undefined;
+
+  const tabs = [
+    { id: "overview" as const, label: "Overview", icon: FolderOpen },
+    { id: "levels" as const, label: "Levels", icon: Layers, count: levels.length },
+    ...(showClashHub
+      ? [{ id: "clashes" as const, label: "Clashes", icon: Crosshair, count: openClashCount }]
+      : []),
+  ] as const;
 
   return (
     <div className="enterprise-animate-in space-y-4 pb-8">
-      <header className="mb-1 flex flex-col gap-3 border-b border-[var(--enterprise-border)] pb-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <div
-            className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]"
-            aria-hidden
-          >
-            <Building2 className="h-4 w-4 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0">
-            <p className="enterprise-type-label">Building</p>
-            <div className="mt-0.5 flex flex-wrap items-center gap-2">
-              <h1 className="enterprise-type-title truncate">{building?.name}</h1>
-              {building?.code ? (
-                <span className="enterprise-badge-neutral rounded px-1.5 py-0.5 text-xs font-semibold">
-                  {building.code}
-                </span>
-              ) : null}
-              <span
-                className={`${statusBadgeClass(publishStatus)} inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold`}
-              >
-                {buildingStatusLabel(publishStatus)}
-              </span>
-              {openClashCount > 0 ? (
-                <button
-                  type="button"
-                  className="enterprise-badge-warning inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold transition hover:opacity-90"
-                  onClick={() => setActiveTab("clashes")}
-                >
-                  {openClashCount} open clash{openClashCount === 1 ? "" : "es"}
-                </button>
-              ) : null}
-            </div>
-            <p className="enterprise-type-subtitle mt-1">
-              {identityParts.length > 0 ? `${identityParts.join(" · ")} · ` : ""}
-              {statusLine}
-            </p>
-            {assets.length > 0 ? (
-              <p className="enterprise-type-caption mt-1">{metaParts.join(" · ")}</p>
-            ) : null}
-          </div>
-        </div>
+      <OmSubPageHeader
+        icon={Building2}
+        title={building?.name ?? "Building"}
+        description={headerDescription}
+        action={headerActions}
+      />
 
-        {assets.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-            <button type="button" className={BTN_GHOST} onClick={() => setBrowserOpen(true)}>
-              <Upload className="h-3.5 w-3.5" aria-hidden />
-              Add files
-            </button>
-            {primaryReadyIfc && (isReady || needsUpdate) ? (
-              <>
-                <button
-                  type="button"
-                  className={BTN_SECONDARY}
-                  onClick={() => openWorkspace("edit")}
-                >
-                  <Pencil className="h-3.5 w-3.5" aria-hidden />
-                  Edit mappings
-                </button>
-                <button type="button" className={BTN_PRIMARY} onClick={() => openWorkspace("view")}>
-                  <PanelsTopLeft className="h-3.5 w-3.5" aria-hidden />
-                  {selectedReadyIfc.length >= 2
-                    ? `Open federated (${selectedReadyIfc.length})`
-                    : "Open 3D"}
-                </button>
-              </>
-            ) : primaryReadyIfc ? (
-              <>
-                <button
-                  type="button"
-                  className={BTN_SECONDARY}
-                  onClick={() => openWorkspace("edit")}
-                >
-                  <Pencil className="h-3.5 w-3.5" aria-hidden />
-                  Continue setup
-                </button>
-                <button
-                  type="button"
-                  className={BTN_PRIMARY}
-                  disabled={!canPublish}
-                  onClick={() => setPublishOpen(true)}
-                >
-                  <Rocket className="h-3.5 w-3.5" aria-hidden />
-                  Publish
-                </button>
-              </>
-            ) : null}
-            {needsUpdate && primaryReadyIfc ? (
-              <button type="button" className={BTN_WARNING} onClick={() => setPublishOpen(true)}>
-                <Rocket className="h-3.5 w-3.5" aria-hidden />
-                Publish update
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </header>
+      {!isProPlus && hasIfc ? (
+        <PlanUpgradeCallout
+          feature="BIM & clash detection"
+          detail="Upgrade to Pro to process IFC models, publish buildings, and run clash detection. PDF levels still work on your current plan."
+        />
+      ) : null}
 
-      {assets.length === 0 ? (
-        <div className="enterprise-card flex flex-col items-center gap-3 px-5 py-10 text-center">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
-            <Upload
-              className="h-4 w-4 text-[var(--enterprise-text-muted)]"
-              strokeWidth={1.75}
-              aria-hidden
-            />
-          </div>
-          <div className="max-w-sm space-y-1.5">
-            <h2 className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]">
-              Add your first files
-            </h2>
-            <p className="enterprise-type-subtitle text-[0.9375rem] leading-relaxed">
-              Upload an IFC model and PDF drawings. Setup opens when the model is ready.
-            </p>
-          </div>
-          <button type="button" className={BTN_PRIMARY} onClick={() => setBrowserOpen(true)}>
-            <Plus className="h-3.5 w-3.5" aria-hidden />
-            Add files
-          </button>
-        </div>
-      ) : processingIfc.length > 0 ? (
+      {processingIfc.length > 0 && isProPlus ? (
         <div className="space-y-3">
           {processingIfc.map((asset) => {
             const job = asset.fileVersionId ? jobs[asset.fileVersionId] : undefined;
@@ -490,71 +466,111 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
         </div>
       ) : (
         <>
-          {showClashHub ? (
-            <nav
-              aria-label="Building sections"
-              role="tablist"
-              className="grid w-full grid-cols-2 gap-0.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] p-0.5"
-            >
-              {(
-                [
-                  { id: "overview" as const, label: "Overview", icon: FolderOpen },
-                  { id: "clashes" as const, label: "Clashes", icon: Crosshair },
-                ] as const
-              ).map((tab) => {
-                const active = activeTab === tab.id;
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    id={`building-tab-${tab.id}`}
-                    aria-controls={`building-panel-${tab.id}`}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={
-                      active
-                        ? "flex min-h-10 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold text-white transition-colors duration-150"
-                        : "flex min-h-10 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold text-[var(--enterprise-text-muted)] transition-colors duration-150 hover:bg-[var(--enterprise-surface)] hover:text-[var(--enterprise-text)]"
-                    }
-                    style={active ? { backgroundColor: "var(--enterprise-primary)" } : undefined}
-                  >
-                    <Icon
-                      className={`h-3.5 w-3.5 shrink-0 ${active ? "text-white" : "opacity-70"}`}
-                      strokeWidth={active ? 2 : 1.75}
-                      aria-hidden
-                    />
-                    <span>{tab.label}</span>
-                    {tab.id === "clashes" && openClashCount > 0 ? (
-                      <span
-                        className={`rounded-md px-1.5 py-px text-xs font-bold tabular-nums ${
-                          active
-                            ? "bg-white/20 text-white"
-                            : "bg-[var(--enterprise-semantic-warning-bg)] text-[var(--enterprise-semantic-warning-text)]"
-                        }`}
-                      >
-                        {openClashCount}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </nav>
-          ) : null}
+          {(assets.length > 0 || levels.length > 0) && (
+            <BuildingDetailStats
+              ifcCount={ifcAssets.length}
+              readyIfcCount={readyIfc.length}
+              pdfCount={pdfAssets.length}
+              unmappedPdfCount={unmapped.length}
+              levelCount={levels.length}
+              mappedLevelCount={mappedLevelCount}
+              openClashCount={openClashCount}
+              publishStatus={publishStatus}
+              showClashes={showClashHub}
+              onSelectTab={setActiveTab}
+            />
+          )}
 
-          {(!showClashHub || activeTab === "overview") && (
+          <nav
+            aria-label="Building sections"
+            role="tablist"
+            className={`grid w-full gap-0.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-0.5 ${
+              showClashHub ? "grid-cols-3" : "grid-cols-2"
+            }`}
+          >
+            {tabs.map((tab) => {
+              const active = activeTab === tab.id;
+              const Icon = tab.icon;
+              const count = "count" in tab ? tab.count : undefined;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  id={`building-tab-${tab.id}`}
+                  aria-controls={`building-panel-${tab.id}`}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={
+                    active
+                      ? "flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-[var(--enterprise-primary-soft)] px-3 py-2 text-xs font-semibold text-[var(--enterprise-primary)] transition-colors duration-150"
+                      : "flex min-h-10 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold text-[var(--enterprise-text-muted)] transition-colors duration-150 hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)]"
+                  }
+                >
+                  <Icon
+                    className={`h-3.5 w-3.5 shrink-0 ${active ? "" : "opacity-70"}`}
+                    strokeWidth={active ? 2 : 1.75}
+                    aria-hidden
+                  />
+                  <span>{tab.label}</span>
+                  {count != null && count > 0 ? (
+                    <span
+                      className={`rounded-md px-1.5 py-px text-xs font-bold tabular-nums ${
+                        active
+                          ? "bg-[var(--enterprise-primary)]/15 text-[var(--enterprise-primary)]"
+                          : tab.id === "clashes"
+                            ? "bg-[var(--enterprise-semantic-warning-bg)] text-[var(--enterprise-semantic-warning-text)]"
+                            : "bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </nav>
+
+          {activeTab === "overview" ? (
             <div
               id="building-panel-overview"
-              role={showClashHub ? "tabpanel" : undefined}
-              aria-labelledby={showClashHub ? "building-tab-overview" : undefined}
+              role="tabpanel"
+              aria-labelledby="building-tab-overview"
               className="space-y-4"
             >
+              {assets.length === 0 ? (
+                <OmEmptyState
+                  icon={Upload}
+                  title="Set up this building"
+                  description="Upload PDF drawings, create levels on the Levels tab, or add an IFC model for 3D (Pro)."
+                  action={
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        className={BTN_PRIMARY}
+                        onClick={() => setBrowserOpen(true)}
+                      >
+                        <Plus className="h-3.5 w-3.5" aria-hidden />
+                        Add files
+                      </button>
+                      <button
+                        type="button"
+                        className={BTN_SECONDARY}
+                        onClick={() => setActiveTab("levels")}
+                      >
+                        <Layers className="h-3.5 w-3.5" aria-hidden />
+                        Go to Levels
+                      </button>
+                    </div>
+                  }
+                />
+              ) : null}
+
               {primaryReadyIfc ? (
                 <section className="enterprise-card space-y-3 p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <div>
-                      <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
+                      <h2 className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]">
                         {isReady ? "Published checklist" : "Setup checklist"}
                       </h2>
                       <p className="mt-0.5 text-sm text-[var(--enterprise-text-muted)]">
@@ -577,40 +593,67 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
                 </section>
               ) : null}
 
-              <section className="space-y-2">
-                <div className="flex items-end justify-between gap-2">
-                  <div>
-                    <h2 className="text-base font-semibold text-[var(--enterprise-text)]">Files</h2>
-                    <p className="mt-0.5 text-sm text-[var(--enterprise-text-muted)]">
-                      {readyIfc.length > 1
-                        ? "Select models to open together, or click a matched PDF to edit its mapping."
-                        : readyIfc.length > 0
-                          ? "Click a matched PDF to edit its mapping."
-                          : "Upload an IFC model to unlock setup."}
-                    </p>
+              {assets.length > 0 ? (
+                <section className="space-y-2">
+                  <div className="flex items-end justify-between gap-2">
+                    <div>
+                      <h2 className="text-base font-semibold tracking-tight text-[var(--enterprise-text)]">
+                        Files
+                      </h2>
+                      <p className="mt-0.5 text-sm text-[var(--enterprise-text-muted)]">
+                        {readyIfc.length > 1
+                          ? "Select models to open together, or click a matched PDF to edit its mapping."
+                          : readyIfc.length > 0
+                            ? "Click a matched PDF to edit its mapping."
+                            : "Building PDFs and models. Assign PDFs on the Levels tab for issue linking."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={BTN_GHOST}
+                      onClick={() => setBrowserOpen(true)}
+                    >
+                      <Plus className="h-3.5 w-3.5" aria-hidden />
+                      Add
+                    </button>
                   </div>
-                  <button type="button" className={BTN_GHOST} onClick={() => setBrowserOpen(true)}>
-                    <Plus className="h-3.5 w-3.5" aria-hidden />
-                    Add
-                  </button>
-                </div>
-                <BuildingFilesList
-                  assets={assets}
-                  onDelete={setAssetToDelete}
-                  deletingId={deleteMut.isPending ? (assetToDelete?.id ?? null) : null}
-                  selectedIfcIds={selectedIfcIds}
-                  onToggleIfc={readyIfc.length > 1 ? toggleIfcSelection : undefined}
-                  onOpenPdf={primaryReadyIfc ? openPdfMapping : undefined}
-                />
-                {assets.every((a) => a.type !== "IFC") ? (
-                  <p className="flex items-start gap-1.5 text-xs text-[var(--enterprise-text-muted)]">
-                    <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                    Add an IFC model to extract levels and open the 3D workspace.
-                  </p>
-                ) : null}
-              </section>
+                  <BuildingFilesList
+                    assets={assets}
+                    onDelete={setAssetToDelete}
+                    deletingId={deleteMut.isPending ? (assetToDelete?.id ?? null) : null}
+                    selectedIfcIds={selectedIfcIds}
+                    onToggleIfc={readyIfc.length > 1 ? toggleIfcSelection : undefined}
+                    onOpenPdf={primaryReadyIfc ? openPdfMapping : undefined}
+                  />
+                  {assets.every((a) => a.type !== "IFC") ? (
+                    <p className="flex items-start gap-1.5 text-xs text-[var(--enterprise-text-muted)]">
+                      <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                      PDF-only setup: assign drawings on the Levels tab
+                      {isProPlus ? ", or add an IFC model for 3D." : "."}
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
             </div>
-          )}
+          ) : null}
+
+          {activeTab === "levels" ? (
+            <div
+              id="building-panel-levels"
+              role="tabpanel"
+              aria-labelledby="building-tab-levels"
+              className="space-y-4"
+            >
+              <BuildingLevelsSection
+                buildingId={buildingId}
+                locationId={locationId}
+                projectId={projectId}
+                levels={levels}
+                unmappedPdfs={unmapped}
+                pdfAssets={pdfAssets}
+              />
+            </div>
+          ) : null}
 
           {showClashHub && activeTab === "clashes" ? (
             <div id="building-panel-clashes" role="tabpanel" aria-labelledby="building-tab-clashes">

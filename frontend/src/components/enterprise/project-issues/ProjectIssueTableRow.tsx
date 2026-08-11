@@ -81,6 +81,7 @@ function IssueTitleCell({
   const firstPhoto = photos[0];
   const detailHref = `/projects/${issue.projectId}/issues/${issue.id}`;
   const metaLine = [
+    issue.levelName?.trim() || null,
     issueSheetLabel(issue),
     issue.pageNumber != null ? `Page ${issue.pageNumber}` : null,
   ]

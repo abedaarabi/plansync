@@ -210,6 +210,12 @@ export function IssueEditSlideOver({ open, issue, onClose, members, onSaved }: P
               />
             </div>
           ) : null}
+          {issue.levelName ? (
+            <p className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)]">
+              <span className="font-medium text-[var(--enterprise-text-muted)]">Level · </span>
+              {issue.levelName}
+            </p>
+          ) : null}
           <div>
             <label htmlFor="issue-edit-location" className={MOBILE_FIELD_LABEL}>
               Location / grid reference

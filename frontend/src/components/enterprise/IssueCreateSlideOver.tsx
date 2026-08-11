@@ -281,6 +281,12 @@ export function IssueCreateSlideOver({
               />
             </div>
           ) : null}
+          {sheetPick.includes("|") ? (
+            <p className="enterprise-type-caption text-[var(--enterprise-text-muted)]">
+              If this sheet is assigned to a building level, the level is linked automatically on
+              create.
+            </p>
+          ) : null}
           <div>
             <label htmlFor="issue-create-location" className={MOBILE_FIELD_LABEL}>
               Location / grid reference

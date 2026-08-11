@@ -1689,6 +1689,17 @@ export function IssueFormSlider(props: Props) {
             open={sectionSchedule}
             onToggle={() => setSectionSchedule((v) => !v)}
           >
+            {variant === "edit" && props.issue.levelName ? (
+              <p className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)]">
+                <span className="font-medium text-[var(--enterprise-text-muted)]">Level · </span>
+                {props.issue.levelName}
+              </p>
+            ) : null}
+            {variant === "create" && !isBimCreate ? (
+              <p className="enterprise-type-caption text-[var(--enterprise-text-muted)]">
+                Building level is set automatically when this sheet is assigned to a level.
+              </p>
+            ) : null}
             <label className="block">
               <span className={labelClass}>
                 {viewerOperationsMode

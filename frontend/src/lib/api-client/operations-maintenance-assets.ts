@@ -38,6 +38,8 @@ type OmAssetWritableFields = {
   pageNumber: number | null;
   annotationId: string | null;
   pinJson: unknown;
+  /** Building level FK (auto-set from drawing map). */
+  levelId?: string | null;
   /** 3D anchor when linked from the BIM viewer. */
   bimAnchor?: OmAssetBimAnchor | null;
 };
@@ -47,6 +49,7 @@ export type OmAssetRow = OmAssetWritableFields & {
   projectId: string;
   file: { id: string; name: string } | null;
   fileVersion: { id: string; version: number } | null;
+  levelName?: string | null;
   /** True when a tenant portal equipment QR secret exists for this asset. */
   hasOccupantQr: boolean;
   /** True when a primary equipment photo has been uploaded. */

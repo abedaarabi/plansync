@@ -324,6 +324,11 @@ function DetailsSection({ issue, nowMs }: { issue: IssueRow; nowMs: number }) {
           "—"
         )}
       </MetaRow>
+      {issue.levelName?.trim() ? (
+        <MetaRow icon={MapPin} label="Level">
+          {issue.levelName.trim()}
+        </MetaRow>
+      ) : null}
       <MetaRow icon={MapPin} label="Location">
         {issue.location?.trim() || "—"}
       </MetaRow>

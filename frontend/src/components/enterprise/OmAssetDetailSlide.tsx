@@ -276,7 +276,8 @@ export function OmAssetDetailSlide({
             <p className="flex items-start gap-2 text-[var(--enterprise-text-muted)]">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
               <span className="font-medium text-[var(--enterprise-text)]">
-                {asset.bimAnchor?.spatialPath?.[0]?.trim() ||
+                {asset.levelName?.trim() ||
+                  asset.bimAnchor?.spatialPath?.[0]?.trim() ||
                   asset.locationLabel?.trim() ||
                   [asset.hall, asset.rowLabel, asset.rack, asset.positionU]
                     .filter(Boolean)

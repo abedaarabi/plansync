@@ -75,6 +75,10 @@ import {
   isIssueRowOverdue,
   matchIssuesForQuery,
 } from "../../lib/issuesChatMatch.js";
+import {
+  resolveLevelForCreate,
+  resolveLevelIdFromDrawing,
+} from "../../lib/locations/resolveLevelFromDrawing.js";
 
 function requirePro(workspace: { subscriptionStatus: string | null }) {
   if (!isWorkspacePro(workspace)) {
@@ -173,11 +177,14 @@ const issueInclude = {
       notes: true,
       imageS3Key: true,
       bimAnchor: true,
+      levelId: true,
+      level: { select: { id: true, displayName: true } },
     },
   },
   vendor: { select: { id: true, name: true, email: true, trade: true } },
   file: { select: { name: true } },
   fileVersion: { select: { version: true } },
+  level: { select: { id: true, displayName: true } },
   rfiLinks: {
     include: {
       rfi: { select: { id: true, rfiNumber: true, title: true, status: true } },
@@ -189,13 +196,15 @@ const issueInclude = {
 
 type IssueRow = Prisma.IssueGetPayload<{ include: typeof issueInclude }>;
 
+// fallow-ignore-next-line complexity
 function issueAssetPublicJson(asset: NonNullable<IssueRow["asset"]>) {
   const bim =
     asset.bimAnchor && typeof asset.bimAnchor === "object" && !Array.isArray(asset.bimAnchor)
       ? (asset.bimAnchor as { name?: unknown; ifcType?: unknown; spatialPath?: unknown })
       : null;
   const spatial = Array.isArray(bim?.spatialPath) ? bim.spatialPath : null;
-  const levelRaw = typeof spatial?.[0] === "string" ? spatial[0].trim() : "";
+  const levelFromBim = typeof spatial?.[0] === "string" ? spatial[0].trim() : "";
+  const levelName = asset.level?.displayName?.trim() || levelFromBim || null;
   const elName = typeof bim?.name === "string" ? bim.name.trim() : "";
   const elType = typeof bim?.ifcType === "string" ? bim.ifcType.trim() : "";
   return {
@@ -213,7 +222,8 @@ function issueAssetPublicJson(asset: NonNullable<IssueRow["asset"]>) {
     serialNumber: asset.serialNumber,
     notes: asset.notes,
     hasImage: Boolean(asset.imageS3Key),
-    level: levelRaw || null,
+    levelId: asset.levelId ?? asset.level?.id ?? null,
+    level: levelName,
     element: elName || elType ? { name: elName || null, ifcType: elType || null } : null,
   };
 }
@@ -411,6 +421,8 @@ function issueRowJson(
     startDate: row.startDate ? row.startDate.toISOString() : null,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     location: row.location,
+    levelId: row.levelId ?? row.level?.id ?? null,
+    levelName: row.level?.displayName ?? null,
     annotationId: row.annotationId,
     bimAnchor: row.bimAnchor ?? null,
     attachedMarkupAnnotationIds: parseAttachedMarkupAnnotationIds(row.attachedMarkupAnnotationIds),
@@ -1094,6 +1106,8 @@ export function registerIssuesRoutes(
         dueDate: optionalYmd,
         location: z.string().max(500).nullable().optional(),
         pageNumber: z.number().int().min(1).optional(),
+        /** Building level; auto-resolved from drawing map when omitted. */
+        levelId: z.string().nullable().optional(),
         /** 3D anchor for issues created from the BIM viewer (IFC GUID + context). */
         bimAnchor: z
           .object({
@@ -1274,6 +1288,20 @@ export function registerIssuesRoutes(
       body.data.attachedMarkupAnnotationIds ?? [],
     ).filter((id) => !primaryAnnId || id !== primaryAnnId);
 
+    const levelResolve = await resolveLevelForCreate({
+      projectId,
+      fileId: file?.id ?? null,
+      pageNumber: body.data.pageNumber ?? null,
+      explicitLevelId: body.data.levelId,
+      bimStoreyName: body.data.bimAnchor?.spatialPath?.[0] ?? null,
+    });
+    if (levelResolve.error) return c.json({ error: levelResolve.error }, 400);
+    const resolvedLevel = levelResolve.level;
+    const locationForCreate =
+      body.data.location !== undefined
+        ? body.data.location
+        : (resolvedLevel?.levelName ?? undefined);
+
     // fallow-ignore-next-line complexity
     const issue = await prisma.$transaction(async (tx) => {
       const iss = await tx.issue.create({
@@ -1301,7 +1329,8 @@ export function registerIssuesRoutes(
           priority: body.data.priority ?? IssuePriority.MEDIUM,
           ...(startDate !== undefined ? { startDate } : {}),
           ...(dueDate !== undefined ? { dueDate } : {}),
-          ...(body.data.location !== undefined ? { location: body.data.location } : {}),
+          ...(locationForCreate !== undefined ? { location: locationForCreate } : {}),
+          ...(resolvedLevel ? { levelId: resolvedLevel.levelId } : {}),
           ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
           ...(body.data.bimAnchor !== undefined
             ? { bimAnchor: body.data.bimAnchor as Prisma.InputJsonValue }
@@ -1594,6 +1623,7 @@ export function registerIssuesRoutes(
         dueDate: optionalYmdPatch,
         location: z.string().max(500).nullable().optional(),
         pageNumber: z.number().int().min(1).nullable().optional(),
+        levelId: z.string().nullable().optional(),
         /** Replace RFIs linked to this issue (same project). */
         rfiIds: z.array(z.string()).max(50).optional(),
         issueKind: z.nativeEnum(IssueKind).optional(),
@@ -1793,11 +1823,26 @@ export function registerIssuesRoutes(
       }
     }
 
+    let patchLevelId: string | null | undefined = undefined;
+    if (body.data.levelId !== undefined) {
+      if (body.data.levelId === null) {
+        patchLevelId = null;
+      } else {
+        const resolved = await resolveLevelIdFromDrawing({
+          projectId: issue.projectId,
+          explicitLevelId: body.data.levelId,
+        });
+        if (!resolved) return c.json({ error: "Level not found in this project" }, 400);
+        patchLevelId = resolved.levelId;
+      }
+    }
+
     const nextStatus = body.data.status;
     const shouldStampResolved =
       nextStatus === IssueStatus.RESOLVED || nextStatus === IssueStatus.CLOSED;
     const statusChanging = body.data.status !== undefined && body.data.status !== issue.status;
 
+    // fallow-ignore-next-line complexity
     const updated = await prisma.$transaction(async (tx) => {
       if (bytesRemovedFromPhotos > 0n) {
         await tx.workspace.update({
@@ -1836,6 +1881,7 @@ export function registerIssuesRoutes(
           ...(patchStart !== undefined ? { startDate: patchStart } : {}),
           ...(patchDue !== undefined ? { dueDate: patchDue } : {}),
           ...(body.data.location !== undefined ? { location: body.data.location } : {}),
+          ...(patchLevelId !== undefined ? { levelId: patchLevelId } : {}),
           ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
           ...(body.data.issueKind !== undefined ? { issueKind: body.data.issueKind } : {}),
           ...(body.data.assetId !== undefined ? { assetId: body.data.assetId } : {}),

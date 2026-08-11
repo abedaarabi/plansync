@@ -81,6 +81,9 @@ export type IssueRow = {
   startDate?: string | null;
   dueDate?: string | null;
   location?: string | null;
+  /** Building level FK (auto-set from drawing map). */
+  levelId?: string | null;
+  levelName?: string | null;
   sheetName?: string | null;
   sheetVersion?: number | null;
   pageNumber?: number | null;
@@ -118,6 +121,7 @@ export type IssueRow = {
     serialNumber?: string | null;
     notes?: string | null;
     hasImage?: boolean;
+    levelId?: string | null;
     level?: string | null;
     element?: { name: string | null; ifcType: string | null } | null;
   } | null;
@@ -384,6 +388,7 @@ export async function createIssue(body: {
   dueDate?: string | null;
   location?: string | null;
   pageNumber?: number;
+  levelId?: string | null;
   bimAnchor?: IssueBimAnchor;
   rfiId?: string;
   rfiIds?: string[];
@@ -428,6 +433,7 @@ export async function patchIssue(
     dueDate?: string | null;
     location?: string | null;
     pageNumber?: number | null;
+    levelId?: string | null;
     /** Replace linked RFIs for this issue. */
     rfiIds?: string[];
     issueKind?: IssueKindApi;

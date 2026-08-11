@@ -415,6 +415,33 @@ export async function deleteBuildingAsset(
   return apiJsonFetch(`/api/v1/buildings/${buildingId}/assets/${fileId}`, { method: "DELETE" });
 }
 
+/** Simple PDF→level assign (no IFC / calibration). */
+export async function assignDrawingToLevel(
+  levelId: string,
+  fileAssetId: string,
+): Promise<{
+  id: string;
+  pdfFileId: string;
+  pdfFileVersionId: string | null;
+  pageIndex: number;
+  bimModelLevelId: string;
+}> {
+  const res = await apiJsonFetch<{
+    mapping: {
+      id: string;
+      pdfFileId: string;
+      pdfFileVersionId: string | null;
+      pageIndex: number;
+      bimModelLevelId: string;
+    };
+  }>(`/api/v1/levels/${levelId}/drawings`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({ fileAssetId }),
+  });
+  return res.mapping;
+}
+
 export async function createLevelMapping(
   levelId: string,
   input: {

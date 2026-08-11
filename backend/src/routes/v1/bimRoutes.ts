@@ -855,6 +855,7 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     const access = await loadProjectForMember(map.projectId, c.get("user").id);
     if (isProjectAccessError(access)) return c.json({ error: access.error }, access.status);
 
+    if (!map.ifcFileVersionId) return c.json({ error: "Map has no IFC model" }, 400);
     const fv = await loadBimFileVersion(map.ifcFileVersionId);
     if (!fv) return c.json({ error: "Not found" }, 404);
     const pro = requireBimPro(fv.file.project.workspace);
@@ -879,6 +880,7 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     const access = await loadProjectForMember(map.projectId, c.get("user").id);
     if (isProjectAccessError(access)) return c.json({ error: access.error }, access.status);
 
+    if (!map.ifcFileVersionId) return c.json({ error: "Map has no IFC model" }, 400);
     const fv = await loadBimFileVersion(map.ifcFileVersionId);
     if (!fv) return c.json({ error: "Not found" }, 404);
     const pro = requireBimPro(fv.file.project.workspace);

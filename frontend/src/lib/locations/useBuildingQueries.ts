@@ -3,11 +3,13 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import {
+  assignDrawingToLevel,
   createBuilding,
   createBuildingLevel,
   createLocation,
   deleteBuilding,
   deleteBuildingAsset,
+  deleteLevelMapping,
   deleteLocation,
   fetchBuilding,
   fetchBuildingAssets,
@@ -43,6 +45,7 @@ export function invalidateBuildingQueries(
   void qc.invalidateQueries({ queryKey: qk.building(buildingId) });
   void qc.invalidateQueries({ queryKey: qk.buildingLevels(buildingId) });
   void qc.invalidateQueries({ queryKey: qk.buildingAssetsRoot(buildingId) });
+  void qc.invalidateQueries({ queryKey: ["levelMappings"] });
   if (locationId) void qc.invalidateQueries({ queryKey: qk.locationDetail(locationId) });
 }
 
@@ -252,7 +255,27 @@ export function useDeleteBuildingMutation(projectId: string, locationId: string)
 export function useCreateBuildingLevelMutation(buildingId: string, locationId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) => createBuildingLevel(buildingId, { name }),
+    mutationFn: (input: string | { name: string; elevation?: number }) =>
+      typeof input === "string"
+        ? createBuildingLevel(buildingId, { name: input })
+        : createBuildingLevel(buildingId, input),
+    onSuccess: () => invalidateBuildingQueries(qc, buildingId, locationId),
+  });
+}
+
+export function useAssignDrawingToLevelMutation(buildingId: string, locationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { levelId: string; fileAssetId: string }) =>
+      assignDrawingToLevel(input.levelId, input.fileAssetId),
+    onSuccess: () => invalidateBuildingQueries(qc, buildingId, locationId),
+  });
+}
+
+export function useUnassignDrawingFromLevelMutation(buildingId: string, locationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (mappingId: string) => deleteLevelMapping(mappingId),
     onSuccess: () => invalidateBuildingQueries(qc, buildingId, locationId),
   });
 }

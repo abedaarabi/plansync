@@ -29,6 +29,7 @@ import {
 import { enqueuePdfAssetProcessing } from "../../lib/locations/pdfAssetProcessor.js";
 import { ensureBuildingLevelsSynced } from "../../lib/locations/buildingLevelsFromIfc.js";
 import {
+  assignDrawingToLevel,
   createLevelMapping,
   deleteLevelMapping,
   updateLevelMapping,
@@ -220,8 +221,7 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
 
     const auth = await loadProjectWithAuth(c.req.param("projectId"), c.get("user").id);
     if ("error" in auth) return c.json({ error: auth.error }, auth.status);
-    const gate = requirePro(auth.ctx.project.workspace);
-    if (gate) return c.json({ error: gate.error }, gate.status);
+    // Locations/buildings support PDF-only levels without Pro; IFC upload still gated.
 
     const data = normalizeLocationInput(body.data);
     const location = await prisma.location.create({
@@ -689,8 +689,11 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
 
     const loaded = await loadBuildingForUser(c, c.req.param("id"));
     if ("response" in loaded) return loaded.response;
-    const gate = requirePro(loaded.ctx.project.workspace);
-    if (gate) return c.json({ error: gate.error }, gate.status);
+    // PDF-only building setup does not require Pro; IFC still does.
+    if (body.data.type === AssetType.IFC) {
+      const gate = requirePro(loaded.ctx.project.workspace);
+      if (gate) return c.json({ error: gate.error }, gate.status);
+    }
     if (!canUploadDrawings(loaded.ctx)) return c.json({ error: "Forbidden" }, 403);
 
     const ws = loaded.ctx.project.workspace;
@@ -749,8 +752,10 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
 
     const loaded = await loadBuildingForUser(c, c.req.param("id"));
     if ("response" in loaded) return loaded.response;
-    const gate = requirePro(loaded.ctx.project.workspace);
-    if (gate) return c.json({ error: gate.error }, gate.status);
+    if (body.data.type === AssetType.IFC) {
+      const gate = requirePro(loaded.ctx.project.workspace);
+      if (gate) return c.json({ error: gate.error }, gate.status);
+    }
     if (!canUploadDrawings(loaded.ctx)) return c.json({ error: "Forbidden" }, 403);
 
     const projectId = loaded.location.projectId;
@@ -956,6 +961,43 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
         calibrationJson: map.calibrationJson,
       })),
     });
+  });
+
+  /** Simple PDF→level assign (no IFC / calibration). */
+  r.post("/levels/:id/drawings", needUser, async (c) => {
+    const body = z
+      .object({
+        fileAssetId: z.string().min(1),
+      })
+      .safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    const loaded = await loadLevelForUser(c, c.req.param("id"));
+    if ("response" in loaded) return loaded.response;
+
+    try {
+      const map = await assignDrawingToLevel({
+        levelId: loaded.level.id,
+        fileAssetId: body.data.fileAssetId,
+        projectId: loaded.level.projectId,
+      });
+      await markBuildingMappingsDirtyByLevelId(loaded.level.id);
+      return c.json(
+        {
+          mapping: {
+            id: map.id,
+            pdfFileId: map.pdfFileId,
+            pdfFileVersionId: map.pdfFileVersionId,
+            pageIndex: map.pageIndex,
+            bimModelLevelId: map.bimModelLevelId,
+          },
+        },
+        201,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to assign drawing";
+      return c.json({ error: msg }, 400);
+    }
   });
 
   r.post("/levels/:id/mapping", needUser, async (c) => {

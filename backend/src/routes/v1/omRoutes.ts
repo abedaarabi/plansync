@@ -50,6 +50,10 @@ import { occupantSubmitRateLimited } from "../../lib/occupantSubmitRateLimit.js"
 import { buildTransactionalEmailHtml } from "../../lib/transactionalEmailLayout.js";
 import { buildInspectionReportPdfBuffer } from "../../lib/omInspectionReportPdf.js";
 import {
+  resolveLevelForCreate,
+  resolveLevelIdFromDrawing,
+} from "../../lib/locations/resolveLevelFromDrawing.js";
+import {
   addUtcDays,
   inspectionFrequencyToIntervalDays,
   validateFailEvidence,
@@ -426,6 +430,7 @@ type OmAssetRowDb = Prisma.AssetGetPayload<{
   include: {
     file: { select: { id: true; name: true } };
     fileVersion: { select: { id: true; version: true } };
+    level: { select: { id: true; displayName: true } };
   };
 }>;
 
@@ -461,7 +466,14 @@ const omAssetSharedBodyFields = {
   fileVersionId: z.string().nullable().optional(),
   pageNumber: z.number().int().min(1).nullable().optional(),
   annotationId: z.string().nullable().optional(),
+  levelId: z.string().nullable().optional(),
   bimAnchor: omAssetBimAnchorSchema,
+} as const;
+
+const omAssetInclude = {
+  file: { select: { id: true, name: true } },
+  fileVersion: { select: { id: true, version: true } },
+  level: { select: { id: true, displayName: true } },
 } as const;
 
 function toOmAssetJson(a: OmAssetRowDb) {
@@ -477,10 +489,13 @@ function toOmAssetJson(a: OmAssetRowDb) {
     lastServiceAt,
     createdAt,
     updatedAt,
+    level,
     ...rest
   } = a;
   return {
     ...rest,
+    levelId: a.levelId ?? level?.id ?? null,
+    levelName: level?.displayName ?? null,
     hasOccupantQr: Boolean(occupantScanSecret),
     hasImage: Boolean(imageS3Key),
     installDate: installDate?.toISOString() ?? null,
@@ -662,10 +677,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     const rows = await prisma.asset.findMany({
       where: { projectId, ...searchWhere },
       orderBy: [{ tag: "asc" }],
-      include: {
-        file: { select: { id: true, name: true } },
-        fileVersion: { select: { id: true, version: true } },
-      },
+      include: omAssetInclude,
     });
     return c.json(rows.map(toOmAssetJson));
   });
@@ -706,6 +718,18 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       return c.json({ error: "bimAnchor requires fileId and fileVersionId" }, 400);
     }
 
+    const levelResolve = await resolveLevelForCreate({
+      projectId,
+      fileId: d.fileId ?? null,
+      pageNumber: d.pageNumber ?? null,
+      explicitLevelId: d.levelId,
+      bimStoreyName: d.bimAnchor?.spatialPath?.[0] ?? null,
+    });
+    if (levelResolve.error) return c.json({ error: levelResolve.error }, 400);
+    const resolvedLevel = levelResolve.level;
+    const locationLabel =
+      d.locationLabel !== undefined ? d.locationLabel : (resolvedLevel?.levelName ?? null);
+
     const occupantScanSecret = ctx.settings.modules.omTenantPortal
       ? randomBytes(24).toString("hex")
       : null;
@@ -721,7 +745,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
           manufacturer: d.manufacturer ?? null,
           model: d.model ?? null,
           serialNumber: d.serialNumber ?? null,
-          locationLabel: d.locationLabel ?? null,
+          locationLabel,
           hall: d.hall ?? null,
           rowLabel: d.rowLabel ?? null,
           rack: d.rack ?? null,
@@ -734,6 +758,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
           fileVersionId: d.fileVersionId ?? null,
           pageNumber: d.pageNumber ?? null,
           annotationId: d.annotationId ?? null,
+          levelId: resolvedLevel?.levelId ?? null,
           pinJson: d.pinJson === undefined ? undefined : (d.pinJson as Prisma.InputJsonValue),
           bimAnchor:
             d.bimAnchor === undefined || d.bimAnchor === null
@@ -741,10 +766,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
               : (d.bimAnchor as Prisma.InputJsonValue),
           ...(occupantScanSecret ? { occupantScanSecret } : {}),
         },
-        include: {
-          file: { select: { id: true, name: true } },
-          fileVersion: { select: { id: true, version: true } },
-        },
+        include: omAssetInclude,
       });
     } catch (e) {
       if (
@@ -817,6 +839,33 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
       }
     }
 
+    let patchLevelId: string | null | undefined = undefined;
+    if (d.levelId !== undefined) {
+      if (d.levelId === null) {
+        patchLevelId = null;
+      } else {
+        const resolved = await resolveLevelIdFromDrawing({
+          projectId,
+          explicitLevelId: d.levelId,
+        });
+        if (!resolved) return c.json({ error: "Level not found in this project" }, 400);
+        patchLevelId = resolved.levelId;
+      }
+    } else if (d.fileId !== undefined || d.pageNumber !== undefined) {
+      const nextFileId = d.fileId !== undefined ? d.fileId : existing.fileId;
+      const nextPage = d.pageNumber !== undefined ? d.pageNumber : existing.pageNumber;
+      if (nextFileId) {
+        const resolved = await resolveLevelIdFromDrawing({
+          projectId,
+          fileId: nextFileId,
+          pageNumber: nextPage,
+        });
+        if (resolved) patchLevelId = resolved.levelId;
+      } else if (d.fileId === null) {
+        patchLevelId = null;
+      }
+    }
+
     const row = await prisma.asset.update({
       where: { id: assetId },
       data: {
@@ -847,6 +896,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
         ...(d.fileVersionId !== undefined ? { fileVersionId: d.fileVersionId } : {}),
         ...(d.pageNumber !== undefined ? { pageNumber: d.pageNumber } : {}),
         ...(d.annotationId !== undefined ? { annotationId: d.annotationId } : {}),
+        ...(patchLevelId !== undefined ? { levelId: patchLevelId } : {}),
         ...(d.pinJson !== undefined
           ? { pinJson: d.pinJson as Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput }
           : {}),
@@ -857,10 +907,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
             }
           : {}),
       },
-      include: {
-        file: { select: { id: true, name: true } },
-        fileVersion: { select: { id: true, version: true } },
-      },
+      include: omAssetInclude,
     });
 
     return c.json(toOmAssetJson(row));
@@ -1215,6 +1262,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
     return c.json({ uploadUrl: url, key });
   });
 
+  // fallow-ignore-next-line complexity
   r.post("/projects/:projectId/om/assets/:assetId/image/complete", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const assetId = c.req.param("assetId")!;
@@ -1277,10 +1325,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
           imageFileName: body.data.fileName,
           imageSizeBytes: body.data.sizeBytes,
         },
-        include: {
-          file: { select: { id: true, name: true } },
-          fileVersion: { select: { id: true, version: true } },
-        },
+        include: omAssetInclude,
       });
       if (storageDelta !== 0n) {
         await tx.workspace.update({
@@ -1358,10 +1403,7 @@ export function registerOmRoutes(r: Hono, needUser: MiddlewareHandler, env: Env)
           imageFileName: null,
           imageSizeBytes: null,
         },
-        include: {
-          file: { select: { id: true, name: true } },
-          fileVersion: { select: { id: true, version: true } },
-        },
+        include: omAssetInclude,
       });
       if (dec > 0n) {
         await tx.workspace.update({
