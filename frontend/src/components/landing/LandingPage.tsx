@@ -7,6 +7,7 @@ import { LandingFinalCtaSection } from "./LandingFinalCtaSection";
 import { LandingChatAssistant } from "./LandingChatAssistant";
 import { LandingHeroSection } from "./LandingHeroSection";
 import { LandingBimShowcaseSection } from "./LandingBimShowcaseSection";
+import { LandingCdeSection } from "./LandingCdeSection";
 import { LandingHowItWorksSection } from "./LandingHowItWorksSection";
 import { LandingPlanViewerSection } from "./LandingPlanViewerSection";
 import { LandingPwaInstallSection } from "./LandingPwaInstallSection";
@@ -27,6 +28,7 @@ function LandingHomeMain() {
       <LandingProofSection />
       <LandingPlanViewerSection />
       <LandingBimShowcaseSection />
+      <LandingCdeSection />
       <LandingSolutionsShowcaseSection />
       <LandingHowItWorksSection />
       <LandingPwaInstallSection />

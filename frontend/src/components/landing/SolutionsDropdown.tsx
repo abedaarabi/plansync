@@ -221,12 +221,17 @@ export function SolutionsDropdown() {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="flex items-center gap-1 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+        className={`landing-type-nav inline-flex items-center gap-1 rounded-lg px-2.5 py-2 transition ${
+          open || pathname.startsWith("/solutions")
+            ? "bg-slate-900/[0.04] text-slate-900"
+            : "text-slate-600 hover:bg-slate-900/[0.03] hover:text-slate-900"
+        }`}
       >
         {t("trigger")}
         <ChevronDown
           className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
           strokeWidth={2.5}
+          aria-hidden
         />
       </button>
       {overlay}

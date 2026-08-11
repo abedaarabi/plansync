@@ -60,6 +60,14 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               </li>
               <li>
                 <Link
+                  href="/#cde"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
+                >
+                  {t.has("cde") ? t("cde") : "CDE"}
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/pricing"
                   className="landing-type-nav text-slate-300 transition hover:text-white"
                 >

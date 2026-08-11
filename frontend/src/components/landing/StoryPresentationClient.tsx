@@ -3,12 +3,36 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowLeft, ArrowRight, Download, Maximize2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  Database,
+  Download,
+  GitBranch,
+  Link2,
+  Maximize2,
+  ShieldCheck,
+  Users2,
+  type LucideIcon,
+} from "lucide-react";
 import { STORY_ASSET_ROWS, STORY_SLIDES, type StorySlide } from "@/lib/storyPresentationContent";
 import { BrowserMockup } from "./BrowserMockup";
 import { MarketingShell } from "./MarketingShell";
 import { StoryHandoverGapChart, StoryTimeLeakChart } from "./StoryCharts";
 import "./story-presentation.css";
+
+const CDE_PILLAR_ICONS: Record<
+  "database" | "gitBranch" | "users" | "shield" | "link" | "building",
+  LucideIcon
+> = {
+  database: Database,
+  gitBranch: GitBranch,
+  users: Users2,
+  shield: ShieldCheck,
+  link: Link2,
+  building: Building2,
+};
 
 function BrandMark({ large = false }: { large?: boolean }) {
   return (
@@ -201,6 +225,53 @@ function SlideBody({ slide }: { slide: StorySlide }) {
             ))}
           </div>
           <p className="mt-8 max-w-xl text-base text-[var(--story-muted)]">{slide.footer}</p>
+        </SlideChrome>
+      );
+    case "cde":
+      return (
+        <SlideChrome label={slide.label}>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--landing-cta)]">
+                {slide.eyebrow}
+              </p>
+              <h2 className="mt-3 max-w-[18ch] text-balance text-2xl font-bold tracking-tight text-[var(--story-ink)] sm:text-3xl">
+                {slide.title}
+              </h2>
+            </div>
+            <p className="mt-3 max-w-md text-sm leading-relaxed text-[var(--story-muted)] sm:mt-0 sm:text-right sm:text-[0.95rem]">
+              {slide.lede}
+            </p>
+          </div>
+          <div className="mt-6 grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {slide.pillars.map((pillar) => {
+              const Icon = CDE_PILLAR_ICONS[pillar.icon];
+              return (
+                <div
+                  key={pillar.title}
+                  className="flex flex-col gap-3 rounded-2xl border border-[var(--story-line)] bg-[var(--story-panel)] p-4 shadow-sm"
+                >
+                  <span
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--story-accent-wash)] text-[var(--landing-cta)] ring-1 ring-[var(--story-accent-ring)]"
+                    aria-hidden
+                  >
+                    <Icon className="h-5 w-5" strokeWidth={1.75} />
+                  </span>
+                  <div>
+                    <h3 className="font-semibold tracking-tight text-[var(--story-ink)]">
+                      {pillar.title}
+                    </h3>
+                    <p className="mt-1 text-sm leading-relaxed text-[var(--story-muted)]">
+                      {pillar.body}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-5 max-w-2xl text-sm text-[var(--story-muted)] sm:text-base">
+            {slide.footer}
+          </p>
         </SlideChrome>
       );
     case "howItWorks":

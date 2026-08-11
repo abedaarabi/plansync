@@ -37,8 +37,9 @@ export const STORY_SLIDES = [
       { n: "01", title: "Something breaks in the middle", time: "~4 min" },
       { n: "02", title: "Why it keeps happening", time: "~3 min" },
       { n: "03", title: "A better ending", time: "~3 min" },
-      { n: "04", title: "PlanSync enters the story", time: "~8 min" },
-      { n: "05", title: "Your turn — what fits your world", time: "~5 min" },
+      { n: "04", title: "The CDE — one shared source of truth", time: "~4 min" },
+      { n: "05", title: "PlanSync enters the story", time: "~8 min" },
+      { n: "06", title: "Your turn — what fits your world", time: "~5 min" },
     ],
   },
   {
@@ -98,7 +99,49 @@ export const STORY_SLIDES = [
         body: "Assets and docs arrive ready — not rebuilt.",
       },
     ],
-    footer: "That’s the ending we want. Next: how PlanSync gets you there.",
+    footer: "That’s the ending we want. Next: the idea behind it — a Common Data Environment.",
+  },
+  {
+    id: "cde" as const,
+    chromeTitle: "Act 2 · the CDE",
+    label: "Act 2 · CDE",
+    eyebrow: "Common Data Environment",
+    title: "One place for the project truth.",
+    lede: "A CDE is the shared hub where drawings, models, decisions, and handover live together — controlled, current, and findable. PlanSync is that environment for delivery teams.",
+    pillars: [
+      {
+        icon: "database" as const,
+        title: "Single source of truth",
+        body: "One workspace for plans, BIM, issues, and closeout — not ten folders and a hope.",
+      },
+      {
+        icon: "gitBranch" as const,
+        title: "Version control",
+        body: "Revisions stay ordered. Everyone opens the current sheet, not last week’s PDF.",
+      },
+      {
+        icon: "users" as const,
+        title: "Shared collaboration",
+        body: "Markups, RFIs, and punch sit on the work — owners and status included.",
+      },
+      {
+        icon: "shield" as const,
+        title: "Access & audit",
+        body: "The right people see the right files. History stays when people leave.",
+      },
+      {
+        icon: "link" as const,
+        title: "Connected workflows",
+        body: "From pin on a drawing to closed RFI to asset with manuals — one chain.",
+      },
+      {
+        icon: "building" as const,
+        title: "Build → ops bridge",
+        body: "Handover isn’t a zip dump. Ops inherits tags, docs, and open items.",
+      },
+    ],
+    footer:
+      "ISO-style idea, practical product: PlanSync keeps the common data environment where the work already happens.",
   },
   {
     id: "howItWorks" as const,
