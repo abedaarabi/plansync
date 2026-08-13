@@ -134,4 +134,6 @@ export const qk = {
   levelMappings: (levelId: string) => ["levelMappings", levelId] as const,
   assetStatus: (fileVersionId: string) => ["assetStatus", fileVersionId] as const,
   locationDetail: (locationId: string) => ["locationDetail", locationId] as const,
+  /** Short-lived S3 GET URL for building cover photo. */
+  buildingImageReadUrl: (buildingId: string) => ["buildingImageReadUrl", buildingId] as const,
 };

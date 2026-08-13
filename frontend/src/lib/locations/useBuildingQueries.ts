@@ -160,6 +160,8 @@ export function useUpdateLocationMutation(projectId: string) {
         address: input.address,
         city: input.city,
         country: input.country,
+        latitude: input.latitude,
+        longitude: input.longitude,
         notes: input.notes,
       }),
     onSuccess: (_data, vars) => {

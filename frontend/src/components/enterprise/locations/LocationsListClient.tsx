@@ -146,6 +146,11 @@ export function LocationsListClient({ projectId }: Props) {
                       <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-[var(--enterprise-text-muted)]">
                         {place ?? "No address yet"}
                       </p>
+                      {loc.latitude != null && loc.longitude != null ? (
+                        <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
+                          Map pin set
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   <div className="enterprise-type-caption mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[var(--enterprise-border)] pt-2.5">

@@ -6,6 +6,8 @@ export type LocationInput = {
   address?: string | null;
   city?: string | null;
   country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   notes?: string | null;
 };
 
@@ -24,12 +26,26 @@ function trimOrNull(value: string | null | undefined): string | null {
 }
 
 export function normalizeLocationInput(input: LocationInput) {
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+  if (
+    input.latitude != null &&
+    input.longitude != null &&
+    Number.isFinite(input.latitude) &&
+    Number.isFinite(input.longitude)
+  ) {
+    latitude = input.latitude;
+    longitude = input.longitude;
+  }
+
   return {
     name: input.name.trim(),
     code: trimOrNull(input.code),
     address: trimOrNull(input.address),
     city: trimOrNull(input.city),
     country: trimOrNull(input.country),
+    latitude,
+    longitude,
     notes: trimOrNull(input.notes),
   };
 }
@@ -50,7 +66,17 @@ export function normalizeBuildingInput(input: BuildingInput) {
 export function locationJson(
   loc: Pick<
     Location,
-    "id" | "name" | "code" | "address" | "city" | "country" | "notes" | "createdAt" | "updatedAt"
+    | "id"
+    | "name"
+    | "code"
+    | "address"
+    | "city"
+    | "country"
+    | "latitude"
+    | "longitude"
+    | "notes"
+    | "createdAt"
+    | "updatedAt"
   > & { buildingCount?: number },
 ) {
   return {
@@ -60,6 +86,8 @@ export function locationJson(
     address: loc.address,
     city: loc.city,
     country: loc.country,
+    latitude: loc.latitude,
+    longitude: loc.longitude,
     notes: loc.notes,
     buildingCount: loc.buildingCount ?? 0,
     createdAt: loc.createdAt.toISOString(),
@@ -68,7 +96,10 @@ export function locationJson(
 }
 
 export function buildingMetaJson(
-  b: Pick<Building, "id" | "name" | "code" | "buildingType" | "floorsApprox" | "notes">,
+  b: Pick<
+    Building,
+    "id" | "name" | "code" | "buildingType" | "floorsApprox" | "notes" | "imageS3Key"
+  >,
 ) {
   return {
     id: b.id,
@@ -77,5 +108,6 @@ export function buildingMetaJson(
     buildingType: b.buildingType,
     floorsApprox: b.floorsApprox,
     notes: b.notes,
+    hasImage: Boolean(b.imageS3Key),
   };
 }

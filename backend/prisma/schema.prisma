@@ -554,6 +554,9 @@ model Location {
   address   String?
   city      String?
   country   String?
+  /// Optional map pin (WGS84). Set together with longitude.
+  latitude  Float?
+  longitude Float?
   notes     String?
   project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   buildings Building[]
@@ -573,6 +576,11 @@ model Building {
   /// Approximate floor count for owner context (IFC levels remain source of truth for BIM).
   floorsApprox        Int?
   notes               String?
+  /// Optional cover photo in S3.
+  imageS3Key          String?
+  imageMimeType       String?
+  imageFileName       String?
+  imageSizeBytes      BigInt?
   /// When mappings were last published for field / Open 3D handoff.
   mappingsPublishedAt DateTime?
   /// True after mapping/level edits until the next publish.
@@ -580,6 +588,7 @@ model Building {
   location            Location        @relation(fields: [locationId], references: [id], onDelete: Cascade)
   files               File[]
   levels              BimModelLevel[]
+  issues              Issue[]
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
@@ -1083,8 +1092,11 @@ model Issue {
   priority        IssuePriority @default(MEDIUM)
   startDate       DateTime?
   dueDate         DateTime?
-  /// Free-text location (e.g. grid / zone), PlanGrid-style.
+  /// Free-text location (e.g. grid / zone / room), PlanGrid-style.
   location        String?
+
+  /// Optional building (WO / issue site context; may be set without a level).
+  buildingId String?
 
   /// Optional building level (auto-set from drawing map or BIM storey).
   levelId String?
@@ -1155,6 +1167,7 @@ model Issue {
   project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   file                  File?                  @relation(fields: [fileId], references: [id], onDelete: SetNull)
   fileVersion           FileVersion?           @relation(fields: [fileVersionId], references: [id], onDelete: SetNull)
+  building              Building?              @relation(fields: [buildingId], references: [id], onDelete: SetNull)
   level                 BimModelLevel?         @relation(fields: [levelId], references: [id], onDelete: SetNull)
   assignee              User?                  @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   creator               User?                  @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: SetNull)
@@ -1173,8 +1186,10 @@ model Issue {
   @@index([projectId])
   @@index([fileId])
   @@index([fileVersionId])
+  @@index([buildingId])
   @@index([levelId])
   @@index([projectId, levelId])
+  @@index([projectId, buildingId])
   @@index([assetId])
   @@index([issueKind])
   @@index([maintenanceScheduleId])

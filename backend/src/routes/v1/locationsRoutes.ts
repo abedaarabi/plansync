@@ -12,8 +12,19 @@ import { prisma } from "../../lib/prisma.js";
 import type { Env } from "../../lib/env.js";
 import { loadProjectWithAuth, canUploadDrawings, canManageFiles } from "../../lib/permissions.js";
 import { isWorkspacePro } from "../../lib/subscription.js";
-import { buildUploadObjectKey, newUploadId, s3KeyMatchesFileUpload } from "../../lib/fileUpload.js";
-import { presignPut, presignGet } from "../../lib/s3.js";
+import {
+  buildBuildingImageKey,
+  buildUploadObjectKey,
+  newUploadId,
+  s3KeyMatchesBuildingImage,
+  s3KeyMatchesFileUpload,
+} from "../../lib/fileUpload.js";
+import {
+  imageUploadCompleteBodySchema,
+  imageUploadPresignBodySchema,
+  validateImageUploadBytes,
+} from "../../lib/issueReferencePhotos.js";
+import { deleteObject, presignPut, presignGet } from "../../lib/s3.js";
 import { resolvedMimeType } from "../../lib/mime.js";
 import { fileVersionJson } from "../../lib/json.js";
 import {
@@ -62,14 +73,43 @@ function requirePro(workspace: { subscriptionStatus: string | null }) {
 const disciplineSchema = z.nativeEnum(BuildingDiscipline).nullish();
 const assetTypeSchema = z.nativeEnum(AssetType);
 const optionalText = z.string().max(500).nullish();
-const locationBodySchema = z.object({
-  name: z.string().min(1).max(200),
-  code: z.string().max(64).nullish(),
-  address: z.string().max(300).nullish(),
-  city: z.string().max(120).nullish(),
-  country: z.string().max(120).nullish(),
-  notes: optionalText,
-});
+const locationBodySchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    code: z.string().max(64).nullish(),
+    address: z.string().max(300).nullish(),
+    city: z.string().max(120).nullish(),
+    country: z.string().max(120).nullish(),
+    latitude: z.number().gte(-90).lte(90).nullable().optional(),
+    longitude: z.number().gte(-180).lte(180).nullable().optional(),
+    notes: optionalText,
+  })
+  .superRefine((val, ctx) => {
+    const hasLat = val.latitude !== undefined;
+    const hasLng = val.longitude !== undefined;
+    if (hasLat !== hasLng) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "latitude and longitude must be set together",
+        path: ["latitude"],
+      });
+      return;
+    }
+    if (val.latitude === null && val.longitude != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "latitude and longitude must both be set or both cleared",
+        path: ["longitude"],
+      });
+    }
+    if (val.longitude === null && val.latitude != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "latitude and longitude must both be set or both cleared",
+        path: ["latitude"],
+      });
+    }
+  });
 const buildingBodySchema = z.object({
   name: z.string().min(1).max(200),
   code: z.string().max(64).nullish(),
@@ -507,6 +547,164 @@ export function registerLocationsRoutes(r: Hono, needUser: MiddlewareHandler, en
       where: { id: loaded.building.id },
       data,
     });
+    return c.json({ building: buildingMetaJson(building) });
+  });
+
+  r.post("/buildings/:id/image/presign", needUser, async (c) => {
+    const loaded = await loadBuildingForUser(c, c.req.param("id"));
+    if ("response" in loaded) return loaded.response;
+    if (loaded.ctx.workspaceMember.isExternal) return c.json({ error: "Forbidden" }, 403);
+
+    const body = imageUploadPresignBodySchema.safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    const validated = validateImageUploadBytes(body.data.contentType, body.data.sizeBytes);
+    if (!validated.ok) return c.json({ error: validated.error }, 400);
+    const ct = validated.contentType;
+
+    const ws = loaded.ctx.project.workspace;
+    const reclaim = loaded.building.imageSizeBytes ?? 0n;
+    const newUsed = ws.storageUsedBytes - reclaim + body.data.sizeBytes;
+    if (newUsed > ws.storageQuotaBytes) {
+      return c.json({ error: "Storage quota exceeded" }, 400);
+    }
+
+    const projectId = loaded.location.projectId;
+    const key = buildBuildingImageKey(
+      loaded.ctx.project.workspaceId,
+      projectId,
+      loaded.building.id,
+      newUploadId(),
+      body.data.fileName,
+    );
+    let url: string | null;
+    try {
+      url = await presignPut(env, key, ct);
+    } catch (e) {
+      console.error("[building image presign]", e);
+      return c.json(
+        { error: "Could not create upload URL. Check S3 credentials and bucket configuration." },
+        503,
+      );
+    }
+    if (!url) {
+      return c.json({ error: "S3 not configured — set AWS_* and S3_BUCKET", devKey: key }, 503);
+    }
+    return c.json({ uploadUrl: url, key });
+  });
+
+  // fallow-ignore-next-line complexity
+  r.post("/buildings/:id/image/complete", needUser, async (c) => {
+    const loaded = await loadBuildingForUser(c, c.req.param("id"));
+    if ("response" in loaded) return loaded.response;
+    if (loaded.ctx.workspaceMember.isExternal) return c.json({ error: "Forbidden" }, 403);
+
+    const body = imageUploadCompleteBodySchema.safeParse(await c.req.json());
+    if (!body.success) return c.json({ error: body.error.flatten() }, 400);
+
+    const validated = validateImageUploadBytes(body.data.contentType, body.data.sizeBytes);
+    if (!validated.ok) return c.json({ error: validated.error }, 400);
+    const ct = validated.contentType;
+
+    const projectId = loaded.location.projectId;
+    if (
+      !s3KeyMatchesBuildingImage(
+        body.data.key,
+        loaded.ctx.project.workspaceId,
+        projectId,
+        loaded.building.id,
+      )
+    ) {
+      return c.json({ error: "Invalid upload key" }, 400);
+    }
+
+    const ws = loaded.ctx.project.workspace;
+    const reclaim = loaded.building.imageSizeBytes ?? 0n;
+    const newUsed = ws.storageUsedBytes - reclaim + body.data.sizeBytes;
+    if (newUsed > ws.storageQuotaBytes) {
+      return c.json({ error: "Storage quota exceeded" }, 400);
+    }
+
+    if (loaded.building.imageS3Key && loaded.building.imageS3Key !== body.data.key) {
+      const del = await deleteObject(env, loaded.building.imageS3Key);
+      if (!del.ok && del.error !== "S3 not configured") {
+        console.warn(
+          `[building image replace] deleteObject ${loaded.building.imageS3Key}:`,
+          del.error,
+        );
+      }
+    }
+
+    const storageDelta = body.data.sizeBytes - reclaim;
+    const building = await prisma.$transaction(async (tx) => {
+      const updated = await tx.building.update({
+        where: { id: loaded.building.id },
+        data: {
+          imageS3Key: body.data.key,
+          imageMimeType: ct,
+          imageFileName: body.data.fileName,
+          imageSizeBytes: body.data.sizeBytes,
+        },
+      });
+      if (storageDelta !== 0n) {
+        await tx.workspace.update({
+          where: { id: loaded.ctx.project.workspaceId },
+          data: { storageUsedBytes: { increment: storageDelta } },
+        });
+      }
+      return updated;
+    });
+
+    return c.json({ building: buildingMetaJson(building) });
+  });
+
+  r.get("/buildings/:id/image/presign-read", needUser, async (c) => {
+    const loaded = await loadBuildingForUser(c, c.req.param("id"));
+    if ("response" in loaded) return loaded.response;
+    if (!loaded.building.imageS3Key) return c.json({ error: "Not found" }, 404);
+
+    let url: string | null;
+    try {
+      url = await presignGet(env, loaded.building.imageS3Key);
+    } catch (e) {
+      console.error("[building image presign-read]", e);
+      return c.json({ error: "Could not create download link (S3)." }, 503);
+    }
+    if (!url) return c.json({ error: "S3 not configured" }, 503);
+    return c.json({ url });
+  });
+
+  r.delete("/buildings/:id/image", needUser, async (c) => {
+    const loaded = await loadBuildingForUser(c, c.req.param("id"));
+    if ("response" in loaded) return loaded.response;
+    if (loaded.ctx.workspaceMember.isExternal) return c.json({ error: "Forbidden" }, 403);
+    if (!loaded.building.imageS3Key) return c.json({ error: "Not found" }, 404);
+
+    const del = await deleteObject(env, loaded.building.imageS3Key);
+    if (!del.ok && del.error !== "S3 not configured") {
+      return c.json({ error: del.error }, 503);
+    }
+
+    const dec = loaded.building.imageSizeBytes ?? 0n;
+    const building = await prisma.$transaction(async (tx) => {
+      const updated = await tx.building.update({
+        where: { id: loaded.building.id },
+        data: {
+          imageS3Key: null,
+          imageMimeType: null,
+          imageFileName: null,
+          imageSizeBytes: null,
+        },
+      });
+      if (dec > 0n) {
+        await tx.workspace.update({
+          where: { id: loaded.ctx.project.workspaceId },
+          data: { storageUsedBytes: { decrement: dec } },
+        });
+      }
+      return updated;
+    });
+
     return c.json({ building: buildingMetaJson(building) });
   });
 

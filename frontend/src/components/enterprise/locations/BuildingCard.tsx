@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, Building2, Crosshair, FileText, Layers, Pencil, Trash2 } from "lucide-react";
+import { Boxes, Crosshair, FileText, Layers, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type { LocationBuildingRow } from "@/lib/api-client/locations";
 import {
@@ -12,6 +12,7 @@ import {
   type BuildingCardStatTone,
 } from "./buildingCardStats";
 import { BuildingCardStatus } from "./BuildingCardStatus";
+import { BuildingImageThumb } from "./BuildingImageThumb";
 
 type Props = {
   building: LocationBuildingRow;
@@ -68,11 +69,13 @@ export function BuildingCard({ building: b, projectId, locationId, onEdit, onDel
         className="flex flex-1 flex-col p-4 transition-colors hover:bg-[var(--enterprise-hover-surface)]/50"
       >
         <div className="flex gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]">
-            <Building2
-              className="h-4 w-4 text-[var(--enterprise-text-muted)]"
-              strokeWidth={1.75}
-              aria-hidden
+          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-[var(--enterprise-border)]">
+            <BuildingImageThumb
+              buildingId={b.id}
+              hasImage={Boolean(b.hasImage)}
+              alt=""
+              className="h-full w-full object-cover object-center"
+              fallbackClassName="flex h-full w-full items-center justify-center bg-[var(--enterprise-hover-surface)]"
             />
           </div>
           <div className="min-w-0 flex-1 space-y-1.5">

@@ -15,13 +15,21 @@ import {
   MOBILE_DIALOG_BTN_PRIMARY,
   MOBILE_DIALOG_BTN_SECONDARY,
 } from "@/components/mobile/EnterpriseResponsiveDialog";
+import { BuildingImageField } from "./BuildingImageField";
 
 type Initial = {
+  id?: string;
   name: string;
   code?: string | null;
   buildingType?: BuildingType | null;
   floorsApprox?: number | null;
   notes?: string | null;
+  hasImage?: boolean;
+};
+
+export type BuildingFormSubmit = BuildingInput & {
+  pendingImage: File | null;
+  removeImage: boolean;
 };
 
 type Props = {
@@ -30,7 +38,7 @@ type Props = {
   initial?: Initial | null;
   isSaving?: boolean;
   onClose: () => void;
-  onSubmit: (input: BuildingInput) => void;
+  onSubmit: (input: BuildingFormSubmit) => void;
 };
 
 type FormState = {
@@ -58,9 +66,13 @@ export function BuildingFormDialog({
   onSubmit,
 }: Props) {
   const [form, setForm] = useState<FormState>(empty);
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    setPendingImage(null);
+    setRemoveImage(false);
     if (mode === "edit" && initial) {
       setForm({
         name: initial.name,
@@ -133,6 +145,8 @@ export function BuildingFormDialog({
             buildingType: form.buildingType || null,
             floorsApprox: floors ? Number(floors) : null,
             notes: form.notes || null,
+            pendingImage,
+            removeImage,
           });
         }}
       >
@@ -199,6 +213,16 @@ export function BuildingFormDialog({
             ))}
           </select>
         </label>
+
+        <BuildingImageField
+          buildingId={mode === "edit" ? initial?.id : undefined}
+          hasExistingImage={Boolean(initial?.hasImage)}
+          pendingFile={pendingImage}
+          onPendingFileChange={setPendingImage}
+          removeExisting={removeImage}
+          onRemoveExistingChange={setRemoveImage}
+          disabled={isSaving}
+        />
 
         <label className="block">
           <span className={`${MOBILE_FIELD_LABEL} inline-flex items-center gap-1.5`}>

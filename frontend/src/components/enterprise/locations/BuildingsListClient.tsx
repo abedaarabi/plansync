@@ -1,11 +1,16 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Building2, MapPin, Plus } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { LocationBuildingRow } from "@/lib/api-client/locations";
+import {
+  deleteBuildingImage,
+  uploadBuildingImageFile,
+  type LocationBuildingRow,
+} from "@/lib/api-client/locations";
 import { formatLocationPlace } from "@/lib/locations/buildingLabels";
 import {
   useCreateBuildingMutation,
@@ -13,11 +18,13 @@ import {
   useLocationDetailQuery,
   useUpdateBuildingMutation,
 } from "@/lib/locations/useBuildingQueries";
+import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
+import { ProjectLocationMap } from "../ProjectLocationMap";
 import { useEnterpriseWorkspace } from "../EnterpriseWorkspaceContext";
 import { EnterpriseLoadingState } from "../EnterpriseLoadingState";
 import { BuildingCard } from "./BuildingCard";
-import { BuildingFormDialog } from "./BuildingFormDialog";
+import { BuildingFormDialog, type BuildingFormSubmit } from "./BuildingFormDialog";
 import { TypeDeleteConfirmDialog } from "./TypeDeleteConfirmDialog";
 
 const BuildingFileBrowser = dynamic(
@@ -30,6 +37,7 @@ type Props = { projectId: string; locationId: string };
 // fallow-ignore-next-line complexity
 export function BuildingsListClient({ projectId, locationId }: Props) {
   const router = useRouter();
+  const qc = useQueryClient();
   const { primary } = useEnterpriseWorkspace();
   const workspaceId = primary?.workspace.id ?? "";
   const isProPlus = isWorkspaceProPlusClient(primary?.workspace);
@@ -37,11 +45,72 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
   const [editing, setEditing] = useState<LocationBuildingRow | null>(null);
   const [browserBuilding, setBrowserBuilding] = useState<{ id: string; name: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
 
   const { data, isPending, isError, refetch } = useLocationDetailQuery(locationId);
   const createMut = useCreateBuildingMutation(projectId, locationId);
   const updateMut = useUpdateBuildingMutation(projectId, locationId);
   const deleteMut = useDeleteBuildingMutation(projectId, locationId);
+
+  async function applyBuildingImage(
+    buildingId: string,
+    pendingImage: File | null,
+    removeImage: boolean,
+  ) {
+    if (removeImage) {
+      await deleteBuildingImage(buildingId);
+    } else if (pendingImage) {
+      await uploadBuildingImageFile(buildingId, pendingImage);
+    } else {
+      return;
+    }
+    qc.removeQueries({ queryKey: qk.buildingImageReadUrl(buildingId) });
+    void qc.invalidateQueries({ queryKey: qk.locationDetail(locationId) });
+    void qc.invalidateQueries({ queryKey: qk.building(buildingId) });
+  }
+
+  // fallow-ignore-next-line complexity
+  async function handleBuildingSubmit(input: BuildingFormSubmit) {
+    const { pendingImage, removeImage, ...fields } = input;
+    setImageBusy(true);
+    try {
+      if (editing) {
+        await updateMut.mutateAsync({ id: editing.id, ...fields });
+        await applyBuildingImage(editing.id, pendingImage, removeImage);
+        toast.success("Building updated");
+        setFormOpen(false);
+        setEditing(null);
+        return;
+      }
+
+      const building = await createMut.mutateAsync(fields);
+      if (pendingImage) {
+        try {
+          await applyBuildingImage(building.id, pendingImage, false);
+        } catch (imgErr) {
+          toast.error(
+            imgErr instanceof Error
+              ? imgErr.message
+              : "Building created, but the photo could not be uploaded.",
+          );
+        }
+      }
+      setFormOpen(false);
+      if (!isProPlus) {
+        toast.message("Building created", {
+          description: "BIM / IFC upload requires Pro — upgrade under Billing.",
+        });
+        router.push(`/projects/${projectId}/locations/${locationId}/buildings/${building.id}`);
+        return;
+      }
+      toast.success("Building created — add your files");
+      setBrowserBuilding({ id: building.id, name: building.name });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save building.");
+    } finally {
+      setImageBusy(false);
+    }
+  }
 
   if (isPending && !data) return <EnterpriseLoadingState label="Loading buildings…" />;
 
@@ -65,7 +134,10 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
   const buildings = data?.buildings ?? [];
   const location = data?.location;
   const place = location ? formatLocationPlace(location) : null;
-  const saving = createMut.isPending || updateMut.isPending;
+  const saving = createMut.isPending || updateMut.isPending || imageBusy;
+  const mapLat = location?.latitude ?? null;
+  const mapLng = location?.longitude ?? null;
+  const hasMapPin = mapLat != null && mapLng != null;
 
   return (
     <div className="enterprise-animate-in space-y-4 pb-8">
@@ -109,6 +181,16 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
           </button>
         ) : null}
       </header>
+
+      {hasMapPin ? (
+        <ProjectLocationMap
+          height={180}
+          latitude={mapLat}
+          longitude={mapLng}
+          zoom={14}
+          showMarker
+        />
+      ) : null}
 
       {buildings.length === 0 ? (
         <div className="enterprise-card flex flex-col items-center gap-3 px-5 py-10 text-center sm:py-12">
@@ -184,37 +266,7 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
           }
         }}
         onSubmit={(input) => {
-          if (editing) {
-            updateMut.mutate(
-              { id: editing.id, ...input },
-              {
-                onSuccess: () => {
-                  toast.success("Building updated");
-                  setFormOpen(false);
-                  setEditing(null);
-                },
-                onError: (err: Error) => toast.error(err.message),
-              },
-            );
-          } else {
-            createMut.mutate(input, {
-              onSuccess: (building) => {
-                setFormOpen(false);
-                if (!isProPlus) {
-                  toast.message("Building created", {
-                    description: "BIM / IFC upload requires Pro — upgrade under Billing.",
-                  });
-                  router.push(
-                    `/projects/${projectId}/locations/${locationId}/buildings/${building.id}`,
-                  );
-                  return;
-                }
-                toast.success("Building created — add your files");
-                setBrowserBuilding({ id: building.id, name: building.name });
-              },
-              onError: (err: Error) => toast.error(err.message),
-            });
-          }
+          void handleBuildingSubmit(input);
         }}
       />
 

@@ -1,6 +1,7 @@
 import { prisma } from "../prisma.js";
 import type { Env } from "../env.js";
 import { deleteFileFromS3AndDb } from "../deleteProjectAssets.js";
+import { deleteObject } from "../s3.js";
 import { buildingFolderKey } from "./locationsAccess.js";
 
 /** Remove a building and its levels/mappings; hard-delete building-folder uploads, unlink other files. */
@@ -9,6 +10,11 @@ export async function cascadeDeleteBuilding(
   buildingId: string,
   workspaceId: string,
 ): Promise<{ bytesFreed: bigint }> {
+  const building = await prisma.building.findUnique({
+    where: { id: buildingId },
+    select: { imageS3Key: true, imageSizeBytes: true },
+  });
+
   const folderKey = buildingFolderKey(buildingId);
   const files = await prisma.file.findMany({
     where: { buildingId },
@@ -30,6 +36,14 @@ export async function cascadeDeleteBuilding(
         },
       });
     }
+  }
+
+  if (building?.imageS3Key) {
+    const imgDel = await deleteObject(env, building.imageS3Key);
+    if (!imgDel.ok && imgDel.error !== "S3 not configured") {
+      console.warn(`[building cascade] deleteObject ${building.imageS3Key}:`, imgDel.error);
+    }
+    bytesFreed += building.imageSizeBytes ?? 0n;
   }
 
   // Levels + drawing maps cascade via Prisma relations.

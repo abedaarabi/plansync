@@ -1,4 +1,7 @@
+import { referencePhotoContentType } from "@/lib/referencePhotoMime";
 import { apiJsonFetch, jsonHeaders } from "./shared";
+
+const MAX_BUILDING_IMAGE_BYTES = 15 * 1024 * 1024;
 
 export type BuildingAssetType = "IFC" | "PDF" | "OTHER";
 export type BuildingDiscipline = "ARCHITECTURAL" | "STRUCTURAL" | "MEP" | "CIVIL" | "OTHER" | null;
@@ -12,6 +15,8 @@ export type LocationInput = {
   address?: string | null;
   city?: string | null;
   country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   notes?: string | null;
 };
 
@@ -30,6 +35,8 @@ export type LocationSummary = {
   address: string | null;
   city: string | null;
   country: string | null;
+  latitude: number | null;
+  longitude: number | null;
   notes: string | null;
   buildingCount: number;
   createdAt: string;
@@ -55,6 +62,7 @@ export type BuildingSummary = {
   buildingType: BuildingType | null;
   floorsApprox: number | null;
   notes: string | null;
+  hasImage: boolean;
   locationId: string;
   locationName: string;
   projectId: string;
@@ -167,6 +175,7 @@ export type LocationBuildingRow = {
   buildingType: BuildingType | null;
   floorsApprox: number | null;
   notes: string | null;
+  hasImage: boolean;
   ifcCount: number;
   readyIfcCount: number;
   pdfCount: number;
@@ -413,6 +422,91 @@ export async function deleteBuildingAsset(
   fileId: string,
 ): Promise<{ ok: true; mode: "deleted" | "unlinked" }> {
   return apiJsonFetch(`/api/v1/buildings/${buildingId}/assets/${fileId}`, { method: "DELETE" });
+}
+
+async function presignBuildingImageUpload(
+  buildingId: string,
+  body: { fileName: string; contentType: string; sizeBytes: number },
+): Promise<{ uploadUrl: string; key: string }> {
+  return apiJsonFetch(`/api/v1/buildings/${buildingId}/image/presign`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({
+      fileName: body.fileName,
+      contentType: body.contentType,
+      sizeBytes: String(body.sizeBytes),
+    }),
+  });
+}
+
+async function completeBuildingImageUpload(
+  buildingId: string,
+  body: {
+    key: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+  },
+): Promise<{ id: string; name: string; hasImage: boolean }> {
+  const res = await apiJsonFetch<{ building: { id: string; name: string; hasImage: boolean } }>(
+    `/api/v1/buildings/${buildingId}/image/complete`,
+    {
+      method: "POST",
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        key: body.key,
+        fileName: body.fileName,
+        contentType: body.contentType,
+        sizeBytes: String(body.sizeBytes),
+      }),
+    },
+  );
+  return res.building;
+}
+
+export async function fetchBuildingImageReadUrl(buildingId: string): Promise<string> {
+  const res = await apiJsonFetch<{ url: string }>(
+    `/api/v1/buildings/${buildingId}/image/presign-read`,
+  );
+  return res.url;
+}
+
+export async function deleteBuildingImage(
+  buildingId: string,
+): Promise<{ id: string; name: string; hasImage: boolean }> {
+  const res = await apiJsonFetch<{ building: { id: string; name: string; hasImage: boolean } }>(
+    `/api/v1/buildings/${buildingId}/image`,
+    { method: "DELETE" },
+  );
+  return res.building;
+}
+
+/** Presign PUT, upload to S3, then complete. */
+export async function uploadBuildingImageFile(
+  buildingId: string,
+  file: File,
+): Promise<{ id: string; name: string; hasImage: boolean }> {
+  if (file.size > MAX_BUILDING_IMAGE_BYTES) {
+    throw new Error("Image too large (max 15 MB).");
+  }
+  const contentType = referencePhotoContentType(file);
+  const { uploadUrl, key } = await presignBuildingImageUpload(buildingId, {
+    fileName: file.name,
+    contentType,
+    sizeBytes: file.size,
+  });
+  const put = await fetch(uploadUrl, {
+    method: "PUT",
+    body: file,
+    headers: { "Content-Type": contentType },
+  });
+  if (!put.ok) throw new Error("Could not upload image to storage.");
+  return completeBuildingImageUpload(buildingId, {
+    key,
+    fileName: file.name,
+    contentType,
+    sizeBytes: file.size,
+  });
 }
 
 /** Simple PDF→level assign (no IFC / calibration). */

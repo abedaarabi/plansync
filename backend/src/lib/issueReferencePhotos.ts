@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { z } from "zod";
 
 export const MAX_ISSUE_REFERENCE_PHOTOS = 12;
 export const MAX_ISSUE_PHOTO_BYTES = 15n * 1024n * 1024n;
@@ -13,6 +14,35 @@ export const ALLOWED_ISSUE_PHOTO_CONTENT_TYPES = new Set([
   "image/heic",
   "image/heif",
 ]);
+
+/** Shared JPEG/PNG/WebP/GIF/HEIC size + MIME checks for S3 image uploads. */
+export function validateImageUploadBytes(
+  contentType: string,
+  sizeBytes: bigint,
+): { ok: true; contentType: string } | { ok: false; error: string } {
+  const ct = contentType.trim().toLowerCase();
+  if (!ALLOWED_ISSUE_PHOTO_CONTENT_TYPES.has(ct)) {
+    return { ok: false, error: "Only JPEG, PNG, WebP, GIF, or HEIC/HEIF images are allowed" };
+  }
+  if (sizeBytes <= 0n) return { ok: false, error: "File is empty" };
+  if (sizeBytes > MAX_ISSUE_PHOTO_BYTES) {
+    return { ok: false, error: "File too large (max 15 MB per image)" };
+  }
+  return { ok: true, contentType: ct };
+}
+
+export const imageUploadPresignBodySchema = z.object({
+  fileName: z.string().min(1),
+  contentType: z.string().default("application/octet-stream"),
+  sizeBytes: z.coerce.bigint(),
+});
+
+export const imageUploadCompleteBodySchema = z.object({
+  key: z.string().min(1),
+  fileName: z.string().min(1),
+  contentType: z.string().default("application/octet-stream"),
+  sizeBytes: z.coerce.bigint(),
+});
 
 export type IssueReferencePhotoParsed = {
   id: string;
