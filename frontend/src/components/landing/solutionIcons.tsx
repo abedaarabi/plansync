@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   BarChart3,
+  Box,
   Calculator,
   CalendarDays,
   CalendarClock,
@@ -21,6 +22,7 @@ import type { SolutionSlug } from "@/lib/landingContent";
 /** Single icon library (lucide) — simple line icons only. */
 export const SOLUTION_ICONS = {
   viewer: FileSearch,
+  "bim-viewer": Box,
   issues: AlertTriangle,
   rfis: MessageSquare,
   takeoff: Calculator,
@@ -64,6 +66,7 @@ const RESTRAINED_ICON: SolutionIconColor = {
 
 export const SOLUTION_ICON_COLORS: Record<SolutionSlug, SolutionIconColor> = {
   viewer: RESTRAINED_ICON,
+  "bim-viewer": RESTRAINED_ICON,
   issues: RESTRAINED_ICON,
   rfis: RESTRAINED_ICON,
   takeoff: RESTRAINED_ICON,

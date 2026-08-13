@@ -120,6 +120,44 @@ export function SolutionFeatureDetail({
           </AnimateIn>
         );
 
+      case "bim-viewer":
+        return (
+          <AnimateIn className="grid items-center gap-10 scroll-mt-24 lg:grid-cols-2 lg:gap-16">
+            <BrowserMockup variant="elevated">
+              <div className="relative aspect-4/3 overflow-hidden bg-slate-950">
+                <Image
+                  src="/images/3dviewer.webp"
+                  alt="PlanSync BIM 3D IFC viewer showing a building model in the browser"
+                  fill
+                  className="object-cover object-[60%_40%]"
+                  sizes="(max-width: 1024px) 100vw, 40vw"
+                  loading="lazy"
+                  quality={82}
+                />
+              </div>
+            </BrowserMockup>
+            <div className={PANEL}>
+              <h2 className="text-2xl font-bold leading-snug tracking-tight text-slate-900 sm:text-3xl">
+                BIM in the browser — next to your drawings
+              </h2>
+              <p className="mt-4 text-base leading-relaxed text-slate-600">
+                Open IFC models where your team already works. Navigate the facility in 3D, inspect
+                elements, and keep spatial context with drawings, assets, and delivery workflows —
+                without exporting to a separate viewer.
+              </p>
+              <ul className="mt-5 flex flex-col gap-3">
+                {LANDING_FEATURE_BULLETS["bim-viewer"].map((b) => (
+                  <li key={b} className="flex gap-3">
+                    <BulletCheck colorClass={colors.text} />
+                    <span className="text-sm leading-relaxed text-slate-600">{b}</span>
+                  </li>
+                ))}
+              </ul>
+              <DetailCta href="/sign-in" label="Explore BIM in PlanSync" colorBg={colors.solidBg} />
+            </div>
+          </AnimateIn>
+        );
+
       case "issues":
         return (
           <AnimateIn className="grid items-center gap-10 scroll-mt-24 lg:grid-cols-2 lg:gap-16">

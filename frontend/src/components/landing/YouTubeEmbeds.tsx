@@ -1,13 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useState } from "react";
 import { FileStack, Play } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-
-/** Virtual player size — YouTube ABR keys off iframe CSS size, not the scaled visual. */
-const HD_EMBED_WIDTH = 1920;
-const HD_EMBED_HEIGHT = 1080;
 
 type LandingVideoModalProps = {
   videoId: string;
@@ -57,28 +53,6 @@ function youtubeEmbedSrc(
     params.set("playlist", videoId);
   }
   return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
-}
-
-/** Scale a 1080p-sized iframe down into the container so YouTube still serves HD. */
-function useHdEmbedScale(containerRef: RefObject<HTMLElement | null>) {
-  const [scale, setScale] = useState(0);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const update = () => {
-      const width = el.clientWidth;
-      setScale(width > 0 ? width / HD_EMBED_WIDTH : 0);
-    };
-
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [containerRef]);
-
-  return scale;
 }
 
 export function LandingVideoModal({
@@ -222,107 +196,5 @@ export function LandingVideoModal({
         </div>
       </div>
     </>
-  );
-}
-
-function warmYoutubeConnections() {
-  if (typeof document === "undefined") return;
-  if (document.querySelector('link[data-yt-preconnect="1"]')) return;
-  for (const href of ["https://www.youtube-nocookie.com", "https://i.ytimg.com"]) {
-    const link = document.createElement("link");
-    link.rel = "preconnect";
-    link.href = href;
-    link.setAttribute("data-yt-preconnect", "1");
-    document.head.appendChild(link);
-  }
-}
-
-type LandingYoutubeFacadeProps = {
-  videoId: string;
-  title: string;
-  playAriaLabel: string;
-  posterAlt: string;
-  /** Branded local poster — preferred over the default YouTube thumbnail. */
-  posterSrc?: string;
-  /** Stable id so section CTAs can trigger play. */
-  playButtonId?: string;
-};
-
-/**
- * Lite-YouTube facade: poster only until click — no YouTube network until play.
- * Best practice for below-the-fold landing embeds (keeps LCP/TBT light).
- */
-export function LandingYoutubeFacade({
-  videoId,
-  title,
-  playAriaLabel,
-  posterAlt,
-  posterSrc,
-  playButtonId,
-}: LandingYoutubeFacadeProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [activated, setActivated] = useState(false);
-  const scale = useHdEmbedScale(containerRef);
-  const thumbnailUrl = posterSrc ?? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-  const isRemotePoster = thumbnailUrl.startsWith("http");
-
-  return (
-    <div ref={containerRef} className="relative aspect-video overflow-hidden bg-slate-950">
-      {activated && scale > 0 ? (
-        <iframe
-          src={youtubeEmbedSrc(videoId, {
-            autoplay: true,
-            mute: false,
-            controls: true,
-          })}
-          title={title}
-          width={HD_EMBED_WIDTH}
-          height={HD_EMBED_HEIGHT}
-          allow="autoplay; encrypted-media; picture-in-picture"
-          className="absolute left-0 top-0 max-w-none border-0"
-          style={{
-            width: HD_EMBED_WIDTH,
-            height: HD_EMBED_HEIGHT,
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
-          }}
-        />
-      ) : (
-        <button
-          type="button"
-          id={playButtonId}
-          onClick={() => setActivated(true)}
-          onPointerEnter={warmYoutubeConnections}
-          onFocus={warmYoutubeConnections}
-          className="group absolute inset-0 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--landing-cta) focus-visible:ring-inset"
-          aria-label={playAriaLabel}
-        >
-          <Image
-            src={thumbnailUrl}
-            alt={posterAlt}
-            fill
-            className="object-cover transition duration-500 ease-out group-hover:scale-[1.02]"
-            sizes="(max-width: 1024px) 100vw, 60vw"
-            unoptimized={isRemotePoster}
-          />
-          <span
-            className="pointer-events-none absolute inset-0 bg-slate-950/25 transition duration-300 group-hover:bg-slate-950/40"
-            aria-hidden
-          />
-          <span className="relative z-10 inline-flex h-16 w-16 items-center justify-center sm:h-18 sm:w-18">
-            <span
-              className="absolute inset-0 rounded-full bg-[color-mix(in_srgb,var(--landing-cta)_28%,transparent)] blur-md transition duration-300 group-hover:bg-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)]"
-              aria-hidden
-            />
-            <span className="relative inline-flex h-full w-full items-center justify-center rounded-full bg-(--landing-cta) shadow-[0_16px_44px_-20px_color-mix(in_srgb,var(--landing-cta)_70%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--landing-cta)_35%,white_65%)] transition duration-300 group-hover:scale-105 group-hover:bg-(--landing-cta-bright)">
-              <Play
-                className="h-7 w-7 translate-x-px text-(--landing-cta-text) sm:h-8 sm:w-8"
-                fill="currentColor"
-              />
-            </span>
-          </span>
-        </button>
-      )}
-    </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   createContext,
@@ -48,6 +48,8 @@ export function MarketingShell({ children }: MarketingShellProps) {
 
 function MarketingShellInner({ children }: MarketingShellProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const isHome = pathname === "/";
   const { data: me } = useQuery({
     queryKey: qk.me(),
     queryFn: fetchMe,
@@ -103,6 +105,7 @@ function MarketingShellInner({ children }: MarketingShellProps) {
           setMobileOpen={setMobileOpen}
           isLoggedIn={isLoggedIn}
           onGoToFreeViewer={goToFreeViewer}
+          dark={isHome}
         />
         <main className="marketing-main-inner">{children}</main>
         <LandingFooter onGoToFreeViewer={goToFreeViewer} />

@@ -35,6 +35,18 @@ export const LANDING_SOLUTIONS = [
     ],
   },
   {
+    slug: "bim-viewer",
+    category: "construction" as SolutionCategory,
+    tagline: "IFC models in the browser",
+    title: "BIM 3D viewer",
+    description:
+      "Open IFC/BIM models in the same workspace as drawings and assets. Navigate the facility in 3D, inspect elements, and keep spatial context with the rest of delivery.",
+    bullets: [
+      "View IFC models in the browser without a separate desktop tool.",
+      "Keep models, drawings, and asset records in one facility workspace.",
+    ],
+  },
+  {
     slug: "issues",
     category: "construction" as SolutionCategory,
     tagline: "Track issues on the drawing",
@@ -276,6 +288,10 @@ export const LANDING_FEATURE_BULLETS = {
     "No account required for Free — open a PDF and start working.",
     "Snap-friendly tools for lengths, areas, and callouts on real construction sets.",
   ],
+  "bim-viewer": [
+    "Navigate IFC models in the browser with element selection and spatial context.",
+    "Keep BIM alongside drawings, assets, and delivery workflows — not in a silo.",
+  ],
   issues: [
     "Filter and sort by assignee, priority, or trade so nothing slips through.",
     "Photo attachments and comments stay next to the pin, not in a separate thread.",
@@ -340,6 +356,10 @@ export const LANDING_FEATURE_BULLETS = {
 
 export const LANDING_FAQ = [
   {
+    q: "Is PlanSync only for data centers?",
+    a: "PlanSync is positioned for mission-critical data-center delivery and operations, while still supporting drawings, BIM, issues, RFIs, assets, and O&M workflows used across complex facilities.",
+  },
+  {
     q: "Is Free really free forever?",
     a: "Yes. The local PDF viewer is free forever. No hidden limits, no expiry, no credit card.",
   },
@@ -356,19 +376,15 @@ export const LANDING_FAQ = [
     a: "Yes. Cancel anytime from your billing settings. No questions asked, no lock-in.",
   },
   {
-    q: "What happens to my data if I cancel?",
-    a: "You keep access until the end of your billing period. Export your data anytime before cancelling.",
-  },
-  {
     q: "How does the 14-day trial work?",
     a: "Full Pro access for 14 days, no credit card needed. Upgrade anytime during or after the trial.",
   },
   {
-    q: "Can I upgrade from Free to Pro?",
-    a: "Yes. Your local markups and measurements migrate automatically to the cloud when you upgrade.",
+    q: "Do you support BIM / IFC?",
+    a: "Yes. PlanSync includes a browser BIM/IFC viewer so models sit in the same workspace as drawings and assets.",
   },
   {
     q: "Do you support DWG/CAD files?",
-    a: "Currently PDF only. DXF/DWG support is on our roadmap and coming soon.",
+    a: "PDF today. DXF/DWG are on the roadmap and not available yet.",
   },
 ] as const;

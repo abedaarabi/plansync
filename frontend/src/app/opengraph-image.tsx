@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { ImageResponse } from "next/og";
 
 export const alt =
-  "PlanSync — construction platform for drawings, issues, RFIs, takeoff, BIM, and facilities ops.";
+  "PlanSync — digital delivery platform for data centers. BIM, drawings, assets, commissioning, and O&M in one workspace.";
 
 export const size = { width: 1200, height: 630 };
 
@@ -141,19 +141,19 @@ export default async function Image() {
               fontWeight: 600,
             }}
           >
-            Construction + FM platform
+            Built for data center delivery
           </div>
           <h1
             style={{
               margin: 0,
-              fontSize: 48,
+              fontSize: 44,
               fontWeight: 700,
               lineHeight: 1.12,
               color: "#F8FAFC",
               letterSpacing: "-0.03em",
             }}
           >
-            Plans, issues & ops — one source of truth
+            From BIM to operations — assets stay connected
           </h1>
           <p
             style={{
@@ -164,13 +164,13 @@ export default async function Image() {
               maxWidth: 460,
             }}
           >
-            Measure PDFs free in your browser. Collaborate on RFIs, takeoff, BIM, and facilities
-            when your team is ready.
+            Drawings, BIM, commissioning, and O&amp;M in one digital workspace for data-center
+            delivery and operations.
           </p>
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {["PDF viewer", "Issues", "RFIs", "Takeoff", "BIM", "FM"].map((label) => (
+          {["Drawings", "BIM", "Assets", "Commissioning", "O&M", "Ops"].map((label) => (
             <span
               key={label}
               style={{
@@ -237,7 +237,7 @@ export default async function Image() {
                 letterSpacing: "0.02em",
               }}
             >
-              plansync.app
+              plansync.dev
             </span>
           </div>
           <img

@@ -3,44 +3,26 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ArrowRight, CheckCircle2, Users2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { trackMarketingEvent } from "@/lib/marketingAnalytics";
-import { getHeroExperimentVariant, type HeroExperimentVariant } from "@/lib/marketingExperiments";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { AnimateIn } from "./AnimateIn";
+import { LandingHeroProductMockup } from "./LandingHeroProductMockup";
+import { DEMO_MAILTO } from "./landingGsap";
 
 type LandingHeroSectionProps = {
-  prefersReducedMotion: boolean;
   onGoToFreeViewer: (source?: string) => void;
 };
 
-const TRUST_NAMES = ["NORTHRIDGE BUILD", "MECHANICA PRO", "HARBOR FM"] as const;
-
-export function LandingHeroSection({
-  prefersReducedMotion,
-  onGoToFreeViewer,
-}: LandingHeroSectionProps) {
+export function LandingHeroSection({ onGoToFreeViewer }: LandingHeroSectionProps) {
   const t = useTranslations("hero");
-  const [heroVariant, setHeroVariant] = useState<HeroExperimentVariant>("control");
-
-  useEffect(() => {
-    const assigned = getHeroExperimentVariant();
-    setHeroVariant(assigned);
-    trackMarketingEvent("marketing_page_view", {
-      path: window.location.pathname,
-      experiment: "hero_message_v1",
-      variant: assigned,
-    });
-  }, []);
-
-  const heroSub = heroVariant === "value-first" ? t("subValueFirst") : t("sub");
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   return (
     <section
       id="hero"
-      className="relative isolate min-h-dvh scroll-mt-20 overflow-hidden pt-28 pb-14 sm:pt-36 sm:pb-20 lg:flex lg:items-center lg:py-24 xl:py-28"
+      className="relative isolate min-h-dvh scroll-mt-20 overflow-hidden pt-28 pb-12 sm:pt-32 sm:pb-16 lg:flex lg:items-center lg:py-20"
     >
-      {/* ── Video / static background ── */}
       <div className="pointer-events-none absolute inset-0" aria-hidden>
         {prefersReducedMotion ? (
           <Image
@@ -48,13 +30,13 @@ export function LandingHeroSection({
             alt=""
             fill
             sizes="100vw"
-            className="object-cover object-[center_36%]"
+            className="landing-photo-soft object-cover object-[center_36%]"
             priority
             quality={75}
           />
         ) : (
           <video
-            className="h-full w-full object-cover object-[center_36%]"
+            className="landing-photo-soft h-full w-full object-cover object-[center_36%]"
             autoPlay
             muted
             loop
@@ -68,129 +50,91 @@ export function LandingHeroSection({
         )}
       </div>
 
-      {/* ── Overlays ── */}
       <div
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.35)_0%,rgba(15,23,42,0.55)_38%,rgba(15,23,42,0.72)_62%,rgba(2,6,23,0.92)_100%)]"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(11,18,32,0.58)_0%,rgba(11,18,32,0.74)_42%,rgba(11,18,32,0.96)_100%)]"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,transparent_45%,rgba(37,99,235,0.08)_100%)]"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 shadow-[inset_0_0_90px_rgba(0,0,0,0.18),inset_0_-100px_150px_rgba(0,0,0,0.38)]"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M60 0H0v60' fill='none' stroke='%23ffffff' stroke-width='0.5'/%3E%3C/svg%3E")`,
-          backgroundSize: "60px 60px",
-        }}
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,transparent_52%,rgba(37,99,235,0.18)_100%)]"
         aria-hidden
       />
 
-      {/* ── Content ── */}
       <div className="relative z-10 mx-auto w-full max-w-6xl px-6">
         <AnimateIn instant>
-          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-12 xl:gap-16">
-            {/* Copy first on mobile so CTAs stay above the fold */}
+          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-12">
             <div className="order-1 text-center lg:text-left">
-              <p className="landing-type-label mb-5 inline-flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--landing-cta)_40%,transparent)] bg-[color-mix(in_srgb,var(--landing-cta)_14%,rgba(15,23,42,0.5))] px-4 py-1.5 text-blue-100 shadow-sm backdrop-blur-md lg:inline-flex">
-                <span className="relative flex h-2 w-2" aria-hidden>
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-(--landing-cta) opacity-60" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-(--landing-cta)" />
-                </span>
+              <p className="mb-5 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
+                Plan<span className="text-blue-400">Sync</span>
+              </p>
+
+              <p className="landing-type-label mb-4 inline-flex items-center rounded-md border border-white/18 bg-white/8 px-3 py-1.5 text-sky-100">
                 {t("eyebrow")}
               </p>
 
-              <h1 className="text-balance text-[2.35rem] font-bold leading-[1.06] tracking-tight text-white sm:text-[3.05rem] lg:max-w-[16ch] lg:text-[3.35rem] lg:leading-[1.05]">
+              <h1 className="text-balance text-[1.85rem] font-semibold leading-[1.12] tracking-[-0.035em] text-white sm:text-[2.35rem] lg:max-w-[15ch] lg:text-[2.55rem]">
                 {t("title")}
               </h1>
 
-              <p className="mx-auto mt-5 max-w-[58ch] text-[1.04rem] leading-relaxed text-blue-100/85 sm:mt-6 sm:text-[1.12rem] lg:mx-0 lg:max-w-[48ch] lg:text-[1.15rem]">
-                {heroSub}
+              <p className="mx-auto mt-4 max-w-[42ch] text-[1.02rem] font-normal leading-[1.65] text-slate-200/90 sm:mt-5 sm:text-[1.06rem] lg:mx-0">
+                {t("sub")}
               </p>
 
-              <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-3.5 lg:justify-start">
-                <button
-                  type="button"
-                  onClick={() => onGoToFreeViewer("hero_primary_cta")}
-                  className="landing-btn-primary flex-1 sm:flex-none"
-                >
-                  {t("openViewer")}
-                  <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
-                </button>
+              <div className="mt-7 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:justify-center lg:justify-start">
                 <Link
                   href="/sign-in"
                   onClick={() =>
                     trackMarketingEvent("marketing_cta_click", {
-                      ctaType: "start_trial",
-                      source: "hero_secondary_trial",
+                      ctaType: "explore_plansync",
+                      source: "hero_primary",
                       destination: "/sign-in",
-                      variant: heroVariant,
                     })
                   }
-                  className="landing-btn-ghost flex-1 sm:flex-none"
+                  className="landing-btn-primary"
                 >
-                  {t("startTrial")}
+                  {t("explore")}
+                  <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
                 </Link>
+                <a
+                  href="#workflow"
+                  className="landing-type-nav px-2 py-2 text-slate-200 underline-offset-4 transition hover:text-white hover:underline"
+                >
+                  {t("seeHow")}
+                </a>
               </div>
 
-              <div className="landing-type-caption mt-5 flex flex-wrap items-center justify-center gap-2.5 text-blue-100/90 lg:justify-start">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/8 px-3 py-1.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
-                  {t("chipNoSignup")}
+              <div className="mt-3 flex flex-col items-center gap-2 sm:flex-row sm:justify-center lg:justify-start">
+                <a
+                  href={DEMO_MAILTO}
+                  onClick={() =>
+                    trackMarketingEvent("marketing_cta_click", {
+                      ctaType: "book_demo",
+                      source: "hero_demo",
+                      destination: "mailto",
+                    })
+                  }
+                  className="landing-type-caption text-slate-400 underline-offset-4 transition hover:text-white hover:underline"
+                >
+                  {t("bookDemo")}
+                </a>
+                <span className="hidden text-slate-600 sm:inline" aria-hidden>
+                  ·
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/8 px-3 py-1.5">
-                  <Users2 className="h-3.5 w-3.5 text-sky-300" />
-                  {t("chipAudience")}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => onGoToFreeViewer("hero_open_pdf")}
+                  className="landing-type-caption text-slate-400 underline-offset-4 transition hover:text-white hover:underline"
+                >
+                  {t("openPdf")}
+                </button>
               </div>
 
-              <p className="landing-type-caption mt-4 text-blue-100/65 lg:text-start">
-                {t("trustLine")} <span className="text-blue-50/80">{TRUST_NAMES.join(" · ")}</span>
+              <p className="landing-type-caption mt-6 text-slate-400 lg:text-start">
+                {t("audienceLine")}
               </p>
             </div>
 
-            <div className="relative order-2 mx-auto w-full max-w-md sm:max-w-lg lg:mx-0 lg:max-w-xl lg:justify-self-end">
-              <div
-                className="pointer-events-none absolute -inset-4 rounded-3xl bg-[radial-gradient(ellipse_at_50%_40%,rgba(255,255,255,0.1),transparent_65%)] blur-2xl"
-                aria-hidden
-              />
-              <div className="relative overflow-hidden rounded-2xl bg-slate-950 shadow-[0_28px_70px_-18px_rgba(0,0,0,0.5)] ring-1 ring-white/12">
-                <div className="relative aspect-16/10 w-full max-sm:aspect-16/11">
-                  {/* 2D plan viewer — left half */}
-                  <div className="absolute inset-y-0 left-0 w-1/2 overflow-hidden">
-                    <Image
-                      src="/images/measure.png"
-                      alt={t("heroImageAlt")}
-                      fill
-                      className="object-cover object-[15%_top]"
-                      sizes="(max-width: 1024px) 45vw, 260px"
-                      priority
-                      quality={82}
-                    />
-                  </div>
-                  {/* 3D IFC viewer — right half */}
-                  <div className="absolute inset-y-0 right-0 w-1/2 overflow-hidden" aria-hidden>
-                    <Image
-                      src="/images/3dviewer.webp"
-                      alt=""
-                      fill
-                      className="object-cover object-[70%_40%]"
-                      sizes="(max-width: 1024px) 45vw, 260px"
-                      priority
-                      quality={82}
-                    />
-                  </div>
-                  {/* Center seam between 2D and 3D */}
-                  <div
-                    className="pointer-events-none absolute inset-y-0 left-1/2 z-10 w-px -translate-x-1/2 bg-white/55 shadow-[0_0_10px_rgba(255,255,255,0.35)]"
-                    aria-hidden
-                  />
-                </div>
-              </div>
+            <div className="relative order-2 mx-auto w-full max-w-xl lg:mx-0 lg:max-w-none">
+              <LandingHeroProductMockup />
             </div>
           </div>
         </AnimateIn>

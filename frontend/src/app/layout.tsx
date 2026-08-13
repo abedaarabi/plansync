@@ -26,9 +26,9 @@ const inter = Inter({
   display: "swap",
 });
 
-const siteTitle = "PlanSync — Plans, issues, RFIs & ops in one place";
+const siteTitle = "PlanSync — Digital Delivery Platform for Data Centers";
 const siteDescription =
-  "One workspace for construction and FM teams. Measure and mark up PDFs free in your browser, then collaborate on issues, RFIs, takeoff, BIM, and facilities workflows.";
+  "From BIM to operations — connect drawings, assets, commissioning, and O&M in one facility workspace for data-center delivery.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteOrigin()),
@@ -64,8 +64,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: siteTitle,
-    description: siteDescription,
+    title: "PlanSync — Digital Delivery for Data Centers",
+    description:
+      "Keep every data-center asset connected from BIM and drawings through commissioning, handover, and operations.",
   },
   appleWebApp: {
     capable: true,

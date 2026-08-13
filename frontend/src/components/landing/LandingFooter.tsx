@@ -28,7 +28,9 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
               />
               <span className="text-base font-bold tracking-tight">PlanSync</span>
             </div>
-            <p className="landing-type-body mt-4 max-w-xs text-slate-400">{t("tagline")}</p>
+            <p className="landing-type-body mt-4 max-w-xs text-slate-400">
+              {t.has("taglineDc") ? t("taglineDc") : t("tagline")}
+            </p>
           </div>
 
           <div>
@@ -36,10 +38,26 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
             <ul className="mt-4 flex flex-col gap-3">
               <li>
                 <Link
-                  href="/#how-it-works"
+                  href="/#platform"
                   className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
-                  {t("howItWorks")}
+                  {t.has("platform") ? t("platform") : "Platform"}
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/#workflow"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
+                >
+                  {t.has("workflow") ? t("workflow") : "2D → 3D → Asset"}
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/#data-centers"
+                  className="landing-type-nav text-slate-300 transition hover:text-white"
+                >
+                  {t.has("dataCenters") ? t("dataCenters") : "Data Centers"}
                 </Link>
               </li>
               <li>
@@ -48,22 +66,6 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                   className="landing-type-nav text-slate-300 transition hover:text-white"
                 >
                   {t("allSolutions")}
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/#bim"
-                  className="landing-type-nav text-slate-300 transition hover:text-white"
-                >
-                  {t("features")}
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/#cde"
-                  className="landing-type-nav text-slate-300 transition hover:text-white"
-                >
-                  {t.has("cde") ? t("cde") : "CDE"}
                 </Link>
               </li>
               <li>
@@ -82,17 +84,6 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                 >
                   {t("freeViewer")}
                 </button>
-              </li>
-              <li>
-                <Link
-                  href="/story"
-                  className="landing-type-nav text-slate-300 transition hover:text-white"
-                >
-                  {t.has("story") ? t("story") : "Delivery story"}
-                </Link>
-              </li>
-              <li>
-                <span className="landing-type-nav text-slate-500">{t("changelog")}</span>
               </li>
             </ul>
             <p className="landing-type-label mt-6 text-slate-500">{t("solutionsHeading")}</p>

@@ -3,24 +3,24 @@ import { HomeClient } from "@/components/HomeClient";
 import { getHomepageJsonLd } from "@/lib/landingJsonLd";
 import { getSiteOrigin } from "@/lib/siteUrl";
 
-const shareTitle = "PlanSync — Plans, issues, RFIs & ops in one place";
+const shareTitle = "PlanSync — Digital Delivery Platform for Data Centers";
 const shareDescription =
-  "Everyone works from the same drawings. Pin issues, run RFIs, measure takeoff, open IFC models, and manage facilities — start free in your browser, no signup required.";
+  "From BIM to operations — connect drawings, assets, commissioning, and O&M in one facility workspace for data-center delivery.";
 
 export const metadata: Metadata = {
   title: shareTitle,
   description: shareDescription,
   keywords: [
-    "free PDF viewer",
-    "free construction PDF viewer",
-    "measure PDF online free",
-    "PDF takeoff tool free",
-    "blueprint viewer online free",
-    "calibrate PDF scale",
-    "construction drawing viewer",
-    "markup PDF free",
-    "architectural PDF viewer",
-    "shop drawing viewer browser",
+    "data center BIM",
+    "data center digital twin",
+    "data center commissioning",
+    "data center asset management",
+    "BIM to operations",
+    "data center construction",
+    "data center facility management",
+    "IFC BIM viewer",
+    "data center O&M",
+    "digital delivery platform",
   ],
   alternates: {
     canonical: "/",
@@ -30,11 +30,13 @@ export const metadata: Metadata = {
     description: shareDescription,
     url: "/",
     type: "website",
+    siteName: "PlanSync",
   },
   twitter: {
     card: "summary_large_image",
-    title: shareTitle,
-    description: shareDescription,
+    title: "PlanSync — Digital Delivery for Data Centers",
+    description:
+      "Keep every data-center asset connected from BIM and drawings through commissioning, handover, and operations.",
   },
   robots: {
     index: true,

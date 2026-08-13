@@ -1,7 +1,7 @@
 import { LANDING_FAQ } from "@/lib/landingContent";
 
 const SOFTWARE_DESCRIPTION =
-  "PlanSync: free browser-based construction PDF viewer with local files (calibrate, measure, annotate, export). Optional PlanSync Pro adds cloud projects, team collaboration, and Stripe billing — Free tier stays full-featured for local PDFs.";
+  "PlanSync is the digital delivery platform for data centers — connecting BIM, drawings, assets, commissioning, and O&M into one facility workspace from construction through operations. Free browser PDF viewer available; Pro/Enterprise add collaboration, BIM/IFC, and operations workflows.";
 
 /** FAQPage + WebSite + SoftwareApplication for homepage SEO (rich results + free-tool signals). */
 export function getHomepageJsonLd(siteOrigin: string) {
@@ -53,12 +53,12 @@ export function getHomepageJsonLd(siteOrigin: string) {
         description: SOFTWARE_DESCRIPTION,
         url: siteOrigin,
         featureList: [
-          "Calibrate drawing scale from a known dimension",
-          "Line, area, angle, and path measurements on PDFs",
-          "Markup tools and export to PDF or PNG",
-          "O&M handover workflows with asset records, inspections, and maintenance planning",
-          "Work orders, tenant request intake, and FM dashboard visibility for operations teams",
-          "Free tier: local-only processing on your device; Team/Pro/Enterprise: optional encrypted cloud projects",
+          "Digital delivery platform for data-center BIM, drawings, and assets",
+          "Browser IFC/BIM viewer alongside 2D plans",
+          "Asset-linked drawings, documents, and O&M records",
+          "Issues and RFIs tied to drawing locations",
+          "O&M handover, maintenance, and FM workflows on Enterprise",
+          "Free tier: local-only PDF processing; Team/Pro/Enterprise: optional encrypted cloud projects",
         ],
       },
       {
