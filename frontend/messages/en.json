@@ -338,6 +338,15 @@
       "body": "Role-based pages and proof modules focus visitors on outcomes that drive trial starts and pipeline quality."
     }
   },
+  "productVideo": {
+    "eyebrow": "See PlanSync in action",
+    "title": "Clash detection where the model already lives",
+    "body": "Run hard clashes and clearance checks in the browser, highlight collisions in context, and turn them into tracked issues — without a separate coordination tool.",
+    "videoTitle": "PlanSync clash detection",
+    "playAriaLabel": "Play PlanSync clash detection demonstration",
+    "thumbnailAlt": "PlanSync clash detection highlighting a spatial conflict between two building elements",
+    "caption": "Product walkthrough · loads only when you play"
+  },
   "solutionsPages": {
     "landingSection": {
       "eyebrow": "Solutions",

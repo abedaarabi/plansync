@@ -641,6 +641,8 @@ export function BimViewerShell(props: {
     initialDescription?: string;
     initialPriority?: string;
     sourceClashIds?: string[];
+    createIntent?: "issue" | "work_order";
+    initialAssetId?: string | null;
   } | null>(null);
   const [assetCreateDraft, setAssetCreateDraft] = useState<{
     bimAnchor: OmAssetBimAnchor;
@@ -1724,6 +1726,8 @@ export function BimViewerShell(props: {
       initialDescription?: string;
       initialPriority?: string;
       sourceClashIds?: string[];
+      createIntent?: "issue" | "work_order";
+      initialAssetId?: string | null;
     }) => {
       if (!resolvedFileVersionId || !resolvedProjectId) {
         toast.error(
@@ -1738,9 +1742,11 @@ export function BimViewerShell(props: {
       setEditingOmAsset(null);
       setAssetCreateDraft(null);
       setActiveDock(null);
-      setIssueCreateDraft(draft);
+      const intent =
+        draft.createIntent ?? (projectSession?.operationsMode ? "work_order" : "issue");
+      setIssueCreateDraft({ ...draft, createIntent: intent });
     },
-    [resolvedFileVersionId, resolvedProjectId],
+    [projectSession?.operationsMode, resolvedFileVersionId, resolvedProjectId],
   );
 
   const armIssuePlacement = useCallback(() => {
@@ -1920,21 +1926,34 @@ export function BimViewerShell(props: {
     ],
   );
 
-  const startIssueCreateFromSelection = useCallback(() => {
-    // fallow-ignore-next-line complexity
-    void (async () => {
-      const sel = selectionRef.current ?? selection;
-      const anchor =
-        (sel ? selectionToBimAnchor(sel) : undefined) ??
-        (selectedGuids.size > 0 ? { ifcGuid: [...selectedGuids][0]! } : undefined);
-      if (!anchor) {
-        toast.error("Select an element in the model first.");
-        return;
-      }
-      const pendingReferencePhoto = await captureIssueSnapshotFile({ anchor });
-      startIssueCreate({ bimAnchor: anchor, pendingReferencePhoto });
-    })();
-  }, [captureIssueSnapshotFile, selectedGuids, selection, startIssueCreate]);
+  const startIssueCreateFromSelection = useCallback(
+    (intent: "issue" | "work_order" = "issue") => {
+      // fallow-ignore-next-line complexity
+      void (async () => {
+        const sel = selectionRef.current ?? selection;
+        const anchor =
+          (sel ? selectionToBimAnchor(sel) : undefined) ??
+          (selectedGuids.size > 0 ? { ifcGuid: [...selectedGuids][0]! } : undefined);
+        if (!anchor) {
+          toast.error("Select an element in the model first.");
+          return;
+        }
+        const engine = engineRef.current;
+        if (engine) {
+          await engine.zoomToSelection({ fitScale: BIM_ASSET_SOFT_FIT_SCALE });
+        }
+        const pendingReferencePhoto = await captureIssueSnapshotFile({ anchor });
+        const matched = findOmAssetByGuid(omAssetsList, anchor.ifcGuid);
+        startIssueCreate({
+          bimAnchor: anchor,
+          pendingReferencePhoto,
+          createIntent: intent,
+          initialAssetId: matched?.id ?? null,
+        });
+      })();
+    },
+    [captureIssueSnapshotFile, omAssetsList, selectedGuids, selection, startIssueCreate],
+  );
 
   const startAssetCreateFromSelection = useCallback(() => {
     // fallow-ignore-next-line complexity
@@ -2198,7 +2217,10 @@ export function BimViewerShell(props: {
             openPropertiesDock("properties");
             break;
           case "createIssue":
-            startIssueCreateFromSelection();
+            startIssueCreateFromSelection("issue");
+            break;
+          case "createWorkOrder":
+            startIssueCreateFromSelection("work_order");
             break;
           case "createAsset":
             startAssetCreateFromSelection();
@@ -3115,7 +3137,11 @@ export function BimViewerShell(props: {
               onOpenIssue={(issue) => void openIssueDetail(issue, { fly: false })}
               onFocusIssue={(issue) => void focusIssueOnly(issue)}
               onStartPlacement={armIssuePlacement}
-              onStartCreateOnSelection={startIssueCreateFromSelection}
+              onStartCreateOnSelection={() =>
+                startIssueCreateFromSelection(
+                  projectSession?.operationsMode ? "work_order" : "issue",
+                )
+              }
               hasSelection={selectionCount > 0}
             />
           </BimGlassDock>
@@ -3175,6 +3201,7 @@ export function BimViewerShell(props: {
             y={contextMenu.y}
             hasSelection={contextMenu.hasSelection}
             canCreateAsset={canCreateOmAsset}
+            operationsMode={Boolean(projectSession?.operationsMode)}
             linkedAssetTag={linkedAssetForSelection?.tag ?? null}
             onAction={onContextAction}
             onClose={() => setContextMenu(null)}
@@ -3359,7 +3386,11 @@ export function BimViewerShell(props: {
           <BimGlassDock
             side="right"
             open
-            title={projectSession?.operationsMode ? "New work order" : "New issue"}
+            title={
+              issueCreateDraft.createIntent === "work_order" || projectSession?.operationsMode
+                ? "New work order"
+                : "New issue"
+            }
             subtitle={
               issueCreateDraft.bimAnchor?.name ||
               issueCreateDraft.bimAnchor?.ifcType ||
@@ -3374,6 +3405,11 @@ export function BimViewerShell(props: {
               annotationId={null}
               layout="docked"
               embedded
+              createIntent={
+                issueCreateDraft.createIntent ??
+                (projectSession?.operationsMode ? "work_order" : "issue")
+              }
+              initialAssetId={issueCreateDraft.initialAssetId}
               bimContext={{
                 // Clash issues prefer set-A's model so reopen loads the right primary + partner.
                 fileId:

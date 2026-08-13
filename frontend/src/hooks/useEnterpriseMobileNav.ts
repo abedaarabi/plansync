@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  Boxes,
   ClipboardCheck,
   ClipboardList,
   FileStack,
@@ -101,8 +102,8 @@ export function useEnterpriseMobileNav(): {
         {
           id: "files",
           href: `/projects/${projectId}/files`,
-          label: t("myDrawings"),
-          icon: FileStack,
+          label: t("hub"),
+          icon: Boxes,
         },
       ];
       if (mod.issues) {
@@ -136,8 +137,8 @@ export function useEnterpriseMobileNav(): {
       {
         id: "files",
         href: `/projects/${projectId}/files`,
-        label: t("filesDrawings"),
-        icon: FileStack,
+        label: t("hub"),
+        icon: Boxes,
       },
     ];
 

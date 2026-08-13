@@ -30,6 +30,7 @@ export function IssuePanelHost() {
         layout="docked"
         open
         annotationId={issueCreateDraft.annotationId}
+        createIntent={issueCreateDraft.createIntent ?? "issue"}
         onClose={closeIssueFlyout}
       />
     );

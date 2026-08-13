@@ -1285,6 +1285,8 @@ export function PdfPageView({
         const dyN = pinRadPx / cssHPl;
         const strokeHex = issueStatusMarkerStrokeHex("OPEN");
         const st0 = useViewerStore.getState();
+        const placeIntent = st0.newIssuePlacementIntent ?? "issue";
+        const placeKind = placeIntent === "work_order" ? "WORK_ORDER" : "CONSTRUCTION";
         const newId = st0.addAnnotation({
           pageIndex: pageIdx0,
           type: "ellipse",
@@ -1294,14 +1296,14 @@ export function PdfPageView({
             { x: snPl.x - dxN, y: snPl.y - dyN },
             { x: snPl.x + dxN, y: snPl.y + dyN },
           ],
-          linkedIssueTitle: "New issue",
+          linkedIssueTitle: placeIntent === "work_order" ? "New work order" : "New issue",
           issueStatus: "OPEN",
-          linkedIssueKind: "CONSTRUCTION",
+          linkedIssueKind: placeKind,
           issueDraft: true,
           author: displayName,
         });
         st0.setNewIssuePlacementActive(false);
-        st0.setIssueCreateDraft({ annotationId: newId });
+        st0.setIssueCreateDraft({ annotationId: newId, createIntent: placeIntent });
         st0.setPendingProSidebarTab("issues");
         st0.setSelectedAnnotationId(newId);
         e.preventDefault();

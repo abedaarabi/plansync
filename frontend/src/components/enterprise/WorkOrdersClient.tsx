@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Calendar,
+  ChartPie,
   Columns3,
   LayoutList,
   Library,
@@ -20,13 +21,16 @@ import {
 import { toast } from "sonner";
 import { OmEmptyState } from "@/components/enterprise/OmEmptyState";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
-import { WorkOrderCard } from "@/components/enterprise/WorkOrderCard";
 import { WorkOrderCompleteSlideOver } from "@/components/enterprise/WorkOrderCompleteSlideOver";
 import { WorkOrderCreateSlideOver } from "@/components/enterprise/WorkOrderCreateSlideOver";
 import { WorkOrderEditSlideOver } from "@/components/enterprise/WorkOrderEditSlideOver";
 import { WorkOrderMobileActionsSheet } from "@/components/enterprise/WorkOrderMobileActionsSheet";
 import { WorkOrdersBoard } from "@/components/enterprise/WorkOrdersBoard";
-import { WorkOrdersOverview } from "@/components/enterprise/WorkOrdersOverview";
+import {
+  WorkOrdersOverview,
+  type WorkOrdersInsightsAction,
+} from "@/components/enterprise/WorkOrdersOverview";
+import { WorkOrdersTable } from "@/components/enterprise/WorkOrdersTable";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
@@ -119,6 +123,7 @@ export function WorkOrdersClient({ projectId }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [actionsWo, setActionsWo] = useState<IssueRow | null>(null);
   const [templateLibOpen, setTemplateLibOpen] = useState(false);
+  const [insightsAction, setInsightsAction] = useState<WorkOrdersInsightsAction | null>(null);
   const openedWoRef = useRef<string | null>(null);
   const openedCreateRef = useRef(false);
 
@@ -330,6 +335,39 @@ export function WorkOrdersClient({ projectId }: Props) {
         description="Asset maintenance and repairs — separate from construction issues."
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {insightsAction ? (
+              <EnterpriseButton
+                size="sm"
+                variant="secondary"
+                onClick={insightsAction.onClick}
+                aria-label={`Work order insights · ${insightsAction.hint}`}
+                className="relative"
+              >
+                <ChartPie
+                  className="h-4 w-4 text-[var(--enterprise-primary)]"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+                Insights
+                <span className="hidden tabular-nums text-[var(--enterprise-text-muted)] sm:inline">
+                  · {insightsAction.hint}
+                </span>
+                {insightsAction.showNewBadge ? (
+                  <span
+                    className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[var(--enterprise-primary)] ring-2 ring-[var(--enterprise-bg)]"
+                    aria-label="New"
+                  />
+                ) : null}
+                {!insightsAction.showNewBadge && insightsAction.urgencyCount > 0 ? (
+                  <span
+                    className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--enterprise-semantic-danger-muted)] px-1 text-[9px] font-bold tabular-nums text-white ring-2 ring-[var(--enterprise-bg)]"
+                    aria-hidden
+                  >
+                    {insightsAction.urgencyCount > 9 ? "9+" : insightsAction.urgencyCount}
+                  </span>
+                ) : null}
+              </EnterpriseButton>
+            ) : null}
             {workspaceId ? (
               <EnterpriseButton
                 size="sm"
@@ -354,6 +392,7 @@ export function WorkOrdersClient({ projectId }: Props) {
           filter={overviewFilter}
           onFilterChange={setOverviewFilter}
           currentUserId={currentUserId}
+          onInsightsActionChange={setInsightsAction}
         />
       ) : null}
 
@@ -524,31 +563,16 @@ export function WorkOrdersClient({ projectId }: Props) {
             />
           </div>
         ) : (
-          <ul className="enterprise-scrollbar max-h-[min(62vh,640px)] space-y-1.5 overflow-y-auto overscroll-contain p-2 sm:p-3">
-            {filtered.map((wo) => (
-              <li
-                key={wo.id}
-                id={`wo-${wo.id}`}
-                className={
-                  highlightWoId === wo.id
-                    ? "rounded-xl ring-2 ring-[var(--enterprise-primary)] ring-offset-2 ring-offset-[var(--enterprise-surface)]"
-                    : undefined
-                }
-              >
-                <WorkOrderCard
-                  wo={wo}
-                  onEdit={() => setEditIssue(wo)}
-                  onComplete={() => setCompleteIssue(wo)}
-                  onStart={() => statusMut.mutate({ id: wo.id, status: "IN_PROGRESS" })}
-                  onVendorLink={() => vendorLinkMut.mutate(wo.id)}
-                  onAiHelp={() => aiMut.mutate(wo.id)}
-                  onMoreActions={() => setActionsWo(wo)}
-                  vendorLinkBusy={vendorLinkBusyId === wo.id}
-                  aiBusy={aiBusyId === wo.id}
-                />
-              </li>
-            ))}
-          </ul>
+          <div className="enterprise-scrollbar max-h-[min(62vh,640px)] overflow-y-auto overscroll-contain">
+            <WorkOrdersTable
+              rows={filtered}
+              highlightId={highlightWoId}
+              onEdit={(wo) => setEditIssue(wo)}
+              onComplete={(wo) => setCompleteIssue(wo)}
+              onStart={(wo) => statusMut.mutate({ id: wo.id, status: "IN_PROGRESS" })}
+              onMoreActions={(wo) => setActionsWo(wo)}
+            />
+          </div>
         )}
       </section>
 

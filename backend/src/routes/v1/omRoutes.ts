@@ -430,7 +430,14 @@ type OmAssetRowDb = Prisma.AssetGetPayload<{
   include: {
     file: { select: { id: true; name: true } };
     fileVersion: { select: { id: true; version: true } };
-    level: { select: { id: true; displayName: true } };
+    level: {
+      select: {
+        id: true;
+        displayName: true;
+        buildingId: true;
+        building: { select: { id: true; name: true } };
+      };
+    };
   };
 }>;
 
@@ -473,7 +480,14 @@ const omAssetSharedBodyFields = {
 const omAssetInclude = {
   file: { select: { id: true, name: true } },
   fileVersion: { select: { id: true, version: true } },
-  level: { select: { id: true, displayName: true } },
+  level: {
+    select: {
+      id: true,
+      displayName: true,
+      buildingId: true,
+      building: { select: { id: true, name: true } },
+    },
+  },
 } as const;
 
 function toOmAssetJson(a: OmAssetRowDb) {
@@ -496,6 +510,8 @@ function toOmAssetJson(a: OmAssetRowDb) {
     ...rest,
     levelId: a.levelId ?? level?.id ?? null,
     levelName: level?.displayName ?? null,
+    buildingId: level?.buildingId ?? level?.building?.id ?? null,
+    buildingName: level?.building?.name ?? null,
     hasOccupantQr: Boolean(occupantScanSecret),
     hasImage: Boolean(imageS3Key),
     installDate: installDate?.toISOString() ?? null,
@@ -566,6 +582,13 @@ async function createInspectionRunWorkOrderIssue(
   ];
   if (params.note?.trim()) descLines.push(`Note: ${params.note.trim()}`);
 
+  const levelResolve = await resolveLevelForCreate({
+    projectId,
+    fileId: file.id,
+    pageNumber: draw.pageNumber,
+  });
+  const resolvedLevel = levelResolve.level;
+
   const issue = await db.issue.create({
     data: {
       workspaceId,
@@ -583,6 +606,9 @@ async function createInspectionRunWorkOrderIssue(
       issueKind: IssueKind.WORK_ORDER,
       workOrderType: WorkOrderType.INSPECTION_FOLLOWUP,
       ...(run.assetId ? { assetId: run.assetId } : {}),
+      ...(resolvedLevel
+        ? { levelId: resolvedLevel.levelId, buildingId: resolvedLevel.buildingId }
+        : {}),
       sourceInspectionRunId: run.id,
       creatorId: userId,
     },

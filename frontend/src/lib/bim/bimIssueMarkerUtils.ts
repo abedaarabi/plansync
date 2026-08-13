@@ -22,7 +22,17 @@ export function issueDisplayCode(issue: IssueNumberSource): string {
 }
 
 /** Short number for pin face (e.g. "24" or "241"). */
-export function issuePinDisplayNumber(issue: IssueNumberSource): string {
+export function issuePinDisplayNumber(
+  issue: IssueNumberSource & { issueKind?: string | null; workOrderNumber?: number | null },
+): string {
+  if (
+    issue.issueKind === "WORK_ORDER" &&
+    issue.workOrderNumber != null &&
+    Number.isFinite(issue.workOrderNumber)
+  ) {
+    const n = issue.workOrderNumber;
+    return n > 999 ? String(n % 1000) : String(n);
+  }
   const n = resolveIssueDisplayNumber(issue);
   return n > 999 ? String(n % 1000) : String(n);
 }

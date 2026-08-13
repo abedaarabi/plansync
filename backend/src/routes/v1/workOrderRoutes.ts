@@ -371,6 +371,8 @@ export function registerWorkOrderRoutes(r: Hono, needUser: MiddlewareHandler, en
             sheetVersion: occ.sheetVersion,
             pageNumber: occ.pageNumber,
             annotationId: occ.annotationId,
+            levelId: occ.levelId,
+            buildingId: occ.buildingId,
             title,
             description: occ.description,
             location: occ.location,

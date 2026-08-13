@@ -102,16 +102,21 @@ function renderMarkerItem(
   const { issue } = pin;
   if (!pin.visible) return null;
   const expanded = props.expandedClusters.size > 0;
+  const isWo = issue.issueKind === "WORK_ORDER";
   return (
     <PinButton
       key={pin.id}
       x={pin.x}
       y={pin.y}
-      label={issuePinDisplayNumber(issue)}
-      color={issueStatusMarkerStrokeHex(issue.status)}
+      label={isWo ? `W${issuePinDisplayNumber(issue)}` : issuePinDisplayNumber(issue)}
+      color={
+        isWo
+          ? "color-mix(in srgb, var(--bim-accent) 72%, #0ea5e9)"
+          : issueStatusMarkerStrokeHex(issue.status)
+      }
       selected={props.selectedIssueId === issue.id}
       expanded={expanded}
-      title={issue.title}
+      title={isWo ? `WO · ${issue.title}` : issue.title}
       onClick={() => props.showCardForIssue(issue, { pin: true })}
       onMouseEnter={() => props.onPinHover(issue.id)}
       onMouseLeave={props.clearHoverSoon}

@@ -707,17 +707,20 @@ export function SidebarIssuesTab() {
     setDeleteConfirmIssue(issue);
   }, []);
 
-  const startNewIssuePlacement = useCallback(() => {
-    setIssuePlacement(null);
-    setNewIssuePlacementActive(true);
-    setViewerWorkspaceMode("issues");
-    setPendingProSidebarTab("issues");
-  }, [
-    setIssuePlacement,
-    setNewIssuePlacementActive,
-    setPendingProSidebarTab,
-    setViewerWorkspaceMode,
-  ]);
+  const startNewIssuePlacement = useCallback(
+    (intent: "issue" | "work_order" = "issue") => {
+      setIssuePlacement(null);
+      setNewIssuePlacementActive(true, intent);
+      setViewerWorkspaceMode("issues");
+      setPendingProSidebarTab("issues");
+    },
+    [
+      setIssuePlacement,
+      setNewIssuePlacementActive,
+      setPendingProSidebarTab,
+      setViewerWorkspaceMode,
+    ],
+  );
 
   const toggleIssueCollapse = useCallback((issueId: string) => {
     setCollapsedIssueIds((prev) =>
@@ -759,14 +762,37 @@ export function SidebarIssuesTab() {
             </span>
           ) : null}
         </span>
-        <button
-          type="button"
-          onClick={startNewIssuePlacement}
-          className="viewer-focus-ring flex items-center gap-1 rounded-md border border-[var(--viewer-primary)]/50 bg-[var(--viewer-primary)] px-2 py-1.5 text-[10px] font-semibold text-white shadow-sm hover:bg-[var(--viewer-primary-hover)]"
-        >
-          <Plus className="h-3 w-3" strokeWidth={2} />
-          New
-        </button>
+        <div className="flex items-center gap-1">
+          {viewerOperationsMode ? (
+            <button
+              type="button"
+              onClick={() => startNewIssuePlacement("work_order")}
+              className="viewer-focus-ring flex items-center gap-1 rounded-md border border-sky-500/50 bg-sky-600 px-2 py-1.5 text-[10px] font-semibold text-white shadow-sm hover:bg-sky-500"
+            >
+              <Plus className="h-3 w-3" strokeWidth={2} />
+              New WO
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => startNewIssuePlacement("issue")}
+                className="viewer-focus-ring flex items-center gap-1 rounded-md border border-[var(--viewer-primary)]/50 bg-[var(--viewer-primary)] px-2 py-1.5 text-[10px] font-semibold text-white shadow-sm hover:bg-[var(--viewer-primary-hover)]"
+              >
+                <Plus className="h-3 w-3" strokeWidth={2} />
+                New issue
+              </button>
+              <button
+                type="button"
+                onClick={() => startNewIssuePlacement("work_order")}
+                className="viewer-focus-ring flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-950/50 px-2 py-1.5 text-[10px] font-semibold text-sky-100 shadow-sm hover:bg-sky-900/60"
+              >
+                <Plus className="h-3 w-3" strokeWidth={2} />
+                New WO
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="shrink-0 space-y-1.5">
@@ -811,8 +837,9 @@ export function SidebarIssuesTab() {
           <button
             type="button"
             onClick={() => {
+              const intent = useViewerStore.getState().newIssuePlacementIntent ?? "issue";
               setNewIssuePlacementActive(false);
-              setIssueCreateDraft({ annotationId: null });
+              setIssueCreateDraft({ annotationId: null, createIntent: intent });
             }}
             className="font-semibold text-sky-200 underline decoration-sky-400/60 underline-offset-2 hover:text-white"
           >
@@ -881,10 +908,10 @@ export function SidebarIssuesTab() {
             </div>
             <button
               type="button"
-              onClick={startNewIssuePlacement}
+              onClick={() => startNewIssuePlacement(viewerOperationsMode ? "work_order" : "issue")}
               className="viewer-focus-ring rounded-lg bg-[var(--viewer-primary)] px-3 py-2 text-[11px] font-semibold text-white hover:bg-[var(--viewer-primary-hover)]"
             >
-              Create first issue
+              {viewerOperationsMode ? "Create first work order" : "Create first issue"}
             </button>
           </div>
         ) : filteredIssues.length === 0 && !issueCreateDraft ? (
@@ -912,10 +939,14 @@ export function SidebarIssuesTab() {
                   </div>
                   <div className="space-y-1.5 pl-3 pr-2.5 pb-2 pt-2">
                     <h3 className="text-[12px] font-semibold leading-tight tracking-tight text-slate-50">
-                      New issue
+                      {issueCreateDraft.createIntent === "work_order"
+                        ? "New work order"
+                        : "New issue"}
                     </h3>
                     <p className="text-[9px] leading-tight text-sky-100/85">
-                      This issue is not saved yet.
+                      {issueCreateDraft.createIntent === "work_order"
+                        ? "This work order is not saved yet."
+                        : "This issue is not saved yet."}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center justify-end gap-1 border-t border-sky-700/30 pt-1.5">
                       <button

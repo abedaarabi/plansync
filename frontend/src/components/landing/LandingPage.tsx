@@ -11,6 +11,7 @@ import { LandingCdeSection } from "./LandingCdeSection";
 import { LandingHowItWorksSection } from "./LandingHowItWorksSection";
 import { LandingPlanViewerSection } from "./LandingPlanViewerSection";
 import { LandingPwaInstallSection } from "./LandingPwaInstallSection";
+import { LandingProductVideoSection } from "./LandingProductVideoSection";
 import { LandingProofSection } from "./LandingProofSection";
 import { LandingSolutionsShowcaseSection } from "./LandingSolutionsShowcaseSection";
 import { MarketingShell, useMarketingGoToFreeViewer } from "./MarketingShell";
@@ -26,6 +27,7 @@ function LandingHomeMain() {
         onGoToFreeViewer={goToFreeViewer}
       />
       <LandingProofSection />
+      <LandingProductVideoSection />
       <LandingPlanViewerSection />
       <LandingBimShowcaseSection />
       <LandingCdeSection />

@@ -76,6 +76,7 @@ import {
   matchIssuesForQuery,
 } from "../../lib/issuesChatMatch.js";
 import {
+  resolveBuildingIdForIssue,
   resolveLevelForCreate,
   resolveLevelIdFromDrawing,
 } from "../../lib/locations/resolveLevelFromDrawing.js";
@@ -184,7 +185,15 @@ const issueInclude = {
   vendor: { select: { id: true, name: true, email: true, trade: true } },
   file: { select: { name: true } },
   fileVersion: { select: { version: true } },
-  level: { select: { id: true, displayName: true } },
+  building: { select: { id: true, name: true } },
+  level: {
+    select: {
+      id: true,
+      displayName: true,
+      buildingId: true,
+      building: { select: { id: true, name: true } },
+    },
+  },
   rfiLinks: {
     include: {
       rfi: { select: { id: true, rfiNumber: true, title: true, status: true } },
@@ -421,6 +430,13 @@ function issueRowJson(
     startDate: row.startDate ? row.startDate.toISOString() : null,
     dueDate: row.dueDate ? row.dueDate.toISOString() : null,
     location: row.location,
+    buildingId:
+      row.buildingId ??
+      row.building?.id ??
+      row.level?.buildingId ??
+      row.level?.building?.id ??
+      null,
+    buildingName: row.building?.name ?? row.level?.building?.name ?? null,
     levelId: row.levelId ?? row.level?.id ?? null,
     levelName: row.level?.displayName ?? null,
     annotationId: row.annotationId,
@@ -1106,6 +1122,8 @@ export function registerIssuesRoutes(
         dueDate: optionalYmd,
         location: z.string().max(500).nullable().optional(),
         pageNumber: z.number().int().min(1).optional(),
+        /** Building; optional without a level. Derived from level when omitted. */
+        buildingId: z.string().nullable().optional(),
         /** Building level; auto-resolved from drawing map when omitted. */
         levelId: z.string().nullable().optional(),
         /** 3D anchor for issues created from the BIM viewer (IFC GUID + context). */
@@ -1133,7 +1151,7 @@ export function registerIssuesRoutes(
         rfiId: z.string().optional(),
         rfiIds: z.array(z.string()).max(50).optional(),
         issueKind: z.nativeEnum(IssueKind).optional(),
-        assetId: z.string().optional(),
+        assetId: z.string().nullable().optional(),
         externalAssigneeEmail: z.string().email().optional().or(z.literal("")),
         externalAssigneeName: z.string().max(200).optional(),
         reporterName: z.string().max(200).optional(),
@@ -1294,9 +1312,17 @@ export function registerIssuesRoutes(
       pageNumber: body.data.pageNumber ?? null,
       explicitLevelId: body.data.levelId,
       bimStoreyName: body.data.bimAnchor?.spatialPath?.[0] ?? null,
+      buildingId: body.data.buildingId,
     });
     if (levelResolve.error) return c.json({ error: levelResolve.error }, 400);
     const resolvedLevel = levelResolve.level;
+    const buildingResolve = await resolveBuildingIdForIssue({
+      projectId,
+      explicitBuildingId: body.data.buildingId,
+      levelBuildingId: resolvedLevel?.buildingId ?? null,
+    });
+    if (buildingResolve.error) return c.json({ error: buildingResolve.error }, 400);
+    const resolvedBuildingId = buildingResolve.buildingId;
     const locationForCreate =
       body.data.location !== undefined
         ? body.data.location
@@ -1331,12 +1357,13 @@ export function registerIssuesRoutes(
           ...(dueDate !== undefined ? { dueDate } : {}),
           ...(locationForCreate !== undefined ? { location: locationForCreate } : {}),
           ...(resolvedLevel ? { levelId: resolvedLevel.levelId } : {}),
+          ...(resolvedBuildingId !== undefined ? { buildingId: resolvedBuildingId } : {}),
           ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
           ...(body.data.bimAnchor !== undefined
             ? { bimAnchor: body.data.bimAnchor as Prisma.InputJsonValue }
             : {}),
           ...(body.data.issueKind !== undefined ? { issueKind: body.data.issueKind } : {}),
-          ...(body.data.assetId !== undefined ? { assetId: body.data.assetId } : {}),
+          ...(body.data.assetId !== undefined ? { assetId: body.data.assetId || null } : {}),
           ...(extEmail
             ? {
                 externalAssigneeEmail: extEmail,
@@ -1623,6 +1650,7 @@ export function registerIssuesRoutes(
         dueDate: optionalYmdPatch,
         location: z.string().max(500).nullable().optional(),
         pageNumber: z.number().int().min(1).nullable().optional(),
+        buildingId: z.string().nullable().optional(),
         levelId: z.string().nullable().optional(),
         /** Replace RFIs linked to this issue (same project). */
         rfiIds: z.array(z.string()).max(50).optional(),
@@ -1824,9 +1852,11 @@ export function registerIssuesRoutes(
     }
 
     let patchLevelId: string | null | undefined = undefined;
+    let patchLevelBuildingId: string | null | undefined = undefined;
     if (body.data.levelId !== undefined) {
       if (body.data.levelId === null) {
         patchLevelId = null;
+        patchLevelBuildingId = null;
       } else {
         const resolved = await resolveLevelIdFromDrawing({
           projectId: issue.projectId,
@@ -1834,6 +1864,29 @@ export function registerIssuesRoutes(
         });
         if (!resolved) return c.json({ error: "Level not found in this project" }, 400);
         patchLevelId = resolved.levelId;
+        patchLevelBuildingId = resolved.buildingId;
+      }
+    }
+
+    let patchBuildingId: string | null | undefined = undefined;
+    const levelSetsBuilding =
+      patchLevelId !== undefined && patchLevelId !== null
+        ? (patchLevelBuildingId ?? null)
+        : undefined;
+    if (body.data.buildingId !== undefined || levelSetsBuilding !== undefined) {
+      const buildingResolve = await resolveBuildingIdForIssue({
+        projectId: issue.projectId,
+        explicitBuildingId:
+          body.data.buildingId !== undefined
+            ? body.data.buildingId
+            : levelSetsBuilding !== undefined
+              ? levelSetsBuilding
+              : undefined,
+        levelBuildingId: levelSetsBuilding,
+      });
+      if (buildingResolve.error) return c.json({ error: buildingResolve.error }, 400);
+      if (buildingResolve.buildingId !== undefined) {
+        patchBuildingId = buildingResolve.buildingId;
       }
     }
 
@@ -1882,6 +1935,7 @@ export function registerIssuesRoutes(
           ...(patchDue !== undefined ? { dueDate: patchDue } : {}),
           ...(body.data.location !== undefined ? { location: body.data.location } : {}),
           ...(patchLevelId !== undefined ? { levelId: patchLevelId } : {}),
+          ...(patchBuildingId !== undefined ? { buildingId: patchBuildingId } : {}),
           ...(body.data.pageNumber !== undefined ? { pageNumber: body.data.pageNumber } : {}),
           ...(body.data.issueKind !== undefined ? { issueKind: body.data.issueKind } : {}),
           ...(body.data.assetId !== undefined ? { assetId: body.data.assetId } : {}),

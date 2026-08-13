@@ -102,6 +102,13 @@ type CreateProps = {
   initialTitle?: string;
   initialDescription?: string;
   initialPriority?: string;
+  /**
+   * Explicit create target. Prefer this over ops-mode copy alone so WO vs issue
+   * always posts the correct `issueKind`.
+   */
+  createIntent?: "issue" | "work_order";
+  /** Optional asset prefilled from BIM selection / GUID match. */
+  initialAssetId?: string | null;
   onCreated?: (issue: IssueRow) => void;
 };
 
@@ -310,6 +317,13 @@ export function IssueFormSlider(props: Props) {
   });
 
   const viewerOperationsMode = useViewerStore((s) => s.viewerOperationsMode);
+  const createIntent: "issue" | "work_order" =
+    variant === "create" && props.createIntent
+      ? props.createIntent
+      : viewerOperationsMode
+        ? "work_order"
+        : "issue";
+  const isWorkOrderCreate = variant === "create" && createIntent === "work_order";
   const omIssueKindKey = viewerOperationsMode ? "CONSTRUCTION,WORK_ORDER,OCCUPANT" : null;
   const issuesQueryKey = qk.issuesForFileVersion(cloudFileVersionId ?? "", omIssueKindKey);
 
@@ -554,6 +568,15 @@ export function IssueFormSlider(props: Props) {
   const createMut = useMutation({
     // fallow-ignore-next-line complexity
     mutationFn: () => {
+      const woFields = isWorkOrderCreate
+        ? {
+            issueKind: "WORK_ORDER" as const,
+            workOrderType: "CORRECTIVE" as const,
+            ...(variant === "create" && props.initialAssetId
+              ? { assetId: props.initialAssetId }
+              : {}),
+          }
+        : {};
       if (isBimCreate && bimContext) {
         return createIssue({
           workspaceId: workspaceId!,
@@ -574,7 +597,8 @@ export function IssueFormSlider(props: Props) {
               : {}),
           ...(bimContext.bimAnchor ? { bimAnchor: bimContext.bimAnchor } : {}),
           ...(linkedMarkupIds.length > 0 ? { attachedMarkupAnnotationIds: linkedMarkupIds } : {}),
-          ...(rfiLinkIds.length > 0 && !viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
+          ...(rfiLinkIds.length > 0 && !isWorkOrderCreate ? { rfiIds: rfiLinkIds } : {}),
+          ...woFields,
         });
       }
       const page = sheetContext.pageNumber;
@@ -594,7 +618,8 @@ export function IssueFormSlider(props: Props) {
         ...(location.trim() ? { location: location.trim() } : {}),
         pageNumber: page,
         ...(linkedMarkupIds.length > 0 ? { attachedMarkupAnnotationIds: linkedMarkupIds } : {}),
-        ...(rfiLinkIds.length > 0 && !viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
+        ...(rfiLinkIds.length > 0 && !isWorkOrderCreate ? { rfiIds: rfiLinkIds } : {}),
+        ...woFields,
       });
     },
     // fallow-ignore-next-line complexity
@@ -607,8 +632,10 @@ export function IssueFormSlider(props: Props) {
         });
       }
       void qc.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
-      if (resolvedProjectId)
+      if (resolvedProjectId) {
         void qc.invalidateQueries({ queryKey: qk.projectRfis(resolvedProjectId) });
+        void qc.invalidateQueries({ queryKey: qk.workOrders(resolvedProjectId) });
+      }
       if (variant === "create") {
         const queued = [...pendingPhotos];
         const snapshotPhoto = props.variant === "create" ? props.pendingReferencePhoto : null;
@@ -621,7 +648,11 @@ export function IssueFormSlider(props: Props) {
             savedRow = await uploadIssueReferencePhotoFile(row.id, p.file);
           }
         } catch {
-          toast.error("Issue saved, but some photos could not be uploaded.");
+          toast.error(
+            isWorkOrderCreate
+              ? "Work order saved, but some photos could not be uploaded."
+              : "Issue saved, but some photos could not be uploaded.",
+          );
         } finally {
           revokePendingPhotos(queued);
           setPendingPhotos([]);
@@ -693,7 +724,7 @@ export function IssueFormSlider(props: Props) {
         ...(pageNumber !== undefined ? { pageNumber } : {}),
         attachedMarkupAnnotationIds: linkedMarkupIds,
         referencePhotos,
-        ...(!viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
+        ...(!isWorkOrderCreate && !viewerOperationsMode ? { rfiIds: rfiLinkIds } : {}),
       });
     },
     onSuccess: (row) => {
@@ -1022,7 +1053,14 @@ export function IssueFormSlider(props: Props) {
     : viewerOperationsMode
       ? "space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/25 p-2.5"
       : "space-y-2";
-  const entityLabel = viewerOperationsMode ? "work order" : "issue";
+  const entityLabel =
+    variant === "create"
+      ? isWorkOrderCreate
+        ? "work order"
+        : "issue"
+      : editIssueRow?.issueKind === "WORK_ORDER" || viewerOperationsMode
+        ? "work order"
+        : "issue";
   const focusRingClass = embedded ? "bim-focus-ring" : "viewer-focus-ring";
   const primaryBtnClass = embedded
     ? `${focusRingClass} rounded-lg bg-[var(--bim-accent)] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40`

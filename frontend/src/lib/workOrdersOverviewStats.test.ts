@@ -31,14 +31,63 @@ describe("filterWorkOrders", () => {
     expect(filterWorkOrders(rows, "PRI:HIGH", NOW).map((r) => r.id)).toEqual(["4"]);
     expect(filterWorkOrders(rows, "TYPE:PREVENTIVE", NOW).map((r) => r.id)).toEqual(["4"]);
   });
+
+  it("filters aging / building / assignee / completed week", () => {
+    const agingRows = [
+      wo({
+        id: "a",
+        status: "OPEN",
+        createdAt: "2026-08-04T00:00:00.000Z",
+        buildingId: "b1",
+        buildingName: "Tower A",
+        assigneeId: "u1",
+        assignee: { id: "u1", name: "Alex", email: "a@x.com" },
+      }),
+      wo({
+        id: "b",
+        status: "OPEN",
+        createdAt: "2026-07-01T00:00:00.000Z",
+        buildingId: null,
+        assigneeId: null,
+      }),
+      wo({
+        id: "c",
+        status: "RESOLVED",
+        resolvedAt: "2026-08-04T12:00:00.000Z",
+      }),
+    ];
+    expect(filterWorkOrders(agingRows, "AGE:0-3", NOW).map((r) => r.id)).toEqual(["a"]);
+    expect(filterWorkOrders(agingRows, "AGE:14+", NOW).map((r) => r.id)).toEqual(["b"]);
+    expect(filterWorkOrders(agingRows, "BUILDING:b1", NOW).map((r) => r.id)).toEqual(["a"]);
+    expect(filterWorkOrders(agingRows, "BUILDING:__none__", NOW).map((r) => r.id)).toEqual([
+      "b",
+      "c",
+    ]);
+    expect(filterWorkOrders(agingRows, "ASSIGNEE:u1", NOW).map((r) => r.id)).toEqual(["a"]);
+    expect(filterWorkOrders(agingRows, "ASSIGNEE:__none__", NOW).map((r) => r.id)).toEqual(["b"]);
+    expect(filterWorkOrders(agingRows, "COMPLETED_WEEK", NOW).map((r) => r.id)).toEqual(["c"]);
+  });
 });
 
 describe("computeWorkOrdersOverview", () => {
-  it("aggregates KPIs used by My day strip", () => {
+  it("aggregates KPIs and insight segments", () => {
     const rows = [
-      wo({ id: "1", status: "OPEN", assigneeId: "me", dueDate: "2026-08-05T18:00:00.000Z" }),
+      wo({
+        id: "1",
+        status: "OPEN",
+        assigneeId: "me",
+        dueDate: "2026-08-05T18:00:00.000Z",
+        buildingId: "b1",
+        buildingName: "Tower A",
+        assignee: { id: "me", name: "Me", email: "me@x.com" },
+      }),
       wo({ id: "2", status: "IN_PROGRESS", dueDate: "2026-08-01T00:00:00.000Z" }),
-      wo({ id: "3", status: "CLOSED", assigneeId: "me" }),
+      wo({
+        id: "3",
+        status: "CLOSED",
+        assigneeId: "me",
+        resolvedAt: "2026-08-03T00:00:00.000Z",
+      }),
       wo({ id: "4", status: "OPEN", priority: "LOW", workOrderType: "CORRECTIVE" }),
     ];
     const stats = computeWorkOrdersOverview(rows, NOW, "me");
@@ -50,6 +99,11 @@ describe("computeWorkOrdersOverview", () => {
     expect(stats.dueToday).toBe(1);
     expect(stats.overdue).toBe(1);
     expect(stats.unassigned).toBe(2);
+    expect(stats.completedThisWeek).toBe(1);
+    expect(stats.slaBreached).toBeGreaterThanOrEqual(1);
     expect(stats.typeSegments.some((s) => s.key === "TYPE:CORRECTIVE")).toBe(true);
+    expect(stats.agingSegments.length).toBeGreaterThan(0);
+    expect(stats.buildingSegments.some((s) => s.key === "BUILDING:b1")).toBe(true);
+    expect(stats.assigneeSegments.some((s) => s.key === "ASSIGNEE:me")).toBe(true);
   });
 });

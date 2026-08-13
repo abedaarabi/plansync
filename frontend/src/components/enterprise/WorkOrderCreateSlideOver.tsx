@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ClipboardList, Package, Search } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import {
   IssueReferencePhotosField,
@@ -11,7 +10,15 @@ import {
 } from "@/components/enterprise/IssueReferencePhotosField";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
+import {
+  WorkOrderAssetFields,
+  formatOmAssetLocation,
+} from "@/components/enterprise/WorkOrderAssetFields";
 import { WorkOrderAssetDocsPanel } from "@/components/enterprise/WorkOrderAssetDocsPanel";
+import {
+  WorkOrderLocationFields,
+  type WorkOrderLocationValue,
+} from "@/components/enterprise/WorkOrderLocationFields";
 import { WorkOrderProcedureField } from "@/components/enterprise/WorkOrderProcedureField";
 import {
   createIssue,
@@ -22,7 +29,6 @@ import {
   ProRequiredError,
   uploadIssueReferencePhotoFile,
   type IssueRow,
-  type OmAssetRow,
   type WorkOrderChecklistItem,
   type WorkspaceWorkOrderTemplateRow,
 } from "@/lib/api-client";
@@ -56,14 +62,6 @@ function revokePendingPhotos(list: IssuePendingPhoto[]) {
   for (const p of list) URL.revokeObjectURL(p.previewUrl);
 }
 
-export function formatOmAssetLocation(a: OmAssetRow): string {
-  const parts = [a.hall, a.rowLabel, a.rack, a.positionU].filter(
-    (x): x is string => typeof x === "string" && x.trim().length > 0,
-  );
-  if (parts.length > 0) return parts.join(" / ");
-  return a.locationLabel?.trim() || "";
-}
-
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -83,6 +81,7 @@ type Props = {
   onCreated: (row: IssueRow) => void | Promise<void>;
 };
 
+// fallow-ignore-next-line complexity
 export function WorkOrderCreateSlideOver({
   open,
   onClose,
@@ -108,8 +107,13 @@ export function WorkOrderCreateSlideOver({
   const [priority, setPriority] = useState("MEDIUM");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [location, setLocation] = useState("");
+  const [locValue, setLocValue] = useState<WorkOrderLocationValue>({
+    buildingId: "",
+    levelId: "",
+    location: "",
+  });
   const [locationTouched, setLocationTouched] = useState(false);
+  const [structureTouched, setStructureTouched] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<IssuePendingPhoto[]>([]);
   const [templateId, setTemplateId] = useState("");
@@ -134,8 +138,13 @@ export function WorkOrderCreateSlideOver({
     setPriority("MEDIUM");
     setStartDate("");
     setDueDate("");
-    setLocation(prefill?.location ?? "");
+    setLocValue({
+      buildingId: "",
+      levelId: "",
+      location: prefill?.location ?? "",
+    });
     setLocationTouched(Boolean(prefill?.location));
+    setStructureTouched(false);
     setTemplateId("");
     setMsg(null);
   }, [initialAssetId, prefill]);
@@ -150,9 +159,14 @@ export function WorkOrderCreateSlideOver({
       setAssetId(prefill?.assetId ?? initialAssetId ?? "");
       setTitle(prefill?.title ?? "");
       setDescription(prefill?.description ?? "");
-      setLocation(prefill?.location ?? "");
+      setLocValue({
+        buildingId: "",
+        levelId: "",
+        location: prefill?.location ?? "",
+      });
       setWorkOrderType(prefill?.workOrderType ?? "CORRECTIVE");
       setLocationTouched(Boolean(prefill?.location));
+      setStructureTouched(false);
     }
   }, [open, initialAssetId, prefill]);
 
@@ -203,19 +217,29 @@ export function WorkOrderCreateSlideOver({
   const selectedAsset = assets.find((a) => a.id === assetId) ?? null;
 
   useEffect(() => {
-    if (!selectedAsset || locationTouched) return;
-    const loc = formatOmAssetLocation(selectedAsset);
-    if (loc) setLocation(loc);
-  }, [selectedAsset, locationTouched]);
+    if (!selectedAsset) return;
+    if (!locationTouched) {
+      const loc = formatOmAssetLocation(selectedAsset);
+      if (loc) {
+        setLocValue((prev) => ({ ...prev, location: loc }));
+      }
+    }
+    if (!structureTouched) {
+      setLocValue((prev) => ({
+        ...prev,
+        buildingId: selectedAsset.buildingId ?? prev.buildingId,
+        levelId: selectedAsset.levelId ?? prev.levelId,
+      }));
+    }
+  }, [selectedAsset, locationTouched, structureTouched]);
 
   const createMut = useMutation({
     mutationFn: async () => {
       if (!workspaceId) throw new Error("Missing workspace.");
-      if (!assetId) throw new Error("Select an asset for this work order.");
       return createIssue({
         workspaceId,
         projectId,
-        assetId,
+        assetId: assetId || null,
         title: title.trim(),
         description: description.trim() || undefined,
         assigneeId: assigneeId || undefined,
@@ -225,7 +249,9 @@ export function WorkOrderCreateSlideOver({
         priority,
         startDate: startDate.trim() || undefined,
         dueDate: dueDate.trim() || undefined,
-        location: location.trim() || undefined,
+        location: locValue.location.trim() || undefined,
+        buildingId: locValue.buildingId || null,
+        levelId: locValue.levelId || null,
         issueKind: "WORK_ORDER",
         workOrderType,
         procedureJson: procedure.length > 0 ? procedure : undefined,
@@ -269,7 +295,7 @@ export function WorkOrderCreateSlideOver({
       form={{
         onSubmit: (e) => {
           e.preventDefault();
-          if (!title.trim() || !assetId) return;
+          if (!title.trim()) return;
           createMut.mutate();
         },
       }}
@@ -279,7 +305,7 @@ export function WorkOrderCreateSlideOver({
           icon={ClipboardList}
           titleId="wo-create-title"
           title="New work order"
-          description="Maintenance or repair tied to equipment. Asset and title required."
+          description="Maintenance or repair work. Title required; asset and location optional."
         />
       }
       footer={
@@ -291,7 +317,7 @@ export function WorkOrderCreateSlideOver({
             type="submit"
             size="sm"
             loading={createMut.isPending}
-            disabled={!title.trim() || !assetId}
+            disabled={!title.trim()}
           >
             {createMut.isPending ? "Creating…" : "Create work order"}
           </EnterpriseButton>
@@ -314,73 +340,21 @@ export function WorkOrderCreateSlideOver({
           <p className="enterprise-type-label text-[var(--enterprise-semantic-info-text)]">
             Equipment
           </p>
-          <div>
-            <label htmlFor="wo-asset-search" className={MOBILE_FIELD_LABEL}>
-              Search assets
-            </label>
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--enterprise-text-muted)]"
-                aria-hidden
-              />
-              <input
-                id="wo-asset-search"
-                value={assetSearch}
-                onChange={(e) => setAssetSearch(e.target.value)}
-                className={`${MOBILE_FIELD_INPUT} enterprise-field-input--icon`}
-                placeholder="Tag, name, location…"
-                autoComplete="off"
-              />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="wo-asset" className={MOBILE_FIELD_LABEL}>
-              Asset *
-            </label>
-            {assetsPending ? (
-              <p className="text-sm text-[var(--enterprise-text-muted)]">Loading assets…</p>
-            ) : filteredAssets.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-[var(--enterprise-border)] px-3 py-4 text-center">
-                <Package
-                  className="mx-auto h-8 w-8 text-[var(--enterprise-text-muted)]"
-                  strokeWidth={1.5}
-                  aria-hidden
-                />
-                <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
-                  {assets.length === 0
-                    ? "No assets on this project yet."
-                    : "No assets match your search."}
-                </p>
-                {assets.length === 0 ? (
-                  <Link
-                    href={assetsHref}
-                    className="mt-2 inline-block text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
-                  >
-                    Add assets in O&amp;M
-                  </Link>
-                ) : null}
-              </div>
-            ) : (
-              <select
-                id="wo-asset"
-                value={assetId}
-                onChange={(e) => {
-                  setAssetId(e.target.value);
-                  setLocationTouched(false);
-                }}
-                className={MOBILE_FIELD_SELECT}
-                required
-              >
-                <option value="">Select equipment…</option>
-                {filteredAssets.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.tag} — {a.name}
-                    {a.category ? ` (${a.category})` : ""}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+          <WorkOrderAssetFields
+            idPrefix="wo"
+            assets={assets}
+            assetsPending={assetsPending}
+            filteredAssets={filteredAssets}
+            assetId={assetId}
+            assetSearch={assetSearch}
+            onAssetSearchChange={setAssetSearch}
+            onAssetIdChange={(id) => {
+              setAssetId(id);
+              setLocationTouched(false);
+              setStructureTouched(false);
+            }}
+            assetsHref={assetsHref}
+          />
           {selectedAsset ? (
             <div className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2.5 text-xs text-[var(--enterprise-text-muted)]">
               <span className="font-mono font-semibold text-[var(--enterprise-text)]">
@@ -492,22 +466,20 @@ export function WorkOrderCreateSlideOver({
               placeholder="Steps, parts needed, safety notes…"
             />
           </div>
-          <div>
-            <label htmlFor="wo-location" className={MOBILE_FIELD_LABEL}>
-              Work location
-            </label>
-            <input
-              id="wo-location"
-              value={location}
-              onChange={(e) => {
-                setLocation(e.target.value);
-                setLocationTouched(true);
-              }}
-              className={MOBILE_FIELD_INPUT}
-              placeholder="Filled from asset when selected"
-            />
-          </div>
         </div>
+
+        <WorkOrderLocationFields
+          projectId={projectId}
+          workspaceId={workspaceId}
+          value={locValue}
+          onChange={(next) => {
+            setLocValue(next);
+            setStructureTouched(true);
+          }}
+          onLocationTextChange={() => setLocationTouched(true)}
+          idPrefix="wo-create-loc"
+          disabled={createMut.isPending}
+        />
 
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Site photos</p>

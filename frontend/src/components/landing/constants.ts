@@ -1,5 +1,7 @@
 export const YOUTUBE_PLAN_VIEWER_ID = "aMiDXOnUJOA";
 export const YOUTUBE_BIM_VIEWER_ID = "xb31sYZH-ms";
+/** PlanSync collision / clash detection walkthrough. */
+export const YOUTUBE_CLASH_DETECTION_ID = "xb31sYZH-ms";
 export const YOUTUBE_PDF_VERSION_CONTROL_ID = "4DnCFziN66o";
 
 export const FREE_FEATURES = [

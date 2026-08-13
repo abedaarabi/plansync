@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Boxes, FileText, HardDrive, ImageIcon, Layers, MessageSquare, Tags } from "lucide-react";
 import type { Project } from "@/types/projects";
 import { EnterpriseOverviewCard } from "@/components/enterprise/EnterpriseOverviewCard";
@@ -12,6 +12,7 @@ import {
 import { EnterpriseSlideOver } from "@/components/enterprise/EnterpriseSlideOver";
 import { formatBytes } from "@/components/file-explorer/fileExplorerUtils";
 import type { FileExplorerInsightsAction } from "@/components/file-explorer/FileExplorerTopBar";
+import { useInsightsPanelState } from "@/hooks/useInsightsPanelState";
 import {
   computeFilesOverview,
   type FilesOverviewFilter,
@@ -181,27 +182,11 @@ export function FilesOverview({
   onInsightsToolbarChange,
 }: Props) {
   const stats = useMemo(() => computeFilesOverview(project), [project]);
-  const [insightsOpen, setInsightsOpen] = useState(false);
-  /** null until hydrated — avoid flashing the “new” badge incorrectly. */
-  const [insightsSeen, setInsightsSeen] = useState<boolean | null>(null);
+  const { insightsOpen, setInsightsOpen, insightsSeen, openInsights } = useInsightsPanelState(
+    INSIGHTS_OPEN_KEY,
+    INSIGHTS_SEEN_KEY,
+  );
   const empty = stats.totalFiles === 0 && stats.folders === 0;
-
-  useEffect(() => {
-    try {
-      setInsightsSeen(localStorage.getItem(INSIGHTS_SEEN_KEY) === "1");
-      if (sessionStorage.getItem(INSIGHTS_OPEN_KEY) === "1") setInsightsOpen(true);
-    } catch {
-      setInsightsSeen(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(INSIGHTS_OPEN_KEY, insightsOpen ? "1" : "0");
-    } catch {
-      /* private mode */
-    }
-  }, [insightsOpen]);
 
   const showStorage =
     storageQuotaBytes != null &&
@@ -213,19 +198,6 @@ export function FilesOverview({
   const insightsHint = showStorage
     ? `${Math.round(storagePct)}% storage`
     : `${stats.totalFiles} file${stats.totalFiles === 1 ? "" : "s"}`;
-
-  const openInsights = useCallback(() => {
-    setInsightsOpen(true);
-    setInsightsSeen((prev) => {
-      if (prev === true) return prev;
-      try {
-        localStorage.setItem(INSIGHTS_SEEN_KEY, "1");
-      } catch {
-        /* private mode */
-      }
-      return true;
-    });
-  }, []);
 
   useEffect(() => {
     if (!onInsightsToolbarChange) return;

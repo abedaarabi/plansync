@@ -293,8 +293,13 @@ interface ViewerState {
   };
   /** PlanGrid-style: toolbar “New issue” → click sheet to place pin, then dialog. */
   newIssuePlacementActive: boolean;
+  /** When placing a new pin, create a work order vs construction issue. */
+  newIssuePlacementIntent: "issue" | "work_order";
   /** Opens create dialog; optional pre-placed pin id, cleared after save/cancel. */
-  issueCreateDraft: null | { annotationId: string | null };
+  issueCreateDraft: null | {
+    annotationId: string | null;
+    createIntent?: "issue" | "work_order";
+  };
   /**
    * Issue create/edit slider is open (portaled). Set synchronously when opening edit so the canvas
    * does not receive clicks during the one-frame delay before `IssueFormSlider` mounts.
@@ -432,8 +437,10 @@ interface ViewerState {
       issueKind: "WORK_ORDER" | "CONSTRUCTION";
     },
   ) => void;
-  setNewIssuePlacementActive: (v: boolean) => void;
-  setIssueCreateDraft: (d: null | { annotationId: string | null }) => void;
+  setNewIssuePlacementActive: (v: boolean, intent?: "issue" | "work_order") => void;
+  setIssueCreateDraft: (
+    d: null | { annotationId: string | null; createIntent?: "issue" | "work_order" },
+  ) => void;
   setIssueFormSliderOpen: (v: boolean) => void;
   setOmAssetPlacementActive: (v: boolean) => void;
   setOmAssetCreateDraft: (d: null | { annotationId: string }) => void;
@@ -608,6 +615,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   sheetOverlayVisibility: { ...DEFAULT_SHEET_OVERLAY_VISIBILITY },
   issuePlacement: null,
   newIssuePlacementActive: false,
+  newIssuePlacementIntent: "issue",
   issueCreateDraft: null,
   issueFormSliderOpen: false,
   issuesSidebarFocusIssueId: null,
@@ -1074,9 +1082,10 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
           }
         : {}),
     }),
-  setNewIssuePlacementActive: (newIssuePlacementActive) =>
+  setNewIssuePlacementActive: (newIssuePlacementActive, intent) =>
     set({
       newIssuePlacementActive,
+      ...(intent ? { newIssuePlacementIntent: intent } : {}),
       ...(newIssuePlacementActive
         ? {
             issuePlacement: null,
@@ -1084,6 +1093,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
             omAssetCreateDraft: null,
             viewerWorkspaceMode: "issues",
             leftSidebarTab: "issues",
+            ...(intent ? { newIssuePlacementIntent: intent } : {}),
           }
         : {}),
     }),

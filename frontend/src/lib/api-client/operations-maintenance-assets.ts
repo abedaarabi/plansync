@@ -50,6 +50,8 @@ export type OmAssetRow = OmAssetWritableFields & {
   file: { id: string; name: string } | null;
   fileVersion: { id: string; version: number } | null;
   levelName?: string | null;
+  buildingId?: string | null;
+  buildingName?: string | null;
   /** True when a tenant portal equipment QR secret exists for this asset. */
   hasOccupantQr: boolean;
   /** True when a primary equipment photo has been uploaded. */

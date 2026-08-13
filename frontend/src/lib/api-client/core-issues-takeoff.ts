@@ -81,6 +81,9 @@ export type IssueRow = {
   startDate?: string | null;
   dueDate?: string | null;
   location?: string | null;
+  /** Building FK (optional without a level). */
+  buildingId?: string | null;
+  buildingName?: string | null;
   /** Building level FK (auto-set from drawing map). */
   levelId?: string | null;
   levelName?: string | null;
@@ -388,12 +391,13 @@ export async function createIssue(body: {
   dueDate?: string | null;
   location?: string | null;
   pageNumber?: number;
+  buildingId?: string | null;
   levelId?: string | null;
   bimAnchor?: IssueBimAnchor;
   rfiId?: string;
   rfiIds?: string[];
   issueKind?: "WORK_ORDER" | "CONSTRUCTION";
-  assetId?: string;
+  assetId?: string | null;
   externalAssigneeEmail?: string;
   externalAssigneeName?: string;
   workOrderType?: string;
@@ -433,6 +437,7 @@ export async function patchIssue(
     dueDate?: string | null;
     location?: string | null;
     pageNumber?: number | null;
+    buildingId?: string | null;
     levelId?: string | null;
     /** Replace linked RFIs for this issue. */
     rfiIds?: string[];

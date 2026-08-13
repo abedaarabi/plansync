@@ -3,14 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Package, Search, Wrench } from "lucide-react";
+import { Box, FileText, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { IssueReferencePhotosField } from "@/components/enterprise/IssueReferencePhotosField";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
-import { formatOmAssetLocation } from "@/components/enterprise/WorkOrderCreateSlideOver";
+import {
+  WorkOrderAssetFields,
+  formatOmAssetLocation,
+} from "@/components/enterprise/WorkOrderAssetFields";
 import { WorkOrderActivityTimeline } from "@/components/enterprise/WorkOrderActivityTimeline";
 import { WorkOrderAssetDocsPanel } from "@/components/enterprise/WorkOrderAssetDocsPanel";
+import {
+  WorkOrderLocationFields,
+  type WorkOrderLocationValue,
+} from "@/components/enterprise/WorkOrderLocationFields";
 import { WorkOrderProcedureField } from "@/components/enterprise/WorkOrderProcedureField";
 import {
   fetchOmAssets,
@@ -19,6 +26,7 @@ import {
   patchIssue,
   postOmWorkspaceWorkOrderTemplate,
   ProRequiredError,
+  viewerHrefForIssue,
   type IssueReferencePhotoRow,
   type IssueRow,
   type WorkOrderChecklistItem,
@@ -53,6 +61,7 @@ type Props = {
   onSaved: (row: IssueRow) => void;
 };
 
+// fallow-ignore-next-line complexity
 export function WorkOrderEditSlideOver({
   open,
   issue,
@@ -74,8 +83,13 @@ export function WorkOrderEditSlideOver({
   const [priority, setPriority] = useState("MEDIUM");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [location, setLocation] = useState("");
+  const [locValue, setLocValue] = useState<WorkOrderLocationValue>({
+    buildingId: "",
+    levelId: "",
+    location: "",
+  });
   const [locationTouched, setLocationTouched] = useState(false);
+  const [structureTouched, setStructureTouched] = useState(false);
   const [photos, setPhotos] = useState<IssueReferencePhotoRow[]>([]);
   const [workOrderType, setWorkOrderType] = useState("CORRECTIVE");
   const [vendorId, setVendorId] = useState("");
@@ -102,8 +116,13 @@ export function WorkOrderEditSlideOver({
     setPriority(issue.priority ?? "MEDIUM");
     setStartDate(issueDateToInputValue(issue.startDate));
     setDueDate(issueDateToInputValue(issue.dueDate));
-    setLocation(issue.location ?? "");
+    setLocValue({
+      buildingId: issue.buildingId ?? "",
+      levelId: issue.levelId ?? "",
+      location: issue.location ?? "",
+    });
     setLocationTouched(false);
+    setStructureTouched(false);
     setPhotos(issue.referencePhotos ?? []);
     setWorkOrderType(issue.workOrderType ?? "CORRECTIVE");
     setVendorId(issue.vendorId ?? "");
@@ -126,17 +145,34 @@ export function WorkOrderEditSlideOver({
   const selectedAsset = assets.find((a) => a.id === assetId) ?? null;
 
   useEffect(() => {
-    if (!selectedAsset || locationTouched) return;
-    const loc = formatOmAssetLocation(selectedAsset);
-    if (loc && !issue?.location) setLocation(loc);
-  }, [selectedAsset, locationTouched, issue?.location]);
+    if (!selectedAsset) return;
+    if (!locationTouched) {
+      const loc = formatOmAssetLocation(selectedAsset);
+      if (loc && !issue?.location) {
+        setLocValue((prev) => ({ ...prev, location: loc }));
+      }
+    }
+    if (!structureTouched && !issue?.buildingId && !issue?.levelId) {
+      setLocValue((prev) => ({
+        ...prev,
+        buildingId: selectedAsset.buildingId ?? prev.buildingId,
+        levelId: selectedAsset.levelId ?? prev.levelId,
+      }));
+    }
+  }, [
+    selectedAsset,
+    locationTouched,
+    structureTouched,
+    issue?.location,
+    issue?.buildingId,
+    issue?.levelId,
+  ]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!issue) throw new Error("Missing work order.");
-      if (!assetId) throw new Error("Select an asset for this work order.");
       return patchIssue(issue.id, {
-        assetId,
+        assetId: assetId || null,
         title: title.trim(),
         description: description.trim() || null,
         assigneeId: assigneeId || null,
@@ -146,7 +182,9 @@ export function WorkOrderEditSlideOver({
         priority,
         startDate: startDate.trim() || null,
         dueDate: dueDate.trim() || null,
-        location: location.trim() || null,
+        location: locValue.location.trim() || null,
+        buildingId: locValue.buildingId || null,
+        levelId: locValue.levelId || null,
         workOrderType,
         vendorId: vendorId || null,
         procedureJson: procedure,
@@ -193,6 +231,9 @@ export function WorkOrderEditSlideOver({
   if (!issue) return null;
 
   const assetsHref = projectScopedHref(projectId, "/om/assets", workspaceId);
+  const viewerHref = viewerHrefForIssue(issue);
+  const viewInModel = Boolean(viewerHref && issue.bimAnchor);
+  const openOnDrawing = Boolean(viewerHref && issue.annotationId && !issue.bimAnchor);
 
   return (
     <EnterpriseSlideOver
@@ -201,7 +242,7 @@ export function WorkOrderEditSlideOver({
       form={{
         onSubmit: (e) => {
           e.preventDefault();
-          if (!title.trim() || !assetId) return;
+          if (!title.trim()) return;
           saveMut.mutate();
         },
       }}
@@ -211,7 +252,7 @@ export function WorkOrderEditSlideOver({
           icon={Wrench}
           titleId="wo-edit-title"
           title="Edit work order"
-          description="Update equipment, scope, and execution details."
+          description="Update equipment, location, scope, and execution details."
         />
       }
       footer={
@@ -235,7 +276,7 @@ export function WorkOrderEditSlideOver({
               type="submit"
               size="sm"
               loading={saveMut.isPending}
-              disabled={!title.trim() || !assetId}
+              disabled={!title.trim()}
             >
               {saveMut.isPending ? "Saving…" : "Save changes"}
             </EnterpriseButton>
@@ -253,79 +294,50 @@ export function WorkOrderEditSlideOver({
           </div>
         ) : null}
 
+        {viewInModel || openOnDrawing ? (
+          <div className="flex flex-wrap gap-2">
+            {viewInModel && viewerHref ? (
+              <Link
+                href={viewerHref}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)]"
+              >
+                <Box className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                View in model
+              </Link>
+            ) : null}
+            {openOnDrawing && viewerHref ? (
+              <Link
+                href={viewerHref}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-xs font-semibold text-[var(--enterprise-primary)] hover:bg-[var(--enterprise-hover-surface)]"
+              >
+                <FileText className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                Open on drawing
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+
         <div
           className={`${MOBILE_FORM_SECTION} rounded-md border border-[var(--enterprise-semantic-info-border)] bg-[var(--enterprise-semantic-info-bg)] p-3`}
         >
           <p className="enterprise-type-label text-[var(--enterprise-semantic-info-text)]">
             Equipment
           </p>
-          <div>
-            <label htmlFor="wo-edit-asset-search" className={MOBILE_FIELD_LABEL}>
-              Search assets
-            </label>
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--enterprise-text-muted)]"
-                aria-hidden
-              />
-              <input
-                id="wo-edit-asset-search"
-                value={assetSearch}
-                onChange={(e) => setAssetSearch(e.target.value)}
-                className={`${MOBILE_FIELD_INPUT} enterprise-field-input--icon`}
-                placeholder="Tag, name, location…"
-                autoComplete="off"
-              />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="wo-edit-asset" className={MOBILE_FIELD_LABEL}>
-              Asset *
-            </label>
-            {assetsPending ? (
-              <p className="text-sm text-[var(--enterprise-text-muted)]">Loading assets…</p>
-            ) : filteredAssets.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-[var(--enterprise-border)] px-3 py-4 text-center">
-                <Package
-                  className="mx-auto h-8 w-8 text-[var(--enterprise-text-muted)]"
-                  strokeWidth={1.5}
-                  aria-hidden
-                />
-                <p className="mt-2 text-sm text-[var(--enterprise-text-muted)]">
-                  {assets.length === 0
-                    ? "No assets on this project yet."
-                    : "No assets match your search."}
-                </p>
-                {assets.length === 0 ? (
-                  <Link
-                    href={assetsHref}
-                    className="mt-2 inline-block text-sm font-semibold text-[var(--enterprise-primary)] hover:underline"
-                  >
-                    Add assets in O&amp;M
-                  </Link>
-                ) : null}
-              </div>
-            ) : (
-              <select
-                id="wo-edit-asset"
-                value={assetId}
-                onChange={(e) => {
-                  setAssetId(e.target.value);
-                  setLocationTouched(false);
-                }}
-                className={MOBILE_FIELD_SELECT}
-                required
-              >
-                <option value="">Select equipment…</option>
-                {filteredAssets.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.tag} — {a.name}
-                    {a.category ? ` (${a.category})` : ""}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+          <WorkOrderAssetFields
+            idPrefix="wo-edit"
+            assets={assets}
+            assetsPending={assetsPending}
+            filteredAssets={filteredAssets}
+            assetId={assetId}
+            assetSearch={assetSearch}
+            onAssetSearchChange={setAssetSearch}
+            onAssetIdChange={(id) => {
+              setAssetId(id);
+              setLocationTouched(false);
+              setStructureTouched(false);
+            }}
+            assetsHref={assetsHref}
+          />
           {selectedAsset ? (
             <div className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2.5 text-xs text-[var(--enterprise-text-muted)]">
               <Wrench
@@ -396,21 +408,20 @@ export function WorkOrderEditSlideOver({
               className={MOBILE_FIELD_TEXTAREA}
             />
           </div>
-          <div>
-            <label htmlFor="wo-edit-location" className={MOBILE_FIELD_LABEL}>
-              Work location
-            </label>
-            <input
-              id="wo-edit-location"
-              value={location}
-              onChange={(e) => {
-                setLocation(e.target.value);
-                setLocationTouched(true);
-              }}
-              className={MOBILE_FIELD_INPUT}
-            />
-          </div>
         </div>
+
+        <WorkOrderLocationFields
+          projectId={projectId}
+          workspaceId={workspaceId}
+          value={locValue}
+          onChange={(next) => {
+            setLocValue(next);
+            setStructureTouched(true);
+          }}
+          onLocationTextChange={() => setLocationTouched(true)}
+          idPrefix="wo-edit-loc"
+          disabled={saveMut.isPending}
+        />
 
         <div className={MOBILE_FORM_SECTION}>
           <IssueReferencePhotosField

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const findFirstLevel = vi.hoisted(() => vi.fn());
 const findFirstMap = vi.hoisted(() => vi.fn());
 const findManyMaps = vi.hoisted(() => vi.fn());
+const findFirstBuilding = vi.hoisted(() => vi.fn());
 
 vi.mock("../prisma.js", () => ({
   prisma: {
@@ -13,14 +14,24 @@ vi.mock("../prisma.js", () => ({
       findFirst: (...args: unknown[]) => findFirstMap(...args),
       findMany: (...args: unknown[]) => findManyMaps(...args),
     },
+    building: {
+      findFirst: (...args: unknown[]) => findFirstBuilding(...args),
+    },
   },
 }));
 
 import {
+  resolveBuildingIdForIssue,
   resolveLevelForCreate,
   resolveLevelIdFromDrawing,
   resolveLevelIdFromStoreyName,
 } from "./resolveLevelFromDrawing.js";
+
+const levelRow = (id: string, name: string, buildingId: string | null = "b1") => ({
+  id,
+  displayName: name,
+  buildingId,
+});
 
 describe("resolveLevelIdFromDrawing", () => {
   beforeEach(() => {
@@ -36,7 +47,7 @@ describe("resolveLevelIdFromDrawing", () => {
   });
 
   it("prefers explicit levelId in the same project", async () => {
-    findFirstLevel.mockResolvedValue({ id: "lvl_1", displayName: "Level 1" });
+    findFirstLevel.mockResolvedValue(levelRow("lvl_1", "Level 1"));
 
     await expect(
       resolveLevelIdFromDrawing({
@@ -44,11 +55,11 @@ describe("resolveLevelIdFromDrawing", () => {
         fileId: "pdf_1",
         explicitLevelId: "lvl_1",
       }),
-    ).resolves.toEqual({ levelId: "lvl_1", levelName: "Level 1" });
+    ).resolves.toEqual({ levelId: "lvl_1", levelName: "Level 1", buildingId: "b1" });
 
     expect(findFirstLevel).toHaveBeenCalledWith({
       where: { id: "lvl_1", projectId: "p1" },
-      select: { id: true, displayName: true },
+      select: { id: true, displayName: true, buildingId: true },
     });
     expect(findManyMaps).not.toHaveBeenCalled();
   });
@@ -65,7 +76,7 @@ describe("resolveLevelIdFromDrawing", () => {
 
   it("resolves by page number (1-based → pageIndex)", async () => {
     findFirstMap.mockResolvedValue({
-      bimModelLevel: { id: "lvl_2", displayName: "L2" },
+      bimModelLevel: levelRow("lvl_2", "L2"),
     });
 
     await expect(
@@ -74,7 +85,7 @@ describe("resolveLevelIdFromDrawing", () => {
         fileId: "pdf_1",
         pageNumber: 2,
       }),
-    ).resolves.toEqual({ levelId: "lvl_2", levelName: "L2" });
+    ).resolves.toEqual({ levelId: "lvl_2", levelName: "L2", buildingId: "b1" });
 
     expect(findFirstMap).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -87,13 +98,14 @@ describe("resolveLevelIdFromDrawing", () => {
     findManyMaps.mockResolvedValue([
       {
         pageIndex: 0,
-        bimModelLevel: { id: "lvl_g", displayName: "Ground" },
+        bimModelLevel: levelRow("lvl_g", "Ground"),
       },
     ]);
 
     await expect(resolveLevelIdFromDrawing({ projectId: "p1", fileId: "pdf_1" })).resolves.toEqual({
       levelId: "lvl_g",
       levelName: "Ground",
+      buildingId: "b1",
     });
   });
 
@@ -101,11 +113,11 @@ describe("resolveLevelIdFromDrawing", () => {
     findManyMaps.mockResolvedValue([
       {
         pageIndex: 1,
-        bimModelLevel: { id: "lvl_a", displayName: "A" },
+        bimModelLevel: levelRow("lvl_a", "A"),
       },
       {
         pageIndex: 2,
-        bimModelLevel: { id: "lvl_b", displayName: "B" },
+        bimModelLevel: levelRow("lvl_b", "B"),
       },
     ]);
 
@@ -118,17 +130,17 @@ describe("resolveLevelIdFromDrawing", () => {
     findManyMaps.mockResolvedValue([
       {
         pageIndex: 0,
-        bimModelLevel: { id: "lvl_all", displayName: "All" },
+        bimModelLevel: levelRow("lvl_all", "All"),
       },
       {
         pageIndex: 1,
-        bimModelLevel: { id: "lvl_p1", displayName: "P1" },
+        bimModelLevel: levelRow("lvl_p1", "P1"),
       },
     ]);
 
     await expect(
       resolveLevelIdFromDrawing({ projectId: "p1", fileId: "  pdf_1  " }),
-    ).resolves.toEqual({ levelId: "lvl_all", levelName: "All" });
+    ).resolves.toEqual({ levelId: "lvl_all", levelName: "All", buildingId: "b1" });
   });
 });
 
@@ -145,7 +157,7 @@ describe("resolveLevelIdFromStoreyName", () => {
   });
 
   it("matches source or display name case-insensitively", async () => {
-    findFirstLevel.mockResolvedValue({ id: "lvl_1", displayName: "Level 1" });
+    findFirstLevel.mockResolvedValue(levelRow("lvl_1", "Level 1"));
 
     await expect(
       resolveLevelIdFromStoreyName({
@@ -153,7 +165,7 @@ describe("resolveLevelIdFromStoreyName", () => {
         storeyName: "LEVEL 1",
         buildingId: "b1",
       }),
-    ).resolves.toEqual({ levelId: "lvl_1", levelName: "Level 1" });
+    ).resolves.toEqual({ levelId: "lvl_1", levelName: "Level 1", buildingId: "b1" });
 
     expect(findFirstLevel).toHaveBeenCalledWith({
       where: {
@@ -164,7 +176,7 @@ describe("resolveLevelIdFromStoreyName", () => {
           { displayName: { equals: "LEVEL 1", mode: "insensitive" } },
         ],
       },
-      select: { id: true, displayName: true },
+      select: { id: true, displayName: true, buildingId: true },
       orderBy: { sortOrder: "asc" },
     });
   });
@@ -196,7 +208,7 @@ describe("resolveLevelForCreate", () => {
 
   it("falls back to BIM storey name when drawing has no map", async () => {
     findManyMaps.mockResolvedValue([]);
-    findFirstLevel.mockResolvedValue({ id: "lvl_s", displayName: "Storey A" });
+    findFirstLevel.mockResolvedValue(levelRow("lvl_s", "Storey A"));
 
     await expect(
       resolveLevelForCreate({
@@ -205,7 +217,53 @@ describe("resolveLevelForCreate", () => {
         bimStoreyName: "Storey A",
       }),
     ).resolves.toEqual({
-      level: { levelId: "lvl_s", levelName: "Storey A" },
+      level: { levelId: "lvl_s", levelName: "Storey A", buildingId: "b1" },
     });
+  });
+});
+
+describe("resolveBuildingIdForIssue", () => {
+  beforeEach(() => {
+    findFirstBuilding.mockReset();
+  });
+
+  it("prefers level building and rejects mismatch", async () => {
+    await expect(
+      resolveBuildingIdForIssue({
+        projectId: "p1",
+        explicitBuildingId: "b2",
+        levelBuildingId: "b1",
+      }),
+    ).resolves.toEqual({
+      buildingId: undefined,
+      error: "Level does not belong to the selected building",
+    });
+
+    await expect(
+      resolveBuildingIdForIssue({
+        projectId: "p1",
+        explicitBuildingId: "b1",
+        levelBuildingId: "b1",
+      }),
+    ).resolves.toEqual({ buildingId: "b1" });
+  });
+
+  it("validates explicit building when no level", async () => {
+    findFirstBuilding.mockResolvedValue({ id: "b1", name: "Tower" });
+    await expect(
+      resolveBuildingIdForIssue({
+        projectId: "p1",
+        explicitBuildingId: "b1",
+      }),
+    ).resolves.toEqual({ buildingId: "b1" });
+  });
+
+  it("clears when explicit building is null", async () => {
+    await expect(
+      resolveBuildingIdForIssue({
+        projectId: "p1",
+        explicitBuildingId: null,
+      }),
+    ).resolves.toEqual({ buildingId: null });
   });
 });
