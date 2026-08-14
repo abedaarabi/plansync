@@ -16,3 +16,11 @@ plansync/
 frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
+
+# Revit / .NET plugin
+**/bin/
+**/obj/
+**/.vs/
+*.user
+*.suo
+*.cache

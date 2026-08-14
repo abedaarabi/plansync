@@ -1,0 +1,183 @@
+<Window x:Class="PlansyncRevitPlugin.UI.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PlanSync — Sign in"
+        Width="440" Height="600"
+        MinWidth="400" MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{DynamicResource PlansyncBgBrush}"
+        Foreground="{DynamicResource PlansyncTextBrush}"
+        TextOptions.TextFormattingMode="Display"
+        FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/PlansyncRevitPlugin;component/UI/Themes/PlansyncTheme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="{DynamicResource PlansyncPageGradientAColor}" Offset="0" />
+                <GradientStop Color="{DynamicResource PlansyncPageGradientBColor}" Offset="0.55" />
+                <GradientStop Color="{DynamicResource PlansyncPageGradientCColor}" Offset="1" />
+            </LinearGradientBrush>
+        </Grid.Background>
+
+        <Border Width="372"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                Background="{DynamicResource PlansyncSurfaceBrush}"
+                BorderBrush="{DynamicResource PlansyncBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="18"
+                Padding="0"
+                Margin="24">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="4" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" CornerRadius="18,18,0,0">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="{DynamicResource PlansyncHeaderBarStartColor}" Offset="0" />
+                            <GradientStop Color="{DynamicResource PlansyncHeaderBarEndColor}" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+
+                <StackPanel Grid.Row="1" Margin="28,24,28,28">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                        <Border Width="44" Height="44"
+                                CornerRadius="12"
+                                Background="{DynamicResource PlansyncAccentTintBgBrush}"
+                                Margin="0,0,12,0">
+                            <Image x:Name="LogoImage"
+                                   Width="28" Height="28"
+                                   Stretch="Uniform"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock FontSize="24" FontWeight="SemiBold"><Run Text="Plan" Foreground="{DynamicResource PlansyncTextBrush}" /><Run Text="Sync" Foreground="{DynamicResource PlansyncAccentBrush}" /></TextBlock>
+                            <TextBlock Text="Revit publish"
+                                       Foreground="{DynamicResource PlansyncMutedBrush}"
+                                       FontSize="12" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <TextBlock Text="Welcome back"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource PlansyncTextBrush}" />
+                    <TextBlock Text="Sign in to pick a project folder and publish IFC or PDF."
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource PlansyncMutedBrush}"
+                               Margin="0,6,0,20"
+                               FontSize="12.5" />
+
+                    <TextBlock Text="Email" FontWeight="SemiBold" Foreground="{DynamicResource PlansyncSecondaryTextBrush}" Margin="0,0,0,6" />
+                    <Border Background="{DynamicResource PlansyncSurfaceAltBrush}"
+                            BorderBrush="{DynamicResource PlansyncBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="2"
+                            Margin="0,0,0,14"
+                            Height="44">
+                        <TextBox x:Name="EmailBox"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 Foreground="{DynamicResource PlansyncInputTextBrush}"
+                                 CaretBrush="{DynamicResource PlansyncInputTextBrush}"
+                                 SelectionBrush="{DynamicResource PlansyncSelectionHighlightBrush}"
+                                 FontSize="14"
+                                 VerticalContentAlignment="Center"
+                                 Padding="10,0"
+                                 TextOptions.TextFormattingMode="Display" />
+                    </Border>
+
+                    <DockPanel Margin="0,0,0,6">
+                        <TextBlock Text="Password" FontWeight="SemiBold" Foreground="{DynamicResource PlansyncSecondaryTextBrush}" />
+                        <TextBlock DockPanel.Dock="Right"
+                                   HorizontalAlignment="Right"
+                                   Cursor="Hand"
+                                   Foreground="{DynamicResource PlansyncAccentBrush}"
+                                   FontWeight="SemiBold"
+                                   MouseLeftButtonUp="ForgotPassword_Click"
+                                   Text="Forgot password?" />
+                    </DockPanel>
+                    <Border Background="{DynamicResource PlansyncSurfaceAltBrush}"
+                            BorderBrush="{DynamicResource PlansyncBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="2"
+                            Margin="0,0,0,14"
+                            Height="44">
+                        <PasswordBox x:Name="PasswordBox"
+                                     BorderThickness="0"
+                                     Background="Transparent"
+                                     Foreground="{DynamicResource PlansyncInputTextBrush}"
+                                     CaretBrush="{DynamicResource PlansyncInputTextBrush}"
+                                     SelectionBrush="{DynamicResource PlansyncSelectionHighlightBrush}"
+                                     FontSize="14"
+                                     VerticalContentAlignment="Center"
+                                     Padding="10,0"
+                                     PasswordChar="•" />
+                    </Border>
+
+                    <Border x:Name="ErrorBanner"
+                            Background="{DynamicResource PlansyncErrorBgBrush}"
+                            BorderBrush="{DynamicResource PlansyncErrorBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="12,10"
+                            Margin="0,0,0,14"
+                            Visibility="Collapsed">
+                        <TextBlock x:Name="ErrorText"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource PlansyncErrorTextBrush}"
+                                   FontSize="12.5" />
+                    </Border>
+
+                    <Button x:Name="SignInButton"
+                            Content="Sign in"
+                            Style="{StaticResource PlansyncPrimaryButton}"
+                            Height="44"
+                            Click="SignIn_Click"
+                            IsDefault="True" />
+
+                    <Border Background="{DynamicResource PlansyncSurfaceAltBrush}"
+                            BorderBrush="{DynamicResource PlansyncBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="12,10"
+                            Margin="0,18,0,0">
+                        <TextBlock HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource PlansyncMutedBrush}"
+                                   FontSize="12.5"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center">
+                            <Run Text="New to PlanSync? " />
+                            <Hyperlink Click="CreateAccount_Click" Foreground="{DynamicResource PlansyncAccentBrush}" TextDecorations="None">
+                                <Run FontWeight="SemiBold" Text="Create account" />
+                            </Hyperlink>
+                        </TextBlock>
+                    </Border>
+
+                    <TextBlock Margin="0,14,0,0"
+                               HorizontalAlignment="Center"
+                               FontSize="12">
+                        <Hyperlink Click="Home_Click" Foreground="{DynamicResource PlansyncFaintTextBrush}" TextDecorations="None">plansync.dev</Hyperlink>
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

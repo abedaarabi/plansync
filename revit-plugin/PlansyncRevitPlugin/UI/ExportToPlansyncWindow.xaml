@@ -1,0 +1,429 @@
+<Window x:Class="PlansyncRevitPlugin.UI.ExportToPlansyncWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Plansync — Export"
+        Width="1040" Height="760"
+        Background="{DynamicResource PlansyncBgBrush}"
+        Foreground="{DynamicResource PlansyncTextBrush}"
+        FontFamily="Segoe UI, sans-serif"
+        FontSize="13"
+        ResizeMode="NoResize"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/PlansyncRevitPlugin;component/UI/Themes/PlansyncTheme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" Margin="0,0,0,14" LastChildFill="False">
+            <StackPanel>
+                <TextBlock FontSize="22" FontWeight="SemiBold"><Run Text="Plan" Foreground="{DynamicResource PlansyncTextBrush}" /><Run Text="Sync" Foreground="{DynamicResource PlansyncAccentBrush}" /></TextBlock>
+                <TextBlock Text="Export IFC and PDF"
+                           Style="{StaticResource PlansyncTitleText}"
+                           Margin="0,4,0,0" />
+            </StackPanel>
+            <Border DockPanel.Dock="Right"
+                    Background="{DynamicResource PlansyncAccentTintBgBrush}"
+                    BorderBrush="{DynamicResource PlansyncAccentTintBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="12,10"
+                    MaxWidth="460"
+                    VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="DESTINATION"
+                               Foreground="{DynamicResource PlansyncAccentBrush}"
+                               FontSize="10"
+                               FontWeight="SemiBold" />
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <RadioButton Content="Plansync cloud"
+                                     Style="{StaticResource PlansyncRadio}"
+                                     IsChecked="{Binding IsCloudDestination, Mode=TwoWay}"
+                                     GroupName="ExportDestination"
+                                     Margin="0,0,14,0" />
+                        <RadioButton Content="My computer"
+                                     Style="{StaticResource PlansyncRadio}"
+                                     IsChecked="{Binding IsCloudDestination, Mode=TwoWay, Converter={StaticResource InverseBool}}"
+                                     GroupName="ExportDestination" />
+                    </StackPanel>
+                    <DockPanel Margin="0,4,0,0">
+                        <Button DockPanel.Dock="Right"
+                                Content="Change"
+                                Style="{StaticResource PlansyncSecondaryButton}"
+                                Command="{Binding ChooseDestinationCommand}"
+                                Visibility="{Binding ShowChooseDestination, Converter={StaticResource BoolToVis}}"
+                                MinWidth="0"
+                                Padding="8,4"
+                                Margin="8,0,0,0" />
+                        <TextBlock Text="{Binding DestinationLabel}"
+                                   Foreground="{DynamicResource PlansyncAccentTintTextBrush}"
+                                   FontSize="12.5"
+                                   FontWeight="Medium"
+                                   TextWrapping="Wrap" />
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+        </DockPanel>
+
+        <Border Grid.Row="1" Style="{StaticResource PlansyncCard}" Margin="0,0,0,12" Padding="14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="280" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <CheckBox Content="Export IFC"
+                              Style="{StaticResource PlansyncCheckBox}"
+                              IsChecked="{Binding IncludeIfc}"
+                              Margin="0,0,20,0"
+                              VerticalAlignment="Center" />
+                    <CheckBox Content="Export PDF"
+                              Style="{StaticResource PlansyncCheckBox}"
+                              IsChecked="{Binding IncludePdf}"
+                              Margin="0,0,20,0"
+                              VerticalAlignment="Center" />
+                    <CheckBox Content="Changed sheets only"
+                              Style="{StaticResource PlansyncCheckBox}"
+                              IsChecked="{Binding ChangedSheetsOnly}"
+                              Margin="0"
+                              VerticalAlignment="Center" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="PUBLISH PROFILE" Style="{StaticResource PlansyncSectionLabel}" Margin="0,0,0,6" />
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right"
+                                Content="Save"
+                                Style="{StaticResource PlansyncSecondaryButton}"
+                                Command="{Binding SaveProfileCommand}"
+                                MinWidth="0"
+                                Margin="8,0,0,0"
+                                Padding="10,6" />
+                        <Button DockPanel.Dock="Right"
+                                Content="Load"
+                                Style="{StaticResource PlansyncSecondaryButton}"
+                                Command="{Binding LoadProfileCommand}"
+                                MinWidth="0"
+                                Margin="8,0,0,0"
+                                Padding="10,6" />
+                        <ComboBox ItemsSource="{Binding Profiles}"
+                                  Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}"
+                                  SelectedItem="{Binding SelectedProfileName}"
+                                  IsEditable="True"
+                                  Height="32" />
+                    </DockPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TabControl Grid.Row="2" Background="Transparent" BorderThickness="0">
+            <TabItem Header="IFC" IsEnabled="{Binding IncludeIfc}">
+                <Grid DataContext="{Binding Ifc}" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="280" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" MinWidth="280" />
+                    </Grid.ColumnDefinitions>
+
+                    <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <Border Style="{StaticResource PlansyncCard}">
+                                <StackPanel>
+                                    <TextBlock Text="IFC VERSION" Style="{StaticResource PlansyncSectionLabel}" />
+                                    <ComboBox ItemsSource="{Binding VersionOptions, Mode=OneTime}"
+                                              SelectedItem="{Binding SelectedVersionOption}"
+                                              DisplayMemberPath="Label"
+                                              Height="34" />
+                                    <TextBlock Text="{Binding SelectedVersionOption.SubLabel}"
+                                               Style="{StaticResource PlansyncCaptionText}"
+                                               Margin="0,6,0,0"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource PlansyncCard}">
+                                <StackPanel>
+                                    <TextBlock Text="MODEL SCOPE" Style="{StaticResource PlansyncSectionLabel}" />
+                                    <RadioButton Content="Whole model"
+                                                 Style="{StaticResource PlansyncRadio}"
+                                                 IsChecked="{Binding WholeModel, Mode=TwoWay}"
+                                                 GroupName="IfcScope" />
+                                    <RadioButton Content="Filter by view"
+                                                 Style="{StaticResource PlansyncRadio}"
+                                                 IsChecked="{Binding FilterByView, Mode=TwoWay}"
+                                                 GroupName="IfcScope" />
+                                    <TextBlock Text="Filter view (3D first)"
+                                               Style="{StaticResource PlansyncSectionLabel}"
+                                               Margin="0,8,0,6" />
+                                    <ComboBox ItemsSource="{Binding Views}"
+                                              SelectedItem="{Binding SelectedView}"
+                                              IsEnabled="{Binding IsViewListEnabled}"
+                                              DisplayMemberPath="Name"
+                                              Height="34" />
+                                    <TextBlock Text="For full 3D elements + rooms: use Whole model, or Filter by a 3D view. Floor plans alone can miss solid geometry."
+                                               Style="{StaticResource PlansyncCaptionText}"
+                                               Margin="0,6,0,0"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource PlansyncCard}">
+                                <StackPanel>
+                                    <TextBlock Text="LEVELS" Style="{StaticResource PlansyncSectionLabel}" />
+                                    <CheckBox Content="Include all levels as building storeys"
+                                              Style="{StaticResource PlansyncCheckBox}"
+                                              IsChecked="{Binding IncludeAllLevelsAsBuildingStories}" />
+                                    <TextBlock Text="Forces every level's &quot;Building Story&quot; flag on for this export only, so reference/sill levels aren't dropped as IfcBuildingStorey. Your Revit model is not modified."
+                                               Style="{StaticResource PlansyncCaptionText}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,0" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource PlansyncCard}">
+                                <StackPanel>
+                                    <TextBlock Text="PLANSYNC 2D + ROOMS" Style="{StaticResource PlansyncSectionLabel}" />
+                                    <CheckBox Content="Include rooms (IfcSpace)"
+                                              Style="{StaticResource PlansyncCheckBox}"
+                                              IsChecked="{Binding ExportRoomsInView}" />
+                                    <CheckBox Content="Include 2D floor cut / plan elements"
+                                              Style="{StaticResource PlansyncCheckBox}"
+                                              IsChecked="{Binding Export2DElements}" />
+                                    <TextBlock Text="These ADD rooms and 2D graphics on top of walls/floors/doors. Prefer Whole model or a 3D filter view so solids export correctly."
+                                               Style="{StaticResource PlansyncCaptionText}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,4,0,0" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource PlansyncCard}">
+                                <StackPanel>
+                                    <TextBlock Text="PROPERTY SETS" Style="{StaticResource PlansyncSectionLabel}" />
+                                    <CheckBox Content="IFC common property sets"
+                                              Style="{StaticResource PlansyncCheckBox}"
+                                              IsChecked="{Binding ExportIfcCommonPropertySets}" />
+                                    <CheckBox Content="Base quantities"
+                                              Style="{StaticResource PlansyncCheckBox}"
+                                              IsChecked="{Binding ExportBaseQuantities}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource PlansyncCard}">
+                                <StackPanel>
+                                    <TextBlock Text="PARAMETER MODE" Style="{StaticResource PlansyncSectionLabel}" />
+                                    <RadioButton Content="All Revit property sets"
+                                                 Style="{StaticResource PlansyncRadio}"
+                                                 IsChecked="{Binding AllRevitPropertySets, Mode=TwoWay}"
+                                                 GroupName="IfcParamMode" />
+                                    <RadioButton Content="Selected parameters only"
+                                                 Style="{StaticResource PlansyncRadio}"
+                                                 IsChecked="{Binding SelectedParametersOnly, Mode=TwoWay}"
+                                                 GroupName="IfcParamMode" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <Border Grid.Column="2" Style="{StaticResource PlansyncCard}" Margin="0" IsEnabled="{Binding IsParameterListEnabled}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,10">
+                                <TextBlock DockPanel.Dock="Left"
+                                           Text="PARAMETERS"
+                                           Style="{StaticResource PlansyncSectionLabel}"
+                                           VerticalAlignment="Center"
+                                           Margin="0" />
+                                <TextBlock DockPanel.Dock="Right"
+                                           Text="{Binding SelectedCountText}"
+                                           Foreground="{StaticResource PlansyncMutedBrush}"
+                                           VerticalAlignment="Center" />
+                            </DockPanel>
+
+                            <TextBox Grid.Row="1"
+                                     Style="{StaticResource PlansyncSearchBox}"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Margin="0,0,0,10" />
+
+                            <DockPanel Grid.Row="2" Margin="0,0,0,10">
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                                    <ToggleButton Content="Shared" Style="{StaticResource PlansyncChipToggle}" IsChecked="{Binding ShowShared}" />
+                                    <ToggleButton Content="Project" Style="{StaticResource PlansyncChipToggle}" IsChecked="{Binding ShowProject}" />
+                                    <ToggleButton Content="Built-in" Style="{StaticResource PlansyncChipToggle}" IsChecked="{Binding ShowBuiltIn}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                                    <Button Content="Select visible"
+                                            Style="{StaticResource PlansyncSecondaryButton}"
+                                            Command="{Binding SelectAllVisibleCommand}"
+                                            Margin="0,0,8,0"
+                                            MinWidth="0" />
+                                    <Button Content="Clear"
+                                            Style="{StaticResource PlansyncSecondaryButton}"
+                                            Command="{Binding ClearVisibleCommand}"
+                                            MinWidth="0" />
+                                </StackPanel>
+                            </DockPanel>
+
+                            <ListView Grid.Row="3"
+                                      BorderBrush="{StaticResource PlansyncBorderBrush}"
+                                      BorderThickness="1"
+                                      ItemsSource="{Binding ParametersView}">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Width="36">
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                </DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <GridViewColumn Header="Name" DisplayMemberBinding="{Binding Name}" Width="220" />
+                                        <GridViewColumn Header="Kind" DisplayMemberBinding="{Binding KindLabel}" Width="90" />
+                                        <GridViewColumn Header="Group" DisplayMemberBinding="{Binding Group}" Width="140" />
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="PDF" IsEnabled="{Binding IncludePdf}">
+                <Border DataContext="{Binding Pdf}" Style="{StaticResource PlansyncCard}" Margin="0,12,0,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                            <TextBlock DockPanel.Dock="Left" Text="DRAWINGS" Style="{StaticResource PlansyncSectionLabel}" Margin="0" VerticalAlignment="Center" />
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding SelectedCountText}" Foreground="{StaticResource PlansyncMutedBrush}" VerticalAlignment="Center" />
+                        </DockPanel>
+
+                        <StackPanel Grid.Row="1" Margin="0,0,0,12">
+                            <RadioButton Content="Combine into one PDF"
+                                         Style="{StaticResource PlansyncRadio}"
+                                         IsChecked="{Binding Combine, Mode=TwoWay}"
+                                         GroupName="PdfCombineMode" />
+                            <RadioButton Content="One PDF per sheet/view"
+                                         Style="{StaticResource PlansyncRadio}"
+                                         IsChecked="{Binding OneFilePerSheet, Mode=TwoWay}"
+                                         GroupName="PdfCombineMode" />
+                            <TextBlock Text="Naming template" Style="{StaticResource PlansyncSectionLabel}" Margin="0,10,0,6" />
+                            <TextBox Text="{Binding NamingTemplate, UpdateSourceTrigger=PropertyChanged}"
+                                     Height="34"
+                                     Padding="8,6" />
+                            <TextBlock Text="{}{SheetNumber}_{SheetName} · {ViewName} · {DocumentTitle} · {Date}"
+                                       Style="{StaticResource PlansyncCaptionText}"
+                                       Margin="0,6,0,0" />
+                            <Border Background="{DynamicResource PlansyncAccentTintBgBrush}" BorderBrush="{DynamicResource PlansyncAccentTintBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,10,0,0">
+                                <TextBlock TextWrapping="Wrap"
+                                           Foreground="{DynamicResource PlansyncAccentTintTextBrush}"
+                                           FontWeight="SemiBold"
+                                           Text="{Binding SuggestedOutputName, StringFormat='Output name: {0}'}" />
+                            </Border>
+                        </StackPanel>
+
+                        <TextBox Grid.Row="2"
+                                 Style="{StaticResource PlansyncSearchBox}"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,0,10" />
+
+                        <Grid Grid.Row="3">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                                    <ToggleButton Content="Sheets" Style="{StaticResource PlansyncChipToggle}" IsChecked="{Binding ShowSheets}" />
+                                    <ToggleButton Content="Views" Style="{StaticResource PlansyncChipToggle}" IsChecked="{Binding ShowViews}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                                    <Button Content="All sheets" Style="{StaticResource PlansyncSecondaryButton}" Command="{Binding SelectAllSheetsCommand}" MinWidth="0" Margin="0,0,8,0" />
+                                    <Button Content="Select visible" Style="{StaticResource PlansyncSecondaryButton}" Command="{Binding SelectAllVisibleCommand}" MinWidth="0" Margin="0,0,8,0" />
+                                    <Button Content="Clear" Style="{StaticResource PlansyncSecondaryButton}" Command="{Binding ClearCommand}" MinWidth="0" />
+                                </StackPanel>
+                            </DockPanel>
+
+                            <ListView Grid.Row="1"
+                                      x:Name="DrawingsList"
+                                      BorderBrush="{StaticResource PlansyncBorderBrush}"
+                                      BorderThickness="1"
+                                      ItemsSource="{Binding DrawingsView}">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Width="36">
+                                            <GridViewColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                </DataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <GridViewColumn Header="Drawing" DisplayMemberBinding="{Binding Name}" Width="220" />
+                                        <GridViewColumn Header="Export as" DisplayMemberBinding="{Binding ExportFileName}" Width="200" />
+                                        <GridViewColumn Header="Type" DisplayMemberBinding="{Binding ViewTypeName}" Width="80" />
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </TabItem>
+
+            <TabItem Header="QA">
+                <Border Style="{StaticResource PlansyncCard}" Margin="0,12,0,0" Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="PARAMETER QA" Style="{StaticResource PlansyncSectionLabel}" />
+                        <TextBlock Style="{StaticResource PlansyncSubtitleText}"
+                                   Text="When IFC uses selected parameters, Plansync can sample the model and warn if those parameters look empty."
+                                   Margin="0,0,0,12" />
+                        <CheckBox Content="Warn before upload if selected parameters look empty"
+                                  Style="{StaticResource PlansyncCheckBox}"
+                                  IsChecked="{Binding WarnOnParamQa}" />
+                        <CheckBox Content="Block publish when parameter QA fails"
+                                  Style="{StaticResource PlansyncCheckBox}"
+                                  IsChecked="{Binding BlockOnParamQa}" />
+                    </StackPanel>
+                </Border>
+            </TabItem>
+        </TabControl>
+
+        <DockPanel Grid.Row="3" Margin="0,16,0,0" LastChildFill="False">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <Button Content="Cancel"
+                        Style="{StaticResource PlansyncSecondaryButton}"
+                        Click="Cancel_Click"
+                        Margin="0,0,10,0"
+                        IsCancel="True" />
+                <Button Content="{Binding ExportButtonLabel}"
+                        Style="{StaticResource PlansyncPrimaryButton}"
+                        Click="Export_Click"
+                        IsDefault="True" />
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

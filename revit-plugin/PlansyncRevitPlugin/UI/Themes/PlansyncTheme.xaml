@@ -1,0 +1,289 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:conv="clr-namespace:PlansyncRevitPlugin.UI.Converters">
+
+    <conv:InverseBooleanConverter x:Key="InverseBool" />
+
+    <Color x:Key="PlansyncAccentColor">#2563EB</Color>
+    <Color x:Key="PlansyncAccentDarkColor">#1D4ED8</Color>
+    <Color x:Key="PlansyncBgColor">#F3F5F7</Color>
+    <Color x:Key="PlansyncSurfaceColor">#FFFFFF</Color>
+    <Color x:Key="PlansyncBorderColor">#D5DBE1</Color>
+    <Color x:Key="PlansyncTextColor">#1F2933</Color>
+    <Color x:Key="PlansyncMutedColor">#62748A</Color>
+
+    <SolidColorBrush x:Key="PlansyncAccentBrush" Color="{StaticResource PlansyncAccentColor}" />
+    <SolidColorBrush x:Key="PlansyncAccentDarkBrush" Color="{StaticResource PlansyncAccentDarkColor}" />
+    <SolidColorBrush x:Key="PlansyncBgBrush" Color="{StaticResource PlansyncBgColor}" />
+    <SolidColorBrush x:Key="PlansyncSurfaceBrush" Color="{StaticResource PlansyncSurfaceColor}" />
+    <SolidColorBrush x:Key="PlansyncBorderBrush" Color="{StaticResource PlansyncBorderColor}" />
+    <SolidColorBrush x:Key="PlansyncTextBrush" Color="{StaticResource PlansyncTextColor}" />
+    <SolidColorBrush x:Key="PlansyncMutedBrush" Color="{StaticResource PlansyncMutedColor}" />
+
+    <SolidColorBrush x:Key="PlansyncSurfaceAltBrush" Color="#F8FAFC" />
+    <SolidColorBrush x:Key="PlansyncHoverBgBrush" Color="#EEF2F5" />
+    <SolidColorBrush x:Key="PlansyncSelectedBgBrush" Color="#DBEAFE" />
+    <SolidColorBrush x:Key="PlansyncPressedAccentBrush" Color="#1E40AF" />
+
+    <SolidColorBrush x:Key="PlansyncAccentTintBgBrush" Color="#EFF6FF" />
+    <SolidColorBrush x:Key="PlansyncAccentTintBorderBrush" Color="#BFDBFE" />
+    <SolidColorBrush x:Key="PlansyncAccentTintStrongBrush" Color="#DBEAFE" />
+    <SolidColorBrush x:Key="PlansyncAccentTintTextBrush" Color="#1E3A8A" />
+    <SolidColorBrush x:Key="PlansyncAccentIconBrush" Color="#60A5FA" />
+
+    <SolidColorBrush x:Key="PlansyncInputBgBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="PlansyncInputTextBrush" Color="#0F172A" />
+    <SolidColorBrush x:Key="PlansyncSelectionHighlightBrush" Color="#93C5FD" />
+
+    <SolidColorBrush x:Key="PlansyncSecondaryTextBrush" Color="#334155" />
+    <SolidColorBrush x:Key="PlansyncFaintTextBrush" Color="#94A3B8" />
+    <SolidColorBrush x:Key="PlansyncPlaceholderTextBrush" Color="#64748B" />
+
+    <SolidColorBrush x:Key="PlansyncErrorBgBrush" Color="#FEF2F2" />
+    <SolidColorBrush x:Key="PlansyncErrorBorderBrush" Color="#FECACA" />
+    <SolidColorBrush x:Key="PlansyncErrorTextBrush" Color="#B91C1C" />
+    <SolidColorBrush x:Key="PlansyncErrorAccentBrush" Color="#DC2626" />
+    <SolidColorBrush x:Key="PlansyncWarnBgBrush" Color="#FEF3C7" />
+    <SolidColorBrush x:Key="PlansyncWarnBorderBrush" Color="#FCD34D" />
+    <SolidColorBrush x:Key="PlansyncWarnTextBrush" Color="#B45309" />
+    <SolidColorBrush x:Key="PlansyncSuccessBrush" Color="#22C55E" />
+    <SolidColorBrush x:Key="PlansyncSuccessBgBrush" Color="#ECFDF5" />
+    <SolidColorBrush x:Key="PlansyncSuccessBorderBrush" Color="#A7F3D0" />
+    <SolidColorBrush x:Key="PlansyncSuccessTextBrush" Color="#047857" />
+
+    <!-- Page-background diagonal gradient stops (LoginWindow, PlansyncBrowserWindow). -->
+    <Color x:Key="PlansyncPageGradientAColor">#F8FAFC</Color>
+    <Color x:Key="PlansyncPageGradientBColor">#EFF6FF</Color>
+    <Color x:Key="PlansyncPageGradientCColor">#DBEAFE</Color>
+
+    <!-- Thin brand accent bar (window/panel top strip). -->
+    <Color x:Key="PlansyncHeaderBarStartColor">#2563EB</Color>
+    <Color x:Key="PlansyncHeaderBarEndColor">#3B82F6</Color>
+
+    <Style x:Key="PlansyncWindowStyle" TargetType="Window">
+        <Setter Property="Background" Value="{StaticResource PlansyncBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncTextBrush}" />
+        <Setter Property="FontFamily" Value="Segoe UI, sans-serif" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="ResizeMode" Value="NoResize" />
+    </Style>
+
+    <Style x:Key="PlansyncBrandText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncAccentDarkBrush}" />
+    </Style>
+
+    <Style x:Key="PlansyncTitleText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncTextBrush}" />
+    </Style>
+
+    <Style x:Key="PlansyncSubtitleText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncMutedBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+
+    <Style x:Key="PlansyncSectionLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncMutedBrush}" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+
+    <Style x:Key="PlansyncEmphasisText" TargetType="TextBlock">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncTextBrush}" />
+    </Style>
+
+    <Style x:Key="PlansyncCaptionText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncMutedBrush}" />
+    </Style>
+
+    <Style x:Key="PlansyncCard" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource PlansyncSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource PlansyncBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="Margin" Value="0,0,0,12" />
+    </Style>
+
+    <Style x:Key="PlansyncPrimaryButton" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource PlansyncAccentBrush}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="18,10" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="MinWidth" Value="110" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="10"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PlansyncAccentDarkBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PlansyncPressedAccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PlansyncSecondaryButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncTextBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource PlansyncBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="14,8" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="MinWidth" Value="90" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="8"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PlansyncHoverBgBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PlansyncChipToggle" TargetType="ToggleButton">
+        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Bd"
+                            Background="{StaticResource PlansyncHoverBgBrush}"
+                            BorderBrush="{StaticResource PlansyncBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="16"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PlansyncSelectedBgBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource PlansyncAccentBrush}" />
+                            <Setter Property="Foreground" Value="{StaticResource PlansyncAccentDarkBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PlansyncSearchBox" TargetType="TextBox">
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="BorderBrush" Value="{StaticResource PlansyncBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="{StaticResource PlansyncInputBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncInputTextBrush}" />
+        <Setter Property="CaretBrush" Value="{StaticResource PlansyncInputTextBrush}" />
+        <Setter Property="SelectionBrush" Value="{StaticResource PlansyncSelectionHighlightBrush}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="8"
+                            SnapsToDevicePixels="True">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="Center"
+                                      Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource PlansyncAccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PlansyncPasswordBox" TargetType="PasswordBox">
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="BorderBrush" Value="{StaticResource PlansyncBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Background" Value="{StaticResource PlansyncInputBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncInputTextBrush}" />
+        <Setter Property="CaretBrush" Value="{StaticResource PlansyncInputTextBrush}" />
+        <Setter Property="SelectionBrush" Value="{StaticResource PlansyncSelectionHighlightBrush}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="PasswordBox">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="8"
+                            SnapsToDevicePixels="True">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="Center"
+                                      Focusable="False"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Hidden" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource PlansyncAccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PlansyncCheckBox" TargetType="CheckBox">
+        <Setter Property="Margin" Value="0,0,0,8" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncTextBrush}" />
+    </Style>
+
+    <Style x:Key="PlansyncRadio" TargetType="RadioButton">
+        <Setter Property="Margin" Value="0,0,0,8" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncTextBrush}" />
+    </Style>
+
+</ResourceDictionary>

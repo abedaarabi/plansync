@@ -1,0 +1,65 @@
+<Window x:Class="PlansyncRevitPlugin.UI.NewFolderWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="New folder"
+        Width="420" Height="210"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource PlansyncSurfaceAltBrush}"
+        Foreground="{DynamicResource PlansyncTextBrush}"
+        FontFamily="Segoe UI, sans-serif"
+        FontSize="13"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/PlansyncRevitPlugin;component/UI/Themes/PlansyncTheme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Text="Create folder"
+                   FontSize="16"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource PlansyncTextBrush}"
+                   Margin="0,0,0,6" />
+        <TextBlock x:Name="ParentHint"
+                   Grid.Row="1"
+                   Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,12" />
+        <TextBox x:Name="NameBox"
+                 Grid.Row="2"
+                 Height="36"
+                 Padding="10,8"
+                 VerticalContentAlignment="Center"
+                 Background="{DynamicResource PlansyncInputBgBrush}"
+                 Foreground="{DynamicResource PlansyncInputTextBrush}"
+                 BorderBrush="{DynamicResource PlansyncBorderBrush}"
+                 BorderThickness="1" />
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,16,0,0">
+            <Button Content="Cancel"
+                    Style="{StaticResource PlansyncSecondaryButton}"
+                    Click="Cancel_Click"
+                    Margin="0,0,10,0"
+                    IsCancel="True" />
+            <Button Content="Create"
+                    Style="{StaticResource PlansyncPrimaryButton}"
+                    Click="Create_Click"
+                    IsDefault="True" />
+        </StackPanel>
+    </Grid>
+</Window>

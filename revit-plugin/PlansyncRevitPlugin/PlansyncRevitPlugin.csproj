@@ -1,0 +1,61 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0-windows</TargetFramework>
+
+		<Platforms>x64</Platforms>
+		<PlatformTarget>x64</PlatformTarget>
+
+		<AppendPlatformToOutputPath>false</AppendPlatformToOutputPath>
+
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<UseWPF>true</UseWPF>
+
+		<StartAction>Program</StartAction>
+		<StartProgram>C:\Program Files\Autodesk\Revit 2027\Revit.exe</StartProgram>
+		<StartWorkingDirectory>C:\Program Files\Autodesk\Revit 2027\</StartWorkingDirectory>
+	</PropertyGroup>
+
+	<!-- Explicit project configurations -->
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+		<DebugSymbols>true</DebugSymbols>
+		<DebugType>full</DebugType>
+		<Optimize>false</Optimize>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+		<DebugType>none</DebugType>
+		<Optimize>true</Optimize>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2027.0.2" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="Resources\*.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Update="Properties\Resources.Designer.cs">
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+			<DependentUpon>Resources.resx</DependentUpon>
+		</Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Update="Properties\Resources.resx">
+			<Generator>ResXFileCodeGenerator</Generator>
+			<LastGenOutput>Resources.Designer.cs</LastGenOutput>
+		</EmbeddedResource>
+	</ItemGroup>
+
+	<Target Name="CopyAddinManifest" AfterTargets="Build">
+		<Copy
+		  SourceFiles="$(ProjectDir)PlansyncRevitPlugin.addin"
+		  DestinationFolder="C:\Users\Admin\AppData\Roaming\Autodesk\Revit\Addins\2027\" />
+	</Target>
+
+</Project>

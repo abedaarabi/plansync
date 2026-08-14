@@ -1,0 +1,65 @@
+<Window x:Class="PlansyncRevitPlugin.UI.ProgressWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Plansync"
+        Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStyle="SingleBorderWindow"
+        Background="{DynamicResource PlansyncSurfaceBrush}"
+        Foreground="{DynamicResource PlansyncTextBrush}"
+        FontFamily="Segoe UI, sans-serif">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/PlansyncRevitPlugin;component/UI/Themes/PlansyncTheme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <StackPanel>
+            <TextBlock FontSize="13" FontWeight="SemiBold" Margin="0,0,0,2"><Run Text="Plan" Foreground="{StaticResource PlansyncTextBrush}" /><Run Text="Sync" Foreground="{StaticResource PlansyncAccentBrush}" /></TextBlock>
+            <TextBlock x:Name="TitleText"
+                       Text="Working…"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource PlansyncTextBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,4,0,0" />
+            <TextBlock x:Name="StatusText"
+                       Text="Please wait"
+                       Margin="0,10,0,0"
+                       Foreground="{StaticResource PlansyncMutedBrush}"
+                       FontSize="13"
+                       TextWrapping="Wrap" />
+            <TextBlock x:Name="DetailText"
+                       Text=""
+                       Margin="0,4,0,0"
+                       Foreground="{StaticResource PlansyncMutedBrush}"
+                       FontSize="12"
+                       TextWrapping="Wrap" />
+
+            <ProgressBar x:Name="Progress"
+                         Height="10"
+                         Minimum="0"
+                         Maximum="100"
+                         Value="0"
+                         IsIndeterminate="True"
+                         BorderThickness="0"
+                         Background="{StaticResource PlansyncBorderBrush}"
+                         Foreground="{StaticResource PlansyncAccentBrush}"
+                         Margin="0,14,0,0" />
+
+            <TextBlock x:Name="PercentText"
+                       HorizontalAlignment="Right"
+                       Text=""
+                       Foreground="{StaticResource PlansyncMutedBrush}"
+                       FontSize="11"
+                       FontWeight="SemiBold"
+                       Margin="0,6,0,0" />
+        </StackPanel>
+    </Grid>
+</Window>
