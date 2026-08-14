@@ -13,7 +13,7 @@ PlanSync API surface is organized into three layers:
 
 ## Base URL and proxy behavior
 
-In production, use your app domain base URL.  
+In production, use the API domain base URL (for example `https://api.plansync.com`).  
 In local development, the web app usually proxies `/api/*` through the frontend host.
 
 The OpenAPI source of truth for this documentation is:
@@ -53,7 +53,7 @@ Continue to [Authentication](authentication) before implementing any integration
 ## Example: health check
 
 ```bash
-curl -X GET "https://app.plansync.com/api/v1/health"
+curl -X GET "https://api.plansync.com/api/v1/health"
 ```
 
 ```json

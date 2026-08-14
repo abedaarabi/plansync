@@ -3,10 +3,16 @@
   "name": "PlanSync",
   "theme": "mint",
   "colors": {
-    "primary": "#0F766E",
-    "light": "#14B8A6",
-    "dark": "#115E59"
+    "primary": "#2563EB",
+    "light": "#3B82F6",
+    "dark": "#1D4ED8"
   },
+  "logo": {
+    "light": "/images/logo-light.svg",
+    "dark": "/images/logo-dark.svg",
+    "href": "https://plansync.com"
+  },
+  "favicon": "/images/favicon.svg",
   "api": {
     "openapi": "openapi/openapi.yaml",
     "playground": {

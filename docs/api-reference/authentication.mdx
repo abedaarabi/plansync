@@ -18,7 +18,7 @@ For protected endpoints:
 Example authenticated request with cookie:
 
 ```bash
-curl -X GET "https://app.plansync.com/api/v1/me" \
+curl -X GET "https://api.plansync.com/api/v1/me" \
   -H "Cookie: better-auth.session_token=<session-cookie>"
 ```
 
@@ -54,7 +54,7 @@ Treat these tokens as secrets.
 Example token route:
 
 ```bash
-curl -X GET "https://app.plansync.com/api/v1/public/proposals/<token>"
+curl -X GET "https://api.plansync.com/api/v1/public/proposals/<token>"
 ```
 
 ## Internal automation routes

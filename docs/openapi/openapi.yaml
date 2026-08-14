@@ -6,8 +6,8 @@ info:
     Customer-facing PlanSync API reference for common integrations.
     Most `/api/v1` endpoints require an authenticated user session (cookie-based Better Auth).
 servers:
-  - url: https://app.plansync.com
-    description: Production app origin
+  - url: https://api.plansync.com
+    description: Production API origin
   - url: http://localhost:3000
     description: Local app origin (proxied to backend)
 tags:
