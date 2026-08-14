@@ -763,35 +763,14 @@ export function SidebarIssuesTab() {
           ) : null}
         </span>
         <div className="flex items-center gap-1">
-          {viewerOperationsMode ? (
-            <button
-              type="button"
-              onClick={() => startNewIssuePlacement("work_order")}
-              className="viewer-focus-ring flex items-center gap-1 rounded-md border border-sky-500/50 bg-sky-600 px-2 py-1.5 text-[10px] font-semibold text-white shadow-sm hover:bg-sky-500"
-            >
-              <Plus className="h-3 w-3" strokeWidth={2} />
-              New WO
-            </button>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => startNewIssuePlacement("issue")}
-                className="viewer-focus-ring flex items-center gap-1 rounded-md border border-[var(--viewer-primary)]/50 bg-[var(--viewer-primary)] px-2 py-1.5 text-[10px] font-semibold text-white shadow-sm hover:bg-[var(--viewer-primary-hover)]"
-              >
-                <Plus className="h-3 w-3" strokeWidth={2} />
-                New issue
-              </button>
-              <button
-                type="button"
-                onClick={() => startNewIssuePlacement("work_order")}
-                className="viewer-focus-ring flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-950/50 px-2 py-1.5 text-[10px] font-semibold text-sky-100 shadow-sm hover:bg-sky-900/60"
-              >
-                <Plus className="h-3 w-3" strokeWidth={2} />
-                New WO
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={() => startNewIssuePlacement(viewerOperationsMode ? "work_order" : "issue")}
+            className="viewer-focus-ring flex items-center gap-1 rounded-md border border-[var(--viewer-primary)]/50 bg-[var(--viewer-primary)] px-2 py-1.5 text-[10px] font-semibold text-white shadow-sm hover:bg-[var(--viewer-primary-hover)]"
+          >
+            <Plus className="h-3 w-3" strokeWidth={2} />
+            New issue
+          </button>
         </div>
       </div>
 
@@ -911,7 +890,7 @@ export function SidebarIssuesTab() {
               onClick={() => startNewIssuePlacement(viewerOperationsMode ? "work_order" : "issue")}
               className="viewer-focus-ring rounded-lg bg-[var(--viewer-primary)] px-3 py-2 text-[11px] font-semibold text-white hover:bg-[var(--viewer-primary-hover)]"
             >
-              {viewerOperationsMode ? "Create first work order" : "Create first issue"}
+              Create first issue
             </button>
           </div>
         ) : filteredIssues.length === 0 && !issueCreateDraft ? (
@@ -939,14 +918,10 @@ export function SidebarIssuesTab() {
                   </div>
                   <div className="space-y-1.5 pl-3 pr-2.5 pb-2 pt-2">
                     <h3 className="text-[12px] font-semibold leading-tight tracking-tight text-slate-50">
-                      {issueCreateDraft.createIntent === "work_order"
-                        ? "New work order"
-                        : "New issue"}
+                      New issue
                     </h3>
                     <p className="text-[9px] leading-tight text-sky-100/85">
-                      {issueCreateDraft.createIntent === "work_order"
-                        ? "This work order is not saved yet."
-                        : "This issue is not saved yet."}
+                      This issue is not saved yet.
                     </p>
                     <div className="mt-1 flex flex-wrap items-center justify-end gap-1 border-t border-sky-700/30 pt-1.5">
                       <button

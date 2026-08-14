@@ -108,7 +108,7 @@ function renderMarkerItem(
       key={pin.id}
       x={pin.x}
       y={pin.y}
-      label={isWo ? `W${issuePinDisplayNumber(issue)}` : issuePinDisplayNumber(issue)}
+      label={issuePinDisplayNumber(issue)}
       color={
         isWo
           ? "color-mix(in srgb, var(--bim-accent) 72%, #0ea5e9)"
@@ -116,7 +116,7 @@ function renderMarkerItem(
       }
       selected={props.selectedIssueId === issue.id}
       expanded={expanded}
-      title={isWo ? `WO · ${issue.title}` : issue.title}
+      title={issue.title}
       onClick={() => props.showCardForIssue(issue, { pin: true })}
       onMouseEnter={() => props.onPinHover(issue.id)}
       onMouseLeave={props.clearHoverSoon}

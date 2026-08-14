@@ -3386,11 +3386,7 @@ export function BimViewerShell(props: {
           <BimGlassDock
             side="right"
             open
-            title={
-              issueCreateDraft.createIntent === "work_order" || projectSession?.operationsMode
-                ? "New work order"
-                : "New issue"
-            }
+            title="New issue"
             subtitle={
               issueCreateDraft.bimAnchor?.name ||
               issueCreateDraft.bimAnchor?.ifcType ||
@@ -3462,7 +3458,7 @@ export function BimViewerShell(props: {
           <BimGlassDock
             side="right"
             open
-            title={projectSession?.operationsMode ? "Edit work order" : "Edit issue"}
+            title="Edit issue"
             subtitle={editIssue.title}
             onClose={() => {
               setEditIssue(null);

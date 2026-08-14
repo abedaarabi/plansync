@@ -12,7 +12,7 @@ import {
 const TYPE_FILTERS: { key: BimIssueTypeFilter; label: string }[] = [
   { key: "all", label: "All types" },
   { key: "CONSTRUCTION", label: "Construction" },
-  { key: "WORK_ORDER", label: "Work order" },
+  { key: "WORK_ORDER", label: "Issue" },
   { key: "OCCUPANT", label: "Occupant" },
 ];
 

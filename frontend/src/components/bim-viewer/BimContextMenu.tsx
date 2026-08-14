@@ -22,7 +22,7 @@ export function BimContextMenu(props: {
   hasSelection: boolean;
   /** When true, show “Add asset” (O&M assets module enabled). */
   canCreateAsset?: boolean;
-  /** O&M / operations project — prefer work orders over construction issues. */
+  /** O&M / operations project — create WORK_ORDER kind under the hood, labeled as issue. */
   operationsMode?: boolean;
   /** Linked O&M asset tag for the current selection, if any. */
   linkedAssetTag?: string | null;
@@ -39,13 +39,10 @@ export function BimContextMenu(props: {
       ? { id: "createAsset", label: "Add asset" }
       : null;
 
-  /** Ops-only: WO. Mixed/construction: issue + WO side by side. */
+  /** Ops creates WORK_ORDER kind; construction creates CONSTRUCTION — both labeled issue. */
   const createItems = props.operationsMode
-    ? [{ id: "createWorkOrder", label: "Create work order" }]
-    : [
-        { id: "createIssue", label: "Create issue" },
-        { id: "createWorkOrder", label: "Create work order" },
-      ];
+    ? [{ id: "createWorkOrder", label: "Create issue" }]
+    : [{ id: "createIssue", label: "Create issue" }];
 
   const items = props.hasSelection
     ? [

@@ -1296,7 +1296,7 @@ export function PdfPageView({
             { x: snPl.x - dxN, y: snPl.y - dyN },
             { x: snPl.x + dxN, y: snPl.y + dyN },
           ],
-          linkedIssueTitle: placeIntent === "work_order" ? "New work order" : "New issue",
+          linkedIssueTitle: "New issue",
           issueStatus: "OPEN",
           linkedIssueKind: placeKind,
           issueDraft: true,

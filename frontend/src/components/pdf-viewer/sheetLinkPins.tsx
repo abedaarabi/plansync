@@ -103,7 +103,7 @@ function FieldwireIssueCard({
           fill="#64748b"
           style={{ fontFamily: "system-ui, sans-serif" }}
         >
-          WO
+          ISSUE
         </text>
       ) : null}
       {hasAttachments ? (
@@ -258,7 +258,7 @@ function flatTopHexPath(cx: number, cy: number, R: number): string {
   return `${parts.join(" ")} Z`;
 }
 
-/** Operations work order — same card treatment with WO hint; flat hex behind tip optional — keep stem. */
+/** Operations issue — same card treatment with ISSUE hint; flat hex behind tip optional — keep stem. */
 function WorkOrderIssuePin({
   cx,
   cy,

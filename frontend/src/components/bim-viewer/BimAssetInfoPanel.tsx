@@ -104,7 +104,7 @@ export function BimAssetInfoPanel(props: {
           <section className="space-y-2 rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_35%,transparent)] p-2.5">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]">
-                Open work orders
+                Open issues
               </p>
               <Link
                 href={workOrdersHref}
@@ -126,7 +126,7 @@ export function BimAssetInfoPanel(props: {
               </span>
               <p className="text-[12px] text-[var(--bim-text-muted)]">
                 {openWoCount === 0
-                  ? "No open WOs on this asset"
+                  ? "No open issues on this asset"
                   : `${openWoCount} open / in progress`}
               </p>
             </div>

@@ -57,7 +57,7 @@ function SettingsFlyoutBody() {
           [
             ["showMarkups", "Markups and comments"],
             ["showMeasurements", "Measurements"],
-            ["showIssuePins", "Issues and work orders"],
+            ["showIssuePins", "Issues"],
             ["showAssetPins", "Asset pins"],
             ["showTakeoff", "Quantity takeoff"],
           ] as const

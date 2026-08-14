@@ -70,7 +70,7 @@ export function issueKindBadgeClass(_kind: string | undefined | null): string {
 export function issueKindDisplayLabel(kind: string | undefined | null): string {
   switch ((kind ?? "CONSTRUCTION").toUpperCase()) {
     case "WORK_ORDER":
-      return "Work order";
+      return "Issue";
     case "OCCUPANT":
       return "Occupant";
     case "CONSTRUCTION":

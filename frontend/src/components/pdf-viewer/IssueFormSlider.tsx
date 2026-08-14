@@ -103,7 +103,7 @@ type CreateProps = {
   initialDescription?: string;
   initialPriority?: string;
   /**
-   * Explicit create target. Prefer this over ops-mode copy alone so WO vs issue
+   * Explicit create target. Prefer this over ops-mode alone so work_order vs issue
    * always posts the correct `issueKind`.
    */
   createIntent?: "issue" | "work_order";
@@ -648,11 +648,7 @@ export function IssueFormSlider(props: Props) {
             savedRow = await uploadIssueReferencePhotoFile(row.id, p.file);
           }
         } catch {
-          toast.error(
-            isWorkOrderCreate
-              ? "Work order saved, but some photos could not be uploaded."
-              : "Issue saved, but some photos could not be uploaded.",
-          );
+          toast.error("Issue saved, but some photos could not be uploaded.");
         } finally {
           revokePendingPhotos(queued);
           setPendingPhotos([]);
@@ -1053,14 +1049,7 @@ export function IssueFormSlider(props: Props) {
     : viewerOperationsMode
       ? "space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/25 p-2.5"
       : "space-y-2";
-  const entityLabel =
-    variant === "create"
-      ? isWorkOrderCreate
-        ? "work order"
-        : "issue"
-      : editIssueRow?.issueKind === "WORK_ORDER" || viewerOperationsMode
-        ? "work order"
-        : "issue";
+  const entityLabel = "issue";
   const focusRingClass = embedded ? "bim-focus-ring" : "viewer-focus-ring";
   const primaryBtnClass = embedded
     ? `${focusRingClass} rounded-lg bg-[var(--bim-accent)] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40`
@@ -1199,7 +1188,7 @@ export function IssueFormSlider(props: Props) {
           {viewerOperationsMode ? (
             <section
               className="rounded-xl border border-sky-400/20 bg-sky-500/10 p-2.5 ring-1 ring-sky-300/10"
-              aria-label="Work order quick context"
+              aria-label="Issue quick context"
             >
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-700/80 bg-slate-900/70 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-300">
@@ -1221,9 +1210,7 @@ export function IssueFormSlider(props: Props) {
               {viewerOperationsMode ? "Work scope" : "Details"}
             </h3>
             <label className="block">
-              <span className={labelClass}>
-                {viewerOperationsMode ? "Work order title" : "Title"}
-              </span>
+              <span className={labelClass}>Title</span>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
