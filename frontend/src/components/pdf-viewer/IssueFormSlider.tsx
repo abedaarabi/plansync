@@ -71,6 +71,22 @@ type PendingPhoto = {
   previewUrl: string;
 };
 
+function bimIssuePrefill(anchor: IssueBimAnchor | undefined, modelName: string | undefined) {
+  const spatialPath = anchor?.spatialPath?.filter(Boolean).join(" › ") ?? "";
+  const detailLines = [
+    modelName?.trim() ? `Model: ${modelName.trim()}` : null,
+    anchor?.ifcType?.trim() ? `IFC type: ${anchor.ifcType.trim()}` : null,
+    spatialPath ? `Level: ${spatialPath}` : null,
+    anchor?.ifcGuid && anchor.ifcGuid !== "viewport-markup" ? `IFC GUID: ${anchor.ifcGuid}` : null,
+  ].filter((line): line is string => Boolean(line));
+
+  return {
+    title: anchor?.name?.trim() ?? "",
+    description: detailLines.join("\n"),
+    location: spatialPath,
+  };
+}
+
 function revokePendingPhotos(photos: PendingPhoto[]) {
   for (const p of photos) URL.revokeObjectURL(p.previewUrl);
 }
@@ -215,6 +231,10 @@ export function IssueFormSlider(props: Props) {
   const storeFileVersionId = useViewerStore((s) => s.cloudFileVersionId);
   const cloudFileVersionId =
     bimContext?.fileVersionId ?? storeFileVersionId ?? editIssueRow?.fileVersionId ?? null;
+  const bimPrefill = useMemo(
+    () => bimIssuePrefill(bimContext?.bimAnchor, bimContext?.modelName),
+    [bimContext?.bimAnchor, bimContext?.modelName],
+  );
   const viewerProjectId = useViewerStore((s) => s.viewerProjectId);
   const annotations = useViewerStore((s) => s.annotations);
   const setIssueCreateDraft = useViewerStore((s) => s.setIssueCreateDraft);
@@ -528,14 +548,14 @@ export function IssueFormSlider(props: Props) {
         return [];
       });
     } else {
-      setTitle(props.initialTitle?.trim() || "");
-      setDescription(props.initialDescription ?? "");
+      setTitle(props.initialTitle?.trim() || bimPrefill.title);
+      setDescription(props.initialDescription ?? bimPrefill.description);
       setAssigneeId("");
       setStatus("OPEN");
       setPriority(props.initialPriority?.trim() || "MEDIUM");
       setStartDate("");
       setDueDate("");
-      setLocation("");
+      setLocation(bimPrefill.location);
       setRfiLinkIds([]);
       setLinkedMarkupIds(props.initialLinkedMarkupIds ?? []);
       setReferencePhotos([]);
@@ -553,6 +573,9 @@ export function IssueFormSlider(props: Props) {
     props.variant === "create" ? (props.initialTitle ?? "") : "",
     props.variant === "create" ? (props.initialDescription ?? "") : "",
     props.variant === "create" ? (props.initialPriority ?? "") : "",
+    bimPrefill.description,
+    bimPrefill.location,
+    bimPrefill.title,
   ]);
 
   useEffect(() => {
@@ -572,11 +595,10 @@ export function IssueFormSlider(props: Props) {
         ? {
             issueKind: "WORK_ORDER" as const,
             workOrderType: "CORRECTIVE" as const,
-            ...(variant === "create" && props.initialAssetId
-              ? { assetId: props.initialAssetId }
-              : {}),
           }
         : {};
+      const linkedAssetId =
+        variant === "create" && props.initialAssetId ? { assetId: props.initialAssetId } : {};
       if (isBimCreate && bimContext) {
         return createIssue({
           workspaceId: workspaceId!,
@@ -598,6 +620,7 @@ export function IssueFormSlider(props: Props) {
           ...(bimContext.bimAnchor ? { bimAnchor: bimContext.bimAnchor } : {}),
           ...(linkedMarkupIds.length > 0 ? { attachedMarkupAnnotationIds: linkedMarkupIds } : {}),
           ...(rfiLinkIds.length > 0 && !isWorkOrderCreate ? { rfiIds: rfiLinkIds } : {}),
+          ...linkedAssetId,
           ...woFields,
         });
       }
@@ -619,6 +642,7 @@ export function IssueFormSlider(props: Props) {
         pageNumber: page,
         ...(linkedMarkupIds.length > 0 ? { attachedMarkupAnnotationIds: linkedMarkupIds } : {}),
         ...(rfiLinkIds.length > 0 && !isWorkOrderCreate ? { rfiIds: rfiLinkIds } : {}),
+        ...linkedAssetId,
         ...woFields,
       });
     },
