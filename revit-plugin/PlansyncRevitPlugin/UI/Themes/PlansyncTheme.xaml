@@ -51,6 +51,18 @@
     <SolidColorBrush x:Key="PlansyncSuccessBorderBrush" Color="#A7F3D0" />
     <SolidColorBrush x:Key="PlansyncSuccessTextBrush" Color="#047857" />
 
+    <!-- Clash / BIM review (matches web clashStatusStyle). -->
+    <Color x:Key="PlansyncClashItem1Color">#00AF00</Color>
+    <Color x:Key="PlansyncClashItem2Color">#FF0000</Color>
+    <SolidColorBrush x:Key="PlansyncClashItem1Brush" Color="{StaticResource PlansyncClashItem1Color}" />
+    <SolidColorBrush x:Key="PlansyncClashItem2Brush" Color="{StaticResource PlansyncClashItem2Color}" />
+    <SolidColorBrush x:Key="PlansyncClashItem1BgBrush" Color="#ECFDF5" />
+    <SolidColorBrush x:Key="PlansyncClashItem1BorderBrush" Color="#A7F3D0" />
+    <SolidColorBrush x:Key="PlansyncClashItem1TextBrush" Color="#047857" />
+    <SolidColorBrush x:Key="PlansyncClashItem2BgBrush" Color="#FEF2F2" />
+    <SolidColorBrush x:Key="PlansyncClashItem2BorderBrush" Color="#FECACA" />
+    <SolidColorBrush x:Key="PlansyncClashItem2TextBrush" Color="#B91C1C" />
+
     <!-- Page-background diagonal gradient stops (LoginWindow, PlansyncBrowserWindow). -->
     <Color x:Key="PlansyncPageGradientAColor">#F8FAFC</Color>
     <Color x:Key="PlansyncPageGradientBColor">#EFF6FF</Color>

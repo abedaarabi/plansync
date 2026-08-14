@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using PlansyncRevitPlugin.Services.Auth;
 
 namespace PlansyncRevitPlugin.Services.Api
@@ -12,6 +13,12 @@ namespace PlansyncRevitPlugin.Services.Api
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNameCaseInsensitive = true
+        };
+
+        private static readonly JsonSerializerOptions PatchJsonOptions = new()
+        {
+            PropertyNameCaseInsensitive = true,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
         public async Task<List<ProjectInfo>> GetProjectsAsync(
@@ -108,6 +115,44 @@ namespace PlansyncRevitPlugin.Services.Api
                 .ReadFromJsonAsync<UploadPreviewResponse>(JsonOptions, cancellationToken)
                 .ConfigureAwait(false);
             return parsed?.Rows ?? new List<UploadPreviewRow>();
+        }
+
+        public async Task<List<IssueInfo>> GetProjectIssuesAsync(
+            string projectId,
+            CancellationToken cancellationToken = default)
+        {
+            PlansyncHttp.EnsureInitialized();
+            using HttpResponseMessage response = await PlansyncHttp.Client
+                .GetAsync($"/api/v1/projects/{projectId}/issues", cancellationToken)
+                .ConfigureAwait(false);
+            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+            List<IssueInfo>? issues = await response.Content
+                .ReadFromJsonAsync<List<IssueInfo>>(JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            return issues ?? new List<IssueInfo>();
+        }
+
+        public async Task<IssueInfo> PatchIssueAsync(
+            string issueId,
+            IssuePatchRequest patch,
+            CancellationToken cancellationToken = default)
+        {
+            PlansyncHttp.EnsureInitialized();
+            using HttpResponseMessage response = await PlansyncHttp.Client
+                .PatchAsJsonAsync($"/api/v1/issues/{issueId}", patch, PatchJsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+            IssueInfo? issue = await response.Content
+                .ReadFromJsonAsync<IssueInfo>(JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            if (issue is null || string.IsNullOrWhiteSpace(issue.Id))
+            {
+                throw new InvalidOperationException("Issue update did not return a row.");
+            }
+
+            return issue;
         }
 
         public async Task UploadFileAsync(

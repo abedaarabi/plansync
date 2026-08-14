@@ -34,6 +34,47 @@ namespace PlansyncRevitPlugin.UI
         private void Refresh_Click(object sender, RoutedEventArgs e)
         {
             _ = RefreshAsync();
+            IssuesPanelHost.NotifySessionChanged();
+        }
+
+        private void StatusTab_Click(object sender, RoutedEventArgs e)
+        {
+            ShowTab(issues: false);
+        }
+
+        private void IssuesTab_Click(object sender, RoutedEventArgs e)
+        {
+            ShowTab(issues: true);
+            IssuesPanelHost.NotifySessionChanged();
+        }
+
+        public void ShowIssuesTab()
+        {
+            ShowTab(issues: true);
+            IssuesPanelHost?.NotifySessionChanged();
+        }
+
+        private void ShowTab(bool issues)
+        {
+            if (StatusTabButton is not null)
+            {
+                StatusTabButton.IsChecked = !issues;
+            }
+
+            if (IssuesTabButton is not null)
+            {
+                IssuesTabButton.IsChecked = issues;
+            }
+
+            if (StatusContent is not null)
+            {
+                StatusContent.Visibility = issues ? Visibility.Collapsed : Visibility.Visible;
+            }
+
+            if (IssuesPanelHost is not null)
+            {
+                IssuesPanelHost.Visibility = issues ? Visibility.Visible : Visibility.Collapsed;
+            }
         }
 
         private async void AuthAction_Click(object sender, RoutedEventArgs e)
@@ -63,6 +104,7 @@ namespace PlansyncRevitPlugin.UI
                 {
                     PlansyncSessionState.Me = login.SignedInMe;
                     PublishStatusHub.Notify($"Signed in as {login.SignedInMe.User.Email}");
+                    IssuesPanelHost.NotifySessionChanged();
                 }
             }
             finally
@@ -84,6 +126,7 @@ namespace PlansyncRevitPlugin.UI
                 PlansyncSessionState.ClearUser();
                 PlansyncSessionState.ClearDestination();
                 PublishStatusHub.Notify("Signed out.");
+                IssuesPanelHost.NotifySessionChanged();
             }
             catch
             {
@@ -91,6 +134,7 @@ namespace PlansyncRevitPlugin.UI
                 PlansyncSessionState.ClearUser();
                 PlansyncSessionState.ClearDestination();
                 PublishStatusHub.Notify("Signed out.");
+                IssuesPanelHost.NotifySessionChanged();
             }
             finally
             {

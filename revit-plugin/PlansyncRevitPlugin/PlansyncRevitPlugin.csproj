@@ -31,6 +31,8 @@
 
 	<ItemGroup>
 		<PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2027.0.2" />
+		<!-- Lucide icons (matches web lucide-react) for WPF dockable pane UI. -->
+		<PackageReference Include="MahApps.Metro.IconPacks.Lucide" Version="6.2.1" />
 	</ItemGroup>
 
 	<ItemGroup>

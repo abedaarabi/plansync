@@ -1,4 +1,6 @@
 using Autodesk.Revit.UI;
+using PlansyncRevitPlugin.Services;
+using PlansyncRevitPlugin.Services.IssueReview;
 using PlansyncRevitPlugin.UI;
 
 namespace PlansyncRevitPlugin
@@ -9,6 +11,9 @@ namespace PlansyncRevitPlugin
         {
             const string tabName = "Plansync";
             const string panelName = "Plansync Tools";
+
+            RevitUiHost.Attach(application);
+            IssueReviewService.EnsureInitialized();
 
             try
             {
@@ -28,7 +33,7 @@ namespace PlansyncRevitPlugin
             }
             catch
             {
-                // Pane may already be registered 
+                // Pane may already be registered
             }
 
             RibbonPanel panel = application.CreateRibbonPanel(tabName, panelName);
@@ -67,15 +72,28 @@ namespace PlansyncRevitPlugin
                 Image = IconLoader.Load("plansync_16.png")
             };
 
+            var issuesButtonData = new PushButtonData(
+                "PlansyncIssues",
+                "Issues",
+                assemblyPath,
+                "PlansyncRevitPlugin.ShowIssuesPanelCommand")
+            {
+                ToolTip = "Review Plansync issues in Revit — open in 3D, edit status, sync to the web app",
+                LargeImage = IconLoader.Load("plansync_32.png"),
+                Image = IconLoader.Load("plansync_16.png")
+            };
+
             panel.AddItem(hubButtonData);
             panel.AddItem(exportButtonData);
             panel.AddItem(panelButtonData);
+            panel.AddItem(issuesButtonData);
 
             return Result.Succeeded;
         }
 
         public Result OnShutdown(UIControlledApplication application)
         {
+            RevitUiHost.Detach();
             return Result.Succeeded;
         }
     }
