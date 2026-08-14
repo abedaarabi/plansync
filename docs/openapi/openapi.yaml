@@ -4,9 +4,10 @@ info:
   version: "1.0.0"
   description: |
     Customer-facing PlanSync API reference for common integrations.
-    Most `/api/v1` endpoints require an authenticated user session (cookie-based Better Auth).
+    Authenticate with a project API key (`x-api-key: psk_…`) on project-scoped routes,
+    or with a Better Auth session cookie from the signed-in web app.
 servers:
-  - url: https://api.plansync.com
+  - url: https://api.plansync.dev
     description: Production API origin
   - url: http://localhost:3000
     description: Local app origin (proxied to backend)
@@ -27,6 +28,7 @@ tags:
   - name: Public Portals
   - name: Billing
 security:
+  - apiKeyAuth: []
   - cookieAuth: []
 paths:
   /api/v1/health:
@@ -561,11 +563,19 @@ paths:
                     example: true
 components:
   securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: |
+        Project API key (`psk_…`) from Project Settings → API keys.
+        Required scopes depend on the route (e.g. `issues:read` for listing issues).
+        Only works on project-scoped `/api/v1/projects/{projectId}/…` routes.
     cookieAuth:
       type: apiKey
       in: cookie
       name: better-auth.session_token
-      description: Better Auth session cookie. Cookie name can vary by environment.
+      description: Better Auth session cookie from a signed-in browser session.
   parameters:
     WorkspaceId:
       name: workspaceId

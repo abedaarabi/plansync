@@ -13,7 +13,7 @@ PlanSync API surface is organized into three layers:
 
 ## Base URL and proxy behavior
 
-In production, use the API domain base URL (for example `https://api.plansync.com`).  
+In production, use the API domain base URL (for example `https://api.plansync.dev`).  
 In local development, the web app usually proxies `/api/*` through the frontend host.
 
 The OpenAPI source of truth for this documentation is:
@@ -35,9 +35,9 @@ Common behaviors:
 
 ## Important integration note
 
-Current customer integrations use authenticated user sessions (cookies) rather than dedicated customer API keys.
+Prefer **project API keys** (`x-api-key`) for integrations and the docs playground.
 
-If your system needs machine-to-machine API keys, that must be added as a separate product enhancement.
+Session cookies still power the signed-in web app. Use cookies when calling from a browser session; use API keys for server-to-server or playground testing.
 
 ## Common endpoint families
 
@@ -53,7 +53,7 @@ Continue to [Authentication](authentication) before implementing any integration
 ## Example: health check
 
 ```bash
-curl -X GET "https://api.plansync.com/api/v1/health"
+curl -X GET "https://api.plansync.dev/api/v1/health"
 ```
 
 ```json

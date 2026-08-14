@@ -62,9 +62,9 @@ Punch includes reference-photo presign/complete flows and CSV export patterns.
 ## Example: create issue
 
 ```bash
-curl -X POST "https://api.plansync.com/api/v1/projects/proj_abc123/issues" \
+curl -X POST "https://api.plansync.dev/api/v1/projects/proj_abc123/issues" \
   -H "Content-Type: application/json" \
-  -H "Cookie: better-auth.session_token=<session-cookie>" \
+  -H "x-api-key: psk_<your-key>" \
   -d '{
     "title": "Water leak near AHU-02",
     "description": "Observed at ceiling tile line C4.",

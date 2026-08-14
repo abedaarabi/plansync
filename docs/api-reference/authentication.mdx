@@ -1,24 +1,40 @@
 ---
 title: "Authentication"
-description: "Session auth model, email verification behavior, and tokenized public routes."
+description: "Session cookies, project API keys, email verification, and tokenized public routes."
 ---
 
 # Authentication
 
-PlanSync uses Better Auth session authentication for most protected APIs.
+PlanSync supports two ways to call protected APIs:
 
-## Session model
+1. **Project API keys** (`x-api-key`) — preferred for integrations and the docs playground
+2. **Better Auth session cookies** — used by the signed-in web app
 
-For protected endpoints:
+## Project API keys
 
-- Authenticate a user through `/api/auth/*`
-- Send requests with session cookies
-- Ensure browser/client supports credentials on same site/app domain
-
-Example authenticated request with cookie:
+Create a key in **Project Settings → API keys**. Keys look like `psk_…` and are sent as a header:
 
 ```bash
-curl -X GET "https://api.plansync.com/api/v1/me" \
+curl -X GET "https://api.plansync.dev/api/v1/projects/<projectId>/issues" \
+  -H "x-api-key: psk_<your-key>"
+```
+
+Notes:
+
+- API keys only work on **project-scoped** routes: `/api/v1/projects/{projectId}/…`
+- The `{projectId}` in the path must match the project the key belongs to
+- Scopes are enforced (for example `issues:read` to list issues, `issues:write` to create)
+- Do **not** paste an API key into the session cookie field in the playground
+
+## Session cookies
+
+For browser/session flows:
+
+- Authenticate through `/api/auth/*`
+- Send the Better Auth session cookie with the request
+
+```bash
+curl -X GET "https://api.plansync.dev/api/v1/me" \
   -H "Cookie: better-auth.session_token=<session-cookie>"
 ```
 
@@ -28,8 +44,9 @@ Most session-protected routes require verified email status.
 
 Possible responses:
 
-- `401 Unauthorized` when no valid session exists
-- `403 Email verification required` when user is signed in but not verified
+- `401 Unauthorized` when no valid session or API key exists
+- `403 Email verification required` when a user is signed in but not verified
+- `403 API key missing scope: …` when the key lacks the required scope
 
 Invite acceptance flows are an exception and can run before verification finalization.
 
@@ -54,7 +71,7 @@ Treat these tokens as secrets.
 Example token route:
 
 ```bash
-curl -X GET "https://api.plansync.com/api/v1/public/proposals/<token>"
+curl -X GET "https://api.plansync.dev/api/v1/public/proposals/<token>"
 ```
 
 ## Internal automation routes
