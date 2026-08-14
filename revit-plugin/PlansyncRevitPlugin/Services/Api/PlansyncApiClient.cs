@@ -119,11 +119,18 @@ namespace PlansyncRevitPlugin.Services.Api
 
         public async Task<List<IssueInfo>> GetProjectIssuesAsync(
             string projectId,
+            string? fileId = null,
             CancellationToken cancellationToken = default)
         {
             PlansyncHttp.EnsureInitialized();
+            string path = $"/api/v1/projects/{projectId}/issues";
+            if (!string.IsNullOrWhiteSpace(fileId))
+            {
+                path += $"?fileId={Uri.EscapeDataString(fileId)}";
+            }
+
             using HttpResponseMessage response = await PlansyncHttp.Client
-                .GetAsync($"/api/v1/projects/{projectId}/issues", cancellationToken)
+                .GetAsync(path, cancellationToken)
                 .ConfigureAwait(false);
             await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
 
@@ -131,6 +138,72 @@ namespace PlansyncRevitPlugin.Services.Api
                 .ReadFromJsonAsync<List<IssueInfo>>(JsonOptions, cancellationToken)
                 .ConfigureAwait(false);
             return issues ?? new List<IssueInfo>();
+        }
+
+        public async Task<string> GetIssueReferencePhotoReadUrlAsync(
+            string issueId,
+            string photoId,
+            CancellationToken cancellationToken = default)
+        {
+            PlansyncHttp.EnsureInitialized();
+            using HttpResponseMessage response = await PlansyncHttp.Client
+                .GetAsync(
+                    $"/api/v1/issues/{issueId}/reference-photos/{photoId}/presign-read",
+                    cancellationToken)
+                .ConfigureAwait(false);
+            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+            using JsonDocument payload = await response.Content
+                .ReadFromJsonAsync<JsonDocument>(JsonOptions, cancellationToken)
+                .ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Photo URL request returned no response.");
+            string? url = payload.RootElement.TryGetProperty("url", out JsonElement value)
+                ? value.GetString()
+                : null;
+            return !string.IsNullOrWhiteSpace(url)
+                ? url
+                : throw new InvalidOperationException("Photo URL request returned no URL.");
+        }
+
+        public async Task<List<IssueCommentInfo>> GetIssueCommentsAsync(
+            string issueId,
+            CancellationToken cancellationToken = default)
+        {
+            PlansyncHttp.EnsureInitialized();
+            using HttpResponseMessage response = await PlansyncHttp.Client
+                .GetAsync($"/api/v1/issues/{issueId}/comments", cancellationToken)
+                .ConfigureAwait(false);
+            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+            IssueCommentsResponse? payload = await response.Content
+                .ReadFromJsonAsync<IssueCommentsResponse>(JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            return payload?.Comments ?? new List<IssueCommentInfo>();
+        }
+
+        public async Task<IssueCommentInfo> CreateIssueCommentAsync(
+            string issueId,
+            string body,
+            CancellationToken cancellationToken = default)
+        {
+            PlansyncHttp.EnsureInitialized();
+            using HttpResponseMessage response = await PlansyncHttp.Client
+                .PostAsJsonAsync(
+                    $"/api/v1/issues/{issueId}/comments",
+                    new { body },
+                    cancellationToken)
+                .ConfigureAwait(false);
+            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+            IssueCommentInfo? comment = await response.Content
+                .ReadFromJsonAsync<IssueCommentInfo>(JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            if (comment is null || string.IsNullOrWhiteSpace(comment.Id))
+            {
+                throw new InvalidOperationException("Comment create did not return a row.");
+            }
+
+            return comment;
         }
 
         public async Task<IssueInfo> PatchIssueAsync(
@@ -155,7 +228,7 @@ namespace PlansyncRevitPlugin.Services.Api
             return issue;
         }
 
-        public async Task UploadFileAsync(
+        public async Task<CompleteUploadResponse> UploadFileAsync(
             string workspaceId,
             string projectId,
             string? folderId,
@@ -223,6 +296,10 @@ namespace PlansyncRevitPlugin.Services.Api
                 .PostAsJsonAsync("/api/v1/files/complete-upload", completeBody, cancellationToken)
                 .ConfigureAwait(false);
             await EnsureSuccessAsync(completeResponse, cancellationToken).ConfigureAwait(false);
+            CompleteUploadResponse? completed = await completeResponse.Content
+                .ReadFromJsonAsync<CompleteUploadResponse>(JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            return completed ?? throw new InvalidOperationException("Upload completion returned no file.");
         }
 
         private static async Task PutFileAsync(

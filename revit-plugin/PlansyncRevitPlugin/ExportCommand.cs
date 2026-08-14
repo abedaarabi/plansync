@@ -121,7 +121,7 @@ namespace PlansyncRevitPlugin
 
             try
             {
-                var window = new ExportToPlansyncWindow(vm);
+                var window = new ExportToPlansyncWindow(vm, uiDoc);
                 if (window.ShowDialog() != true || !vm.DialogConfirmed)
                 {
                     return Result.Cancelled;

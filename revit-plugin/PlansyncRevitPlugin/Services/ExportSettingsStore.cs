@@ -45,5 +45,40 @@ namespace PlansyncRevitPlugin.Services
             string json = JsonSerializer.Serialize(settings, JsonOptions);
             File.WriteAllText(SettingsPath, json);
         }
+
+        public static RevitModelBinding? GetModelBinding(string? projectId, string documentTitle)
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+            {
+                return null;
+            }
+
+            return Load().ModelBindings.FirstOrDefault(binding =>
+                string.Equals(binding.ProjectId, projectId, StringComparison.Ordinal)
+                && string.Equals(binding.DocumentTitle, documentTitle, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public static RevitModelBinding? GetLatestModelBinding(string? projectId)
+        {
+            if (string.IsNullOrWhiteSpace(projectId))
+            {
+                return null;
+            }
+
+            return Load().ModelBindings
+                .Where(binding => string.Equals(binding.ProjectId, projectId, StringComparison.Ordinal))
+                .OrderByDescending(binding => binding.UpdatedAt)
+                .FirstOrDefault();
+        }
+
+        public static void SaveModelBinding(RevitModelBinding binding)
+        {
+            PersistedExportSettings settings = Load();
+            settings.ModelBindings.RemoveAll(existing =>
+                string.Equals(existing.ProjectId, binding.ProjectId, StringComparison.Ordinal)
+                && string.Equals(existing.DocumentTitle, binding.DocumentTitle, StringComparison.OrdinalIgnoreCase));
+            settings.ModelBindings.Add(binding);
+            Save(settings);
+        }
     }
 }

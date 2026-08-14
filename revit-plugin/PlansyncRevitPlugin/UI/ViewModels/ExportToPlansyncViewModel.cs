@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows.Threading;
 using PlansyncRevitPlugin.Models;
 using PlansyncRevitPlugin.Services;
 
@@ -15,7 +16,12 @@ namespace PlansyncRevitPlugin.UI.ViewModels
         private string _selectedProfileName = "Default";
         private string _cloudDestinationLabel = string.Empty;
         private bool _isCloudDestination = true;
+        private string _profileStatus = string.Empty;
+        private string _activeTab = "IFC";
+        private bool _profileLoadReady;
+        private bool _suppressProfileLoad;
         private readonly Func<string?>? _chooseDestination;
+        private DispatcherTimer? _statusClearTimer;
 
         public ExportToPlansyncViewModel(
             IfcExportViewModel ifc,
@@ -37,7 +43,6 @@ namespace PlansyncRevitPlugin.UI.ViewModels
 
             ConfirmCommand = new RelayCommand(Confirm, CanConfirm);
             SaveProfileCommand = new RelayCommand(SaveProfile, () => !string.IsNullOrWhiteSpace(ProfileName));
-            LoadProfileCommand = new RelayCommand(LoadSelectedProfile, () => !string.IsNullOrWhiteSpace(SelectedProfileName));
 
             PublishOptions options = persisted.Options;
             IncludeIfc = options.IncludeIfc;
@@ -50,16 +55,26 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                 : options.PdfNamingTemplate;
             Pdf.ChangedSheetsOnly = options.ChangedSheetsOnly;
 
+            _suppressProfileLoad = true;
             SelectedProfileName = persisted.ActiveProfileName
                                    ?? Profiles.FirstOrDefault()
                                    ?? "Default";
             ProfileName = SelectedProfileName;
+            _suppressProfileLoad = false;
+            _profileLoadReady = true;
 
-            // Bubble nested view models' export-state changes up so the combined dialog's
-            // disabled-Export hint stays in sync with per-tab selections (sheets, view filter…).
             Ifc.ExportCommand.CanExecuteChanged += (_, _) => NotifyExportState();
             Pdf.ExportCommand.CanExecuteChanged += (_, _) => NotifyExportState();
+            Pdf.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName is nameof(PdfExportViewModel.SelectedCountText)
+                    or nameof(PdfExportViewModel.FocusedDrawing))
+                {
+                    OnPropertyChanged(nameof(ExportSummary));
+                }
+            };
 
+            EnsureValidActiveTab();
             NotifyExportState();
         }
 
@@ -69,7 +84,6 @@ namespace PlansyncRevitPlugin.UI.ViewModels
 
         public RelayCommand ConfirmCommand { get; }
         public RelayCommand SaveProfileCommand { get; }
-        public RelayCommand LoadProfileCommand { get; }
         public RelayCommand ChooseDestinationCommand { get; }
 
         public bool DialogConfirmed { get; private set; }
@@ -85,6 +99,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                     OnPropertyChanged(nameof(DestinationLabel));
                     OnPropertyChanged(nameof(ShowChooseDestination));
                     OnPropertyChanged(nameof(ExportButtonLabel));
+                    OnPropertyChanged(nameof(ExportSummary));
                 }
             }
         }
@@ -97,6 +112,139 @@ namespace PlansyncRevitPlugin.UI.ViewModels
             ? (string.IsNullOrWhiteSpace(_cloudDestinationLabel) ? "No destination selected — choose one" : _cloudDestinationLabel)
             : "Save to your computer (no upload)";
 
+        public string ProfileStatus
+        {
+            get => _profileStatus;
+            private set => SetProperty(ref _profileStatus, value);
+        }
+
+        public bool HasProfileStatus => !string.IsNullOrWhiteSpace(ProfileStatus);
+
+        public string ActiveTab
+        {
+            get => _activeTab;
+            set
+            {
+                string next = NormalizeTab(value);
+                if (SetProperty(ref _activeTab, next))
+                {
+                    OnPropertyChanged(nameof(IsIfcTab));
+                    OnPropertyChanged(nameof(IsPdfTab));
+                    OnPropertyChanged(nameof(IsQaTab));
+                }
+            }
+        }
+
+        public bool IsIfcTab
+        {
+            get => ActiveTab == "IFC";
+            set
+            {
+                if (value)
+                {
+                    ActiveTab = "IFC";
+                }
+                else
+                {
+                    OnPropertyChanged(nameof(IsIfcTab));
+                }
+            }
+        }
+
+        public bool IsPdfTab
+        {
+            get => ActiveTab == "PDF";
+            set
+            {
+                if (value)
+                {
+                    ActiveTab = "PDF";
+                }
+                else
+                {
+                    OnPropertyChanged(nameof(IsPdfTab));
+                }
+            }
+        }
+
+        public bool IsQaTab
+        {
+            get => ActiveTab == "QA";
+            set
+            {
+                if (value)
+                {
+                    ActiveTab = "QA";
+                }
+                else
+                {
+                    OnPropertyChanged(nameof(IsQaTab));
+                }
+            }
+        }
+
+        public bool IsFormatIfcOnly
+        {
+            get => IncludeIfc && !IncludePdf;
+            set
+            {
+                if (value)
+                {
+                    IncludeIfc = true;
+                    IncludePdf = false;
+                    NotifyFormatProperties();
+                    if (ActiveTab == "PDF")
+                    {
+                        ActiveTab = "IFC";
+                    }
+                }
+                else
+                {
+                    OnPropertyChanged(nameof(IsFormatIfcOnly));
+                }
+            }
+        }
+
+        public bool IsFormatPdfOnly
+        {
+            get => IncludePdf && !IncludeIfc;
+            set
+            {
+                if (value)
+                {
+                    IncludeIfc = false;
+                    IncludePdf = true;
+                    NotifyFormatProperties();
+                    if (ActiveTab == "IFC")
+                    {
+                        ActiveTab = "PDF";
+                    }
+                }
+                else
+                {
+                    OnPropertyChanged(nameof(IsFormatPdfOnly));
+                }
+            }
+        }
+
+        public bool IsFormatBoth
+        {
+            get => IncludeIfc && IncludePdf;
+            set
+            {
+                if (value)
+                {
+                    IncludeIfc = true;
+                    IncludePdf = true;
+                    NotifyFormatProperties();
+                }
+                else
+                {
+                    OnPropertyChanged(nameof(IsFormatBoth));
+                }
+            }
+        }
+
         public bool IncludeIfc
         {
             get => _includeIfc;
@@ -104,6 +252,8 @@ namespace PlansyncRevitPlugin.UI.ViewModels
             {
                 if (SetProperty(ref _includeIfc, value))
                 {
+                    NotifyFormatProperties();
+                    EnsureValidActiveTab();
                     NotifyExportState();
                 }
             }
@@ -116,6 +266,8 @@ namespace PlansyncRevitPlugin.UI.ViewModels
             {
                 if (SetProperty(ref _includePdf, value))
                 {
+                    NotifyFormatProperties();
+                    EnsureValidActiveTab();
                     NotifyExportState();
                 }
             }
@@ -169,8 +321,52 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                         ProfileName = value;
                     }
 
-                    LoadProfileCommand?.RaiseCanExecuteChanged();
+                    if (_profileLoadReady && !_suppressProfileLoad && !string.IsNullOrWhiteSpace(value))
+                    {
+                        LoadSelectedProfile(showStatus: true);
+                    }
                 }
+            }
+        }
+
+        public string ExportSummary
+        {
+            get
+            {
+                var parts = new List<string>();
+                if (IncludeIfc && IncludePdf)
+                {
+                    parts.Add("IFC + PDF");
+                }
+                else if (IncludeIfc)
+                {
+                    parts.Add("IFC");
+                }
+                else if (IncludePdf)
+                {
+                    parts.Add("PDF");
+                }
+                else
+                {
+                    parts.Add("Nothing selected");
+                }
+
+                if (IncludePdf)
+                {
+                    int sheets = Pdf.Drawings.Count(d => d.IsSelected);
+                    parts.Add(sheets == 1 ? "1 drawing" : $"{sheets} drawings");
+                }
+
+                parts.Add(IsCloudDestination ? "Cloud" : "Computer");
+
+                string dest = DestinationLabel;
+                if (dest.Length > 42)
+                {
+                    dest = dest[..39] + "…";
+                }
+
+                parts.Add(dest);
+                return string.Join(" · ", parts);
             }
         }
 
@@ -192,14 +388,14 @@ namespace PlansyncRevitPlugin.UI.ViewModels
             {
                 _cloudDestinationLabel = label;
                 OnPropertyChanged(nameof(DestinationLabel));
+                OnPropertyChanged(nameof(ExportSummary));
             }
         }
 
         public void ApplyChangedSheetsFilter(string historyKey)
         {
-            // Always compute per-row "changed since last publish" badges; the PDF view model
-            // itself only auto-deselects previously-published sheets when ChangedSheetsOnly is on.
             Pdf.ApplyChangedSheetsFilter(PublishHistoryStore.GetLastPdfViewIds(historyKey));
+            OnPropertyChanged(nameof(ExportSummary));
         }
 
         public void Persist(PersistedExportSettings settings)
@@ -264,17 +460,56 @@ namespace PlansyncRevitPlugin.UI.ViewModels
         private void NotifyExportState()
         {
             ConfirmCommand?.RaiseCanExecuteChanged();
+            OnPropertyChanged(nameof(ExportSummary));
         }
+
+        private void NotifyFormatProperties()
+        {
+            OnPropertyChanged(nameof(IsFormatIfcOnly));
+            OnPropertyChanged(nameof(IsFormatPdfOnly));
+            OnPropertyChanged(nameof(IsFormatBoth));
+            OnPropertyChanged(nameof(ExportSummary));
+        }
+
+        private void EnsureValidActiveTab()
+        {
+            if (ActiveTab == "IFC" && !IncludeIfc && IncludePdf)
+            {
+                ActiveTab = "PDF";
+            }
+            else if (ActiveTab == "PDF" && !IncludePdf && IncludeIfc)
+            {
+                ActiveTab = "IFC";
+            }
+            else if (ActiveTab is "IFC" or "PDF" && !IncludeIfc && !IncludePdf)
+            {
+                ActiveTab = "QA";
+            }
+        }
+
+        private static string NormalizeTab(string? value) =>
+            value?.Trim().ToUpperInvariant() switch
+            {
+                "PDF" => "PDF",
+                "QA" => "QA",
+                _ => "IFC"
+            };
 
         private void SaveProfile()
         {
+            string name = ProfileName.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return;
+            }
+
             PersistedExportSettings settings = ExportSettingsStore.Load();
             settings.Profiles.RemoveAll(p =>
-                string.Equals(p.Name, ProfileName, StringComparison.OrdinalIgnoreCase));
+                string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
 
             settings.Profiles.Add(new PublishProfile
             {
-                Name = ProfileName.Trim(),
+                Name = name,
                 IncludeIfc = IncludeIfc,
                 IncludePdf = IncludePdf,
                 Ifc = Ifc.ToSettings(),
@@ -282,18 +517,23 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                 Options = ToOptions()
             });
 
-            settings.ActiveProfileName = ProfileName.Trim();
+            settings.ActiveProfileName = name;
             ExportSettingsStore.Save(settings);
 
-            if (!Profiles.Contains(ProfileName.Trim()))
+            if (!Profiles.Contains(name))
             {
-                Profiles.Add(ProfileName.Trim());
+                Profiles.Add(name);
             }
 
-            SelectedProfileName = ProfileName.Trim();
+            _suppressProfileLoad = true;
+            SelectedProfileName = name;
+            ProfileName = name;
+            _suppressProfileLoad = false;
+
+            SetProfileStatus($"Saved “{name}”");
         }
 
-        private void LoadSelectedProfile()
+        private void LoadSelectedProfile(bool showStatus)
         {
             PersistedExportSettings settings = ExportSettingsStore.Load();
             PublishProfile? profile = settings.Profiles.FirstOrDefault(p =>
@@ -310,8 +550,6 @@ namespace PlansyncRevitPlugin.UI.ViewModels
             ChangedSheetsOnly = profile.Options.ChangedSheetsOnly;
             ProfileName = profile.Name;
 
-            // Rebuild nested VMs would be heavy; apply via re-creating settings on Confirm.
-            // Soft-apply common PDF options:
             Pdf.Combine = profile.Pdf.Combine;
             Pdf.NamingTemplate = profile.Pdf.NamingTemplate;
             Pdf.ChangedSheetsOnly = profile.Options.ChangedSheetsOnly;
@@ -343,6 +581,31 @@ namespace PlansyncRevitPlugin.UI.ViewModels
             }
 
             NotifyExportState();
+            EnsureValidActiveTab();
+
+            if (showStatus)
+            {
+                SetProfileStatus($"Loaded “{profile.Name}”");
+            }
+        }
+
+        private void SetProfileStatus(string message)
+        {
+            ProfileStatus = message;
+            OnPropertyChanged(nameof(HasProfileStatus));
+
+            _statusClearTimer?.Stop();
+            _statusClearTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(3)
+            };
+            _statusClearTimer.Tick += (_, _) =>
+            {
+                _statusClearTimer.Stop();
+                ProfileStatus = string.Empty;
+                OnPropertyChanged(nameof(HasProfileStatus));
+            };
+            _statusClearTimer.Start();
         }
     }
 }

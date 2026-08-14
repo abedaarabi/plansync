@@ -1,3 +1,5 @@
+using System.Windows;
+using System.Windows.Controls;
 using Autodesk.Revit.UI;
 
 namespace PlansyncRevitPlugin.UI
@@ -12,12 +14,43 @@ namespace PlansyncRevitPlugin.UI
 
         public void SetupDockablePane(DockablePaneProviderData data)
         {
-            var pane = new PlansyncStatusPane();
-            CurrentPane = pane;
-            data.FrameworkElement = pane;
-            data.InitialState = new DockablePaneState
+            try
+            {
+                var pane = new PlansyncStatusPane();
+                CurrentPane = pane;
+                data.FrameworkElement = pane;
+            }
+            catch (Exception ex)
+            {
+                CurrentPane = null;
+                Services.PlansyncLog.Write("PlansyncStatusPane creation failed", ex);
+                data.FrameworkElement = CreateFallbackPane(ex);
+            }
+
+            var state = new DockablePaneState
             {
                 DockPosition = DockPosition.Right
+            };
+
+            try
+            {
+                state.MinimumWidth = 380;
+            }
+            catch
+            {
+                // Older hosts may ignore or reject MinimumWidth.
+            }
+
+            data.InitialState = state;
+        }
+
+        private static FrameworkElement CreateFallbackPane(Exception ex)
+        {
+            return new TextBlock
+            {
+                Text = "Plansync panel failed to load:\n\n" + ex.Message,
+                Margin = new Thickness(16),
+                TextWrapping = TextWrapping.Wrap
             };
         }
     }

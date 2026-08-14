@@ -12,6 +12,10 @@ namespace PlansyncRevitPlugin.Services.Api
 
         [JsonPropertyName("email")]
         public string? Email { get; set; }
+
+        /// <summary>Avatar: absolute http(s) URL or a `data:` URL from the account editor.</summary>
+        [JsonPropertyName("image")]
+        public string? Image { get; set; }
     }
 
     public sealed class IssueBimAnchor
@@ -34,6 +38,9 @@ namespace PlansyncRevitPlugin.Services.Api
         [JsonPropertyName("fileVersionId")]
         public string? FileVersionId { get; set; }
 
+        [JsonPropertyName("fileId")]
+        public string? FileId { get; set; }
+
         [JsonPropertyName("modelFileName")]
         public string? ModelFileName { get; set; }
 
@@ -48,6 +55,9 @@ namespace PlansyncRevitPlugin.Services.Api
 
         [JsonPropertyName("fileVersionIdB")]
         public string? FileVersionIdB { get; set; }
+
+        [JsonPropertyName("fileIdB")]
+        public string? FileIdB { get; set; }
 
         [JsonPropertyName("modelFileNameB")]
         public string? ModelFileNameB { get; set; }
@@ -96,6 +106,15 @@ namespace PlansyncRevitPlugin.Services.Api
         [JsonPropertyName("bimAnchor")]
         public IssueBimAnchor? BimAnchor { get; set; }
 
+        [JsonPropertyName("fileId")]
+        public string? FileId { get; set; }
+
+        [JsonPropertyName("fileVersionId")]
+        public string? FileVersionId { get; set; }
+
+        [JsonPropertyName("referencePhotos")]
+        public List<IssueReferencePhoto> ReferencePhotos { get; set; } = new();
+
         [JsonPropertyName("assigneeId")]
         public string? AssigneeId { get; set; }
 
@@ -117,6 +136,36 @@ namespace PlansyncRevitPlugin.Services.Api
         public bool IsOpen =>
             string.Equals(Status, "OPEN", StringComparison.OrdinalIgnoreCase)
             || string.Equals(Status, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public sealed class IssueReferencePhoto
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonPropertyName("fileName")]
+        public string FileName { get; set; } = string.Empty;
+    }
+
+    public sealed class IssueCommentInfo
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonPropertyName("body")]
+        public string Body { get; set; } = string.Empty;
+
+        [JsonPropertyName("createdAt")]
+        public string? CreatedAt { get; set; }
+
+        [JsonPropertyName("author")]
+        public IssueUserRef? Author { get; set; }
+    }
+
+    public sealed class IssueCommentsResponse
+    {
+        [JsonPropertyName("comments")]
+        public List<IssueCommentInfo> Comments { get; set; } = new();
     }
 
     public sealed class IssuePatchRequest

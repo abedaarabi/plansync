@@ -1,6 +1,7 @@
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using PlansyncRevitPlugin.Services;
 using PlansyncRevitPlugin.UI;
 
 namespace PlansyncRevitPlugin
@@ -18,8 +19,8 @@ namespace PlansyncRevitPlugin
             }
             catch (Exception ex)
             {
-                message = ex.Message;
-                TaskDialog.Show("Plansync", $"Could not show status panel:\n{ex.Message}");
+                message = PlansyncErrorDialog.Format(ex);
+                TaskDialog.Show("Plansync", $"Could not show status panel:\n{message}");
                 return Result.Failed;
             }
         }

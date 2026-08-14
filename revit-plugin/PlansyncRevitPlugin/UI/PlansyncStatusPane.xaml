@@ -6,7 +6,8 @@
              Background="{DynamicResource PlansyncSurfaceAltBrush}"
              Foreground="{DynamicResource PlansyncTextBrush}"
              FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-             FontSize="12">
+             FontSize="13"
+             MinWidth="380">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -42,30 +43,21 @@
                     </Border.Background>
                 </Border>
                 <DockPanel Grid.Row="1" LastChildFill="False">
-                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="26" Height="26"
-                                CornerRadius="8"
-                                Background="{DynamicResource PlansyncAccentTintBgBrush}"
-                                Margin="0,0,8,0"
-                                VerticalAlignment="Center">
-                            <Image x:Name="LogoImage"
-                                   Width="16" Height="16"
-                                   Stretch="Uniform"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                        </Border>
-                        <TextBlock FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center">
-                            <Run Text="Plan" Foreground="{DynamicResource PlansyncTextBrush}" />
-                            <Run Text="Sync" Foreground="{DynamicResource PlansyncAccentBrush}" />
-                        </TextBlock>
-                    </StackPanel>
+                    <Image x:Name="LogoImage"
+                           DockPanel.Dock="Left"
+                           Width="22"
+                           Height="22"
+                           Stretch="Uniform"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Center"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
                     <Border x:Name="AuthBadge"
                             DockPanel.Dock="Right"
                             Background="{DynamicResource PlansyncSurfaceAltBrush}"
                             BorderBrush="{DynamicResource PlansyncBorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="999"
-                            Padding="8,3"
+                            CornerRadius="6"
+                            Padding="7,3"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
@@ -81,86 +73,46 @@
             </Grid>
         </Border>
 
-        <!-- Segmented Status / Issues -->
+        <!-- Premium segmented Status / Issues -->
         <Border Grid.Row="1"
                 Background="{DynamicResource PlansyncSurfaceBrush}"
                 BorderBrush="{DynamicResource PlansyncBorderBrush}"
                 BorderThickness="0,0,0,1"
-                Padding="8,6">
-            <UniformGrid Columns="2">
-                <ToggleButton x:Name="StatusTabButton"
-                              IsChecked="True"
-                              Click="StatusTab_Click"
-                              Margin="0,0,4,0"
-                              Cursor="Hand"
-                              FontWeight="SemiBold"
-                              FontSize="12">
-                    <ToggleButton.Template>
-                        <ControlTemplate TargetType="ToggleButton">
-                            <Border x:Name="Bd"
-                                    Background="Transparent"
-                                    BorderBrush="Transparent"
-                                    BorderThickness="0,0,0,2"
-                                    Padding="10,8"
-                                    CornerRadius="8">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                    <iconPacks:PackIconLucide Kind="Activity"
-                                                              Width="14" Height="14"
-                                                              Margin="0,0,6,0"
-                                                              VerticalAlignment="Center" />
-                                    <TextBlock Text="Status" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PlansyncSelectedBgBrush}" />
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PlansyncAccentBrush}" />
-                                    <Setter Property="Foreground" Value="{DynamicResource PlansyncAccentDarkBrush}" />
-                                </Trigger>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PlansyncHoverBgBrush}" />
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </ToggleButton.Template>
-                </ToggleButton>
-                <ToggleButton x:Name="IssuesTabButton"
-                              IsChecked="False"
-                              Click="IssuesTab_Click"
-                              Margin="4,0,0,0"
-                              Cursor="Hand"
-                              FontWeight="SemiBold"
-                              FontSize="12">
-                    <ToggleButton.Template>
-                        <ControlTemplate TargetType="ToggleButton">
-                            <Border x:Name="Bd"
-                                    Background="Transparent"
-                                    BorderBrush="Transparent"
-                                    BorderThickness="0,0,0,2"
-                                    Padding="10,8"
-                                    CornerRadius="8">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                    <iconPacks:PackIconLucide Kind="CircleAlert"
-                                                              Width="14" Height="14"
-                                                              Margin="0,0,6,0"
-                                                              VerticalAlignment="Center" />
-                                    <TextBlock Text="Issues" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PlansyncSelectedBgBrush}" />
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PlansyncAccentBrush}" />
-                                    <Setter Property="Foreground" Value="{DynamicResource PlansyncAccentDarkBrush}" />
-                                </Trigger>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PlansyncHoverBgBrush}" />
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </ToggleButton.Template>
-                </ToggleButton>
-            </UniformGrid>
+                Padding="12,10">
+            <Border Background="{DynamicResource PlansyncHoverBgBrush}"
+                    BorderBrush="{DynamicResource PlansyncBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="3">
+                <UniformGrid Columns="2">
+                    <ToggleButton x:Name="StatusTabButton"
+                                  Style="{StaticResource PlansyncSegmentToggle}"
+                                  IsChecked="True"
+                                  Click="StatusTab_Click"
+                                  Margin="0,0,2,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <iconPacks:PackIconLucide Kind="Activity"
+                                                      Width="13" Height="13"
+                                                      Margin="0,0,6,0"
+                                                      VerticalAlignment="Center" />
+                            <TextBlock Text="Status" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton x:Name="IssuesTabButton"
+                                  Style="{StaticResource PlansyncSegmentToggle}"
+                                  IsChecked="False"
+                                  Click="IssuesTab_Click"
+                                  Margin="2,0,0,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <iconPacks:PackIconLucide Kind="CircleAlert"
+                                                      Width="13" Height="13"
+                                                      Margin="0,0,6,0"
+                                                      VerticalAlignment="Center" />
+                            <TextBlock Text="Issues" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                </UniformGrid>
+            </Border>
         </Border>
 
         <!-- Tab bodies (content hosted outside TabItem so Status keeps code-behind names) -->
@@ -173,7 +125,7 @@
                     <Border Background="{DynamicResource PlansyncSurfaceBrush}"
                             BorderBrush="{DynamicResource PlansyncBorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="12"
+                            CornerRadius="8"
                             Padding="12"
                             Margin="0,0,0,10">
                         <StackPanel>
@@ -207,7 +159,7 @@
                     <Border Background="{DynamicResource PlansyncSurfaceBrush}"
                             BorderBrush="{DynamicResource PlansyncBorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="12"
+                            CornerRadius="8"
                             Padding="12"
                             Margin="0,0,0,10">
                         <StackPanel>
@@ -246,7 +198,7 @@
                             <Border Background="{DynamicResource PlansyncAccentTintBgBrush}"
                                     BorderBrush="{DynamicResource PlansyncAccentTintBorderBrush}"
                                     BorderThickness="1"
-                                    CornerRadius="8"
+                                    CornerRadius="6"
                                     Padding="8,6"
                                     Margin="0,3,0,0">
                                 <StackPanel Orientation="Horizontal">
@@ -270,7 +222,7 @@
                     <Border Background="{DynamicResource PlansyncSurfaceBrush}"
                             BorderBrush="{DynamicResource PlansyncBorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="12"
+                            CornerRadius="8"
                             Padding="12"
                             Margin="0,0,0,10">
                         <StackPanel>
@@ -306,7 +258,7 @@
                     <Border Background="{DynamicResource PlansyncSurfaceBrush}"
                             BorderBrush="{DynamicResource PlansyncBorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="12"
+                            CornerRadius="8"
                             Padding="12"
                             Margin="0,0,0,12">
                         <StackPanel>
@@ -320,8 +272,8 @@
                                         Background="{DynamicResource PlansyncWarnBgBrush}"
                                         BorderBrush="{DynamicResource PlansyncWarnBorderBrush}"
                                         BorderThickness="1"
-                                        CornerRadius="999"
-                                        Padding="8,2"
+                                        CornerRadius="6"
+                                        Padding="6,2"
                                         Visibility="Collapsed">
                                     <TextBlock x:Name="QueueBadgeText"
                                                Text="0 queued"

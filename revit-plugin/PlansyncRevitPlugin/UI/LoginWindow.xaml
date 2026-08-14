@@ -35,7 +35,7 @@
                 Background="{DynamicResource PlansyncSurfaceBrush}"
                 BorderBrush="{DynamicResource PlansyncBorderBrush}"
                 BorderThickness="1"
-                CornerRadius="18"
+                CornerRadius="10"
                 Padding="0"
                 Margin="24">
             <Grid>
@@ -44,7 +44,7 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0" CornerRadius="18,18,0,0">
+                <Border Grid.Row="0" CornerRadius="10,10,0,0">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                             <GradientStop Color="{DynamicResource PlansyncHeaderBarStartColor}" Offset="0" />
@@ -54,23 +54,17 @@
                 </Border>
 
                 <StackPanel Grid.Row="1" Margin="28,24,28,28">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
-                        <Border Width="44" Height="44"
-                                CornerRadius="12"
-                                Background="{DynamicResource PlansyncAccentTintBgBrush}"
-                                Margin="0,0,12,0">
-                            <Image x:Name="LogoImage"
-                                   Width="28" Height="28"
-                                   Stretch="Uniform"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                        </Border>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock FontSize="24" FontWeight="SemiBold"><Run Text="Plan" Foreground="{DynamicResource PlansyncTextBrush}" /><Run Text="Sync" Foreground="{DynamicResource PlansyncAccentBrush}" /></TextBlock>
-                            <TextBlock Text="Revit publish"
-                                       Foreground="{DynamicResource PlansyncMutedBrush}"
-                                       FontSize="12" />
-                        </StackPanel>
+                    <StackPanel Margin="0,0,0,18">
+                        <Image x:Name="LogoImage"
+                               Width="36"
+                               Height="36"
+                               Stretch="Uniform"
+                               HorizontalAlignment="Left"
+                               RenderOptions.BitmapScalingMode="HighQuality" />
+                        <TextBlock Text="Revit publish"
+                                   Foreground="{DynamicResource PlansyncMutedBrush}"
+                                   FontSize="12"
+                                   Margin="0,6,0,0" />
                     </StackPanel>
 
                     <TextBlock Text="Welcome back"
@@ -87,7 +81,7 @@
                     <Border Background="{DynamicResource PlansyncSurfaceAltBrush}"
                             BorderBrush="{DynamicResource PlansyncBorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="10"
+                            CornerRadius="6"
                             Padding="2"
                             Margin="0,0,0,14"
                             Height="44">
@@ -116,7 +110,7 @@
                     <Border Background="{DynamicResource PlansyncSurfaceAltBrush}"
                             BorderBrush="{DynamicResource PlansyncBorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="10"
+                            CornerRadius="6"
                             Padding="2"
                             Margin="0,0,0,14"
                             Height="44">
@@ -136,7 +130,7 @@
                             Background="{DynamicResource PlansyncErrorBgBrush}"
                             BorderBrush="{DynamicResource PlansyncErrorBorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="10"
+                            CornerRadius="6"
                             Padding="12,10"
                             Margin="0,0,0,14"
                             Visibility="Collapsed">
@@ -156,7 +150,7 @@
                     <Border Background="{DynamicResource PlansyncSurfaceAltBrush}"
                             BorderBrush="{DynamicResource PlansyncBorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="10"
+                            CornerRadius="6"
                             Padding="12,10"
                             Margin="0,18,0,0">
                         <TextBlock HorizontalAlignment="Center"

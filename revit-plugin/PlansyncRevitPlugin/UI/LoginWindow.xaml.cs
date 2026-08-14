@@ -15,7 +15,8 @@ namespace PlansyncRevitPlugin.UI
         {
             InitializeComponent();
             WindowOwnerHelper.SetRevitAsOwner(this);
-            LogoImage.Source = IconLoader.Load("logo_mark_48.png");
+            LogoImage.Source = IconLoader.Load("icon-180.png")
+                ?? IconLoader.Load("logo_mark_48.png");
         }
 
         public MeResponse? SignedInMe { get; private set; }

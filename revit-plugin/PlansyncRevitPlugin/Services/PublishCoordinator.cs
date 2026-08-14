@@ -26,6 +26,9 @@ namespace PlansyncRevitPlugin.Services
         public bool QueuedOffline { get; init; }
         public string? Error { get; init; }
         public string? VersionNote { get; init; }
+        public string? FileId { get; init; }
+        public string? FileVersionId { get; init; }
+        public bool IsIfc { get; init; }
     }
 
     internal static class PublishCoordinator
@@ -283,7 +286,7 @@ namespace PlansyncRevitPlugin.Services
                             overall);
                     });
 
-                    api.UploadFileAsync(
+                    CompleteUploadResponse completed = api.UploadFileAsync(
                             PlansyncSessionState.WorkspaceId!,
                             PlansyncSessionState.ProjectId!,
                             PlansyncSessionState.FolderId,
@@ -297,7 +300,11 @@ namespace PlansyncRevitPlugin.Services
                     {
                         FileName = file.FileName,
                         Succeeded = true,
-                        VersionNote = versionNote
+                        VersionNote = versionNote,
+                        FileId = completed.File?.Id ?? completed.FileVersion?.FileId,
+                        FileVersionId = completed.FileVersion?.Id,
+                        IsIfc = string.Equals(file.ContentType, "application/x-step", StringComparison.OrdinalIgnoreCase)
+                            || file.FileName.EndsWith(".ifc", StringComparison.OrdinalIgnoreCase)
                     });
                 }
                 catch (Exception ex)
@@ -328,7 +335,8 @@ namespace PlansyncRevitPlugin.Services
                         Succeeded = false,
                         QueuedOffline = true,
                         Error = ex.Message,
-                        VersionNote = versionNote
+                        VersionNote = versionNote,
+                        IsIfc = file.FileName.EndsWith(".ifc", StringComparison.OrdinalIgnoreCase)
                     });
                 }
             }
@@ -350,6 +358,20 @@ namespace PlansyncRevitPlugin.Services
                 doc.Title,
                 request.Pdf.SelectedViewIds,
                 results.Where(r => r.Succeeded).Select(r => r.FileName));
+
+            PublishFileResult? ifc = results.FirstOrDefault(r =>
+                r.Succeeded && r.IsIfc && !string.IsNullOrWhiteSpace(r.FileId));
+            if (ifc is not null)
+            {
+                ExportSettingsStore.SaveModelBinding(new RevitModelBinding
+                {
+                    ProjectId = PlansyncSessionState.ProjectId!,
+                    DocumentTitle = doc.Title,
+                    FileId = ifc.FileId!,
+                    FileVersionId = ifc.FileVersionId,
+                    FileName = ifc.FileName
+                });
+            }
         }
 
         private static void ShowSummary(IReadOnlyList<PublishFileResult> results)

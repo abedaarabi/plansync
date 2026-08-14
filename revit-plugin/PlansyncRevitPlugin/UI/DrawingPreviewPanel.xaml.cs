@@ -1,8 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using PlansyncRevitPlugin.UI.ViewModels;
+using Vis = System.Windows.Visibility;
 
 namespace PlansyncRevitPlugin.UI
 {
@@ -19,6 +21,7 @@ namespace PlansyncRevitPlugin.UI
         public void Bind(UIDocument? uiDocument)
         {
             _uiDocument = uiDocument;
+            OpenInRevitButton.IsEnabled = _uiDocument is not null && _viewId is not null;
         }
 
         public void ShowDrawing(ViewItemViewModel? drawing)
@@ -26,22 +29,59 @@ namespace PlansyncRevitPlugin.UI
             if (drawing is null)
             {
                 _viewId = null;
-                EmptyText.Visibility = System.Windows.Visibility.Visible;
-                DetailsPanel.Visibility = System.Windows.Visibility.Collapsed;
+                EmptyText.Visibility = Vis.Visible;
+                EmptyText.Text = "Select a drawing to preview.";
+                DetailsPanel.Visibility = Vis.Collapsed;
+                PreviewImage.Visibility = Vis.Collapsed;
+                PreviewImage.Source = null;
+                LoadingText.Visibility = Vis.Collapsed;
+                TypeBadge.Text = string.Empty;
                 OpenInRevitButton.IsEnabled = false;
                 return;
             }
 
             _viewId = drawing.Id;
-            EmptyText.Visibility = System.Windows.Visibility.Collapsed;
-            DetailsPanel.Visibility = System.Windows.Visibility.Visible;
+            EmptyText.Visibility = Vis.Collapsed;
+            DetailsPanel.Visibility = Vis.Visible;
             NameText.Text = drawing.Name;
             NumberText.Text = string.IsNullOrWhiteSpace(drawing.SheetNumber) ? "—" : drawing.SheetNumber;
             TypeText.Text = $"{drawing.Category} · {drawing.ViewTypeName}";
+            TypeBadge.Text = drawing.Category;
             ExportNameText.Text = string.IsNullOrWhiteSpace(drawing.ExportFileName)
                 ? drawing.Name
                 : drawing.ExportFileName;
             OpenInRevitButton.IsEnabled = _uiDocument is not null;
+        }
+
+        public void SetLoading(bool loading)
+        {
+            LoadingText.Visibility = loading ? Vis.Visible : Vis.Collapsed;
+            if (loading)
+            {
+                PreviewImage.Visibility = Vis.Collapsed;
+                EmptyText.Visibility = Vis.Collapsed;
+            }
+        }
+
+        public void SetThumbnail(BitmapImage? image)
+        {
+            LoadingText.Visibility = Vis.Collapsed;
+            if (image is null)
+            {
+                PreviewImage.Source = null;
+                PreviewImage.Visibility = Vis.Collapsed;
+                if (DetailsPanel.Visibility == Vis.Visible)
+                {
+                    EmptyText.Text = "Preview unavailable for this view.";
+                    EmptyText.Visibility = Vis.Visible;
+                }
+
+                return;
+            }
+
+            EmptyText.Visibility = Vis.Collapsed;
+            PreviewImage.Source = image;
+            PreviewImage.Visibility = Vis.Visible;
         }
 
         public void ShowView(ViewItemViewModel? view, string? exportFileName = null)
@@ -57,6 +97,11 @@ namespace PlansyncRevitPlugin.UI
             NumberText.Text = "3D / model view";
         }
 
+        public void PromptOpenInRevit()
+        {
+            OpenInRevit_Click(this, new RoutedEventArgs());
+        }
+
         private void OpenInRevit_Click(object sender, RoutedEventArgs e)
         {
             if (_uiDocument?.Document is null || _viewId is null)
@@ -65,7 +110,6 @@ namespace PlansyncRevitPlugin.UI
             }
 
             // Changing ActiveView while a modal WPF dialog is open hard-crashes Revit.
-            // Tell the user what to open instead of forcing a view switch here.
             try
             {
                 Element? element = _uiDocument.Document.GetElement(new ElementId(_viewId.Value));

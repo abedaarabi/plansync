@@ -621,6 +621,7 @@ export function registerIssuesRoutes(
   r.get("/projects/:projectId/issues", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const fileVersionId = c.req.query("fileVersionId")?.trim() || undefined;
+    const fileId = c.req.query("fileId")?.trim() || undefined;
     const assetIdFilter = c.req.query("assetId")?.trim() || undefined;
     const kinds = parseIssueKindsFromQuery(c);
     const kindClause = issueKindWhere(kinds);
@@ -649,6 +650,15 @@ export function registerIssuesRoutes(
       where: {
         projectId,
         ...(fileVersionId ? { fileVersionId } : {}),
+        ...(fileId
+          ? {
+              OR: [
+                { fileId },
+                { bimAnchor: { path: ["fileId"], equals: fileId } },
+                { bimAnchor: { path: ["fileIdB"], equals: fileId } },
+              ],
+            }
+          : {}),
         ...(assetIdFilter ? { assetId: assetIdFilter } : {}),
         ...(assigneeFilter === "me" ? { assigneeId: userId } : {}),
         ...(dueToday

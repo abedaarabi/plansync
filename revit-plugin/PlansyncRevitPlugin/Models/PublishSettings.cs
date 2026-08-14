@@ -10,6 +10,7 @@ namespace PlansyncRevitPlugin.Models
         public string? ActiveProfileName { get; set; }
         public List<PublishHistoryEntry> History { get; set; } = new();
         public List<OfflineQueueItem> OfflineQueue { get; set; } = new();
+        public List<RevitModelBinding> ModelBindings { get; set; } = new();
     }
 
     public sealed class DestinationSettings
@@ -51,6 +52,17 @@ namespace PlansyncRevitPlugin.Models
         public DateTimeOffset PublishedAt { get; set; }
         public List<long> PdfViewIds { get; set; } = new();
         public List<string> FileNames { get; set; } = new();
+    }
+
+    /// <summary>Connects a Revit document to the stable Plansync File created by IFC publish.</summary>
+    public sealed class RevitModelBinding
+    {
+        public string ProjectId { get; set; } = string.Empty;
+        public string DocumentTitle { get; set; } = string.Empty;
+        public string FileId { get; set; } = string.Empty;
+        public string? FileVersionId { get; set; }
+        public string FileName { get; set; } = string.Empty;
+        public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     }
 
     public sealed class OfflineQueueItem

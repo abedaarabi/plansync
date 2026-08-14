@@ -8,86 +8,109 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </UserControl.Resources>
-    <Border Background="{DynamicResource PlansyncSurfaceAltBrush}"
+    <Border Background="{DynamicResource PlansyncSurfaceBrush}"
             BorderBrush="{DynamicResource PlansyncBorderBrush}"
             BorderThickness="1"
-            CornerRadius="12"
-            Padding="14">
+            CornerRadius="8"
+            Padding="12">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
+                <RowDefinition Height="*" MinHeight="160" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <TextBlock Text="DRAWING PREVIEW"
-                       FontSize="11"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
-                       Margin="0,0,0,12" />
+            <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                <TextBlock Text="PREVIEW"
+                           Style="{StaticResource PlansyncSectionLabel}"
+                           Margin="0"
+                           VerticalAlignment="Center" />
+                <TextBlock x:Name="TypeBadge"
+                           DockPanel.Dock="Right"
+                           Style="{StaticResource PlansyncCaptionText}"
+                           VerticalAlignment="Center" />
+            </DockPanel>
 
-            <StackPanel Grid.Row="1">
-                <Border Width="56" Height="56"
-                        CornerRadius="12"
-                        Background="{DynamicResource PlansyncAccentTintStrongBrush}"
-                        HorizontalAlignment="Left"
-                        Margin="0,0,0,14">
-                    <Viewbox Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Canvas Width="24" Height="24">
-                            <Path Fill="{DynamicResource PlansyncAccentBrush}"
-                                  Data="M10,4 H4 C2.9,4 2.01,4.9 2.01,6 V18 C2.01,19.1 2.9,20 4,20 H20 C21.1,20 22,19.1 22,18 V8 C22,6.9 21.1,6 20,6 H12 L10,4 Z" />
-                            <Path Fill="{DynamicResource PlansyncAccentIconBrush}"
-                                  Data="M3,9.5 H21 V18 C21,19.1 20.1,20 19,20 H5 C3.9,20 3,19.1 3,18 Z" />
-                        </Canvas>
-                    </Viewbox>
-                </Border>
-
-                <TextBlock x:Name="EmptyText"
-                           Text="Select a drawing to review its name and open it in Revit before export."
-                           Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
-                           TextWrapping="Wrap"
-                           FontSize="12.5" />
-
-                <StackPanel x:Name="DetailsPanel" Visibility="Collapsed">
-                    <TextBlock Text="Name" Foreground="{DynamicResource PlansyncFaintTextBrush}" FontSize="10" />
-                    <TextBlock x:Name="NameText"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource PlansyncTextBrush}"
+            <Border Grid.Row="1"
+                    Background="{DynamicResource PlansyncSurfaceAltBrush}"
+                    BorderBrush="{DynamicResource PlansyncBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    ClipToBounds="True">
+                <Grid>
+                    <TextBlock x:Name="EmptyText"
+                               Text="Select a drawing to preview."
+                               Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
                                TextWrapping="Wrap"
-                               Margin="0,2,0,10" />
+                               Margin="16"
+                               TextAlignment="Center" />
+                    <Image x:Name="PreviewImage"
+                           Stretch="Uniform"
+                           Margin="6"
+                           Visibility="Collapsed"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+                    <TextBlock x:Name="LoadingText"
+                               Text="Generating preview…"
+                               Foreground="{DynamicResource PlansyncMutedBrush}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Visibility="Collapsed" />
+                </Grid>
+            </Border>
 
-                    <TextBlock Text="Sheet number" Foreground="{DynamicResource PlansyncFaintTextBrush}" FontSize="10" />
-                    <TextBlock x:Name="NumberText"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource PlansyncTextBrush}"
-                               Margin="0,2,0,10" />
+            <StackPanel x:Name="DetailsPanel" Grid.Row="2" Margin="0,12,0,0" Visibility="Collapsed">
+                <TextBlock Text="Sheet / view" Style="{StaticResource PlansyncCaptionText}" />
+                <TextBlock x:Name="NameText"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource PlansyncTextBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,2,0,8" />
 
-                    <TextBlock Text="Type" Foreground="{DynamicResource PlansyncFaintTextBrush}" FontSize="10" />
-                    <TextBlock x:Name="TypeText"
-                               Foreground="{DynamicResource PlansyncTextBrush}"
-                               Margin="0,2,0,10" />
-
-                    <TextBlock Text="Will export as" Foreground="{DynamicResource PlansyncFaintTextBrush}" FontSize="10" />
-                    <Border Background="{DynamicResource PlansyncAccentTintBgBrush}"
-                            BorderBrush="{DynamicResource PlansyncAccentTintBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="10,8"
-                            Margin="0,4,0,0">
-                        <TextBlock x:Name="ExportNameText"
-                                   Foreground="{DynamicResource PlansyncAccentTintTextBrush}"
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Number" Style="{StaticResource PlansyncCaptionText}" />
+                        <TextBlock x:Name="NumberText"
                                    FontWeight="SemiBold"
+                                   Foreground="{DynamicResource PlansyncTextBrush}"
+                                   Margin="0,2,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Type" Style="{StaticResource PlansyncCaptionText}" />
+                        <TextBlock x:Name="TypeText"
+                                   Foreground="{DynamicResource PlansyncTextBrush}"
+                                   Margin="0,2,0,0"
                                    TextWrapping="Wrap" />
-                    </Border>
-                </StackPanel>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock Text="Will export as" Style="{StaticResource PlansyncCaptionText}" Margin="0,10,0,4" />
+                <Border Background="{DynamicResource PlansyncAccentTintBgBrush}"
+                        BorderBrush="{DynamicResource PlansyncAccentTintBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="8,6">
+                    <TextBlock x:Name="ExportNameText"
+                               Foreground="{DynamicResource PlansyncAccentTintTextBrush}"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap"
+                               FontSize="12" />
+                </Border>
             </StackPanel>
 
             <Button x:Name="OpenInRevitButton"
-                    Grid.Row="2"
+                    Grid.Row="3"
                     Content="Open in Revit"
                     Style="{StaticResource PlansyncSecondaryButton}"
-                    Margin="0,14,0,0"
-                    Padding="12,10"
+                    Margin="0,12,0,0"
+                    Padding="12,7"
                     HorizontalAlignment="Stretch"
                     IsEnabled="False"
                     Click="OpenInRevit_Click" />

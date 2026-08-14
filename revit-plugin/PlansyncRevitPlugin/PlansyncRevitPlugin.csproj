@@ -11,6 +11,8 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<UseWPF>true</UseWPF>
+		<!-- Class-library output: copy NuGet deps (IconPacks) next to the plugin DLL for Revit. -->
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 
 		<StartAction>Program</StartAction>
 		<StartProgram>C:\Program Files\Autodesk\Revit 2027\Revit.exe</StartProgram>
@@ -30,7 +32,11 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2027.0.2" />
+		<PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2027.0.2">
+			<!-- Compile against Revit API; do not copy Revit DLLs next to the add-in. -->
+			<ExcludeAssets>runtime</ExcludeAssets>
+			<PrivateAssets>all</PrivateAssets>
+		</PackageReference>
 		<!-- Lucide icons (matches web lucide-react) for WPF dockable pane UI. -->
 		<PackageReference Include="MahApps.Metro.IconPacks.Lucide" Version="6.2.1" />
 	</ItemGroup>
@@ -57,7 +63,8 @@
 	<Target Name="CopyAddinManifest" AfterTargets="Build">
 		<Copy
 		  SourceFiles="$(ProjectDir)PlansyncRevitPlugin.addin"
-		  DestinationFolder="C:\Users\Admin\AppData\Roaming\Autodesk\Revit\Addins\2027\" />
+		  DestinationFolder="$(AppData)\Autodesk\Revit\Addins\2027\"
+		  SkipUnchangedFiles="false" />
 	</Target>
 
 </Project>

@@ -15,7 +15,8 @@ namespace PlansyncRevitPlugin.UI
             DataContext = viewModel;
             ViewModel = viewModel;
             WindowOwnerHelper.SetRevitAsOwner(this);
-            LogoImage.Source = IconLoader.Load("logo_mark_48.png");
+            LogoImage.Source = IconLoader.Load("icon-180.png")
+                ?? IconLoader.Load("logo_mark_48.png");
         }
 
         public PlansyncBrowserViewModel ViewModel { get; }

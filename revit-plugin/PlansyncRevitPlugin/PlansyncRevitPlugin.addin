@@ -2,7 +2,7 @@
 <RevitAddIns>
 	<AddIn Type="Command">
 		<Name>Plansync Sync</Name>
-		<Assembly>C:\Users\Admin\Desktop\PlanSync_Revit_Plugin\PlansyncRevitPlugin\PlansyncRevitPlugin\bin\Debug\net10.0-windows\PlansyncRevitPlugin.dll</Assembly>
+		<Assembly>C:\Users\Admin\Desktop\plansync\revit-plugin\PlansyncRevitPlugin\bin\Debug\net10.0-windows\PlansyncRevitPlugin.dll</Assembly>
 		<AddInId>7022E37A-1139-48F4-9D19-6D8D65F1568E</AddInId>
 		<FullClassName>PlansyncRevitPlugin.PlansyncCommand</FullClassName>
 		<VendorId>PLSY</VendorId>
@@ -10,7 +10,7 @@
 	</AddIn>
 	<AddIn Type="Application">
 		<Name>Plansync</Name>
-		<Assembly>C:\Users\Admin\Desktop\PlanSync_Revit_Plugin\PlansyncRevitPlugin\PlansyncRevitPlugin\bin\Debug\net10.0-windows\PlansyncRevitPlugin.dll</Assembly>
+		<Assembly>C:\Users\Admin\Desktop\plansync\revit-plugin\PlansyncRevitPlugin\bin\Debug\net10.0-windows\PlansyncRevitPlugin.dll</Assembly>
 		<AddInId>A3F8C2E1-9B47-4D6A-8E21-5F0C1A7B3D94</AddInId>
 		<FullClassName>PlansyncRevitPlugin.PlansyncApp</FullClassName>
 		<VendorId>PLSY</VendorId>

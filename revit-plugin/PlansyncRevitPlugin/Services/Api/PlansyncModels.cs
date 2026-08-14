@@ -97,6 +97,33 @@ namespace PlansyncRevitPlugin.Services.Api
         public string WorkspaceId { get; set; } = string.Empty;
     }
 
+    public sealed class CompleteUploadResponse
+    {
+        [JsonPropertyName("file")]
+        public UploadedFileInfo? File { get; set; }
+
+        [JsonPropertyName("fileVersion")]
+        public UploadedFileVersionInfo? FileVersion { get; set; }
+    }
+
+    public sealed class UploadedFileInfo
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public sealed class UploadedFileVersionInfo
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonPropertyName("fileId")]
+        public string FileId { get; set; } = string.Empty;
+    }
+
     public sealed class UploadPreviewResponse
     {
         [JsonPropertyName("rows")]

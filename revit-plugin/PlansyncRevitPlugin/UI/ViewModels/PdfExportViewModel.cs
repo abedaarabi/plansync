@@ -15,7 +15,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
         private string _selectedCountText = "0 selected";
         private string _namingTemplate = "{SheetNumber}_{SheetName}";
         private bool _changedSheetsOnly;
-        private ViewItemViewModel? _previewDrawing;
+        private ViewItemViewModel? _focusedDrawing;
         private string _suggestedOutputName = string.Empty;
         private readonly string _documentTitle;
 
@@ -43,16 +43,17 @@ namespace PlansyncRevitPlugin.UI.ViewModels
             ApplyPersisted(persisted, activeViewId);
             RefreshSelectedCount();
             RefreshExportNames();
-            PreviewDrawing ??= Drawings.FirstOrDefault(d => d.IsSelected) ?? Drawings.FirstOrDefault();
+            FocusedDrawing ??= Drawings.FirstOrDefault(d => d.IsSelected) ?? Drawings.FirstOrDefault();
             NotifyExportState();
         }
 
         public string DocumentTitle => _documentTitle;
 
-        public ViewItemViewModel? PreviewDrawing
+        /// <summary>Row focused for the preview pane (independent of multi-select checkboxes).</summary>
+        public ViewItemViewModel? FocusedDrawing
         {
-            get => _previewDrawing;
-            set => SetProperty(ref _previewDrawing, value);
+            get => _focusedDrawing;
+            set => SetProperty(ref _focusedDrawing, value);
         }
 
         public string SuggestedOutputName
@@ -280,7 +281,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
 
                 if (sender is ViewItemViewModel drawing && drawing.IsSelected)
                 {
-                    PreviewDrawing = drawing;
+                    FocusedDrawing = drawing;
                 }
             }
         }
