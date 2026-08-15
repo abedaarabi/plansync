@@ -328,7 +328,7 @@ export function useBimClashSession(args: {
       setRunStats(data.test.lastRunStats);
 
       const deepClashId = args.initialClashId?.trim();
-      let row =
+      const row =
         deepClashId && !deepLinkApplied.current
           ? (data.clashes.find((c) => c.id === deepClashId) ?? null)
           : selectedClashIdRef.current

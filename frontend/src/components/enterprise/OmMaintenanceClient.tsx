@@ -359,64 +359,66 @@ export function OmMaintenanceClient({ projectId }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {dueNowRows.map((r) => (
-                    <tr key={r.id} className="border-b border-[var(--enterprise-border)]/80">
-                      // fallow-ignore-next-line code-duplication
-                      <td className="px-3 py-2">
-                        <AssetCell projectId={projectId} row={r} />
-                      </td>
-                      <td className="px-3 py-2 text-[var(--enterprise-text)]">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(r)}
-                          className="text-left font-medium hover:underline"
-                        >
-                          {r.title || r.frequency}
-                        </button>
-                        {meterTriggerLabel(r) ? (
-                          <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
-                            {meterTriggerLabel(r)}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 tabular-nums text-[var(--enterprise-text-muted)]">
-                        {formatScheduleDate(r.nextDueAt)}
-                      </td>
-                      <td className="px-3 py-2">{healthBadge(r.health)}</td>
-                      <td className="px-3 py-2">
-                        <AssigneeCell row={r} />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="flex justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => createWorkOrderMut.mutate(r.id)}
-                            disabled={createWorkOrderMut.isPending}
-                            className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
-                          >
-                            <ClipboardList className="h-3.5 w-3.5" aria-hidden />
-                            Create work order
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => completeMut.mutate(r.id)}
-                            disabled={completeMut.isPending}
-                            className="inline-flex min-h-8 items-center rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
-                          >
-                            Complete directly
-                          </button>
+                  {dueNowRows.map(
+                    // fallow-ignore-next-line code-duplication
+                    (r) => (
+                      <tr key={r.id} className="border-b border-[var(--enterprise-border)]/80">
+                        <td className="px-3 py-2">
+                          <AssetCell projectId={projectId} row={r} />
+                        </td>
+                        <td className="px-3 py-2 text-[var(--enterprise-text)]">
                           <button
                             type="button"
                             onClick={() => openEdit(r)}
-                            className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)]"
+                            className="text-left font-medium hover:underline"
                           >
-                            <Pencil className="h-3.5 w-3.5" aria-hidden />
-                            Edit
+                            {r.title || r.frequency}
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          {meterTriggerLabel(r) ? (
+                            <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
+                              {meterTriggerLabel(r)}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums text-[var(--enterprise-text-muted)]">
+                          {formatScheduleDate(r.nextDueAt)}
+                        </td>
+                        <td className="px-3 py-2">{healthBadge(r.health)}</td>
+                        <td className="px-3 py-2">
+                          <AssigneeCell row={r} />
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => createWorkOrderMut.mutate(r.id)}
+                              disabled={createWorkOrderMut.isPending}
+                              className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
+                            >
+                              <ClipboardList className="h-3.5 w-3.5" aria-hidden />
+                              Create work order
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => completeMut.mutate(r.id)}
+                              disabled={completeMut.isPending}
+                              className="inline-flex min-h-8 items-center rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)] disabled:opacity-50"
+                            >
+                              Complete directly
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEdit(r)}
+                              className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)]"
+                            >
+                              <Pencil className="h-3.5 w-3.5" aria-hidden />
+                              Edit
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ),
+                  )}
                 </tbody>
               </table>
             </div>
@@ -448,47 +450,49 @@ export function OmMaintenanceClient({ projectId }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {upcomingRows.map((r) => (
-                  <tr key={r.id} className="border-b border-[var(--enterprise-border)]/80">
-                    // fallow-ignore-next-line code-duplication
-                    <td className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-3 py-2">
-                      <AssetCell projectId={projectId} row={r} />
-                    </td>
-                    <td className="px-3 py-2 text-[var(--enterprise-text)]">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(r)}
-                        className="text-left font-medium hover:underline"
-                      >
-                        {r.title || r.frequency}
-                      </button>
-                      {meterTriggerLabel(r) ? (
-                        <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
-                          {meterTriggerLabel(r)}
-                        </p>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 tabular-nums text-[var(--enterprise-text-muted)]">
-                      {formatScheduleDate(r.nextDueAt)}
-                    </td>
-                    <td className="px-3 py-2 tabular-nums text-[var(--enterprise-text-muted)]">
-                      {formatScheduleDate(r.lastCompletedAt)}
-                    </td>
-                    <td className="px-3 py-2">
-                      <AssigneeCell row={r} />
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(r)}
-                        className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)]"
-                      >
-                        <Pencil className="h-3.5 w-3.5" aria-hidden />
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {upcomingRows.map(
+                  // fallow-ignore-next-line code-duplication
+                  (r) => (
+                    <tr key={r.id} className="border-b border-[var(--enterprise-border)]/80">
+                      <td className="sticky left-0 z-[1] bg-[var(--enterprise-surface)] px-3 py-2">
+                        <AssetCell projectId={projectId} row={r} />
+                      </td>
+                      <td className="px-3 py-2 text-[var(--enterprise-text)]">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(r)}
+                          className="text-left font-medium hover:underline"
+                        >
+                          {r.title || r.frequency}
+                        </button>
+                        {meterTriggerLabel(r) ? (
+                          <p className="mt-0.5 text-[11px] text-[var(--enterprise-text-muted)]">
+                            {meterTriggerLabel(r)}
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2 tabular-nums text-[var(--enterprise-text-muted)]">
+                        {formatScheduleDate(r.nextDueAt)}
+                      </td>
+                      <td className="px-3 py-2 tabular-nums text-[var(--enterprise-text-muted)]">
+                        {formatScheduleDate(r.lastCompletedAt)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <AssigneeCell row={r} />
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(r)}
+                          className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-[var(--enterprise-border)] px-2.5 text-xs font-semibold text-[var(--enterprise-text)]"
+                        >
+                          <Pencil className="h-3.5 w-3.5" aria-hidden />
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ),
+                )}
               </tbody>
             </table>
           </div>
