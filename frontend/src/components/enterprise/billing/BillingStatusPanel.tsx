@@ -1,6 +1,7 @@
 "use client";
 
 import { CreditCard, Lock, ShieldCheck } from "lucide-react";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { billingPlanById } from "@/lib/billingPlanCatalog";
 import { paidPlanLabel, type PaidBillingPlan } from "@/lib/productPricing";
 
@@ -102,14 +103,17 @@ export function BillingStatusPanel({
 
           {hasStripe ? (
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-start">
-              <button
+              <EnterpriseButton
                 type="button"
+                variant="soft"
+                size="md"
+                className="mobile-touch-target"
                 disabled={busy !== null}
+                loading={busy === "portal"}
                 onClick={onManageBilling}
-                className="enterprise-btn-secondary mobile-touch-target inline-flex items-center justify-center gap-1.5 rounded-md px-3.5 py-2.5 text-sm font-semibold disabled:opacity-60"
               >
-                {busy === "portal" ? "Opening…" : "Manage billing"}
-              </button>
+                Manage billing
+              </EnterpriseButton>
               {canCancelInApp ? (
                 <button
                   type="button"

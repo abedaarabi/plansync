@@ -20,6 +20,7 @@ import {
 } from "@/lib/locations/useBuildingQueries";
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
+import { EnterpriseButton } from "../EnterpriseButton";
 import { ProjectLocationMap } from "../ProjectLocationMap";
 import { useEnterpriseWorkspace } from "../EnterpriseWorkspaceContext";
 import { EnterpriseLoadingState } from "../EnterpriseLoadingState";
@@ -120,13 +121,9 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
         <p className="text-sm font-medium text-[var(--enterprise-text)]">
           Couldn’t load this location
         </p>
-        <button
-          type="button"
-          className="enterprise-btn-primary mobile-touch-target rounded-md px-4 py-2 text-sm"
-          onClick={() => void refetch()}
-        >
+        <EnterpriseButton size="md" className="mobile-touch-target" onClick={() => void refetch()}>
           Try again
-        </button>
+        </EnterpriseButton>
       </div>
     );
   }
@@ -168,9 +165,9 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
           </div>
         </div>
         {buildings.length > 0 ? (
-          <button
-            type="button"
-            className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-semibold"
+          <EnterpriseButton
+            size="sm"
+            className="mobile-touch-target"
             onClick={() => {
               setEditing(null);
               setFormOpen(true);
@@ -178,7 +175,7 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
           >
             <Plus className="h-3.5 w-3.5" aria-hidden />
             Add building
-          </button>
+          </EnterpriseButton>
         ) : null}
       </header>
 
@@ -209,9 +206,9 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
               Create a building, then upload an IFC model and PDF drawings to start setup.
             </p>
           </div>
-          <button
-            type="button"
-            className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold"
+          <EnterpriseButton
+            size="md"
+            className="mobile-touch-target"
             onClick={() => {
               setEditing(null);
               setFormOpen(true);
@@ -219,7 +216,7 @@ export function BuildingsListClient({ projectId, locationId }: Props) {
           >
             <Plus className="h-4 w-4" aria-hidden />
             Add building
-          </button>
+          </EnterpriseButton>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

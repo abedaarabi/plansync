@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { MOBILE_FIELD_SELECT } from "@/lib/mobileFormStyles";
 import type { BuildingDiscipline } from "@/lib/api-client/locations";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { DeviceSource, type PickedFile } from "./DeviceSource";
 import { ProjectFilesSource } from "./ProjectFilesSource";
 import { useBatchUpload, type UploadRow } from "./useBatchUpload";
@@ -303,14 +304,15 @@ export function BuildingFileBrowser({
                       Files stay on your device until you upload.
                     </p>
                   </div>
-                  <button
+                  <EnterpriseButton
                     type="button"
-                    className="enterprise-btn-primary mobile-touch-target inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm shadow-sm"
+                    size="md"
+                    className="mobile-touch-target shrink-0"
                     onClick={() => void batch.startUpload()}
                   >
                     <ArrowUpFromLine className="h-4 w-4" aria-hidden />
                     Upload {batch.queuedCount} file{batch.queuedCount === 1 ? "" : "s"}
-                  </button>
+                  </EnterpriseButton>
                 </div>
               ) : null}
 
@@ -407,33 +409,33 @@ export function BuildingFileBrowser({
                 </button>
               ) : null}
               {uploadDone ? (
-                <button
+                <EnterpriseButton
                   type="button"
-                  className="enterprise-btn-primary mobile-touch-target inline-flex items-center justify-center gap-2 rounded-lg px-6 py-2.5 text-sm"
+                  size="md"
+                  className="mobile-touch-target"
                   onClick={closeAndReset}
                 >
                   <CheckCircle2 className="h-4 w-4" aria-hidden />
                   Done
-                </button>
+                </EnterpriseButton>
               ) : (
-                <button
+                <EnterpriseButton
                   type="button"
-                  className="enterprise-btn-primary mobile-touch-target inline-flex items-center justify-center gap-2 rounded-lg px-6 py-2.5 text-sm disabled:opacity-50"
-                  disabled={batch.queuedCount === 0 || batch.uploading}
+                  size="md"
+                  className="mobile-touch-target"
+                  loading={batch.uploading}
+                  disabled={batch.queuedCount === 0}
                   onClick={() => void batch.startUpload()}
                 >
                   {batch.uploading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                      Uploading…
-                    </>
+                    "Uploading…"
                   ) : (
                     <>
                       <ArrowUpFromLine className="h-4 w-4" aria-hidden />
                       Upload {batch.queuedCount} file{batch.queuedCount === 1 ? "" : "s"}
                     </>
                   )}
-                </button>
+                </EnterpriseButton>
               )}
             </div>
           </div>

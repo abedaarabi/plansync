@@ -26,6 +26,7 @@ import { trialDaysLeft } from "@/lib/workspaceSubscription";
 import { BillingCompareTable } from "@/components/enterprise/billing/BillingCompareTable";
 import { BillingPlanCards } from "@/components/enterprise/billing/BillingPlanCards";
 import { BillingStatusPanel } from "@/components/enterprise/billing/BillingStatusPanel";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 
 type BillingWorkspace = {
   subscriptionStatus?: string | null;
@@ -250,16 +251,19 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin }: P
                   ))}
                 </ul>
                 <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end sm:gap-3">
-                  <button
+                  <EnterpriseButton
                     type="button"
+                    variant="soft"
+                    size="md"
                     disabled={busy !== null}
                     onClick={() => setPlanChangeOpen(false)}
-                    className="enterprise-btn-secondary min-h-11 rounded-md px-4 py-2.5 text-sm font-medium disabled:opacity-60 sm:min-h-0"
                   >
                     Not now
-                  </button>
-                  <button
+                  </EnterpriseButton>
+                  <EnterpriseButton
                     type="button"
+                    size="md"
+                    loading={busy === "change-plan"}
                     disabled={busy !== null}
                     onClick={async () => {
                       setBusy("change-plan");
@@ -289,10 +293,9 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin }: P
                         setBusy(null);
                       }
                     }}
-                    className="enterprise-btn-primary min-h-11 rounded-md px-4 py-2.5 text-sm font-semibold disabled:opacity-60 sm:min-h-0"
                   >
-                    {busy === "change-plan" ? "Processing…" : "Yes, change plan"}
-                  </button>
+                    Yes, change plan
+                  </EnterpriseButton>
                 </div>
               </div>
             </div>,
@@ -330,14 +333,15 @@ export function WorkspaceBillingCard({ workspaceId, workspace, isSuperAdmin }: P
                   <span>End immediately (no further invoices; access may end now)</span>
                 </label>
                 <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end sm:gap-3">
-                  <button
+                  <EnterpriseButton
                     type="button"
+                    variant="soft"
+                    size="md"
                     disabled={cancelBusy}
                     onClick={() => setCancelOpen(false)}
-                    className="enterprise-btn-secondary min-h-11 rounded-md px-4 py-2.5 text-sm font-medium disabled:opacity-60 sm:min-h-0"
                   >
                     Keep subscription
-                  </button>
+                  </EnterpriseButton>
                   <button
                     type="button"
                     disabled={cancelBusy}

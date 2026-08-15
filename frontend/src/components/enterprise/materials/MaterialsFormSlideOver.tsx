@@ -1,11 +1,27 @@
 "use client";
 
+import { useEffect } from "react";
 import { LayoutList, Pencil, Plus } from "lucide-react";
+import { z } from "zod";
 import type { MaterialTemplateField } from "@/lib/api-client";
 import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import {
+  EnterpriseInput,
+  EnterpriseTextarea,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { OM_COMPACT_INPUT } from "@/lib/omCompactStyles";
 import type { MaterialFormState } from "./materialsUtils";
+
+export const materialsFormSchema = z.object({
+  materialType: z.string().trim().min(1, "Enter a material type."),
+  name: z.string().trim().min(1, "Enter a material name."),
+});
+
+type MaterialsFormValues = z.infer<typeof materialsFormSchema>;
 
 type Props = {
   open: boolean;
@@ -28,6 +44,18 @@ export function MaterialsFormSlideOver({
   onClose,
   onSubmit,
 }: Props) {
+  const enterpriseForm = useEnterpriseForm(materialsFormSchema, {
+    materialType: form.materialType,
+    name: form.name,
+  });
+
+  useEffect(() => {
+    enterpriseForm.reset({
+      materialType: form.materialType,
+      name: form.name,
+    });
+  }, [enterpriseForm, form.materialType, form.name]);
+
   function setField<K extends keyof MaterialFormState>(key: K, value: MaterialFormState[K]) {
     onFormChange({ ...form, [key]: value });
   }
@@ -45,10 +73,8 @@ export function MaterialsFormSlideOver({
       onClose={onClose}
       ariaLabelledBy="materials-panel-title"
       form={{
-        onSubmit: (e) => {
-          e.preventDefault();
-          onSubmit();
-        },
+        noValidate: true,
+        onSubmit: enterpriseForm.handleSubmit(onSubmit),
       }}
       header={
         <SlideOverHeader
@@ -69,33 +95,54 @@ export function MaterialsFormSlideOver({
         </>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <EnterpriseForm
+        form={enterpriseForm}
+        formId="materials-form"
+        onSubmit={onSubmit}
+        className="grid gap-3 sm:grid-cols-2"
+      >
         <div className="sm:col-span-2">
           <p className="enterprise-type-label">Core details</p>
         </div>
         <div className="sm:col-span-2">
-          <label className="enterprise-field-label">
-            Material type <span className="text-[var(--enterprise-error)]">*</span>
-          </label>
-          <input
+          <EnterpriseFormField<MaterialsFormValues>
+            name="materialType"
+            label="Material type"
             required
-            value={form.materialType}
-            onChange={(e) => setField("materialType", e.target.value)}
-            className={`mt-1 ${OM_COMPACT_INPUT}`}
-            placeholder="e.g. Concrete, Structural Steel, Finishes"
-          />
+          >
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                className={OM_COMPACT_INPUT}
+                onChange={(event) => {
+                  field.onChange(event);
+                  setField("materialType", event.target.value);
+                }}
+                placeholder="e.g. Concrete, Structural Steel, Finishes"
+              />
+            )}
+          </EnterpriseFormField>
         </div>
         <div className="sm:col-span-2">
-          <label className="enterprise-field-label">
-            Material name <span className="text-[var(--enterprise-error)]">*</span>
-          </label>
-          <input
-            required
-            value={form.name}
-            onChange={(e) => setField("name", e.target.value)}
-            className={`mt-1 ${OM_COMPACT_INPUT}`}
-            placeholder="e.g. Ready-mix 25 MPa"
-          />
+          <EnterpriseFormField<MaterialsFormValues> name="name" label="Material name" required>
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                className={OM_COMPACT_INPUT}
+                onChange={(event) => {
+                  field.onChange(event);
+                  setField("name", event.target.value);
+                }}
+                placeholder="e.g. Ready-mix 25 MPa"
+              />
+            )}
+          </EnterpriseFormField>
         </div>
         <div>
           <label className="enterprise-field-label">SKU</label>
@@ -159,7 +206,7 @@ export function MaterialsFormSlideOver({
         </div>
         <div className="sm:col-span-2">
           <label className="enterprise-field-label">Notes</label>
-          <textarea
+          <EnterpriseTextarea
             value={form.notes}
             onChange={(e) => setField("notes", e.target.value)}
             rows={2}
@@ -201,7 +248,7 @@ export function MaterialsFormSlideOver({
             </div>
           </div>
         ) : null}
-      </div>
+      </EnterpriseForm>
     </EnterpriseSlideOver>
   );
 }

@@ -26,6 +26,7 @@ import {
 } from "@/lib/omInspectionOfflineDraft";
 import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmInspectionSignaturePad } from "@/components/enterprise/OmInspectionSignaturePad";
@@ -529,20 +530,17 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
               >
                 Flip camera
               </button>
-              <button
-                type="button"
-                onClick={captureCameraFrame}
-                className="rounded-md bg-[var(--enterprise-primary)] px-5 py-2.5 text-sm font-semibold text-white"
-              >
+              <EnterpriseButton size="md" onClick={captureCameraFrame}>
                 Capture photo
-              </button>
-              <button
-                type="button"
+              </EnterpriseButton>
+              <EnterpriseButton
+                variant="secondary"
+                size="md"
                 onClick={() => setCameraItemId(null)}
-                className="rounded-md border border-white/25 px-4 py-2.5 text-sm font-medium text-white"
+                className="border-white/25 bg-transparent text-white hover:bg-white/10"
               >
                 Cancel
-              </button>
+              </EnterpriseButton>
             </div>
             <p className="mt-3 text-center text-[11px] text-white/60">
               Allow camera access when prompted. On iPhone, use Safari or your installed PWA over
@@ -589,22 +587,22 @@ export function OmInspectionRunSlideOver({ projectId, run, template, open, onClo
                 Delete inspection
               </button>
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  disabled={patchMut.isPending}
+                <EnterpriseButton
+                  variant="secondary"
+                  size="sm"
+                  loading={patchMut.isPending}
                   onClick={() => patchMut.mutate(buildPayloadRows())}
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-[var(--enterprise-border)] px-5 text-sm font-medium text-[var(--enterprise-text)] disabled:opacity-50"
                 >
                   Save Draft
-                </button>
-                <button
-                  type="button"
+                </EnterpriseButton>
+                <EnterpriseButton
+                  size="sm"
+                  loading={completeMut.isPending}
                   disabled={completeMut.isPending || !allAnswered}
                   onClick={tryComplete}
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   Complete Inspection
-                </button>
+                </EnterpriseButton>
               </div>
             </div>
           ) : (

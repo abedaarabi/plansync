@@ -23,7 +23,7 @@ function normStatus(s: string): string {
   return s.trim().toUpperCase().replace(/\s+/g, "_");
 }
 
-function rfiAssigneeIds(r: RfiRow): string[] {
+export function rfiAssigneeIds(r: RfiRow): string[] {
   const ids = new Set<string>();
   if (r.assignedToUserId) ids.add(r.assignedToUserId);
   if (r.assignedTo?.id) ids.add(r.assignedTo.id);

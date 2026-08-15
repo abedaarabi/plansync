@@ -1,20 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Hash, MapPin, StickyNote } from "lucide-react";
+import { MapPin } from "lucide-react";
+import { z } from "zod";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import {
+  EnterpriseInput,
+  EnterpriseTextarea,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import type { LocationInput, LocationSummary } from "@/lib/api-client/locations";
 import { geocodeLocationName } from "@/lib/openMeteoGeocode";
 import { parseCoord } from "@/lib/projectGeo";
-import {
-  MOBILE_FIELD_INPUT,
-  MOBILE_FIELD_LABEL,
-  MOBILE_FIELD_TEXTAREA,
-} from "@/lib/mobileFormStyles";
-import {
-  EnterpriseResponsiveDialog,
-  MOBILE_DIALOG_BTN_PRIMARY,
-  MOBILE_DIALOG_BTN_SECONDARY,
-} from "@/components/mobile/EnterpriseResponsiveDialog";
+import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { ProjectLocationMap } from "@/components/enterprise/ProjectLocationMap";
 
 type Props = {
@@ -26,29 +26,28 @@ type Props = {
   onSubmit: (input: LocationInput) => void;
 };
 
-type FormState = {
-  name: string;
-  code: string;
-  address: string;
-  city: string;
-  country: string;
-  notes: string;
-  latitude: number | null;
-  longitude: number | null;
-};
+const locationFormSchema = z.object({
+  address: z.string(),
+  city: z.string(),
+  code: z.string(),
+  country: z.string(),
+  name: z.string().trim().min(1, "Enter a location name."),
+  notes: z.string(),
+});
 
-const empty: FormState = {
+type LocationFormValues = z.infer<typeof locationFormSchema>;
+type MapPin = { latitude: number; longitude: number } | null;
+
+const EMPTY_FORM: LocationFormValues = {
   name: "",
   code: "",
   address: "",
   city: "",
   country: "",
   notes: "",
-  latitude: null,
-  longitude: null,
 };
 
-function placeQuery(form: Pick<FormState, "address" | "city" | "country">): string {
+function placeQuery(form: Pick<LocationFormValues, "address" | "city" | "country">): string {
   return [form.address, form.city, form.country]
     .map((p) => p.trim())
     .filter(Boolean)
@@ -64,11 +63,12 @@ export function LocationFormDialog({
   onClose,
   onSubmit,
 }: Props) {
-  const [form, setForm] = useState<FormState>(empty);
+  const form = useEnterpriseForm(locationFormSchema, EMPTY_FORM);
+  const [mapPin, setMapPin] = useState<MapPin>(null);
   const [geocodingLocation, setGeocodingLocation] = useState(false);
   const manualPinRef = useRef(false);
-  const formRef = useRef(form);
-  formRef.current = form;
+  const mapPinRef = useRef(mapPin);
+  mapPinRef.current = mapPin;
   const initialRef = useRef(initial);
   initialRef.current = initial;
 
@@ -76,33 +76,32 @@ export function LocationFormDialog({
     if (!open) return;
     manualPinRef.current = false;
     if (mode === "edit" && initial) {
-      setForm({
+      form.reset({
         name: initial.name,
         code: initial.code ?? "",
         address: initial.address ?? "",
         city: initial.city ?? "",
         country: initial.country ?? "",
         notes: initial.notes ?? "",
-        latitude: parseCoord(initial.latitude),
-        longitude: parseCoord(initial.longitude),
       });
+      const latitude = parseCoord(initial.latitude);
+      const longitude = parseCoord(initial.longitude);
+      setMapPin(latitude != null && longitude != null ? { latitude, longitude } : null);
     } else {
-      setForm(empty);
+      form.reset(EMPTY_FORM);
+      setMapPin(null);
     }
-  }, [open, mode, initial]);
+  }, [form, initial, mode, open]);
 
-  const placeLine = placeQuery(form);
+  const [address, city, country] = form.watch(["address", "city", "country"]);
+  const placeLine = placeQuery({ address, city, country });
 
   useEffect(() => {
     if (!open) return;
     const q = placeLine.trim();
     if (!q) {
       if (!manualPinRef.current) {
-        setForm((prev) =>
-          prev.latitude == null && prev.longitude == null
-            ? prev
-            : { ...prev, latitude: null, longitude: null },
-        );
+        setMapPin(null);
       }
       setGeocodingLocation(false);
       return;
@@ -118,31 +117,29 @@ export function LocationFormDialog({
       });
       const slat = parseCoord(init.latitude);
       const slng = parseCoord(init.longitude);
-      const curLat = formRef.current.latitude;
-      const curLng = formRef.current.longitude;
       if (
         q === initQ &&
         slat != null &&
         slng != null &&
-        curLat != null &&
-        curLng != null &&
-        Math.abs(curLat - slat) < 1e-5 &&
-        Math.abs(curLng - slng) < 1e-5
+        mapPinRef.current?.latitude != null &&
+        mapPinRef.current?.longitude != null &&
+        Math.abs(mapPinRef.current.latitude - slat) < 1e-5 &&
+        Math.abs(mapPinRef.current.longitude - slng) < 1e-5
       ) {
         return;
       }
     }
 
     const t = window.setTimeout(() => {
-      const latest = placeQuery(formRef.current).trim();
+      const latest = placeQuery(form.getValues()).trim();
       if (!latest || manualPinRef.current) return;
       setGeocodingLocation(true);
       void (async () => {
         try {
           const geo = await geocodeLocationName(latest);
           if (!geo || manualPinRef.current) return;
-          if (placeQuery(formRef.current).trim() !== latest) return;
-          setForm((prev) => ({ ...prev, latitude: geo.lat, longitude: geo.lng }));
+          if (placeQuery(form.getValues()).trim() !== latest) return;
+          setMapPin({ latitude: geo.lat, longitude: geo.lng });
         } finally {
           setGeocodingLocation(false);
         }
@@ -150,15 +147,20 @@ export function LocationFormDialog({
     }, 550);
 
     return () => window.clearTimeout(t);
-  }, [open, mode, placeLine]);
+  }, [form, mode, open, placeLine]);
 
-  const set =
-    (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      if (key === "address" || key === "city" || key === "country") {
-        manualPinRef.current = false;
-      }
-      setForm((prev) => ({ ...prev, [key]: e.target.value }));
-    };
+  const handleSubmit = (values: LocationFormValues) => {
+    onSubmit({
+      name: values.name.trim(),
+      code: values.code || null,
+      address: values.address || null,
+      city: values.city || null,
+      country: values.country || null,
+      latitude: mapPin?.latitude ?? null,
+      longitude: mapPin?.longitude ?? null,
+      notes: values.notes || null,
+    });
+  };
 
   return (
     <EnterpriseResponsiveDialog
@@ -170,22 +172,28 @@ export function LocationFormDialog({
       panelClassName="max-w-lg"
       footer={
         <>
-          <button
+          <EnterpriseButton
             type="submit"
             form="location-form"
-            disabled={isSaving || !form.name.trim()}
-            className={`${MOBILE_DIALOG_BTN_PRIMARY} enterprise-btn-primary`}
+            variant="primary"
+            size="md"
+            fullWidth
+            loading={isSaving}
+            className="max-lg:min-h-[52px] sm:w-auto"
           >
             {isSaving ? "Saving…" : mode === "create" ? "Create location" : "Save changes"}
-          </button>
-          <button
+          </EnterpriseButton>
+          <EnterpriseButton
             type="button"
+            variant="secondary"
+            size="md"
+            fullWidth
             disabled={isSaving}
             onClick={onClose}
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text)]`}
+            className="max-lg:min-h-[52px] sm:w-auto"
           >
             Cancel
-          </button>
+          </EnterpriseButton>
         </>
       }
     >
@@ -206,91 +214,97 @@ export function LocationFormDialog({
         </div>
       </div>
 
-      <form
+      <EnterpriseForm
+        form={form}
+        density="mobile"
         id="location-form"
         className="space-y-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!form.name.trim()) return;
-          const pinSet = form.latitude != null && form.longitude != null;
-          onSubmit({
-            name: form.name.trim(),
-            code: form.code || null,
-            address: form.address || null,
-            city: form.city || null,
-            country: form.country || null,
-            latitude: pinSet ? form.latitude : null,
-            longitude: pinSet ? form.longitude : null,
-            notes: form.notes || null,
-          });
-        }}
+        onSubmit={handleSubmit}
       >
-        <label className="block">
-          <span className={MOBILE_FIELD_LABEL}>Location name *</span>
-          <input
-            className={MOBILE_FIELD_INPUT}
-            value={form.name ?? ""}
-            onChange={set("name")}
-            placeholder="e.g. Downtown Campus"
-            required
-            autoFocus
-          />
-        </label>
+        <EnterpriseFormField<LocationFormValues> name="name" label="Location name" required>
+          {({ describedBy, field, id, invalid }) => (
+            <EnterpriseInput
+              {...field}
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              placeholder="e.g. Downtown Campus"
+              autoFocus
+            />
+          )}
+        </EnterpriseFormField>
 
-        <label className="block">
-          <span className={`${MOBILE_FIELD_LABEL} inline-flex items-center gap-1.5`}>
-            <Hash className="h-3.5 w-3.5" aria-hidden />
-            Code
-          </span>
-          <input
-            className={MOBILE_FIELD_INPUT}
-            value={form.code ?? ""}
-            onChange={set("code")}
-            placeholder="e.g. HQ, SITE-01"
-          />
-        </label>
+        <EnterpriseFormField<LocationFormValues> name="code" label="Code">
+          {({ describedBy, field, id, invalid }) => (
+            <EnterpriseInput
+              {...field}
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              placeholder="e.g. HQ, SITE-01"
+            />
+          )}
+        </EnterpriseFormField>
 
-        <label className="block">
-          <span className={MOBILE_FIELD_LABEL}>Street address</span>
-          <input
-            className={MOBILE_FIELD_INPUT}
-            value={form.address ?? ""}
-            onChange={set("address")}
-            placeholder="Street and number (optional)"
-          />
-        </label>
+        <EnterpriseFormField<LocationFormValues> name="address" label="Street address">
+          {({ describedBy, field, id, invalid }) => (
+            <EnterpriseInput
+              {...field}
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              placeholder="Street and number (optional)"
+              onChange={(event) => {
+                manualPinRef.current = false;
+                field.onChange(event);
+              }}
+            />
+          )}
+        </EnterpriseFormField>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className={MOBILE_FIELD_LABEL}>City</span>
-            <input
-              className={MOBILE_FIELD_INPUT}
-              value={form.city ?? ""}
-              onChange={set("city")}
-              placeholder="City"
-            />
-          </label>
-          <label className="block">
-            <span className={MOBILE_FIELD_LABEL}>Country</span>
-            <input
-              className={MOBILE_FIELD_INPUT}
-              value={form.country ?? ""}
-              onChange={set("country")}
-              placeholder="Country"
-            />
-          </label>
+          <EnterpriseFormField<LocationFormValues> name="city" label="City">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                placeholder="City"
+                onChange={(event) => {
+                  manualPinRef.current = false;
+                  field.onChange(event);
+                }}
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<LocationFormValues> name="country" label="Country">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                placeholder="Country"
+                onChange={(event) => {
+                  manualPinRef.current = false;
+                  field.onChange(event);
+                }}
+              />
+            )}
+          </EnterpriseFormField>
         </div>
 
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className={MOBILE_FIELD_LABEL}>Map pin (optional)</p>
-            {form.latitude != null && form.longitude != null ? (
+            <p className="enterprise-field-label mb-0">Map pin (optional)</p>
+            {mapPin ? (
               <button
                 type="button"
                 className="text-xs font-semibold text-[var(--enterprise-primary)] hover:underline"
                 onClick={() => {
                   manualPinRef.current = false;
-                  setForm((prev) => ({ ...prev, latitude: null, longitude: null }));
+                  setMapPin(null);
                 }}
               >
                 Clear pin
@@ -304,31 +318,30 @@ export function LocationFormDialog({
           </p>
           <ProjectLocationMap
             height={200}
-            latitude={form.latitude ?? 39.8283}
-            longitude={form.longitude ?? -98.5795}
-            zoom={form.latitude != null && form.longitude != null ? 14 : 4}
-            showMarker={form.latitude != null && form.longitude != null}
+            latitude={mapPin?.latitude ?? 39.8283}
+            longitude={mapPin?.longitude ?? -98.5795}
+            zoom={mapPin ? 14 : 4}
+            showMarker={Boolean(mapPin)}
             onPick={(lat, lng) => {
               manualPinRef.current = true;
-              setForm((prev) => ({ ...prev, latitude: lat, longitude: lng }));
+              setMapPin({ latitude: lat, longitude: lng });
             }}
           />
         </div>
 
-        <label className="block">
-          <span className={`${MOBILE_FIELD_LABEL} inline-flex items-center gap-1.5`}>
-            <StickyNote className="h-3.5 w-3.5" aria-hidden />
-            Notes
-          </span>
-          <textarea
-            className={MOBILE_FIELD_TEXTAREA}
-            value={form.notes ?? ""}
-            onChange={set("notes")}
-            placeholder="Optional notes for the owner or team"
-            rows={3}
-          />
-        </label>
-      </form>
+        <EnterpriseFormField<LocationFormValues> name="notes" label="Notes">
+          {({ describedBy, field, id, invalid }) => (
+            <EnterpriseTextarea
+              {...field}
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              placeholder="Optional notes for the owner or team"
+              rows={3}
+            />
+          )}
+        </EnterpriseFormField>
+      </EnterpriseForm>
     </EnterpriseResponsiveDialog>
   );
 }

@@ -13,12 +13,8 @@ import {
 } from "lucide-react";
 import type { CloudFile } from "@/types/projects";
 import { formatItemDateOrDash, sortedVersions } from "./fileExplorerUtils";
-import {
-  EnterpriseSlideOver,
-  SlideOverHeader,
-  SLIDE_OVER_BTN_PRIMARY,
-  SLIDE_OVER_BTN_SECONDARY,
-} from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { FileCommentsPanel } from "./FileCommentsPanel";
 
 type TabId = "details" | "versions" | "comments";
@@ -74,27 +70,28 @@ export function FileDetailSlideOver({
       }
       footer={
         <>
-          <button type="button" onClick={onClose} className={SLIDE_OVER_BTN_SECONDARY}>
+          <EnterpriseButton type="button" variant="secondary" size="sm" onClick={onClose}>
             Close
-          </button>
-          <button
+          </EnterpriseButton>
+          <EnterpriseButton
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => file && onDownloadFile(file)}
             disabled={!file}
-            className={`${SLIDE_OVER_BTN_SECONDARY} gap-1.5`}
           >
             <Download className="h-4 w-4" aria-hidden />
             Download
-          </button>
-          <button
+          </EnterpriseButton>
+          <EnterpriseButton
             type="button"
+            size="sm"
             onClick={() => file && onOpenFile(file)}
             disabled={!file}
-            className={`${SLIDE_OVER_BTN_PRIMARY} gap-1.5`}
           >
             <Eye className="h-4 w-4" aria-hidden />
             Open viewer
-          </button>
+          </EnterpriseButton>
         </>
       }
     >

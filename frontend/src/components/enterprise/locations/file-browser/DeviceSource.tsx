@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { FolderUp, HardDriveUpload, Plus, Upload } from "lucide-react";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 
 export type PickedFile = { file: File; path: string[] };
 
@@ -223,22 +224,25 @@ export function DeviceSource({ onFiles, compact = false, title, subtitle }: Prop
             </p>
           </div>
           <div className="flex flex-wrap justify-center gap-2">
-            <button
+            <EnterpriseButton
               type="button"
-              className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm"
+              size="md"
+              className="mobile-touch-target"
               onClick={() => fileInputRef.current?.click()}
             >
               <Upload className="h-4 w-4" aria-hidden />
               Choose files
-            </button>
-            <button
+            </EnterpriseButton>
+            <EnterpriseButton
               type="button"
-              className="mobile-touch-target inline-flex items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-5 py-2.5 text-sm font-medium hover:bg-[var(--enterprise-hover-surface)]"
+              variant="secondary"
+              size="md"
+              className="mobile-touch-target"
               onClick={() => folderInputRef.current?.click()}
             >
               <FolderUp className="h-4 w-4" aria-hidden />
               Choose folder
-            </button>
+            </EnterpriseButton>
           </div>
         </div>
       </div>

@@ -13,11 +13,8 @@ import {
 } from "@/lib/api-client/bim-clash";
 import { clashTypeLabel, formatClashDistanceDetail } from "@/lib/bim/clash/clashStatusStyle";
 import { ProRequiredError } from "@/lib/api-client/errors";
-import {
-  EnterpriseResponsiveDialog,
-  MOBILE_DIALOG_BTN_PRIMARY,
-  MOBILE_DIALOG_BTN_SECONDARY,
-} from "@/components/mobile/EnterpriseResponsiveDialog";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
 import { qk } from "@/lib/queryKeys";
 
 type Props = {
@@ -135,22 +132,28 @@ function ClearClashesConfirmDialog({
       panelClassName="max-w-md"
       footer={
         <>
-          <button
+          <EnterpriseButton
             type="button"
-            disabled={isDeleting}
+            variant="danger"
+            size="md"
+            fullWidth
+            className="max-lg:min-h-[52px]"
+            loading={isDeleting}
             onClick={onConfirm}
-            className={`${MOBILE_DIALOG_BTN_PRIMARY} bg-[var(--enterprise-semantic-danger-text)] text-white hover:opacity-90 disabled:pointer-events-none`}
           >
             {isDeleting ? "Deleting…" : confirmLabel}
-          </button>
-          <button
+          </EnterpriseButton>
+          <EnterpriseButton
             type="button"
+            variant="secondary"
+            size="md"
+            fullWidth
+            className="max-lg:min-h-[52px]"
             disabled={isDeleting}
             onClick={onCancel}
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]`}
           >
             Cancel
-          </button>
+          </EnterpriseButton>
         </>
       }
     >
@@ -311,14 +314,15 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
               Delete all
             </button>
           ) : null}
-          <button
+          <EnterpriseButton
             type="button"
-            className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold"
+            size="sm"
+            className="mobile-touch-target"
             onClick={onReviewIn3d}
           >
             <PanelsTopLeft className="h-3.5 w-3.5" aria-hidden />
             {hasTests ? "Review in 3D" : "Open & run test"}
-          </button>
+          </EnterpriseButton>
         </div>
       </div>
 
@@ -414,14 +418,16 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
                         </button>
                       ) : null}
                       {onOpenTest ? (
-                        <button
+                        <EnterpriseButton
                           type="button"
-                          className="enterprise-btn-secondary mobile-touch-target inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium"
+                          variant="soft"
+                          size="sm"
+                          className="mobile-touch-target px-2.5 text-xs"
                           onClick={() => onOpenTest(t.id)}
                         >
                           <PanelsTopLeft className="h-3 w-3" aria-hidden />
                           Open
-                        </button>
+                        </EnterpriseButton>
                       ) : null}
                     </div>
                   </div>
@@ -479,14 +485,16 @@ export function BuildingClashHealth({ buildingId, onReviewIn3d, onOpenTest, onOp
               automatically.
             </p>
           </div>
-          <button
+          <EnterpriseButton
             type="button"
-            className="enterprise-btn-secondary mobile-touch-target inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium"
+            variant="soft"
+            size="sm"
+            className="mobile-touch-target"
             onClick={onReviewIn3d}
           >
             <PanelsTopLeft className="h-3.5 w-3.5" aria-hidden />
             Open viewer
-          </button>
+          </EnterpriseButton>
         </div>
       )}
 

@@ -1,12 +1,8 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
 import type { ProjectChangeRow } from "@/lib/projectChangeSummary";
-import {
-  EnterpriseResponsiveDialog,
-  MOBILE_DIALOG_BTN_PRIMARY,
-  MOBILE_DIALOG_BTN_SECONDARY,
-} from "@/components/mobile/EnterpriseResponsiveDialog";
+import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
+import { ConfirmDialogActions } from "@/components/enterprise/ConfirmDialogActions";
 
 type Props = {
   open: boolean;
@@ -36,31 +32,15 @@ export function ConfirmProjectSaveDialog({
       bodyClassName="overflow-hidden"
       footerClassName="border-t border-[#F1F5F9] bg-[#FAFBFC] px-6 py-4 mt-0"
       footer={
-        <>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={onConfirm}
-            className={`${MOBILE_DIALOG_BTN_PRIMARY} gap-2 bg-[#2563EB] text-white shadow-md hover:bg-[#1d4ed8] disabled:cursor-not-allowed`}
-          >
-            {saving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Saving…
-              </>
-            ) : (
-              "Confirm and save"
-            )}
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={onCancel}
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] disabled:opacity-50`}
-          >
-            Back to editing
-          </button>
-        </>
+        <ConfirmDialogActions
+          confirmLabel="Confirm and save"
+          confirmingLabel="Saving…"
+          cancelLabel="Back to editing"
+          confirmVariant="primary"
+          isPending={saving}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+        />
       }
     >
       <div className="border-b border-[#F1F5F9] bg-gradient-to-br from-[#F8FAFC] to-white px-6 py-5">

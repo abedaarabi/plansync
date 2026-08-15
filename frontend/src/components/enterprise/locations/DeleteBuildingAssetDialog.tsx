@@ -2,11 +2,8 @@
 
 import { AlertTriangle } from "lucide-react";
 import type { BuildingAsset } from "@/lib/api-client/locations";
-import {
-  EnterpriseResponsiveDialog,
-  MOBILE_DIALOG_BTN_PRIMARY,
-  MOBILE_DIALOG_BTN_SECONDARY,
-} from "@/components/mobile/EnterpriseResponsiveDialog";
+import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
+import { ConfirmDialogActions } from "@/components/enterprise/ConfirmDialogActions";
 
 type Props = {
   open: boolean;
@@ -36,24 +33,14 @@ export function DeleteBuildingAssetDialog({
       closeOnBackdrop={!isDeleting}
       closeOnEscape={!isDeleting}
       footer={
-        <>
-          <button
-            type="button"
-            disabled={isDeleting || !asset}
-            onClick={onConfirm}
-            className={`${MOBILE_DIALOG_BTN_PRIMARY} bg-red-600 text-white hover:bg-red-700 disabled:pointer-events-none`}
-          >
-            {isDeleting ? "Removing…" : isIfc ? "Remove model" : "Remove drawing"}
-          </button>
-          <button
-            type="button"
-            disabled={isDeleting}
-            onClick={onCancel}
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]`}
-          >
-            Cancel
-          </button>
-        </>
+        <ConfirmDialogActions
+          confirmLabel={isIfc ? "Remove model" : "Remove drawing"}
+          confirmingLabel="Removing…"
+          isPending={isDeleting}
+          confirmDisabled={!asset}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+        />
       }
     >
       <div className="flex gap-3">

@@ -17,6 +17,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   fetchEmailInvites,
   fetchProjects,
@@ -35,6 +36,15 @@ import {
 import { qk } from "@/lib/queryKeys";
 import type { WorkspaceRole } from "@/types/enterprise";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import {
+  EnterpriseButton,
+  enterpriseButtonClassName,
+} from "@/components/enterprise/EnterpriseButton";
+import { INVITE_KIND_OPTIONS, WORKSPACE_ROLE_OPTIONS } from "./inviteFormOptions";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import { EnterpriseInput, EnterpriseSelect } from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import {
   filterEmailInvites,
   formatInviteSentAgo,
@@ -63,6 +73,38 @@ const INVITE_KIND_HELP: Record<EmailInviteKind, string> = {
 
 const DROPDOWN_PANEL_Z = 200;
 const DROPDOWN_MAX_H = 240;
+
+export const workspaceInviteSchema = z
+  .object({
+    email: z.string().trim().email("Enter a valid email address."),
+    inviteKind: z.enum(["INTERNAL", "CLIENT", "CONTRACTOR", "SUBCONTRACTOR"]),
+    inviteeCompany: z.string(),
+    inviteeName: z.string(),
+    projectIds: z.array(z.string()),
+    role: z.enum(["MEMBER", "ADMIN", "SUPER_ADMIN"]),
+    trade: z.string(),
+  })
+  .superRefine((values, context) => {
+    if (values.inviteKind !== "INTERNAL" && values.projectIds.length === 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Client, contractor, and subcontractor invites must include at least one project.",
+        path: ["projectIds"],
+      });
+    }
+  });
+
+type WorkspaceInviteValues = z.infer<typeof workspaceInviteSchema>;
+
+const WORKSPACE_INVITE_DEFAULTS: WorkspaceInviteValues = {
+  email: "",
+  inviteKind: "INTERNAL",
+  inviteeCompany: "",
+  inviteeName: "",
+  projectIds: [],
+  role: "MEMBER",
+  trade: "",
+};
 
 function ProjectAccessDropdown({
   projectOptions,
@@ -300,15 +342,9 @@ export function WorkspaceTeamClient({
     enabled: Boolean(wid && isAdmin),
   });
 
-  const [email, setEmail] = useState("");
-  const [inviteKind, setInviteKind] = useState<EmailInviteKind>("INTERNAL");
-  const [role, setRole] = useState<"MEMBER" | "ADMIN" | "SUPER_ADMIN">("MEMBER");
-  const [trade, setTrade] = useState("");
-  const [inviteeName, setInviteeName] = useState("");
-  const [inviteeCompany, setInviteeCompany] = useState("");
-  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
-  const [sending, setSending] = useState(false);
+  const inviteForm = useEnterpriseForm(workspaceInviteSchema, WORKSPACE_INVITE_DEFAULTS);
   const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
 
   const projectOptions = useMemo(
     () => workspaceProjects.map((p) => ({ id: p.id, name: p.name })),
@@ -316,8 +352,13 @@ export function WorkspaceTeamClient({
   );
 
   function toggleProject(id: string) {
-    setSelectedProjectIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    const selectedProjectIds = inviteForm.getValues("projectIds");
+    inviteForm.setValue(
+      "projectIds",
+      selectedProjectIds.includes(id)
+        ? selectedProjectIds.filter((projectId) => projectId !== id)
+        : [...selectedProjectIds, id],
+      { shouldValidate: true },
     );
   }
 
@@ -439,34 +480,23 @@ export function WorkspaceTeamClient({
     },
   });
 
-  async function onInvite(e: React.FormEvent) {
-    e.preventDefault();
-    if (!wid || !email.trim()) return;
-    if (inviteKind !== "INTERNAL" && selectedProjectIds.length === 0) {
-      setError(
-        "Client, contractor, and subcontractor invites must include at least one project. Select projects below.",
-      );
-      return;
-    }
+  async function onInvite(values: WorkspaceInviteValues) {
+    if (!wid) return;
     setSending(true);
     setError(null);
     try {
       await sendProjectEmailInvite(wid, {
-        email: email.trim(),
-        projectIds: selectedProjectIds,
-        inviteKind,
-        ...(inviteKind === "INTERNAL" ? { role } : { role: "MEMBER" as const }),
-        trade: trade.trim() || undefined,
-        inviteeName: inviteeName.trim() || undefined,
-        inviteeCompany: inviteeCompany.trim() || undefined,
+        email: values.email.trim(),
+        projectIds: values.projectIds,
+        inviteKind: values.inviteKind,
+        ...(values.inviteKind === "INTERNAL" ? { role: values.role } : { role: "MEMBER" as const }),
+        trade: values.trade.trim() || undefined,
+        inviteeName: values.inviteeName.trim() || undefined,
+        inviteeCompany: values.inviteeCompany.trim() || undefined,
         expiresInDays: 14,
       });
-      const addr = email.trim();
-      setEmail("");
-      setInviteKind("INTERNAL");
-      setTrade("");
-      setInviteeName("");
-      setInviteeCompany("");
+      const addr = values.email.trim();
+      inviteForm.reset(WORKSPACE_INVITE_DEFAULTS);
       invalidateInviteQueries();
       toast.success(`Invite sent to ${addr}`, {
         id: "team-invite-sent",
@@ -528,6 +558,9 @@ export function WorkspaceTeamClient({
     inviteListKindFilter !== "all" ||
     inviteListStatusFilter !== "all" ||
     inviteListSearch.trim() !== "";
+  const inviteKind = inviteForm.watch("inviteKind");
+  const role = inviteForm.watch("role");
+  const selectedProjectIds = inviteForm.watch("projectIds");
 
   if (ctxLoading) {
     return <EnterpriseLoadingState message="Loading team…" label="Loading workspace team" />;
@@ -591,7 +624,11 @@ export function WorkspaceTeamClient({
               {isAdmin && embedded ? (
                 <Link
                   href="/organization?tab=invite-member"
-                  className="enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-3.5 py-2.5 text-sm font-semibold"
+                  className={enterpriseButtonClassName({
+                    variant: "primary",
+                    size: "md",
+                    className: "mobile-touch-target",
+                  })}
                 >
                   <UserPlus className="h-4 w-4" aria-hidden />
                   Invite member
@@ -1243,199 +1280,170 @@ export function WorkspaceTeamClient({
           </div>
 
           <div className="enterprise-card p-4 sm:p-5">
-            <form onSubmit={onInvite} className="space-y-5">
-              <div>
-                <label
-                  htmlFor="team-invite-email"
-                  className="mb-1.5 block text-sm font-medium text-[var(--enterprise-text)]"
-                >
-                  Email address
-                </label>
-                <input
-                  id="team-invite-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="off"
-                  className="h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)] transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
-                  placeholder="colleague@company.com"
-                  required
-                />
-              </div>
+            <EnterpriseForm form={inviteForm} onSubmit={onInvite} className="space-y-5">
+              <EnterpriseFormField<WorkspaceInviteValues>
+                name="email"
+                label="Email address"
+                required
+              >
+                {({ describedBy, field, id, invalid }) => (
+                  <EnterpriseInput
+                    {...field}
+                    id={id}
+                    type="text"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    autoComplete="off"
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid}
+                    placeholder="colleague@company.com"
+                  />
+                )}
+              </EnterpriseFormField>
 
-              <div>
-                <label
-                  htmlFor="team-invite-kind"
-                  className="mb-1.5 block text-sm font-medium text-[var(--enterprise-text)]"
-                >
-                  Invite as
-                </label>
-                <div className="relative">
-                  <select
-                    id="team-invite-kind"
-                    value={inviteKind}
-                    onChange={(e) => setInviteKind(e.target.value as EmailInviteKind)}
-                    className="h-11 w-full cursor-pointer appearance-none rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] pl-3 pr-10 text-sm font-medium text-[var(--enterprise-text)] transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20 mobile-tappable-row min-h-14 active:scale-[0.99]"
+              <EnterpriseFormField<WorkspaceInviteValues>
+                name="inviteKind"
+                label="Invite as"
+                hint={INVITE_KIND_HELP[inviteKind]}
+              >
+                {({ describedBy, field, id, invalid }) => (
+                  <EnterpriseSelect
+                    {...field}
+                    id={id}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid}
                   >
-                    <option value="INTERNAL">Internal teammate</option>
-                    <option value="CLIENT">Client</option>
-                    <option value="CONTRACTOR">Contractor</option>
-                    <option value="SUBCONTRACTOR">Subcontractor</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--enterprise-text-muted)]" />
-                </div>
-                <p className="mt-2 text-[13px] leading-relaxed text-[var(--enterprise-text-muted)]">
-                  {INVITE_KIND_HELP[inviteKind]}
-                </p>
-              </div>
+                    {INVITE_KIND_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </EnterpriseSelect>
+                )}
+              </EnterpriseFormField>
 
               {inviteKind === "INTERNAL" ? (
-                <div>
-                  <label
-                    htmlFor="team-invite-role"
-                    className="mb-1.5 block text-sm font-medium text-[var(--enterprise-text)]"
-                  >
-                    Workspace role
-                  </label>
-                  <div className="relative">
-                    <select
-                      id="team-invite-role"
-                      value={role}
-                      onChange={(e) =>
-                        setRole(e.target.value as "MEMBER" | "ADMIN" | "SUPER_ADMIN")
-                      }
-                      className="h-11 w-full cursor-pointer appearance-none rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] pl-3 pr-10 text-sm font-medium text-[var(--enterprise-text)] transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20 mobile-tappable-row min-h-14 active:scale-[0.99]"
+                <EnterpriseFormField<WorkspaceInviteValues>
+                  name="role"
+                  label="Workspace role"
+                  hint={ROLE_HELP[role]}
+                >
+                  {({ describedBy, field, id, invalid }) => (
+                    <EnterpriseSelect
+                      {...field}
+                      id={id}
+                      aria-describedby={describedBy}
+                      aria-invalid={invalid}
                     >
-                      <option value="MEMBER">Member</option>
-                      <option value="ADMIN">Admin</option>
+                      {WORKSPACE_ROLE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
                       {actorIsSuperAdmin ? <option value="SUPER_ADMIN">Super Admin</option> : null}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--enterprise-text-muted)]" />
-                  </div>
-                  <p className="mt-2 text-[13px] leading-relaxed text-[var(--enterprise-text-muted)]">
-                    {ROLE_HELP[role as keyof typeof ROLE_HELP] ?? ROLE_HELP.MEMBER}
-                  </p>
-                </div>
+                    </EnterpriseSelect>
+                  )}
+                </EnterpriseFormField>
               ) : null}
 
               {inviteKind === "CONTRACTOR" || inviteKind === "SUBCONTRACTOR" ? (
-                <div>
-                  <label
-                    htmlFor="team-invite-trade"
-                    className="mb-1.5 block text-sm font-medium text-[var(--enterprise-text)]"
-                  >
-                    Trade / discipline{" "}
-                    <span className="font-normal text-[var(--enterprise-text-muted)]">
-                      (optional)
-                    </span>
-                  </label>
-                  <input
-                    id="team-invite-trade"
-                    type="text"
-                    value={trade}
-                    onChange={(e) => setTrade(e.target.value)}
-                    autoComplete="off"
-                    maxLength={120}
-                    className="h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)] transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
-                    placeholder="e.g. Electrical, Concrete"
-                  />
-                </div>
+                <EnterpriseFormField<WorkspaceInviteValues> name="trade" label="Trade / discipline">
+                  {({ describedBy, field, id, invalid }) => (
+                    <EnterpriseInput
+                      {...field}
+                      id={id}
+                      autoComplete="off"
+                      maxLength={120}
+                      aria-describedby={describedBy}
+                      aria-invalid={invalid}
+                      placeholder="e.g. Electrical, Concrete"
+                    />
+                  )}
+                </EnterpriseFormField>
               ) : null}
 
               {inviteKind !== "INTERNAL" ? (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label
-                      htmlFor="team-invite-name"
-                      className="mb-1.5 block text-sm font-medium text-[var(--enterprise-text)]"
-                    >
-                      Invitee name{" "}
-                      <span className="font-normal text-[var(--enterprise-text-muted)]">
-                        (optional)
-                      </span>
-                    </label>
-                    <input
-                      id="team-invite-name"
-                      type="text"
-                      value={inviteeName}
-                      onChange={(e) => setInviteeName(e.target.value)}
-                      autoComplete="off"
-                      maxLength={200}
-                      className="h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)] transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
-                      placeholder="First Last"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="team-invite-company"
-                      className="mb-1.5 block text-sm font-medium text-[var(--enterprise-text)]"
-                    >
-                      Company{" "}
-                      <span className="font-normal text-[var(--enterprise-text-muted)]">
-                        (optional)
-                      </span>
-                    </label>
-                    <input
-                      id="team-invite-company"
-                      type="text"
-                      value={inviteeCompany}
-                      onChange={(e) => setInviteeCompany(e.target.value)}
-                      autoComplete="off"
-                      maxLength={200}
-                      className="h-11 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 text-sm text-[var(--enterprise-text)] placeholder:text-[var(--enterprise-text-muted)] transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
-                      placeholder="Company name"
-                    />
-                  </div>
+                  <EnterpriseFormField<WorkspaceInviteValues>
+                    name="inviteeName"
+                    label="Invitee name"
+                  >
+                    {({ describedBy, field, id, invalid }) => (
+                      <EnterpriseInput
+                        {...field}
+                        id={id}
+                        autoComplete="off"
+                        maxLength={200}
+                        aria-describedby={describedBy}
+                        aria-invalid={invalid}
+                        placeholder="First Last"
+                      />
+                    )}
+                  </EnterpriseFormField>
+                  <EnterpriseFormField<WorkspaceInviteValues> name="inviteeCompany" label="Company">
+                    {({ describedBy, field, id, invalid }) => (
+                      <EnterpriseInput
+                        {...field}
+                        id={id}
+                        autoComplete="off"
+                        maxLength={200}
+                        aria-describedby={describedBy}
+                        aria-invalid={invalid}
+                        placeholder="Company name"
+                      />
+                    )}
+                  </EnterpriseFormField>
                 </div>
               ) : null}
 
-              <div>
-                <span className="mb-3 block text-sm font-medium text-[var(--enterprise-text)]">
-                  Grant access to
-                </span>
-                {projectOptions.length === 0 ? (
-                  <p className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-4 py-4 text-sm text-[var(--enterprise-text-muted)]">
-                    No projects in workspace.
-                  </p>
-                ) : (
-                  <ProjectAccessDropdown
-                    ariaLabel="Grant access to projects"
-                    projectOptions={projectOptions}
-                    selectedIds={selectedProjectIds}
-                    onToggleProject={toggleProject}
-                  />
+              <EnterpriseFormField<WorkspaceInviteValues> name="projectIds" label="Grant access to">
+                {() => (
+                  <>
+                    {projectOptions.length === 0 ? (
+                      <p className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-4 py-4 text-sm text-[var(--enterprise-text-muted)]">
+                        No projects in workspace.
+                      </p>
+                    ) : (
+                      <ProjectAccessDropdown
+                        ariaLabel="Grant access to projects"
+                        projectOptions={projectOptions}
+                        selectedIds={selectedProjectIds}
+                        onToggleProject={toggleProject}
+                      />
+                    )}
+                    <p className="mt-2 text-[13px] text-[var(--enterprise-text-muted)]">
+                      {inviteKind === "INTERNAL" ? (
+                        <>
+                          Leave none selected for{" "}
+                          <span className="font-medium text-[var(--enterprise-text)]">
+                            Full workspace
+                          </span>{" "}
+                          — or pick one or more projects to limit access.
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-medium text-[var(--enterprise-text)]">
+                            Required:
+                          </span>{" "}
+                          select one or more projects. External invites cannot use “full workspace”
+                          without a project list.
+                        </>
+                      )}
+                    </p>
+                  </>
                 )}
-                <p className="mt-2 text-[13px] text-[var(--enterprise-text-muted)]">
-                  {inviteKind === "INTERNAL" ? (
-                    <>
-                      Leave none selected for{" "}
-                      <span className="font-medium text-[var(--enterprise-text)]">
-                        Full workspace
-                      </span>{" "}
-                      — or pick one or more projects to limit access.
-                    </>
-                  ) : (
-                    <>
-                      <span className="font-medium text-[var(--enterprise-text)]">Required:</span>{" "}
-                      select one or more projects. External invites cannot use “full workspace”
-                      without a project list.
-                    </>
-                  )}
-                </p>
-              </div>
+              </EnterpriseFormField>
 
               {error ? (
                 <p className="text-sm text-[var(--enterprise-semantic-danger-text)]">{error}</p>
               ) : null}
 
               <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  disabled={sending}
-                  className="enterprise-btn-primary inline-flex h-11 items-center gap-2 rounded-md px-5 text-sm font-semibold disabled:opacity-60"
-                >
+                <EnterpriseButton type="submit" size="lg" loading={sending}>
                   {sending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    "Sending…"
                   ) : (
                     <>
                       <Send className="h-4 w-4" />
@@ -1443,9 +1451,9 @@ export function WorkspaceTeamClient({
                       <ArrowRight className="h-4 w-4 opacity-90" />
                     </>
                   )}
-                </button>
+                </EnterpriseButton>
               </div>
-            </form>
+            </EnterpriseForm>
           </div>
         </div>
       ) : null}

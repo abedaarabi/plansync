@@ -1,20 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2, Hash, Layers, StickyNote } from "lucide-react";
+import { Building2 } from "lucide-react";
+import { z } from "zod";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import {
+  EnterpriseInput,
+  EnterpriseSelect,
+  EnterpriseTextarea,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import type { BuildingInput, BuildingType } from "@/lib/api-client/locations";
 import { BUILDING_TYPE_OPTIONS } from "@/lib/locations/buildingLabels";
-import {
-  MOBILE_FIELD_INPUT,
-  MOBILE_FIELD_LABEL,
-  MOBILE_FIELD_SELECT,
-  MOBILE_FIELD_TEXTAREA,
-} from "@/lib/mobileFormStyles";
-import {
-  EnterpriseResponsiveDialog,
-  MOBILE_DIALOG_BTN_PRIMARY,
-  MOBILE_DIALOG_BTN_SECONDARY,
-} from "@/components/mobile/EnterpriseResponsiveDialog";
+import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { BuildingImageField } from "./BuildingImageField";
 
 type Initial = {
@@ -41,19 +41,33 @@ type Props = {
   onSubmit: (input: BuildingFormSubmit) => void;
 };
 
-type FormState = {
-  name: string;
-  code: string;
-  buildingType: BuildingType | "";
-  floorsApprox: string;
-  notes: string;
-};
+const buildingFormSchema = z.object({
+  buildingType: z.union([
+    z.literal(""),
+    z.enum(["OFFICE", "RESIDENTIAL", "MIXED", "INDUSTRIAL", "OTHER"]),
+  ]),
+  code: z.string(),
+  floorsApprox: z.string().refine(
+    (value) => {
+      const trimmed = value.trim();
+      return (
+        trimmed === "" ||
+        (Number.isInteger(Number(trimmed)) && Number(trimmed) >= 0 && Number(trimmed) <= 300)
+      );
+    },
+    { message: "Enter a whole number from 0 to 300." },
+  ),
+  name: z.string().trim().min(1, "Enter a building name."),
+  notes: z.string(),
+});
 
-const empty: FormState = {
-  name: "",
-  code: "",
+type BuildingFormValues = z.infer<typeof buildingFormSchema>;
+
+const EMPTY_FORM: BuildingFormValues = {
   buildingType: "",
+  code: "",
   floorsApprox: "",
+  name: "",
   notes: "",
 };
 
@@ -65,7 +79,7 @@ export function BuildingFormDialog({
   onClose,
   onSubmit,
 }: Props) {
-  const [form, setForm] = useState<FormState>(empty);
+  const form = useEnterpriseForm(buildingFormSchema, EMPTY_FORM);
   const [pendingImage, setPendingImage] = useState<File | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
 
@@ -74,7 +88,7 @@ export function BuildingFormDialog({
     setPendingImage(null);
     setRemoveImage(false);
     if (mode === "edit" && initial) {
-      setForm({
+      form.reset({
         name: initial.name,
         code: initial.code ?? "",
         buildingType: initial.buildingType ?? "",
@@ -82,9 +96,22 @@ export function BuildingFormDialog({
         notes: initial.notes ?? "",
       });
     } else {
-      setForm(empty);
+      form.reset(EMPTY_FORM);
     }
-  }, [open, mode, initial]);
+  }, [form, initial, mode, open]);
+
+  const handleSubmit = (values: BuildingFormValues) => {
+    const floors = values.floorsApprox.trim();
+    onSubmit({
+      name: values.name.trim(),
+      code: values.code || null,
+      buildingType: values.buildingType || null,
+      floorsApprox: floors ? Number(floors) : null,
+      notes: values.notes || null,
+      pendingImage,
+      removeImage,
+    });
+  };
 
   return (
     <EnterpriseResponsiveDialog
@@ -96,22 +123,28 @@ export function BuildingFormDialog({
       panelClassName="max-w-lg"
       footer={
         <>
-          <button
+          <EnterpriseButton
             type="submit"
             form="building-form"
-            disabled={isSaving || !form.name.trim()}
-            className={`${MOBILE_DIALOG_BTN_PRIMARY} enterprise-btn-primary`}
+            variant="primary"
+            size="md"
+            fullWidth
+            loading={isSaving}
+            className="max-lg:min-h-[52px] sm:w-auto"
           >
             {isSaving ? "Saving…" : mode === "create" ? "Create building" : "Save changes"}
-          </button>
-          <button
+          </EnterpriseButton>
+          <EnterpriseButton
             type="button"
+            variant="secondary"
+            size="md"
+            fullWidth
             disabled={isSaving}
             onClick={onClose}
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text)]`}
+            className="max-lg:min-h-[52px] sm:w-auto"
           >
             Cancel
-          </button>
+          </EnterpriseButton>
         </>
       }
     >
@@ -132,87 +165,70 @@ export function BuildingFormDialog({
         </div>
       </div>
 
-      <form
+      <EnterpriseForm
+        form={form}
+        density="mobile"
         id="building-form"
         className="space-y-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!form.name.trim()) return;
-          const floors = form.floorsApprox.trim();
-          onSubmit({
-            name: form.name.trim(),
-            code: form.code || null,
-            buildingType: form.buildingType || null,
-            floorsApprox: floors ? Number(floors) : null,
-            notes: form.notes || null,
-            pendingImage,
-            removeImage,
-          });
-        }}
+        onSubmit={handleSubmit}
       >
-        <label className="block">
-          <span className={MOBILE_FIELD_LABEL}>Building name *</span>
-          <input
-            className={MOBILE_FIELD_INPUT}
-            value={form.name}
-            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-            placeholder="e.g. Tower A"
-            required
-            autoFocus
-          />
-        </label>
+        <EnterpriseFormField<BuildingFormValues> name="name" label="Building name" required>
+          {({ describedBy, field, id, invalid }) => (
+            <EnterpriseInput
+              {...field}
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              placeholder="e.g. Tower A"
+              autoFocus
+            />
+          )}
+        </EnterpriseFormField>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className={`${MOBILE_FIELD_LABEL} inline-flex items-center gap-1.5`}>
-              <Hash className="h-3.5 w-3.5" aria-hidden />
-              Code
-            </span>
-            <input
-              className={MOBILE_FIELD_INPUT}
-              value={form.code}
-              onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))}
-              placeholder="e.g. A, B2"
-            />
-          </label>
-          <label className="block">
-            <span className={`${MOBILE_FIELD_LABEL} inline-flex items-center gap-1.5`}>
-              <Layers className="h-3.5 w-3.5" aria-hidden />
-              Floors (approx)
-            </span>
-            <input
-              className={MOBILE_FIELD_INPUT}
-              type="number"
-              min={0}
-              max={300}
-              inputMode="numeric"
-              value={form.floorsApprox}
-              onChange={(e) => setForm((p) => ({ ...p, floorsApprox: e.target.value }))}
-              placeholder="e.g. 12"
-            />
-          </label>
+          <EnterpriseFormField<BuildingFormValues> name="code" label="Code">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                placeholder="e.g. A, B2"
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<BuildingFormValues> name="floorsApprox" label="Floors (approx)">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                type="number"
+                inputMode="numeric"
+                placeholder="e.g. 12"
+              />
+            )}
+          </EnterpriseFormField>
         </div>
 
-        <label className="block">
-          <span className={MOBILE_FIELD_LABEL}>Building type</span>
-          <select
-            className={MOBILE_FIELD_SELECT}
-            value={form.buildingType}
-            onChange={(e) =>
-              setForm((p) => ({
-                ...p,
-                buildingType: e.target.value as BuildingType | "",
-              }))
-            }
-          >
-            <option value="">Select type</option>
-            {BUILDING_TYPE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <EnterpriseFormField<BuildingFormValues> name="buildingType" label="Building type">
+          {({ describedBy, field, id, invalid }) => (
+            <EnterpriseSelect
+              {...field}
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+            >
+              <option value="">Select type</option>
+              {BUILDING_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </EnterpriseSelect>
+          )}
+        </EnterpriseFormField>
 
         <BuildingImageField
           buildingId={mode === "edit" ? initial?.id : undefined}
@@ -224,20 +240,19 @@ export function BuildingFormDialog({
           disabled={isSaving}
         />
 
-        <label className="block">
-          <span className={`${MOBILE_FIELD_LABEL} inline-flex items-center gap-1.5`}>
-            <StickyNote className="h-3.5 w-3.5" aria-hidden />
-            Notes
-          </span>
-          <textarea
-            className={MOBILE_FIELD_TEXTAREA}
-            value={form.notes}
-            onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-            placeholder="Optional notes for the owner or team"
-            rows={3}
-          />
-        </label>
-      </form>
+        <EnterpriseFormField<BuildingFormValues> name="notes" label="Notes">
+          {({ describedBy, field, id, invalid }) => (
+            <EnterpriseTextarea
+              {...field}
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              placeholder="Optional notes for the owner or team"
+              rows={3}
+            />
+          )}
+        </EnterpriseFormField>
+      </EnterpriseForm>
     </EnterpriseResponsiveDialog>
   );
 }

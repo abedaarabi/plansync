@@ -1,20 +1,21 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Building2, ChevronDown } from "lucide-react";
+import { z } from "zod";
 import type { FolderStructureTemplateWithTree } from "@/lib/api-client";
 import type { Project } from "@/types/projects";
+import { EnterpriseForm } from "./forms/EnterpriseForm";
+import { EnterpriseFormField } from "./forms/EnterpriseFormField";
+import { EnterpriseInput } from "./forms/EnterpriseInputs";
+import { useEnterpriseForm } from "./forms/useEnterpriseForm";
 import { FolderTreePreview } from "./FolderTreePreview";
 import { logoUrlFromWebsiteInput } from "@/lib/websiteUrl";
 import { PROJECT_STAGES, type ProjectStageValue } from "@/lib/projectStage";
 import type { ProjectCurrencyCode } from "@/lib/projectCurrency";
 import type { ProjectMeasurementSystem } from "@/lib/projectMeasurement";
-import {
-  EnterpriseSlideOver,
-  SlideOverHeader,
-  SLIDE_OVER_BTN_PRIMARY,
-  SLIDE_OVER_BTN_SECONDARY,
-} from "./EnterpriseSlideOver";
+import { EnterpriseButton } from "./EnterpriseButton";
+import { EnterpriseSlideOver, SlideOverHeader } from "./EnterpriseSlideOver";
 import { ProjectCurrencyPicker } from "./ProjectCurrencyPicker";
 import { ProjectMeasurementSystemPicker } from "./ProjectMeasurementSystemPicker";
 import { ProjectTypeSelect } from "./ProjectTypeSelect";
@@ -41,12 +42,25 @@ export type NewProjectDialogValues = {
   copyFromProjectId: string;
 };
 
+const newProjectBasicsSchema = z
+  .object({
+    endDate: z.string().min(1, "Select an end date."),
+    projectName: z.string().trim().min(1, "Enter a project name."),
+    startDate: z.string().min(1, "Select a start date."),
+  })
+  .refine((values) => !values.startDate || !values.endDate || values.endDate >= values.startDate, {
+    message: "End date must be on or after the start date.",
+    path: ["endDate"],
+  });
+
+type NewProjectBasicsValues = z.infer<typeof newProjectBasicsSchema>;
+
 type Props = {
   open: boolean;
   saving: boolean;
   values: NewProjectDialogValues;
   onChange: (field: keyof NewProjectDialogValues, value: string | number) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (values: NewProjectBasicsValues) => void;
   onCancel: () => void;
   /** Shown on the primary button when not saving */
   submitLabel?: string;
@@ -114,6 +128,21 @@ export function NewProjectDialog({
   templates,
   copySourceProjects,
 }: Props) {
+  const form = useEnterpriseForm(newProjectBasicsSchema, {
+    endDate: values.endDate,
+    projectName: values.projectName,
+    startDate: values.startDate,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    form.reset({
+      endDate: values.endDate,
+      projectName: values.projectName,
+      startDate: values.startDate,
+    });
+  }, [form, open, values.endDate, values.projectName, values.startDate]);
+
   const websiteLogoPreview = useMemo(
     () => logoUrlFromWebsiteInput(values.websiteUrl),
     [values.websiteUrl],
@@ -128,7 +157,7 @@ export function NewProjectDialog({
     <EnterpriseSlideOver
       open={open}
       onClose={onCancel}
-      form={{ onSubmit }}
+      form={{ noValidate: true, onSubmit: form.handleSubmit(onSubmit) }}
       ariaLabelledBy="new-project-dialog-title"
       panelMaxWidthClass="w-[min(100%,calc(100dvw-12px))] max-w-[min(1920px,calc(100dvw-12px))]"
       headerClassName="px-4 sm:px-8 lg:px-10 xl:px-12"
@@ -152,17 +181,22 @@ export function NewProjectDialog({
             and copy-from apply only at creation — you can still rename folders anytime.
           </p>
           <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
-            <button type="button" onClick={onCancel} className={SLIDE_OVER_BTN_SECONDARY}>
+            <EnterpriseButton type="button" variant="secondary" size="sm" onClick={onCancel}>
               Cancel
-            </button>
-            <button type="submit" disabled={saving} className={SLIDE_OVER_BTN_PRIMARY}>
+            </EnterpriseButton>
+            <EnterpriseButton type="submit" size="sm" loading={saving}>
               {saving ? "Creating…" : submitLabel}
-            </button>
+            </EnterpriseButton>
           </div>
         </>
       }
     >
-      <div className="mx-auto flex max-w-[min(1280px,100%)] flex-col gap-8">
+      <EnterpriseForm
+        form={form}
+        formId="new-project-form"
+        onSubmit={onSubmit}
+        className="mx-auto flex max-w-[min(1280px,100%)] flex-col gap-8"
+      >
         <div className="grid gap-3 sm:grid-cols-3" role="list" aria-label="Project creation steps">
           {FLOW_STEPS.map((s) => (
             <div
@@ -193,49 +227,66 @@ export function NewProjectDialog({
           />
           <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
             <div className="space-y-5">
-              <div>
-                <label htmlFor="new-project-name" className={labelClass}>
-                  Project name <span className="text-[var(--enterprise-error)]">*</span>
-                </label>
-                <input
-                  id="new-project-name"
-                  value={values.projectName}
-                  onChange={(e) => onChange("projectName", e.target.value)}
-                  className={inputClass}
-                  placeholder="e.g. Tower A — Structure"
-                  required
-                  autoFocus
-                  autoComplete="off"
-                />
-              </div>
+              <EnterpriseFormField<NewProjectBasicsValues>
+                name="projectName"
+                label="Project name"
+                required
+              >
+                {({ describedBy, field, id, invalid }) => (
+                  <EnterpriseInput
+                    {...field}
+                    id={id}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid}
+                    placeholder="e.g. Tower A — Structure"
+                    autoFocus
+                    autoComplete="off"
+                    onChange={(event) => {
+                      field.onChange(event);
+                      onChange("projectName", event.target.value);
+                    }}
+                  />
+                )}
+              </EnterpriseFormField>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="new-project-start-date" className={labelClass}>
-                    Start date <span className="text-[var(--enterprise-error)]">*</span>
-                  </label>
-                  <input
-                    id="new-project-start-date"
-                    type="date"
-                    value={values.startDate}
-                    onChange={(e) => onChange("startDate", e.target.value)}
-                    className={inputClass}
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="new-project-end-date" className={labelClass}>
-                    End date <span className="text-[var(--enterprise-error)]">*</span>
-                  </label>
-                  <input
-                    id="new-project-end-date"
-                    type="date"
-                    value={values.endDate}
-                    onChange={(e) => onChange("endDate", e.target.value)}
-                    className={inputClass}
-                    min={values.startDate || undefined}
-                    required
-                  />
-                </div>
+                <EnterpriseFormField<NewProjectBasicsValues>
+                  name="startDate"
+                  label="Start date"
+                  required
+                >
+                  {({ describedBy, field, id, invalid }) => (
+                    <EnterpriseInput
+                      {...field}
+                      id={id}
+                      type="date"
+                      aria-describedby={describedBy}
+                      aria-invalid={invalid}
+                      onChange={(event) => {
+                        field.onChange(event);
+                        onChange("startDate", event.target.value);
+                      }}
+                    />
+                  )}
+                </EnterpriseFormField>
+                <EnterpriseFormField<NewProjectBasicsValues>
+                  name="endDate"
+                  label="End date"
+                  required
+                >
+                  {({ describedBy, field, id, invalid }) => (
+                    <EnterpriseInput
+                      {...field}
+                      id={id}
+                      type="date"
+                      aria-describedby={describedBy}
+                      aria-invalid={invalid}
+                      onChange={(event) => {
+                        field.onChange(event);
+                        onChange("endDate", event.target.value);
+                      }}
+                    />
+                  )}
+                </EnterpriseFormField>
               </div>
             </div>
 
@@ -562,7 +613,7 @@ export function NewProjectDialog({
             </div>
           ) : null}
         </section>
-      </div>
+      </EnterpriseForm>
     </EnterpriseSlideOver>
   );
 }

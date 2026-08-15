@@ -5,10 +5,12 @@ import { OmSectionCard } from "@/components/enterprise/OmSectionCard";
 import type { OmMaintenanceReport } from "@/lib/api-client";
 import { ISSUE_PRIORITY_LABEL, ISSUE_PRIORITY_ORDER } from "@/lib/issueStatusStyle";
 
+const NEUTRAL_FILL = "var(--enterprise-chart-5)";
+
 const PRIORITY_FILL: Record<string, string> = {
-  LOW: "#94a3b8",
-  MEDIUM: "#2563eb",
-  HIGH: "#dc2626",
+  LOW: NEUTRAL_FILL,
+  MEDIUM: "var(--enterprise-chart-1)",
+  HIGH: "var(--enterprise-error)",
 };
 
 type Segment = { key: string; label: string; value: number; fill: string };
@@ -79,13 +81,13 @@ function PmComplianceDonut({ onTime, late, pct }: { onTime: number; late: number
       key: "on-time",
       label: "On time",
       value: onTime,
-      fill: "var(--enterprise-semantic-success-text)",
+      fill: "var(--enterprise-success)",
     },
     {
       key: "late",
       label: "Late",
       value: late,
-      fill: "var(--enterprise-semantic-warning-text)",
+      fill: "var(--enterprise-warning)",
     },
   ];
 
@@ -203,7 +205,7 @@ function WeeklyCountBars({ weeks }: { weeks: OmMaintenanceReport["completedByWee
             </span>
             <div className="flex w-full flex-1 items-end">
               <div
-                className="w-full rounded-t-md bg-[var(--enterprise-primary)] transition-[height] duration-200"
+                className="w-full rounded-t-md bg-[var(--enterprise-chart-1)] transition-[height] duration-200"
                 style={{ height: `${pct}%` }}
                 title={`${formatWeekLabel(w.weekStart)}: ${w.count} completed`}
               />
@@ -237,7 +239,7 @@ function WeeklyCostBars({ weeks }: { weeks: OmMaintenanceReport["completedByWeek
             </span>
             <div className="flex w-full flex-1 items-end">
               <div
-                className="w-full rounded-t-md bg-[var(--enterprise-primary)]/85 transition-[height] duration-200"
+                className="w-full rounded-t-md bg-[var(--enterprise-chart-4)] transition-[height] duration-200"
                 style={{ height: `${pct}%` }}
                 title={`${formatWeekLabel(w.weekStart)}: $${w.partsCost.toFixed(2)}`}
               />
@@ -282,8 +284,8 @@ function AssetCostBars({ assets }: { assets: OmMaintenanceReport["topAssetsByCos
                   width: `${pct}%`,
                   backgroundColor:
                     idx === 0
-                      ? "var(--enterprise-primary)"
-                      : `color-mix(in srgb, var(--enterprise-primary) ${88 - idx * 12}%, var(--enterprise-border))`,
+                      ? "var(--enterprise-chart-1)"
+                      : `color-mix(in srgb, var(--enterprise-chart-1) ${88 - idx * 12}%, var(--enterprise-border))`,
                 }}
               />
             </div>
@@ -303,7 +305,7 @@ export function OmMaintenanceReportCharts({ report }: Props) {
       key,
       label: ISSUE_PRIORITY_LABEL[key] ?? key,
       value: map.get(key) ?? 0,
-      fill: PRIORITY_FILL[key] ?? "#94a3b8",
+      fill: PRIORITY_FILL[key] ?? NEUTRAL_FILL,
     })).filter((s) => s.value > 0);
   }, [report.backlogByPriority]);
 
@@ -386,7 +388,7 @@ function LaborHoursBars({ weeks }: { weeks: OmMaintenanceReport["completedByWeek
             <div className="min-w-0 flex-1">
               <div className="h-2.5 overflow-hidden rounded-full bg-[var(--enterprise-bg)] ring-1 ring-[var(--enterprise-border)]/60">
                 <div
-                  className="h-full rounded-full bg-[var(--enterprise-semantic-info-text)]/90"
+                  className="h-full rounded-full bg-[var(--enterprise-chart-2)]"
                   style={{ width: `${pct}%` }}
                 />
               </div>

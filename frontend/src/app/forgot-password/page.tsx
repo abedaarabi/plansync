@@ -2,19 +2,39 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { AlertCircle, ArrowLeft, Loader2, Mail } from "lucide-react";
-import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { ArrowLeft, Mail } from "lucide-react";
+import { z } from "zod";
+import {
+  AuthFormAlert,
+  AuthSubmitButton,
+  AUTH_FIELD_ICON,
+  AUTH_FIELD_INPUT,
+} from "@/components/auth/authFormChrome";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import { EnterpriseInput } from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { EnterpriseAuthLayout } from "@/components/auth/EnterpriseAuthLayout";
 import { authClient } from "@/lib/auth-client";
 
+const forgotSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, "Enter your email address.")
+    .email("Enter a valid email address."),
+});
+
+type ForgotValues = z.infer<typeof forgotSchema>;
+
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
+  const form = useEnterpriseForm(forgotSchema, { email: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sentEmail, setSentEmail] = useState("");
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSubmit({ email }: ForgotValues) {
     setError(null);
     setLoading(true);
     try {
@@ -24,7 +44,10 @@ export default function ForgotPasswordPage() {
         redirectTo: `${origin}/reset-password`,
       });
       if (err) setError(err.message ?? "Could not send reset email.");
-      else setSent(true);
+      else {
+        setSentEmail(email.trim());
+        setSent(true);
+      }
     } catch (ex) {
       setError(ex instanceof Error ? ex.message : "Request failed");
     } finally {
@@ -40,8 +63,8 @@ export default function ForgotPasswordPage() {
       {sent ? (
         <div className="space-y-4 text-center">
           <p className="enterprise-type-body text-[#64748B]">
-            If an account exists for <strong className="text-[#0F172A]">{email}</strong>, you’ll get
-            an email with a reset link shortly. Check your spam folder if nothing arrives.
+            If an account exists for <strong className="text-[#0F172A]">{sentEmail}</strong>, you’ll
+            get an email with a reset link shortly. Check your spam folder if nothing arrives.
           </p>
           <Link
             href="/sign-in"
@@ -52,59 +75,39 @@ export default function ForgotPasswordPage() {
           </Link>
         </div>
       ) : (
-        <form onSubmit={onSubmit} className="space-y-5">
-          <div>
-            <label
-              htmlFor="forgot-email"
-              className="enterprise-type-nav mb-1.5 block text-[#64748B]"
-            >
-              Email
-            </label>
-            <div className="relative">
-              <Mail
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                aria-hidden
-              />
-              <input
-                id="forgot-email"
-                type="email"
-                required
-                autoComplete="email"
-                className="enterprise-field-input enterprise-field-input--icon py-2.5 pr-3"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-              />
-            </div>
-          </div>
-
-          {error && (
-            <div
-              className="flex gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800"
-              role="alert"
-            >
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <EnterpriseButton type="submit" fullWidth loading={loading} className="gap-2">
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                Sending…
-              </>
-            ) : (
-              "Send reset link"
+        <EnterpriseForm form={form} onSubmit={onSubmit} className="space-y-5">
+          <EnterpriseFormField<ForgotValues> name="email" label="Email" required>
+            {({ describedBy, field, id, invalid }) => (
+              <div className="relative">
+                <Mail className={AUTH_FIELD_ICON} aria-hidden />
+                <EnterpriseInput
+                  {...field}
+                  id={id}
+                  type="text"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  autoComplete="email"
+                  className={AUTH_FIELD_INPUT}
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                  placeholder="you@company.com"
+                />
+              </div>
             )}
-          </EnterpriseButton>
+          </EnterpriseFormField>
+
+          {error && <AuthFormAlert>{error}</AuthFormAlert>}
+
+          <AuthSubmitButton loading={loading} loadingLabel="Sending…" label="Send reset link" />
 
           <p className="text-center text-sm">
             <Link href="/sign-in" className="font-medium text-[#2563EB] hover:underline">
               ← Back to sign in
             </Link>
           </p>
-        </form>
+        </EnterpriseForm>
       )}
     </EnterpriseAuthLayout>
   );

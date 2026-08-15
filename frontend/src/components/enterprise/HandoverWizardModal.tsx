@@ -10,6 +10,7 @@ import {
   type ProjectSessionOmHandover,
   ProRequiredError,
 } from "@/lib/api-client";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { qk } from "@/lib/queryKeys";
 
 type Props = {
@@ -190,21 +191,12 @@ export function HandoverWizardModal({ projectId, projectName, open, onClose, omH
         </div>
 
         <div className="flex flex-col-reverse gap-2 border-t border-[var(--enterprise-border)] px-5 py-4 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-11 rounded-xl border border-[var(--enterprise-border)] px-4 text-sm font-medium text-[var(--enterprise-text)]"
-          >
+          <EnterpriseButton variant="secondary" size="md" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="button"
-            disabled={saveMut.isPending}
-            onClick={() => saveMut.mutate()}
-            className="min-h-11 rounded-xl bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            {saveMut.isPending ? "Saving…" : "Complete handover →"}
-          </button>
+          </EnterpriseButton>
+          <EnterpriseButton size="md" loading={saveMut.isPending} onClick={() => saveMut.mutate()}>
+            Complete handover →
+          </EnterpriseButton>
         </div>
       </div>
     </div>

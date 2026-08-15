@@ -25,6 +25,7 @@ import {
 import { ISSUE_STATUS_LABEL } from "@/lib/issueStatusStyle";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import { enterpriseButtonClassName } from "@/components/enterprise/EnterpriseButton";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
@@ -221,7 +222,10 @@ export function OmFmDashboardClient({ projectId }: Props) {
             ) : null}
             <Link
               href={`${pBase}/om/handover`}
-              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--enterprise-primary)] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-95"
+              className={enterpriseButtonClassName({
+                variant: "primary",
+                size: "sm",
+              })}
             >
               Handover
               <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />

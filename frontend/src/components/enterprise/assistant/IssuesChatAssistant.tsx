@@ -9,6 +9,7 @@ import { fetchProjectIssuesChat } from "@/lib/api-client";
 import { ProRequiredError } from "@/lib/api-client/errors";
 import { projectScopedBaseFromPathname } from "@/lib/projectScopedPath";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { IssueChatCard } from "./IssueChatCard";
 import { IssuesChatMarkdown, prepareChatMarkdown } from "./IssuesChatMarkdown";
 
@@ -447,14 +448,15 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
                   disabled={sending}
                   className="max-h-32 min-h-11 flex-1 resize-none bg-transparent px-2.5 py-2.5 text-base leading-snug text-[var(--enterprise-text)] outline-none placeholder:text-[var(--enterprise-text-muted)] disabled:opacity-60 sm:text-sm"
                 />
-                <button
+                <EnterpriseButton
                   type="submit"
+                  size="md"
+                  className="h-11 w-11 shrink-0 px-0"
                   disabled={sending || !inputValue.trim()}
-                  className="enterprise-btn-primary inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/40"
                   aria-label="Send"
                 >
                   <Send className="h-4 w-4" aria-hidden />
-                </button>
+                </EnterpriseButton>
               </form>
               <p className="mt-2 px-1 text-center text-[11px] text-[var(--enterprise-text-muted)]">
                 Enter to send · Esc to close

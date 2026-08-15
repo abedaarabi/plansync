@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Sparkles } from "lucide-react";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { BILLING_PLAN_CATALOG, type BillingPlanCatalogEntry } from "@/lib/billingPlanCatalog";
 import { paidPlanLabel, type PaidBillingPlan } from "@/lib/productPricing";
 
@@ -104,20 +105,18 @@ export function BillingPlanCards({
               ))}
             </ul>
 
-            <button
+            <EnterpriseButton
               type="button"
+              variant={plan.highlight || isCurrent ? "primary" : "soft"}
+              size="md"
+              fullWidth
+              className="mt-6"
               disabled={disabled}
+              loading={busy === `checkout-${plan.id}`}
               onClick={onClick}
-              className={
-                isCurrent
-                  ? "mt-6 w-full cursor-default rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5 text-sm font-semibold text-[var(--enterprise-text-muted)]"
-                  : plan.highlight
-                    ? "enterprise-btn-primary mt-6 w-full rounded-md px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
-                    : "enterprise-btn-secondary mt-6 w-full rounded-md px-3 py-2.5 text-sm font-semibold disabled:opacity-60"
-              }
             >
               {ctaLabel(plan, currentPlan, busy, canChangePlan)}
-            </button>
+            </EnterpriseButton>
 
             {!hasStripeCustomer && !isCurrent ? (
               <p className="mt-2 text-center text-[11px] text-[var(--enterprise-text-muted)]">

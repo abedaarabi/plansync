@@ -66,7 +66,7 @@ export function DashboardActivityChart({
   const [hovered, setHovered] = useState<number | null>(null);
 
   const legendDaily =
-    caption ?? "Daily events use your workspace primary color; the dashed line is a 7-day average.";
+    caption ?? "Solid line is the daily count; the dashed line is a 7-day average.";
 
   const stats = useMemo(() => {
     if (!data.length) return null;
@@ -238,12 +238,8 @@ export function DashboardActivityChart({
           <title>{ariaLabel}</title>
           <defs>
             <linearGradient id={`${gradId}-dash-area`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--enterprise-primary)" stopOpacity="0.22" />
-              <stop offset="100%" stopColor="var(--enterprise-primary)" stopOpacity="0" />
-            </linearGradient>
-            <linearGradient id={`${gradId}-dash-line`} x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="var(--enterprise-primary)" stopOpacity="0.75" />
-              <stop offset="100%" stopColor="var(--enterprise-primary)" stopOpacity="1" />
+              <stop offset="0%" stopColor="var(--enterprise-chart-1)" stopOpacity="0.14" />
+              <stop offset="100%" stopColor="var(--enterprise-chart-1)" stopOpacity="0" />
             </linearGradient>
           </defs>
 
@@ -254,9 +250,9 @@ export function DashboardActivityChart({
                 y1={y}
                 x2={w - pad.r}
                 y2={y}
-                stroke="var(--enterprise-border)"
+                stroke="var(--enterprise-chart-grid)"
                 strokeWidth="1"
-                strokeOpacity={t === 1 ? 0.45 : 0.14}
+                strokeOpacity={t === 1 ? 0.9 : 0.4}
               />
               <text
                 x={pad.l - 8}
@@ -279,8 +275,8 @@ export function DashboardActivityChart({
           <path
             d={lineD}
             fill="none"
-            stroke={`url(#${gradId}-dash-line)`}
-            strokeWidth={compact ? "2" : "2.5"}
+            stroke="var(--enterprise-chart-1)"
+            strokeWidth={compact ? "2" : "2.25"}
             strokeLinecap="round"
             strokeLinejoin="round"
             pointerEvents="none"
@@ -289,11 +285,10 @@ export function DashboardActivityChart({
           <path
             d={avgD}
             fill="none"
-            stroke="var(--enterprise-success)"
-            strokeWidth={compact ? "1.5" : "2"}
+            stroke="var(--enterprise-chart-2)"
+            strokeWidth={compact ? "1.5" : "1.75"}
             strokeDasharray="6 5"
             strokeLinecap="round"
-            opacity={0.92}
             pointerEvents="none"
           />
 
@@ -303,7 +298,7 @@ export function DashboardActivityChart({
               y1={pad.t}
               x2={hiPoint.x}
               y2={pad.t + innerH}
-              stroke="var(--enterprise-primary)"
+              stroke="var(--enterprise-chart-1)"
               strokeWidth="1"
               strokeOpacity={0.35}
               strokeDasharray="4 3"
@@ -316,10 +311,10 @@ export function DashboardActivityChart({
               key={p.date}
               cx={p.x}
               cy={p.y}
-              r={compact ? (hi === i ? 4.25 : 2.75) : hi === i ? 5.5 : 3.5}
+              r={compact ? (hi === i ? 4.25 : 2.25) : hi === i ? 5.25 : 2.75}
               fill="var(--enterprise-surface)"
-              stroke="var(--enterprise-primary)"
-              strokeWidth={compact ? (hi === i ? 2 : 1.5) : hi === i ? 2.5 : 2}
+              stroke="var(--enterprise-chart-1)"
+              strokeWidth={compact ? (hi === i ? 2 : 1.5) : hi === i ? 2.5 : 1.75}
               pointerEvents="none"
               className="transition-[r,stroke-width] duration-150 ease-out"
             />
@@ -377,14 +372,14 @@ export function DashboardActivityChart({
               {formatDayLong(data[hi].date)}
             </p>
             <p className="mt-1 text-[12px] tabular-nums text-[var(--enterprise-text-muted)]">
-              <span className="font-semibold text-[var(--enterprise-primary)]">
+              <span className="font-semibold text-[var(--enterprise-chart-1)]">
                 {data[hi].count}
               </span>{" "}
               events
             </p>
             <p className="mt-0.5 text-[11px] tabular-nums text-[var(--enterprise-text-muted)]">
               7-day avg:{" "}
-              <span className="font-medium text-[var(--enterprise-success)]">
+              <span className="font-medium text-[var(--enterprise-chart-2)]">
                 {hiAvg.toFixed(1)}
               </span>
             </p>
@@ -397,14 +392,14 @@ export function DashboardActivityChart({
       >
         <span className="inline-flex items-center gap-2">
           <span
-            className="h-2 w-5 shrink-0 rounded-full bg-[var(--enterprise-primary)]"
+            className="h-2 w-5 shrink-0 rounded-full bg-[var(--enterprise-chart-1)]"
             aria-hidden
           />
           Daily count
         </span>
         <span className="inline-flex items-center gap-2">
           <span
-            className="h-0.5 w-5 border-t-2 border-dashed border-[var(--enterprise-success)]"
+            className="h-0.5 w-5 border-t-2 border-dashed border-[var(--enterprise-chart-2)]"
             aria-hidden
           />
           7-day average

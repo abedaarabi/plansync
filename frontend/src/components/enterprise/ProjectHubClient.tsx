@@ -289,13 +289,10 @@ export function ProjectHubClient() {
   const loading = ctxLoading || (Boolean(wid && isPro) && projectsPending);
 
   // fallow-ignore-next-line complexity
-  async function onCreateProject(e: React.FormEvent) {
-    e.preventDefault();
-    if (!wid || !projectName.trim() || !startDate || !endDate || !isAdmin) return;
-    if (endDate < startDate) {
-      setError("End date must be on or after the start date.");
-      return;
-    }
+  async function onCreateProject(
+    basics: Pick<NewProjectDialogValues, "projectName" | "startDate" | "endDate">,
+  ) {
+    if (!wid || !isAdmin) return;
     setSaving(true);
     setError(null);
     const ifs = initialFolderStructure;
@@ -307,9 +304,9 @@ export function ProjectHubClient() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: projectName.trim(),
-          startDate,
-          endDate,
+          name: basics.projectName.trim(),
+          startDate: basics.startDate,
+          endDate: basics.endDate,
           currency,
           measurementSystem,
           projectNumber: projectNumber.trim() || undefined,

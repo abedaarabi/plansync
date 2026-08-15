@@ -3,9 +3,19 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquareText } from "lucide-react";
+import { z } from "zod";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
 import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import {
+  EnterpriseInput,
+  EnterpriseSelect,
+  EnterpriseTextarea,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
+import { RFI_PRIORITY_OPTIONS, RFI_RISK_OPTIONS } from "@/components/enterprise/rfiFormOptions";
 import { RfiRelatedIssuesPicker } from "@/components/enterprise/RfiRelatedIssuesPicker";
 import {
   groupSheetRows,
@@ -19,12 +29,7 @@ import {
   ProRequiredError,
   type RfiRow,
 } from "@/lib/api-client";
-import {
-  MOBILE_FIELD_INPUT,
-  MOBILE_FIELD_LABEL,
-  MOBILE_FIELD_TEXTAREA,
-  MOBILE_FORM_SECTION,
-} from "@/lib/mobileFormStyles";
+import { MOBILE_FORM_SECTION } from "@/lib/mobileFormStyles";
 import { qk } from "@/lib/queryKeys";
 
 type Props = {
@@ -34,6 +39,34 @@ type Props = {
   isPro: boolean;
   workspaceId?: string;
   onCreated: (rfi: RfiRow) => void;
+};
+
+export const rfiCreateSchema = z.object({
+  dueYmd: z.string(),
+  fromDiscipline: z.string(),
+  pageNum: z
+    .string()
+    .refine((value) => !value || (Number.isInteger(Number(value)) && Number(value) > 0), {
+      message: "Enter a whole page number greater than zero.",
+    }),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
+  question: z.string().trim().min(1, "Enter the question that needs an official answer."),
+  risk: z.enum(["", "low", "med", "high"]),
+  sheetPick: z.string(),
+  title: z.string().trim().min(1, "Enter a short RFI title."),
+});
+
+type RfiCreateValues = z.infer<typeof rfiCreateSchema>;
+
+const RFI_CREATE_DEFAULTS: RfiCreateValues = {
+  dueYmd: "",
+  fromDiscipline: "",
+  pageNum: "",
+  priority: "MEDIUM",
+  question: "",
+  risk: "",
+  sheetPick: "",
+  title: "",
 };
 
 // fallow-ignore-next-line complexity
@@ -46,31 +79,17 @@ export function RfiCreateSlideOver({
   onCreated,
 }: Props) {
   const qc = useQueryClient();
-  const [title, setTitle] = useState("");
-  const [question, setQuestion] = useState("");
-  const [fromDiscipline, setFromDiscipline] = useState("");
+  const form = useEnterpriseForm(rfiCreateSchema, RFI_CREATE_DEFAULTS);
   const [assignUserIds, setAssignUserIds] = useState<string[]>([]);
-  const [dueYmd, setDueYmd] = useState("");
-  const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH">("MEDIUM");
-  const [risk, setRisk] = useState<"" | "low" | "med" | "high">("");
   const [issueIds, setIssueIds] = useState<string[]>([]);
-  const [sheetPick, setSheetPick] = useState("");
-  const [pageNum, setPageNum] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
 
   const reset = useCallback(() => {
-    setTitle("");
-    setQuestion("");
-    setFromDiscipline("");
+    form.reset(RFI_CREATE_DEFAULTS);
     setAssignUserIds([]);
-    setDueYmd("");
-    setPriority("MEDIUM");
-    setRisk("");
     setIssueIds([]);
-    setSheetPick("");
-    setPageNum("");
     setMsg(null);
-  }, []);
+  }, [form]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -108,25 +127,25 @@ export function RfiCreateSlideOver({
   }, [team]);
 
   const createMut = useMutation({
-    mutationFn: () => {
+    mutationFn: (values: RfiCreateValues) => {
       let fileId: string | undefined;
       let fileVersionId: string | undefined;
-      if (issueIds.length === 0 && sheetPick.includes("|")) {
-        const [f, v] = sheetPick.split("|");
+      if (issueIds.length === 0 && values.sheetPick.includes("|")) {
+        const [f, v] = values.sheetPick.split("|");
         if (f && v) {
           fileId = f;
           fileVersionId = v;
         }
       }
-      const pn = pageNum.trim() ? parseInt(pageNum, 10) : undefined;
+      const pn = values.pageNum.trim() ? parseInt(values.pageNum, 10) : undefined;
       return createProjectRfi(projectId, {
-        title: title.trim(),
-        description: question.trim(),
-        fromDiscipline: fromDiscipline.trim() || undefined,
+        title: values.title.trim(),
+        description: values.question.trim(),
+        fromDiscipline: values.fromDiscipline.trim() || undefined,
         assigneeUserIds: assignUserIds.length > 0 ? assignUserIds : undefined,
-        dueDate: dueYmd.trim() ? dueYmd.trim() : null,
-        priority,
-        risk: risk === "" ? null : risk,
+        dueDate: values.dueYmd.trim() ? values.dueYmd.trim() : null,
+        priority: values.priority,
+        risk: values.risk === "" ? null : values.risk,
         issueIds: issueIds.length > 0 ? issueIds : undefined,
         fileId,
         fileVersionId,
@@ -149,11 +168,8 @@ export function RfiCreateSlideOver({
       open={open}
       onClose={handleClose}
       form={{
-        onSubmit: (e) => {
-          e.preventDefault();
-          if (!title.trim() || !question.trim()) return;
-          createMut.mutate();
-        },
+        noValidate: true,
+        onSubmit: form.handleSubmit((values) => createMut.mutate(values)),
       }}
       ariaLabelledBy="rfi-create-title"
       header={
@@ -169,63 +185,58 @@ export function RfiCreateSlideOver({
           <EnterpriseButton type="button" variant="secondary" size="sm" onClick={handleClose}>
             Cancel
           </EnterpriseButton>
-          <EnterpriseButton
-            type="submit"
-            size="sm"
-            loading={createMut.isPending}
-            disabled={!title.trim() || !question.trim()}
-          >
+          <EnterpriseButton type="submit" size="sm" loading={createMut.isPending}>
             {createMut.isPending ? "Creating…" : "Create RFI"}
           </EnterpriseButton>
         </>
       }
     >
-      <div className="space-y-4">
+      <EnterpriseForm
+        form={form}
+        formId="rfi-create-form"
+        onSubmit={(values) => createMut.mutate(values)}
+        className="space-y-4"
+      >
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Details</p>
-          <div>
-            <label htmlFor="rfi-title" className={MOBILE_FIELD_LABEL}>
-              Title *
-            </label>
-            <input
-              id="rfi-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-              required
-              placeholder="Wall thickness clarification"
-            />
-          </div>
-          <div>
-            <label htmlFor="rfi-question" className={MOBILE_FIELD_LABEL}>
-              Question *
-            </label>
-            <textarea
-              id="rfi-question"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              rows={4}
-              required
-              className={MOBILE_FIELD_TEXTAREA}
-              placeholder="Describe what needs an official answer…"
-            />
-          </div>
+          <EnterpriseFormField<RfiCreateValues> name="title" label="Title" required>
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                placeholder="Wall thickness clarification"
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<RfiCreateValues> name="question" label="Question" required>
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseTextarea
+                {...field}
+                id={id}
+                rows={4}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                placeholder="Describe what needs an official answer…"
+              />
+            )}
+          </EnterpriseFormField>
         </div>
         <div className={`${MOBILE_FORM_SECTION} grid gap-4`}>
-          <div>
-            <label htmlFor="rfi-from-discipline" className={MOBILE_FIELD_LABEL}>
-              From discipline
-            </label>
-            <input
-              id="rfi-from-discipline"
-              value={fromDiscipline}
-              onChange={(e) => setFromDiscipline(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-              placeholder="GC, Structural, MEP…"
-            />
-          </div>
+          <EnterpriseFormField<RfiCreateValues> name="fromDiscipline" label="From discipline">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                placeholder="GC, Structural, MEP…"
+              />
+            )}
+          </EnterpriseFormField>
           <div className="sm:col-span-2">
-            <label className={MOBILE_FIELD_LABEL}>Responders (optional)</label>
+            <p className="enterprise-field-label">Responders (optional)</p>
             <div className="mt-1">
               {assignablePickRows.length === 0 ? (
                 <p className="text-xs text-[var(--enterprise-text-muted)]">No members yet.</p>
@@ -246,61 +257,61 @@ export function RfiCreateSlideOver({
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label htmlFor="rfi-due" className={MOBILE_FIELD_LABEL}>
-              Due date
-            </label>
-            <input
-              id="rfi-due"
-              type="date"
-              value={dueYmd}
-              onChange={(e) => setDueYmd(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-            />
-          </div>
-          <div>
-            <label htmlFor="rfi-priority" className={MOBILE_FIELD_LABEL}>
-              Priority
-            </label>
-            <select
-              id="rfi-priority"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as typeof priority)}
-              className={MOBILE_FIELD_INPUT}
-            >
-              <option value="LOW">Low</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="HIGH">High</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="rfi-risk" className={MOBILE_FIELD_LABEL}>
-              Risk
-            </label>
-            <select
-              id="rfi-risk"
-              value={risk}
-              onChange={(e) => setRisk(e.target.value as typeof risk)}
-              className={MOBILE_FIELD_INPUT}
-            >
-              <option value="">—</option>
-              <option value="low">Low</option>
-              <option value="med">Medium</option>
-              <option value="high">High</option>
-            </select>
-          </div>
+          <EnterpriseFormField<RfiCreateValues> name="dueYmd" label="Due date">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                type="date"
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<RfiCreateValues> name="priority" label="Priority">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              >
+                {RFI_PRIORITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<RfiCreateValues> name="risk" label="Risk">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              >
+                {RFI_RISK_OPTIONS.map((opt) => (
+                  <option key={opt.value || "none"} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
         </div>
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
             Related issues
           </p>
-          <label className={MOBILE_FIELD_LABEL}>Link site issues (optional)</label>
+          <p className="enterprise-field-label">Link site issues (optional)</p>
           <RfiRelatedIssuesPicker
             issues={issues}
             value={issueIds}
             onChange={(ids) => {
               setIssueIds(ids);
-              if (ids.length > 0) setSheetPick("");
+              if (ids.length > 0) form.setValue("sheetPick", "");
             }}
             disabled={createMut.isPending}
           />
@@ -313,46 +324,51 @@ export function RfiCreateSlideOver({
         {issueIds.length === 0 ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label htmlFor="rfi-sheet" className={MOBILE_FIELD_LABEL}>
-                Link to drawing (optional)
-              </label>
-              <select
-                id="rfi-sheet"
-                value={sheetPick}
-                onChange={(e) => setSheetPick(e.target.value)}
-                className={MOBILE_FIELD_INPUT}
+              <EnterpriseFormField<RfiCreateValues>
+                name="sheetPick"
+                label="Link to drawing (optional)"
               >
-                <option value="">— Select sheet & revision —</option>
-                {sheetGrouped.map(({ group, items }) => (
-                  <optgroup key={group} label={group}>
-                    {items.map(({ file, version }) => (
-                      <option key={`${file.id}|${version.id}`} value={`${file.id}|${version.id}`}>
-                        {file.name} · v{version.version}
-                      </option>
+                {({ describedBy, field, id, invalid }) => (
+                  <EnterpriseSelect
+                    {...field}
+                    id={id}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid}
+                  >
+                    <option value="">— Select sheet & revision —</option>
+                    {sheetGrouped.map(({ group, items }) => (
+                      <optgroup key={group} label={group}>
+                        {items.map(({ file, version }) => (
+                          <option
+                            key={`${file.id}|${version.id}`}
+                            value={`${file.id}|${version.id}`}
+                          >
+                            {file.name} · v{version.version}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
-                  </optgroup>
-                ))}
-              </select>
+                  </EnterpriseSelect>
+                )}
+              </EnterpriseFormField>
               {project && sheetGrouped.length === 0 ? (
                 <p className="mt-1 text-xs text-[var(--enterprise-text-muted)]">
                   No drawings in this project yet. Add PDFs under Files, then link a sheet here.
                 </p>
               ) : null}
             </div>
-            <div>
-              <label htmlFor="rfi-page" className={MOBILE_FIELD_LABEL}>
-                Page (optional)
-              </label>
-              <input
-                id="rfi-page"
-                type="number"
-                min={1}
-                value={pageNum}
-                onChange={(e) => setPageNum(e.target.value)}
-                className={MOBILE_FIELD_INPUT}
-                placeholder="1"
-              />
-            </div>
+            <EnterpriseFormField<RfiCreateValues> name="pageNum" label="Page (optional)">
+              {({ describedBy, field, id, invalid }) => (
+                <EnterpriseInput
+                  {...field}
+                  id={id}
+                  inputMode="numeric"
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                  placeholder="1"
+                />
+              )}
+            </EnterpriseFormField>
           </div>
         ) : null}
         {msg ? (
@@ -360,7 +376,7 @@ export function RfiCreateSlideOver({
             {msg}
           </p>
         ) : null}
-      </div>
+      </EnterpriseForm>
     </EnterpriseSlideOver>
   );
 }

@@ -46,6 +46,7 @@ import {
 import { qk } from "@/lib/queryKeys";
 import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 import { EnterpriseLoadingState } from "../EnterpriseLoadingState";
+import { enterpriseButtonClassName } from "../EnterpriseButton";
 import { useEnterpriseWorkspace } from "../EnterpriseWorkspaceContext";
 import { OmEmptyState } from "../OmEmptyState";
 import { OmSubPageHeader } from "../OmSubPageHeader";
@@ -78,19 +79,74 @@ function phaseFromStatus(status: BuildingAsset["status"]): BimJobPhase {
   return "registering";
 }
 
+function BuildingWorkspaceActions({
+  canPublish,
+  isReadyOrNeedsUpdate,
+  onEdit,
+  onPublish,
+  onView,
+  selectedReadyIfcCount,
+}: {
+  canPublish: boolean;
+  isReadyOrNeedsUpdate: boolean;
+  onEdit: () => void;
+  onPublish: () => void;
+  onView: () => void;
+  selectedReadyIfcCount: number;
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        className={enterpriseButtonClassName({
+          variant: "soft",
+          size: "sm",
+          className: "mobile-touch-target",
+        })}
+        onClick={onEdit}
+      >
+        <Pencil className="h-3.5 w-3.5" aria-hidden />
+        {isReadyOrNeedsUpdate ? "Edit mappings" : "Continue setup"}
+      </button>
+      {isReadyOrNeedsUpdate ? (
+        <button
+          type="button"
+          className={enterpriseButtonClassName({
+            variant: "primary",
+            size: "sm",
+            className: "mobile-touch-target",
+          })}
+          onClick={onView}
+        >
+          <PanelsTopLeft className="h-3.5 w-3.5" aria-hidden />
+          {selectedReadyIfcCount >= 2 ? `Open federated (${selectedReadyIfcCount})` : "Open 3D"}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={enterpriseButtonClassName({
+            variant: "primary",
+            size: "sm",
+            className: "mobile-touch-target",
+          })}
+          disabled={!canPublish}
+          onClick={onPublish}
+        >
+          <Rocket className="h-3.5 w-3.5" aria-hidden />
+          Publish
+        </button>
+      )}
+    </>
+  );
+}
+
 function statusBadgeClass(status: BuildingPublishStatus): string {
   if (status === "ready") return "enterprise-badge-success";
   if (status === "needs_update") return "enterprise-badge-warning";
   return "enterprise-badge-neutral";
 }
 
-const BTN_SECONDARY =
-  "enterprise-btn-secondary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium";
-const BTN_GHOST =
-  "mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--enterprise-primary)] transition hover:bg-[var(--enterprise-primary-soft)]";
-const BTN_PRIMARY =
-  "enterprise-btn-primary mobile-touch-target inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-semibold";
-const BTN_WARNING =
+const WARNING_BTN =
   "mobile-touch-target inline-flex items-center gap-1.5 rounded-md border border-[var(--enterprise-semantic-warning-border)] bg-[var(--enterprise-semantic-warning-bg)] px-3 py-1.5 text-sm font-medium text-[var(--enterprise-semantic-warning-text)] transition hover:opacity-90";
 
 type BuildingTab = "overview" | "levels" | "clashes";
@@ -376,42 +432,30 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
   const headerActions =
     assets.length > 0 ? (
       <div className="flex flex-wrap items-center gap-1.5">
-        <button type="button" className={BTN_GHOST} onClick={() => setBrowserOpen(true)}>
+        <button
+          type="button"
+          className={enterpriseButtonClassName({
+            variant: "ghost",
+            size: "sm",
+            className: "mobile-touch-target",
+          })}
+          onClick={() => setBrowserOpen(true)}
+        >
           <Upload className="h-3.5 w-3.5" aria-hidden />
           Add files
         </button>
-        {primaryReadyIfc && (isReady || needsUpdate) ? (
-          <>
-            <button type="button" className={BTN_SECONDARY} onClick={() => openWorkspace("edit")}>
-              <Pencil className="h-3.5 w-3.5" aria-hidden />
-              Edit mappings
-            </button>
-            <button type="button" className={BTN_PRIMARY} onClick={() => openWorkspace("view")}>
-              <PanelsTopLeft className="h-3.5 w-3.5" aria-hidden />
-              {selectedReadyIfc.length >= 2
-                ? `Open federated (${selectedReadyIfc.length})`
-                : "Open 3D"}
-            </button>
-          </>
-        ) : primaryReadyIfc ? (
-          <>
-            <button type="button" className={BTN_SECONDARY} onClick={() => openWorkspace("edit")}>
-              <Pencil className="h-3.5 w-3.5" aria-hidden />
-              Continue setup
-            </button>
-            <button
-              type="button"
-              className={BTN_PRIMARY}
-              disabled={!canPublish}
-              onClick={() => setPublishOpen(true)}
-            >
-              <Rocket className="h-3.5 w-3.5" aria-hidden />
-              Publish
-            </button>
-          </>
+        {primaryReadyIfc ? (
+          <BuildingWorkspaceActions
+            canPublish={canPublish}
+            isReadyOrNeedsUpdate={isReady || needsUpdate}
+            onEdit={() => openWorkspace("edit")}
+            onPublish={() => setPublishOpen(true)}
+            onView={() => openWorkspace("view")}
+            selectedReadyIfcCount={selectedReadyIfc.length}
+          />
         ) : null}
         {needsUpdate && primaryReadyIfc ? (
-          <button type="button" className={BTN_WARNING} onClick={() => setPublishOpen(true)}>
+          <button type="button" className={WARNING_BTN} onClick={() => setPublishOpen(true)}>
             <Rocket className="h-3.5 w-3.5" aria-hidden />
             Publish update
           </button>
@@ -547,7 +591,11 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
                     <div className="flex flex-wrap items-center justify-center gap-2">
                       <button
                         type="button"
-                        className={BTN_PRIMARY}
+                        className={enterpriseButtonClassName({
+                          variant: "primary",
+                          size: "sm",
+                          className: "mobile-touch-target",
+                        })}
                         onClick={() => setBrowserOpen(true)}
                       >
                         <Plus className="h-3.5 w-3.5" aria-hidden />
@@ -555,7 +603,11 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
                       </button>
                       <button
                         type="button"
-                        className={BTN_SECONDARY}
+                        className={enterpriseButtonClassName({
+                          variant: "soft",
+                          size: "sm",
+                          className: "mobile-touch-target",
+                        })}
                         onClick={() => setActiveTab("levels")}
                       >
                         <Layers className="h-3.5 w-3.5" aria-hidden />
@@ -610,7 +662,11 @@ export function BuildingDetailClient({ projectId, locationId, buildingId, worksp
                     </div>
                     <button
                       type="button"
-                      className={BTN_GHOST}
+                      className={enterpriseButtonClassName({
+                        variant: "ghost",
+                        size: "sm",
+                        className: "mobile-touch-target",
+                      })}
                       onClick={() => setBrowserOpen(true)}
                     >
                       <Plus className="h-3.5 w-3.5" aria-hidden />

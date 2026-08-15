@@ -30,6 +30,10 @@ import {
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
+import {
+  EnterpriseButton,
+  enterpriseButtonClassName,
+} from "@/components/enterprise/EnterpriseButton";
 import { isSuperAdmin, isWorkspaceManager } from "@/lib/workspaceRole";
 import { isWorkspaceOmBillingClient } from "@/lib/workspaceSubscription";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
@@ -395,16 +399,16 @@ export function ProjectSettingsClient({ projectId }: Props) {
                 enables Operations mode and keeps schedule, issues, punch, field reporting, and
                 O&amp;M active while turning off RFIs, takeoff, and proposals.
               </p>
-              <button
+              <EnterpriseButton
                 type="button"
-                disabled={datacenterDefaultsMutation.isPending}
+                variant="soft"
+                size="sm"
+                className="mt-2.5"
+                loading={datacenterDefaultsMutation.isPending}
                 onClick={() => datacenterDefaultsMutation.mutate()}
-                className="enterprise-btn-secondary mt-2.5 inline-flex min-h-9 items-center rounded-lg px-3 text-xs font-semibold disabled:opacity-50"
               >
-                {datacenterDefaultsMutation.isPending
-                  ? "Applying data center defaults…"
-                  : "Apply data center defaults"}
-              </button>
+                Apply data center defaults
+              </EnterpriseButton>
             </div>
             <SettingsToggleRow
               label="Issues"
@@ -464,20 +468,21 @@ export function ProjectSettingsClient({ projectId }: Props) {
               <code className="mobile-table-wrap block w-full overflow-x-auto rounded-lg border border-[var(--enterprise-semantic-success-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-xs text-[var(--enterprise-text)]">
                 {newApiKeyPlainText}
               </code>
-              <button
+              <EnterpriseButton
                 type="button"
-                className="enterprise-btn-primary inline-flex min-h-9 items-center justify-center rounded-lg px-3 text-xs font-semibold"
+                size="sm"
                 onClick={() => void navigator.clipboard.writeText(newApiKeyPlainText)}
               >
                 Copy
-              </button>
-              <button
+              </EnterpriseButton>
+              <EnterpriseButton
                 type="button"
-                className="enterprise-btn-secondary inline-flex min-h-9 items-center justify-center rounded-lg px-3 text-xs font-semibold"
+                variant="soft"
+                size="sm"
                 onClick={() => setNewApiKeyPlainText(null)}
               >
                 Dismiss
-              </button>
+              </EnterpriseButton>
             </div>
           </div>
         ) : null}
@@ -511,10 +516,10 @@ export function ProjectSettingsClient({ projectId }: Props) {
               maxLength={120}
             />
           </div>
-          <button
+          <EnterpriseButton
             type="button"
-            className="enterprise-btn-primary inline-flex min-h-10 items-center justify-center rounded-lg px-3.5 text-xs font-semibold disabled:opacity-50"
-            disabled={createApiKeyMutation.isPending}
+            size="md"
+            loading={createApiKeyMutation.isPending}
             onClick={() =>
               createApiKeyMutation.mutate({
                 name: apiKeyNameDraft.trim() || "Integration key",
@@ -523,8 +528,8 @@ export function ProjectSettingsClient({ projectId }: Props) {
               })
             }
           >
-            {createApiKeyMutation.isPending ? "Creating…" : "Create key"}
-          </button>
+            Create key
+          </EnterpriseButton>
         </div>
 
         <div className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)]/50 p-3">
@@ -641,9 +646,10 @@ export function ProjectSettingsClient({ projectId }: Props) {
               className={OM_COMPACT_INPUT}
             />
           </div>
-          <button
+          <EnterpriseButton
             type="button"
-            className="enterprise-btn-primary inline-flex min-h-10 items-center justify-center rounded-lg px-3.5 text-xs font-semibold disabled:opacity-50"
+            size="md"
+            loading={createWebhookMutation.isPending}
             disabled={createWebhookMutation.isPending || !webhookUrlDraft.trim()}
             onClick={() =>
               createWebhookMutation.mutate({
@@ -656,7 +662,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
             }
           >
             Add webhook
-          </button>
+          </EnterpriseButton>
         </div>
         <div className="space-y-2">
           {webhooksQuery.data?.items?.length ? (
@@ -688,15 +694,16 @@ export function ProjectSettingsClient({ projectId }: Props) {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <button
+                  <EnterpriseButton
                     type="button"
-                    className="enterprise-btn-secondary inline-flex min-h-9 items-center justify-center rounded-lg px-3 text-xs font-semibold"
+                    variant="soft"
+                    size="sm"
                     onClick={() =>
                       toggleWebhookMutation.mutate({ webhookId: w.id, isActive: !w.isActive })
                     }
                   >
                     {w.isActive ? "Disable" : "Enable"}
-                  </button>
+                  </EnterpriseButton>
                   <button
                     type="button"
                     className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--enterprise-semantic-danger-border)] px-3 text-xs font-semibold text-[var(--enterprise-semantic-danger-text)]"
@@ -755,7 +762,7 @@ export function ProjectSettingsClient({ projectId }: Props) {
               {isSuperAdmin(primary?.role) ? (
                 <Link
                   href={billingHref}
-                  className="enterprise-btn-primary inline-flex min-h-10 items-center justify-center rounded-lg px-4 text-xs font-semibold"
+                  className={enterpriseButtonClassName({ variant: "primary", size: "md" })}
                 >
                   Open Plan &amp; billing
                 </Link>
@@ -790,7 +797,11 @@ export function ProjectSettingsClient({ projectId }: Props) {
             {m.issues ? (
               <Link
                 href={`/projects/${projectId}/issues?issueKind=CONSTRUCTION`}
-                className="enterprise-btn-secondary mt-2 inline-flex min-h-10 items-center justify-center rounded-lg px-3 text-xs font-semibold"
+                className={enterpriseButtonClassName({
+                  variant: "soft",
+                  size: "md",
+                  className: "mt-2",
+                })}
               >
                 Open Construction issues
               </Link>
@@ -845,8 +856,11 @@ export function ProjectSettingsClient({ projectId }: Props) {
                       placeholder="e.g. Report a maintenance issue for this building"
                       className={`${OM_COMPACT_INPUT} max-w-xl`}
                     />
-                    <button
+                    <EnterpriseButton
                       type="button"
+                      size="md"
+                      className="shrink-0"
+                      loading={mutation.isPending}
                       disabled={
                         mutation.isPending ||
                         occupantHeadlineDraft.trim() ===
@@ -865,10 +879,9 @@ export function ProjectSettingsClient({ projectId }: Props) {
                           },
                         })
                       }
-                      className="enterprise-btn-primary inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-semibold disabled:opacity-50"
                     >
                       Save headline
-                    </button>
+                    </EnterpriseButton>
                   </div>
                 </div>
               </>

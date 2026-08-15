@@ -4,13 +4,18 @@ import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { MapPin, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { IssueReferencePhotosField } from "@/components/enterprise/IssueReferencePhotosField";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
 import {
-  EnterpriseSlideOver,
-  SlideOverHeader,
-  SLIDE_OVER_BTN_PRIMARY,
-  SLIDE_OVER_BTN_SECONDARY,
-} from "@/components/enterprise/EnterpriseSlideOver";
+  EnterpriseInput,
+  EnterpriseSelect,
+  EnterpriseTextarea,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import {
   formatIssueLockHint,
   patchIssue,
@@ -25,15 +30,37 @@ import {
   ISSUE_STATUS_ORDER,
   issueDateToInputValue,
 } from "@/lib/issueStatusStyle";
-import {
-  MOBILE_FIELD_INPUT,
-  MOBILE_FIELD_LABEL,
-  MOBILE_FIELD_SELECT,
-  MOBILE_FIELD_TEXTAREA,
-  MOBILE_FORM_SECTION,
-} from "@/lib/mobileFormStyles";
+import { MOBILE_FORM_SECTION } from "@/lib/mobileFormStyles";
 
 type WorkspaceMember = { userId: string; name: string | null; email: string | null };
+
+export const issueEditSchema = z.object({
+  assigneeId: z.string(),
+  description: z.string(),
+  dueDate: z.string(),
+  location: z.string(),
+  pageNum: z
+    .string()
+    .refine((value) => !value || (Number.isInteger(Number(value)) && Number(value) > 0), {
+      message: "Enter a whole page number greater than zero.",
+    }),
+  priority: z.string(),
+  status: z.string(),
+  title: z.string().trim().min(1, "Enter a short issue title."),
+});
+
+type IssueEditValues = z.infer<typeof issueEditSchema>;
+
+const ISSUE_EDIT_DEFAULTS: IssueEditValues = {
+  assigneeId: "",
+  description: "",
+  dueDate: "",
+  location: "",
+  pageNum: "",
+  priority: "MEDIUM",
+  status: "OPEN",
+  title: "",
+};
 
 type Props = {
   open: boolean;
@@ -51,43 +78,38 @@ function issueSheetLabel(issue: IssueRow): string {
 }
 
 export function IssueEditSlideOver({ open, issue, onClose, members, onSaved }: Props) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [pageNum, setPageNum] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
-  const [status, setStatus] = useState("OPEN");
-  const [priority, setPriority] = useState("MEDIUM");
-  const [dueDate, setDueDate] = useState("");
-  const [location, setLocation] = useState("");
+  const form = useEnterpriseForm(issueEditSchema, ISSUE_EDIT_DEFAULTS);
   const [photos, setPhotos] = useState<IssueReferencePhotoRow[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !issue) return;
-    setTitle(issue.title);
-    setDescription(issue.description ?? "");
-    setPageNum(issue.pageNumber != null ? String(issue.pageNumber) : "");
-    setAssigneeId(issue.assigneeId ?? "");
-    setStatus(issue.status);
-    setPriority(issue.priority ?? "MEDIUM");
-    setDueDate(issueDateToInputValue(issue.dueDate));
-    setLocation(issue.location ?? "");
+    form.reset({
+      assigneeId: issue.assigneeId ?? "",
+      description: issue.description ?? "",
+      dueDate: issueDateToInputValue(issue.dueDate),
+      location: issue.location ?? "",
+      pageNum: issue.pageNumber != null ? String(issue.pageNumber) : "",
+      priority: issue.priority ?? "MEDIUM",
+      status: issue.status,
+      title: issue.title,
+    });
     setPhotos(issue.referencePhotos ?? []);
     setMsg(null);
-  }, [open, issue]);
+  }, [form, issue, open]);
 
   const saveMut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: IssueEditValues) => {
       if (!issue) throw new Error("Missing issue.");
-      const pn = pageNum.trim() ? parseInt(pageNum, 10) : null;
+      const pn = values.pageNum.trim() ? parseInt(values.pageNum, 10) : null;
       return patchIssue(issue.id, {
-        title: title.trim(),
-        description: description.trim() || null,
-        assigneeId: assigneeId || null,
-        status,
-        priority,
-        dueDate: dueDate.trim() || null,
-        location: location.trim() || null,
+        title: values.title.trim(),
+        description: values.description.trim() || null,
+        assigneeId: values.assigneeId || null,
+        status: values.status,
+        priority: values.priority,
+        dueDate: values.dueDate.trim() || null,
+        location: values.location.trim() || null,
         ...(issue.fileVersionId
           ? { pageNumber: pn != null && Number.isFinite(pn) ? pn : null }
           : {}),
@@ -115,11 +137,8 @@ export function IssueEditSlideOver({ open, issue, onClose, members, onSaved }: P
       open={open}
       onClose={onClose}
       form={{
-        onSubmit: (e) => {
-          e.preventDefault();
-          if (!title.trim()) return;
-          saveMut.mutate();
-        },
+        noValidate: true,
+        onSubmit: form.handleSubmit((values) => saveMut.mutate(values)),
       }}
       ariaLabelledBy="issue-edit-title"
       header={
@@ -132,20 +151,21 @@ export function IssueEditSlideOver({ open, issue, onClose, members, onSaved }: P
       }
       footer={
         <>
-          <button type="button" onClick={onClose} className={SLIDE_OVER_BTN_SECONDARY}>
+          <EnterpriseButton type="button" variant="secondary" size="sm" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saveMut.isPending || !title.trim()}
-            className={SLIDE_OVER_BTN_PRIMARY}
-          >
+          </EnterpriseButton>
+          <EnterpriseButton type="submit" size="sm" loading={saveMut.isPending}>
             {saveMut.isPending ? "Saving…" : "Save changes"}
-          </button>
+          </EnterpriseButton>
         </>
       }
     >
-      <div className="space-y-4">
+      <EnterpriseForm
+        form={form}
+        formId="issue-edit-form"
+        onSubmit={(values) => saveMut.mutate(values)}
+        className="space-y-4"
+      >
         {msg ? (
           <div
             className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
@@ -156,35 +176,32 @@ export function IssueEditSlideOver({ open, issue, onClose, members, onSaved }: P
         ) : null}
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Details</p>
-          <div>
-            <label htmlFor="issue-edit-title-input" className={MOBILE_FIELD_LABEL}>
-              Title *
-            </label>
-            <input
-              id="issue-edit-title-input"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="issue-edit-description" className={MOBILE_FIELD_LABEL}>
-              Description
-            </label>
-            <textarea
-              id="issue-edit-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className={MOBILE_FIELD_TEXTAREA}
-            />
-          </div>
+          <EnterpriseFormField<IssueEditValues> name="title" label="Title" required>
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<IssueEditValues> name="description" label="Description">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseTextarea
+                {...field}
+                id={id}
+                rows={3}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </EnterpriseFormField>
         </div>
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Drawing link</p>
           <div>
-            <span className={MOBILE_FIELD_LABEL}>Linked sheet</span>
+            <span className="enterprise-field-label">Linked sheet</span>
             <p className="mt-1 flex items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5 text-sm text-[var(--enterprise-text)]">
               <MapPin className="h-4 w-4 shrink-0 text-[var(--enterprise-primary)]" aria-hidden />
               {issueSheetLabel(issue)}
@@ -196,19 +213,17 @@ export function IssueEditSlideOver({ open, issue, onClose, members, onSaved }: P
             ) : null}
           </div>
           {hasSheet ? (
-            <div>
-              <label htmlFor="issue-edit-page" className={MOBILE_FIELD_LABEL}>
-                Page number
-              </label>
-              <input
-                id="issue-edit-page"
-                type="number"
-                min={1}
-                value={pageNum}
-                onChange={(e) => setPageNum(e.target.value)}
-                className={MOBILE_FIELD_INPUT}
-              />
-            </div>
+            <EnterpriseFormField<IssueEditValues> name="pageNum" label="Page number">
+              {({ describedBy, field, id, invalid }) => (
+                <EnterpriseInput
+                  {...field}
+                  id={id}
+                  inputMode="numeric"
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                />
+              )}
+            </EnterpriseFormField>
           ) : null}
           {issue.levelName ? (
             <p className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)]">
@@ -216,17 +231,16 @@ export function IssueEditSlideOver({ open, issue, onClose, members, onSaved }: P
               {issue.levelName}
             </p>
           ) : null}
-          <div>
-            <label htmlFor="issue-edit-location" className={MOBILE_FIELD_LABEL}>
-              Location / grid reference
-            </label>
-            <input
-              id="issue-edit-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-            />
-          </div>
+          <EnterpriseFormField<IssueEditValues> name="location" label="Location / grid reference">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </EnterpriseFormField>
         </div>
         <div className={MOBILE_FORM_SECTION}>
           <IssueReferencePhotosField
@@ -240,72 +254,68 @@ export function IssueEditSlideOver({ open, issue, onClose, members, onSaved }: P
           <p className="enterprise-type-label col-span-full text-[var(--enterprise-text-muted)]">
             Assignment
           </p>
-          <div>
-            <label htmlFor="issue-edit-status" className={MOBILE_FIELD_LABEL}>
-              Status
-            </label>
-            <select
-              id="issue-edit-status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className={MOBILE_FIELD_SELECT}
-            >
-              {ISSUE_STATUS_ORDER.map((s) => (
-                <option key={s} value={s}>
-                  {ISSUE_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="issue-edit-priority" className={MOBILE_FIELD_LABEL}>
-              Priority
-            </label>
-            <select
-              id="issue-edit-priority"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              className={MOBILE_FIELD_SELECT}
-            >
-              {ISSUE_PRIORITY_ORDER.map((p) => (
-                <option key={p} value={p}>
-                  {ISSUE_PRIORITY_LABEL[p]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="issue-edit-assignee" className={MOBILE_FIELD_LABEL}>
-              Assignee
-            </label>
-            <select
-              id="issue-edit-assignee"
-              value={assigneeId}
-              onChange={(e) => setAssigneeId(e.target.value)}
-              className={MOBILE_FIELD_SELECT}
-            >
-              <option value="">Unassigned</option>
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.name || m.email || m.userId}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="issue-edit-due" className={MOBILE_FIELD_LABEL}>
-              Due date
-            </label>
-            <input
-              id="issue-edit-due"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-            />
-          </div>
+          <EnterpriseFormField<IssueEditValues> name="status" label="Status">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              >
+                {ISSUE_STATUS_ORDER.map((s) => (
+                  <option key={s} value={s}>
+                    {ISSUE_STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<IssueEditValues> name="priority" label="Priority">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              >
+                {ISSUE_PRIORITY_ORDER.map((p) => (
+                  <option key={p} value={p}>
+                    {ISSUE_PRIORITY_LABEL[p]}
+                  </option>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<IssueEditValues> name="assigneeId" label="Assignee">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              >
+                <option value="">Unassigned</option>
+                {members.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.name || m.email || m.userId}
+                  </option>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<IssueEditValues> name="dueDate" label="Due date">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                type="date"
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </EnterpriseFormField>
         </div>
-      </div>
+      </EnterpriseForm>
     </EnterpriseSlideOver>
   );
 }

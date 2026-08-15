@@ -81,6 +81,7 @@ html {
   --enterprise-text-muted: #64748b;
   --enterprise-subtitle: #475569;
   --enterprise-success: #059669;
+  --enterprise-warning: #d97706;
   --enterprise-error: #dc2626;
   --enterprise-auth-bg: #0b1220;
   /* Deep rail — solid professional navy (no gradient chrome) */
@@ -122,6 +123,19 @@ html {
   --enterprise-semantic-danger-border: #fecaca;
   --enterprise-semantic-danger-text: #991b1b;
   --enterprise-semantic-danger-muted: #b91c1c;
+
+  /*
+   * Chart series — categorical hues for data lines/bars. Distinct from the
+   * semantic set on purpose: green/amber/red stay reserved for status meaning,
+   * so a second series never reads as "healthy" or "at risk".
+   */
+  --enterprise-chart-1: #2563eb;
+  --enterprise-chart-2: #0f766e;
+  --enterprise-chart-3: #7c3aed;
+  --enterprise-chart-4: #ea580c;
+  --enterprise-chart-5: #64748b;
+  --enterprise-chart-area: color-mix(in srgb, var(--enterprise-chart-1) 14%, transparent);
+  --enterprise-chart-grid: color-mix(in srgb, var(--enterprise-border) 85%, transparent);
 
   /* Landing — align with enterprise brand (override earlier landing-* in this block) */
   --landing-cta: var(--enterprise-primary);
@@ -4184,6 +4198,40 @@ button:active:not(:disabled),
   outline: none;
   border-color: var(--enterprise-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--enterprise-primary) 16%, transparent);
+}
+/*
+ * Browsers still apply :invalid styles with noValidate (especially type=email).
+ * Neutralize that so every control uses the same Zod/RHF error chrome.
+ */
+.enterprise-field-input:invalid {
+  border-color: var(--enterprise-border);
+  background: var(--enterprise-surface);
+  box-shadow: none;
+}
+/* Zod/RHF invalid — applied to every failing field on submit/blur */
+.enterprise-field-input.enterprise-field-input--error,
+.enterprise-field-input[aria-invalid="true"],
+.enterprise-field-input.enterprise-field-input--error:invalid,
+.enterprise-field-input[aria-invalid="true"]:invalid {
+  border-color: var(--enterprise-error);
+  background: color-mix(
+    in srgb,
+    var(--enterprise-semantic-danger-bg) 70%,
+    var(--enterprise-surface)
+  );
+}
+.enterprise-field-input.enterprise-field-input--error:focus,
+.enterprise-field-input[aria-invalid="true"]:focus,
+.enterprise-field-input.enterprise-field-input--error:invalid:focus,
+.enterprise-field-input[aria-invalid="true"]:invalid:focus {
+  border-color: var(--enterprise-error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--enterprise-error) 22%, transparent);
+}
+.enterprise-field-input:disabled {
+  cursor: not-allowed;
+  background: var(--enterprise-hover-surface);
+  color: var(--enterprise-text-muted);
+  opacity: 0.7;
 }
 /**
  * Leading icon (absolute left-3, 16px): keep text/placeholder clear of the glyph.

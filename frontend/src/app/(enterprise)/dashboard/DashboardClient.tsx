@@ -3,7 +3,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { useMemo, useState } from "react";
+import { z } from "zod";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
   ArrowUpRight,
@@ -19,6 +20,14 @@ import {
   Users,
 } from "lucide-react";
 import { DashboardActivityChart } from "@/components/enterprise/DashboardActivityChart";
+import {
+  EnterpriseButton,
+  enterpriseButtonClassName,
+} from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import { EnterpriseInput } from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { WorkspaceUsageMeter, formatGiB } from "@/components/enterprise/WorkspaceUsageMeters";
 import {
@@ -39,7 +48,15 @@ export function DashboardClient() {
   const queryClient = useQueryClient();
   const td = useTranslations("app.pages.dashboard");
   const tc = useTranslations("app.pages.common");
-  const [workspaceName, setWorkspaceName] = useState("");
+  const workspaceSchema = useMemo(
+    () =>
+      z.object({
+        name: z.string().trim().min(1, "Enter a workspace name."),
+      }),
+    [],
+  );
+  type WorkspaceValues = z.infer<typeof workspaceSchema>;
+  const workspaceForm = useEnterpriseForm(workspaceSchema, { name: "" });
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [createWorkspaceError, setCreateWorkspaceError] = useState<string | null>(null);
   const {
@@ -107,7 +124,11 @@ export function DashboardClient() {
         <p className="text-sm font-semibold text-[var(--enterprise-text)]">{td("signInPrompt")}</p>
         <Link
           href="/sign-in?next=/dashboard"
-          className="mt-3 inline-flex rounded-md bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[var(--enterprise-primary-deep)]"
+          className={enterpriseButtonClassName({
+            variant: "primary",
+            size: "md",
+            className: "mt-3",
+          })}
         >
           {td("signInCta")}
         </Link>
@@ -129,14 +150,13 @@ export function DashboardClient() {
     return (base || fallback).slice(0, 48);
   }
 
-  async function onCreateWorkspace(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const name = workspaceName.trim();
-    if (!name || creatingWorkspace) return;
+  async function onCreateWorkspace({ name }: WorkspaceValues) {
+    if (creatingWorkspace) return;
+    const trimmed = name.trim();
     setCreatingWorkspace(true);
     setCreateWorkspaceError(null);
     try {
-      await createWorkspace(name, makeWorkspaceSlug(name));
+      await createWorkspace(trimmed, makeWorkspaceSlug(trimmed));
       await queryClient.invalidateQueries({ queryKey: qk.me() });
       router.push("/projects");
     } catch (err) {
@@ -156,33 +176,35 @@ export function DashboardClient() {
           <p className="mt-1 text-xs text-[var(--enterprise-text-muted)] sm:text-sm">
             {td("createWorkspaceBody")}
           </p>
-          <form onSubmit={onCreateWorkspace} className="mt-4 space-y-3">
-            <div>
-              <label htmlFor="workspace-name" className="enterprise-field-label">
-                {td("workspaceNameLabel")}
-              </label>
-              <input
-                id="workspace-name"
-                value={workspaceName}
-                onChange={(e) => setWorkspaceName(e.target.value)}
-                className="enterprise-field-input"
-                placeholder={td("workspaceNamePlaceholder")}
-                required
-              />
-            </div>
+          <EnterpriseForm
+            form={workspaceForm}
+            onSubmit={onCreateWorkspace}
+            className="mt-4 space-y-3"
+          >
+            <EnterpriseFormField<WorkspaceValues>
+              name="name"
+              label={td("workspaceNameLabel")}
+              required
+            >
+              {({ describedBy, field, id, invalid }) => (
+                <EnterpriseInput
+                  {...field}
+                  id={id}
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                  placeholder={td("workspaceNamePlaceholder")}
+                />
+              )}
+            </EnterpriseFormField>
             {createWorkspaceError ? (
               <p className="enterprise-alert-danger rounded-md px-3 py-2 text-sm">
                 {createWorkspaceError}
               </p>
             ) : null}
-            <button
-              type="submit"
-              disabled={creatingWorkspace}
-              className="inline-flex rounded-md bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[var(--enterprise-primary-deep)] disabled:cursor-not-allowed disabled:opacity-60"
-            >
+            <EnterpriseButton type="submit" size="md" loading={creatingWorkspace}>
               {creatingWorkspace ? td("creating") : td("createWorkspaceCta")}
-            </button>
-          </form>
+            </EnterpriseButton>
+          </EnterpriseForm>
           <p className="mt-3 text-xs text-[var(--enterprise-text-muted)]">
             {td("redirectPrefix")}
             <strong className="text-[var(--enterprise-text)]">{td("redirectEmphasis")}</strong>
@@ -538,7 +560,10 @@ export function DashboardClient() {
             </h2>
             <Link
               href="/projects"
-              className="text-xs font-medium text-[var(--enterprise-primary)] hover:underline"
+              className={enterpriseButtonClassName({
+                variant: "ghost",
+                size: "sm",
+              })}
             >
               {td("goToProjects")}
             </Link>
@@ -574,7 +599,11 @@ export function DashboardClient() {
               </p>
               <Link
                 href="/projects"
-                className="mt-3 inline-flex rounded-md bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[var(--enterprise-primary-deep)]"
+                className={enterpriseButtonClassName({
+                  variant: "primary",
+                  size: "md",
+                  className: "mt-3",
+                })}
               >
                 {td("goToProjects")}
               </Link>

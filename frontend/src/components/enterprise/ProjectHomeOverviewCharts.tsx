@@ -14,19 +14,21 @@ import {
 
 type BarSegment = { key: string; label: string; count: number; fill: string };
 
+const NEUTRAL_FILL = "var(--enterprise-chart-5)";
+
 const PUNCH_FILL: Record<string, string> = {
-  OPEN: "#dc2626",
-  IN_PROGRESS: "#d97706",
-  READY_FOR_GC: "#2563eb",
-  CLOSED: "#64748b",
+  OPEN: "var(--enterprise-error)",
+  IN_PROGRESS: "var(--enterprise-warning)",
+  READY_FOR_GC: "var(--enterprise-chart-1)",
+  CLOSED: NEUTRAL_FILL,
 };
 
 const RFI_ORDER = ["OPEN", "IN_REVIEW", "ANSWERED", "CLOSED"] as const;
 const RFI_FILL: Record<string, string> = {
-  OPEN: "#2563eb",
-  IN_REVIEW: "#d97706",
-  ANSWERED: "#059669",
-  CLOSED: "#64748b",
+  OPEN: "var(--enterprise-chart-1)",
+  IN_REVIEW: "var(--enterprise-warning)",
+  ANSWERED: "var(--enterprise-success)",
+  CLOSED: NEUTRAL_FILL,
 };
 
 const ISSUE_ORDER_SET = new Set<string>(ISSUE_STATUS_ORDER);
@@ -54,7 +56,7 @@ function issueSegments(issues: IssueRow[]): BarSegment[] {
     if (!ISSUE_ORDER_SET.has(k)) other += n;
   }
   if (other > 0) {
-    out.push({ key: "OTHER", label: "Other", count: other, fill: "#94a3b8" });
+    out.push({ key: "OTHER", label: "Other", count: other, fill: NEUTRAL_FILL });
   }
   return out;
 }
@@ -74,7 +76,7 @@ function punchSegments(rows: PunchRow[]): BarSegment[] {
       key,
       label: PUNCH_STATUS_LABEL[key] ?? key,
       count,
-      fill: PUNCH_FILL[key] ?? "#94a3b8",
+      fill: PUNCH_FILL[key] ?? NEUTRAL_FILL,
     });
   }
   const punchSet = new Set<string>(PUNCH_STATUS_ORDER);
@@ -83,7 +85,7 @@ function punchSegments(rows: PunchRow[]): BarSegment[] {
     if (!punchSet.has(k)) other += n;
   }
   if (other > 0) {
-    out.push({ key: "OTHER", label: "Other", count: other, fill: "#cbd5e1" });
+    out.push({ key: "OTHER", label: "Other", count: other, fill: NEUTRAL_FILL });
   }
   return out;
 }
@@ -103,7 +105,7 @@ function rfiSegments(rows: RfiRow[]): BarSegment[] {
       key,
       label: RFI_STATUS_LABEL[key] ?? key,
       count,
-      fill: RFI_FILL[key] ?? "#94a3b8",
+      fill: RFI_FILL[key] ?? NEUTRAL_FILL,
     });
   }
   const rfiSet = new Set<string>(RFI_ORDER);
@@ -112,7 +114,7 @@ function rfiSegments(rows: RfiRow[]): BarSegment[] {
     if (!rfiSet.has(k)) other += n;
   }
   if (other > 0) {
-    out.push({ key: "OTHER", label: "Other", count: other, fill: "#cbd5e1" });
+    out.push({ key: "OTHER", label: "Other", count: other, fill: NEUTRAL_FILL });
   }
   return out;
 }

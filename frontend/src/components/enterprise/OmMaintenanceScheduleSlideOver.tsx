@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   ASSET_METER_TYPE_LABEL,
   createOmMaintenance,
@@ -23,10 +24,18 @@ import {
   MOBILE_FIELD_SELECT,
 } from "@/lib/mobileFormStyles";
 import { qk } from "@/lib/queryKeys";
+import {
+  EnterpriseButton,
+  enterpriseButtonClassName,
+} from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetPicker } from "@/components/enterprise/OmAssetPicker";
 import { OmAssigneePicker } from "@/components/enterprise/OmAssigneePicker";
 import { OmFormSection } from "@/components/enterprise/OmFormSection";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import { EnterpriseInput } from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 
 const FREQUENCY_OPTIONS: { value: OmMaintenanceFrequency; label: string; short: string }[] = [
   { value: "DAILY", label: "Daily", short: "Daily" },
@@ -52,6 +61,12 @@ type FormState = {
   meterType: AssetMeterTypeApi;
   meterThreshold: string;
 };
+
+const maintenanceScheduleSchema = z.object({
+  title: z.string().trim().min(1, "Enter a schedule title."),
+});
+
+type MaintenanceScheduleValues = z.infer<typeof maintenanceScheduleSchema>;
 
 const METER_TYPES: AssetMeterTypeApi[] = [
   "RUN_HOURS",
@@ -117,6 +132,7 @@ function MaintenanceScheduleFormFields({
   const [form, setForm] = useState<FormState>(() =>
     schedule ? formFromSchedule(schedule) : emptyForm(preferredAssetId),
   );
+  const titleForm = useEnterpriseForm(maintenanceScheduleSchema, { title: form.title });
 
   const saveMut = useMutation({
     mutationFn: () => {
@@ -185,7 +201,11 @@ function MaintenanceScheduleFormFields({
     setForm((prev) => ({ ...prev, [key]: value }));
 
   return (
-    <>
+    <EnterpriseForm
+      form={titleForm}
+      onSubmit={() => saveMut.mutate()}
+      className="flex min-h-0 flex-1 flex-col"
+    >
       <div className="space-y-7 px-5 py-5">
         <OmFormSection title="Asset" description="Equipment this preventive task applies to.">
           <OmAssetPicker
@@ -208,19 +228,26 @@ function MaintenanceScheduleFormFields({
         </OmFormSection>
 
         <OmFormSection title="Schedule">
-          <div>
-            <label htmlFor="ppm-title" className={MOBILE_FIELD_LABEL}>
-              Schedule title
-            </label>
-            <input
-              id="ppm-title"
-              value={form.title}
-              onChange={(e) => set("title", e.target.value)}
-              placeholder="e.g. Filter replacement"
-              maxLength={200}
-              className={MOBILE_FIELD_INPUT}
-            />
-          </div>
+          <EnterpriseFormField<MaintenanceScheduleValues>
+            name="title"
+            label="Schedule title"
+            required
+          >
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                maxLength={200}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                placeholder="e.g. Filter replacement"
+                onChange={(event) => {
+                  field.onChange(event);
+                  set("title", event.target.value);
+                }}
+              />
+            )}
+          </EnterpriseFormField>
 
           <div>
             <p className={MOBILE_FIELD_LABEL}>Frequency</p>
@@ -388,23 +415,14 @@ function MaintenanceScheduleFormFields({
       </div>
 
       <div className="flex w-full justify-end gap-2 border-t border-[var(--enterprise-border)] px-5 py-3">
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex min-h-10 items-center rounded-lg border border-[var(--enterprise-border)] px-4 text-sm font-medium text-[var(--enterprise-text)]"
-        >
+        <EnterpriseButton variant="secondary" size="sm" onClick={onClose}>
           Cancel
-        </button>
-        <button
-          type="button"
-          disabled={saveMut.isPending}
-          onClick={() => saveMut.mutate()}
-          className="inline-flex min-h-10 items-center rounded-lg bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white disabled:opacity-50"
-        >
+        </EnterpriseButton>
+        <EnterpriseButton type="submit" size="sm" loading={saveMut.isPending}>
           {isEdit ? "Save changes" : "Create schedule"}
-        </button>
+        </EnterpriseButton>
       </div>
-    </>
+    </EnterpriseForm>
   );
 }
 
@@ -473,7 +491,11 @@ export function OmMaintenanceScheduleSlideOver({
             </p>
             <Link
               href={`/projects/${encodeURIComponent(projectId)}/om/assets`}
-              className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-[var(--enterprise-primary)] px-4 text-xs font-semibold text-white"
+              className={enterpriseButtonClassName({
+                variant: "primary",
+                size: "sm",
+                className: "mt-3",
+              })}
             >
               Go to Assets
             </Link>

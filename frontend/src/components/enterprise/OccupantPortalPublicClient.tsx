@@ -4,7 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Building2, Camera, Loader2, Send } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { OmAssetSummaryCard } from "@/components/enterprise/OmAssetSummaryCard";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import {
+  EnterpriseInput,
+  EnterpriseTextarea,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import {
   completeOccupantIssueReferencePhoto,
   fetchOccupantAssetImageUrl,
@@ -27,15 +35,27 @@ type Props = { token: string; initialAssetSecret?: string };
 
 type Phase = "form" | "done";
 
+const occupantRequestSchema = z.object({
+  description: z.string().trim().min(1, "Describe the issue."),
+  floor: z.string(),
+  reporterEmail: z.string().trim().email("Enter a valid email address."),
+  reporterName: z.string().trim().min(1, "Enter your name."),
+  room: z.string(),
+});
+
+type OccupantRequestValues = z.infer<typeof occupantRequestSchema>;
+
 // fallow-ignore-next-line complexity
 export function OccupantPortalPublicClient({ token, initialAssetSecret }: Props) {
   const assetSecret = initialAssetSecret?.trim() || undefined;
 
-  const [description, setDescription] = useState("");
-  const [floor, setFloor] = useState("");
-  const [room, setRoom] = useState("");
-  const [reporterName, setReporterName] = useState("");
-  const [reporterEmail, setReporterEmail] = useState("");
+  const form = useEnterpriseForm(occupantRequestSchema, {
+    description: "",
+    floor: "",
+    reporterEmail: "",
+    reporterName: "",
+    room: "",
+  });
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [uploadStep, setUploadStep] = useState<string | null>(null);
@@ -59,21 +79,16 @@ export function OccupantPortalPublicClient({ token, initialAssetSecret }: Props)
     retry: false,
   });
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!description.trim() || !reporterName.trim() || !reporterEmail.trim()) {
-      toast.error("Please fill in description, your name, and email.");
-      return;
-    }
+  async function onSubmit(values: OccupantRequestValues) {
     setSubmitting(true);
     setUploadStep(null);
     try {
       const res = await postOccupantSubmit(token, {
-        description: description.trim(),
-        floor: floor.trim() || undefined,
-        room: room.trim() || undefined,
-        reporterName: reporterName.trim(),
-        reporterEmail: reporterEmail.trim(),
+        description: values.description.trim(),
+        floor: values.floor.trim() || undefined,
+        room: values.room.trim() || undefined,
+        reporterName: values.reporterName.trim(),
+        reporterEmail: values.reporterEmail.trim(),
         assetSecret,
       });
 
@@ -201,20 +216,24 @@ export function OccupantPortalPublicClient({ token, initialAssetSecret }: Props)
         />
       ) : null}
 
-      <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-[var(--enterprise-text)]">
-            What is the issue?
-          </span>
-          <textarea
-            required
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            className="min-h-[7.5rem] w-full max-w-full rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-base text-[var(--enterprise-text)] shadow-[var(--enterprise-shadow-xs)] placeholder:text-[var(--enterprise-text-muted)] sm:min-h-[120px] sm:text-sm"
-            placeholder="Describe the problem…"
-          />
-        </label>
+      <EnterpriseForm form={form} onSubmit={onSubmit} className="space-y-4">
+        <EnterpriseFormField<OccupantRequestValues>
+          name="description"
+          label="What is the issue?"
+          required
+        >
+          {({ describedBy, field, id, invalid }) => (
+            <EnterpriseTextarea
+              {...field}
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              rows={4}
+              className="min-h-[7.5rem] max-w-full sm:min-h-[120px]"
+              placeholder="Describe the problem…"
+            />
+          )}
+        </EnterpriseFormField>
         <label className="block text-sm">
           <span className="mb-1 flex items-center gap-2 font-medium text-[var(--enterprise-text)]">
             <Camera className="h-4 w-4 text-[var(--enterprise-text-muted)]" aria-hidden />
@@ -229,46 +248,52 @@ export function OccupantPortalPublicClient({ token, initialAssetSecret }: Props)
           />
         </label>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-[var(--enterprise-text)]">
-              Floor (optional)
-            </span>
-            <input
-              value={floor}
-              onChange={(e) => setFloor(e.target.value)}
-              className="min-h-11 w-full rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-[var(--enterprise-text)]">
-              Room (optional)
-            </span>
-            <input
-              value={room}
-              onChange={(e) => setRoom(e.target.value)}
-              className="min-h-11 w-full rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm"
-            />
-          </label>
+          <EnterpriseFormField<OccupantRequestValues> name="floor" label="Floor (optional)">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<OccupantRequestValues> name="room" label="Room (optional)">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </EnterpriseFormField>
         </div>
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-[var(--enterprise-text)]">Your name</span>
-          <input
-            required
-            value={reporterName}
-            onChange={(e) => setReporterName(e.target.value)}
-            className="min-h-11 w-full rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-[var(--enterprise-text)]">Email</span>
-          <input
-            required
-            type="email"
-            value={reporterEmail}
-            onChange={(e) => setReporterEmail(e.target.value)}
-            className="min-h-11 w-full rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm"
-          />
-        </label>
+        <EnterpriseFormField<OccupantRequestValues> name="reporterName" label="Your name" required>
+          {({ describedBy, field, id, invalid }) => (
+            <EnterpriseInput
+              {...field}
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+            />
+          )}
+        </EnterpriseFormField>
+        <EnterpriseFormField<OccupantRequestValues> name="reporterEmail" label="Email" required>
+          {({ describedBy, field, id, invalid }) => (
+            <EnterpriseInput
+              {...field}
+              id={id}
+              type="text"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+            />
+          )}
+        </EnterpriseFormField>
         {uploadStep ? (
           <p className="flex items-center gap-2 text-xs text-[var(--enterprise-text-muted)]">
             <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -292,7 +317,7 @@ export function OccupantPortalPublicClient({ token, initialAssetSecret }: Props)
             </>
           )}
         </button>
-      </form>
+      </EnterpriseForm>
     </div>
   );
 }

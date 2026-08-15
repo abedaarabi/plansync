@@ -5,8 +5,24 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Lock, Mail, User } from "lucide-react";
+import { z } from "zod";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import {
+  AuthFormAlert,
+  AuthSubmitButton,
+  AUTH_FIELD_ICON,
+  AUTH_FIELD_INPUT,
+  AUTH_PASSWORD_INPUT,
+} from "@/components/auth/authFormChrome";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import {
+  EnterpriseInput,
+  EnterprisePasswordInput,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
+import { acceptInviteAndEnterWorkspace } from "@/lib/acceptInviteAndEnterWorkspace";
 import { authClient } from "@/lib/auth-client";
-import { workspaceGateUrl } from "@/lib/workspacePreference";
 
 type InvitePreview =
   | { valid: false; reason: "invalid" | "expired" }
@@ -21,6 +37,35 @@ type InvitePreview =
       };
     };
 
+function createJoinSchema(mode: "sign-up" | "sign-in") {
+  return z
+    .object({
+      name: mode === "sign-up" ? z.string().trim().min(2, "Enter your full name.") : z.string(),
+      email: z
+        .string()
+        .trim()
+        .min(1, "Enter your email address.")
+        .email("Enter a valid email address."),
+      password:
+        mode === "sign-up"
+          ? z.string().min(8, "Password must be at least 8 characters.")
+          : z.string().min(1, "Enter your password."),
+      confirmPassword:
+        mode === "sign-up" ? z.string().min(1, "Confirm your password.") : z.string(),
+    })
+    .superRefine((values, context) => {
+      if (mode === "sign-up" && values.password !== values.confirmPassword) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Passwords do not match.",
+          path: ["confirmPassword"],
+        });
+      }
+    });
+}
+
+type JoinValues = z.infer<ReturnType<typeof createJoinSchema>>;
+
 export function JoinClient({ token }: { token: string }) {
   const router = useRouter();
   const { data: session, isPending: sessionPending } = authClient.useSession();
@@ -31,10 +76,12 @@ export function JoinClient({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const [mode, setMode] = useState<"sign-up" | "sign-in">("sign-up");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const form = useEnterpriseForm(createJoinSchema(mode), {
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
 
   useEffect(() => {
     void (async () => {
@@ -54,21 +101,14 @@ export function JoinClient({ token }: { token: string }) {
   }, [token]);
 
   const acceptAndGo = useCallback(async () => {
-    const res = await fetch(apiUrl(`/api/v1/invites/${encodeURIComponent(token)}/accept`), {
-      method: "POST",
-      credentials: "include",
-    });
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
-    if (res.status === 402) {
-      setError("This workspace requires an active Pro subscription for invites.");
+    const result = await acceptInviteAndEnterWorkspace(
+      `/api/v1/invites/${encodeURIComponent(token)}/accept`,
+      router,
+    );
+    if (!result.ok) {
+      setError(result.error);
       return false;
     }
-    if (!res.ok) {
-      setError(j.error ?? "Could not join workspace.");
-      return false;
-    }
-    router.replace(workspaceGateUrl("/dashboard"));
-    router.refresh();
     return true;
   }, [router, token]);
 
@@ -82,62 +122,47 @@ export function JoinClient({ token }: { token: string }) {
     }
   }, [acceptAndGo]);
 
-  const onAuthSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      setError(null);
-      setAuthLoading(true);
-      try {
-        if (mode === "sign-up") {
-          const displayName = name.trim() || email.split("@")[0] || "User";
-          if (displayName.length < 2) {
-            setError("Enter your full name (at least 2 characters).");
-            return;
-          }
-          if (password.length < 8) {
-            setError("Password must be at least 8 characters.");
-            return;
-          }
-          if (password !== confirmPassword) {
-            setError("Passwords do not match.");
-            return;
-          }
-          const { error: err } = await authClient.signUp.email({
-            email: email.trim(),
-            password,
-            name: displayName,
-          });
-          if (err) {
-            setError(err.message ?? "Could not create account.");
-            return;
-          }
-        } else {
-          const { error: err } = await authClient.signIn.email({
-            email: email.trim(),
-            password,
-          });
-          if (err) {
-            setError(err.message ?? "Sign in failed.");
-            return;
-          }
+  async function onAuthSubmit({ email, name, password }: JoinValues) {
+    setError(null);
+    setAuthLoading(true);
+    try {
+      if (mode === "sign-up") {
+        const displayName = name.trim() || email.split("@")[0] || "User";
+        const { error: err } = await authClient.signUp.email({
+          email: email.trim(),
+          password,
+          name: displayName,
+        });
+        if (err) {
+          setError(err.message ?? "Could not create account.");
+          return;
         }
-        await acceptAndGo();
-      } catch (ex) {
-        setError(ex instanceof Error ? ex.message : "Something went wrong.");
-      } finally {
-        setAuthLoading(false);
+      } else {
+        const { error: err } = await authClient.signIn.email({
+          email: email.trim(),
+          password,
+        });
+        if (err) {
+          setError(err.message ?? "Sign in failed.");
+          return;
+        }
       }
-    },
-    [acceptAndGo, confirmPassword, email, mode, name, password],
-  );
+      await acceptAndGo();
+    } catch (ex) {
+      setError(ex instanceof Error ? ex.message : "Something went wrong.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
 
   useEffect(() => {
     setError(null);
-  }, [mode]);
+    form.clearErrors();
+  }, [form, mode]);
 
   useEffect(() => {
-    setConfirmPassword("");
-  }, [mode]);
+    form.setValue("confirmPassword", "");
+  }, [form, mode]);
 
   if (loadingPreview || sessionPending) {
     return (
@@ -252,117 +277,103 @@ export function JoinClient({ token }: { token: string }) {
                 : "Sign in with your PlanSync account, then join the workspace."}
             </p>
 
-            <form onSubmit={(e) => void onAuthSubmit(e)} className="space-y-4">
+            <EnterpriseForm form={form} onSubmit={onAuthSubmit} className="space-y-4">
               {mode === "sign-up" ? (
-                <div>
-                  <label
-                    htmlFor="join-name"
-                    className="mb-1.5 block text-left text-xs font-medium text-slate-600"
-                  >
-                    Your name
-                  </label>
+                <EnterpriseFormField<JoinValues> name="name" label="Your name" required>
+                  {({ describedBy, field, id, invalid }) => (
+                    <div className="relative">
+                      <User className={AUTH_FIELD_ICON} aria-hidden />
+                      <EnterpriseInput
+                        {...field}
+                        id={id}
+                        autoComplete="name"
+                        placeholder="Jane Doe"
+                        className={AUTH_FIELD_INPUT}
+                        aria-describedby={describedBy}
+                        aria-invalid={invalid}
+                      />
+                    </div>
+                  )}
+                </EnterpriseFormField>
+              ) : null}
+
+              <EnterpriseFormField<JoinValues> name="email" label="Email" required>
+                {({ describedBy, field, id, invalid }) => (
                   <div className="relative">
-                    <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      id="join-name"
+                    <Mail className={AUTH_FIELD_ICON} aria-hidden />
+                    <EnterpriseInput
+                      {...field}
+                      id={id}
                       type="text"
-                      autoComplete="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Jane Doe"
-                      required
-                      className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none ring-blue-500/20 focus:ring-2"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      autoComplete="email"
+                      placeholder="you@company.com"
+                      className={AUTH_FIELD_INPUT}
+                      aria-describedby={describedBy}
+                      aria-invalid={invalid}
                     />
                   </div>
-                </div>
+                )}
+              </EnterpriseFormField>
+
+              <EnterpriseFormField<JoinValues> name="password" label="Password" required>
+                {({ describedBy, field, id, invalid }) => (
+                  <>
+                    <div className="relative">
+                      <Lock className={AUTH_FIELD_ICON} aria-hidden />
+                      <EnterprisePasswordInput
+                        {...field}
+                        id={id}
+                        autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
+                        placeholder={mode === "sign-up" ? "At least 8 characters" : "Your password"}
+                        className={AUTH_PASSWORD_INPUT}
+                        aria-describedby={describedBy}
+                        aria-invalid={invalid}
+                      />
+                    </div>
+                  </>
+                )}
+              </EnterpriseFormField>
+              {mode === "sign-up" ? (
+                <p className="-mt-2 text-left text-xs text-slate-500">
+                  This creates your PlanSync login for this team.
+                </p>
               ) : null}
-
-              <div>
-                <label
-                  htmlFor="join-email"
-                  className="mb-1.5 block text-left text-xs font-medium text-slate-600"
-                >
-                  Email
-                </label>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    id="join-email"
-                    type="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@company.com"
-                    required
-                    className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none ring-blue-500/20 focus:ring-2"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="join-password"
-                  className="mb-1.5 block text-left text-xs font-medium text-slate-600"
-                >
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    id="join-password"
-                    type="password"
-                    autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={mode === "sign-up" ? "At least 8 characters" : "Your password"}
-                    required
-                    minLength={mode === "sign-up" ? 8 : 1}
-                    className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none ring-blue-500/20 focus:ring-2"
-                  />
-                </div>
-                {mode === "sign-up" ? (
-                  <p className="mt-1 text-left text-[11px] text-slate-500">
-                    This creates your PlanSync login for this team.
-                  </p>
-                ) : null}
-              </div>
 
               {mode === "sign-up" ? (
-                <div>
-                  <label
-                    htmlFor="join-confirm"
-                    className="mb-1.5 block text-left text-xs font-medium text-slate-600"
-                  >
-                    Confirm password
-                  </label>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      id="join-confirm"
-                      type="password"
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Re-enter password"
-                      required
-                      minLength={8}
-                      className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none ring-blue-500/20 focus:ring-2"
-                    />
-                  </div>
-                </div>
+                <EnterpriseFormField<JoinValues>
+                  name="confirmPassword"
+                  label="Confirm password"
+                  required
+                >
+                  {({ describedBy, field, id, invalid }) => (
+                    <div className="relative">
+                      <Lock className={AUTH_FIELD_ICON} aria-hidden />
+                      <EnterprisePasswordInput
+                        {...field}
+                        id={id}
+                        autoComplete="new-password"
+                        placeholder="Re-enter password"
+                        className={AUTH_PASSWORD_INPUT}
+                        aria-describedby={describedBy}
+                        aria-invalid={invalid}
+                      />
+                    </div>
+                  )}
+                </EnterpriseFormField>
               ) : null}
 
-              {error ? <p className="text-center text-sm text-red-600">{error}</p> : null}
+              {error ? <AuthFormAlert>{error}</AuthFormAlert> : null}
 
-              <button
-                type="submit"
-                disabled={authLoading}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-              >
-                {authLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {mode === "sign-up" ? "Create account & join" : "Sign in & join"}
-              </button>
-            </form>
+              <AuthSubmitButton
+                loading={authLoading}
+                loadingLabel={mode === "sign-up" ? "Create account & join" : "Sign in & join"}
+                label={mode === "sign-up" ? "Create account & join" : "Sign in & join"}
+              />
+            </EnterpriseForm>
 
             <p className="text-center text-xs text-slate-500">
               <Link

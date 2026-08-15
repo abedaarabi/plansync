@@ -1,11 +1,8 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
-import {
-  EnterpriseResponsiveDialog,
-  MOBILE_DIALOG_BTN_PRIMARY,
-  MOBILE_DIALOG_BTN_SECONDARY,
-} from "@/components/mobile/EnterpriseResponsiveDialog";
+import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
+import { ConfirmDialogActions } from "@/components/enterprise/ConfirmDialogActions";
 
 type Props = {
   open: boolean;
@@ -34,24 +31,13 @@ export function DeleteProjectIssueConfirmDialog({
       closeOnBackdrop={!isDeleting}
       closeOnEscape={!isDeleting}
       footer={
-        <>
-          <button
-            type="button"
-            disabled={isDeleting}
-            className={`${MOBILE_DIALOG_BTN_PRIMARY} border border-red-800/80 bg-red-950/80 text-red-100 shadow-sm hover:bg-red-900/90 disabled:opacity-40`}
-            onClick={onConfirm}
-          >
-            {isDeleting ? "Deleting…" : `Delete ${entityLabel}`}
-          </button>
-          <button
-            type="button"
-            disabled={isDeleting}
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-40`}
-            onClick={onCancel}
-          >
-            Cancel
-          </button>
-        </>
+        <ConfirmDialogActions
+          confirmLabel={`Delete ${entityLabel}`}
+          confirmingLabel="Deleting…"
+          isPending={isDeleting}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+        />
       }
     >
       <div className="flex gap-3">

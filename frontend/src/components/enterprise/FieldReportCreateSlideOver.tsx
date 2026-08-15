@@ -4,16 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ScrollText } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import { EnterpriseInput, EnterpriseSelect } from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { createFieldReport, ProRequiredError, type FieldReportRow } from "@/lib/api-client";
 import { emptyDetails } from "@/lib/fieldReportUtils";
-import {
-  MOBILE_FIELD_INPUT,
-  MOBILE_FIELD_LABEL,
-  MOBILE_FIELD_SELECT,
-  MOBILE_FORM_SECTION,
-} from "@/lib/mobileFormStyles";
+import { MOBILE_FORM_SECTION } from "@/lib/mobileFormStyles";
 import { qk } from "@/lib/queryKeys";
 
 type Props = {
@@ -32,6 +32,13 @@ function todayYmd(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+export const fieldReportCreateSchema = z.object({
+  author: z.string(),
+  reportDate: z.string().trim().min(1, "Select a report date."),
+});
+
+type FieldReportCreateValues = z.infer<typeof fieldReportCreateSchema>;
+
 export function FieldReportCreateSlideOver({
   open,
   onClose,
@@ -42,15 +49,19 @@ export function FieldReportCreateSlideOver({
   onCreated,
 }: Props) {
   const qc = useQueryClient();
-  const [reportDate, setReportDate] = useState(todayYmd);
-  const [author, setAuthor] = useState("");
+  const form = useEnterpriseForm(fieldReportCreateSchema, {
+    author: defaultAuthor.trim() || members[0] || "",
+    reportDate: defaultDate?.trim() || todayYmd(),
+  });
   const [msg, setMsg] = useState<string | null>(null);
 
   const reset = useCallback(() => {
-    setReportDate(defaultDate?.trim() || todayYmd());
-    setAuthor(defaultAuthor.trim() || members[0] || "");
+    form.reset({
+      author: defaultAuthor.trim() || members[0] || "",
+      reportDate: defaultDate?.trim() || todayYmd(),
+    });
     setMsg(null);
-  }, [defaultAuthor, defaultDate, members]);
+  }, [defaultAuthor, defaultDate, form, members]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -59,18 +70,16 @@ export function FieldReportCreateSlideOver({
 
   useEffect(() => {
     if (!open) return;
-    setReportDate(defaultDate?.trim() || todayYmd());
-    setAuthor(defaultAuthor.trim() || members[0] || "");
-    setMsg(null);
-  }, [open, defaultAuthor, defaultDate, members]);
+    reset();
+  }, [open, reset]);
 
   const createMut = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: FieldReportCreateValues) =>
       createFieldReport(projectId, {
-        reportDate: new Date(`${reportDate}T12:00:00.000Z`).toISOString(),
+        reportDate: new Date(`${values.reportDate}T12:00:00.000Z`).toISOString(),
         reportKind: "DAILY",
         status: "DRAFT",
-        authorLabel: author.trim() || undefined,
+        authorLabel: values.author.trim() || undefined,
         details: emptyDetails(),
         totalWorkers: 0,
         photoCount: 0,
@@ -97,11 +106,8 @@ export function FieldReportCreateSlideOver({
       open={open}
       onClose={handleClose}
       form={{
-        onSubmit: (e) => {
-          e.preventDefault();
-          if (!reportDate.trim()) return;
-          createMut.mutate();
-        },
+        noValidate: true,
+        onSubmit: form.handleSubmit((values) => createMut.mutate(values)),
       }}
       ariaLabelledBy="fr-create-title"
       header={
@@ -117,18 +123,18 @@ export function FieldReportCreateSlideOver({
           <EnterpriseButton type="button" variant="secondary" size="sm" onClick={handleClose}>
             Cancel
           </EnterpriseButton>
-          <EnterpriseButton
-            type="submit"
-            size="sm"
-            loading={createMut.isPending}
-            disabled={!reportDate.trim()}
-          >
+          <EnterpriseButton type="submit" size="sm" loading={createMut.isPending}>
             {createMut.isPending ? "Creating…" : "Create"}
           </EnterpriseButton>
         </>
       }
     >
-      <div className="space-y-4">
+      <EnterpriseForm
+        form={form}
+        formId="field-report-create-form"
+        onSubmit={(values) => createMut.mutate(values)}
+        className="space-y-4"
+      >
         {msg ? (
           <div
             className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
@@ -141,7 +147,7 @@ export function FieldReportCreateSlideOver({
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Report</p>
           <div>
-            <span className={MOBILE_FIELD_LABEL}>Type</span>
+            <span className="enterprise-field-label">Type</span>
             <div className="mt-1 space-y-2 text-sm text-[var(--enterprise-text)]">
               <label className="flex items-center gap-2">
                 <input
@@ -160,39 +166,36 @@ export function FieldReportCreateSlideOver({
               </label>
             </div>
           </div>
-          <div>
-            <label htmlFor="fr-create-date" className={MOBILE_FIELD_LABEL}>
-              Date
-            </label>
-            <input
-              id="fr-create-date"
-              type="date"
-              value={reportDate}
-              onChange={(e) => setReportDate(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="fr-create-author" className={MOBILE_FIELD_LABEL}>
-              Written by
-            </label>
-            <select
-              id="fr-create-author"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              className={MOBILE_FIELD_SELECT}
-            >
-              <option value="">—</option>
-              {members.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <EnterpriseFormField<FieldReportCreateValues> name="reportDate" label="Date" required>
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                type="date"
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<FieldReportCreateValues> name="author" label="Written by">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              >
+                <option value="">—</option>
+                {members.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
         </div>
-      </div>
+      </EnterpriseForm>
     </EnterpriseSlideOver>
   );
 }

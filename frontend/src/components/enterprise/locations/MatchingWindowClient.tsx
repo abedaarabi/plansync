@@ -32,6 +32,7 @@ import { remainingUnmappedDrawings } from "@/lib/locations/matchNextDrawing";
 import { invalidateBuildingQueries } from "@/lib/locations/useBuildingQueries";
 import { buildWorkspaceHref } from "@/lib/locations/workspaceHref";
 import { qk } from "@/lib/queryKeys";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import type { CanvasPoint } from "./CalibrationCanvas";
 import { PdfPickPane } from "./matching/PdfPickPane";
 import { PlanPickPane } from "./matching/PlanPickPane";
@@ -607,14 +608,16 @@ export function MatchingWindowClient({
               >
                 Reset points
               </button>
-              <button
+              <EnterpriseButton
                 type="button"
-                className="enterprise-btn-primary rounded-md px-2.5 py-1 text-xs disabled:opacity-50"
-                disabled={!calibration || saveMut.isPending || unmapMut.isPending}
+                size="sm"
+                className="px-2.5 text-xs"
+                loading={saveMut.isPending}
+                disabled={!calibration || unmapMut.isPending}
                 onClick={() => saveMut.mutate()}
               >
                 {saveMut.isPending ? "Saving…" : isUpdate ? "Save updates" : "Save registration"}
-              </button>
+              </EnterpriseButton>
             </div>
           </div>
         </footer>
@@ -655,24 +658,21 @@ function SaveSuccessPanel({
       </div>
       <div className="flex w-full max-w-xs flex-col gap-2">
         {workspaceHref ? (
-          <button
-            type="button"
-            className="enterprise-btn-primary inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm"
-            onClick={() => openBimViewer(workspaceHref)}
-          >
+          <EnterpriseButton type="button" size="md" onClick={() => openBimViewer(workspaceHref)}>
             <PanelsTopLeft className="h-4 w-4" aria-hidden />
             Open in 3D workspace
-          </button>
+          </EnterpriseButton>
         ) : null}
         {continueMatchingHref ? (
-          <button
+          <EnterpriseButton
             type="button"
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-2.5 text-sm font-medium text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]"
+            variant="secondary"
+            size="md"
             onClick={() => openBimViewer(continueMatchingHref)}
           >
             Match next drawing
             <ArrowRight className="h-4 w-4" aria-hidden />
-          </button>
+          </EnterpriseButton>
         ) : null}
         <Link
           href={buildingHref}

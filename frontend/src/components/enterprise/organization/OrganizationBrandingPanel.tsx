@@ -6,6 +6,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Building2, ExternalLink, ImageIcon, Palette, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import {
+  EnterpriseInput,
+  EnterpriseTextarea,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { deleteWorkspacePermanently, patchWorkspace, uploadWorkspaceLogo } from "@/lib/api-client";
 import {
   isValidWorkspacePrimaryHex,
@@ -31,6 +40,27 @@ type Props = {
   canEdit: boolean;
 };
 
+export const organizationBrandingSchema = z.object({
+  description: z.string(),
+  name: z.string().trim().min(1, "Enter a workspace name."),
+  primaryColor: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || isValidWorkspacePrimaryHex(value), {
+      message: "Primary color must be a hex value like #2563EB (6 digits after #).",
+    }),
+  slug: z.string().trim().min(1, "Enter a URL slug."),
+  website: z
+    .string()
+    .trim()
+    .refine(
+      (value) => value === "" || normalizeWorkspaceWebsite(value).ok,
+      "Enter a valid website address.",
+    ),
+});
+
+type OrganizationBrandingValues = z.infer<typeof organizationBrandingSchema>;
+
 // fallow-ignore-next-line complexity
 export function OrganizationBrandingPanel({
   workspaceId,
@@ -40,49 +70,51 @@ export function OrganizationBrandingPanel({
 }: Props) {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const form = useEnterpriseForm(organizationBrandingSchema, {
+    description: ws.description ?? "",
+    name: ws.name,
+    primaryColor: ws.primaryColor ?? "#2563EB",
+    slug: ws.slug,
+    website: ws.website ?? "",
+  });
 
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
-  const [description, setDescription] = useState("");
-  const [website, setWebsite] = useState("");
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const [websiteFieldError, setWebsiteFieldError] = useState<string | null>(null);
   const [websitePreviewHost, setWebsitePreviewHost] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
-  const [primaryColor, setPrimaryColor] = useState("#2563EB");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
 
   useEffect(() => {
-    setName(ws.name);
-    setSlug(ws.slug);
+    form.reset({
+      description: ws.description ?? "",
+      name: ws.name,
+      primaryColor: ws.primaryColor ?? "#2563EB",
+      slug: ws.slug,
+      website: ws.website ?? "",
+    });
     const lu = ws.logoUrl ?? "";
     setLogoUrl(isWorkspaceHostedLogoPath(lu) ? "" : lu);
-    setDescription(ws.description ?? "");
-    setWebsite(ws.website ?? "");
-    setPrimaryColor(ws.primaryColor ?? "#2563EB");
-    setWebsiteFieldError(null);
     if (ws.website) {
       const n = normalizeWorkspaceWebsite(ws.website);
       setWebsitePreviewHost(n.ok ? n.hostname : null);
     } else {
       setWebsitePreviewHost(null);
     }
-  }, [ws]);
+  }, [form, ws]);
 
   const saveMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: OrganizationBrandingValues) =>
       patchWorkspace(workspaceId, {
-        name: name.trim(),
-        slug: slug.trim(),
+        name: values.name.trim(),
+        slug: values.slug.trim(),
         logoUrl: logoUrl.trim() || null,
-        description: description.trim() || null,
-        website: website.trim() || null,
-        primaryColor: isValidWorkspacePrimaryHex(primaryColor) ? primaryColor.trim() : undefined,
+        description: values.description.trim() || null,
+        website: values.website.trim() || null,
+        primaryColor: values.primaryColor.trim() || undefined,
       }),
-    onMutate: async () => {
+    onMutate: async (values) => {
       const prev = queryClient.getQueryData<MeResponse | null>(qk.me());
       if (!prev) return {};
       const next: MeResponse = {
@@ -94,12 +126,14 @@ export function OrganizationBrandingPanel({
                 ...mw,
                 workspace: {
                   ...mw.workspace,
-                  name: name.trim(),
-                  slug: slug.trim(),
+                  name: values.name.trim(),
+                  slug: values.slug.trim(),
                   logoUrl: logoUrl.trim() || null,
-                  description: description.trim() || null,
-                  website: website.trim() || null,
-                  primaryColor: normalizeWorkspacePrimaryHex(primaryColor.trim() || undefined),
+                  description: values.description.trim() || null,
+                  website: values.website.trim() || null,
+                  primaryColor: normalizeWorkspacePrimaryHex(
+                    values.primaryColor.trim() || undefined,
+                  ),
                 },
               },
         ),
@@ -113,33 +147,14 @@ export function OrganizationBrandingPanel({
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.me() });
-      setWebsiteFieldError(null);
       setMsg({ type: "ok", text: "Organization saved." });
     },
   });
 
-  function onSaveOrg(e: React.FormEvent) {
-    e.preventDefault();
+  function onSaveOrg(values: OrganizationBrandingValues) {
     if (!canEdit) return;
-    const w = website.trim();
-    if (w) {
-      const n = normalizeWorkspaceWebsite(w);
-      if (!n.ok) {
-        setWebsiteFieldError(n.message);
-        setMsg({ type: "err", text: n.message });
-        return;
-      }
-    }
-    const pc = primaryColor.trim();
-    if (pc && !isValidWorkspacePrimaryHex(pc)) {
-      setMsg({
-        type: "err",
-        text: "Primary color must be a hex value like #2563EB (6 digits after #).",
-      });
-      return;
-    }
     setMsg(null);
-    saveMutation.mutate();
+    saveMutation.mutate(values);
   }
 
   const trialDays =
@@ -156,6 +171,7 @@ export function OrganizationBrandingPanel({
             : `${planName} trial`
         : "Free";
 
+  const primaryColor = form.watch("primaryColor");
   const previewColor = isValidWorkspacePrimaryHex(primaryColor)
     ? primaryColor.trim()
     : normalizeWorkspacePrimaryHex(undefined);
@@ -220,7 +236,9 @@ export function OrganizationBrandingPanel({
       </div>
 
       {canEdit ? (
-        <form
+        <EnterpriseForm
+          form={form}
+          density="compact"
           onSubmit={onSaveOrg}
           className="space-y-5"
           style={workspaceEnterpriseCssVars(primaryColor)}
@@ -231,43 +249,53 @@ export function OrganizationBrandingPanel({
               How this organization is named in the app and in URLs.
             </p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className={OM_COMPACT_LABEL} htmlFor="org-name">
-                  Workspace name
-                </label>
-                <input
-                  id="org-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className={OM_COMPACT_INPUT}
-                  required
-                />
-              </div>
-              <div>
-                <label className={OM_COMPACT_LABEL} htmlFor="org-slug">
-                  URL slug
-                </label>
-                <input
-                  id="org-slug"
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
-                  className={`${OM_COMPACT_INPUT} font-mono`}
-                  required
-                />
-              </div>
+              <EnterpriseFormField<OrganizationBrandingValues>
+                name="name"
+                label="Workspace name"
+                required
+              >
+                {({ describedBy, field, id, invalid }) => (
+                  <EnterpriseInput
+                    {...field}
+                    id={id}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid}
+                  />
+                )}
+              </EnterpriseFormField>
+              <EnterpriseFormField<OrganizationBrandingValues>
+                name="slug"
+                label="URL slug"
+                required
+              >
+                {({ describedBy, field, id, invalid }) => (
+                  <EnterpriseInput
+                    {...field}
+                    id={id}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid}
+                    className="font-mono"
+                  />
+                )}
+              </EnterpriseFormField>
             </div>
             <div className="mt-4">
-              <label className={OM_COMPACT_LABEL} htmlFor="org-description">
-                Description
-              </label>
-              <textarea
-                id="org-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                className={`${OM_COMPACT_INPUT} resize-y`}
-                placeholder="Optional — shown on invite pages"
-              />
+              <EnterpriseFormField<OrganizationBrandingValues>
+                name="description"
+                label="Description"
+              >
+                {({ describedBy, field, id, invalid }) => (
+                  <EnterpriseTextarea
+                    {...field}
+                    id={id}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid}
+                    rows={3}
+                    className="resize-y"
+                    placeholder="Optional — shown on invite pages"
+                  />
+                )}
+              </EnterpriseFormField>
             </div>
           </div>
 
@@ -278,7 +306,9 @@ export function OrganizationBrandingPanel({
             </p>
 
             <div className="mt-4">
-              <label className={OM_COMPACT_LABEL}>Primary color</label>
+              <label className={OM_COMPACT_LABEL} htmlFor="org-primary-color">
+                Primary color
+              </label>
               <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
                 Pick a color or paste <span className="font-mono">#RRGGBB</span>.
               </p>
@@ -286,28 +316,40 @@ export function OrganizationBrandingPanel({
                 <input
                   type="color"
                   value={previewColor}
-                  onChange={(e) => setPrimaryColor(e.target.value.toUpperCase())}
+                  onChange={(e) =>
+                    form.setValue("primaryColor", e.target.value.toUpperCase(), {
+                      shouldValidate: true,
+                    })
+                  }
                   className="h-11 w-14 cursor-pointer rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-1 "
                   aria-label="Choose primary brand color"
                 />
-                <input
-                  value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  onBlur={() => {
-                    const t = primaryColor.trim();
-                    if (t === "") {
-                      setPrimaryColor(normalizeWorkspacePrimaryHex(undefined));
-                      return;
-                    }
-                    if (isValidWorkspacePrimaryHex(t)) {
-                      setPrimaryColor(t.toUpperCase());
-                    }
-                  }}
-                  placeholder="#2563EB"
-                  spellCheck={false}
-                  className={`${OM_COMPACT_INPUT} min-w-[9rem] max-w-[11rem] font-mono`}
-                  autoComplete="off"
-                />
+                <EnterpriseFormField<OrganizationBrandingValues>
+                  name="primaryColor"
+                  label="Primary color"
+                >
+                  {({ describedBy, field, id, invalid }) => (
+                    <EnterpriseInput
+                      {...field}
+                      id={id}
+                      aria-describedby={describedBy}
+                      aria-invalid={invalid}
+                      placeholder="#2563EB"
+                      spellCheck={false}
+                      className="min-w-[9rem] max-w-[11rem] font-mono"
+                      autoComplete="off"
+                      onBlur={(event) => {
+                        field.onBlur();
+                        const value = event.currentTarget.value.trim();
+                        if (value === "") {
+                          form.setValue("primaryColor", normalizeWorkspacePrimaryHex(undefined));
+                        } else if (isValidWorkspacePrimaryHex(value)) {
+                          form.setValue("primaryColor", value.toUpperCase());
+                        }
+                      }}
+                    />
+                  )}
+                </EnterpriseFormField>
                 <span
                   className="inline-flex items-center gap-2 rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2 text-xs text-[var(--enterprise-text-muted)]"
                   aria-hidden
@@ -324,53 +366,37 @@ export function OrganizationBrandingPanel({
             </div>
 
             <div className="mt-5">
-              <label className={OM_COMPACT_LABEL} htmlFor="org-website">
-                Website
-              </label>
               <p className="mt-0.5 text-[11px] leading-snug text-[var(--enterprise-text-muted)]">
                 We can use your site&apos;s favicon as the logo when you haven&apos;t uploaded one.
               </p>
-              <input
-                id="org-website"
-                value={website}
-                onChange={(e) => {
-                  setWebsite(e.target.value);
-                  setWebsiteFieldError(null);
-                }}
-                onBlur={(e) => {
-                  const v = e.currentTarget.value.trim();
-                  if (!v) {
-                    setWebsiteFieldError(null);
-                    setWebsitePreviewHost(null);
-                    return;
-                  }
-                  const n = normalizeWorkspaceWebsite(v);
-                  if (!n.ok) {
-                    setWebsiteFieldError(n.message);
-                    setWebsitePreviewHost(null);
-                    return;
-                  }
-                  setWebsiteFieldError(null);
-                  setWebsitePreviewHost(n.hostname);
-                  const logo = logoUrl.trim();
-                  if (!logo || isGoogleFaviconUrl(logo)) {
-                    setLogoUrl(faviconUrlFromHostname(n.hostname));
-                  }
-                }}
-                placeholder="example.com or https://…"
-                className={`${OM_COMPACT_INPUT} ${
-                  websiteFieldError
-                    ? "border-[var(--enterprise-semantic-danger-border)] ring-1 ring-[var(--enterprise-semantic-danger-border)]"
-                    : ""
-                }`}
-                inputMode="url"
-                autoComplete="url"
-              />
-              {websiteFieldError ? (
-                <p className="mt-1 text-xs text-[var(--enterprise-semantic-danger-text)]">
-                  {websiteFieldError}
-                </p>
-              ) : websitePreviewHost ? (
+              <EnterpriseFormField<OrganizationBrandingValues> name="website" label="Website">
+                {({ describedBy, field, id, invalid }) => (
+                  <EnterpriseInput
+                    {...field}
+                    id={id}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid}
+                    onBlur={(event) => {
+                      field.onBlur();
+                      const normalized = normalizeWorkspaceWebsite(
+                        event.currentTarget.value.trim(),
+                      );
+                      if (!normalized.ok) {
+                        setWebsitePreviewHost(null);
+                        return;
+                      }
+                      setWebsitePreviewHost(normalized.hostname);
+                      if (!logoUrl.trim() || isGoogleFaviconUrl(logoUrl)) {
+                        setLogoUrl(faviconUrlFromHostname(normalized.hostname));
+                      }
+                    }}
+                    placeholder="example.com or https://…"
+                    inputMode="url"
+                    autoComplete="url"
+                  />
+                )}
+              </EnterpriseFormField>
+              {websitePreviewHost ? (
                 <div className="mt-2 flex items-center gap-3 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] px-3 py-2.5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -472,13 +498,9 @@ export function OrganizationBrandingPanel({
           ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="submit"
-              disabled={saveMutation.isPending}
-              className="enterprise-btn-primary rounded-md px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
-            >
-              {saveMutation.isPending ? "Saving…" : "Save branding"}
-            </button>
+            <EnterpriseButton type="submit" size="md" loading={saveMutation.isPending}>
+              Save branding
+            </EnterpriseButton>
             <Link
               href={`/workspaces/${ws.id}/materials`}
               className="text-sm font-medium text-[var(--enterprise-primary)] hover:underline"
@@ -486,7 +508,7 @@ export function OrganizationBrandingPanel({
               Material catalog fields →
             </Link>
           </div>
-        </form>
+        </EnterpriseForm>
       ) : (
         <div className="enterprise-card p-4 sm:p-5">
           <dl className="space-y-4 text-sm">
@@ -580,14 +602,15 @@ export function OrganizationBrandingPanel({
               className={`${OM_COMPACT_INPUT} mt-4`}
             />
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
-              <button
+              <EnterpriseButton
                 type="button"
+                variant="secondary"
+                size="md"
                 disabled={deleteBusy}
                 onClick={() => setDeleteOpen(false)}
-                className="enterprise-btn-secondary rounded-md px-3 py-2.5 text-sm font-medium disabled:opacity-60"
               >
                 Cancel
-              </button>
+              </EnterpriseButton>
               <button
                 type="button"
                 disabled={deleteBusy || deleteConfirmName.trim() !== ws.name.trim()}

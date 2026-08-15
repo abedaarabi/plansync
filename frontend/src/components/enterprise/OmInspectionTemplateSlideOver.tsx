@@ -14,12 +14,8 @@ import {
 } from "@/lib/api-client";
 import { MOBILE_FIELD_INPUT, MOBILE_FIELD_LABEL } from "@/lib/mobileFormStyles";
 import { qk } from "@/lib/queryKeys";
-import {
-  EnterpriseSlideOver,
-  SlideOverHeader,
-  SLIDE_OVER_BTN_PRIMARY,
-  SLIDE_OVER_BTN_SECONDARY,
-} from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmFormSection } from "@/components/enterprise/OmFormSection";
 
 const FREQUENCY_OPTIONS = [
@@ -221,17 +217,17 @@ export function OmInspectionTemplateSlideOver({
       }
       footer={
         <>
-          <button type="button" onClick={onClose} className={SLIDE_OVER_BTN_SECONDARY}>
+          <EnterpriseButton type="button" variant="secondary" size="sm" onClick={onClose}>
             Cancel
-          </button>
-          <button
+          </EnterpriseButton>
+          <EnterpriseButton
             type="button"
-            disabled={mut.isPending}
+            size="sm"
+            loading={mut.isPending}
             onClick={() => mut.mutate()}
-            className={SLIDE_OVER_BTN_PRIMARY}
           >
             {isEdit ? "Save changes" : isCompany ? "Create company template" : "Create template"}
-          </button>
+          </EnterpriseButton>
         </>
       }
     >

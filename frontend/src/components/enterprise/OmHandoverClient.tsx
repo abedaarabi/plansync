@@ -35,7 +35,10 @@ import {
 } from "@/lib/projectStage";
 import { qk } from "@/lib/queryKeys";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
-import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import {
+  EnterpriseButton,
+  enterpriseButtonClassName,
+} from "@/components/enterprise/EnterpriseButton";
 import { isSuperAdmin } from "@/lib/workspaceRole";
 import { isWorkspaceOmBillingClient } from "@/lib/workspaceSubscription";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
@@ -341,7 +344,11 @@ export function OmHandoverClient({ projectId }: Props) {
         </p>
         <Link
           href={`/projects/${projectId}/settings`}
-          className="inline-flex w-full min-h-12 max-w-sm items-center justify-center gap-2 rounded-md bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2 sm:w-auto"
+          className={enterpriseButtonClassName({
+            variant: "primary",
+            size: "lg",
+            className: "max-w-sm sm:w-auto",
+          })}
         >
           Open project settings
           <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
@@ -367,7 +374,11 @@ export function OmHandoverClient({ projectId }: Props) {
         {superAdmin ? (
           <Link
             href="/organization?tab=billing"
-            className="inline-flex w-full min-h-12 max-w-sm items-center justify-center gap-2 rounded-md bg-[var(--enterprise-primary)] px-5 text-sm font-semibold text-white transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)] focus-visible:ring-offset-2 sm:w-auto"
+            className={enterpriseButtonClassName({
+              variant: "primary",
+              size: "lg",
+              className: "max-w-sm sm:w-auto",
+            })}
           >
             Open Plan & billing
             <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />

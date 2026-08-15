@@ -1,15 +1,12 @@
 "use client";
 
-import { Loader2, Rocket } from "lucide-react";
+import { Rocket } from "lucide-react";
 import { toast } from "sonner";
 import type { BuildingChecklist } from "@/lib/api-client/locations";
 import { canPublishBuilding } from "@/lib/locations/buildingPublish";
 import { usePublishBuildingMappingsMutation } from "@/lib/locations/useBuildingQueries";
-import {
-  EnterpriseResponsiveDialog,
-  MOBILE_DIALOG_BTN_PRIMARY,
-  MOBILE_DIALOG_BTN_SECONDARY,
-} from "@/components/mobile/EnterpriseResponsiveDialog";
+import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { BuildingPublishChecklist } from "./BuildingPublishChecklist";
 
 type Props = {
@@ -43,10 +40,14 @@ export function BuildingPublishDialog({
       closeOnEscape={!pending}
       footer={
         <>
-          <button
+          <EnterpriseButton
             type="button"
-            disabled={!canPublish || pending}
-            className={`${MOBILE_DIALOG_BTN_PRIMARY} enterprise-btn-primary disabled:opacity-50`}
+            variant="primary"
+            size="md"
+            fullWidth
+            loading={pending}
+            disabled={!canPublish}
+            className="max-lg:min-h-[52px] sm:w-auto"
             onClick={() => {
               publishMut.mutate(undefined, {
                 onSuccess: () => {
@@ -58,23 +59,19 @@ export function BuildingPublishDialog({
               });
             }}
           >
-            {pending ? (
-              <span className="inline-flex items-center justify-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                Publishing…
-              </span>
-            ) : (
-              "Publish"
-            )}
-          </button>
-          <button
+            {pending ? "Publishing…" : "Publish"}
+          </EnterpriseButton>
+          <EnterpriseButton
             type="button"
+            variant="secondary"
+            size="md"
+            fullWidth
             disabled={pending}
             onClick={onClose}
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]`}
+            className="max-lg:min-h-[52px] sm:w-auto"
           >
             Cancel
-          </button>
+          </EnterpriseButton>
         </>
       }
     >

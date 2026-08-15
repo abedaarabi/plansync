@@ -4,16 +4,21 @@ import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   IssueReferencePhotosField,
   type IssuePendingPhoto,
 } from "@/components/enterprise/IssueReferencePhotosField";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
 import {
-  EnterpriseSlideOver,
-  SlideOverHeader,
-  SLIDE_OVER_BTN_PRIMARY,
-  SLIDE_OVER_BTN_SECONDARY,
-} from "@/components/enterprise/EnterpriseSlideOver";
+  EnterpriseInput,
+  EnterpriseSelect,
+  EnterpriseTextarea,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import {
   groupSheetRows,
   sheetRowsForProject,
@@ -32,16 +37,40 @@ import {
   ISSUE_STATUS_LABEL,
   ISSUE_STATUS_ORDER,
 } from "@/lib/issueStatusStyle";
-import {
-  MOBILE_FIELD_INPUT,
-  MOBILE_FIELD_LABEL,
-  MOBILE_FIELD_SELECT,
-  MOBILE_FIELD_TEXTAREA,
-  MOBILE_FORM_SECTION,
-} from "@/lib/mobileFormStyles";
+import { MOBILE_FORM_SECTION } from "@/lib/mobileFormStyles";
 import { qk } from "@/lib/queryKeys";
 
 type WorkspaceMember = { userId: string; name: string | null; email: string | null };
+
+export const issueCreateSchema = z.object({
+  assigneeId: z.string(),
+  description: z.string(),
+  dueDate: z.string(),
+  location: z.string(),
+  pageNum: z
+    .string()
+    .refine((value) => !value || (Number.isInteger(Number(value)) && Number(value) > 0), {
+      message: "Enter a whole page number greater than zero.",
+    }),
+  priority: z.string(),
+  sheetPick: z.string(),
+  status: z.string(),
+  title: z.string().trim().min(1, "Enter a short issue title."),
+});
+
+type IssueCreateValues = z.infer<typeof issueCreateSchema>;
+
+const ISSUE_CREATE_DEFAULTS: IssueCreateValues = {
+  assigneeId: "",
+  description: "",
+  dueDate: "",
+  location: "",
+  pageNum: "",
+  priority: "MEDIUM",
+  sheetPick: "",
+  status: "OPEN",
+  title: "",
+};
 
 function revokePendingPhotos(list: IssuePendingPhoto[]) {
   for (const p of list) URL.revokeObjectURL(p.previewUrl);
@@ -68,15 +97,7 @@ export function IssueCreateSlideOver({
   members,
   onCreated,
 }: Props) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [sheetPick, setSheetPick] = useState("");
-  const [pageNum, setPageNum] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
-  const [status, setStatus] = useState("OPEN");
-  const [priority, setPriority] = useState("MEDIUM");
-  const [dueDate, setDueDate] = useState("");
-  const [location, setLocation] = useState("");
+  const form = useEnterpriseForm(issueCreateSchema, ISSUE_CREATE_DEFAULTS);
   const [msg, setMsg] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<IssuePendingPhoto[]>([]);
 
@@ -85,17 +106,9 @@ export function IssueCreateSlideOver({
       revokePendingPhotos(prev);
       return [];
     });
-    setTitle("");
-    setDescription("");
-    setSheetPick("");
-    setPageNum("");
-    setAssigneeId("");
-    setStatus("OPEN");
-    setPriority("MEDIUM");
-    setDueDate("");
-    setLocation("");
+    form.reset(ISSUE_CREATE_DEFAULTS);
     setMsg(null);
-  }, []);
+  }, [form]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -114,22 +127,24 @@ export function IssueCreateSlideOver({
   );
 
   const createMut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: IssueCreateValues) => {
       if (!workspaceId) throw new Error("Missing workspace.");
-      const hasSheet = sheetPick.includes("|");
-      const [fileId, fileVersionId] = hasSheet ? sheetPick.split("|") : [undefined, undefined];
-      const pn = pageNum.trim() ? parseInt(pageNum, 10) : undefined;
+      const hasSheet = values.sheetPick.includes("|");
+      const [fileId, fileVersionId] = hasSheet
+        ? values.sheetPick.split("|")
+        : [undefined, undefined];
+      const pn = values.pageNum.trim() ? parseInt(values.pageNum, 10) : undefined;
       return createIssue({
         workspaceId,
         projectId,
         ...(hasSheet && fileId && fileVersionId ? { fileId, fileVersionId } : {}),
-        title: title.trim(),
-        description: description.trim() || undefined,
-        assigneeId: assigneeId || undefined,
-        status,
-        priority,
-        dueDate: dueDate.trim() || undefined,
-        location: location.trim() || undefined,
+        title: values.title.trim(),
+        description: values.description.trim() || undefined,
+        assigneeId: values.assigneeId || undefined,
+        status: values.status,
+        priority: values.priority,
+        dueDate: values.dueDate.trim() || undefined,
+        location: values.location.trim() || undefined,
         ...(hasSheet && Number.isFinite(pn) ? { pageNumber: pn } : {}),
         issueKind: "CONSTRUCTION",
       });
@@ -165,11 +180,8 @@ export function IssueCreateSlideOver({
       open={open}
       onClose={handleClose}
       form={{
-        onSubmit: (e) => {
-          e.preventDefault();
-          if (!title.trim()) return;
-          createMut.mutate();
-        },
+        noValidate: true,
+        onSubmit: form.handleSubmit((values) => createMut.mutate(values)),
       }}
       ariaLabelledBy="issue-create-title"
       header={
@@ -182,20 +194,21 @@ export function IssueCreateSlideOver({
       }
       footer={
         <>
-          <button type="button" onClick={handleClose} className={SLIDE_OVER_BTN_SECONDARY}>
+          <EnterpriseButton type="button" variant="secondary" size="sm" onClick={handleClose}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={createMut.isPending || !title.trim()}
-            className={SLIDE_OVER_BTN_PRIMARY}
-          >
+          </EnterpriseButton>
+          <EnterpriseButton type="submit" size="sm" loading={createMut.isPending}>
             {createMut.isPending ? "Creating…" : "Create issue"}
-          </button>
+          </EnterpriseButton>
         </>
       }
     >
-      <div className="space-y-4">
+      <EnterpriseForm
+        form={form}
+        formId="issue-create-form"
+        onSubmit={(values) => createMut.mutate(values)}
+        className="space-y-4"
+      >
         {msg ? (
           <div
             className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
@@ -206,99 +219,93 @@ export function IssueCreateSlideOver({
         ) : null}
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Details</p>
-          <div>
-            <label htmlFor="issue-create-title-input" className={MOBILE_FIELD_LABEL}>
-              Title *
-            </label>
-            <input
-              id="issue-create-title-input"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-              required
-              placeholder="Short summary"
-            />
-          </div>
-          <div>
-            <label htmlFor="issue-create-description" className={MOBILE_FIELD_LABEL}>
-              Description
-            </label>
-            <textarea
-              id="issue-create-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className={MOBILE_FIELD_TEXTAREA}
-              placeholder="Context, scope, or steps to reproduce…"
-            />
-          </div>
+          <EnterpriseFormField<IssueCreateValues> name="title" label="Title" required>
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                placeholder="Short summary"
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<IssueCreateValues> name="description" label="Description">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseTextarea
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                rows={3}
+                placeholder="Context, scope, or steps to reproduce…"
+              />
+            )}
+          </EnterpriseFormField>
         </div>
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Drawing link</p>
-          <div>
-            <label htmlFor="issue-create-sheet" className={MOBILE_FIELD_LABEL}>
-              Sheet
-            </label>
-            <select
-              id="issue-create-sheet"
-              value={sheetPick}
-              onChange={(e) => setSheetPick(e.target.value)}
-              className={MOBILE_FIELD_SELECT}
-            >
-              <option value="">No sheet linked</option>
-              {sheetGrouped.map(({ group, items: sheetItems }) => (
-                <optgroup key={group} label={group}>
-                  {sheetItems.map((row) => (
-                    <option
-                      key={`${row.file.id}|${row.version.id}`}
-                      value={`${row.file.id}|${row.version.id}`}
-                    >
-                      {row.file.name} (v{row.version.version})
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            {sheetGrouped.length === 0 ? (
-              <p className="mt-1.5 text-xs text-[var(--enterprise-text-muted)]">
-                Upload drawings in Project files first.
-              </p>
-            ) : null}
-          </div>
-          {sheetPick.includes("|") ? (
-            <div>
-              <label htmlFor="issue-create-page" className={MOBILE_FIELD_LABEL}>
-                Page number
-              </label>
-              <input
-                id="issue-create-page"
-                type="number"
-                min={1}
-                value={pageNum}
-                onChange={(e) => setPageNum(e.target.value)}
-                className={MOBILE_FIELD_INPUT}
-                placeholder="Optional — 1-based page"
-              />
-            </div>
+          <EnterpriseFormField<IssueCreateValues> name="sheetPick" label="Sheet">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              >
+                <option value="">No sheet linked</option>
+                {sheetGrouped.map(({ group, items: sheetItems }) => (
+                  <optgroup key={group} label={group}>
+                    {sheetItems.map((row) => (
+                      <option
+                        key={`${row.file.id}|${row.version.id}`}
+                        value={`${row.file.id}|${row.version.id}`}
+                      >
+                        {row.file.name} (v{row.version.version})
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
+          {sheetGrouped.length === 0 ? (
+            <p className="-mt-2 text-xs text-[var(--enterprise-text-muted)]">
+              Upload drawings in Project files first.
+            </p>
           ) : null}
-          {sheetPick.includes("|") ? (
+          {form.watch("sheetPick").includes("|") ? (
+            <EnterpriseFormField<IssueCreateValues> name="pageNum" label="Page number">
+              {({ describedBy, field, id, invalid }) => (
+                <EnterpriseInput
+                  {...field}
+                  id={id}
+                  type="text"
+                  inputMode="numeric"
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                  placeholder="Optional — 1-based page"
+                />
+              )}
+            </EnterpriseFormField>
+          ) : null}
+          {form.watch("sheetPick").includes("|") ? (
             <p className="enterprise-type-caption text-[var(--enterprise-text-muted)]">
               If this sheet is assigned to a building level, the level is linked automatically on
               create.
             </p>
           ) : null}
-          <div>
-            <label htmlFor="issue-create-location" className={MOBILE_FIELD_LABEL}>
-              Location / grid reference
-            </label>
-            <input
-              id="issue-create-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-              placeholder="e.g. Grid B-2, Level 3"
-            />
-          </div>
+          <EnterpriseFormField<IssueCreateValues> name="location" label="Location / grid reference">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                placeholder="e.g. Grid B-2, Level 3"
+              />
+            )}
+          </EnterpriseFormField>
         </div>
         <div className={MOBILE_FORM_SECTION}>
           <IssueReferencePhotosField
@@ -314,72 +321,68 @@ export function IssueCreateSlideOver({
           <p className="enterprise-type-label col-span-full text-[var(--enterprise-text-muted)]">
             Assignment
           </p>
-          <div>
-            <label htmlFor="issue-create-status" className={MOBILE_FIELD_LABEL}>
-              Status
-            </label>
-            <select
-              id="issue-create-status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className={MOBILE_FIELD_SELECT}
-            >
-              {ISSUE_STATUS_ORDER.map((s) => (
-                <option key={s} value={s}>
-                  {ISSUE_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="issue-create-priority" className={MOBILE_FIELD_LABEL}>
-              Priority
-            </label>
-            <select
-              id="issue-create-priority"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              className={MOBILE_FIELD_SELECT}
-            >
-              {ISSUE_PRIORITY_ORDER.map((p) => (
-                <option key={p} value={p}>
-                  {ISSUE_PRIORITY_LABEL[p]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="issue-create-assignee" className={MOBILE_FIELD_LABEL}>
-              Assignee
-            </label>
-            <select
-              id="issue-create-assignee"
-              value={assigneeId}
-              onChange={(e) => setAssigneeId(e.target.value)}
-              className={MOBILE_FIELD_SELECT}
-            >
-              <option value="">Unassigned</option>
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.name || m.email || m.userId}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="issue-create-due" className={MOBILE_FIELD_LABEL}>
-              Due date
-            </label>
-            <input
-              id="issue-create-due"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-            />
-          </div>
+          <EnterpriseFormField<IssueCreateValues> name="status" label="Status">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              >
+                {ISSUE_STATUS_ORDER.map((status) => (
+                  <option key={status} value={status}>
+                    {ISSUE_STATUS_LABEL[status]}
+                  </option>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<IssueCreateValues> name="priority" label="Priority">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              >
+                {ISSUE_PRIORITY_ORDER.map((priority) => (
+                  <option key={priority} value={priority}>
+                    {ISSUE_PRIORITY_LABEL[priority]}
+                  </option>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<IssueCreateValues> name="assigneeId" label="Assignee">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              >
+                <option value="">Unassigned</option>
+                {members.map((member) => (
+                  <option key={member.userId} value={member.userId}>
+                    {member.name || member.email || member.userId}
+                  </option>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<IssueCreateValues> name="dueDate" label="Due date">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                type="date"
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </EnterpriseFormField>
         </div>
-      </div>
+      </EnterpriseForm>
     </EnterpriseSlideOver>
   );
 }

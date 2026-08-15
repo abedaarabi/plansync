@@ -148,14 +148,6 @@ export function SlideOverHeader({
   );
 }
 
-/** Secondary footer action (Cancel). */
-export const SLIDE_OVER_BTN_SECONDARY =
-  "inline-flex min-h-9 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3.5 py-2 text-sm font-semibold text-[var(--enterprise-text)] transition hover:bg-[var(--enterprise-hover-surface)] disabled:cursor-not-allowed disabled:opacity-55";
-
-/** Primary footer action (Save / Create). */
-export const SLIDE_OVER_BTN_PRIMARY =
-  "inline-flex min-h-9 items-center justify-center rounded-md border border-transparent bg-[var(--enterprise-primary)] px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-[var(--enterprise-primary-deep)] disabled:cursor-not-allowed disabled:opacity-55";
-
 /**
  * Right-edge slide-over with backdrop and body scroll lock.
  * Solid enterprise chrome — dense header/footer, hairline borders, no glass.

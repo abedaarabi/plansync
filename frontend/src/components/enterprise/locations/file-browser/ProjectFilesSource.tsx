@@ -6,6 +6,7 @@ import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { fetchProjects } from "@/lib/api-client";
 import { FileExplorerTree } from "@/components/file-explorer";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { useLinkExistingFileMutation } from "@/lib/locations/useBuildingQueries";
 import { qk } from "@/lib/queryKeys";
 import { assetTypeFromKind, iconClassForKind, iconForKind, kindFromName } from "./fileKind";
@@ -144,14 +145,16 @@ export function ProjectFilesSource({
         <p className="enterprise-type-caption text-[var(--enterprise-text-muted)]">
           {selectedFiles.size} selected
         </p>
-        <button
+        <EnterpriseButton
           type="button"
-          className="enterprise-btn-primary mobile-touch-target rounded-lg px-4 py-2 text-sm disabled:opacity-50"
-          disabled={selectedFiles.size === 0 || linkMut.isPending}
+          size="md"
+          className="mobile-touch-target"
+          loading={linkMut.isPending}
+          disabled={selectedFiles.size === 0}
           onClick={linkSelected}
         >
           {linkMut.isPending ? "Linking…" : "Add to building"}
-        </button>
+        </EnterpriseButton>
       </div>
     </div>
   );

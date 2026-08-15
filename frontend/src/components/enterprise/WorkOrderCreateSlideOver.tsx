@@ -4,12 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ClipboardList } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   IssueReferencePhotosField,
   type IssuePendingPhoto,
 } from "@/components/enterprise/IssueReferencePhotosField";
-import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
-import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import {
   WorkOrderAssetFields,
   formatOmAssetLocation,
@@ -20,6 +19,16 @@ import {
   type WorkOrderLocationValue,
 } from "@/components/enterprise/WorkOrderLocationFields";
 import { WorkOrderProcedureField } from "@/components/enterprise/WorkOrderProcedureField";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import {
+  EnterpriseInput,
+  EnterpriseSelect,
+  EnterpriseTextarea,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import {
   createIssue,
   fetchOmAssets,
@@ -44,7 +53,6 @@ import {
   MOBILE_FIELD_INPUT,
   MOBILE_FIELD_LABEL,
   MOBILE_FIELD_SELECT,
-  MOBILE_FIELD_TEXTAREA,
   MOBILE_FORM_SECTION,
 } from "@/lib/mobileFormStyles";
 import { filterOmAssetsBySearch } from "@/lib/filterOmAssetsBySearch";
@@ -57,6 +65,13 @@ const WO_TYPES = [
   { value: "INSPECTION_FOLLOWUP", label: "Inspection follow-up" },
   { value: "TENANT", label: "Tenant" },
 ] as const;
+
+export const workOrderCreateSchema = z.object({
+  description: z.string(),
+  title: z.string().trim().min(1, "Enter a work order title."),
+});
+
+type WorkOrderCreateValues = z.infer<typeof workOrderCreateSchema>;
 
 function revokePendingPhotos(list: IssuePendingPhoto[]) {
   for (const p of list) URL.revokeObjectURL(p.previewUrl);
@@ -92,14 +107,13 @@ export function WorkOrderCreateSlideOver({
   prefill,
   onCreated,
 }: Props) {
+  const form = useEnterpriseForm(workOrderCreateSchema, { description: "", title: "" });
   const [assetId, setAssetId] = useState("");
   const [workOrderType, setWorkOrderType] = useState("CORRECTIVE");
   const [vendorId, setVendorId] = useState("");
   const [procedure, setProcedure] = useState<WorkOrderChecklistItem[]>([]);
   const [completionEvidenceRequired, setCompletionEvidenceRequired] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [vendorName, setVendorName] = useState("");
   const [vendorEmail, setVendorEmail] = useState("");
@@ -125,8 +139,8 @@ export function WorkOrderCreateSlideOver({
     });
     setAssetId(prefill?.assetId ?? initialAssetId ?? "");
     setAssetSearch("");
-    setTitle(prefill?.title ?? "");
-    setDescription(prefill?.description ?? "");
+    form.reset({ title: prefill?.title ?? "" });
+    form.setValue("description", prefill?.description ?? "");
     setWorkOrderType(prefill?.workOrderType ?? "CORRECTIVE");
     setVendorId("");
     setProcedure([]);
@@ -147,7 +161,7 @@ export function WorkOrderCreateSlideOver({
     setStructureTouched(false);
     setTemplateId("");
     setMsg(null);
-  }, [initialAssetId, prefill]);
+  }, [form, initialAssetId, prefill]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -157,8 +171,8 @@ export function WorkOrderCreateSlideOver({
   useEffect(() => {
     if (open) {
       setAssetId(prefill?.assetId ?? initialAssetId ?? "");
-      setTitle(prefill?.title ?? "");
-      setDescription(prefill?.description ?? "");
+      form.reset({ title: prefill?.title ?? "" });
+      form.setValue("description", prefill?.description ?? "");
       setLocValue({
         buildingId: "",
         levelId: "",
@@ -168,7 +182,7 @@ export function WorkOrderCreateSlideOver({
       setLocationTouched(Boolean(prefill?.location));
       setStructureTouched(false);
     }
-  }, [open, initialAssetId, prefill]);
+  }, [form, open, initialAssetId, prefill]);
 
   const { data: vendors = [] } = useQuery({
     queryKey: qk.omVendors(projectId),
@@ -201,12 +215,17 @@ export function WorkOrderCreateSlideOver({
         }))
       : [];
     setProcedure(steps);
-    setTitle((prev) => {
-      const trimmed = prev.trim();
-      if (!trimmed) return tpl.name;
-      if (trimmed.startsWith(`${tpl.name}:`) || trimmed.startsWith(`${tpl.name} —`)) return prev;
-      return `${tpl.name}: ${trimmed}`;
-    });
+    form.setValue(
+      "title",
+      (() => {
+        const prev = form.getValues("title");
+        const trimmed = prev.trim();
+        if (!trimmed) return tpl.name;
+        if (trimmed.startsWith(`${tpl.name}:`) || trimmed.startsWith(`${tpl.name} —`)) return prev;
+        return `${tpl.name}: ${trimmed}`;
+      })(),
+      { shouldDirty: true, shouldValidate: true },
+    );
   }
 
   const filteredAssets = useMemo(
@@ -234,14 +253,14 @@ export function WorkOrderCreateSlideOver({
   }, [selectedAsset, locationTouched, structureTouched]);
 
   const createMut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: WorkOrderCreateValues) => {
       if (!workspaceId) throw new Error("Missing workspace.");
       return createIssue({
         workspaceId,
         projectId,
         assetId: assetId || null,
-        title: title.trim(),
-        description: description.trim() || undefined,
+        title: values.title.trim(),
+        description: values.description.trim() || undefined,
         assigneeId: assigneeId || undefined,
         externalAssigneeName: vendorName.trim() || undefined,
         externalAssigneeEmail: vendorEmail.trim() || undefined,
@@ -293,11 +312,8 @@ export function WorkOrderCreateSlideOver({
       open={open}
       onClose={handleClose}
       form={{
-        onSubmit: (e) => {
-          e.preventDefault();
-          if (!title.trim()) return;
-          createMut.mutate();
-        },
+        noValidate: true,
+        onSubmit: form.handleSubmit((values) => createMut.mutate(values)),
       }}
       ariaLabelledBy="wo-create-title"
       header={
@@ -313,18 +329,18 @@ export function WorkOrderCreateSlideOver({
           <EnterpriseButton type="button" variant="secondary" size="sm" onClick={handleClose}>
             Cancel
           </EnterpriseButton>
-          <EnterpriseButton
-            type="submit"
-            size="sm"
-            loading={createMut.isPending}
-            disabled={!title.trim()}
-          >
+          <EnterpriseButton type="submit" size="sm" loading={createMut.isPending}>
             {createMut.isPending ? "Creating…" : "Create work order"}
           </EnterpriseButton>
         </>
       }
     >
-      <div className="space-y-4">
+      <EnterpriseForm
+        form={form}
+        formId="work-order-create-form"
+        onSubmit={(values) => createMut.mutate(values)}
+        className="space-y-4"
+      >
         {msg ? (
           <div
             className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
@@ -397,7 +413,7 @@ export function WorkOrderCreateSlideOver({
               <label htmlFor="wo-company-template" className={MOBILE_FIELD_LABEL}>
                 From company template
               </label>
-              <select
+              <EnterpriseSelect
                 id="wo-company-template"
                 value={templateId}
                 onChange={(e) => {
@@ -409,7 +425,6 @@ export function WorkOrderCreateSlideOver({
                   const tpl = companyTemplates.find((t) => t.id === id);
                   if (tpl) applyCompanyTemplate(tpl);
                 }}
-                className={MOBILE_FIELD_SELECT}
               >
                 <option value="">None — start blank</option>
                 {companyTemplates.map((t) => (
@@ -420,52 +435,55 @@ export function WorkOrderCreateSlideOver({
                       : ""}
                   </option>
                 ))}
-              </select>
+              </EnterpriseSelect>
             </div>
           ) : null}
           <div>
             <label htmlFor="wo-type" className={MOBILE_FIELD_LABEL}>
               Work order type
             </label>
-            <select
+            <EnterpriseSelect
               id="wo-type"
               value={workOrderType}
               onChange={(e) => setWorkOrderType(e.target.value)}
-              className={MOBILE_FIELD_SELECT}
             >
               {WO_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>
               ))}
-            </select>
+            </EnterpriseSelect>
           </div>
-          <div>
-            <label htmlFor="wo-title" className={MOBILE_FIELD_LABEL}>
-              Work order title *
-            </label>
-            <input
-              id="wo-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-              required
-              placeholder="e.g. Replace air filter unit AHU-2"
-            />
-          </div>
-          <div>
-            <label htmlFor="wo-description" className={MOBILE_FIELD_LABEL}>
-              Scope / execution notes
-            </label>
-            <textarea
-              id="wo-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className={MOBILE_FIELD_TEXTAREA}
-              placeholder="Steps, parts needed, safety notes…"
-            />
-          </div>
+          <EnterpriseFormField<WorkOrderCreateValues>
+            name="title"
+            label="Work order title"
+            required
+          >
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                placeholder="e.g. Replace air filter unit AHU-2"
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<WorkOrderCreateValues>
+            name="description"
+            label="Scope / execution notes"
+          >
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseTextarea
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                rows={3}
+                placeholder="Steps, parts needed, safety notes…"
+              />
+            )}
+          </EnterpriseFormField>
         </div>
 
         <WorkOrderLocationFields
@@ -639,7 +657,7 @@ export function WorkOrderCreateSlideOver({
             />
           </div>
         </div>
-      </div>
+      </EnterpriseForm>
     </EnterpriseSlideOver>
   );
 }

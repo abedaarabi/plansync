@@ -3,11 +3,8 @@
 import { useMemo, useState } from "react";
 import { Loader2, Package, Search } from "lucide-react";
 import type { MaterialRow } from "@/lib/api-client";
-import {
-  EnterpriseSlideOver,
-  SlideOverHeader,
-  SLIDE_OVER_BTN_SECONDARY,
-} from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 
 export function TakeoffMaterialsSlider({
   open,
@@ -50,9 +47,9 @@ export function TakeoffMaterialsSlider({
         />
       }
       footer={
-        <button type="button" onClick={onClose} className={SLIDE_OVER_BTN_SECONDARY}>
+        <EnterpriseButton type="button" variant="secondary" size="sm" onClick={onClose}>
           Close
-        </button>
+        </EnterpriseButton>
       }
     >
       <div className="space-y-3">

@@ -5,9 +5,14 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Box, FileText, Wrench } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { IssueReferencePhotosField } from "@/components/enterprise/IssueReferencePhotosField";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import { EnterpriseInput } from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import {
   WorkOrderAssetFields,
   formatOmAssetLocation,
@@ -51,6 +56,12 @@ import { qk } from "@/lib/queryKeys";
 
 type WorkspaceMember = { userId: string; name: string | null; email: string | null };
 
+export const workOrderEditSchema = z.object({
+  title: z.string().trim().min(1, "Enter a work order title."),
+});
+
+type WorkOrderEditValues = z.infer<typeof workOrderEditSchema>;
+
 type Props = {
   open: boolean;
   issue: IssueRow | null;
@@ -72,9 +83,9 @@ export function WorkOrderEditSlideOver({
   onSaved,
 }: Props) {
   const qc = useQueryClient();
+  const form = useEnterpriseForm(workOrderEditSchema, { title: "" });
   const [assetId, setAssetId] = useState("");
   const [assetSearch, setAssetSearch] = useState("");
-  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [vendorName, setVendorName] = useState("");
@@ -107,7 +118,7 @@ export function WorkOrderEditSlideOver({
     if (!open || !issue) return;
     setAssetId(issue.assetId ?? "");
     setAssetSearch("");
-    setTitle(issue.title);
+    form.reset({ title: issue.title });
     setDescription(issue.description ?? "");
     setAssigneeId(issue.assigneeId ?? "");
     setVendorName(issue.externalAssigneeName ?? "");
@@ -129,7 +140,7 @@ export function WorkOrderEditSlideOver({
     setProcedure(issue.procedureJson ?? []);
     setCompletionEvidenceRequired(Boolean(issue.completionEvidenceRequired));
     setMsg(null);
-  }, [open, issue]);
+  }, [form, open, issue]);
 
   const { data: assets = [], isPending: assetsPending } = useQuery({
     queryKey: qk.omAssets(projectId, assetSearch),
@@ -169,11 +180,11 @@ export function WorkOrderEditSlideOver({
   ]);
 
   const saveMut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: WorkOrderEditValues) => {
       if (!issue) throw new Error("Missing work order.");
       return patchIssue(issue.id, {
         assetId: assetId || null,
-        title: title.trim(),
+        title: values.title.trim(),
         description: description.trim() || null,
         assigneeId: assigneeId || null,
         externalAssigneeName: vendorName.trim() || null,
@@ -208,7 +219,7 @@ export function WorkOrderEditSlideOver({
     mutationFn: () => {
       if (!workspaceId) throw new Error("No workspace selected.");
       return postOmWorkspaceWorkOrderTemplate(workspaceId, {
-        name: title.trim() || "Work order procedure",
+        name: form.getValues("title").trim() || "Work order procedure",
         description: description.trim() || null,
         workOrderType: (workOrderType as "CORRECTIVE") || "CORRECTIVE",
         priority,
@@ -240,11 +251,8 @@ export function WorkOrderEditSlideOver({
       open={open}
       onClose={onClose}
       form={{
-        onSubmit: (e) => {
-          e.preventDefault();
-          if (!title.trim()) return;
-          saveMut.mutate();
-        },
+        noValidate: true,
+        onSubmit: form.handleSubmit((values) => saveMut.mutate(values)),
       }}
       ariaLabelledBy="wo-edit-title"
       header={
@@ -272,19 +280,19 @@ export function WorkOrderEditSlideOver({
             <EnterpriseButton type="button" variant="secondary" size="sm" onClick={onClose}>
               Cancel
             </EnterpriseButton>
-            <EnterpriseButton
-              type="submit"
-              size="sm"
-              loading={saveMut.isPending}
-              disabled={!title.trim()}
-            >
+            <EnterpriseButton type="submit" size="sm" loading={saveMut.isPending}>
               {saveMut.isPending ? "Saving…" : "Save changes"}
             </EnterpriseButton>
           </div>
         </div>
       }
     >
-      <div className="space-y-4">
+      <EnterpriseForm
+        form={form}
+        formId="work-order-edit-form"
+        onSubmit={(values) => saveMut.mutate(values)}
+        className="space-y-4"
+      >
         {msg ? (
           <div
             className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
@@ -384,18 +392,16 @@ export function WorkOrderEditSlideOver({
               <option value="OCCUPANT">Occupant</option>
             </select>
           </div>
-          <div>
-            <label htmlFor="wo-edit-title" className={MOBILE_FIELD_LABEL}>
-              Work order title *
-            </label>
-            <input
-              id="wo-edit-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-              required
-            />
-          </div>
+          <EnterpriseFormField<WorkOrderEditValues> name="title" label="Work order title" required>
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+              />
+            )}
+          </EnterpriseFormField>
           <div>
             <label htmlFor="wo-edit-description" className={MOBILE_FIELD_LABEL}>
               Scope / execution notes
@@ -581,7 +587,7 @@ export function WorkOrderEditSlideOver({
         </div>
 
         <WorkOrderActivityTimeline issue={issue} enabled={open} />
-      </div>
+      </EnterpriseForm>
     </EnterpriseSlideOver>
   );
 }

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
+import { z } from "zod";
 import { deleteProject, patchProject, type PatchProjectBody } from "@/lib/api-client";
 import { buildProjectChangeRows } from "@/lib/projectChangeSummary";
 import { PROJECT_STAGES, type ProjectStageValue } from "@/lib/projectStage";
@@ -14,12 +15,8 @@ import { qk } from "@/lib/queryKeys";
 import type { Project } from "@/types/projects";
 import { ConfirmProjectSaveDialog } from "./ConfirmProjectSaveDialog";
 import { DeleteProjectConfirmDialog } from "./DeleteProjectConfirmDialog";
-import {
-  EnterpriseSlideOver,
-  SlideOverHeader,
-  SLIDE_OVER_BTN_PRIMARY,
-  SLIDE_OVER_BTN_SECONDARY,
-} from "./EnterpriseSlideOver";
+import { EnterpriseButton } from "./EnterpriseButton";
+import { EnterpriseSlideOver, SlideOverHeader } from "./EnterpriseSlideOver";
 import { ProjectCurrencyPicker } from "./ProjectCurrencyPicker";
 import { ProjectMeasurementSystemPicker } from "./ProjectMeasurementSystemPicker";
 import { ProjectProgressBar } from "./ProjectProgressBar";
@@ -27,6 +24,10 @@ import { ProjectTypeSelect } from "./ProjectTypeSelect";
 import { ProjectLocationMap } from "./ProjectLocationMap";
 import { geocodeLocationName } from "@/lib/openMeteoGeocode";
 import { parseCoord } from "@/lib/projectGeo";
+import { EnterpriseForm } from "./forms/EnterpriseForm";
+import { EnterpriseFormField } from "./forms/EnterpriseFormField";
+import { EnterpriseInput } from "./forms/EnterpriseInputs";
+import { useEnterpriseForm } from "./forms/useEnterpriseForm";
 
 const inputClass =
   "mt-1.5 w-full rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)]  placeholder:text-[var(--enterprise-text-muted)]/75 transition focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20";
@@ -43,6 +44,13 @@ type Props = {
   onProjectDeleted?: (projectId: string) => void;
 };
 
+const projectEditSchema = z.object({
+  name: z.string().trim().min(1, "Enter a project name."),
+});
+
+type ProjectEditValues = z.infer<typeof projectEditSchema>;
+
+// fallow-ignore-next-line complexity
 export function ProjectEditSlideOver({
   open,
   onClose,
@@ -52,6 +60,7 @@ export function ProjectEditSlideOver({
   onProjectDeleted,
 }: Props) {
   const queryClient = useQueryClient();
+  const form = useEnterpriseForm(projectEditSchema, { name: "" });
 
   const [nameEd, setNameEd] = useState("");
   const [projectNumberEd, setProjectNumberEd] = useState("");
@@ -112,6 +121,7 @@ export function ProjectEditSlideOver({
 
   function hydrate(p: Project) {
     setNameEd(p.name);
+    form.reset({ name: p.name });
     setProjectNumberEd(p.projectNumber ?? "");
     setLocalBudgetEd(p.localBudget != null && p.localBudget !== "" ? String(p.localBudget) : "");
     setProjectSizeEd(p.projectSize ?? "");
@@ -132,7 +142,7 @@ export function ProjectEditSlideOver({
   useEffect(() => {
     if (!project) return;
     hydrate(project);
-  }, [project]);
+  }, [form, project]);
 
   /** Debounced geocode from the Location field (English address / city) → map pin. */
   useEffect(() => {
@@ -369,15 +379,11 @@ export function ProjectEditSlideOver({
         open={open && !!project}
         onClose={handleClose}
         form={{
-          onSubmit: (e) => {
-            e.preventDefault();
-            if (!nameEd.trim()) {
-              toast.error("Project name is required");
-              return;
-            }
+          noValidate: true,
+          onSubmit: form.handleSubmit(() => {
             if (!formDirty) return;
             setConfirmSaveOpen(true);
-          },
+          }),
         }}
         ariaLabelledBy="edit-project-slide-title"
         header={
@@ -389,32 +395,43 @@ export function ProjectEditSlideOver({
         }
         footer={
           <>
-            <button type="button" onClick={handleClose} className={SLIDE_OVER_BTN_SECONDARY}>
+            <EnterpriseButton type="button" variant="secondary" size="sm" onClick={handleClose}>
               Cancel
-            </button>
-            <button
+            </EnterpriseButton>
+            <EnterpriseButton
               type="submit"
-              disabled={!formDirty || !nameEd.trim() || saveMutation.isPending}
-              className={SLIDE_OVER_BTN_PRIMARY}
+              size="sm"
+              loading={saveMutation.isPending}
+              disabled={!formDirty || Boolean(form.formState.errors.name)}
             >
               Save changes
-            </button>
+            </EnterpriseButton>
           </>
         }
       >
-        <div className="space-y-5">
-          <div>
-            <label htmlFor="edit-slide-name" className={labelClass}>
-              Project name <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="edit-slide-name"
-              value={nameEd}
-              onChange={(e) => setNameEd(e.target.value)}
-              className={inputClass}
-              required
-            />
-          </div>
+        <EnterpriseForm
+          form={form}
+          formId="edit-project-form"
+          onSubmit={() => {
+            if (!formDirty) return;
+            setConfirmSaveOpen(true);
+          }}
+          className="space-y-5"
+        >
+          <EnterpriseFormField<ProjectEditValues> name="name" label="Project name" required>
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                onChange={(event) => {
+                  field.onChange(event);
+                  setNameEd(event.target.value);
+                }}
+              />
+            )}
+          </EnterpriseFormField>
 
           <div className="rounded-md border border-[var(--enterprise-border)]/70 bg-[var(--enterprise-bg)]/25 p-4">
             <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--enterprise-text-muted)]">
@@ -655,7 +672,7 @@ export function ProjectEditSlideOver({
               </button>
             </div>
           ) : null}
-        </div>
+        </EnterpriseForm>
       </EnterpriseSlideOver>
       <DeleteProjectConfirmDialog
         open={deleteDialogOpen && !!project}

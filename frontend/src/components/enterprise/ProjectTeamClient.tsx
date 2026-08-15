@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Crown, Loader2, Mail, Search, UserMinus, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   fetchEmailInvites,
   fetchProject,
@@ -14,7 +15,6 @@ import {
   resendEmailInvite,
   revokeEmailInvite,
   sendProjectEmailInvite,
-  type EmailInviteKind,
   type EmailInviteRow,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
@@ -34,6 +34,22 @@ import {
 import { userInitials } from "@/lib/user-initials";
 import { isWorkspaceManager } from "@/lib/workspaceRole";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
+import { INVITE_KIND_OPTIONS, WORKSPACE_ROLE_OPTIONS } from "./inviteFormOptions";
+import { EnterpriseForm } from "./forms/EnterpriseForm";
+import { EnterpriseFormField } from "./forms/EnterpriseFormField";
+import { EnterpriseInput, EnterpriseSelect } from "./forms/EnterpriseInputs";
+import { useEnterpriseForm } from "./forms/useEnterpriseForm";
+
+const projectInviteSchema = z.object({
+  email: z.string().trim().min(1, "Enter an email address.").email("Enter a valid email address."),
+  inviteKind: z.enum(["INTERNAL", "CLIENT", "CONTRACTOR", "SUBCONTRACTOR"]),
+  inviteeCompany: z.string(),
+  inviteeName: z.string(),
+  role: z.enum(["ADMIN", "MEMBER", "SUPER_ADMIN"]),
+  trade: z.string(),
+});
+
+type ProjectInviteValues = z.infer<typeof projectInviteSchema>;
 
 export function ProjectTeamClient({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
@@ -41,12 +57,15 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
   const isAdmin = isWorkspaceManager(primary?.role);
   const actorIsSuperAdmin = primary?.role === "SUPER_ADMIN";
   const currentUserId = me?.user.id;
-  const [email, setEmail] = useState("");
-  const [inviteKind, setInviteKind] = useState<EmailInviteKind>("INTERNAL");
-  const [role, setRole] = useState<"ADMIN" | "MEMBER" | "SUPER_ADMIN">("MEMBER");
-  const [trade, setTrade] = useState("");
-  const [inviteeName, setInviteeName] = useState("");
-  const [inviteeCompany, setInviteeCompany] = useState("");
+  const inviteForm = useEnterpriseForm(projectInviteSchema, {
+    email: "",
+    inviteKind: "INTERNAL",
+    inviteeCompany: "",
+    inviteeName: "",
+    role: "MEMBER",
+    trade: "",
+  });
+  const inviteKind = inviteForm.watch("inviteKind");
   const [sending, setSending] = useState(false);
   const [inviteListKindFilter, setInviteListKindFilter] = useState<InviteKindFilter>("all");
   const [inviteListStatusFilter, setInviteListStatusFilter] = useState<InviteStatusFilter>("all");
@@ -187,25 +206,20 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
     onError: (e: Error) => toast.error(e.message ?? "Could not resend"),
   });
 
-  async function onInvite(e: React.FormEvent) {
-    e.preventDefault();
-    if (!workspaceId || !email.trim()) return;
+  async function onInvite(values: ProjectInviteValues) {
+    if (!workspaceId) return;
     setSending(true);
     try {
       await sendProjectEmailInvite(workspaceId, {
-        email: email.trim(),
+        email: values.email.trim(),
         projectIds: [projectId],
-        inviteKind,
-        ...(inviteKind === "INTERNAL" ? { role } : { role: "MEMBER" as const }),
-        trade: trade.trim() || undefined,
-        inviteeName: inviteeName.trim() || undefined,
-        inviteeCompany: inviteeCompany.trim() || undefined,
+        inviteKind: values.inviteKind,
+        ...(values.inviteKind === "INTERNAL" ? { role: values.role } : { role: "MEMBER" as const }),
+        trade: values.trade.trim() || undefined,
+        inviteeName: values.inviteeName.trim() || undefined,
+        inviteeCompany: values.inviteeCompany.trim() || undefined,
       });
-      setEmail("");
-      setInviteKind("INTERNAL");
-      setTrade("");
-      setInviteeName("");
-      setInviteeCompany("");
+      inviteForm.reset();
       void qc.invalidateQueries({ queryKey: qk.emailInvites(workspaceId, projectId) });
       void qc.invalidateQueries({ queryKey: qk.projectTeam(projectId) });
       toast.success("Invite sent");
@@ -233,93 +247,115 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
           Invite to this project
         </h2>
         {isAdmin ? (
-          <form className="mt-3 space-y-3" onSubmit={onInvite}>
+          <EnterpriseForm
+            form={inviteForm}
+            density="compact"
+            className="mt-3 space-y-3"
+            onSubmit={onInvite}
+          >
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="min-w-0 sm:col-span-2">
-                <label className="mb-1 block text-xs text-[var(--enterprise-text-muted)]">
-                  Email
-                </label>
-                <input
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  type="email"
-                  required
-                  className={OM_COMPACT_INPUT}
-                  placeholder="name@company.com"
-                />
+                <EnterpriseFormField<ProjectInviteValues> name="email" label="Email" required>
+                  {({ describedBy, field, id, invalid }) => (
+                    <EnterpriseInput
+                      {...field}
+                      id={id}
+                      type="text"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      aria-describedby={describedBy}
+                      aria-invalid={invalid}
+                      placeholder="name@company.com"
+                    />
+                  )}
+                </EnterpriseFormField>
               </div>
-              <div>
-                <label className="mb-1 block text-xs text-[var(--enterprise-text-muted)]">
-                  Invite as
-                </label>
-                <select
-                  value={inviteKind}
-                  onChange={(e) => setInviteKind(e.target.value as EmailInviteKind)}
-                  className={OM_COMPACT_SELECT}
-                >
-                  <option value="INTERNAL">Internal teammate</option>
-                  <option value="CLIENT">Client</option>
-                  <option value="CONTRACTOR">Contractor</option>
-                  <option value="SUBCONTRACTOR">Subcontractor</option>
-                </select>
-              </div>
-              {inviteKind === "INTERNAL" ? (
-                <div>
-                  <label className="mb-1 block text-xs text-[var(--enterprise-text-muted)]">
-                    Workspace role
-                  </label>
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as "ADMIN" | "MEMBER" | "SUPER_ADMIN")}
-                    className={OM_COMPACT_SELECT}
+              <EnterpriseFormField<ProjectInviteValues> name="inviteKind" label="Invite as">
+                {({ describedBy, field, id, invalid }) => (
+                  <EnterpriseSelect
+                    {...field}
+                    id={id}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid}
                   >
-                    <option value="MEMBER">Member</option>
-                    <option value="ADMIN">Admin</option>
-                    {actorIsSuperAdmin ? <option value="SUPER_ADMIN">Super Admin</option> : null}
-                  </select>
-                </div>
+                    {INVITE_KIND_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </EnterpriseSelect>
+                )}
+              </EnterpriseFormField>
+              {inviteKind === "INTERNAL" ? (
+                <EnterpriseFormField<ProjectInviteValues> name="role" label="Workspace role">
+                  {({ describedBy, field, id, invalid }) => (
+                    <EnterpriseSelect
+                      {...field}
+                      id={id}
+                      aria-describedby={describedBy}
+                      aria-invalid={invalid}
+                    >
+                      {WORKSPACE_ROLE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                      {actorIsSuperAdmin ? <option value="SUPER_ADMIN">Super Admin</option> : null}
+                    </EnterpriseSelect>
+                  )}
+                </EnterpriseFormField>
               ) : null}
               {inviteKind === "CONTRACTOR" || inviteKind === "SUBCONTRACTOR" ? (
                 <div className="sm:col-span-2">
-                  <label className="mb-1 block text-xs text-[var(--enterprise-text-muted)]">
-                    Trade / discipline (optional)
-                  </label>
-                  <input
-                    value={trade}
-                    onChange={(e) => setTrade(e.target.value)}
-                    type="text"
-                    maxLength={120}
-                    className={OM_COMPACT_INPUT}
-                    placeholder="e.g. Electrical"
-                  />
+                  <EnterpriseFormField<ProjectInviteValues>
+                    name="trade"
+                    label="Trade / discipline (optional)"
+                  >
+                    {({ describedBy, field, id, invalid }) => (
+                      <EnterpriseInput
+                        {...field}
+                        id={id}
+                        maxLength={120}
+                        aria-describedby={describedBy}
+                        aria-invalid={invalid}
+                        placeholder="e.g. Electrical"
+                      />
+                    )}
+                  </EnterpriseFormField>
                 </div>
               ) : null}
               {inviteKind !== "INTERNAL" ? (
                 <>
-                  <div>
-                    <label className="mb-1 block text-xs text-[var(--enterprise-text-muted)]">
-                      Name (optional)
-                    </label>
-                    <input
-                      value={inviteeName}
-                      onChange={(e) => setInviteeName(e.target.value)}
-                      type="text"
-                      maxLength={200}
-                      className={OM_COMPACT_INPUT}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-[var(--enterprise-text-muted)]">
-                      Company (optional)
-                    </label>
-                    <input
-                      value={inviteeCompany}
-                      onChange={(e) => setInviteeCompany(e.target.value)}
-                      type="text"
-                      maxLength={200}
-                      className={OM_COMPACT_INPUT}
-                    />
-                  </div>
+                  <EnterpriseFormField<ProjectInviteValues>
+                    name="inviteeName"
+                    label="Name (optional)"
+                  >
+                    {({ describedBy, field, id, invalid }) => (
+                      <EnterpriseInput
+                        {...field}
+                        id={id}
+                        maxLength={200}
+                        aria-describedby={describedBy}
+                        aria-invalid={invalid}
+                      />
+                    )}
+                  </EnterpriseFormField>
+                  <EnterpriseFormField<ProjectInviteValues>
+                    name="inviteeCompany"
+                    label="Company (optional)"
+                  >
+                    {({ describedBy, field, id, invalid }) => (
+                      <EnterpriseInput
+                        {...field}
+                        id={id}
+                        maxLength={200}
+                        aria-describedby={describedBy}
+                        aria-invalid={invalid}
+                      />
+                    )}
+                  </EnterpriseFormField>
                 </>
               ) : null}
             </div>
@@ -338,7 +374,7 @@ export function ProjectTeamClient({ projectId }: { projectId: string }) {
               )}
               Invite
             </button>
-          </form>
+          </EnterpriseForm>
         ) : (
           <p className="mt-3 text-sm text-[var(--enterprise-text-muted)]">
             Only workspace admins can send invites or manage pending invitations. Ask a Super Admin

@@ -33,12 +33,11 @@ import { projectScopedHref } from "@/lib/projectScopedPath";
 import { qk } from "@/lib/queryKeys";
 import type { CloudFile } from "@/types/projects";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
-import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import {
-  EnterpriseSlideOver,
-  SlideOverHeader,
-  SLIDE_OVER_BTN_PRIMARY,
-} from "@/components/enterprise/EnterpriseSlideOver";
+  EnterpriseButton,
+  enterpriseButtonClassName,
+} from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
 import { OmAssetDocumentsBlock } from "@/components/enterprise/OmAssetDocumentsBlock";
 import { OmAssetImageThumb } from "@/components/enterprise/OmAssetImageThumb";
 import { OmAssetInspectionTimeline } from "@/components/enterprise/OmAssetInspectionTimeline";
@@ -206,7 +205,12 @@ export function OmAssetDetailSlide({
           <Link
             href={workOrdersHref}
             onClick={onClose}
-            className={`${SLIDE_OVER_BTN_PRIMARY} w-full gap-1.5`}
+            className={enterpriseButtonClassName({
+              variant: "primary",
+              size: "sm",
+              fullWidth: true,
+              className: "gap-1.5",
+            })}
           >
             <Plus className="h-4 w-4" strokeWidth={2} />
             Create work order

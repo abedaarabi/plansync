@@ -12,6 +12,7 @@ import { X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   fetchProjectSession,
   fetchProjectTeam,
@@ -72,6 +73,10 @@ import {
 } from "@/components/file-explorer";
 import { folderSubtreeIds, isInFolderSubtree } from "@/lib/folderSubtree";
 import { FilesOverview } from "@/components/enterprise/FilesOverview";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import { EnterpriseInput } from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import {
   filterProjectFiles,
   filesOverviewFilterLabel,
@@ -81,6 +86,12 @@ import {
 const UPLOAD_INPUT_ID = "project-files-upload-input";
 const ROOT_DROP_KEY = "root";
 const SMART_UPLOAD_FLOW_ENABLED = process.env.NEXT_PUBLIC_SMART_UPLOAD_FLOW !== "0";
+
+const newFolderSchema = z.object({
+  name: z.string().trim().min(1, "Enter a folder name."),
+});
+
+type NewFolderValues = z.infer<typeof newFolderSchema>;
 
 function folderDropKey(folderId: string | null) {
   return folderId === null ? ROOT_DROP_KEY : `folder:${folderId}`;
@@ -205,7 +216,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
   }, [project, folderParam, pathname, router, searchParams]);
   const [folderModal, setFolderModal] = useState(false);
-  const [folderName, setFolderName] = useState("");
+  const newFolderForm = useEnterpriseForm(newFolderSchema, { name: "" });
   const [newFolderAccessMode, setNewFolderAccessMode] = useState<"all" | "selected">("all");
   const [newFolderAccessUserIds, setNewFolderAccessUserIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -818,7 +829,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
   }
 
   function openNewFolderModal() {
-    setFolderName("");
+    newFolderForm.reset({ name: "" });
     setNewFolderAccessMode("all");
     setNewFolderAccessUserIds([]);
     setFolderModal(true);
@@ -829,9 +840,9 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
     setFolderModal(false);
   }
 
-  async function onCreateFolder() {
+  async function onCreateFolder(values: NewFolderValues) {
     if (!canManage) return;
-    if (!wid || !folderName.trim()) return;
+    if (!wid) return;
     setSaving(true);
     const tempId = `optimistic-${nanoid()}`;
     const optimisticAccessMode = newFolderAccessMode === "selected" ? "SELECTED_USERS" : "ALL";
@@ -839,7 +850,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
       newFolderAccessMode === "selected" ? [...newFolderAccessUserIds] : [];
     const opt: ProjectFolder = {
       id: tempId,
-      name: folderName.trim(),
+      name: values.name.trim(),
       parentId: folderId,
       projectId,
       accessMode: optimisticAccessMode,
@@ -854,7 +865,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: folderName.trim(),
+          name: values.name.trim(),
           parentId: folderId ?? undefined,
           accessMode: optimisticAccessMode,
           allowedUserIds: optimisticAllowedUserIds,
@@ -867,7 +878,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
       const folder = (await res.json()) as ProjectFolder;
       replaceOptimisticFolder(queryClient, wid, projectId, tempId, folder);
       setFolderModal(false);
-      setFolderName("");
+      newFolderForm.reset({ name: "" });
       setNewFolderAccessMode("all");
       setNewFolderAccessUserIds([]);
     } finally {
@@ -1389,9 +1400,9 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
               Cancel
             </button>
             <button
-              type="button"
-              onClick={() => void onCreateFolder()}
-              disabled={saving || !folderName.trim()}
+              type="submit"
+              form="project-files-new-folder-form"
+              disabled={saving}
               className="rounded-md bg-[var(--enterprise-primary)] px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
               {saving ? "Creating..." : "Create folder"}
@@ -1413,30 +1424,25 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
             Create a folder and set who can access it.
           </p>
         </div>
-        <div className="space-y-4 px-4 py-4 lg:px-5">
+        <EnterpriseForm
+          id="project-files-new-folder-form"
+          form={newFolderForm}
+          onSubmit={onCreateFolder}
+          className="space-y-4 px-4 py-4 lg:px-5"
+        >
           <div className="space-y-2 rounded-md border border-[var(--enterprise-border)] bg-white p-3">
-            <label
-              htmlFor="project-files-folder-name"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--enterprise-text-muted)]"
-            >
-              <FolderPlus className="h-3.5 w-3.5" aria-hidden />
-              Folder name
-            </label>
-            <input
-              id="project-files-folder-name"
-              value={folderName}
-              onChange={(e) => setFolderName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void onCreateFolder();
-                }
-              }}
-              className="mt-1.5 w-full rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2 text-sm text-[var(--enterprise-text)] focus:border-[var(--enterprise-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--enterprise-primary)]/20"
-              placeholder="e.g. Architectural"
-              required
-              autoFocus
-            />
+            <EnterpriseFormField<NewFolderValues> name="name" label="Folder name" required>
+              {({ describedBy, field, id, invalid }) => (
+                <EnterpriseInput
+                  {...field}
+                  id={id}
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                  placeholder="e.g. Architectural"
+                  autoFocus
+                />
+              )}
+            </EnterpriseFormField>
           </div>
 
           <div className="space-y-2 rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)] p-3">
@@ -1525,7 +1531,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
               </div>
             </div>
           ) : null}
-        </div>
+        </EnterpriseForm>
       </EnterpriseResponsiveDialog>
       <EnterpriseResponsiveDialog
         open={folderAccessOpen && Boolean(selectedFolder)}

@@ -6,9 +6,19 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, MapPin, MessageSquareText } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseMemberMultiPicker } from "@/components/enterprise/EnterpriseMemberMultiPicker";
 import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import {
+  EnterpriseInput,
+  EnterpriseSelect,
+  EnterpriseTextarea,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
+import { RFI_PRIORITY_OPTIONS, RFI_RISK_OPTIONS } from "@/components/enterprise/rfiFormOptions";
 import { RfiRelatedIssuesPicker } from "@/components/enterprise/RfiRelatedIssuesPicker";
 import { useEnterpriseWorkspace } from "@/components/enterprise/EnterpriseWorkspaceContext";
 import {
@@ -25,14 +35,9 @@ import {
   RFI_STATUS_LABEL,
   rfiStatusBadgeClass,
 } from "@/lib/issueStatusStyle";
-import {
-  MOBILE_FIELD_INPUT,
-  MOBILE_FIELD_LABEL,
-  MOBILE_FIELD_TEXTAREA,
-  MOBILE_FORM_SECTION,
-} from "@/lib/mobileFormStyles";
+import { MOBILE_FORM_SECTION } from "@/lib/mobileFormStyles";
 import { qk } from "@/lib/queryKeys";
-import { rfiBallInCourt } from "@/lib/rfisOverviewStats";
+import { rfiAssigneeIds, rfiBallInCourt } from "@/lib/rfisOverviewStats";
 
 type Props = {
   open: boolean;
@@ -41,18 +46,28 @@ type Props = {
   rfi: RfiRow | null;
 };
 
+export const rfiEditSchema = z.object({
+  dueYmd: z.string(),
+  fromDiscipline: z.string(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
+  question: z.string(),
+  risk: z.enum(["", "low", "med", "high"]),
+  title: z.string().trim().min(1, "Enter a short RFI title."),
+});
+
+type RfiEditValues = z.infer<typeof rfiEditSchema>;
+
+const RFI_EDIT_DEFAULTS: RfiEditValues = {
+  dueYmd: "",
+  fromDiscipline: "",
+  priority: "MEDIUM",
+  question: "",
+  risk: "",
+  title: "",
+};
+
 function normStatus(s: string): string {
   return s.trim().toUpperCase().replace(/\s+/g, "_");
-}
-
-function rfiResponderIds(r: RfiRow): string[] {
-  const ids = new Set<string>();
-  if (r.assignedToUserId) ids.add(r.assignedToUserId);
-  if (r.assignedTo?.id) ids.add(r.assignedTo.id);
-  for (const a of r.assignees ?? []) {
-    if (a.id) ids.add(a.id);
-  }
-  return [...ids];
 }
 
 // fallow-ignore-next-line complexity
@@ -61,13 +76,7 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
   const router = useRouter();
   const { me } = useEnterpriseWorkspace();
   const meId = me?.user.id ?? null;
-
-  const [title, setTitle] = useState("");
-  const [question, setQuestion] = useState("");
-  const [fromDiscipline, setFromDiscipline] = useState("");
-  const [dueYmd, setDueYmd] = useState("");
-  const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH">("MEDIUM");
-  const [risk, setRisk] = useState<"" | "low" | "med" | "high">("");
+  const form = useEnterpriseForm(rfiEditSchema, RFI_EDIT_DEFAULTS);
   const [assignUserIds, setAssignUserIds] = useState<string[]>([]);
   const [issueIds, setIssueIds] = useState<string[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
@@ -76,23 +85,25 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
   useEffect(() => {
     if (!open || !rfi) return;
     setLocalRfi(rfi);
-    setTitle(rfi.title);
-    setQuestion(rfi.description ?? "");
-    setFromDiscipline(rfi.fromDiscipline ?? "");
-    setDueYmd(issueDateToInputValue(rfi.dueDate));
-    setPriority(
+    const priority =
       (rfi.priority || "MEDIUM").toUpperCase() === "HIGH"
         ? "HIGH"
         : (rfi.priority || "MEDIUM").toUpperCase() === "LOW"
           ? "LOW"
-          : "MEDIUM",
-    );
+          : "MEDIUM";
     const rk = (rfi.risk ?? "").toLowerCase();
-    setRisk(rk === "low" || rk === "med" || rk === "high" ? rk : "");
-    setAssignUserIds(rfiResponderIds(rfi));
+    form.reset({
+      dueYmd: issueDateToInputValue(rfi.dueDate),
+      fromDiscipline: rfi.fromDiscipline ?? "",
+      priority,
+      question: rfi.description ?? "",
+      risk: rk === "low" || rk === "med" || rk === "high" ? rk : "",
+      title: rfi.title,
+    });
+    setAssignUserIds(rfiAssigneeIds(rfi));
     setIssueIds((rfi.issues ?? []).map((i) => i.id));
     setMsg(null);
-  }, [open, rfi]);
+  }, [form, open, rfi]);
 
   const { data: team } = useQuery({
     queryKey: qk.projectTeam(projectId),
@@ -121,15 +132,15 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
   const ballInCourt = active ? rfiBallInCourt(active) : "—";
 
   const saveMut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (values: RfiEditValues) => {
       if (!active) throw new Error("Missing RFI.");
       return patchProjectRfi(projectId, active.id, {
-        title: title.trim(),
-        description: question.trim() || null,
-        fromDiscipline: fromDiscipline.trim() || null,
-        dueDate: dueYmd.trim() ? dueYmd.trim() : null,
-        priority,
-        risk: risk === "" ? null : risk,
+        title: values.title.trim(),
+        description: values.question.trim() || null,
+        fromDiscipline: values.fromDiscipline.trim() || null,
+        dueDate: values.dueYmd.trim() ? values.dueYmd.trim() : null,
+        priority: values.priority,
+        risk: values.risk === "" ? null : values.risk,
         assigneeUserIds: assignUserIds,
         issueIds,
       });
@@ -187,18 +198,17 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
       open={open}
       onClose={onClose}
       form={{
-        onSubmit: (e) => {
-          e.preventDefault();
-          if (!title.trim() || closed) return;
-          saveMut.mutate();
-        },
+        noValidate: true,
+        onSubmit: form.handleSubmit((values) => {
+          if (!closed) saveMut.mutate(values);
+        }),
       }}
       ariaLabelledBy="rfi-edit-title"
       header={
         <SlideOverHeader
           icon={MessageSquareText}
           titleId="rfi-edit-title"
-          title={title.trim() || "Edit RFI"}
+          title={form.watch("title").trim() || "Edit RFI"}
           description={
             <>
               <span className="font-mono font-semibold tabular-nums">{numLabel}</span>
@@ -223,7 +233,7 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
                 type="button"
                 size="sm"
                 loading={statusMut.isPending}
-                disabled={assignUserIds.length === 0 && rfiResponderIds(active).length === 0}
+                disabled={assignUserIds.length === 0 && rfiAssigneeIds(active).length === 0}
                 onClick={() =>
                   statusMut.mutate({
                     status: "IN_REVIEW",
@@ -272,11 +282,7 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
               Cancel
             </EnterpriseButton>
             {!closed ? (
-              <EnterpriseButton
-                type="submit"
-                loading={saveMut.isPending}
-                disabled={!title.trim() || busy}
-              >
+              <EnterpriseButton type="submit" loading={saveMut.isPending} disabled={busy}>
                 {saveMut.isPending ? "Saving…" : "Save changes"}
               </EnterpriseButton>
             ) : null}
@@ -284,7 +290,12 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
         </div>
       }
     >
-      <div className="space-y-4">
+      <EnterpriseForm
+        form={form}
+        formId="rfi-edit-form"
+        onSubmit={(values) => saveMut.mutate(values)}
+        className="space-y-4"
+      >
         {msg ? (
           <div
             className="rounded-md border border-[var(--enterprise-semantic-danger-border)] bg-[var(--enterprise-semantic-danger-bg)] px-3 py-2 text-sm text-[var(--enterprise-semantic-danger-text)]"
@@ -309,101 +320,97 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
 
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Details</p>
-          <div>
-            <label htmlFor="rfi-edit-title-input" className={MOBILE_FIELD_LABEL}>
-              Title *
-            </label>
-            <input
-              id="rfi-edit-title-input"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-              required
-              disabled={closed || busy}
-            />
-          </div>
-          <div>
-            <label htmlFor="rfi-edit-question" className={MOBILE_FIELD_LABEL}>
-              Question
-            </label>
-            <textarea
-              id="rfi-edit-question"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              rows={4}
-              className={MOBILE_FIELD_TEXTAREA}
-              disabled={closed || busy}
-            />
-          </div>
+          <EnterpriseFormField<RfiEditValues> name="title" label="Title" required>
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                disabled={closed || busy}
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<RfiEditValues> name="question" label="Question">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseTextarea
+                {...field}
+                id={id}
+                rows={4}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                disabled={closed || busy}
+              />
+            )}
+          </EnterpriseFormField>
         </div>
 
         <div className={`${MOBILE_FORM_SECTION} grid gap-4 sm:grid-cols-2`}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)] sm:col-span-2">
             Routing
           </p>
-          <div>
-            <label htmlFor="rfi-edit-discipline" className={MOBILE_FIELD_LABEL}>
-              From discipline
-            </label>
-            <input
-              id="rfi-edit-discipline"
-              value={fromDiscipline}
-              onChange={(e) => setFromDiscipline(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-              disabled={closed || busy}
-            />
-          </div>
-          <div>
-            <label htmlFor="rfi-edit-due" className={MOBILE_FIELD_LABEL}>
-              Due date
-            </label>
-            <input
-              id="rfi-edit-due"
-              type="date"
-              value={dueYmd}
-              onChange={(e) => setDueYmd(e.target.value)}
-              className={MOBILE_FIELD_INPUT}
-              disabled={closed || busy}
-            />
-          </div>
-          <div>
-            <label htmlFor="rfi-edit-priority" className={MOBILE_FIELD_LABEL}>
-              Priority
-            </label>
-            <select
-              id="rfi-edit-priority"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as typeof priority)}
-              className={MOBILE_FIELD_INPUT}
-              disabled={closed || busy}
-            >
-              <option value="LOW">Low</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="HIGH">High</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="rfi-edit-risk" className={MOBILE_FIELD_LABEL}>
-              Risk
-            </label>
-            <select
-              id="rfi-edit-risk"
-              value={risk}
-              onChange={(e) => setRisk(e.target.value as typeof risk)}
-              className={MOBILE_FIELD_INPUT}
-              disabled={closed || busy}
-            >
-              <option value="">—</option>
-              <option value="low">Low</option>
-              <option value="med">Medium</option>
-              <option value="high">High</option>
-            </select>
-          </div>
+          <EnterpriseFormField<RfiEditValues> name="fromDiscipline" label="From discipline">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                disabled={closed || busy}
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<RfiEditValues> name="dueYmd" label="Due date">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                type="date"
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                disabled={closed || busy}
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<RfiEditValues> name="priority" label="Priority">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                disabled={closed || busy}
+              >
+                {RFI_PRIORITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<RfiEditValues> name="risk" label="Risk">
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseSelect
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                disabled={closed || busy}
+              >
+                {RFI_RISK_OPTIONS.map((opt) => (
+                  <option key={opt.value || "none"} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </EnterpriseSelect>
+            )}
+          </EnterpriseFormField>
         </div>
 
         <div className={MOBILE_FORM_SECTION}>
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Responders</p>
-          <label className={MOBILE_FIELD_LABEL}>Who can answer</label>
+          <p className="enterprise-field-label">Who can answer</p>
           <div className="mt-1">
             {assignablePickRows.length === 0 ? (
               <p className="text-xs text-[var(--enterprise-text-muted)]">No members yet.</p>
@@ -423,7 +430,7 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
           <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">
             Related issues
           </p>
-          <label className={MOBILE_FIELD_LABEL}>Linked site issues</label>
+          <p className="enterprise-field-label">Linked site issues</p>
           <RfiRelatedIssuesPicker
             issues={projectIssues}
             value={issueIds}
@@ -456,7 +463,7 @@ export function RfiEditSlideOver({ open, onClose, projectId, rfi }: Props) {
             <ExternalLink className="h-3.5 w-3.5" aria-hidden />
           </Link>
         </div>
-      </div>
+      </EnterpriseForm>
     </EnterpriseSlideOver>
   );
 }

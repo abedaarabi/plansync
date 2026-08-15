@@ -2,9 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Package, Plus, Trash2 } from "lucide-react";
+import { Trash2, Plus, Package, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import { EnterpriseInput } from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseOverviewKpiTile } from "@/components/enterprise/EnterpriseOverviewKpiTile";
 import { OmEmptyState } from "@/components/enterprise/OmEmptyState";
@@ -17,13 +22,37 @@ import {
   ProRequiredError,
   type OmPartsInventoryRow,
 } from "@/lib/api-client";
+import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { qk } from "@/lib/queryKeys";
-
-import { OM_COMPACT_INPUT, OM_COMPACT_LABEL, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 
 type Props = { projectId: string };
 
 type PartsFilter = "ALL" | "LOW" | "OUT" | "OK";
+
+export const partsInventoryCreateSchema = z.object({
+  name: z.string().trim().min(1, "Enter a part name."),
+  quantity: z
+    .string()
+    .refine((value) => /^\d+$/.test(value), "Enter a whole quantity of zero or more."),
+  reorderLevel: z
+    .string()
+    .refine((value) => /^\d+$/.test(value), "Enter a whole reorder level of zero or more."),
+  unitCost: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || /^(?:\d+|\d*\.\d+)$/.test(value), {
+      message: "Enter a valid unit cost.",
+    }),
+});
+
+type PartsInventoryCreateValues = z.infer<typeof partsInventoryCreateSchema>;
+
+const PARTS_INVENTORY_DEFAULTS: PartsInventoryCreateValues = {
+  name: "",
+  quantity: "0",
+  reorderLevel: "5",
+  unitCost: "",
+};
 
 function stockTone(item: OmPartsInventoryRow): "success" | "warning" | "danger" {
   if (item.quantity <= 0) return "danger";
@@ -104,10 +133,7 @@ function PartListCard({ item, onDelete }: { item: OmPartsInventoryRow; onDelete:
 // fallow-ignore-next-line complexity
 export function OmPartsInventoryClient({ projectId }: Props) {
   const qc = useQueryClient();
-  const [name, setName] = useState("");
-  const [quantity, setQuantity] = useState("0");
-  const [reorderLevel, setReorderLevel] = useState("5");
-  const [unitCost, setUnitCost] = useState("");
+  const createForm = useEnterpriseForm(partsInventoryCreateSchema, PARTS_INVENTORY_DEFAULTS);
   const [filter, setFilter] = useState<PartsFilter>("ALL");
 
   const { data: items = [], isPending } = useQuery({
@@ -116,17 +142,15 @@ export function OmPartsInventoryClient({ projectId }: Props) {
   });
 
   const createMut = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: PartsInventoryCreateValues) =>
       postOmPartsInventoryItem(projectId, {
-        name: name.trim(),
-        quantity: parseInt(quantity, 10) || 0,
-        reorderLevel: parseInt(reorderLevel, 10) || 0,
-        unitCost: unitCost.trim() ? parseFloat(unitCost) : undefined,
+        name: values.name.trim(),
+        quantity: parseInt(values.quantity, 10),
+        reorderLevel: parseInt(values.reorderLevel, 10),
+        unitCost: values.unitCost.trim() ? parseFloat(values.unitCost) : undefined,
       }),
     onSuccess: async () => {
-      setName("");
-      setQuantity("0");
-      setUnitCost("");
+      createForm.reset(PARTS_INVENTORY_DEFAULTS);
       await qc.invalidateQueries({ queryKey: qk.omPartsInventory(projectId) });
       toast.success("Part added.");
     },
@@ -223,53 +247,65 @@ export function OmPartsInventoryClient({ projectId }: Props) {
         title="Add part"
         description="Quantity updates automatically on work order completion."
       >
-        <form
+        <EnterpriseForm
+          form={createForm}
+          density="compact"
           className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto] lg:items-end"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!name.trim()) return;
-            createMut.mutate();
-          }}
+          onSubmit={(values) => createMut.mutate(values)}
         >
           <div className="sm:col-span-2 lg:col-span-1">
-            <label className={OM_COMPACT_LABEL}>Part name *</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={OM_COMPACT_INPUT}
-              required
-            />
+            <EnterpriseFormField<PartsInventoryCreateValues> name="name" label="Part name" required>
+              {({ describedBy, field, id, invalid }) => (
+                <EnterpriseInput
+                  {...field}
+                  id={id}
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                />
+              )}
+            </EnterpriseFormField>
           </div>
           <div>
-            <label className={OM_COMPACT_LABEL}>Qty</label>
-            <input
-              type="number"
-              min={0}
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              className={OM_COMPACT_INPUT}
-            />
+            <EnterpriseFormField<PartsInventoryCreateValues> name="quantity" label="Qty">
+              {({ describedBy, field, id, invalid }) => (
+                <EnterpriseInput
+                  {...field}
+                  id={id}
+                  type="text"
+                  inputMode="numeric"
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                />
+              )}
+            </EnterpriseFormField>
           </div>
           <div>
-            <label className={OM_COMPACT_LABEL}>Reorder</label>
-            <input
-              type="number"
-              min={0}
-              value={reorderLevel}
-              onChange={(e) => setReorderLevel(e.target.value)}
-              className={OM_COMPACT_INPUT}
-            />
+            <EnterpriseFormField<PartsInventoryCreateValues> name="reorderLevel" label="Reorder">
+              {({ describedBy, field, id, invalid }) => (
+                <EnterpriseInput
+                  {...field}
+                  id={id}
+                  type="text"
+                  inputMode="numeric"
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                />
+              )}
+            </EnterpriseFormField>
           </div>
           <div>
-            <label className={OM_COMPACT_LABEL}>Unit cost</label>
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={unitCost}
-              onChange={(e) => setUnitCost(e.target.value)}
-              className={OM_COMPACT_INPUT}
-            />
+            <EnterpriseFormField<PartsInventoryCreateValues> name="unitCost" label="Unit cost">
+              {({ describedBy, field, id, invalid }) => (
+                <EnterpriseInput
+                  {...field}
+                  id={id}
+                  type="text"
+                  inputMode="decimal"
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid}
+                />
+              )}
+            </EnterpriseFormField>
           </div>
           <div className="flex items-end sm:col-span-2 lg:col-span-1">
             <EnterpriseButton
@@ -282,7 +318,7 @@ export function OmPartsInventoryClient({ projectId }: Props) {
               Add
             </EnterpriseButton>
           </div>
-        </form>
+        </EnterpriseForm>
       </OmSectionCard>
 
       {items.length === 0 ? (

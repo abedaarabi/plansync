@@ -3,32 +3,58 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { AlertCircle, ArrowRight, Loader2, Lock, Mail, User } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, Loader2, Lock, Mail, User } from "lucide-react";
+import { z } from "zod";
 import { BrandStoryPanel, MarketingHeroBackdrop } from "@/components/BrandStoryPanel";
+import {
+  AuthFormAlert,
+  AUTH_FIELD_ICON,
+  AUTH_FIELD_INPUT,
+  AUTH_PASSWORD_INPUT,
+} from "@/components/auth/authFormChrome";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import {
+  EnterpriseInput,
+  EnterprisePasswordInput,
+} from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { SocialAuthButtons } from "@/components/SocialAuthButtons";
 import { authClient } from "@/lib/auth-client";
 import { workspaceGateUrl } from "@/lib/workspacePreference";
 
-const fieldIcon =
-  "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400";
-const fieldInput =
-  "enterprise-field-input enterprise-field-input--icon min-h-11 py-2.5 pr-3 text-[0.9375rem]";
+function createAuthSchema(mode: "sign-in" | "sign-up") {
+  return z.object({
+    email: z
+      .string()
+      .trim()
+      .min(1, "Enter your email address.")
+      .email("Enter a valid email address."),
+    name: mode === "sign-up" ? z.string().trim().min(1, "Enter your full name.") : z.string(),
+    password: z
+      .string()
+      .min(1, "Enter your password.")
+      .min(8, "Password must be at least 8 characters."),
+  });
+}
+
+type AuthValues = z.infer<ReturnType<typeof createAuthSchema>>;
 
 export default function SignInPage() {
   const router = useRouter();
   const [next, setNext] = useState("/dashboard");
+  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const q = sp.get("next");
     if (q?.startsWith("/")) setNext(q);
     if (sp.get("mode") === "sign-up") setMode("sign-up");
   }, []);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
+  // Schema follows the visible fields so empty submit marks every required input.
+  const authSchema = useMemo(() => createAuthSchema(mode), [mode]);
+  const form = useEnterpriseForm(authSchema, { email: "", name: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -61,8 +87,7 @@ export default function SignInPage() {
     return { ready: false, emailVerified: null };
   }
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSubmit({ email, name, password }: AuthValues) {
     setError(null);
     setUnverifiedEmail(null);
     setLoading(true);
@@ -172,6 +197,7 @@ export default function SignInPage() {
                       aria-selected={mode === "sign-in"}
                       onClick={() => {
                         setError(null);
+                        form.clearErrors();
                         setMode("sign-in");
                       }}
                       className={`relative min-h-10 flex-1 rounded-[5px] py-2 text-sm font-semibold transition ${
@@ -188,6 +214,7 @@ export default function SignInPage() {
                       aria-selected={mode === "sign-up"}
                       onClick={() => {
                         setError(null);
+                        form.clearErrors();
                         setMode("sign-up");
                       }}
                       className={`relative min-h-10 flex-1 rounded-[5px] py-2 text-sm font-semibold transition ${
@@ -200,65 +227,68 @@ export default function SignInPage() {
                     </button>
                   </div>
 
-                  <form onSubmit={onSubmit} className="space-y-3.5">
+                  <EnterpriseForm form={form} onSubmit={onSubmit} className="space-y-3.5">
                     {mode === "sign-up" && (
-                      <div>
-                        <label htmlFor="auth-name" className="enterprise-field-label">
-                          Full name
-                        </label>
-                        <div className="relative">
-                          <User className={fieldIcon} aria-hidden />
-                          <input
-                            id="auth-name"
-                            className={fieldInput}
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            autoComplete="name"
-                            placeholder="Abed Aarabi"
-                            required
-                          />
-                        </div>
-                      </div>
+                      <EnterpriseFormField<AuthValues> name="name" label="Full name" required>
+                        {({ describedBy, field, id, invalid }) => (
+                          <div className="relative">
+                            <User className={AUTH_FIELD_ICON} aria-hidden />
+                            <EnterpriseInput
+                              {...field}
+                              id={id}
+                              className={AUTH_FIELD_INPUT}
+                              aria-describedby={describedBy}
+                              aria-invalid={invalid}
+                              autoComplete="name"
+                              placeholder="Abed Aarabi"
+                            />
+                          </div>
+                        )}
+                      </EnterpriseFormField>
                     )}
 
-                    <div>
-                      <label htmlFor="auth-email" className="enterprise-field-label">
-                        {mode === "sign-up" ? "Work email" : "Email"}
-                      </label>
-                      <div className="relative">
-                        <Mail className={fieldIcon} aria-hidden />
-                        <input
-                          id="auth-email"
-                          type="email"
-                          required
-                          className={fieldInput}
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          autoComplete="email"
-                          placeholder="you@company.com"
-                        />
-                      </div>
-                    </div>
+                    <EnterpriseFormField<AuthValues>
+                      name="email"
+                      label={mode === "sign-up" ? "Work email" : "Email"}
+                      required
+                    >
+                      {({ describedBy, field, id, invalid }) => (
+                        <div className="relative">
+                          <Mail className={AUTH_FIELD_ICON} aria-hidden />
+                          <EnterpriseInput
+                            {...field}
+                            id={id}
+                            type="text"
+                            inputMode="email"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            className={AUTH_FIELD_INPUT}
+                            aria-describedby={describedBy}
+                            aria-invalid={invalid}
+                            autoComplete="email"
+                            placeholder="you@company.com"
+                          />
+                        </div>
+                      )}
+                    </EnterpriseFormField>
 
-                    <div>
-                      <label htmlFor="auth-password" className="enterprise-field-label">
-                        Password
-                      </label>
-                      <div className="relative">
-                        <Lock className={fieldIcon} aria-hidden />
-                        <input
-                          id="auth-password"
-                          type="password"
-                          required
-                          minLength={8}
-                          className={fieldInput}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
-                          placeholder="••••••••••••"
-                        />
-                      </div>
-                    </div>
+                    <EnterpriseFormField<AuthValues> name="password" label="Password" required>
+                      {({ describedBy, field, id, invalid }) => (
+                        <div className="relative">
+                          <Lock className={AUTH_FIELD_ICON} aria-hidden />
+                          <EnterprisePasswordInput
+                            {...field}
+                            id={id}
+                            className={AUTH_PASSWORD_INPUT}
+                            aria-describedby={describedBy}
+                            aria-invalid={invalid}
+                            autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
+                            placeholder="••••••••••••"
+                          />
+                        </div>
+                      )}
+                    </EnterpriseFormField>
 
                     {mode === "sign-in" ? (
                       <div className="-mt-1 text-right">
@@ -271,15 +301,7 @@ export default function SignInPage() {
                       </div>
                     ) : null}
 
-                    {error && (
-                      <div
-                        className="flex gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800"
-                        role="alert"
-                      >
-                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
-                        <span>{error}</span>
-                      </div>
-                    )}
+                    {error && <AuthFormAlert>{error}</AuthFormAlert>}
                     {unverifiedEmail ? (
                       <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
                         <p>
@@ -317,7 +339,7 @@ export default function SignInPage() {
                         </>
                       )}
                     </EnterpriseButton>
-                  </form>
+                  </EnterpriseForm>
 
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center" aria-hidden>

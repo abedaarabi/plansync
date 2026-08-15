@@ -4,7 +4,12 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Mail, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import { EnterpriseInput } from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { EnterpriseLoadingState } from "@/components/enterprise/EnterpriseLoadingState";
 import { EnterpriseOverviewKpiTile } from "@/components/enterprise/EnterpriseOverviewKpiTile";
 import { OmEmptyState } from "@/components/enterprise/OmEmptyState";
@@ -19,81 +24,116 @@ import {
   type OmVendorRow,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
-import { OM_COMPACT_INPUT, OM_COMPACT_LABEL, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
+import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 
 type VendorFilter = "ALL" | "WITH_EMAIL" | "WITH_TRADE" | "MISSING_CONTACT";
 
 type Props = { projectId: string };
 
-function VendorFormFields({
-  name,
-  email,
-  trade,
-  onName,
-  onEmail,
-  onTrade,
-  idPrefix,
-}: {
-  name: string;
-  email: string;
-  trade: string;
-  onName: (v: string) => void;
-  onEmail: (v: string) => void;
-  onTrade: (v: string) => void;
-  idPrefix: string;
-}) {
+export const vendorFormSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || z.string().email().safeParse(value).success, {
+      message: "Enter a valid email address.",
+    }),
+  name: z.string().trim().min(1, "Enter a company name."),
+  trade: z.string(),
+});
+
+type VendorFormValues = z.infer<typeof vendorFormSchema>;
+
+const VENDOR_FORM_DEFAULTS: VendorFormValues = { email: "", name: "", trade: "" };
+
+function VendorFormFields({ tradeClassName }: { tradeClassName?: string }) {
   return (
     <>
-      <div>
-        <label htmlFor={`${idPrefix}-name`} className={OM_COMPACT_LABEL}>
-          Company name *
-        </label>
-        <input
-          id={`${idPrefix}-name`}
-          value={name}
-          onChange={(e) => onName(e.target.value)}
-          className={OM_COMPACT_INPUT}
-          required
-        />
-      </div>
-      <div>
-        <label htmlFor={`${idPrefix}-email`} className={OM_COMPACT_LABEL}>
-          Email
-        </label>
-        <input
-          id={`${idPrefix}-email`}
-          type="email"
-          value={email}
-          onChange={(e) => onEmail(e.target.value)}
-          className={OM_COMPACT_INPUT}
-          placeholder="vendor@company.com"
-        />
-      </div>
-      <div className="sm:col-span-2 lg:col-span-1">
-        <label htmlFor={`${idPrefix}-trade`} className={OM_COMPACT_LABEL}>
-          Trade
-        </label>
-        <input
-          id={`${idPrefix}-trade`}
-          value={trade}
-          onChange={(e) => onTrade(e.target.value)}
-          className={OM_COMPACT_INPUT}
-          placeholder="HVAC, electrical, plumbing…"
-        />
+      <EnterpriseFormField<VendorFormValues> name="name" label="Company name" required>
+        {({ describedBy, field, id, invalid }) => (
+          <EnterpriseInput
+            {...field}
+            id={id}
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
+          />
+        )}
+      </EnterpriseFormField>
+      <EnterpriseFormField<VendorFormValues> name="email" label="Email">
+        {({ describedBy, field, id, invalid }) => (
+          <EnterpriseInput
+            {...field}
+            id={id}
+            type="text"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
+            placeholder="vendor@company.com"
+          />
+        )}
+      </EnterpriseFormField>
+      <div className={tradeClassName}>
+        <EnterpriseFormField<VendorFormValues> name="trade" label="Trade">
+          {({ describedBy, field, id, invalid }) => (
+            <EnterpriseInput
+              {...field}
+              id={id}
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              placeholder="HVAC, electrical, plumbing…"
+            />
+          )}
+        </EnterpriseFormField>
       </div>
     </>
+  );
+}
+
+function VendorEditForm({
+  vendor,
+  onCancel,
+  onSave,
+  saving,
+}: {
+  vendor: OmVendorRow;
+  onCancel: () => void;
+  onSave: (values: VendorFormValues) => void;
+  saving: boolean;
+}) {
+  const form = useEnterpriseForm(vendorFormSchema, {
+    email: vendor.email ?? "",
+    name: vendor.name,
+    trade: vendor.trade ?? "",
+  });
+
+  return (
+    <li className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-2.5 sm:p-3">
+      <EnterpriseForm
+        form={form}
+        density="compact"
+        onSubmit={onSave}
+        className="grid gap-2 sm:grid-cols-2"
+      >
+        <VendorFormFields />
+        <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+          <EnterpriseButton type="submit" size="sm" loading={saving}>
+            Save changes
+          </EnterpriseButton>
+          <EnterpriseButton type="button" size="sm" variant="secondary" onClick={onCancel}>
+            <X className="h-4 w-4" aria-hidden />
+            Cancel
+          </EnterpriseButton>
+        </div>
+      </EnterpriseForm>
+    </li>
   );
 }
 
 function VendorListCard({
   vendor,
   editing,
-  editName,
-  editEmail,
-  editTrade,
-  onEditName,
-  onEditEmail,
-  onEditTrade,
   onStartEdit,
   onCancelEdit,
   onSave,
@@ -102,48 +142,21 @@ function VendorListCard({
 }: {
   vendor: OmVendorRow;
   editing: boolean;
-  editName: string;
-  editEmail: string;
-  editTrade: string;
-  onEditName: (v: string) => void;
-  onEditEmail: (v: string) => void;
-  onEditTrade: (v: string) => void;
   onStartEdit: () => void;
   onCancelEdit: () => void;
-  onSave: () => void;
+  onSave: (values: VendorFormValues) => void;
   onDelete: () => void;
   saving: boolean;
 }) {
   if (editing) {
     return (
-      <li className="rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] p-2.5 sm:p-3">
-        <form
-          className="grid gap-2 sm:grid-cols-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onSave();
-          }}
-        >
-          <VendorFormFields
-            idPrefix={`vendor-edit-${vendor.id}`}
-            name={editName}
-            email={editEmail}
-            trade={editTrade}
-            onName={onEditName}
-            onEmail={onEditEmail}
-            onTrade={onEditTrade}
-          />
-          <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-            <EnterpriseButton type="submit" size="sm" loading={saving}>
-              Save changes
-            </EnterpriseButton>
-            <EnterpriseButton type="button" size="sm" variant="secondary" onClick={onCancelEdit}>
-              <X className="h-4 w-4" aria-hidden />
-              Cancel
-            </EnterpriseButton>
-          </div>
-        </form>
-      </li>
+      <VendorEditForm
+        key={vendor.id}
+        vendor={vendor}
+        onCancel={onCancelEdit}
+        onSave={onSave}
+        saving={saving}
+      />
     );
   }
 
@@ -203,13 +216,8 @@ function VendorListCard({
 
 export function OmVendorsClient({ projectId }: Props) {
   const qc = useQueryClient();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [trade, setTrade] = useState("");
+  const createForm = useEnterpriseForm(vendorFormSchema, VENDOR_FORM_DEFAULTS);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editEmail, setEditEmail] = useState("");
-  const [editTrade, setEditTrade] = useState("");
   const [filter, setFilter] = useState<VendorFilter>("ALL");
 
   const { data: vendors = [], isPending } = useQuery({
@@ -241,16 +249,14 @@ export function OmVendorsClient({ projectId }: Props) {
   const invalidate = () => qc.invalidateQueries({ queryKey: qk.omVendors(projectId) });
 
   const createMut = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: VendorFormValues) =>
       postOmVendor(projectId, {
-        name: name.trim(),
-        email: email.trim() || undefined,
-        trade: trade.trim() || undefined,
+        name: values.name.trim(),
+        email: values.email.trim() || undefined,
+        trade: values.trade.trim() || undefined,
       }),
     onSuccess: async () => {
-      setName("");
-      setEmail("");
-      setTrade("");
+      createForm.reset(VENDOR_FORM_DEFAULTS);
       await invalidate();
       toast.success("Vendor added.");
     },
@@ -258,8 +264,12 @@ export function OmVendorsClient({ projectId }: Props) {
   });
 
   const patchMut = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof patchOmVendor>[2] }) =>
-      patchOmVendor(projectId, id, body),
+    mutationFn: ({ id, values }: { id: string; values: VendorFormValues }) =>
+      patchOmVendor(projectId, id, {
+        name: values.name.trim(),
+        email: values.email.trim() || null,
+        trade: values.trade.trim() || null,
+      }),
     onSuccess: async () => {
       setEditingId(null);
       await invalidate();
@@ -277,13 +287,6 @@ export function OmVendorsClient({ projectId }: Props) {
     },
     onError: (e: Error) => toast.error(e.message),
   });
-
-  function startEdit(v: OmVendorRow) {
-    setEditingId(v.id);
-    setEditName(v.name);
-    setEditEmail(v.email ?? "");
-    setEditTrade(v.trade ?? "");
-  }
 
   if (isPending) return <EnterpriseLoadingState message="Loading vendors…" label="Loading" />;
 
@@ -337,23 +340,13 @@ export function OmVendorsClient({ projectId }: Props) {
         title="Add vendor"
         description="Used when assigning work orders or sending vendor portal links."
       >
-        <form
+        <EnterpriseForm
+          form={createForm}
+          density="compact"
+          onSubmit={(values) => createMut.mutate(values)}
           className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!name.trim()) return;
-            createMut.mutate();
-          }}
         >
-          <VendorFormFields
-            idPrefix="vendor-create"
-            name={name}
-            email={email}
-            trade={trade}
-            onName={setName}
-            onEmail={setEmail}
-            onTrade={setTrade}
-          />
+          <VendorFormFields tradeClassName="sm:col-span-2 lg:col-span-1" />
           <div className="flex items-end sm:col-span-2 lg:col-span-1">
             <EnterpriseButton
               type="submit"
@@ -365,7 +358,7 @@ export function OmVendorsClient({ projectId }: Props) {
               Add
             </EnterpriseButton>
           </div>
-        </form>
+        </EnterpriseForm>
       </OmSectionCard>
 
       {vendors.length === 0 ? (
@@ -401,25 +394,9 @@ export function OmVendorsClient({ projectId }: Props) {
                   key={v.id}
                   vendor={v}
                   editing={editingId === v.id}
-                  editName={editName}
-                  editEmail={editEmail}
-                  editTrade={editTrade}
-                  onEditName={setEditName}
-                  onEditEmail={setEditEmail}
-                  onEditTrade={setEditTrade}
-                  onStartEdit={() => startEdit(v)}
+                  onStartEdit={() => setEditingId(v.id)}
                   onCancelEdit={() => setEditingId(null)}
-                  onSave={() => {
-                    if (!editName.trim()) return;
-                    patchMut.mutate({
-                      id: v.id,
-                      body: {
-                        name: editName.trim(),
-                        email: editEmail.trim() || null,
-                        trade: editTrade.trim() || null,
-                      },
-                    });
-                  }}
+                  onSave={(values) => patchMut.mutate({ id: v.id, values })}
                   onDelete={() => deleteMut.mutate(v.id)}
                   saving={patchMut.isPending}
                 />

@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Layers } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { EnterpriseSlideOver, SlideOverHeader } from "@/components/enterprise/EnterpriseSlideOver";
-import {
-  MOBILE_FIELD_INPUT,
-  MOBILE_FIELD_LABEL,
-  MOBILE_FORM_SECTION,
-} from "@/lib/mobileFormStyles";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import { EnterpriseInput } from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
+import { MOBILE_FORM_SECTION } from "@/lib/mobileFormStyles";
 import { useCreateBuildingLevelMutation } from "@/lib/locations/useBuildingQueries";
 
 type Props = {
@@ -19,51 +20,60 @@ type Props = {
   locationId: string;
 };
 
+const buildingLevelFormSchema = z.object({
+  elevation: z.string().refine((value) => value.trim() === "" || Number.isFinite(Number(value)), {
+    message: "Enter a valid number.",
+  }),
+  name: z.string().trim().min(1, "Enter a level name.").max(200, "Use 200 characters or fewer."),
+});
+
+type BuildingLevelFormValues = z.infer<typeof buildingLevelFormSchema>;
+
+const EMPTY_FORM: BuildingLevelFormValues = { elevation: "", name: "" };
+
 export function BuildingLevelFormSlideOver({ open, onClose, buildingId, locationId }: Props) {
-  const [name, setName] = useState("");
-  const [elevation, setElevation] = useState("");
+  const form = useEnterpriseForm(buildingLevelFormSchema, EMPTY_FORM);
   const createMut = useCreateBuildingLevelMutation(buildingId, locationId);
 
   useEffect(() => {
     if (!open) {
-      setName("");
-      setElevation("");
+      form.reset(EMPTY_FORM);
     }
-  }, [open]);
+  }, [form, open]);
 
   const handleClose = () => {
     if (createMut.isPending) return;
     onClose();
   };
 
-  const elevNum = elevation.trim() === "" ? undefined : Number(elevation);
-  const elevValid = elevNum === undefined || Number.isFinite(elevNum);
+  const handleSubmit = (values: BuildingLevelFormValues) => {
+    const elevation = values.elevation.trim();
+    const elevationValue = elevation === "" ? undefined : Number(elevation);
+    const name = values.name.trim();
+    createMut.mutate(
+      {
+        name,
+        ...(elevationValue !== undefined ? { elevation: elevationValue } : {}),
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Level “${name}” created`);
+          onClose();
+        },
+        onError: (err) => {
+          toast.error(err instanceof Error ? err.message : "Could not create level.");
+        },
+      },
+    );
+  };
 
   return (
     <EnterpriseSlideOver
       open={open}
       onClose={handleClose}
       form={{
-        onSubmit: (e) => {
-          e.preventDefault();
-          const trimmed = name.trim();
-          if (!trimmed || !elevValid) return;
-          createMut.mutate(
-            {
-              name: trimmed,
-              ...(elevNum !== undefined ? { elevation: elevNum } : {}),
-            },
-            {
-              onSuccess: () => {
-                toast.success(`Level “${trimmed}” created`);
-                onClose();
-              },
-              onError: (err) => {
-                toast.error(err instanceof Error ? err.message : "Could not create level.");
-              },
-            },
-          );
-        },
+        noValidate: true,
+        onSubmit: form.handleSubmit(handleSubmit),
       }}
       ariaLabelledBy="building-level-create-title"
       header={
@@ -85,51 +95,49 @@ export function BuildingLevelFormSlideOver({ open, onClose, buildingId, location
           >
             Cancel
           </EnterpriseButton>
-          <EnterpriseButton
-            type="submit"
-            size="sm"
-            loading={createMut.isPending}
-            disabled={!name.trim() || !elevValid}
-          >
+          <EnterpriseButton type="submit" size="sm" loading={createMut.isPending}>
             {createMut.isPending ? "Creating…" : "Create level"}
           </EnterpriseButton>
         </>
       }
     >
-      <div className={MOBILE_FORM_SECTION}>
-        <div>
-          <label htmlFor="building-level-name" className={MOBILE_FIELD_LABEL}>
-            Name *
-          </label>
-          <input
-            id="building-level-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className={MOBILE_FIELD_INPUT}
-            required
-            maxLength={200}
-            placeholder="Level 1"
-            autoFocus
-          />
+      <EnterpriseForm
+        form={form}
+        formId="building-level-form"
+        density="mobile"
+        onSubmit={handleSubmit}
+      >
+        <div className={MOBILE_FORM_SECTION}>
+          <EnterpriseFormField<BuildingLevelFormValues> name="name" label="Name" required>
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                placeholder="Level 1"
+                autoFocus
+              />
+            )}
+          </EnterpriseFormField>
+          <EnterpriseFormField<BuildingLevelFormValues>
+            name="elevation"
+            label="Elevation (m, optional)"
+          >
+            {({ describedBy, field, id, invalid }) => (
+              <EnterpriseInput
+                {...field}
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                type="number"
+                step="any"
+                placeholder="0"
+              />
+            )}
+          </EnterpriseFormField>
         </div>
-        <div>
-          <label htmlFor="building-level-elevation" className={MOBILE_FIELD_LABEL}>
-            Elevation (m, optional)
-          </label>
-          <input
-            id="building-level-elevation"
-            type="number"
-            step="any"
-            value={elevation}
-            onChange={(e) => setElevation(e.target.value)}
-            className={MOBILE_FIELD_INPUT}
-            placeholder="0"
-          />
-          {!elevValid ? (
-            <p className="mt-1 text-xs text-[var(--enterprise-error)]">Enter a valid number.</p>
-          ) : null}
-        </div>
-      </div>
+      </EnterpriseForm>
     </EnterpriseSlideOver>
   );
 }

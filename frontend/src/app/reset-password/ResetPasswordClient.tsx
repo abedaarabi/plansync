@@ -3,10 +3,35 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { AlertCircle, Loader2, Lock } from "lucide-react";
-import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
+import { Lock } from "lucide-react";
+import { z } from "zod";
+import {
+  AuthFormAlert,
+  AuthSubmitButton,
+  AUTH_FIELD_ICON,
+  AUTH_PASSWORD_INPUT,
+} from "@/components/auth/authFormChrome";
+import { EnterpriseForm } from "@/components/enterprise/forms/EnterpriseForm";
+import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFormField";
+import { EnterprisePasswordInput } from "@/components/enterprise/forms/EnterpriseInputs";
+import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { EnterpriseAuthLayout } from "@/components/auth/EnterpriseAuthLayout";
 import { authClient } from "@/lib/auth-client";
+
+const resetSchema = z
+  .object({
+    confirm: z.string().min(1, "Confirm your password."),
+    password: z
+      .string()
+      .min(1, "Enter a new password.")
+      .min(8, "Password must be at least 8 characters."),
+  })
+  .refine((values) => values.password === values.confirm, {
+    message: "Passwords do not match.",
+    path: ["confirm"],
+  });
+
+type ResetValues = z.infer<typeof resetSchema>;
 
 export function ResetPasswordClient() {
   const router = useRouter();
@@ -14,26 +39,16 @@ export function ResetPasswordClient() {
   const token = searchParams.get("token");
   const qpError = searchParams.get("error");
 
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const form = useEnterpriseForm(resetSchema, { confirm: "", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSubmit({ password }: ResetValues) {
     setError(null);
     const t = token?.trim() ?? "";
     if (!t) {
       setError("This reset link is missing a token. Request a new link from the sign-in page.");
-      return;
-    }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-    if (password !== confirm) {
-      setError("Passwords do not match.");
       return;
     }
     setLoading(true);
@@ -122,80 +137,45 @@ export function ResetPasswordClient() {
       title="Choose a new password"
       description="Use at least 8 characters. You’ll be signed out of other devices for security."
     >
-      <form onSubmit={onSubmit} className="space-y-5">
-        <div>
-          <label
-            htmlFor="reset-password"
-            className="enterprise-type-nav mb-1.5 block text-[#64748B]"
-          >
-            New password
-          </label>
-          <div className="relative">
-            <Lock
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-              aria-hidden
-            />
-            <input
-              id="reset-password"
-              type="password"
-              required
-              minLength={8}
-              autoComplete="new-password"
-              className="enterprise-field-input enterprise-field-input--icon py-2.5 pr-3"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••••"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label
-            htmlFor="reset-password-confirm"
-            className="enterprise-type-nav mb-1.5 block text-[#64748B]"
-          >
-            Confirm password
-          </label>
-          <div className="relative">
-            <Lock
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-              aria-hidden
-            />
-            <input
-              id="reset-password-confirm"
-              type="password"
-              required
-              minLength={8}
-              autoComplete="new-password"
-              className="enterprise-field-input enterprise-field-input--icon py-2.5 pr-3"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              placeholder="••••••••••••"
-            />
-          </div>
-        </div>
-
-        {error && (
-          <div
-            className="flex gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800"
-            role="alert"
-          >
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <EnterpriseButton type="submit" fullWidth loading={loading} className="gap-2">
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Updating…
-            </>
-          ) : (
-            "Update password"
+      <EnterpriseForm form={form} onSubmit={onSubmit} className="space-y-5">
+        <EnterpriseFormField<ResetValues> name="password" label="New password" required>
+          {({ describedBy, field, id, invalid }) => (
+            <div className="relative">
+              <Lock className={AUTH_FIELD_ICON} aria-hidden />
+              <EnterprisePasswordInput
+                {...field}
+                id={id}
+                className={AUTH_PASSWORD_INPUT}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                autoComplete="new-password"
+                placeholder="••••••••••••"
+              />
+            </div>
           )}
-        </EnterpriseButton>
-      </form>
+        </EnterpriseFormField>
+
+        <EnterpriseFormField<ResetValues> name="confirm" label="Confirm password" required>
+          {({ describedBy, field, id, invalid }) => (
+            <div className="relative">
+              <Lock className={AUTH_FIELD_ICON} aria-hidden />
+              <EnterprisePasswordInput
+                {...field}
+                id={id}
+                className={AUTH_PASSWORD_INPUT}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                autoComplete="new-password"
+                placeholder="••••••••••••"
+              />
+            </div>
+          )}
+        </EnterpriseFormField>
+
+        {error && <AuthFormAlert>{error}</AuthFormAlert>}
+
+        <AuthSubmitButton loading={loading} loadingLabel="Updating…" label="Update password" />
+      </EnterpriseForm>
     </EnterpriseAuthLayout>
   );
 }

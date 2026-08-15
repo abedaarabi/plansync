@@ -14,6 +14,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { OmAssigneeAvatar } from "@/components/enterprise/OmAssigneePicker";
+import { enterpriseButtonClassName } from "@/components/enterprise/EnterpriseButton";
 import type { IssueRow } from "@/lib/api-client";
 import {
   ISSUE_PRIORITY_LABEL,
@@ -35,9 +36,12 @@ const WO_TYPE_LABEL: Record<string, string> = {
 const ROW_ACTION =
   "inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--enterprise-text-muted)] transition hover:bg-[var(--enterprise-hover-surface)] hover:text-[var(--enterprise-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/40";
 
-/** Matches `enterprise-btn-primary` density for table row CTAs. */
-const ROW_ACTION_PRIMARY =
-  "inline-flex h-8 items-center gap-1 rounded-md bg-[var(--enterprise-primary)] px-2.5 text-xs font-semibold text-white transition hover:bg-[var(--enterprise-primary-deep)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--enterprise-primary)]/40";
+/** Compact table CTA — primary tokens with dense row height. */
+const ROW_ACTION_PRIMARY = enterpriseButtonClassName({
+  variant: "primary",
+  size: "sm",
+  className: "h-8 min-h-8 px-2.5 text-xs",
+});
 
 function dueLabel(dueDate: string | null | undefined): { text: string; overdue: boolean } {
   if (!dueDate) return { text: "No due date", overdue: false };

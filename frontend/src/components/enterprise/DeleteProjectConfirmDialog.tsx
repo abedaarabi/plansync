@@ -2,12 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
-import {
-  EnterpriseResponsiveDialog,
-  MOBILE_DIALOG_BTN_PRIMARY,
-  MOBILE_DIALOG_BTN_SECONDARY,
-} from "@/components/mobile/EnterpriseResponsiveDialog";
+import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
 import { MOBILE_FIELD_INPUT, MOBILE_FIELD_LABEL } from "@/lib/mobileFormStyles";
+import { ConfirmDialogActions } from "@/components/enterprise/ConfirmDialogActions";
 
 type Props = {
   open: boolean;
@@ -48,25 +45,15 @@ export function DeleteProjectConfirmDialog({
       closeOnBackdrop={!isDeleting}
       closeOnEscape={!isDeleting}
       footer={
-        <>
-          <button
-            type="button"
-            disabled={isDeleting || !nameMatches}
-            onClick={onConfirm}
-            title={!nameMatches ? "Enter the exact project name above" : undefined}
-            className={`${MOBILE_DIALOG_BTN_PRIMARY} bg-red-600 text-white hover:bg-red-700 disabled:pointer-events-none`}
-          >
-            {isDeleting ? "Deleting…" : "Delete project"}
-          </button>
-          <button
-            type="button"
-            disabled={isDeleting}
-            onClick={onCancel}
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]`}
-          >
-            Cancel
-          </button>
-        </>
+        <ConfirmDialogActions
+          confirmLabel="Delete project"
+          confirmingLabel="Deleting…"
+          isPending={isDeleting}
+          confirmDisabled={!nameMatches}
+          confirmTitle={!nameMatches ? "Enter the exact project name above" : undefined}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+        />
       }
     >
       <div className="flex gap-3">

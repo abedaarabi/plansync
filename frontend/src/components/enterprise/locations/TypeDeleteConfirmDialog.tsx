@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
-import {
-  EnterpriseResponsiveDialog,
-  MOBILE_DIALOG_BTN_PRIMARY,
-  MOBILE_DIALOG_BTN_SECONDARY,
-} from "@/components/mobile/EnterpriseResponsiveDialog";
+import { AlertTriangle } from "lucide-react";
+import { EnterpriseResponsiveDialog } from "@/components/mobile/EnterpriseResponsiveDialog";
 import { MOBILE_FIELD_INPUT, MOBILE_FIELD_LABEL } from "@/lib/mobileFormStyles";
+import { ConfirmDialogActions } from "@/components/enterprise/ConfirmDialogActions";
 
 type Props = {
   open: boolean;
@@ -47,31 +44,14 @@ export function TypeDeleteConfirmDialog({
       closeOnBackdrop={!isDeleting}
       closeOnEscape={!isDeleting}
       footer={
-        <>
-          <button
-            type="button"
-            disabled={isDeleting || !canDelete}
-            onClick={onConfirm}
-            className={`${MOBILE_DIALOG_BTN_PRIMARY} bg-red-600 text-white hover:bg-red-700 disabled:pointer-events-none`}
-          >
-            {isDeleting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                Deleting…
-              </>
-            ) : (
-              confirmLabel
-            )}
-          </button>
-          <button
-            type="button"
-            disabled={isDeleting}
-            onClick={onCancel}
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] text-[var(--enterprise-text)] hover:bg-[var(--enterprise-hover-surface)]`}
-          >
-            Cancel
-          </button>
-        </>
+        <ConfirmDialogActions
+          confirmLabel={confirmLabel}
+          confirmingLabel="Deleting…"
+          isPending={isDeleting}
+          confirmDisabled={!canDelete}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+        />
       }
     >
       <div className="flex items-start gap-3">
