@@ -6,10 +6,14 @@ import type { BimQuantityIndex } from "@/lib/bim/types";
 import { bimIndexBlockingLoad } from "@/lib/bim/indexStatus";
 import {
   buildAnalyticsSnapshot,
-  formatQuantity,
   segmentIsFullySelected,
   type BimChartSegment,
 } from "@/lib/bim/chartStats";
+import { useProjectMeasurementSystem } from "@/hooks/useProjectMeasurementSystem";
+import {
+  formatSiQuantityForProject,
+  type ProjectMeasurementSystem,
+} from "@/lib/projectMeasurement";
 
 type AnalyticsTab = "overview" | "types" | "levels" | "disciplines";
 
@@ -18,11 +22,13 @@ export function BimAnalyticsDrawer(props: {
   index: BimQuantityIndex | null;
   selectedGuids: Set<string>;
   conversionStatus: string;
+  projectId?: string | null;
   onSelectSegment: (segment: BimChartSegment) => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<AnalyticsTab>("overview");
   const snapshot = useMemo(() => buildAnalyticsSnapshot(props.index), [props.index]);
+  const { measurementSystem } = useProjectMeasurementSystem(props.projectId ?? undefined);
 
   const blocking = bimIndexBlockingLoad(props.conversionStatus, props.index, null);
 
@@ -82,6 +88,7 @@ export function BimAnalyticsDrawer(props: {
               <OverviewTab
                 snapshot={snapshot}
                 selectedGuids={props.selectedGuids}
+                measurementSystem={measurementSystem}
                 onSelect={props.onSelectSegment}
               />
             ) : null}
@@ -93,6 +100,7 @@ export function BimAnalyticsDrawer(props: {
                 segments={snapshot.topTypes}
                 metric="count"
                 selectedGuids={props.selectedGuids}
+                measurementSystem={measurementSystem}
                 onSelect={props.onSelectSegment}
               />
             ) : null}
@@ -104,6 +112,7 @@ export function BimAnalyticsDrawer(props: {
                 segments={snapshot.topLevels}
                 metric="count"
                 selectedGuids={props.selectedGuids}
+                measurementSystem={measurementSystem}
                 onSelect={props.onSelectSegment}
               />
             ) : null}
@@ -115,6 +124,7 @@ export function BimAnalyticsDrawer(props: {
                 segments={snapshot.disciplines}
                 metric="count"
                 selectedGuids={props.selectedGuids}
+                measurementSystem={measurementSystem}
                 onSelect={props.onSelectSegment}
               />
             ) : null}
@@ -143,9 +153,10 @@ function TabBtn(props: { active: boolean; label: string; onClick: () => void }) 
 function OverviewTab(props: {
   snapshot: NonNullable<ReturnType<typeof buildAnalyticsSnapshot>>;
   selectedGuids: Set<string>;
+  measurementSystem: ProjectMeasurementSystem;
   onSelect: (segment: BimChartSegment) => void;
 }) {
-  const { snapshot } = props;
+  const { snapshot, measurementSystem } = props;
   return (
     <div className="space-y-4">
       <div className="bim-analytics-kpi-grid">
@@ -155,7 +166,9 @@ function OverviewTab(props: {
         <KpiCard
           label="Indexed area"
           value={
-            snapshot.totalArea != null ? formatQuantity(snapshot.totalArea, "m²") : "Not in export"
+            snapshot.totalArea != null
+              ? formatSiQuantityForProject(snapshot.totalArea, "area", measurementSystem, 1)
+              : "Not in export"
           }
         />
       </div>
@@ -174,6 +187,7 @@ function OverviewTab(props: {
         segments={snapshot.topTypes.slice(0, 6)}
         metric="count"
         selectedGuids={props.selectedGuids}
+        measurementSystem={measurementSystem}
         onSelect={props.onSelect}
         compact
       />
@@ -189,6 +203,7 @@ function OverviewTab(props: {
             .slice(0, 6)}
           metric="area"
           selectedGuids={props.selectedGuids}
+          measurementSystem={measurementSystem}
           onSelect={props.onSelect}
           compact
         />
@@ -213,6 +228,7 @@ function ChartList(props: {
   segments: BimChartSegment[];
   metric: "count" | "area" | "volume";
   selectedGuids: Set<string>;
+  measurementSystem: ProjectMeasurementSystem;
   onSelect: (segment: BimChartSegment) => void;
   compact?: boolean;
 }) {
@@ -261,9 +277,14 @@ function ChartList(props: {
             const selected = segmentIsFullySelected(segment, props.selectedGuids);
             const valueLabel =
               props.metric === "area" && segment.totalArea != null
-                ? formatQuantity(segment.totalArea, "m²")
+                ? formatSiQuantityForProject(segment.totalArea, "area", props.measurementSystem, 1)
                 : props.metric === "volume" && segment.totalVolume != null
-                  ? formatQuantity(segment.totalVolume, "m³")
+                  ? formatSiQuantityForProject(
+                      segment.totalVolume,
+                      "volume",
+                      props.measurementSystem,
+                      1,
+                    )
                   : segment.count.toLocaleString();
 
             return (

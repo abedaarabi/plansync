@@ -2920,6 +2920,7 @@ export function BimViewerShell(props: {
               interactive={tool === "markup" && markupHydrated}
               engine={activeEngine}
               container={viewportEl}
+              projectId={resolvedProjectId}
             />
           ) : null}
 
@@ -3320,6 +3321,7 @@ export function BimViewerShell(props: {
             onDeleteSelectedMarkups={deleteSelectedMarkups}
             onCreateIssueFromMarkup={onCreateIssueFromMarkup}
             onOpenShortcuts={() => setShortcutsOpen(true)}
+            projectId={resolvedProjectId}
           />
         ) : null}
 

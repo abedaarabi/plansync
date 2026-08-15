@@ -1,4 +1,11 @@
 import type { BimElementQuantities } from "@/lib/bim/types";
+import {
+  formatSiQuantityForProject,
+  projectDisplayUnits,
+  siQuantityToDisplay,
+  type ProjectDisplayQuantityKind,
+  type ProjectMeasurementSystem,
+} from "@/lib/projectMeasurement";
 
 export type BimModelQuantityRollup = {
   count: number;
@@ -91,18 +98,21 @@ function pickModelQuantity(rollup: BimModelQuantityRollup, materialUnit?: string
   return Math.max(rollup.count, 1);
 }
 
-const DEFAULT_UNIT_BY_KIND: Record<QuantityKind, string> = {
-  count: "ea",
-  length: "m",
-  area: "m²",
-  volume: "m³",
-};
+function defaultUnitByKind(
+  kind: QuantityKind,
+  system: ProjectMeasurementSystem = "METRIC",
+): string {
+  if (kind === "count") return "ea";
+  const units = projectDisplayUnits(system);
+  return units[kind];
+}
 
 /** Default quantity + unit from model rollup; material unit steers which model metric is used. */
 // fallow-ignore-next-line complexity
 export function pickModelQuantityAndUnit(
   rollup: BimModelQuantityRollup,
   materialUnit?: string,
+  system: ProjectMeasurementSystem = "METRIC",
 ): { quantity: number; unit: string } {
   if (materialUnit?.trim()) {
     const unit = materialUnit.trim();
@@ -112,7 +122,9 @@ export function pickModelQuantityAndUnit(
   for (const kind of ["volume", "area", "length", "count"] as const) {
     const v = valueForKind(rollup, kind);
     if (v != null && Number.isFinite(v) && v > 0) {
-      return { quantity: v, unit: DEFAULT_UNIT_BY_KIND[kind] };
+      const quantity =
+        kind === "count" ? v : siQuantityToDisplay(v, kind as ProjectDisplayQuantityKind, system);
+      return { quantity, unit: defaultUnitByKind(kind, system) };
     }
   }
 
@@ -126,12 +138,17 @@ export function formatModelQuantity(value: number): string {
 }
 
 // fallow-ignore-next-line complexity
-export function modelQuantityHint(rollup: BimModelQuantityRollup): string | null {
+export function modelQuantityHint(
+  rollup: BimModelQuantityRollup,
+  system: ProjectMeasurementSystem = "METRIC",
+): string | null {
   const parts: string[] = [];
   if (rollup.count > 0) parts.push(`${rollup.count} ea`);
-  if (rollup.length != null) parts.push(`${formatModelQuantity(rollup.length)} m`);
-  if (rollup.area != null) parts.push(`${formatModelQuantity(rollup.area)} m²`);
-  if (rollup.volume != null) parts.push(`${formatModelQuantity(rollup.volume)} m³`);
+  if (rollup.length != null)
+    parts.push(formatSiQuantityForProject(rollup.length, "length", system));
+  if (rollup.area != null) parts.push(formatSiQuantityForProject(rollup.area, "area", system));
+  if (rollup.volume != null)
+    parts.push(formatSiQuantityForProject(rollup.volume, "volume", system));
   return parts.length ? parts.join(" · ") : null;
 }
 

@@ -1,5 +1,12 @@
 "use client";
 
+import { useProjectMeasurementSystem } from "@/hooks/useProjectMeasurementSystem";
+import {
+  projectDisplayUnits,
+  siQuantityToDisplay,
+  type ProjectMeasurementSystem,
+} from "@/lib/projectMeasurement";
+
 export function BimComparePanel(props: {
   deltas: {
     ifcType: string;
@@ -9,7 +16,9 @@ export function BimComparePanel(props: {
   }[];
   baseVersion: number;
   compareVersion: number;
+  projectId?: string | null;
 }) {
+  const { measurementSystem } = useProjectMeasurementSystem(props.projectId ?? undefined);
   const changed = props.deltas.filter(
     (d) => d.countDelta !== 0 || d.areaDelta != null || d.volumeDelta != null,
   );
@@ -25,7 +34,9 @@ export function BimComparePanel(props: {
       </span>
       <span className="shrink-0 tabular-nums text-[var(--bim-text-muted)]">
         {d.countDelta !== 0 ? `${d.countDelta > 0 ? "+" : ""}${d.countDelta} ea` : ""}
-        {d.areaDelta != null ? ` · ${d.areaDelta > 0 ? "+" : ""}${d.areaDelta.toFixed(1)} m²` : ""}
+        {d.areaDelta != null
+          ? ` · ${formatSignedSiDelta(d.areaDelta, "area", measurementSystem)}`
+          : ""}
       </span>
     </li>
   ));
@@ -43,4 +54,14 @@ export function BimComparePanel(props: {
       )}
     </div>
   );
+}
+
+function formatSignedSiDelta(
+  delta: number,
+  kind: "area" | "volume",
+  system: ProjectMeasurementSystem,
+): string {
+  const sign = delta > 0 ? "+" : "";
+  const n = siQuantityToDisplay(Math.abs(delta), kind, system);
+  return `${sign}${n.toFixed(1)} ${projectDisplayUnits(system)[kind]}`;
 }

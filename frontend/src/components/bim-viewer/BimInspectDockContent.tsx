@@ -100,6 +100,7 @@ export function BimInspectDockContent(props: {
               length={props.quantityRollup.length}
               area={props.quantityRollup.area}
               volume={props.quantityRollup.volume}
+              projectId={props.projectId}
               selectionSummary={props.takeoffSelectionSummary}
             />
           </div>

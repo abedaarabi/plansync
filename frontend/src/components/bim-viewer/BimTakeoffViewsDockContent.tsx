@@ -80,6 +80,7 @@ export function BimTakeoffViewsDockContent(props: {
                 baseVersion={props.compareDeltas.baseVersion}
                 compareVersion={props.compareDeltas.compareVersion}
                 deltas={props.compareDeltas.deltas}
+                projectId={props.projectId}
               />
             ) : null}
             <div className="bim-detail-card">

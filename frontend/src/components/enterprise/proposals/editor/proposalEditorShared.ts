@@ -1,3 +1,5 @@
+import { formatProjectMoney } from "@/lib/projectCurrency";
+
 export type ActiveSection = "client" | "pricing" | "cover" | "review";
 export type SaveStatus = "saved" | "saving" | "unsaved" | "error";
 
@@ -9,16 +11,7 @@ export const EDITOR_STEPS: { id: ActiveSection; label: string; number: number }[
 ];
 
 export function fmtMoney(amount: string, currency: string) {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return amount;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency.length === 3 ? currency : "USD",
-    }).format(n);
-  } catch {
-    return amount;
-  }
+  return formatProjectMoney(amount, currency);
 }
 
 /** True when cover HTML has real text (not empty / empty paragraph). */

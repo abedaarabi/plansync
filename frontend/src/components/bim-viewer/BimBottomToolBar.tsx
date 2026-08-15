@@ -82,6 +82,7 @@ export function BimBottomToolBar(props: {
   onDeleteSelectedMarkups: () => void;
   onCreateIssueFromMarkup: () => void;
   onOpenShortcuts: () => void;
+  projectId?: string | null;
 }) {
   const measureActive = props.tool === "length" || props.tool === "area" || props.tool === "angle";
   return (
@@ -100,6 +101,7 @@ export function BimBottomToolBar(props: {
           index={props.quantityIndex}
           selectedGuids={props.selectedGuids}
           conversionStatus={props.conversionStatus}
+          projectId={props.projectId}
           onSelectSegment={props.onSelectChartSegment}
           onClose={props.onCloseAnalytics}
         />

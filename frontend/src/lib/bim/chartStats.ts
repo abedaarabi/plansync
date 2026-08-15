@@ -33,11 +33,6 @@ function formatIfcTypeLabel(ifcType: string): string {
   return stripped.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
-export function formatQuantity(value: number, unit: string, digits = 1): string {
-  if (!Number.isFinite(value)) return "—";
-  return `${value.toLocaleString(undefined, { maximumFractionDigits: digits })} ${unit}`;
-}
-
 export function segmentIsFullySelected(
   segment: BimChartSegment,
   selectedGuids: Set<string>,

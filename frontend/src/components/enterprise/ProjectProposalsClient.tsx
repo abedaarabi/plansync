@@ -40,6 +40,7 @@ import { PlanUpgradeCallout } from "@/components/enterprise/PlanUpgradeCallout";
 import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
 import { useProjectCurrency } from "@/hooks/useProjectCurrency";
 import { useTickNowMs } from "@/lib/useTickNowMs";
+import { formatProjectMoney } from "@/lib/projectCurrency";
 
 const FILTER_KEYS = [
   "ALL",
@@ -68,17 +69,7 @@ const FILTER_LABEL: Record<StatusFilter, string> = {
 };
 
 function fmtMoney(amount: string, currency: string) {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return amount;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency.length === 3 ? currency : "USD",
-      maximumFractionDigits: 2,
-    }).format(n);
-  } catch {
-    return `${currency} ${n.toFixed(2)}`;
-  }
+  return formatProjectMoney(amount, currency);
 }
 
 function formatSentDate(iso: string | null): string {

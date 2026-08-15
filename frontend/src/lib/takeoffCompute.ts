@@ -1,5 +1,9 @@
 import { pdfDistanceUnits } from "@/lib/coords";
 import { polygonAreaMm2, polylineLengthMm } from "@/lib/measureCompute";
+import {
+  formatRawGeometryForProject,
+  type ProjectMeasurementSystem,
+} from "@/lib/projectMeasurement";
 import type {
   TakeoffItem,
   TakeoffMeasurementType,
@@ -166,11 +170,13 @@ function sumRawQuantityForItem(zones: TakeoffZone[], itemId: string): number {
   return zones.filter((z) => z.itemId === itemId).reduce((s, z) => s + z.rawQuantity, 0);
 }
 
-/** Human-readable raw geometry for tooltips and sidebar (always base units). */
-export function formatRawQuantityLabel(kind: TakeoffMeasurementType, raw: number): string {
-  if (kind === "count") return `${Math.max(0, Math.round(raw))} marks`;
-  if (kind === "linear") return `${raw.toLocaleString(undefined, { maximumFractionDigits: 2 })} mm`;
-  return `${raw.toLocaleString(undefined, { maximumFractionDigits: 2 })} mm²`;
+/** Human-readable raw geometry for tooltips and sidebar (project display units). */
+export function formatRawQuantityLabel(
+  kind: TakeoffMeasurementType,
+  raw: number,
+  system: ProjectMeasurementSystem = "METRIC",
+): string {
+  return formatRawGeometryForProject(kind, raw, system);
 }
 
 /** Axis-aligned rectangle from two opposite corners in normalized [0,1]² (4 points, closed). */

@@ -22,6 +22,7 @@ import {
   pickModelQuantityAndUnit,
   type BimModelQuantityRollup,
 } from "@/lib/bim/modelQuantity";
+import { useProjectMeasurementSystem } from "@/hooks/useProjectMeasurementSystem";
 import {
   MOBILE_FIELD_INPUT,
   MOBILE_FIELD_LABEL,
@@ -51,6 +52,7 @@ export function BimAddToTakeoffDialog(props: {
   resolveModelQuantities: () => Promise<BimModelQuantityRollup>;
   onSuccess?: () => void;
 }) {
+  const { measurementSystem } = useProjectMeasurementSystem(props.projectId ?? undefined);
   const [materialSearch, setMaterialSearch] = useState("");
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(true);
@@ -133,7 +135,11 @@ export function BimAddToTakeoffDialog(props: {
         if (cancelled) return;
         loadedSelectionKeyRef.current = selectionKey;
         setModelRollup(rollup);
-        const { quantity, unit: modelUnit } = pickModelQuantityAndUnit(rollup);
+        const { quantity, unit: modelUnit } = pickModelQuantityAndUnit(
+          rollup,
+          undefined,
+          measurementSystem,
+        );
         setQuantity(formatModelQuantity(quantity));
         setUnit(modelUnit);
       } catch (e) {
@@ -147,7 +153,7 @@ export function BimAddToTakeoffDialog(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.open, props.resolveModelQuantities, props.selectedGuids]);
+  }, [props.open, props.resolveModelQuantities, props.selectedGuids, measurementSystem]);
 
   const selectedMaterial = useMemo(
     () => materials.find((m) => m.id === selectedMaterialId) ?? null,
@@ -167,7 +173,11 @@ export function BimAddToTakeoffDialog(props: {
     setSelectedMaterialId(m.id);
     setLabel(defaultLabel(m));
     const materialUnit = m.unit?.trim() || "ea";
-    const { quantity: qty } = pickModelQuantityAndUnit(modelRollup, materialUnit);
+    const { quantity: qty } = pickModelQuantityAndUnit(
+      modelRollup,
+      materialUnit,
+      measurementSystem,
+    );
     setUnit(materialUnit);
     setQuantity(formatModelQuantity(qty));
     setPickerOpen(false);
@@ -177,7 +187,11 @@ export function BimAddToTakeoffDialog(props: {
     setSelectedMaterialId(null);
     setPickerOpen(true);
     setLabel("");
-    const { quantity, unit: modelUnit } = pickModelQuantityAndUnit(modelRollup);
+    const { quantity, unit: modelUnit } = pickModelQuantityAndUnit(
+      modelRollup,
+      undefined,
+      measurementSystem,
+    );
     setUnit(modelUnit);
     setQuantity(formatModelQuantity(quantity));
   }
@@ -197,7 +211,10 @@ export function BimAddToTakeoffDialog(props: {
     return typeHint ? `${base} · ${typeHint}` : base;
   }, [props.selectionSummary, props.selectedGuids.length]);
 
-  const modelQtyHint = useMemo(() => modelQuantityHint(modelRollup), [modelRollup]);
+  const modelQtyHint = useMemo(
+    () => modelQuantityHint(modelRollup, measurementSystem),
+    [modelRollup, measurementSystem],
+  );
 
   // fallow-ignore-next-line complexity
   async function submit() {

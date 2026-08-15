@@ -29,18 +29,10 @@ import { proposalStatusBadgeClass, proposalStatusLabel } from "@/lib/proposalSta
 import { qk } from "@/lib/queryKeys";
 import { PlanUpgradeCallout } from "@/components/enterprise/PlanUpgradeCallout";
 import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
+import { formatProjectMoney } from "@/lib/projectCurrency";
 
 function fmtMoney(amount: string, currency: string) {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return amount;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency.length === 3 ? currency : "USD",
-    }).format(n);
-  } catch {
-    return amount;
-  }
+  return formatProjectMoney(amount, currency);
 }
 
 function formatWhen(iso: string | null): string {

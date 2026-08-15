@@ -7,12 +7,14 @@ import {
   Eye,
   KeyRound,
   Layers,
+  Ruler,
   Settings,
   ShieldCheck,
   Webhook,
   Wrench,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   createProjectWebhook,
   createProjectApiKey,
@@ -34,9 +36,16 @@ import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { OccupantPortalLinksSettings } from "./OccupantPortalLinksSettings";
 import { AccessRestricted } from "./AccessRestricted";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
+import { ProjectCurrencyPicker } from "@/components/enterprise/ProjectCurrencyPicker";
+import { ProjectMeasurementSystemPicker } from "@/components/enterprise/ProjectMeasurementSystemPicker";
 import { OM_COMPACT_INPUT, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { SettingsSection } from "@/components/enterprise/project-settings/SettingsSection";
 import { SettingsToggleRow } from "@/components/enterprise/project-settings/SettingsToggleRow";
+import { normalizeProjectCurrency, type ProjectCurrencyCode } from "@/lib/projectCurrency";
+import {
+  normalizeProjectMeasurementSystem,
+  type ProjectMeasurementSystem,
+} from "@/lib/projectMeasurement";
 
 type Props = { projectId: string };
 
@@ -93,6 +102,8 @@ export function ProjectSettingsClient({ projectId }: Props) {
   const [clientVisibilityDraft, setClientVisibilityDraft] = useState<
     ProjectSessionResponse["settings"]["clientVisibility"] | null
   >(null);
+  const [currencyDraft, setCurrencyDraft] = useState<ProjectCurrencyCode | null>(null);
+  const [measurementDraft, setMeasurementDraft] = useState<ProjectMeasurementSystem | null>(null);
 
   const apiKeysQuery = useQuery({
     queryKey: qk.projectApiKeys(projectId),
@@ -168,7 +179,24 @@ export function ProjectSettingsClient({ projectId }: Props) {
     setOccupantHeadlineDraft(session.settings.omTenantPortalUi?.headline ?? "");
     setModulesDraft(session.settings.modules);
     setClientVisibilityDraft(session.settings.clientVisibility);
+    setCurrencyDraft(normalizeProjectCurrency(session.currency));
+    setMeasurementDraft(normalizeProjectMeasurementSystem(session.measurementSystem));
   }, [session]);
+
+  const unitsMutation = useMutation({
+    mutationFn: (body: {
+      currency?: ProjectCurrencyCode;
+      measurementSystem?: ProjectMeasurementSystem;
+    }) => patchProject(projectId, body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: qk.projectSession(projectId) });
+      await queryClient.invalidateQueries({ queryKey: qk.project(projectId) });
+      toast.success("Currency & units updated");
+    },
+    onError: (e: Error) => {
+      toast.error(e.message || "Could not update currency & units");
+    },
+  });
 
   const opModeMutation = useMutation({
     mutationFn: (operationsMode: boolean) => patchProject(projectId, { operationsMode }),
@@ -307,6 +335,46 @@ export function ProjectSettingsClient({ projectId }: Props) {
           </p>
         </div>
       </div>
+
+      <SettingsSection
+        icon={Ruler}
+        title="Currency & units"
+        description="Project currency and measurement system apply across budgets, takeoffs, PDF/BIM measurements, and new proposals."
+      >
+        {!canEditSettings ? (
+          <p className="text-sm text-[var(--enterprise-text-muted)]">
+            Currency and measurement settings are editable by Super Admin only.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            <div>
+              <p className="enterprise-field-label mb-2">Project currency</p>
+              <ProjectCurrencyPicker
+                value={currencyDraft ?? normalizeProjectCurrency(session.currency)}
+                disabled={unitsMutation.isPending}
+                idPrefix="settings-currency"
+                onChange={(code) => {
+                  setCurrencyDraft(code);
+                  unitsMutation.mutate({ currency: code });
+                }}
+              />
+            </div>
+            <div>
+              <p className="enterprise-field-label mb-2">Measurement system</p>
+              <ProjectMeasurementSystemPicker
+                value={
+                  measurementDraft ?? normalizeProjectMeasurementSystem(session.measurementSystem)
+                }
+                disabled={unitsMutation.isPending}
+                onChange={(system) => {
+                  setMeasurementDraft(system);
+                  unitsMutation.mutate({ measurementSystem: system });
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </SettingsSection>
 
       <SettingsSection
         icon={Layers}

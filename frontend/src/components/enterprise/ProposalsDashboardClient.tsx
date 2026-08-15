@@ -30,6 +30,7 @@ import { OM_PAGE_CLASS } from "@/lib/omCompactStyles";
 import { qk } from "@/lib/queryKeys";
 import { PlanUpgradeCallout } from "@/components/enterprise/PlanUpgradeCallout";
 import { isWorkspaceProPlusClient } from "@/lib/workspaceSubscription";
+import { formatProjectMoney } from "@/lib/projectCurrency";
 
 const STATUS_ORDER = [
   "DRAFT",
@@ -42,16 +43,7 @@ const STATUS_ORDER = [
 ] as const;
 
 function fmtMoney(amount: number, currency: string) {
-  if (!Number.isFinite(amount)) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency.length === 3 ? currency : "USD",
-      maximumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
+  return formatProjectMoney(amount, currency);
 }
 
 function formatDate(iso: string): string {

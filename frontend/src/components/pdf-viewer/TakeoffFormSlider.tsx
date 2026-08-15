@@ -90,6 +90,7 @@ function unitsForKind(kind: TakeoffMeasurementType): TakeoffUnit[] {
   }
 }
 
+// fallow-ignore-next-line complexity
 export function TakeoffFormSlider() {
   const open = useViewerStore((s) => s.takeoffSliderOpen);
   const editZoneId = useViewerStore((s) => s.takeoffEditingZoneId);
@@ -1007,7 +1008,11 @@ export function TakeoffFormSlider() {
               <p>
                 Raw geometry:{" "}
                 <span className="tabular-nums text-slate-100">
-                  {formatRawQuantityLabel(editZone.measurementType, editZone.rawQuantity)}
+                  {formatRawQuantityLabel(
+                    editZone.measurementType,
+                    editZone.rawQuantity,
+                    measurementSys,
+                  )}
                 </span>
               </p>
               <p>

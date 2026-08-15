@@ -2,6 +2,8 @@
 
 import { Box, Layers } from "lucide-react";
 import type { BimQuantityEntry } from "@/lib/bim/types";
+import { useProjectMeasurementSystem } from "@/hooks/useProjectMeasurementSystem";
+import { formatSiQuantityForProject } from "@/lib/projectMeasurement";
 import type { BimTakeoffSelectionSummary } from "./BimAddToTakeoffDialog";
 
 // fallow-ignore-next-line complexity
@@ -11,8 +13,11 @@ export function BimQuantitiesPanel(props: {
   length: number | null;
   area: number | null;
   volume: number | null;
+  projectId?: string | null;
   selectionSummary?: BimTakeoffSelectionSummary | null;
 }) {
+  const { measurementSystem } = useProjectMeasurementSystem(props.projectId ?? undefined);
+
   if (props.count === 0) {
     return (
       <div className="bim-detail-card text-center">
@@ -51,11 +56,22 @@ export function BimQuantitiesPanel(props: {
       <div className="bim-metric-grid">
         <QtyTile label="Count" value={String(props.count)} />
         {props.length != null ? (
-          <QtyTile label="Length" value={`${props.length.toFixed(2)} m`} />
+          <QtyTile
+            label="Length"
+            value={formatSiQuantityForProject(props.length, "length", measurementSystem)}
+          />
         ) : null}
-        {props.area != null ? <QtyTile label="Area" value={`${props.area.toFixed(2)} m²`} /> : null}
+        {props.area != null ? (
+          <QtyTile
+            label="Area"
+            value={formatSiQuantityForProject(props.area, "area", measurementSystem)}
+          />
+        ) : null}
         {props.volume != null ? (
-          <QtyTile label="Volume" value={`${props.volume.toFixed(2)} m³`} />
+          <QtyTile
+            label="Volume"
+            value={formatSiQuantityForProject(props.volume, "volume", measurementSystem)}
+          />
         ) : null}
       </div>
 

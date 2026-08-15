@@ -76,3 +76,23 @@ export function formatProjectCurrencyLabel(code: string): string {
   const row = PROJECT_CURRENCIES.find((c) => c.code === code);
   return row ? `${row.code} · ${row.label}` : code;
 }
+
+/** Shared money display for proposals, takeoffs, dashboards (display-only; no FX). */
+export function formatProjectMoney(
+  amount: string | number | null | undefined,
+  currency: string,
+): string {
+  if (amount == null) return "—";
+  const n = typeof amount === "number" ? amount : Number(amount);
+  if (!Number.isFinite(n)) return typeof amount === "string" ? amount : "—";
+  const code = normalizeProjectCurrency(currency);
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: code,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return `${code} ${n.toFixed(2)}`;
+  }
+}

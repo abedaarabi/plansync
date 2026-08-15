@@ -12,6 +12,7 @@ import {
 import { prisma } from "../../lib/prisma.js";
 import { requireProPlusAccess as requirePro } from "../../lib/planFeatureGates.js";
 import { loadProjectForMember } from "../../lib/projectAccess.js";
+import { parseProjectCurrency } from "../../lib/projectSettings.js";
 import type { Env } from "../../lib/env.js";
 import { logActivitySafe } from "../../lib/activity.js";
 import { createUserNotifications } from "../../lib/userNotifications.js";
@@ -460,6 +461,7 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
     });
   });
 
+  // fallow-ignore-next-line complexity
   r.post("/projects/:projectId/proposals", needUser, async (c) => {
     const projectId = c.req.param("projectId")!;
     const access = await loadProjectForMember(projectId, c.get("user").id);
@@ -509,7 +511,11 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
     const validUntil = body.data.validUntil
       ? new Date(body.data.validUntil)
       : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-    const currency = body.data.currency ?? access.project.currency;
+    const currencyRaw = body.data.currency ?? access.project.currency;
+    const currency = parseProjectCurrency(currencyRaw);
+    if (!currency) {
+      return c.json({ error: "Invalid currency" }, 400);
+    }
     const zdec = new Prisma.Decimal(0);
 
     const created = await prisma.proposal.create({
@@ -627,7 +633,11 @@ export function registerProposalRoutes(r: Hono, needUser: MiddlewareHandler, env
     if (body.data.clientEmail !== undefined) data.clientEmail = body.data.clientEmail;
     if (body.data.clientCompany !== undefined) data.clientCompany = body.data.clientCompany;
     if (body.data.clientPhone !== undefined) data.clientPhone = body.data.clientPhone;
-    if (body.data.currency !== undefined) data.currency = body.data.currency;
+    if (body.data.currency !== undefined) {
+      const currency = parseProjectCurrency(body.data.currency);
+      if (!currency) return c.json({ error: "Invalid currency" }, 400);
+      data.currency = currency;
+    }
     if (body.data.validUntil !== undefined) data.validUntil = new Date(body.data.validUntil);
     if (body.data.templateId !== undefined)
       data.template = body.data.templateId

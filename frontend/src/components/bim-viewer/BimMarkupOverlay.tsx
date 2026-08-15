@@ -27,16 +27,21 @@ import { bimAnnotationToSheetAnnotation } from "@/lib/bim/bimAnnotationAdapter";
 import { scheduleBimMarkupPersist } from "@/lib/bim/bimMarkupSync";
 import type { BimEngine } from "./bimEngine";
 import { markupShapeToType, useBimMarkupStore, type BimAnnotation } from "@/store/bimMarkupStore";
+import { useProjectMeasurementSystem } from "@/hooks/useProjectMeasurementSystem";
+import { defaultMeasureUnitForProject } from "@/lib/projectMeasurement";
 
 type Props = {
   /** When true, pointer handlers for draw/select are enabled. */
   interactive: boolean;
   engine: BimEngine | null;
   container: HTMLElement | null;
+  projectId?: string | null;
 };
 
 // fallow-ignore-next-line complexity
-export function BimMarkupOverlay({ interactive, engine, container }: Props) {
+export function BimMarkupOverlay({ interactive, engine, container, projectId }: Props) {
+  const { measurementSystem } = useProjectMeasurementSystem(projectId ?? undefined);
+  const measureUnit = defaultMeasureUnitForProject(measurementSystem);
   const annotations = useBimMarkupStore((s) => s.annotations);
   const selectedIds = useBimMarkupStore((s) => s.selectedIds);
   const markupShape = useBimMarkupStore((s) => s.markupShape);
@@ -584,7 +589,7 @@ export function BimMarkupOverlay({ interactive, engine, container }: Props) {
           pageW={size.w}
           pageH={size.h}
           scale={1}
-          measureUnit="mm"
+          measureUnit={measureUnit}
           arrowMarkerId="bim-markup-arrow-head"
           selectedAnnotationIds={selectedIds}
         />

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { formatProjectMoney } from "@/lib/projectCurrency";
 import {
   ProposalLetterPreviewBlock,
   splitProposalCoverNote,
@@ -30,16 +31,7 @@ import {
 } from "@/lib/api-client";
 
 function fmtMoney(amount: string, currency: string) {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return amount;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency.length === 3 ? currency : "USD",
-    }).format(n);
-  } catch {
-    return amount;
-  }
+  return formatProjectMoney(amount, currency);
 }
 
 const DECLINE = [
