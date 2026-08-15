@@ -22,6 +22,7 @@ import {
 } from "@/components/enterprise/forms/EnterpriseInputs";
 import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { acceptInviteAndEnterWorkspace } from "@/lib/acceptInviteAndEnterWorkspace";
+import { AUTH_PASSWORD_HINT, strongAuthPasswordSchema } from "@/lib/auth-password";
 import { authClient } from "@/lib/auth-client";
 
 type InvitePreview =
@@ -47,9 +48,7 @@ function createJoinSchema(mode: "sign-up" | "sign-in") {
         .min(1, "Enter your email address.")
         .email("Enter a valid email address."),
       password:
-        mode === "sign-up"
-          ? z.string().min(8, "Password must be at least 8 characters.")
-          : z.string().min(1, "Enter your password."),
+        mode === "sign-up" ? strongAuthPasswordSchema : z.string().min(1, "Enter your password."),
       confirmPassword:
         mode === "sign-up" ? z.string().min(1, "Confirm your password.") : z.string(),
     })
@@ -321,26 +320,22 @@ export function JoinClient({ token }: { token: string }) {
 
               <EnterpriseFormField<JoinValues> name="password" label="Password" required>
                 {({ describedBy, field, id, invalid }) => (
-                  <>
-                    <div className="relative">
-                      <Lock className={AUTH_FIELD_ICON} aria-hidden />
-                      <EnterprisePasswordInput
-                        {...field}
-                        id={id}
-                        autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
-                        placeholder={mode === "sign-up" ? "At least 8 characters" : "Your password"}
-                        className={AUTH_PASSWORD_INPUT}
-                        aria-describedby={describedBy}
-                        aria-invalid={invalid}
-                      />
-                    </div>
-                  </>
+                  <div className="relative">
+                    <Lock className={AUTH_FIELD_ICON} aria-hidden />
+                    <EnterprisePasswordInput
+                      {...field}
+                      id={id}
+                      autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
+                      placeholder={mode === "sign-up" ? "At least 10 characters" : "Your password"}
+                      className={AUTH_PASSWORD_INPUT}
+                      aria-describedby={describedBy}
+                      aria-invalid={invalid}
+                    />
+                  </div>
                 )}
               </EnterpriseFormField>
               {mode === "sign-up" ? (
-                <p className="-mt-2 text-left text-xs text-slate-500">
-                  This creates your PlanSync login for this team.
-                </p>
+                <p className="-mt-2 text-left text-xs text-slate-500">{AUTH_PASSWORD_HINT}</p>
               ) : null}
 
               {mode === "sign-up" ? (

@@ -22,22 +22,33 @@ import {
 } from "@/components/enterprise/forms/EnterpriseInputs";
 import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { SocialAuthButtons } from "@/components/SocialAuthButtons";
+import { AUTH_PASSWORD_HINT, strongAuthPasswordSchema } from "@/lib/auth-password";
 import { authClient } from "@/lib/auth-client";
 import { workspaceGateUrl } from "@/lib/workspacePreference";
 
 function createAuthSchema(mode: "sign-in" | "sign-up") {
-  return z.object({
-    email: z
-      .string()
-      .trim()
-      .min(1, "Enter your email address.")
-      .email("Enter a valid email address."),
-    name: mode === "sign-up" ? z.string().trim().min(1, "Enter your full name.") : z.string(),
-    password: z
-      .string()
-      .min(1, "Enter your password.")
-      .min(8, "Password must be at least 8 characters."),
-  });
+  return z
+    .object({
+      email: z
+        .string()
+        .trim()
+        .min(1, "Enter your email address.")
+        .email("Enter a valid email address."),
+      name: mode === "sign-up" ? z.string().trim().min(1, "Enter your full name.") : z.string(),
+      password:
+        mode === "sign-up" ? strongAuthPasswordSchema : z.string().min(1, "Enter your password."),
+      confirmPassword:
+        mode === "sign-up" ? z.string().min(1, "Confirm your password.") : z.string(),
+    })
+    .superRefine((values, context) => {
+      if (mode === "sign-up" && values.password !== values.confirmPassword) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Passwords do not match.",
+          path: ["confirmPassword"],
+        });
+      }
+    });
 }
 
 type AuthValues = z.infer<ReturnType<typeof createAuthSchema>>;
@@ -54,7 +65,12 @@ export default function SignInPage() {
   }, []);
   // Schema follows the visible fields so empty submit marks every required input.
   const authSchema = useMemo(() => createAuthSchema(mode), [mode]);
-  const form = useEnterpriseForm(authSchema, { email: "", name: "", password: "" });
+  const form = useEnterpriseForm(authSchema, {
+    email: "",
+    name: "",
+    password: "",
+    confirmPassword: "",
+  });
   const [error, setError] = useState<string | null>(null);
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -198,6 +214,7 @@ export default function SignInPage() {
                       onClick={() => {
                         setError(null);
                         form.clearErrors();
+                        form.setValue("confirmPassword", "");
                         setMode("sign-in");
                       }}
                       className={`relative min-h-10 flex-1 rounded-[5px] py-2 text-sm font-semibold transition ${
@@ -215,6 +232,7 @@ export default function SignInPage() {
                       onClick={() => {
                         setError(null);
                         form.clearErrors();
+                        form.setValue("confirmPassword", "");
                         setMode("sign-up");
                       }}
                       className={`relative min-h-10 flex-1 rounded-[5px] py-2 text-sm font-semibold transition ${
@@ -284,11 +302,41 @@ export default function SignInPage() {
                             aria-describedby={describedBy}
                             aria-invalid={invalid}
                             autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
-                            placeholder="••••••••••••"
+                            placeholder={
+                              mode === "sign-up" ? "At least 10 characters" : "••••••••••••"
+                            }
                           />
                         </div>
                       )}
                     </EnterpriseFormField>
+
+                    {mode === "sign-up" ? (
+                      <>
+                        <p className="-mt-1.5 text-xs text-[var(--enterprise-text-muted)]">
+                          {AUTH_PASSWORD_HINT}
+                        </p>
+                        <EnterpriseFormField<AuthValues>
+                          name="confirmPassword"
+                          label="Confirm password"
+                          required
+                        >
+                          {({ describedBy, field, id, invalid }) => (
+                            <div className="relative">
+                              <Lock className={AUTH_FIELD_ICON} aria-hidden />
+                              <EnterprisePasswordInput
+                                {...field}
+                                id={id}
+                                className={AUTH_PASSWORD_INPUT}
+                                aria-describedby={describedBy}
+                                aria-invalid={invalid}
+                                autoComplete="new-password"
+                                placeholder="Re-enter password"
+                              />
+                            </div>
+                          )}
+                        </EnterpriseFormField>
+                      </>
+                    ) : null}
 
                     {mode === "sign-in" ? (
                       <div className="-mt-1 text-right">

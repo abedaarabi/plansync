@@ -56,9 +56,11 @@ describe("ResetPasswordClient", () => {
   it("validates that the new passwords match before calling the API", async () => {
     searchParams = new URLSearchParams("token=reset-token");
     render(<ResetPasswordClient />);
-    fireEvent.change(screen.getByLabelText("New password *"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("New password *"), {
+      target: { value: "Password123!" },
+    });
     fireEvent.change(screen.getByLabelText("Confirm password *"), {
-      target: { value: "password456" },
+      target: { value: "Password456!" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Update password" }));
 
@@ -71,15 +73,17 @@ describe("ResetPasswordClient", () => {
   it("resets the password using the link token and returns to sign in", async () => {
     searchParams = new URLSearchParams("token=reset-token");
     render(<ResetPasswordClient />);
-    fireEvent.change(screen.getByLabelText("New password *"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText("New password *"), {
+      target: { value: "Password123!" },
+    });
     fireEvent.change(screen.getByLabelText("Confirm password *"), {
-      target: { value: "password123" },
+      target: { value: "Password123!" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Update password" }));
 
     await waitFor(() => {
       expect(resetPassword).toHaveBeenCalledWith({
-        newPassword: "password123",
+        newPassword: "Password123!",
         token: "reset-token",
       });
     });

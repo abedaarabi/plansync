@@ -16,15 +16,13 @@ import { EnterpriseFormField } from "@/components/enterprise/forms/EnterpriseFor
 import { EnterprisePasswordInput } from "@/components/enterprise/forms/EnterpriseInputs";
 import { useEnterpriseForm } from "@/components/enterprise/forms/useEnterpriseForm";
 import { EnterpriseAuthLayout } from "@/components/auth/EnterpriseAuthLayout";
+import { AUTH_PASSWORD_HINT, strongAuthPasswordSchema } from "@/lib/auth-password";
 import { authClient } from "@/lib/auth-client";
 
 const resetSchema = z
   .object({
     confirm: z.string().min(1, "Confirm your password."),
-    password: z
-      .string()
-      .min(1, "Enter a new password.")
-      .min(8, "Password must be at least 8 characters."),
+    password: strongAuthPasswordSchema,
   })
   .refine((values) => values.password === values.confirm, {
     message: "Passwords do not match.",
@@ -135,7 +133,7 @@ export function ResetPasswordClient() {
   return (
     <EnterpriseAuthLayout
       title="Choose a new password"
-      description="Use at least 8 characters. You’ll be signed out of other devices for security."
+      description={`${AUTH_PASSWORD_HINT} You’ll be signed out of other devices for security.`}
     >
       <EnterpriseForm form={form} onSubmit={onSubmit} className="space-y-5">
         <EnterpriseFormField<ResetValues> name="password" label="New password" required>
@@ -149,7 +147,7 @@ export function ResetPasswordClient() {
                 aria-describedby={describedBy}
                 aria-invalid={invalid}
                 autoComplete="new-password"
-                placeholder="••••••••••••"
+                placeholder="At least 10 characters"
               />
             </div>
           )}
