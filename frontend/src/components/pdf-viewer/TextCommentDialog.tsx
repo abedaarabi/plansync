@@ -45,7 +45,7 @@ export function TextCommentDialog({
       open={open}
       onClose={onCancel}
       ariaLabelledBy="text-comment-title"
-      variant="viewer-dark"
+      variant="viewer"
       overlayZClass="z-[100]"
       panelClassName="max-w-sm"
       footer={
@@ -61,7 +61,7 @@ export function TextCommentDialog({
           </button>
           <button
             type="button"
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} text-[var(--viewer-text-muted)] hover:bg-white/5 hover:text-[var(--viewer-text)]`}
+            className={`${MOBILE_DIALOG_BTN_SECONDARY} text-[var(--viewer-text-muted)] hover:bg-slate-100 hover:text-[var(--viewer-text)]`}
             title="Discard and close"
             onClick={onCancel}
           >

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ExternalLink, ListChecks, X } from "lucide-react";
+import { ExternalLink, ListChecks, X } from "lucide-react";
 import { useViewerStore } from "@/store/viewerStore";
+import { ViewerGuideSteps } from "./ViewerGuideSteps";
 
 const STORAGE_KEY = "plansync-issue-guide-dismissed-v1";
 const LEGACY_STORAGE_KEY = "plansync-issue-review-guide-dismissed-v1";
@@ -84,10 +85,10 @@ export function IssueGuide({ variant, hasPin, hasTitle, hasAssignee }: Props) {
   };
 
   return (
-    <div className="viewer-card mb-3 space-y-2 border border-blue-500/25 bg-blue-950/20 p-2.5 ring-1 ring-blue-500/15">
+    <div className="viewer-card mb-3 space-y-2 border border-blue-500/25 bg-blue-50 p-2.5 ring-1 ring-blue-500/15">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-blue-300/90">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-blue-600">
             <ListChecks className="h-3.5 w-3.5 shrink-0" aria-hidden />
             Issue checklist
           </div>
@@ -98,41 +99,28 @@ export function IssueGuide({ variant, hasPin, hasTitle, hasAssignee }: Props) {
         <button
           type="button"
           onClick={dismiss}
-          className="viewer-focus-ring shrink-0 rounded-md p-0.5 text-slate-500 transition hover:bg-slate-800 hover:text-slate-300"
+          className="viewer-focus-ring shrink-0 rounded-md p-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-600"
           title="Hide checklist for this session"
           aria-label="Dismiss issue checklist"
         >
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
-      <ol className="space-y-1.5">
-        {steps.map((s, i) => (
-          <li key={s.id} className="flex gap-2 text-[10px] leading-snug">
-            <span
-              className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold ${
-                s.done
-                  ? "border-blue-500/60 bg-blue-600/25 text-blue-200"
-                  : "border-slate-600 text-slate-500"
-              }`}
-              aria-hidden
-            >
-              {s.done ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : i + 1}
-            </span>
-            <span>
-              <span className={`font-medium ${s.done ? "text-slate-200" : "text-slate-400"}`}>
-                {s.title}
-              </span>
-              <span className="mt-0.5 block text-slate-500">{s.detail}</span>
-            </span>
-          </li>
-        ))}
-      </ol>
+      <ViewerGuideSteps
+        steps={steps.map((s) => ({
+          key: s.id,
+          title: s.title,
+          detail: s.detail,
+          done: s.done,
+        }))}
+        listClassName="space-y-1.5"
+      />
       {viewerProjectId ? (
         <a
           href={`/projects/${viewerProjectId}/rfis`}
           target="_blank"
           rel="noopener noreferrer"
-          className="viewer-focus-ring inline-flex items-center gap-1 text-[10px] font-medium text-blue-400/90 transition hover:text-blue-300"
+          className="viewer-focus-ring inline-flex items-center gap-1 text-[10px] font-medium text-blue-400/90 transition hover:text-blue-600"
         >
           Open project RFIs
           <ExternalLink className="h-3 w-3" strokeWidth={2} aria-hidden />

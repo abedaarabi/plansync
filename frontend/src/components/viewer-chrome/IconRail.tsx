@@ -24,6 +24,10 @@ function RailButtons(props: {
 }) {
   const btn = props.tone === "bim" ? "bim-rail-btn" : "viewer-rail-btn";
   const tipSideClass = props.tooltipSide === "left" ? "right-full mr-2" : "left-full ml-2";
+  const tooltipToneClass =
+    props.tone === "bim"
+      ? "border-[var(--bim-border)] bg-[var(--bim-panel)] text-[var(--bim-text)]"
+      : "border-[var(--viewer-border)] bg-[var(--viewer-panel)] text-[var(--viewer-text)]";
 
   return (
     <>
@@ -42,11 +46,8 @@ function RailButtons(props: {
             data-mode={mode || undefined}
             className={`group relative ${btn} mobile-touch-target`}
           >
-            <Icon
-              className={`h-[18px] w-[18px] ${props.tone === "viewer" ? "text-white" : ""}`}
-              strokeWidth={1.75}
-              aria-hidden
-            />
+            {/* Inherit the rail button's currentColor so hover/active tints apply. */}
+            <Icon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
             {item.badge != null && item.badge > 0 ? (
               <span
                 className={
@@ -61,7 +62,7 @@ function RailButtons(props: {
             {props.showTooltips ? (
               <span
                 role="tooltip"
-                className={`pointer-events-none absolute top-1/2 z-[60] -translate-y-1/2 whitespace-nowrap rounded-md border border-[#475569] bg-[#0f172a]/95 px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 max-sm:hidden ${tipSideClass}`}
+                className={`pointer-events-none absolute top-1/2 z-[60] -translate-y-1/2 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-medium opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 max-sm:hidden ${tooltipToneClass} ${tipSideClass}`}
               >
                 {item.label}
               </span>

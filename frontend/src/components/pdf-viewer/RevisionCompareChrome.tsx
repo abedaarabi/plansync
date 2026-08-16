@@ -36,7 +36,7 @@ export function RevisionCompareChrome(props: {
   };
 
   return (
-    <div className="no-print flex shrink-0 flex-col gap-1.5 border-b border-[#334155] bg-[#0f172a]/95 px-2 py-1.5 text-[11px] text-[#e2e8f0] backdrop-blur-sm print:hidden">
+    <div className="no-print flex shrink-0 flex-col gap-1.5 border-b border-slate-200 bg-white/95 px-2 py-1.5 text-[11px] text-slate-700 backdrop-blur-sm print:hidden">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1">
           {(
@@ -51,8 +51,8 @@ export function RevisionCompareChrome(props: {
               onClick={() => setLayout(id)}
               className={`rounded-md px-2 py-1 font-medium transition ${
                 layout === id
-                  ? "bg-[#2563eb] text-white shadow-sm"
-                  : "bg-[#1e293b] text-[#94a3b8] ring-1 ring-[#334155] hover:bg-[#334155] hover:text-[#f8fafc]"
+                  ? "bg-[var(--viewer-primary-muted)] text-[var(--viewer-primary)] ring-1 ring-[var(--viewer-primary)]/45"
+                  : "bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
               {label}
@@ -62,7 +62,7 @@ export function RevisionCompareChrome(props: {
         <button
           type="button"
           onClick={() => exit()}
-          className="rounded-md border border-[#475569] bg-[#1e293b] px-2.5 py-1 text-[11px] font-semibold text-[#e2e8f0] shadow-sm transition hover:bg-[#334155]"
+          className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100"
         >
           Exit revision compare
         </button>
@@ -75,7 +75,7 @@ export function RevisionCompareChrome(props: {
             style={{ background: REVISION_DIFF_COLOR_A }}
             aria-hidden
           />
-          <span className="text-[#94a3b8]">Rev A</span>
+          <span className="text-slate-500">Rev A</span>
           <select
             value={baseId ?? ""}
             onChange={(e) => onPickBase(e.target.value)}
@@ -95,14 +95,14 @@ export function RevisionCompareChrome(props: {
             style={{ background: REVISION_DIFF_COLOR_B }}
             aria-hidden
           />
-          <span className="text-[#94a3b8]">Rev B</span>
-          <span className="rounded-md border border-[#334155] bg-[#1e293b] px-2 py-0.5 font-semibold tabular-nums text-[#e2e8f0]">
+          <span className="text-slate-500">Rev B</span>
+          <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 font-semibold tabular-nums text-slate-700">
             v{targetVer ?? "—"}
           </span>
-          <span className="text-[10px] text-[#64748b]">(open sheet)</span>
+          <span className="text-[10px] text-slate-500">(open sheet)</span>
         </span>
 
-        <span className="hidden items-center gap-2 text-[10px] text-[#94a3b8] sm:flex">
+        <span className="hidden items-center gap-2 text-[10px] text-slate-500 sm:flex">
           <span className="inline-flex items-center gap-1">
             <span className="h-2 w-2 rounded-sm" style={{ background: REVISION_DIFF_COLOR_A }} />
             Only in A
@@ -115,7 +115,7 @@ export function RevisionCompareChrome(props: {
         </span>
 
         {layout === "diff" || showTint ? (
-          <label className="flex items-center gap-1.5 text-[#94a3b8]">
+          <label className="flex items-center gap-1.5 text-slate-500">
             Opacity
             <input
               type="range"
@@ -130,19 +130,19 @@ export function RevisionCompareChrome(props: {
         ) : null}
 
         {layout === "sideBySide" ? (
-          <label className="flex cursor-pointer items-center gap-1.5 text-[#94a3b8]">
+          <label className="flex cursor-pointer items-center gap-1.5 text-slate-500">
             <input
               type="checkbox"
               checked={showTint}
               onChange={(e) => setShowTint(e.target.checked)}
-              className="rounded border-[#64748b]"
+              className="rounded border-slate-300"
             />
             Show diff tint on B
           </label>
         ) : null}
 
         {props.loadingDiff ? (
-          <span className="text-[10px] text-[#64748b]">Computing diff…</span>
+          <span className="text-[10px] text-slate-500">Computing diff…</span>
         ) : null}
         {props.loadError ? (
           <span className="text-[10px] text-amber-400">{props.loadError}</span>

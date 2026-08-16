@@ -167,9 +167,9 @@ function TakeoffInventoryDrawerBody({
 
   const titleMain = (
     <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="min-w-0 text-[11px] text-[#e2e8f0]">
-        <span className="font-medium text-[#94a3b8]">Inventory</span>{" "}
-        <span className="tabular-nums text-[#f1f5f9]">
+      <span className="min-w-0 text-[11px] text-slate-700">
+        <span className="font-medium text-slate-500">Inventory</span>{" "}
+        <span className="tabular-nums text-slate-900">
           {itemCount} {itemCount === 1 ? "item" : "items"} · {zoneCount}{" "}
           {zoneCount === 1 ? "zone" : "zones"}
         </span>
@@ -181,13 +181,13 @@ function TakeoffInventoryDrawerBody({
   const titleCollapsed =
     itemCount === 0 ? (
       <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="min-w-0 text-[11px] text-[#e2e8f0]">
-          <span className="font-medium text-[#94a3b8]">Inventory</span>{" "}
-          <span className="text-[#cbd5e1]">No takeoff lines yet</span>
+        <span className="min-w-0 text-[11px] text-slate-700">
+          <span className="font-medium text-slate-500">Inventory</span>{" "}
+          <span className="text-slate-700">No takeoff lines yet</span>
         </span>
         <button
           type="button"
-          className="viewer-focus-ring shrink-0 rounded-md border border-[#475569] bg-[#1e293b] px-2 py-0.5 text-[10px] font-semibold text-[#e2e8f0] hover:bg-[#334155]"
+          className="viewer-focus-ring shrink-0 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-100"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={startTakeoffFromCollapsed}
         >
@@ -227,7 +227,7 @@ function TakeoffInventoryDrawerBody({
               onClick={toggleInventoryFullscreen}
               title={inventoryFullscreen ? "Exit full screen (inventory)" : "Full screen inventory"}
               aria-pressed={inventoryFullscreen}
-              className="viewer-focus-ring inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#475569] bg-[#0f172a] text-[#e2e8f0] transition-colors hover:bg-[#1e293b]"
+              className="viewer-focus-ring inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-white"
             >
               {inventoryFullscreen ? (
                 <Minimize2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
@@ -240,7 +240,7 @@ function TakeoffInventoryDrawerBody({
               onClick={() => setTakeoffInventoryDrawerFromSidebar(false)}
               title="Close inventory"
               aria-label="Close inventory"
-              className="viewer-focus-ring inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#475569] bg-[#0f172a] text-[#e2e8f0] transition-colors hover:bg-[#1e293b]"
+              className="viewer-focus-ring inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-white"
             >
               <X className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
             </button>

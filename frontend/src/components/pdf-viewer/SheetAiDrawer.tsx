@@ -40,10 +40,10 @@ export function SheetAiDrawer() {
   const snapHeightsPx = useMemo(() => [32, 280, fullH] as const, [fullH]);
 
   const titleMain = (
-    <span className="flex min-w-0 items-center gap-1.5 text-[10px] text-[#e2e8f0]">
+    <span className="flex min-w-0 items-center gap-1.5 text-[10px] text-slate-700">
       <Sparkles className="h-3 w-3 shrink-0 text-violet-400" aria-hidden />
-      <span className="font-medium text-[#94a3b8]">Assist</span>
-      <span className="text-[#cbd5e1]">Takeoff detect</span>
+      <span className="font-medium text-slate-500">Assist</span>
+      <span className="text-slate-700">Takeoff detect</span>
     </span>
   );
 
@@ -56,7 +56,7 @@ export function SheetAiDrawer() {
         keyboardToggleEnabled={false}
         title={titleMain}
         titleWhenCollapsed={
-          <span className="flex items-center gap-1 text-[10px] text-[#cbd5e1]">
+          <span className="flex items-center gap-1 text-[10px] text-slate-700">
             <Sparkles className="h-3 w-3 text-violet-400" aria-hidden />
             Assist
           </span>

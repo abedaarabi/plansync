@@ -44,8 +44,8 @@ export function SidebarSheetAiTab() {
 
   if (!cloudFileVersionId) {
     return (
-      <p className="px-2 py-3 text-center text-[10px] leading-relaxed text-[#94A3B8]">
-        Open a <strong className="text-[#F8FAFC]">cloud project</strong> sheet to use Takeoff
+      <p className="px-2 py-3 text-center text-[10px] leading-relaxed text-slate-500">
+        Open a <strong className="text-slate-900">cloud project</strong> sheet to use Takeoff
         assist.
       </p>
     );
@@ -56,19 +56,19 @@ export function SidebarSheetAiTab() {
       <button
         type="button"
         onClick={() => void handleClearAiDrawing()}
-        className="viewer-focus-ring flex w-full shrink-0 items-center justify-center gap-1.5 rounded-md border border-[#475569] bg-[#1e293b] py-1.5 text-[10px] font-medium text-rose-200/90 hover:border-rose-500/50 hover:bg-rose-950/35"
+        className="viewer-focus-ring flex w-full shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white py-1.5 text-[10px] font-medium text-rose-700 hover:border-rose-500/50 hover:bg-rose-50"
         title="Assist highlights, markups, issue pins, AI takeoff zones"
       >
         <Trash2 className="h-3 w-3 shrink-0" aria-hidden />
         Clear Assist from drawing
       </button>
 
-      <p className="text-[9px] leading-snug text-[#64748b]">
+      <p className="text-[9px] leading-snug text-slate-500">
         Category detect and quantities live in the{" "}
-        <strong className="text-slate-400">Assist</strong> drawer at the bottom of the viewer.
+        <strong className="text-slate-500">Assist</strong> drawer at the bottom of the viewer.
       </p>
 
-      <p className="text-[9px] leading-snug text-[#64748b]">
+      <p className="text-[9px] leading-snug text-slate-500">
         AI can misread drawings. Always verify on the sheet.
       </p>
     </div>

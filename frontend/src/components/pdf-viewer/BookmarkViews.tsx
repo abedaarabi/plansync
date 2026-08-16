@@ -93,7 +93,7 @@ export function BookmarkViews() {
               <button
                 type="button"
                 onClick={() => apply(b)}
-                className="flex min-w-0 flex-1 items-center gap-1 text-left text-[10px] tracking-tight text-[var(--viewer-text)] hover:text-white"
+                className="flex min-w-0 flex-1 items-center gap-1 text-left text-[10px] tracking-tight text-[var(--viewer-text)] hover:text-slate-900"
                 title={`Page ${b.page} · ${Math.round(b.scale * 100)}%`}
               >
                 <Bookmark

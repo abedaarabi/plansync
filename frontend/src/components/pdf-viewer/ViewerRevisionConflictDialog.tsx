@@ -51,7 +51,7 @@ export function ViewerRevisionConflictDialog({
       open={open}
       onClose={onClose}
       ariaLabelledBy="viewer-rev-conflict-title"
-      variant="viewer-dark"
+      variant="viewer"
       overlayZClass="z-[200]"
       footer={
         <>
@@ -64,7 +64,7 @@ export function ViewerRevisionConflictDialog({
           </button>
           <button
             type="button"
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-slate-600 text-slate-200 hover:bg-slate-800`}
+            className={`${MOBILE_DIALOG_BTN_SECONDARY} border border-slate-300 text-slate-700 hover:bg-slate-100`}
             onClick={onClose}
           >
             Dismiss
@@ -72,10 +72,10 @@ export function ViewerRevisionConflictDialog({
         </>
       }
     >
-      <h2 id="viewer-rev-conflict-title" className="text-base font-semibold text-white">
+      <h2 id="viewer-rev-conflict-title" className="text-base font-semibold text-slate-900">
         This sheet changed while you were editing
       </h2>
-      <p className="mt-2 text-sm leading-relaxed text-slate-300">
+      <p className="mt-2 text-sm leading-relaxed text-slate-600">
         Another save updated the cloud copy. Reload the latest version to merge their markups with
         yours. Unsaved local strokes that are not on the server are kept when possible.
       </p>

@@ -20,15 +20,15 @@ function FlyoutChrome({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#0F172A] text-[#F8FAFC] shadow-[-12px_0_28px_-10px_rgba(0,0,0,0.45)]">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#334155] px-3 py-2.5">
-        <h2 className="truncate text-[12px] font-semibold tracking-tight text-[#F8FAFC]">
+    <div className="flex h-full min-h-0 flex-col bg-white text-slate-900 shadow-[-8px_0_20px_-8px_rgba(12,18,34,0.1)]">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5">
+        <h2 className="truncate text-[12px] font-semibold tracking-tight text-slate-900">
           {title}
         </h2>
         <button
           type="button"
           onClick={onClose}
-          className="viewer-focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#334155] bg-[#1E293B] text-[#94A3B8] transition hover:border-[#475569] hover:bg-[#334155] hover:text-[#F8FAFC]"
+          className="viewer-focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-200 hover:bg-slate-100 hover:text-slate-900"
           aria-label="Close panel"
         >
           <X className="h-4 w-4" strokeWidth={2} />
@@ -45,14 +45,14 @@ function SettingsFlyoutBody() {
   const setSheetOverlayVisibilityAll = useViewerStore((s) => s.setSheetOverlayVisibilityAll);
 
   return (
-    <div className="space-y-4 overflow-y-auto px-3 py-3 text-[11px] text-[#CBD5E1] [scrollbar-width:thin]">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B]">
+    <div className="space-y-4 overflow-y-auto px-3 py-3 text-[11px] text-slate-700 [scrollbar-width:thin]">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
         Sheet overlays
       </p>
-      <p className="text-[10px] leading-snug text-[#94A3B8]">
+      <p className="text-[10px] leading-snug text-slate-500">
         Choose what appears on the drawing (same options as in this settings panel).
       </p>
-      <div className="space-y-2 rounded-lg border border-[#334155] bg-[#1E293B] p-2.5">
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-2.5">
         {(
           [
             ["showMarkups", "Markups and comments"],
@@ -64,22 +64,22 @@ function SettingsFlyoutBody() {
         ).map(([key, label]) => (
           <label
             key={key}
-            className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-[#334155]/80"
+            className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-slate-100/80"
           >
             <input
               type="checkbox"
-              className="rounded border-[#475569] bg-[#0F172A] text-[#2563EB] accent-[#2563EB]"
+              className="rounded border-slate-200 bg-white text-[#2563EB] accent-[#2563EB]"
               checked={sheetOverlayVisibility[key]}
               onChange={(e) => patchSheetOverlayVisibility({ [key]: e.target.checked })}
             />
-            <span className="text-[#E2E8F0]">{label}</span>
+            <span className="text-slate-700">{label}</span>
           </label>
         ))}
       </div>
       <div className="flex flex-col gap-2">
         <button
           type="button"
-          className="rounded-lg border border-[#334155] bg-[#1E293B] px-2 py-2 text-left text-[11px] font-medium text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155]"
+          className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-[11px] font-medium text-slate-700 transition hover:border-slate-200 hover:bg-slate-100"
           onClick={() =>
             setSheetOverlayVisibilityAll({
               showMarkups: false,
@@ -94,7 +94,7 @@ function SettingsFlyoutBody() {
         </button>
         <button
           type="button"
-          className="rounded-lg border border-[#334155] bg-[#1E293B] px-2 py-2 text-left text-[11px] font-medium text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155]"
+          className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-[11px] font-medium text-slate-700 transition hover:border-slate-200 hover:bg-slate-100"
           onClick={() => setSheetOverlayVisibilityAll({ ...DEFAULT_SHEET_OVERLAY_VISIBILITY })}
         >
           Show all overlays
@@ -131,7 +131,7 @@ export function ViewerFlyoutStack() {
           type="button"
           aria-label="Close side panel"
           className={`no-print absolute inset-0 z-[35] transition-opacity duration-200 ${
-            lightBackdrop ? "bg-transparent" : "bg-slate-950/50 backdrop-blur-[1px]"
+            lightBackdrop ? "bg-transparent" : "bg-slate-50 backdrop-blur-[1px]"
           }`}
           onClick={onClose}
         />
@@ -143,12 +143,12 @@ export function ViewerFlyoutStack() {
         style={{ width: flyoutW }}
         aria-hidden={!open}
       >
-        <div className="pointer-events-auto flex h-full min-h-0 flex-col border-l border-[#334155] bg-[#0F172A]">
+        <div className="pointer-events-auto flex h-full min-h-0 flex-col border-l border-slate-200 bg-white">
           {rightFlyout === "settings" ? (
             <FlyoutChrome title="Sheet settings" onClose={onClose}>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <MapSnapPanelBody />
-                <hr className="mx-3 border-0 border-t border-[#334155]" />
+                <hr className="mx-3 border-0 border-t border-slate-200" />
                 <SettingsFlyoutBody />
               </div>
             </FlyoutChrome>

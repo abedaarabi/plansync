@@ -234,8 +234,8 @@ export function SheetAiPanel() {
 
   if (!cloudFileVersionId) {
     return (
-      <p className="px-1 text-[10px] leading-relaxed text-[#94A3B8]">
-        Open a <strong className="text-[#F8FAFC]">cloud project</strong> sheet to use Takeoff
+      <p className="px-1 text-[10px] leading-relaxed text-slate-500">
+        Open a <strong className="text-slate-900">cloud project</strong> sheet to use Takeoff
         assist.
       </p>
     );
@@ -247,36 +247,36 @@ export function SheetAiPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-1 overflow-hidden">
-      <div className="flex shrink-0 items-center gap-1 rounded border border-[#334155]/70 bg-[#1e293b]/40 px-1 py-0.5">
-        <h3 className="flex flex-1 items-center gap-1 text-[8px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+      <div className="flex shrink-0 items-center gap-1 rounded border border-slate-200/70 bg-white/40 px-1 py-0.5">
+        <h3 className="flex flex-1 items-center gap-1 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
           <Sparkles className="h-2.5 w-2.5 text-violet-400" aria-hidden />
           Takeoff assist
         </h3>
       </div>
-      <p className="shrink-0 px-0.5 text-[8px] leading-tight text-[#64748b]">
+      <p className="shrink-0 px-0.5 text-[8px] leading-tight text-slate-500">
         Estimates from this view only — verify counts on the sheet.
       </p>
 
       <section
-        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-[#334155]/70 bg-[#1e293b]/40"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-slate-200/70 bg-white/40"
         aria-label="Takeoff assist"
       >
         <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-1 [scrollbar-width:thin]">
           <div>
-            <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+            <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
               Detect
             </p>
-            <div className="flex flex-col gap-0.5 rounded border border-[#334155]/60 bg-slate-900/40 px-1 py-1">
+            <div className="flex flex-col gap-0.5 rounded border border-slate-200/60 bg-slate-50 px-1 py-1">
               {CATEGORY_ORDER.map((cat) => (
                 <label
                   key={cat}
-                  className="flex cursor-pointer items-center gap-1.5 text-[9px] text-slate-200"
+                  className="flex cursor-pointer items-center gap-1.5 text-[9px] text-slate-700"
                 >
                   <input
                     type="checkbox"
                     checked={selected[cat]}
                     onChange={() => toggleCategory(cat)}
-                    className="h-3 w-3 shrink-0 rounded border-[#475569] bg-[#0f172a] text-violet-500"
+                    className="h-3 w-3 shrink-0 rounded border-slate-200 bg-white text-violet-700"
                   />
                   <span
                     className="inline-block h-2 w-2 shrink-0 rounded-sm"
@@ -290,7 +290,7 @@ export function SheetAiPanel() {
           </div>
 
           {hasServerTakeoff ? (
-            <p className="text-[7px] leading-tight text-[#64748b]">
+            <p className="text-[7px] leading-tight text-slate-500">
               Saved on server for this page.
             </p>
           ) : null}
@@ -299,30 +299,30 @@ export function SheetAiPanel() {
             type="button"
             disabled={detectLoading || selectedCategories.length === 0}
             onClick={() => void runDetect()}
-            className="w-full rounded border border-violet-500/40 bg-violet-600/85 py-1 text-[9px] font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+            className="w-full rounded border border-violet-500/40 bg-violet-50 py-1 text-[9px] font-semibold text-violet-700 transition hover:bg-violet-100 disabled:opacity-40"
           >
             {detectLoading ? "Detecting…" : "Detect"}
           </button>
 
           {detectLoading ? (
-            <div className="flex items-center gap-1 py-0.5 text-[9px] text-[#94A3B8]">
+            <div className="flex items-center gap-1 py-0.5 text-[9px] text-slate-500">
               <Loader2 className="h-2.5 w-2.5 animate-spin" aria-hidden />
               Analyzing…
             </div>
           ) : null}
 
           {takeoffResult && tableCategories.length > 0 ? (
-            <div className="border-t border-[#334155] pt-1">
-              <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+            <div className="border-t border-slate-200 pt-1">
+              <p className="mb-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500">
                 Quantities
               </p>
-              <div className="max-h-[min(40vh,280px)] overflow-auto rounded border border-[#334155] [scrollbar-width:thin]">
-                <table className="w-full min-w-50 border-collapse text-left text-[9px] text-slate-200">
+              <div className="max-h-[min(40vh,280px)] overflow-auto rounded border border-slate-200 [scrollbar-width:thin]">
+                <table className="w-full min-w-50 border-collapse text-left text-[9px] text-slate-700">
                   <thead>
-                    <tr className="border-b border-[#334155] bg-slate-900/80">
+                    <tr className="border-b border-slate-200 bg-white">
                       <th className="w-2 px-1 py-1" aria-hidden />
-                      <th className="px-1 py-1 font-semibold text-[#94a3b8]">Category</th>
-                      <th className="px-1 py-1 font-semibold text-[#94a3b8]">Count</th>
+                      <th className="px-1 py-1 font-semibold text-slate-500">Category</th>
+                      <th className="px-1 py-1 font-semibold text-slate-500">Count</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -331,7 +331,7 @@ export function SheetAiPanel() {
                       return (
                         <tr
                           key={cat}
-                          className="border-b border-[#334155]/80 align-top last:border-b-0 hover:bg-slate-800/40"
+                          className="border-b border-slate-200/80 align-top last:border-b-0 hover:bg-slate-50"
                         >
                           <td className="px-1 py-1">
                             <span
@@ -344,12 +344,12 @@ export function SheetAiPanel() {
                             <button
                               type="button"
                               onClick={() => focusCategory(cat)}
-                              className="text-left font-medium text-sky-400 hover:text-sky-300 hover:underline"
+                              className="text-left font-medium text-sky-400 hover:text-blue-600 hover:underline"
                             >
                               {CATEGORY_LABEL[cat]}
                             </button>
                           </td>
-                          <td className="px-1 py-1 tabular-nums text-slate-100">{n}</td>
+                          <td className="px-1 py-1 tabular-nums text-slate-900">{n}</td>
                         </tr>
                       );
                     })}
@@ -358,8 +358,8 @@ export function SheetAiPanel() {
               </div>
             </div>
           ) : !detectLoading ? (
-            <p className="text-[9px] leading-snug text-[#64748b]">
-              Choose categories, then <strong className="text-slate-400">Detect</strong> to show
+            <p className="text-[9px] leading-snug text-slate-500">
+              Choose categories, then <strong className="text-slate-500">Detect</strong> to show
               counts and highlights on the sheet.
             </p>
           ) : null}

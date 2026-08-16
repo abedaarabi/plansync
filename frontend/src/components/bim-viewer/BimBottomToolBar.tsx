@@ -6,12 +6,12 @@ import {
   Crosshair,
   DraftingCompass,
   Eraser,
-  Expand,
   Keyboard,
   Layers,
   LayoutGrid,
   Map,
   Maximize2,
+  Minimize2,
   MoreHorizontal,
   MousePointer2,
   Pencil,
@@ -332,14 +332,23 @@ export function BimBottomToolBar(props: {
             />
             <FlyoutBtn label="Clear" active={false} onClick={props.onClearMarkups} icon={Eraser} />
             <FlyoutBtn label="Snapshot" active={false} onClick={props.onSnapshot} icon={Camera} />
-            <FlyoutBtn
-              label={props.fullscreen ? "Exit FS" : "Fullscreen"}
-              active={props.fullscreen}
-              onClick={props.onToggleFullscreen}
-              icon={props.fullscreen ? Expand : Maximize2}
-            />
           </div>
         </div>
+
+        <button
+          type="button"
+          aria-label={props.fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          title={props.fullscreen ? "Exit fullscreen" : "Fullscreen"}
+          data-active={props.fullscreen}
+          onClick={props.onToggleFullscreen}
+          className="bim-bottom-bar-btn mobile-touch-target"
+        >
+          {props.fullscreen ? (
+            <Minimize2 className="h-4.5 w-4.5" aria-hidden />
+          ) : (
+            <Maximize2 className="h-4.5 w-4.5" aria-hidden />
+          )}
+        </button>
 
         <button
           type="button"

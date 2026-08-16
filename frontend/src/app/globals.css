@@ -30,17 +30,17 @@ html {
   --landing-cta-text: #ffffff;
   --landing-glass: rgba(255, 255, 255, 0.95);
   --landing-glass-strong: #ffffff;
-  /* PlanSync viewer — navy rails, light sheet canvas */
+  /* PlanSync viewer — white chrome, blue icons, light sheet canvas */
   --viewer-shell: #f1f5f9;
   --viewer-shell-glow: rgba(37, 99, 235, 0.06);
-  --viewer-chrome-top: #0f172a;
-  --viewer-chrome-mid: #0f172a;
-  --viewer-chrome-bottom: #0f172a;
-  --viewer-chrome-border: #334155;
-  --viewer-surface: #1e293b;
-  --viewer-text: #f8fafc;
-  --viewer-text-muted: #94a3b8;
-  --viewer-border-token: #334155;
+  --viewer-chrome-top: #ffffff;
+  --viewer-chrome-mid: #ffffff;
+  --viewer-chrome-bottom: #ffffff;
+  --viewer-chrome-border: #e2e8f0;
+  --viewer-surface: #ffffff;
+  --viewer-text: #0f172a;
+  --viewer-text-muted: #475569;
+  --viewer-border-token: #e2e8f0;
   --viewer-canvas: #f8fafc;
   --viewer-canvas-dot: rgba(148, 163, 184, 0.22);
   --viewer-primary: #2563eb;
@@ -52,12 +52,13 @@ html {
   --viewer-accent-soft: rgba(37, 99, 235, 0.18);
   --viewer-accent-measure: #2563eb;
   --viewer-accent-measure-soft: rgba(37, 99, 235, 0.2);
-  --viewer-border: #334155;
-  --viewer-border-strong: #334155;
-  --viewer-surface-elevated: #1e293b;
-  --viewer-panel: #1e293b;
-  --viewer-success: #10b981;
-  --viewer-error: #ef4444;
+  --viewer-border: #e2e8f0;
+  --viewer-border-strong: #cbd5e1;
+  --viewer-surface-elevated: #ffffff;
+  --viewer-panel: #ffffff;
+  --viewer-icon: #2563eb;
+  --viewer-success: #059669;
+  --viewer-error: #dc2626;
 
   /* PlanSync Pro — enterprise shell (refined SaaS: depth, restraint, crisp type) */
   /* Premium AEC workspace — cool slate, navy rail, single blue accent */
@@ -142,7 +143,7 @@ html {
   --landing-cta-bright: var(--enterprise-primary-deep);
 
   /* Viewer inputs — align with enterprise slate */
-  --viewer-input-bg: #1e293b;
+  --viewer-input-bg: #ffffff;
 }
 
 @theme inline {
@@ -270,13 +271,20 @@ button:active:not(:disabled),
     var(--viewer-shell);
 }
 
+.viewer-shell-bg:fullscreen,
+.viewer-shell-bg:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+}
+
 .viewer-canvas-area {
   background-color: var(--viewer-canvas);
   --viewer-rail-w: 3.25rem;
   --viewer-dock-w: 16.25rem;
   --viewer-rail-gap: 8px;
-  --viewer-glass-bg: color-mix(in srgb, #1e293b 88%, #94a3b8 12%);
-  --viewer-glass-blur: 18px;
+  --viewer-glass-bg: #ffffff;
+  --viewer-glass-blur: 0px;
 }
 
 @media (max-width: 639px) {
@@ -295,12 +303,12 @@ button:active:not(:disabled),
 /* PDF viewer — icon rail + glass docks (plain CSS; avoid @apply dropouts in @layer) */
 .viewer-glass-surface {
   border: 1px solid var(--viewer-border);
-  background: var(--viewer-glass-bg, #1e293b);
-  backdrop-filter: blur(var(--viewer-glass-blur, 18px));
-  -webkit-backdrop-filter: blur(var(--viewer-glass-blur, 18px));
+  background: var(--viewer-glass-bg, #ffffff);
+  backdrop-filter: blur(var(--viewer-glass-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--viewer-glass-blur, 0px));
   box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.35),
-    0 8px 32px rgba(15, 23, 42, 0.45);
+    0 1px 2px rgba(12, 18, 34, 0.04),
+    0 4px 16px rgba(12, 18, 34, 0.08);
 }
 
 .viewer-icon-rail {
@@ -373,7 +381,7 @@ button:active:not(:disabled),
   border-radius: 0.75rem;
   background: transparent;
   transition: all 150ms ease;
-  color: #ffffff;
+  color: var(--viewer-icon);
   cursor: pointer;
 }
 
@@ -386,20 +394,20 @@ button:active:not(:disabled),
 }
 
 .viewer-rail-btn:hover {
-  color: #ffffff;
-  background: color-mix(in srgb, var(--viewer-surface) 70%, transparent);
+  color: var(--viewer-primary-hover);
+  background: var(--viewer-primary-muted);
 }
 
 .viewer-rail-btn[data-mode="true"] {
-  color: #ffffff;
-  background: color-mix(in srgb, var(--viewer-primary) 28%, transparent);
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.55);
+  color: var(--viewer-primary);
+  background: var(--viewer-primary-muted);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.35);
 }
 
 .viewer-rail-btn[data-active="true"] {
-  color: #ffffff;
-  background: var(--viewer-primary);
-  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.45);
+  color: var(--viewer-primary);
+  background: var(--viewer-primary-muted);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.45);
 }
 
 .viewer-rail-btn:focus-visible {
@@ -503,9 +511,9 @@ button:active:not(:disabled),
 
 .viewer-glass-dock__header {
   flex-shrink: 0;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--viewer-border);
   padding: 0.625rem 0.75rem 0.625rem;
-  background: color-mix(in srgb, #0f172a 55%, #1e293b 45%);
+  background: var(--viewer-panel);
 }
 
 .viewer-glass-dock__header-row {
@@ -521,7 +529,7 @@ button:active:not(:disabled),
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: #f8fafc;
+  color: var(--viewer-text);
 }
 
 .viewer-dock-header-sub {
@@ -530,7 +538,7 @@ button:active:not(:disabled),
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 10px;
-  color: #94a3b8;
+  color: var(--viewer-text-muted);
 }
 
 .viewer-glass-dock__body {
@@ -543,7 +551,7 @@ button:active:not(:disabled),
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  background: color-mix(in srgb, var(--viewer-panel) 88%, #475569 12%);
+  background: var(--viewer-panel);
 }
 
 .viewer-dock-scroll {
@@ -829,26 +837,26 @@ button:active:not(:disabled),
     @apply text-[11px] font-medium;
   }
   .viewer-section-title {
-    @apply mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#94a3b8];
+    @apply mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--viewer-text-muted)];
   }
   .viewer-card {
-    @apply rounded-lg border border-[#334155] bg-[#1e293b] shadow-[0_1px_3px_rgba(0,0,0,0.2)];
+    @apply rounded-lg border border-[var(--viewer-border)] bg-[var(--viewer-panel)];
   }
   .viewer-kbd {
     @apply rounded border border-slate-300 bg-slate-100 px-1 py-px font-mono text-[8px] font-medium text-slate-700;
   }
   .viewer-input-select {
-    @apply max-w-[6rem] rounded-md border border-[#94a3b8] px-1.5 py-1 text-[10px] text-[#f8fafc] outline-none transition focus:border-[var(--viewer-primary)] focus:ring-1 focus:ring-[var(--viewer-primary-ring)];
-    background: #1e293b;
+    @apply max-w-[6rem] rounded-md border border-[var(--viewer-border-strong)] px-1.5 py-1 text-[10px] text-[var(--viewer-text)] outline-none transition focus:border-[var(--viewer-primary)] focus:ring-1 focus:ring-[var(--viewer-primary-ring)];
+    background: var(--viewer-input-bg);
   }
   .viewer-input-dark {
-    @apply w-full rounded-lg border border-[#94a3b8] bg-[#1e293b] px-2 py-2 text-[11px] text-[#f8fafc] outline-none transition placeholder:text-[#64748b] focus:border-[#2563eb] focus:ring-1 focus:ring-[var(--viewer-primary-ring)];
+    @apply w-full rounded-lg border border-[var(--viewer-border-strong)] bg-[var(--viewer-input-bg)] px-2 py-2 text-[11px] text-[var(--viewer-text)] outline-none transition placeholder:text-slate-400 focus:border-[var(--viewer-primary)] focus:ring-1 focus:ring-[var(--viewer-primary-ring)];
   }
   .viewer-focus-ring {
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--viewer-primary)] focus-visible:ring-offset-0;
   }
 
-  /* BIM viewer — canvas-first hybrid (scoped under .bim-viewer) */
+  /* BIM viewer — light chrome (enterprise-aligned), dark 3D canvas */
   .bim-viewer {
     /* Shared by tree + canvas offset (must live on .bim-viewer, not the tree alone). */
     --bim-workspace-tree-w: min(360px, 34%);
@@ -858,35 +866,35 @@ button:active:not(:disabled),
     --bim-canvas-top: #0f172a;
     --bim-canvas-mid: #111827;
     --bim-canvas-bottom: #1f2937;
-    --bim-accent: #3b82f6;
-    --bim-accent-hover: #60a5fa;
-    --bim-accent-muted: rgba(59, 130, 246, 0.12);
-    --bim-accent-selected: rgba(59, 130, 246, 0.35);
-    --bim-text: #f9fafb;
-    --bim-text-muted: #94a3b8;
-    --bim-text-subtle: #64748b;
-    --bim-border: #475569;
-    --bim-border-strong: #64748b;
-    --bim-panel: #1e293b;
-    --bim-hover: #334155;
+    --bim-accent: #2563eb;
+    --bim-accent-hover: #1d4ed8;
+    --bim-accent-muted: rgba(37, 99, 235, 0.08);
+    --bim-accent-selected: rgba(37, 99, 235, 0.18);
+    --bim-text: #0f172a;
+    --bim-text-muted: #64748b;
+    --bim-text-subtle: #94a3b8;
+    --bim-border: #e2e8f0;
+    --bim-border-strong: #cbd5e1;
+    --bim-panel: #ffffff;
+    --bim-hover: #f8fafc;
     --bim-toolbar-h: 3.75rem;
-    --bim-panel-shadow: 0 1px 2px rgba(15, 23, 42, 0.28), 0 10px 28px rgba(15, 23, 42, 0.35);
+    --bim-panel-shadow: 0 4px 16px rgba(12, 18, 34, 0.08), 0 1px 2px rgba(12, 18, 34, 0.04);
     --bim-stage-shadow: inset 0 0 0 1px rgba(51, 65, 85, 0.18), 0 16px 48px rgba(15, 23, 42, 0.45);
     --bim-transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
-    /* Hybrid floating chrome — menus/docks stay lighter than the canvas shell */
-    --bim-chrome-bg: #0f172a;
-    --bim-chrome-surface: #334155;
-    --bim-chrome-text: #f9fafb;
-    --bim-chrome-text-muted: #cbd5e1;
-    --bim-chrome-border: #475569;
-    --bim-glass-bg: color-mix(in srgb, #3f5169 86%, #94a3b8 14%);
-    --bim-glass-blur: 18px;
-    --bim-success: #10b981;
-    --bim-warning: #f59e0b;
-    --bim-danger: #ef4444;
-    --bim-info: #06b6d4;
-    --bim-icon: #cbd5e1;
-    --bim-disabled: #64748b;
+    /* Floating chrome — white surfaces, blue icons (match app shell) */
+    --bim-chrome-bg: #ffffff;
+    --bim-chrome-surface: #ffffff;
+    --bim-chrome-text: #0f172a;
+    --bim-chrome-text-muted: #64748b;
+    --bim-chrome-border: #e2e8f0;
+    --bim-glass-bg: #ffffff;
+    --bim-glass-blur: 0px;
+    --bim-success: #059669;
+    --bim-warning: #d97706;
+    --bim-danger: #dc2626;
+    --bim-info: #2563eb;
+    --bim-icon: #2563eb;
+    --bim-disabled: #94a3b8;
     /* Fits 40–44px rail buttons + padding so icons stay centered. */
     --bim-rail-w: 3.25rem;
     --bim-dock-w: 20rem;
@@ -944,50 +952,40 @@ button:active:not(:disabled),
 
   /*
    * Portaled BIM surfaces (bottom sheets, context menu) render outside .bim-viewer.
-   * `.bim-theme` carries the color tokens so docks stay dark on mobile/iPad.
+   * `.bim-theme` carries the light chrome tokens onto those portals.
    */
   .bim-theme,
   .bim-context-menu-portal {
     --bim-shell: #0f172a;
     --bim-shell-deep: #111827;
     --bim-canvas: #0f172a;
-    --bim-accent: #3b82f6;
-    --bim-accent-hover: #60a5fa;
-    --bim-accent-muted: rgba(59, 130, 246, 0.12);
-    --bim-accent-selected: rgba(59, 130, 246, 0.35);
-    --bim-text: #f9fafb;
-    --bim-text-muted: #94a3b8;
-    --bim-text-subtle: #64748b;
-    --bim-border: #475569;
-    --bim-border-strong: #64748b;
-    --bim-panel: #1e293b;
-    --bim-hover: #334155;
-    --bim-panel-shadow: 0 1px 2px rgba(15, 23, 42, 0.28), 0 10px 28px rgba(15, 23, 42, 0.35);
+    --bim-accent: #2563eb;
+    --bim-accent-hover: #1d4ed8;
+    --bim-accent-muted: rgba(37, 99, 235, 0.08);
+    --bim-accent-selected: rgba(37, 99, 235, 0.18);
+    --bim-text: #0f172a;
+    --bim-text-muted: #64748b;
+    --bim-text-subtle: #94a3b8;
+    --bim-border: #e2e8f0;
+    --bim-border-strong: #cbd5e1;
+    --bim-panel: #ffffff;
+    --bim-hover: #f8fafc;
+    --bim-panel-shadow: 0 4px 16px rgba(12, 18, 34, 0.08), 0 1px 2px rgba(12, 18, 34, 0.04);
     --bim-transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
-    --bim-chrome-bg: #0f172a;
-    --bim-chrome-surface: #334155;
-    --bim-chrome-text: #f9fafb;
-    --bim-chrome-text-muted: #cbd5e1;
-    --bim-chrome-border: #475569;
-    --bim-glass-bg: color-mix(in srgb, #3f5169 86%, #94a3b8 14%);
-    --bim-glass-blur: 18px;
-    --bim-success: #10b981;
-    --bim-warning: #f59e0b;
-    --bim-danger: #ef4444;
-    --bim-info: #06b6d4;
-    --bim-icon: #cbd5e1;
-    --bim-disabled: #64748b;
+    --bim-chrome-bg: #ffffff;
+    --bim-chrome-surface: #ffffff;
+    --bim-chrome-text: #0f172a;
+    --bim-chrome-text-muted: #64748b;
+    --bim-chrome-border: #e2e8f0;
+    --bim-glass-bg: #ffffff;
+    --bim-glass-blur: 0px;
+    --bim-success: #059669;
+    --bim-warning: #d97706;
+    --bim-danger: #dc2626;
+    --bim-info: #2563eb;
+    --bim-icon: #2563eb;
+    --bim-disabled: #94a3b8;
     color: var(--bim-text);
-  }
-
-  .bim-viewer {
-    --bim-accent: #3b82f6;
-    --bim-chrome-surface: #334155;
-    --bim-chrome-text: #f9fafb;
-    --bim-chrome-text-muted: #cbd5e1;
-    --bim-chrome-border: #475569;
-    --bim-glass-bg: color-mix(in srgb, #3f5169 86%, #94a3b8 14%);
-    --bim-glass-blur: 18px;
   }
 
   .bim-context-menu-portal .bim-glass-surface {
@@ -995,9 +993,7 @@ button:active:not(:disabled),
     background: var(--bim-glass-bg);
     backdrop-filter: blur(var(--bim-glass-blur));
     -webkit-backdrop-filter: blur(var(--bim-glass-blur));
-    box-shadow:
-      0 1px 2px rgba(15, 23, 42, 0.35),
-      0 8px 32px rgba(15, 23, 42, 0.45);
+    box-shadow: var(--bim-panel-shadow);
   }
 
   .bim-type-caption {
@@ -1328,17 +1324,15 @@ button:active:not(:disabled),
 
   .bim-view-cube__home {
     @apply inline-flex h-7 w-7 items-center justify-center rounded-lg transition-all duration-150;
-    color: var(--bim-chrome-text-muted);
+    color: var(--bim-icon);
     border: 1px solid var(--bim-chrome-border);
-    background: color-mix(in srgb, var(--bim-chrome-surface) 78%, transparent);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: var(--bim-chrome-surface);
   }
 
   .bim-view-cube__home:hover {
-    color: var(--bim-chrome-text);
+    color: var(--bim-accent-hover);
     border-color: color-mix(in srgb, var(--bim-accent) 40%, var(--bim-chrome-border));
-    background: color-mix(in srgb, var(--bim-chrome-surface) 90%, transparent);
+    background: var(--bim-accent-muted);
   }
 
   .bim-view-cube__home:focus-visible {
@@ -1788,17 +1782,17 @@ button:active:not(:disabled),
 
   .bim-tool-btn {
     @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-all duration-150;
-    color: var(--bim-text-muted);
+    color: var(--bim-icon);
   }
   .bim-tool-btn:hover {
     background: var(--bim-panel);
-    color: var(--bim-text);
+    color: var(--bim-accent-hover);
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
   }
   .bim-tool-btn[data-active="true"] {
-    background: var(--bim-accent);
-    color: #ffffff;
-    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
+    background: var(--bim-accent-muted);
+    color: var(--bim-accent);
+    box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.45);
   }
 
   .bim-tree-row {
@@ -2124,9 +2118,7 @@ button:active:not(:disabled),
     background: var(--bim-glass-bg);
     backdrop-filter: blur(var(--bim-glass-blur));
     -webkit-backdrop-filter: blur(var(--bim-glass-blur));
-    box-shadow:
-      0 1px 2px rgba(15, 23, 42, 0.35),
-      0 8px 32px rgba(15, 23, 42, 0.45);
+    box-shadow: var(--bim-panel-shadow);
   }
 
   .bim-canvas-full {
@@ -2163,66 +2155,19 @@ button:active:not(:disabled),
   }
 
   .bim-loading-overlay {
+    position: relative;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background:
-      radial-gradient(
-        ellipse 70% 45% at 50% 18%,
-        color-mix(in srgb, var(--bim-accent) 10%, transparent),
-        transparent 70%
-      ),
-      linear-gradient(
-        180deg,
-        var(--bim-shell) 0%,
-        var(--bim-canvas-top) 40%,
-        var(--bim-canvas-mid) 70%,
-        var(--bim-shell-deep) 100%
-      );
+    background: #ffffff;
     opacity: 1;
-    transition: opacity 280ms ease;
+    transition: opacity 320ms ease;
   }
 
   .bim-loading-overlay[data-exiting="true"] {
     opacity: 0;
     pointer-events: none;
-  }
-
-  .bim-loading-topbar {
-    position: relative;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    padding: calc(env(safe-area-inset-top, 0px) + 0.75rem)
-      calc(env(safe-area-inset-right, 0px) + 0.75rem) 0.5rem
-      calc(env(safe-area-inset-left, 0px) + 0.75rem);
-  }
-
-  .bim-loading-brand-mark {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-  }
-
-  .bim-loading-brand-mark__text {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    line-height: 1.15;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--bim-text-subtle);
-  }
-
-  .bim-loading-brand-mark__sub {
-    margin-top: 0.1rem;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    color: var(--bim-text-subtle);
+    transition-delay: 480ms;
   }
 
   .bim-loading-stage {
@@ -2233,31 +2178,59 @@ button:active:not(:disabled),
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 1rem 1.25rem calc(env(safe-area-inset-bottom, 0px) + 2rem);
+    padding: 2rem 1.25rem calc(env(safe-area-inset-bottom, 0px) + 2rem);
     text-align: center;
+  }
+
+  .bim-loading-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .bim-loading-brand__logo {
+    flex-shrink: 0;
+    opacity: 0.95;
+  }
+
+  .bim-loading-brand__copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.1;
+  }
+
+  .bim-loading-brand__word {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--bim-text);
+  }
+
+  .bim-loading-brand__word span:last-child {
+    color: var(--bim-accent);
+  }
+
+  .bim-loading-brand__sub {
+    margin: 0.2rem 0 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--bim-text-subtle);
   }
 
   .bim-loading-preview {
     position: relative;
-    width: min(100%, 24rem);
+    width: min(100%, 17rem);
     aspect-ratio: 16 / 10;
     overflow: hidden;
-    border-radius: 0.9rem;
-    border: 1px solid color-mix(in srgb, var(--bim-border) 55%, transparent);
-    background: var(--bim-shell);
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--bim-shell) 60%, transparent),
-      var(--bim-panel-shadow);
-  }
-
-  .bim-loading-preview--empty {
-    background:
-      radial-gradient(
-        ellipse 70% 60% at 50% 45%,
-        color-mix(in srgb, var(--bim-accent) 12%, transparent),
-        transparent 70%
-      ),
-      var(--bim-shell);
+    border-radius: 0.5rem;
+    border: 1px solid var(--bim-border);
+    background: var(--bim-hover);
   }
 
   .bim-loading-preview__img {
@@ -2266,29 +2239,8 @@ button:active:not(:disabled),
     height: 100%;
     object-fit: contain;
     object-position: center;
-    background: var(--bim-shell);
-    filter: saturate(1.05) contrast(1.04);
+    background: var(--bim-hover);
     animation: bim-loading-preview-in 0.35s ease-out both;
-  }
-
-  .bim-loading-preview::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--bim-shell) 28%, transparent) 0%,
-        transparent 28%,
-        transparent 72%,
-        color-mix(in srgb, var(--bim-shell) 45%, transparent) 100%
-      ),
-      radial-gradient(
-        ellipse 85% 75% at 50% 45%,
-        transparent 40%,
-        color-mix(in srgb, var(--bim-shell) 35%, transparent) 100%
-      );
   }
 
   .bim-loading-model-name {
@@ -2296,7 +2248,7 @@ button:active:not(:disabled),
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     overflow: hidden;
-    max-width: min(100%, 24rem);
+    max-width: 100%;
     margin-top: 1.1rem;
     word-break: break-word;
     font-size: 1.05rem;
@@ -2311,14 +2263,14 @@ button:active:not(:disabled),
     font-size: 11px;
     font-weight: 500;
     letter-spacing: 0.02em;
-    color: var(--bim-text-subtle);
+    color: var(--bim-text-muted);
   }
 
   .bim-loading-headline {
     margin-top: 0.85rem;
     font-size: 13px;
     font-weight: 600;
-    color: var(--bim-text-muted);
+    color: var(--bim-text);
   }
 
   .bim-loading-steps {
@@ -2339,15 +2291,15 @@ button:active:not(:disabled),
     gap: 0.35rem;
     font-size: 11px;
     font-weight: 600;
-    color: var(--bim-text-subtle);
+    color: var(--bim-text-muted);
   }
 
   .bim-loading-steps__item[data-state="active"] {
-    color: var(--bim-text);
+    color: var(--bim-accent);
   }
 
   .bim-loading-steps__item[data-state="done"] {
-    color: var(--bim-text-muted);
+    color: var(--bim-text);
   }
 
   .bim-loading-steps__dot {
@@ -2357,20 +2309,20 @@ button:active:not(:disabled),
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    border: 1.5px solid color-mix(in srgb, var(--bim-border) 85%, transparent);
-    background: transparent;
+    border: 1.5px solid var(--bim-border-strong);
+    background: var(--bim-panel);
     color: var(--bim-accent);
   }
 
   .bim-loading-steps__item[data-state="active"] .bim-loading-steps__dot {
     border-color: var(--bim-accent);
     background: color-mix(in srgb, var(--bim-accent) 22%, transparent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bim-accent) 12%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bim-accent) 14%, transparent);
   }
 
   .bim-loading-steps__item[data-state="done"] .bim-loading-steps__dot {
     border-color: color-mix(in srgb, var(--bim-accent) 55%, var(--bim-border));
-    background: color-mix(in srgb, var(--bim-accent) 18%, transparent);
+    background: color-mix(in srgb, var(--bim-accent) 10%, var(--bim-panel));
   }
 
   .bim-loading-progress {
@@ -2382,7 +2334,7 @@ button:active:not(:disabled),
     height: 0.2rem;
     overflow: hidden;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bim-border) 80%, transparent);
+    background: var(--bim-border);
   }
 
   .bim-loading-progress__fill {
@@ -2408,7 +2360,7 @@ button:active:not(:disabled),
     margin-top: 0.85rem;
     font-size: 11px;
     line-height: 1.45;
-    color: var(--bim-text-subtle);
+    color: var(--bim-text-muted);
   }
 
   .bim-loading-bar {
@@ -2503,13 +2455,13 @@ button:active:not(:disabled),
 
   .bim-breadcrumb-chip__back {
     @apply flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150;
-    color: var(--bim-chrome-text-muted);
+    color: var(--bim-icon);
     border: 1px solid var(--bim-chrome-border);
   }
 
   .bim-breadcrumb-chip__back:hover {
-    color: var(--bim-chrome-text);
-    background: color-mix(in srgb, var(--bim-chrome-surface) 88%, transparent);
+    color: var(--bim-accent-hover);
+    background: var(--bim-accent-muted);
   }
 
   .bim-icon-rail {
@@ -2558,7 +2510,7 @@ button:active:not(:disabled),
     padding: 0;
     border-radius: 0.75rem;
     transition: all 150ms ease;
-    color: var(--bim-chrome-text-muted);
+    color: var(--bim-icon);
   }
 
   /* Keep square + centered even when .mobile-touch-target bumps min size. */
@@ -2571,14 +2523,14 @@ button:active:not(:disabled),
   }
 
   .bim-rail-btn:hover {
-    color: var(--bim-chrome-text);
-    background: color-mix(in srgb, var(--bim-chrome-surface) 70%, transparent);
+    color: var(--bim-accent-hover);
+    background: var(--bim-accent-muted);
   }
 
   .bim-rail-btn[data-active="true"] {
-    color: #ffffff;
-    background: var(--bim-accent);
-    box-shadow: 0 1px 4px rgba(37, 99, 235, 0.45);
+    color: var(--bim-accent);
+    background: var(--bim-accent-muted);
+    box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.45);
   }
 
   .bim-rail-btn:focus-visible {
@@ -2626,7 +2578,7 @@ button:active:not(:disabled),
 
   .bim-glass-dock__body {
     @apply flex min-h-0 flex-1 flex-col overflow-hidden;
-    background: color-mix(in srgb, var(--bim-panel) 72%, #475569 28%);
+    background: var(--bim-panel);
   }
 
   /* Single scroll owner inside glass docks / clash sheet (avoids nested iOS scroll lock). */
@@ -2636,7 +2588,7 @@ button:active:not(:disabled),
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Phone + tablet: solid dark docks — frosted glass reads as washed/white. */
+  /* Phone + tablet: solid white docks (match desktop chrome). */
   @media (max-width: 1023px) {
     .bim-glass-dock.bim-glass-surface {
       background: var(--bim-panel);
@@ -2650,7 +2602,7 @@ button:active:not(:disabled),
     }
 
     .bim-glass-dock__header {
-      background: color-mix(in srgb, var(--bim-shell) 55%, var(--bim-panel) 45%);
+      background: var(--bim-panel);
     }
   }
 
@@ -2669,7 +2621,7 @@ button:active:not(:disabled),
       max-height: min(82dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 3rem));
       border-radius: 1.25rem 1.25rem 0 0;
       padding-bottom: env(safe-area-inset-bottom, 0px);
-      box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.55);
+      box-shadow: 0 -4px 24px rgba(12, 18, 34, 0.12);
     }
 
     .bim-glass-dock__header {
@@ -2778,23 +2730,23 @@ button:active:not(:disabled),
 
   .bim-bottom-bar-btn {
     @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all duration-150;
-    color: var(--bim-chrome-text-muted);
+    color: var(--bim-icon);
   }
 
   .bim-bottom-bar-btn:hover {
-    color: var(--bim-chrome-text);
-    background: color-mix(in srgb, var(--bim-chrome-surface) 70%, transparent);
+    color: var(--bim-accent-hover);
+    background: var(--bim-accent-muted);
   }
 
   .bim-bottom-bar-btn[data-active="true"] {
     color: #ffffff;
     background: var(--bim-accent);
-    box-shadow: 0 1px 4px rgba(37, 99, 235, 0.45);
+    box-shadow: 0 1px 4px rgba(37, 99, 235, 0.28);
   }
 
   .bim-bottom-bar-btn[data-expanded="true"] {
-    color: var(--bim-chrome-text);
-    background: color-mix(in srgb, var(--bim-chrome-surface) 80%, transparent);
+    color: var(--bim-accent);
+    background: var(--bim-accent-muted);
   }
 
   .bim-bottom-bar-btn:focus-visible {
@@ -2810,15 +2762,13 @@ button:active:not(:disabled),
     gap: 0.15rem;
     padding: 0.35rem 0.7rem;
     border-radius: 0.55rem;
-    border: 1px solid color-mix(in srgb, var(--bim-chrome-border) 80%, transparent);
-    background: color-mix(in srgb, var(--bim-chrome-surface) 92%, transparent);
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.45);
+    border: 1px solid var(--bim-chrome-border);
+    background: var(--bim-chrome-surface);
+    box-shadow: var(--bim-panel-shadow);
     color: var(--bim-chrome-text);
     pointer-events: none;
     white-space: nowrap;
     transform: translate(-50%, -100%);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
   }
 
   .bim-cluster-type-label__title {
@@ -2834,6 +2784,47 @@ button:active:not(:disabled),
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--bim-chrome-text-muted);
+  }
+
+  /*
+   * Measurement chrome (length / area / angle). The measurement tools build
+   * these nodes with inline styles, so the value chips need `!important`.
+   * Endpoint border-color stays inline so it tracks the measurement color.
+   */
+  .bim-measure-endpoint {
+    width: 9px;
+    height: 9px;
+    border-radius: 9999px;
+    border-width: 2px;
+    border-style: solid;
+    border-color: var(--bim-accent, #2563eb);
+    background: #ffffff;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.45);
+    pointer-events: none;
+  }
+
+  .bim-measure-label {
+    padding: 0.15rem 0.4rem !important;
+    border: 1px solid var(--bim-accent, #2563eb) !important;
+    border-radius: 0.3rem !important;
+    background: rgba(255, 255, 255, 0.97) !important;
+    color: var(--bim-accent, #2563eb) !important;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.32) !important;
+    font-size: 0.6875rem !important;
+    font-weight: 600 !important;
+    line-height: 1.3 !important;
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .bim-measure-label--selected {
+    background: var(--bim-accent, #2563eb) !important;
+    color: #ffffff !important;
+    box-shadow:
+      0 2px 10px rgba(15, 23, 42, 0.4),
+      0 0 0 3px var(--bim-accent-selected, rgba(37, 99, 235, 0.18)) !important;
   }
 
   .bim-bottom-flyout {
@@ -2861,12 +2852,12 @@ button:active:not(:disabled),
 
   .bim-bottom-flyout-btn {
     @apply flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold whitespace-nowrap transition-colors duration-150;
-    color: var(--bim-chrome-text-muted);
+    color: var(--bim-icon);
   }
 
   .bim-bottom-flyout-btn:hover {
-    color: var(--bim-chrome-text);
-    background: color-mix(in srgb, var(--bim-chrome-surface) 70%, transparent);
+    color: var(--bim-accent-hover);
+    background: var(--bim-accent-muted);
   }
 
   .bim-bottom-flyout-btn[data-active="true"] {
@@ -2903,12 +2894,12 @@ button:active:not(:disabled),
   .bim-markup-shape-btn {
     @apply flex h-8 items-center justify-center rounded-lg border transition-colors duration-150;
     border-color: var(--bim-chrome-border);
-    color: var(--bim-chrome-text-muted);
+    color: var(--bim-icon);
   }
 
   .bim-markup-shape-btn:hover {
-    color: var(--bim-chrome-text);
-    background: color-mix(in srgb, var(--bim-chrome-surface) 70%, transparent);
+    color: var(--bim-accent-hover);
+    background: var(--bim-accent-muted);
   }
 
   .bim-markup-shape-btn[data-active="true"] {
@@ -3118,83 +3109,81 @@ button:active:not(:disabled),
     }
   }
 
-  .bim-viewer .bim-issue-form-host section {
-    border-color: var(--bim-border);
-    background: var(--bim-panel);
-    --tw-ring-color: transparent;
-  }
-
-  .bim-viewer .bim-issue-form-host .text-slate-400 {
-    color: var(--bim-text-muted);
-  }
-
-  .bim-viewer .bim-issue-form-host .text-slate-500 {
-    color: var(--bim-text-subtle);
-  }
-
-  .bim-viewer .bim-issue-form-host .border-slate-800\/80 {
-    border-color: var(--bim-border);
-  }
-
-  .bim-viewer .bim-issue-form-host .bg-slate-900\/25 {
-    background: var(--bim-hover);
-  }
-
   .viewer-toolbar-btn {
-    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#334155] text-[#94a3b8] transition duration-150 hover:border-[#475569] hover:bg-[#334155] hover:text-[#f8fafc] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-35;
-    background: #1e293b;
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--viewer-border)] text-[var(--viewer-icon)] transition duration-150 hover:border-[var(--viewer-border-strong)] hover:bg-[var(--viewer-primary-muted)] hover:text-[var(--viewer-primary-hover)] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-35;
+    background: var(--viewer-panel);
   }
   .viewer-toolbar-btn-active {
-    border-color: rgba(37, 99, 235, 0.55);
-    background: #2563eb;
-    color: #ffffff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    border-color: color-mix(in srgb, var(--viewer-primary) 45%, transparent);
+    background: var(--viewer-primary-muted);
+    color: var(--viewer-primary);
+  }
+  /* Chrome icons stay blue; labels stay near-black (do not paint annotation SVG on the sheet). */
+  .viewer-chrome-icon {
+    color: var(--viewer-icon);
+  }
+  .viewer-shell-bg header :is(button, a, [role="menuitem"]) > svg:not([class*="text-"]) {
+    color: var(--viewer-icon);
+  }
+  .viewer-glass-dock :is(button, a, [role="menuitem"], [role="tab"]) > svg:not([class*="text-"]) {
+    color: var(--viewer-icon);
   }
   .viewer-pill-toggle {
     @apply relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border transition duration-200;
-    border-color: #334155;
-    background: #334155;
+    border-color: var(--viewer-border-strong);
+    background: #e2e8f0;
   }
   .viewer-pill-toggle-thumb {
     @apply pointer-events-none absolute left-1 top-1/2 h-4 w-4 rounded-full shadow transition duration-200;
     transform: translate(0, -50%);
-    background: #64748b;
+    background: #ffffff;
   }
   .viewer-pill-toggle[data-state="on"] .viewer-pill-toggle-thumb {
     transform: translate(1.125rem, -50%);
     background: #ffffff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 1px 2px rgba(12, 18, 34, 0.15);
   }
   .viewer-pill-toggle[data-state="on"] {
-    border-color: #2563eb;
-    background: #2563eb;
+    border-color: var(--viewer-primary);
+    background: var(--viewer-primary);
   }
   .viewer-range {
     @apply h-1 w-full min-w-0 max-w-full cursor-pointer appearance-none rounded-full accent-[#2563eb];
-    background: #334155;
+    background: #e2e8f0;
     touch-action: pan-x;
   }
   .viewer-range::-webkit-slider-thumb {
-    @apply h-3.5 w-3.5 cursor-pointer appearance-none rounded-full border border-white/30 bg-[#2563eb] shadow-[0_0_12px_-2px_rgba(37,99,235,0.8)];
+    @apply h-3.5 w-3.5 cursor-pointer appearance-none rounded-full border border-white bg-[#2563eb] shadow-sm;
   }
   .viewer-markup-tool-btn {
     @apply flex flex-col items-center gap-0.5 rounded-md border border-transparent px-0.5 py-1 text-[8px] font-medium leading-tight transition;
-    background: #1e293b;
-    color: #94a3b8;
+    background: var(--viewer-panel);
+    color: var(--viewer-text);
+  }
+  .viewer-markup-tool-btn > svg {
+    color: var(--viewer-icon);
   }
   .viewer-markup-tool-btn:hover {
-    background: #334155;
-    color: #f8fafc;
+    background: var(--viewer-primary-muted);
+    color: var(--viewer-text);
+  }
+  .viewer-markup-tool-btn:hover > svg {
+    color: var(--viewer-primary-hover);
   }
   .viewer-markup-tool-btn-active {
-    background: #2563eb;
-    color: #ffffff;
-    border-color: transparent;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    background: var(--viewer-primary-muted);
+    color: var(--viewer-primary);
+    border-color: color-mix(in srgb, var(--viewer-primary) 45%, transparent);
+  }
+  .viewer-markup-tool-btn-active > svg {
+    color: var(--viewer-primary);
   }
   .viewer-markup-tool-btn-active:hover {
-    background: #1d4ed8;
-    color: #ffffff;
+    background: var(--viewer-primary-muted);
+    color: var(--viewer-primary-hover);
+  }
+  .viewer-markup-tool-btn-active:hover > svg {
+    color: var(--viewer-primary-hover);
   }
 }
 

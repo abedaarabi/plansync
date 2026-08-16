@@ -842,7 +842,7 @@ export function TakeoffFormSlider() {
       }}
     >
       <aside
-        className="flex h-full w-full min-w-0 max-w-md flex-col overflow-x-hidden border-l border-[#334155] bg-[#0f172a] shadow-none"
+        className="flex h-full w-full min-w-0 max-w-md flex-col overflow-x-hidden border-l border-slate-200 bg-white shadow-none"
         role="dialog"
         aria-label={
           editZone
@@ -853,8 +853,8 @@ export function TakeoffFormSlider() {
         }
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#334155] px-4 py-2.5">
-          <h2 className="text-sm font-semibold tracking-tight text-[#f8fafc]">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5">
+          <h2 className="text-sm font-semibold tracking-tight text-slate-900">
             {editZone
               ? editZone.noSheetGeometry
                 ? "Manual takeoff line"
@@ -865,7 +865,7 @@ export function TakeoffFormSlider() {
           </h2>
           <button
             type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-[#94a3b8] hover:bg-[#334155] hover:text-white"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
             aria-label="Close"
             onClick={() => closeTakeoffSlider()}
           >
@@ -875,11 +875,11 @@ export function TakeoffFormSlider() {
 
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-x-none px-4 py-3 [scrollbar-width:thin]">
           {isManualFlow ? (
-            <div className="mb-4 rounded-lg border border-sky-500/35 bg-sky-950/40 px-3 py-2.5 text-[11px] text-sky-100">
-              <p className="font-semibold uppercase tracking-wide text-sky-300/90">
+            <div className="mb-4 rounded-lg border border-sky-500/35 bg-sky-50 px-3 py-2.5 text-[11px] text-sky-700">
+              <p className="font-semibold uppercase tracking-wide text-blue-600/90">
                 Manual quantity
               </p>
-              <p className="mt-1 leading-snug text-sky-200/90">
+              <p className="mt-1 leading-snug text-sky-700/90">
                 Link a catalog material and enter a quantity without drawing on the plan. The line
                 is grouped under the page you are viewing for export and reports.
               </p>
@@ -902,8 +902,8 @@ export function TakeoffFormSlider() {
                       }}
                       className={`rounded-md border px-2 py-1.5 text-[10px] font-semibold ${
                         active
-                          ? "border-sky-500/60 bg-sky-600/30 text-sky-50"
-                          : "border-slate-600 bg-slate-900/60 text-slate-400 hover:border-slate-500"
+                          ? "border-sky-500/60 bg-sky-50 text-sky-700"
+                          : "border-slate-300 bg-white text-slate-500 hover:border-slate-300"
                       }`}
                     >
                       {label}
@@ -911,25 +911,23 @@ export function TakeoffFormSlider() {
                   );
                 })}
               </div>
-              <label className="mt-3 block text-[10px] text-sky-100">
-                <span className="mb-1 block font-semibold text-sky-200/95">Quantity</span>
+              <label className="mt-3 block text-[10px] text-sky-700">
+                <span className="mb-1 block font-semibold text-sky-700/95">Quantity</span>
                 <input
                   type="text"
                   inputMode="decimal"
                   value={directQtyStr}
                   onChange={(e) => setDirectQtyStr(e.target.value.replace(/[^\d.,-]/g, ""))}
                   placeholder="e.g. 12.5"
-                  className="mt-1 w-full rounded-md border border-sky-500/40 bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc] placeholder:text-[#64748b]"
+                  className="mt-1 w-full rounded-md border border-sky-500/40 bg-white px-2 py-2 text-[12px] text-slate-900 placeholder:text-slate-500"
                 />
               </label>
             </div>
           ) : null}
 
           {pending && !editZone ? (
-            <div className="mb-4 rounded-lg border border-emerald-500/35 bg-emerald-950/40 px-3 py-2 text-[11px] text-emerald-100">
-              <p className="font-semibold uppercase tracking-wide text-emerald-300/90">
-                Calculated
-              </p>
+            <div className="mb-4 rounded-lg border border-emerald-500/35 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700">
+              <p className="font-semibold uppercase tracking-wide text-emerald-600">Calculated</p>
               <p className="mt-1 tabular-nums">
                 {(() => {
                   const sz = pageSizePtByPage[pending.pageIndex];
@@ -955,10 +953,10 @@ export function TakeoffFormSlider() {
               heightMmPreview != null &&
               heightMmPreview > 0 &&
               previewComputedQty != null ? (
-                <div className="mt-1.5 space-y-1 border-t border-emerald-500/25 pt-1.5 tabular-nums text-emerald-50">
+                <div className="mt-1.5 space-y-1 border-t border-emerald-500/25 pt-1.5 tabular-nums text-emerald-700">
                   <p>
-                    <span className="font-semibold text-emerald-200/95">Wall area (formula): </span>
-                    <span className="text-emerald-100/95">
+                    <span className="font-semibold text-emerald-700/95">Wall area (formula): </span>
+                    <span className="text-emerald-700">
                       plan length {formatPlanLengthForFormula(linearLengthMmRaw, measurementSys)} ×
                       height {heightStr.trim()} {heightUnit}
                       {wasteFormulaSuffix}
@@ -976,10 +974,10 @@ export function TakeoffFormSlider() {
               heightMmPreview != null &&
               heightMmPreview > 0 &&
               previewComputedQty != null ? (
-                <div className="mt-1.5 space-y-1 border-t border-emerald-500/25 pt-1.5 tabular-nums text-emerald-50">
+                <div className="mt-1.5 space-y-1 border-t border-emerald-500/25 pt-1.5 tabular-nums text-emerald-700">
                   <p>
-                    <span className="font-semibold text-emerald-200/95">Volume (formula): </span>
-                    <span className="text-emerald-100/95">
+                    <span className="font-semibold text-emerald-700/95">Volume (formula): </span>
+                    <span className="text-emerald-700">
                       plan area {formatPlanAreaForFormula(planAreaMm2Raw, measurementSys)} × height{" "}
                       {heightStr.trim()} {heightUnit}
                       {wasteFormulaSuffix}
@@ -992,8 +990,8 @@ export function TakeoffFormSlider() {
                 </div>
               ) : null}
               {selectedItemId && totalPendingWithNewZone != null ? (
-                <p className="mt-1.5 border-t border-emerald-500/25 pt-1.5 tabular-nums text-sky-200/95">
-                  <span className="font-semibold text-sky-300/90">Line total after save: </span>
+                <p className="mt-1.5 border-t border-emerald-500/25 pt-1.5 tabular-nums text-sky-700/95">
+                  <span className="font-semibold text-blue-600/90">Line total after save: </span>
                   {totalPendingWithNewZone.toLocaleString(undefined, {
                     maximumFractionDigits: 2,
                   })}{" "}
@@ -1004,10 +1002,10 @@ export function TakeoffFormSlider() {
           ) : null}
 
           {editZone && editItem && !editZone.noSheetGeometry ? (
-            <div className="mb-4 space-y-1 rounded-lg border border-slate-600/50 bg-slate-900/60 px-3 py-2 text-[11px] text-slate-300">
+            <div className="mb-4 space-y-1 rounded-lg border border-slate-300/50 bg-white px-3 py-2 text-[11px] text-slate-600">
               <p>
                 Raw geometry:{" "}
-                <span className="tabular-nums text-slate-100">
+                <span className="tabular-nums text-slate-900">
                   {formatRawQuantityLabel(
                     editZone.measurementType,
                     editZone.rawQuantity,
@@ -1017,7 +1015,7 @@ export function TakeoffFormSlider() {
               </p>
               <p>
                 This zone:{" "}
-                <span className="font-semibold tabular-nums text-white">
+                <span className="font-semibold tabular-nums text-slate-900">
                   {(editZoneDisplayQty ?? editZone.computedQuantity).toLocaleString(undefined, {
                     maximumFractionDigits: 2,
                   })}{" "}
@@ -1030,8 +1028,8 @@ export function TakeoffFormSlider() {
               heightMmPreview != null &&
               heightMmPreview > 0 &&
               previewComputedQty != null ? (
-                <p className="tabular-nums text-slate-200">
-                  <span className="font-semibold text-slate-400">Wall area: </span>
+                <p className="tabular-nums text-slate-700">
+                  <span className="font-semibold text-slate-500">Wall area: </span>
                   plan length {formatPlanLengthForFormula(linearLengthMmRaw, measurementSys)} ×
                   height {heightStr.trim()} {heightUnit}
                   {wasteFormulaSuffix} →{" "}
@@ -1045,8 +1043,8 @@ export function TakeoffFormSlider() {
               heightMmPreview != null &&
               heightMmPreview > 0 &&
               previewComputedQty != null ? (
-                <p className="tabular-nums text-slate-200">
-                  <span className="font-semibold text-slate-400">Volume: </span>
+                <p className="tabular-nums text-slate-700">
+                  <span className="font-semibold text-slate-500">Volume: </span>
                   plan area {formatPlanAreaForFormula(planAreaMm2Raw, measurementSys)} × height{" "}
                   {heightStr.trim()} {heightUnit}
                   {wasteFormulaSuffix} →{" "}
@@ -1056,7 +1054,7 @@ export function TakeoffFormSlider() {
               ) : null}
               <p>
                 Total (all zones):{" "}
-                <span className="tabular-nums text-sky-300">
+                <span className="tabular-nums text-blue-600">
                   {(totalAllZonesLive ?? sumZonesForItem(zones, editItem.id)).toLocaleString(
                     undefined,
                     { maximumFractionDigits: 2 },
@@ -1067,11 +1065,11 @@ export function TakeoffFormSlider() {
               {editZoneEstCost != null ? (
                 <p>
                   Est. this zone (qty × rate):{" "}
-                  <span className="font-semibold tabular-nums text-amber-200/95">
+                  <span className="font-semibold tabular-nums text-amber-700/95">
                     {editZoneEstCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </span>
                   {selectedMaterial?.currency ? (
-                    <span className="text-slate-400"> {selectedMaterial.currency}</span>
+                    <span className="text-slate-500"> {selectedMaterial.currency}</span>
                   ) : null}
                 </p>
               ) : null}
@@ -1079,25 +1077,25 @@ export function TakeoffFormSlider() {
           ) : null}
 
           {editZone && editItem && editZone.noSheetGeometry ? (
-            <div className="mb-4 rounded-lg border border-violet-500/35 bg-violet-950/35 px-3 py-2 text-[11px] text-violet-100">
-              <p className="font-semibold text-violet-200/95">Manual line (no sheet shape)</p>
-              <p className="mt-1 tabular-nums text-violet-50">
+            <div className="mb-4 rounded-lg border border-violet-500/35 bg-violet-50 px-3 py-2 text-[11px] text-violet-700">
+              <p className="font-semibold text-violet-700">Manual line (no sheet shape)</p>
+              <p className="mt-1 tabular-nums text-violet-700">
                 Quantity:{" "}
                 {editZone.computedQuantity.toLocaleString(undefined, {
                   maximumFractionDigits: 2,
                 })}{" "}
                 {editItem.unit}
-                <span className="ml-2 text-violet-300/90">· p.{editZone.pageIndex + 1}</span>
+                <span className="ml-2 text-violet-600">· p.{editZone.pageIndex + 1}</span>
               </p>
             </div>
           ) : null}
 
           {editZone && editItem && !editZone.noSheetGeometry ? (
-            <div className="mb-4 rounded-lg border border-amber-500/35 bg-amber-950/45 px-3 py-2.5">
-              <p className="text-[9px] font-semibold uppercase tracking-wide text-amber-200/90">
+            <div className="mb-4 rounded-lg border border-amber-500/35 bg-amber-50 px-3 py-2.5">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-amber-700">
                 This zone on sheet
               </p>
-              <p className="mt-1 text-[10px] text-amber-100/85">
+              <p className="mt-1 text-[10px] text-amber-700">
                 Page {editZone.pageIndex + 1}
                 {editZone.locked ? " · locked" : ""}
               </p>
@@ -1106,7 +1104,7 @@ export function TakeoffFormSlider() {
                   <button
                     type="button"
                     onClick={() => startRedrawShape()}
-                    className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-950/60 px-2 py-1.5 text-left text-[11px] font-medium text-amber-50 hover:bg-amber-950/90"
+                    className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-50 px-2 py-1.5 text-left text-[11px] font-medium text-amber-700 hover:bg-amber-50"
                   >
                     <Shapes className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                     Redraw shape on sheet
@@ -1114,7 +1112,7 @@ export function TakeoffFormSlider() {
                   <button
                     type="button"
                     onClick={() => startMoveZone()}
-                    className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-950/60 px-2 py-1.5 text-left text-[11px] font-medium text-amber-50 hover:bg-amber-950/90"
+                    className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-50 px-2 py-1.5 text-left text-[11px] font-medium text-amber-700 hover:bg-amber-50"
                   >
                     <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                     Move zone on sheet
@@ -1123,7 +1121,7 @@ export function TakeoffFormSlider() {
                     <button
                       type="button"
                       onClick={() => startVertexEdit()}
-                      className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-950/60 px-2 py-1.5 text-left text-[11px] font-medium text-amber-50 hover:bg-amber-950/90"
+                      className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-50 px-2 py-1.5 text-left text-[11px] font-medium text-amber-700 hover:bg-amber-50"
                     >
                       <Pencil className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                       Edit polygon corners
@@ -1132,7 +1130,7 @@ export function TakeoffFormSlider() {
                   <button
                     type="button"
                     onClick={() => duplicateCurrentZone()}
-                    className="flex items-center gap-2 rounded-md border border-slate-500/40 bg-slate-900/70 px-2 py-1.5 text-left text-[11px] font-medium text-slate-100 hover:bg-slate-800/90"
+                    className="flex items-center gap-2 rounded-md border border-slate-300/40 bg-white px-2 py-1.5 text-left text-[11px] font-medium text-slate-900 hover:bg-slate-100"
                   >
                     <Copy className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                     Duplicate zone (offset copy)
@@ -1142,20 +1140,20 @@ export function TakeoffFormSlider() {
             </div>
           ) : null}
 
-          <div className="mb-4 rounded-lg border border-sky-500/30 bg-sky-950/40 px-3 py-2.5">
-            <p className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-sky-300/90">
+          <div className="mb-4 rounded-lg border border-sky-500/30 bg-sky-50 px-3 py-2.5">
+            <p className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-blue-600/90">
               {editZone && editItem ? "Material & costing (line item)" : "Material library"}
             </p>
             {!workspaceId ? (
-              <p className="text-[11px] leading-snug text-[#94a3b8]">
+              <p className="text-[11px] leading-snug text-slate-500">
                 Open this sheet from a cloud project to load your workspace material catalog.
               </p>
             ) : materialsLoading ? (
-              <p className="text-[11px] text-[#64748b]">Loading materials…</p>
+              <p className="text-[11px] text-slate-500">Loading materials…</p>
             ) : (
               <>
                 <div className="relative">
-                  <div className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[#64748b]">
+                  <div className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-500">
                     <Search className="h-3.5 w-3.5" strokeWidth={2} />
                   </div>
                   <input
@@ -1171,11 +1169,11 @@ export function TakeoffFormSlider() {
                     }}
                     placeholder="Search materials (e.g. door, concrete)…"
                     autoComplete="off"
-                    className="w-full rounded-md border border-[#475569] bg-[#0f172a] py-2 pl-8 pr-2 text-[12px] text-[#f8fafc] placeholder:text-[#64748b]"
+                    className="w-full rounded-md border border-slate-200 bg-white py-2 pl-8 pr-2 text-[12px] text-slate-900 placeholder:text-slate-500"
                   />
                   {materialPickerOpen && filteredMaterials.length > 0 ? (
                     <ul
-                      className="absolute left-0 right-0 top-full z-[1] mt-1 max-h-44 overflow-y-auto rounded-md border border-[#334155] bg-[#0f172a] py-1 shadow-lg [scrollbar-width:thin]"
+                      className="absolute left-0 right-0 top-full z-[1] mt-1 max-h-44 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg [scrollbar-width:thin]"
                       role="listbox"
                     >
                       {filteredMaterials.map((m) => {
@@ -1184,12 +1182,12 @@ export function TakeoffFormSlider() {
                           <li key={m.id}>
                             <button
                               type="button"
-                              className="w-full px-2 py-1.5 text-left text-[11px] hover:bg-[#1e293b]"
+                              className="w-full px-2 py-1.5 text-left text-[11px] hover:bg-white"
                               onMouseDown={(e) => e.preventDefault()}
                               onClick={() => applyMaterial(m)}
                             >
-                              <span className="font-medium text-[#f8fafc]">{m.name}</span>
-                              <span className="block text-[10px] text-[#94a3b8]">
+                              <span className="font-medium text-slate-900">{m.name}</span>
+                              <span className="block text-[10px] text-slate-500">
                                 {m.category.name}
                                 {m.sku ? ` · ${m.sku}` : ""}
                                 {m.unitPrice != null && m.unitPrice !== ""
@@ -1197,7 +1195,7 @@ export function TakeoffFormSlider() {
                                   : ""}
                               </span>
                               {customSub ? (
-                                <span className="block text-[9px] leading-snug text-[#64748b]">
+                                <span className="block text-[9px] leading-snug text-slate-500">
                                   {customSub}
                                 </span>
                               ) : null}
@@ -1210,12 +1208,12 @@ export function TakeoffFormSlider() {
                 </div>
                 {selectedMaterial ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                    <span className="text-emerald-300">
+                    <span className="text-emerald-600">
                       Linked: {selectedMaterial.category.name} — {selectedMaterial.name}
                     </span>
                     <button
                       type="button"
-                      className="rounded border border-[#475569] px-2 py-0.5 text-[10px] text-[#94a3b8] hover:bg-[#334155]"
+                      className="rounded border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500 hover:bg-slate-100"
                       onClick={() => clearMaterialSelection()}
                     >
                       Unlink
@@ -1223,7 +1221,7 @@ export function TakeoffFormSlider() {
                   </div>
                 ) : null}
                 {materials.length === 0 ? (
-                  <p className="mt-2 text-[10px] leading-snug text-amber-200/90">
+                  <p className="mt-2 text-[10px] leading-snug text-amber-700">
                     No materials in this workspace yet. Add them in the material hub, then search
                     here.
                   </p>
@@ -1233,51 +1231,51 @@ export function TakeoffFormSlider() {
           </div>
 
           {editZone?.noSheetGeometry ? (
-            <label className="mb-3 block text-[11px] text-[#94a3b8]">
+            <label className="mb-3 block text-[11px] text-slate-500">
               Quantity
               <input
                 type="text"
                 inputMode="decimal"
                 value={directQtyStr}
                 onChange={(e) => setDirectQtyStr(e.target.value.replace(/[^\d.,-]/g, ""))}
-                className="mt-1 w-full rounded-md border border-[#475569] bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc]"
+                className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-[12px] text-slate-900"
               />
             </label>
           ) : null}
 
           {editZone && editItem ? (
-            <p className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-[#64748b]">
+            <p className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
               Line item (all zones for this item)
             </p>
           ) : null}
 
-          <label className="mb-3 block text-[11px] text-[#94a3b8]">
+          <label className="mb-3 block text-[11px] text-slate-500">
             Item name
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded-md border border-[#475569] bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc]"
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-[12px] text-slate-900"
               placeholder="e.g. Concrete slab"
             />
           </label>
 
-          <label className="mb-3 block text-[11px] text-[#94a3b8]">
+          <label className="mb-3 block text-[11px] text-slate-500">
             Category (optional)
             <input
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="mt-1 w-full rounded-md border border-[#475569] bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc]"
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-[12px] text-slate-900"
               placeholder="Structure"
             />
           </label>
 
-          <label className="mb-3 block text-[11px] text-[#94a3b8]">
+          <label className="mb-3 block text-[11px] text-slate-500">
             Unit
             <select
               value={unit}
               onChange={(e) => setUnit(e.target.value as TakeoffUnit)}
               disabled={Boolean(selectedItemId && !editZone && !isManualFlow && !pending)}
-              className="mt-1 w-full rounded-md border border-[#475569] bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc] disabled:opacity-50"
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-[12px] text-slate-900 disabled:opacity-50"
             >
               {(kind ? unitsForKind(kind) : ["m²"]).map((u) => (
                 <option key={u} value={u}>
@@ -1289,12 +1287,12 @@ export function TakeoffFormSlider() {
 
           {(kind === "area" || kind === "linear") &&
           (Boolean(pending) || Boolean(editZone && editItem && !editZone.noSheetGeometry)) ? (
-            <div className="mb-3 rounded-lg border border-slate-600/50 bg-slate-900/40 px-3 py-2.5">
-              <p className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+            <div className="mb-3 rounded-lg border border-slate-300/50 bg-slate-50 px-3 py-2.5">
+              <p className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
                 {kind === "linear" ? "Wall height (vertical)" : "Height (extrusion)"}
               </p>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                <label className="block min-w-0 flex-1 text-[11px] text-[#94a3b8]">
+                <label className="block min-w-0 flex-1 text-[11px] text-slate-500">
                   {kind === "linear" ? "Height" : "Extrusion height"}
                   <input
                     type="text"
@@ -1302,15 +1300,15 @@ export function TakeoffFormSlider() {
                     value={heightStr}
                     onChange={(e) => setHeightStr(e.target.value.replace(/[^\d.,-]/g, ""))}
                     placeholder={kind === "linear" ? "e.g. floor-to-ceiling" : "Optional"}
-                    className="mt-1 w-full rounded-md border border-[#475569] bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc]"
+                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-[12px] text-slate-900"
                   />
                 </label>
-                <label className="block shrink-0 text-[11px] text-[#94a3b8] sm:w-28">
+                <label className="block shrink-0 text-[11px] text-slate-500 sm:w-28">
                   Unit
                   <select
                     value={heightUnit}
                     onChange={(e) => setHeightUnit(e.target.value as HeightInputUnit)}
-                    className="mt-1 w-full rounded-md border border-[#475569] bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc]"
+                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-[12px] text-slate-900"
                   >
                     <option value="m">m</option>
                     <option value="mm">mm</option>
@@ -1318,32 +1316,32 @@ export function TakeoffFormSlider() {
                   </select>
                 </label>
               </div>
-              <p className="mt-2 text-[10px] leading-snug text-[#64748b]">
+              <p className="mt-2 text-[10px] leading-snug text-slate-500">
                 {kind === "linear" ? (
                   <>
-                    Choose display unit <strong className="font-medium text-slate-400">m²</strong>,{" "}
-                    <strong className="font-medium text-slate-400">mm²</strong>, or{" "}
-                    <strong className="font-medium text-slate-400">ft²</strong> for wall finishes:
+                    Choose display unit <strong className="font-medium text-slate-500">m²</strong>,{" "}
+                    <strong className="font-medium text-slate-500">mm²</strong>, or{" "}
+                    <strong className="font-medium text-slate-500">ft²</strong> for wall finishes:
                     quantity ={" "}
-                    <strong className="font-medium text-slate-400">plan length × height</strong>.
-                    Use <strong className="font-medium text-slate-400">m</strong> / mm / ft for
+                    <strong className="font-medium text-slate-500">plan length × height</strong>.
+                    Use <strong className="font-medium text-slate-500">m</strong> / mm / ft for
                     length-only lines (no height). If you add height but the unit is still m / mm /
                     ft, height is ignored until you switch the unit to m², mm², or ft².
                   </>
                 ) : (
                   <>
-                    With <strong className="font-medium text-slate-400">m³</strong>, mm³, or ft³:
-                    multiplies <strong className="font-medium text-slate-400">plan area</strong> by
+                    With <strong className="font-medium text-slate-500">m³</strong>, mm³, or ft³:
+                    multiplies <strong className="font-medium text-slate-500">plan area</strong> by
                     this height. Leave empty for flat area (m²) takeoff.
                   </>
                 )}
               </p>
               {linearHeightIgnored ? (
-                <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-950/50 px-2 py-1.5 text-[10px] leading-snug text-amber-100">
+                <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-700">
                   Height is entered but the display unit is length (m / mm / ft / kg). Change{" "}
-                  <strong className="font-medium text-amber-200">Unit</strong> above to m², mm², or
+                  <strong className="font-medium text-amber-700">Unit</strong> above to m², mm², or
                   ft² so quantity uses{" "}
-                  <strong className="font-medium text-amber-200">plan length × height</strong> and
+                  <strong className="font-medium text-amber-700">plan length × height</strong> and
                   cost updates.
                 </p>
               ) : null}
@@ -1351,85 +1349,85 @@ export function TakeoffFormSlider() {
           ) : null}
 
           {kind === "linear" ? (
-            <label className="mb-3 block text-[11px] text-[#94a3b8]">
+            <label className="mb-3 block text-[11px] text-slate-500">
               Linear factor (kg/m) — when unit is kg
               <input
                 value={linearFactor}
                 onChange={(e) => setLinearFactor(e.target.value)}
-                className="mt-1 w-full rounded-md border border-[#475569] bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc]"
+                className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-[12px] text-slate-900"
                 placeholder="Optional"
               />
             </label>
           ) : null}
 
           {!isManualFlow ? (
-            <label className="mb-3 block text-[11px] text-[#94a3b8]">
+            <label className="mb-3 block text-[11px] text-slate-500">
               Waste %
               <input
                 value={wastePct}
                 onChange={(e) => setWastePct(e.target.value.replace(/[^\d.]/g, ""))}
-                className="mt-1 w-full rounded-md border border-[#475569] bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc]"
+                className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-[12px] text-slate-900"
                 placeholder="0"
               />
             </label>
           ) : null}
 
-          <label className="mb-3 block text-[11px] text-[#94a3b8]">
+          <label className="mb-3 block text-[11px] text-slate-500">
             <span className="flex flex-wrap items-baseline gap-1.5">
               <span>Unit price / rate</span>
               {selectedMaterial ? (
                 <span className="text-[10px] font-normal text-emerald-400/90">(from catalog)</span>
               ) : (
-                <span className="text-[10px] font-normal text-[#64748b]">(optional)</span>
+                <span className="text-[10px] font-normal text-slate-500">(optional)</span>
               )}
             </span>
             <input
               value={rate}
               onChange={(e) => setRate(e.target.value.replace(/[^\d.]/g, ""))}
-              className="mt-1 w-full rounded-md border border-[#475569] bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc]"
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-[12px] text-slate-900"
               placeholder="Per display unit"
             />
           </label>
 
           {estLineCost != null && previewComputedQty != null ? (
-            <div className="mb-4 rounded-lg border border-emerald-500/35 bg-emerald-950/40 px-3 py-2 text-[11px] text-emerald-100">
-              <p className="font-semibold uppercase tracking-wide text-emerald-300/90">
+            <div className="mb-4 rounded-lg border border-emerald-500/35 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700">
+              <p className="font-semibold uppercase tracking-wide text-emerald-700/90">
                 Estimated line cost
               </p>
               <p className="mt-1 tabular-nums">
                 {previewComputedQty.toLocaleString(undefined, { maximumFractionDigits: 2 })} {unit}{" "}
                 × {previewRateNum.toLocaleString(undefined, { maximumFractionDigits: 4 })} ={" "}
-                <span className="font-semibold text-white">
+                <span className="font-semibold text-emerald-900">
                   {estLineCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </span>
                 {selectedMaterial?.currency ? (
-                  <span className="text-emerald-200/80"> {selectedMaterial.currency}</span>
+                  <span className="text-emerald-700/80"> {selectedMaterial.currency}</span>
                 ) : null}
               </p>
             </div>
           ) : null}
 
-          <label className="mb-3 block text-[11px] text-[#94a3b8]">
+          <label className="mb-3 block text-[11px] text-slate-500">
             Tags (comma-separated, e.g. Floor 1, MEP)
             <input
               value={tagsStr}
               onChange={(e) => setTagsStr(e.target.value)}
-              className="mt-1 w-full rounded-md border border-[#475569] bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc]"
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-[12px] text-slate-900"
               placeholder="Optional"
             />
           </label>
 
-          <label className="mb-3 block text-[11px] text-[#94a3b8]">
+          <label className="mb-3 block text-[11px] text-slate-500">
             Notes
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="mt-1 w-full resize-none rounded-md border border-[#475569] bg-[#0f172a] px-2 py-2 text-[12px] text-[#f8fafc]"
+              className="mt-1 w-full resize-none rounded-md border border-slate-200 bg-white px-2 py-2 text-[12px] text-slate-900"
             />
           </label>
 
-          <p className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-[#64748b]">
+          <p className="mb-2 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
             Color
           </p>
           <div className="mb-4 flex flex-wrap gap-2">
@@ -1449,16 +1447,16 @@ export function TakeoffFormSlider() {
               type="color"
               value={color}
               onChange={(e) => setColor(e.target.value)}
-              className="h-8 w-10 cursor-pointer rounded border border-[#475569] bg-transparent"
+              className="h-8 w-10 cursor-pointer rounded border border-slate-200 bg-transparent"
             />
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[#334155] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
           {editZone ? (
             <button
               type="button"
-              className="mr-auto rounded-md border border-red-900/60 bg-red-950/50 px-3 py-2 text-[11px] font-medium text-red-200 hover:bg-red-950/80"
+              className="mr-auto rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-medium text-red-600 hover:bg-red-50"
               onClick={() => {
                 if (editZoneId) takeoffRemoveZone(editZoneId);
                 closeTakeoffSlider();
@@ -1469,14 +1467,14 @@ export function TakeoffFormSlider() {
           ) : null}
           <button
             type="button"
-            className="rounded-md border border-[#475569] px-4 py-2 text-[11px] font-medium text-[#e2e8f0] hover:bg-[#334155]"
+            className="rounded-md border border-slate-200 px-4 py-2 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
             onClick={() => closeTakeoffSlider()}
           >
             Cancel
           </button>
           <button
             type="button"
-            className="rounded-md bg-[#2563eb] px-4 py-2 text-[11px] font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-40"
+            className="rounded-md bg-(--viewer-primary) px-4 py-2 text-[11px] font-semibold text-white hover:bg-(--viewer-primary-hover) disabled:opacity-40"
             disabled={
               (!editZone && !pending && !isManualFlow) || (isManualFlow && !directQtyStr.trim())
             }

@@ -42,10 +42,10 @@ function PanelSection({
 }) {
   return (
     <section
-      className={`rounded-xl border border-slate-700/80 bg-slate-900/35 p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)] ${className}`}
+      className={`rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.03)] ${className}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-[11px] font-semibold tracking-tight text-slate-200">{title}</h3>
+        <h3 className="text-[11px] font-semibold tracking-tight text-slate-700">{title}</h3>
         {titleRight}
       </div>
       <div className={bodyClassName}>{children}</div>
@@ -166,8 +166,8 @@ export function SidebarTakeoffTab() {
   if (!cloudFileVersionId || !viewerProjectId) {
     return (
       <div className="w-full p-1">
-        <div className="rounded-xl border border-slate-600/60 bg-slate-900/50 p-4 text-[12px] leading-relaxed text-slate-400">
-          <p className="font-semibold text-slate-200">Takeoff needs a project file</p>
+        <div className="rounded-xl border border-slate-300/60 bg-slate-50 p-4 text-[12px] leading-relaxed text-slate-500">
+          <p className="font-semibold text-slate-700">Takeoff needs a project file</p>
           <p className="mt-2">
             Open this sheet from a cloud project to use quantity takeoff, inventory, and exports.
           </p>
@@ -181,7 +181,7 @@ export function SidebarTakeoffTab() {
       <div className="flex w-full flex-col gap-3 px-0.5 pb-1 pt-0.5">
         <PanelSection title="Scale">
           {!cal ? (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-500/35 bg-amber-950/40 px-3 py-2 text-[11px] leading-snug text-amber-100">
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/35 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-700">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
               <span>
                 Calibrate this sheet in the <strong className="font-medium">Measure</strong> tab
@@ -189,7 +189,7 @@ export function SidebarTakeoffTab() {
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-[11px] text-emerald-200/95">
+            <div className="flex items-center gap-2 text-[11px] text-emerald-700/95">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
               <span className="tabular-nums">
                 Ready · {cal.mmPerPdfUnit.toExponential(2)} mm per PDF unit
@@ -204,7 +204,7 @@ export function SidebarTakeoffTab() {
           titleRight={
             <button
               type="button"
-              className="mt-0.5 shrink-0 rounded p-0.5 text-slate-500 hover:bg-slate-800/80 hover:text-slate-300"
+              className="mt-0.5 shrink-0 rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-600"
               title="Preview on the sheet and default for new lines until you pick a row in inventory."
               aria-label="Line color help"
             >
@@ -220,8 +220,8 @@ export function SidebarTakeoffTab() {
                 title={c}
                 className={`h-6 w-6 shrink-0 rounded-full border-2 transition-shadow ${
                   takeoffPenColor === c
-                    ? "border-transparent ring-2 ring-blue-500 ring-offset-2 ring-offset-[#0c1220]"
-                    : "border-transparent hover:ring-1 hover:ring-slate-600"
+                    ? "border-transparent ring-2 ring-blue-500 ring-offset-2 ring-offset-white"
+                    : "border-transparent hover:ring-1 hover:ring-slate-300"
                 }`}
                 style={{ backgroundColor: c }}
                 onClick={() => setTakeoffPenColor(c)}
@@ -231,7 +231,7 @@ export function SidebarTakeoffTab() {
               type="color"
               value={takeoffPenColor}
               onChange={(e) => setTakeoffPenColor(e.target.value)}
-              className="h-6 w-9 cursor-pointer rounded-md border border-slate-600 bg-transparent"
+              className="h-6 w-9 cursor-pointer rounded-md border border-slate-300 bg-transparent"
             />
           </div>
         </PanelSection>
@@ -242,7 +242,7 @@ export function SidebarTakeoffTab() {
           titleRight={
             <button
               type="button"
-              className="mt-0.5 shrink-0 rounded p-0.5 text-slate-500 hover:bg-slate-800/80 hover:text-slate-300"
+              className="mt-0.5 shrink-0 rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-600"
               title={
                 "Click a zone to edit. Use inventory (below the sheet) for rows, export, and multi-select. " +
                 "⌘/Ctrl-click zones on the sheet to add or remove from selection."
@@ -268,8 +268,8 @@ export function SidebarTakeoffTab() {
                   }}
                   className={`flex flex-col items-center gap-1 rounded-lg border px-1 py-2.5 text-[10px] font-semibold transition-colors disabled:opacity-40 ${
                     active
-                      ? "border-sky-500/55 bg-sky-600/25 text-sky-50 shadow-sm ring-1 ring-sky-500/30"
-                      : "border-slate-600/80 bg-slate-800/40 text-slate-400 hover:border-slate-500 hover:bg-slate-800/70 hover:text-slate-200"
+                      ? "border-sky-500/55 bg-sky-50 text-sky-700 shadow-sm ring-1 ring-sky-500/30"
+                      : "border-slate-300 bg-slate-50 text-slate-500 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-700"
                   }`}
                 >
                   <Icon className="h-4 w-4" strokeWidth={2} />
@@ -285,7 +285,7 @@ export function SidebarTakeoffTab() {
             onClick={() => setTool("takeoff")}
             className={`mt-3 inline-flex max-w-[min(100%,16rem)] items-center justify-center gap-2 self-center rounded-lg px-4 py-2 text-[12px] font-semibold shadow-sm transition-[box-shadow,transform] duration-200 disabled:opacity-40 ${
               tool === "takeoff"
-                ? "bg-sky-500 text-white ring-2 ring-sky-300/50 ring-offset-2 ring-offset-[#0c1220] animate-[takeoff-draw-pulse_2.2s_ease-in-out_infinite]"
+                ? "bg-sky-500 text-white ring-2 ring-sky-300/50 ring-offset-2 ring-offset-white animate-[takeoff-draw-pulse_2.2s_ease-in-out_infinite]"
                 : "bg-sky-600 text-white hover:bg-sky-500"
             }`}
           >
@@ -294,8 +294,8 @@ export function SidebarTakeoffTab() {
           </button>
 
           {takeoffDrawKind === "area" ? (
-            <div className="mt-3 border-t border-slate-700/60 pt-3">
-              <p className="text-[10px] font-medium text-slate-400">Area shape</p>
+            <div className="mt-3 border-t border-slate-200 pt-3">
+              <p className="text-[10px] font-medium text-slate-500">Area shape</p>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
@@ -306,8 +306,8 @@ export function SidebarTakeoffTab() {
                   }}
                   className={`rounded-lg border px-2 py-2 text-[11px] font-semibold transition-colors disabled:opacity-40 ${
                     takeoffAreaMode === "polygon"
-                      ? "border-sky-500/55 bg-sky-600/25 text-sky-50 ring-1 ring-sky-500/30"
-                      : "border-slate-600/80 bg-slate-800/40 text-slate-400 hover:border-slate-500"
+                      ? "border-sky-500/55 bg-sky-50 text-sky-700 ring-1 ring-sky-500/30"
+                      : "border-slate-300 bg-slate-50 text-slate-500 hover:border-slate-300"
                   }`}
                 >
                   Polygon
@@ -321,8 +321,8 @@ export function SidebarTakeoffTab() {
                   }}
                   className={`rounded-lg border px-2 py-2 text-[11px] font-semibold transition-colors disabled:opacity-40 ${
                     takeoffAreaMode === "box"
-                      ? "border-sky-500/55 bg-sky-600/25 text-sky-50 ring-1 ring-sky-500/30"
-                      : "border-slate-600/80 bg-slate-800/40 text-slate-400 hover:border-slate-500"
+                      ? "border-sky-500/55 bg-sky-50 text-sky-700 ring-1 ring-sky-500/30"
+                      : "border-slate-300 bg-slate-50 text-slate-500 hover:border-slate-300"
                   }`}
                 >
                   Box (2 clicks)
@@ -338,8 +338,8 @@ export function SidebarTakeoffTab() {
         </PanelSection>
 
         {anomalies.length > 0 ? (
-          <PanelSection title="Checks" className="border-sky-800/40 bg-sky-950/20">
-            <ul className="space-y-1.5 text-[10px] leading-snug text-sky-100/90">
+          <PanelSection title="Checks" className="border-sky-800/40 bg-sky-50">
+            <ul className="space-y-1.5 text-[10px] leading-snug text-sky-700">
               {anomalies.slice(0, 5).map((a) => (
                 <li key={a.id} className="flex gap-1.5">
                   <LayoutGrid className="mt-0.5 h-3 w-3 shrink-0 text-sky-400" />
@@ -365,7 +365,7 @@ export function SidebarTakeoffTab() {
               <button
                 type="button"
                 onClick={() => setTakeoffInventoryDrawerFromSidebar(true)}
-                className="w-full rounded-lg border border-sky-500/40 bg-sky-950/30 py-2 text-[11px] font-semibold text-sky-100 hover:bg-sky-950/50"
+                className="w-full rounded-lg border border-sky-500/40 bg-sky-50 py-2 text-[11px] font-semibold text-sky-700 hover:bg-sky-50"
               >
                 Show inventory
               </button>
@@ -383,14 +383,14 @@ export function SidebarTakeoffTab() {
                 <button
                   type="button"
                   onClick={() => finishCountFromStore("merge")}
-                  className="rounded-lg border border-emerald-500/45 bg-emerald-950/40 py-2 text-[11px] font-semibold text-emerald-100 hover:bg-emerald-950/65"
+                  className="rounded-lg border border-emerald-500/45 bg-emerald-50 py-2 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50"
                 >
                   Add to zone ({takeoffCountDraftPoints?.length ?? 0})
                 </button>
                 <button
                   type="button"
                   onClick={() => finishCountFromStore("replace")}
-                  className="rounded-lg border border-amber-500/40 bg-amber-950/35 py-2 text-[11px] font-semibold text-amber-100 hover:bg-amber-950/55"
+                  className="rounded-lg border border-amber-500/40 bg-amber-50 py-2 text-[11px] font-semibold text-amber-700 hover:bg-amber-50"
                 >
                   Replace all ({takeoffCountDraftPoints?.length ?? 0})
                 </button>
@@ -400,7 +400,7 @@ export function SidebarTakeoffTab() {
             <button
               type="button"
               onClick={() => finishCountFromStore()}
-              className="shrink-0 rounded-lg border border-emerald-500/45 bg-emerald-950/40 py-2.5 text-[11px] font-semibold text-emerald-100 hover:bg-emerald-950/65"
+              className="shrink-0 rounded-lg border border-emerald-500/45 bg-emerald-50 py-2.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50"
             >
               Finish count ({takeoffCountDraftPoints?.length ?? 0}) and save
             </button>

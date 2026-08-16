@@ -8,7 +8,7 @@ import { BookmarkViews } from "./BookmarkViews";
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
-    <h3 className="mb-2 px-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#94A3B8]">
+    <h3 className="mb-2 px-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">
       {children}
     </h3>
   );
@@ -89,15 +89,15 @@ export function MapSnapPanelBody() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-3 text-[#F8FAFC] [scrollbar-width:thin]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-3 text-slate-900 [scrollbar-width:thin]">
       <SectionTitle>Map</SectionTitle>
-      <div className="mb-4 space-y-3 rounded-lg border border-[#334155] bg-[#1E293B] p-3">
+      <div className="mb-4 space-y-3 rounded-lg border border-slate-200 bg-white p-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <Map className="h-4 w-4 shrink-0 text-[var(--viewer-primary)]" aria-hidden />
             <div className="min-w-0">
-              <p className="text-[11px] font-medium tracking-tight text-[#F8FAFC]">Overview map</p>
-              <p className="text-[9px] leading-snug text-[#94A3B8]">Corner thumbnail for panning</p>
+              <p className="text-[11px] font-medium tracking-tight text-slate-900">Overview map</p>
+              <p className="text-[9px] leading-snug text-slate-500">Corner thumbnail for panning</p>
             </div>
           </div>
           <PillToggle
@@ -107,8 +107,8 @@ export function MapSnapPanelBody() {
             onPressedChange={setShowMinimap}
           />
         </div>
-        <div className="flex items-center justify-between gap-2 border-t border-[#334155] pt-3">
-          <span className="text-[10px] font-medium tracking-tight text-[#94A3B8]">
+        <div className="flex items-center justify-between gap-2 border-t border-slate-200 pt-3">
+          <span className="text-[10px] font-medium tracking-tight text-slate-500">
             Only when zoomed in
           </span>
           <PillToggle
@@ -122,18 +122,18 @@ export function MapSnapPanelBody() {
       </div>
 
       <SectionTitle>Saved views</SectionTitle>
-      <div className="mb-4 [&_.viewer-card]:border-[#334155] [&_.viewer-card]:bg-[#1E293B]">
+      <div className="mb-4 [&_.viewer-card]:border-slate-200 [&_.viewer-card]:bg-white">
         <BookmarkViews />
       </div>
 
       <SectionTitle>Snap to sheet</SectionTitle>
-      <div className="mb-4 space-y-3 rounded-lg border border-[#334155] bg-[#1E293B] p-3">
+      <div className="mb-4 space-y-3 rounded-lg border border-slate-200 bg-white p-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <Magnet className="h-4 w-4 shrink-0 text-[var(--viewer-primary)]" aria-hidden />
             <div className="min-w-0">
-              <p className="text-[11px] font-medium tracking-tight text-[#F8FAFC]">PDF geometry</p>
-              <p className="text-[9px] leading-snug text-[#94A3B8]">Snap strokes to vectors</p>
+              <p className="text-[11px] font-medium tracking-tight text-slate-900">PDF geometry</p>
+              <p className="text-[9px] leading-snug text-slate-500">Snap strokes to vectors</p>
             </div>
           </div>
           <PillToggle
@@ -145,10 +145,10 @@ export function MapSnapPanelBody() {
         </div>
 
         <div>
-          <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#64748B]">
+          <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-500">
             Strength
           </p>
-          <div className="flex rounded-lg border border-[#334155] bg-[#0F172A] p-0.5">
+          <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
             {SNAP_PRESETS.map((p) => {
               const active = activeSnapPreset === p.id;
               return (
@@ -159,8 +159,8 @@ export function MapSnapPanelBody() {
                   onClick={() => applySnapPreset(p)}
                   className={`min-w-0 flex-1 rounded-md px-1 py-1.5 text-[9px] font-semibold uppercase tracking-wide transition ${
                     active
-                      ? "bg-[#2563eb] text-white shadow-sm"
-                      : "text-[#94A3B8] hover:bg-[#334155] hover:text-[#F8FAFC]"
+                      ? "bg-[var(--viewer-primary-muted)] text-[var(--viewer-primary)] ring-1 ring-[var(--viewer-primary)]/45"
+                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
                   {p.label}
@@ -169,18 +169,18 @@ export function MapSnapPanelBody() {
             })}
           </div>
           {activeSnapPreset === "custom" && snapToGeometry && (
-            <p className="mt-2 text-[9px] leading-snug text-[#94A3B8]">
+            <p className="mt-2 text-[9px] leading-snug text-slate-500">
               Custom radius — adjust the slider below.
             </p>
           )}
         </div>
 
         <label
-          className="block border-t border-[#334155] pt-3 text-[10px] text-[#94A3B8]"
+          className="block border-t border-slate-200 pt-3 text-[10px] text-slate-500"
           title="Search radius in pixels (0 = no snap)."
         >
           <span className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="font-medium text-[#E2E8F0]">Snap radius</span>
+            <span className="font-medium text-slate-700">Snap radius</span>
             <span className="tabular-nums text-[var(--viewer-primary)]">{snapRadiusPx}px</span>
           </span>
           <input
@@ -196,19 +196,19 @@ export function MapSnapPanelBody() {
         </label>
 
         {pdfSnapLayers.length >= 1 && snapToGeometry && (
-          <div className="max-h-32 space-y-2 overflow-y-auto border-t border-[#334155] pt-3 text-[10px]">
-            <p className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#64748B]">
+          <div className="max-h-32 space-y-2 overflow-y-auto border-t border-slate-200 pt-3 text-[10px]">
+            <p className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-500">
               <Layers className="h-3.5 w-3.5 text-[var(--viewer-primary)]" />
               Layers
             </p>
             {pdfSnapLayers.map((l) => (
               <div
                 key={l.id}
-                className="flex items-center justify-between gap-2 rounded-md px-0.5 py-1 hover:bg-[#334155]/50"
+                className="flex items-center justify-between gap-2 rounded-md px-0.5 py-1 hover:bg-slate-100/50"
                 onMouseEnter={() => setToolbarHoveredLayerId(l.id)}
                 onMouseLeave={() => setToolbarHoveredLayerId(null)}
               >
-                <span className="min-w-0 truncate text-[10px] text-[#CBD5E1]" title={l.label}>
+                <span className="min-w-0 truncate text-[10px] text-slate-700" title={l.label}>
                   {l.label}
                 </span>
                 <PillToggle
@@ -223,7 +223,7 @@ export function MapSnapPanelBody() {
         )}
       </div>
 
-      <p className="rounded-lg border border-[#334155] bg-[#1E293B] px-2 py-2 text-[9px] italic leading-snug text-[#94A3B8]">
+      <p className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-[9px] italic leading-snug text-slate-500">
         Saved views store zoom, page, and snap. Pan and zoom use the top toolbar.
       </p>
     </div>

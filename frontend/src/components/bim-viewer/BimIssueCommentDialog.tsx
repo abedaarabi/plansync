@@ -78,7 +78,7 @@ export function BimIssueCommentDialog(props: {
         setBody("");
         props.onClose();
       }}
-      variant="viewer-dark"
+      variant="viewer"
       ariaLabelledBy="bim-issue-comment-title"
       panelClassName="max-w-md"
       footer={
@@ -102,22 +102,22 @@ export function BimIssueCommentDialog(props: {
         </div>
       }
     >
-      <h2 id="bim-issue-comment-title" className="text-sm font-semibold text-white">
+      <h2 id="bim-issue-comment-title" className="text-sm font-semibold text-[var(--bim-text)]">
         Add comment
       </h2>
       {issue ? (
-        <p className="mt-1 text-[11px] text-slate-400">
+        <p className="mt-1 text-[11px] text-[var(--bim-text-muted)]">
           {issueDisplayCode(issue)} · {issue.title}
         </p>
       ) : null}
       {loadingComments ? (
-        <p className="mt-3 text-[11px] text-slate-500">Loading comments…</p>
+        <p className="mt-3 text-[11px] text-[var(--bim-text-muted)]">Loading comments…</p>
       ) : comments.length > 0 ? (
-        <ul className="mt-3 max-h-32 space-y-2 overflow-y-auto rounded-lg border border-white/10 bg-slate-900/50 p-2">
+        <ul className="mt-3 max-h-32 space-y-2 overflow-y-auto rounded-lg border border-[var(--bim-border)] bg-[var(--bim-hover)] p-2">
           {comments.map((comment) => (
-            <li key={comment.id} className="text-[11px] leading-relaxed text-slate-300">
-              <span className="font-medium text-slate-200">{comment.author.name ?? "Unknown"}</span>
-              <span className="text-slate-500"> · {comment.body}</span>
+            <li key={comment.id} className="text-[11px] leading-relaxed text-[var(--bim-text)]">
+              <span className="font-medium">{comment.author.name ?? "Unknown"}</span>
+              <span className="text-[var(--bim-text-muted)]"> · {comment.body}</span>
             </li>
           ))}
         </ul>
@@ -127,7 +127,7 @@ export function BimIssueCommentDialog(props: {
         onChange={(e) => setBody(e.target.value)}
         rows={4}
         placeholder="Write a comment…"
-        className="mt-3 w-full resize-none rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-[13px] text-white outline-none focus:border-[var(--bim-accent)]"
+        className="mt-3 w-full resize-none rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] px-3 py-2 text-[13px] text-[var(--bim-text)] outline-none focus:border-[var(--bim-accent)]"
       />
     </EnterpriseResponsiveDialog>
   );

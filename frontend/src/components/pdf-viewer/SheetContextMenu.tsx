@@ -1,7 +1,9 @@
 "use client";
 
+import { Crosshair, MessageSquarePlus, MousePointer2, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ViewerMarkupLockActions } from "./ViewerMarkupLockActions";
 
 type Props = {
   clientX: number;
@@ -21,6 +23,10 @@ type Props = {
   /** When false, Delete is hidden (e.g. issue pins — delete from Issues tab only). */
   showDelete?: boolean;
 };
+
+const itemClass =
+  "flex w-full items-center gap-2 px-3 py-2 text-left text-slate-900 hover:bg-slate-100";
+const iconClass = "h-3.5 w-3.5 shrink-0 text-[var(--viewer-icon)]";
 
 export function SheetContextMenu({
   clientX,
@@ -77,101 +83,80 @@ export function SheetContextMenu({
       ref={ref}
       role="menu"
       aria-label="Sheet actions"
-      className="fixed z-[200] min-w-[12rem] rounded-lg border border-slate-600/90 bg-slate-900 py-1 text-[13px] text-slate-100 shadow-2xl ring-1 ring-black/50"
+      className="fixed z-[200] min-w-[12rem] rounded-lg border border-slate-300/90 bg-white py-1 text-[13px] text-slate-900 shadow-2xl ring-1 ring-slate-900/5"
       style={{ left: pos.left, top: pos.top }}
     >
       <button
         type="button"
         role="menuitem"
-        className="flex w-full items-center px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
+        className={itemClass}
         onClick={() => {
           onAddComment();
           onClose();
         }}
       >
+        <MessageSquarePlus className={iconClass} aria-hidden strokeWidth={1.75} />
         Add comment…
       </button>
       <button
         type="button"
         role="menuitem"
-        className="flex w-full items-center px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
+        className={itemClass}
         onClick={() => {
           onSelectTool();
           onClose();
         }}
       >
+        <MousePointer2 className={iconClass} aria-hidden strokeWidth={1.75} />
         Select tool
       </button>
       {hitId && (
         <>
-          <div className="my-1 h-px bg-slate-700" />
+          <div className="my-1 h-px bg-slate-200" />
           <button
             type="button"
             role="menuitem"
-            className="flex w-full items-center px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
+            className={itemClass}
             onClick={() => {
               onSelectOnlyThis();
               onClose();
             }}
           >
+            <Crosshair className={iconClass} aria-hidden strokeWidth={1.75} />
             Select only this
           </button>
           {showEditComment && (
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
+              className={itemClass}
               onClick={() => {
                 onEditComment();
                 onClose();
               }}
             >
+              <Pencil className={iconClass} aria-hidden strokeWidth={1.75} />
               Edit comment…
             </button>
           )}
-          <button
-            type="button"
-            role="menuitem"
-            className="flex w-full items-center px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
-            onClick={() => {
-              onCopy();
-              onClose();
-            }}
-          >
-            Copy
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="flex w-full items-center px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
-            onClick={() => {
-              onDuplicate();
-              onClose();
-            }}
-          >
-            Duplicate
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="flex w-full items-center px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
-            onClick={() => {
-              onToggleLock();
-              onClose();
-            }}
-          >
-            {hitLocked ? "Unlock" : "Lock"}
-          </button>
+          <ViewerMarkupLockActions
+            locked={hitLocked}
+            onCopy={onCopy}
+            onDuplicate={onDuplicate}
+            onToggleLock={onToggleLock}
+            onClose={onClose}
+          />
           {showDelete ? (
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
+              className={itemClass}
               onClick={() => {
                 onDelete();
                 onClose();
               }}
             >
+              <Trash2 className={iconClass} aria-hidden strokeWidth={1.75} />
               Delete
             </button>
           ) : null}

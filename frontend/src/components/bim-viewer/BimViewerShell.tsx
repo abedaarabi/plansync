@@ -142,7 +142,8 @@ import {
 } from "@/lib/bim/bimFilters";
 import { BimFiltersPanel, useBimFilterPreview } from "./BimFiltersPanel";
 import { BimLoadingOverlay } from "./BimLoadingOverlay";
-import { overallLoadFraction } from "@/lib/bim/bimLoadingSteps";
+import { overallLoadFraction, type BimLoadPhase } from "@/lib/bim/bimLoadingSteps";
+import { subscribeFullscreenChange, toggleElementFullscreen } from "@/lib/viewerFullscreen";
 import { readModelThumbnailDataUrl } from "@/lib/bim/bimThumbnailCache";
 import { BimLoadAbortedError } from "@/lib/bim/loadFetch";
 import { disposeModelThumbnailService, peekModelThumbnail } from "@/lib/bim/modelThumbnail";
@@ -180,25 +181,7 @@ type PlanPanelMode = "minimap" | "drawingSync";
 
 type BimDockId = BimLeftDockId | "properties" | "takeoffViews" | "issues" | "filters" | "clashes";
 
-type Phase =
-  | { kind: "resolving" }
-  | {
-      kind: "downloading";
-      label?: string;
-      index?: number;
-      total?: number;
-      fraction?: number;
-      bytesTotal?: number;
-    }
-  | {
-      kind: "converting";
-      fraction: number;
-      label?: string;
-      index?: number;
-      total?: number;
-    }
-  | { kind: "ready" }
-  | { kind: "error"; message: string };
+type Phase = BimLoadPhase | { kind: "ready" } | { kind: "error"; message: string };
 
 type GeometryStreamProgress = {
   label?: string;
@@ -669,7 +652,8 @@ export function BimViewerShell(props: {
       return;
     }
     setLoadExiting(true);
-    const timer = window.setTimeout(() => setLoadExiting(false), 300);
+    // Hold Ready as the active step briefly, then fade the overlay out.
+    const timer = window.setTimeout(() => setLoadExiting(false), 900);
     return () => window.clearTimeout(timer);
   }, [phase.kind]);
 
@@ -795,19 +779,26 @@ export function BimViewerShell(props: {
           becameReady = true;
           window.clearTimeout(loadWatchdog);
           setPhase({ kind: "ready" });
-          void Promise.race([
-            (async () => {
-              await engine.fitToView();
-              await engine.resizeViewport();
-            })(),
-            new Promise<void>((resolve) => {
-              window.setTimeout(resolve, 2_500);
-            }),
-          ]).catch(() => undefined);
+          void (async () => {
+            try {
+              await Promise.race([
+                (async () => {
+                  await engine.fitToView();
+                  await engine.resizeViewport();
+                })(),
+                new Promise<void>((resolve) => {
+                  window.setTimeout(resolve, 2_500);
+                }),
+              ]);
+              if (!cancelled) engine.captureHomeCamera();
+            } catch {
+              /* fit/home capture is best-effort */
+            }
+          })();
         };
 
         const reportProgress = (
-          kind: "downloading" | "converting",
+          kind: "preparing" | "downloading" | "converting",
           i: number,
           member: BimFederationMember,
           fraction: number | null,
@@ -821,6 +812,15 @@ export function BimViewerShell(props: {
               index: i,
               total: memberTotal,
               fraction: local ?? 0,
+            });
+            return;
+          }
+          if (kind === "preparing") {
+            setPhase({
+              kind: "preparing",
+              label: member.name,
+              index: i,
+              total: memberTotal,
             });
             return;
           }
@@ -850,7 +850,7 @@ export function BimViewerShell(props: {
           if (cancelled) return;
           let lastLocalFraction = 0;
           const trackAndReport = (
-            kind: "downloading" | "converting",
+            kind: "preparing" | "downloading" | "converting",
             fraction: number | null,
             bytesTotal?: number | null,
           ) => {
@@ -861,7 +861,7 @@ export function BimViewerShell(props: {
           };
           if (!becameReady) {
             setPhase({
-              kind: "downloading",
+              kind: "preparing",
               label: member.name,
               index: i,
               total: memberTotal,
@@ -878,7 +878,7 @@ export function BimViewerShell(props: {
             fitView: false,
             signal: abort.signal,
             onPreparing: (fraction) => {
-              trackAndReport("downloading", fraction);
+              trackAndReport("preparing", fraction);
             },
             onDownloading: (fraction, bytesTotal) => {
               trackAndReport("downloading", fraction, bytesTotal);
@@ -1438,11 +1438,7 @@ export function BimViewerShell(props: {
     loadedModels,
   ]);
 
-  useEffect(() => {
-    const onFs = () => setFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
-  }, []);
+  useEffect(() => subscribeFullscreenChange(setFullscreen), []);
 
   useEffect(() => {
     if (phase.kind !== "ready") return;
@@ -1509,6 +1505,11 @@ export function BimViewerShell(props: {
     void engineRef.current?.fitToView();
   }, []);
 
+  const goHome = useCallback(() => {
+    setActiveFlyout(null);
+    void engineRef.current?.goHome();
+  }, []);
+
   const onShowAll = useCallback(() => {
     setActiveFlyout(null);
     setFilterState(EMPTY_BIM_FILTER_STATE);
@@ -1545,22 +1546,57 @@ export function BimViewerShell(props: {
     setClusterByType(engineRef.current?.isClusterByTypeActive() ?? false);
   }, [loadedModels]);
 
-  /** Esc = Show all objects (clears isolate/hide/section/filters + selection). */
+  /** Esc exits placement / tools / flyouts / docks; engine handles show-all last. */
+  // fallow-ignore-next-line complexity
   useEffect(() => {
     if (phase.kind !== "ready") return;
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || issuePlacementActive) return;
+      if (e.key !== "Escape") return;
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if ((e.target as HTMLElement | null)?.isContentEditable) return;
+
+      if (issuePlacementActive) {
+        e.preventDefault();
+        setIssuePlacementActive(false);
+        engineRef.current?.setIssuePlacementPick(null);
+        return;
+      }
+
+      if (contextMenu) {
+        e.preventDefault();
+        setContextMenu(null);
+        return;
+      }
+
+      if (tool !== "select") {
+        e.preventDefault();
+        setActiveFlyout(null);
+        setTool("select");
+        engineRef.current?.setTool("select");
+        return;
+      }
+
+      if (activeFlyout) {
+        e.preventDefault();
+        setActiveFlyout(null);
+        return;
+      }
+
+      if (activeDock) {
+        e.preventDefault();
+        setActiveDock(null);
+        return;
+      }
+
       e.preventDefault();
       onShowAll();
     };
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [phase.kind, onShowAll, issuePlacementActive]);
+  }, [phase.kind, issuePlacementActive, contextMenu, tool, activeFlyout, activeDock, onShowAll]);
 
   useEffect(() => {
     if (clash.selectedClashId) skipFilterZoomOnceRef.current = true;
@@ -2266,18 +2302,6 @@ export function BimViewerShell(props: {
     return () => engine.setIssuePlacementPick(null);
   }, [captureIssueSnapshotFile, issuePlacementActive, activeEngine, phase.kind, startIssueCreate]);
 
-  useEffect(() => {
-    if (!issuePlacementActive) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setIssuePlacementActive(false);
-        engineRef.current?.setIssuePlacementPick(null);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [issuePlacementActive]);
-
   // fallow-ignore-next-line complexity
   const saveCurrentView = useCallback(async () => {
     const fvId = resolvedFileVersionId;
@@ -2365,10 +2389,7 @@ export function BimViewerShell(props: {
   }, []);
 
   const toggleFullscreen = useCallback(() => {
-    const el = shellRef.current;
-    if (!el) return;
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void el.requestFullscreen();
+    void toggleElementFullscreen(shellRef.current);
   }, []);
 
   const captureSnapshot = useCallback(() => {
@@ -2493,6 +2514,15 @@ export function BimViewerShell(props: {
   const activeFileVersionId = selection?.fileVersionId ?? resolvedFileVersionId;
   const activeFileId = selection?.modelId?.split(":")[0] ?? props.fileId;
   const isFederated = federationMembers.length > 1;
+  const showMeasurements =
+    tool === "length" || tool === "area" || tool === "angle" || activeFlyout === "measure";
+  const showMarkups = tool === "markup" || activeFlyout === "markup";
+  const showIssueMarkers = activeDock === "issues" || issuePlacementActive;
+
+  useEffect(() => {
+    if (phase.kind !== "ready") return;
+    engineRef.current?.setMeasurementsVisible(showMeasurements);
+  }, [phase.kind, showMeasurements, activeEngine]);
 
   const onToggleModelVisible = useCallback((modelId: string, visible: boolean) => {
     void engineRef.current?.setModelVisible(modelId, visible).then(() => {
@@ -2573,15 +2603,6 @@ export function BimViewerShell(props: {
     },
     [federationMembers, phase.kind, props.projectId, quantityIndex, resolvedProjectId],
   );
-
-  useEffect(() => {
-    if (!activeFlyout) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setActiveFlyout(null);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [activeFlyout]);
 
   const onSelectElementFromSearch = useCallback((guid: string) => {
     setActiveFlyout(null);
@@ -2915,7 +2936,7 @@ export function BimViewerShell(props: {
           data-issue-placement={issuePlacementActive ? "true" : undefined}
           className={`touch-none${splitViewActive ? " bim-viewport-pane" : " relative h-full w-full"}${issuePlacementActive ? " bim-viewport--issue-placement" : ""}`}
         >
-          {workChromeReady ? (
+          {workChromeReady && showMarkups ? (
             <BimMarkupOverlay
               interactive={tool === "markup" && markupHydrated}
               engine={activeEngine}
@@ -2997,9 +3018,9 @@ export function BimViewerShell(props: {
             header={
               <button
                 type="button"
-                onClick={fitToView}
-                aria-label="Fit model to view"
-                title="Fit model to view"
+                onClick={goHome}
+                aria-label="Reset camera to home view"
+                title="Home view"
                 className="bim-rail-btn mobile-touch-target"
               >
                 <Home className="h-[18px] w-[18px]" aria-hidden />
@@ -3153,7 +3174,7 @@ export function BimViewerShell(props: {
             open
             onClose={closeClashDock}
             ariaLabel="Clash detection"
-            variant="viewer-dark"
+            variant="viewer"
             maxHeightClass="max-h-[min(78dvh,720px)]"
             bodyScroll={false}
             bodyClassName="p-0"
@@ -3175,7 +3196,7 @@ export function BimViewerShell(props: {
           </BimGlassDock>
         ) : null}
 
-        {workChromeReady ? (
+        {workChromeReady && showIssueMarkers ? (
           <BimIssueMarkersOverlay
             engine={activeEngine}
             issues={issues}
@@ -3223,12 +3244,8 @@ export function BimViewerShell(props: {
 
         {phase.kind === "error" ? (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--bim-shell)]">
-            <p className="text-[14px] font-medium text-[var(--bim-text)]">
-              Could not open this model
-            </p>
-            <p className="max-w-sm text-center text-[12px] text-[var(--bim-text-muted)]">
-              {phase.message}
-            </p>
+            <p className="text-[14px] font-medium text-slate-100">Could not open this model</p>
+            <p className="max-w-sm text-center text-[12px] text-slate-400">{phase.message}</p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
@@ -3243,7 +3260,7 @@ export function BimViewerShell(props: {
               <button
                 type="button"
                 onClick={() => router.push(backHref)}
-                className="bim-focus-ring rounded-md border border-[var(--bim-border)] bg-transparent px-4 py-2 text-[13px] font-medium text-[var(--bim-text)] transition-colors duration-150 hover:bg-[var(--bim-panel)]"
+                className="bim-focus-ring rounded-md border border-slate-600 bg-transparent px-4 py-2 text-[13px] font-medium text-slate-200 transition-colors duration-150 hover:bg-slate-800"
               >
                 Back to files
               </button>

@@ -12,6 +12,7 @@ import {
   Hand,
   HelpCircle,
   Maximize2,
+  Minimize2,
   MousePointer2,
   Redo2,
   Search,
@@ -30,6 +31,7 @@ import {
   FileText,
   Keyboard,
   Library,
+  Expand,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -58,6 +60,7 @@ import { useViewerStore, VIEWER_SCALE_MAX, VIEWER_SCALE_MIN } from "@/store/view
 import type { Tool } from "@/store/viewerStore";
 import { toast } from "sonner";
 import { useViewerCollabDesktop } from "@/hooks/useViewerCollabDesktop";
+import { subscribeFullscreenChange, toggleElementFullscreen } from "@/lib/viewerFullscreen";
 import { ClearPersistedMarkupDialog } from "./ClearPersistedMarkupDialog";
 import { PdfSearchPopover } from "./PdfSearchPopover";
 import { RevisionCompareDialog } from "./RevisionCompareDialog";
@@ -125,10 +128,12 @@ type TopBarProps = {
 export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {}) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const docInfoRef = useRef<HTMLDivElement>(null);
   const helpRef = useRef<HTMLDivElement>(null);
   const searchBtnRef = useRef<HTMLButtonElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
 
   const pdfUrl = useViewerStore((s) => s.pdfUrl);
   const fileName = useViewerStore((s) => s.fileName);
@@ -284,7 +289,36 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
     `viewer-focus-ring viewer-toolbar-btn ${active ? "viewer-toolbar-btn-active" : ""}`;
 
   const proProjectsNavClass =
-    "viewer-focus-ring viewer-type-caption flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-[#334155] bg-[#1E293B] px-2.5 text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155] active:scale-[0.98] sm:min-h-7";
+    "viewer-focus-ring viewer-type-caption flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-slate-900 transition hover:border-slate-200 hover:bg-slate-100 active:scale-[0.98] sm:min-h-7";
+
+  const chromeIconBtn =
+    "rounded p-1 text-[var(--viewer-icon)] transition hover:bg-[var(--viewer-primary-muted)] hover:text-[var(--viewer-primary-hover)] disabled:opacity-30";
+
+  useEffect(() => subscribeFullscreenChange(setFullscreen), []);
+
+  const toggleFullscreen = () => {
+    const shell = headerRef.current?.closest(".viewer-shell-bg");
+    void toggleElementFullscreen(shell instanceof HTMLElement ? shell : null);
+  };
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "f" || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.isContentEditable ||
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT"
+      ) {
+        return;
+      }
+      event.preventDefault();
+      toggleFullscreen();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   const goBackOrProjects = () => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -296,7 +330,8 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
 
   return (
     <header
-      className="no-print relative flex h-10 shrink-0 items-stretch gap-0 border-b border-[#334155] bg-[#0F172A] text-[#F8FAFC]"
+      ref={headerRef}
+      className="no-print relative flex h-10 shrink-0 items-stretch gap-0 border-b border-slate-200 bg-white text-slate-900"
       role="banner"
     >
       <input
@@ -312,7 +347,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
         className="flex min-h-0 min-w-0 flex-1 items-center gap-2 overflow-x-auto overflow-y-hidden px-2 py-1 [scrollbar-width:thin]"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
-        <div className="flex shrink-0 items-center gap-2 border-r border-[#334155] pr-2.5">
+        <div className="flex shrink-0 items-center gap-2 border-r border-slate-200 pr-2.5">
           <div
             className="viewer-type-caption flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-lg bg-[var(--viewer-primary)] font-bold text-white shadow-sm"
             aria-label="PlanSync"
@@ -325,9 +360,12 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               type="button"
               disabled
               title="Loading account"
-              className="viewer-type-caption flex min-h-8 shrink-0 cursor-wait items-center justify-center gap-1.5 rounded-md border border-[#334155] bg-[#1E293B] px-2.5 text-[#94A3B8] opacity-80 sm:min-h-7"
+              className="viewer-type-caption flex min-h-8 shrink-0 cursor-wait items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-slate-900 opacity-80 sm:min-h-7"
             >
-              <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+              <FolderOpen
+                className="h-3.5 w-3.5 shrink-0 text-[var(--viewer-icon)]"
+                strokeWidth={2}
+              />
               <span className="hidden sm:inline">Open</span>
             </button>
           ) : meHasProWorkspace(me ?? null) ? (
@@ -339,7 +377,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                 onClick={goBackOrProjects}
                 className={`${proProjectsNavClass} xl:hidden`}
               >
-                <span className="text-[#94A3B8]" aria-hidden>
+                <span className="text-[var(--viewer-icon)]" aria-hidden>
                   ←
                 </span>
                 <span className="hidden sm:inline">Back</span>
@@ -350,7 +388,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                 aria-label="Back to Projects"
                 className={`${proProjectsNavClass} hidden xl:flex`}
               >
-                <span className="text-[#94A3B8]" aria-hidden>
+                <span className="text-[var(--viewer-icon)]" aria-hidden>
                   ←
                 </span>
                 <span className="hidden sm:inline">Projects</span>
@@ -361,9 +399,12 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Material library — add or edit materials to assign in takeoff (opens in new tab)"
-                  className="viewer-focus-ring viewer-type-caption flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-[#334155] bg-[#1E293B] px-2 text-[#E2E8F0] transition hover:border-[#475569] hover:bg-[#334155] active:scale-[0.98] sm:min-h-7"
+                  className="viewer-focus-ring viewer-type-caption flex min-h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-slate-900 transition hover:border-slate-200 hover:bg-slate-100 active:scale-[0.98] sm:min-h-7"
                 >
-                  <Library className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                  <Library
+                    className="h-3.5 w-3.5 shrink-0 text-[var(--viewer-icon)]"
+                    strokeWidth={2}
+                  />
                   <span className="hidden sm:inline">Materials</span>
                 </Link>
               ) : null}
@@ -375,7 +416,10 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               title="Open a PDF file from your device"
               className="viewer-focus-ring viewer-type-caption flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[var(--viewer-primary)] px-2.5 text-white shadow-[var(--viewer-primary-glow)] transition hover:bg-[var(--viewer-primary-hover)] active:scale-[0.98] sm:min-h-7"
             >
-              <FolderOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+              <FolderOpen
+                className="h-3.5 w-3.5 shrink-0 text-[var(--viewer-icon)]"
+                strokeWidth={2}
+              />
               <span className="hidden sm:inline">Open</span>
             </button>
           )}
@@ -410,26 +454,26 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
 
         <div className="flex min-w-[8rem] flex-1 justify-center px-1">
           <div
-            className={`flex shrink-0 items-center gap-0.5 rounded-md border border-[#334155] bg-[#1E293B] p-0.5 ${!pdfUrl ? "pointer-events-none opacity-40" : ""}`}
+            className={`flex shrink-0 items-center gap-0.5 rounded-md border border-slate-200 bg-white p-0.5 ${!pdfUrl ? "pointer-events-none opacity-40" : ""}`}
           >
             <button
               type="button"
               disabled={!pdfUrl || currentPage <= 1}
               onClick={() => setCurrentPage(currentPage - 1)}
-              className="rounded p-1 text-[#94A3B8] transition hover:bg-[#334155] hover:text-[#F8FAFC] disabled:opacity-30"
+              className={chromeIconBtn}
               title="Previous page"
               aria-label="Previous page"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="viewer-type-caption min-w-[3.25rem] text-center font-semibold tabular-nums text-[#F8FAFC]">
+            <span className="viewer-type-caption min-w-[3.25rem] text-center font-semibold tabular-nums text-slate-900">
               {pdfUrl ? `${currentPage} / ${numPages || "—"}` : "—"}
             </span>
             <button
               type="button"
               disabled={!pdfUrl || currentPage >= numPages}
               onClick={() => setCurrentPage(currentPage + 1)}
-              className="rounded p-1 text-[#94A3B8] transition hover:bg-[#334155] hover:text-[#F8FAFC] disabled:opacity-30"
+              className={chromeIconBtn}
               title="Next page"
               aria-label="Next page"
             >
@@ -443,12 +487,12 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
         <div
           className={`flex shrink-0 items-center gap-1.5 ${!pdfUrl ? "pointer-events-none opacity-40" : ""}`}
         >
-          <div className="flex items-center gap-0.5 rounded-md border border-[#334155] bg-[#1E293B] p-0.5">
+          <div className="flex items-center gap-0.5 rounded-md border border-slate-200 bg-white p-0.5">
             <button
               type="button"
               disabled={!pdfUrl}
               onClick={() => setScale(scale / 1.2)}
-              className="rounded p-1 text-[#94A3B8] transition hover:bg-[#334155] hover:text-[#F8FAFC] disabled:opacity-30"
+              className={chromeIconBtn}
               title="Zoom out"
               aria-label="Zoom out"
             >
@@ -467,16 +511,16 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   (e.target as HTMLInputElement).blur();
                 }
               }}
-              className="viewer-type-caption h-6 w-10 rounded border border-transparent bg-transparent text-center font-semibold tabular-nums text-[#60A5FA] outline-none transition focus:border-[#2563EB]/60 focus:ring-1 focus:ring-[#2563EB]/35 disabled:opacity-40"
+              className="viewer-type-caption h-6 w-10 rounded border border-transparent bg-transparent text-center font-semibold tabular-nums text-blue-600 outline-none transition focus:border-[#2563EB]/60 focus:ring-1 focus:ring-[#2563EB]/35 disabled:opacity-40"
               title="Zoom %"
               aria-label="Zoom percentage"
             />
-            <span className="viewer-type-label pr-0.5 text-[#94A3B8]">%</span>
+            <span className="viewer-type-label pr-0.5 text-slate-500">%</span>
             <button
               type="button"
               disabled={!pdfUrl}
               onClick={() => setScale(scale * 1.2)}
-              className="rounded p-1 text-[#94A3B8] transition hover:bg-[#334155] hover:text-[#F8FAFC] disabled:opacity-30"
+              className={chromeIconBtn}
               title="Zoom in"
               aria-label="Zoom in"
             >
@@ -485,7 +529,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
           </div>
 
           <div
-            className={`flex shrink-0 items-center gap-0.5 rounded-md border border-[#334155] bg-[#1E293B] p-0.5 ${!pdfUrl ? "pointer-events-none opacity-40" : ""}`}
+            className={`flex shrink-0 items-center gap-0.5 rounded-md border border-slate-200 bg-white p-0.5 ${!pdfUrl ? "pointer-events-none opacity-40" : ""}`}
             role="group"
             aria-label="Fit view"
           >
@@ -494,12 +538,27 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               disabled={!pdfUrl}
               title="Fit width"
               onClick={() => requestFit("width")}
-              className="rounded p-1 text-[#94A3B8] transition hover:bg-[#334155] hover:text-[#F8FAFC] disabled:opacity-30"
+              className={chromeIconBtn}
               aria-label="Fit width"
             >
               <Maximize2 className="h-3.5 w-3.5 rotate-90" />
             </button>
           </div>
+
+          <button
+            type="button"
+            title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            onClick={toggleFullscreen}
+            className={`${chromeIconBtn}${fullscreen ? " bg-[var(--viewer-primary-muted)] text-[var(--viewer-primary)]" : ""}`}
+            aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+            aria-pressed={fullscreen}
+          >
+            {fullscreen ? (
+              <Minimize2 className="h-3.5 w-3.5" aria-hidden />
+            ) : (
+              <Expand className="h-3.5 w-3.5" aria-hidden />
+            )}
+          </button>
 
           <BarDivider />
 
@@ -577,7 +636,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   className={`viewer-focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-35 ${
                     compareMode
                       ? "viewer-toolbar-btn-active"
-                      : "border-transparent bg-transparent text-[#94A3B8] hover:border-[#475569] hover:bg-[#1E293B] hover:text-[#F8FAFC]"
+                      : "border-transparent bg-transparent text-[var(--viewer-icon)] hover:border-slate-200 hover:bg-[var(--viewer-primary-muted)] hover:text-[var(--viewer-primary-hover)]"
                   }`}
                 >
                   <SquareSplitHorizontal className="h-4 w-4" strokeWidth={1.75} />
@@ -601,7 +660,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   className={`viewer-focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-35 ${
                     revisionCompareActive
                       ? "viewer-toolbar-btn-active"
-                      : "border-transparent bg-transparent text-[#94A3B8] hover:border-[#475569] hover:bg-[#1E293B] hover:text-[#F8FAFC]"
+                      : "border-transparent bg-transparent text-[var(--viewer-icon)] hover:border-slate-200 hover:bg-[var(--viewer-primary-muted)] hover:text-[var(--viewer-primary-hover)]"
                   }`}
                 >
                   <GitCompareArrows className="h-4 w-4" strokeWidth={1.75} />
@@ -613,7 +672,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
       </div>
 
       <div
-        className="relative z-[70] flex shrink-0 items-center border-l border-[#334155] bg-[#0F172A] py-1 pl-2 pr-2"
+        className="relative z-[70] flex shrink-0 items-center border-l border-slate-200 bg-white py-1 pl-2 pr-2"
         ref={moreMenuRef}
       >
         <button
@@ -629,20 +688,20 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
         </button>
         {moreMenuOpen ? (
           <div
-            className="absolute right-0 top-full z-[85] mt-1 w-[min(calc(100vw-1rem),13rem)] min-w-[12rem] rounded-xl border border-[#334155] bg-[#1E293B] py-1 shadow-2xl ring-1 ring-black/25"
+            className="absolute right-0 top-full z-[85] mt-1 w-[min(calc(100vw-1rem),13rem)] min-w-[12rem] rounded-xl border border-slate-200 bg-white py-1 shadow-2xl ring-1 ring-black/25"
             role="menu"
           >
             <button
               type="button"
               role="menuitem"
-              className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-[#F8FAFC] transition hover:bg-[#334155]"
+              className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-slate-900 transition hover:bg-slate-100"
               onClick={() => {
                 setSheetExportOpen(true);
                 setMoreMenuOpen(false);
               }}
             >
               <FileDown
-                className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]"
+                className="h-3.5 w-3.5 shrink-0 text-[var(--viewer-icon)]"
                 strokeWidth={2}
                 aria-hidden
               />
@@ -651,7 +710,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             <button
               type="button"
               role="menuitem"
-              className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-[#F8FAFC] transition hover:bg-[#334155]"
+              className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-slate-900 transition hover:bg-slate-100"
               onClick={() => {
                 setDocInfoOpen(true);
                 setHelpOpen(false);
@@ -659,7 +718,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               }}
             >
               <FileText
-                className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]"
+                className="h-3.5 w-3.5 shrink-0 text-[var(--viewer-icon)]"
                 strokeWidth={2}
                 aria-hidden
               />
@@ -668,7 +727,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             <button
               type="button"
               role="menuitem"
-              className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-[#F8FAFC] transition hover:bg-[#334155]"
+              className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-slate-900 transition hover:bg-slate-100"
               onClick={() => {
                 setHelpOpen(true);
                 setDocInfoOpen(false);
@@ -676,7 +735,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               }}
             >
               <Keyboard
-                className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]"
+                className="h-3.5 w-3.5 shrink-0 text-[var(--viewer-icon)]"
                 strokeWidth={2}
                 aria-hidden
               />
@@ -686,7 +745,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               <button
                 type="button"
                 role="menuitem"
-                className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-[#F8FAFC] transition hover:bg-[#334155]"
+                className="viewer-type-caption flex w-full items-center gap-2 px-3 py-2 text-left text-slate-900 transition hover:bg-slate-100"
                 onClick={() => {
                   void (async () => {
                     const hide = !me?.user.hideViewerPresence;
@@ -706,7 +765,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                 }}
               >
                 <UserX
-                  className="h-3.5 w-3.5 shrink-0 text-[#94A3B8]"
+                  className="h-3.5 w-3.5 shrink-0 text-[var(--viewer-icon)]"
                   strokeWidth={2}
                   aria-hidden
                 />
@@ -726,31 +785,31 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
       <div className="relative" ref={docInfoRef}>
         {docInfoOpen && (
           <div
-            className="fixed right-3 top-11 z-[60] max-h-[min(70vh,520px)] w-[min(calc(100vw-1rem),300px)] overflow-y-auto rounded-xl border border-[#334155] bg-[#1E293B] p-3 shadow-2xl ring-1 ring-black/25 [scrollbar-width:thin]"
+            className="fixed right-3 top-11 z-[60] max-h-[min(70vh,520px)] w-[min(calc(100vw-1rem),300px)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 shadow-2xl ring-1 ring-black/25 [scrollbar-width:thin]"
             role="dialog"
             aria-label="Document information"
           >
             <p className="viewer-type-label mb-2 text-blue-400/85">Document</p>
-            <dl className="viewer-type-caption mb-3 space-y-2 text-slate-300">
-              <div className="rounded-md border border-slate-600/55 bg-slate-800/50 px-2 py-1.5">
+            <dl className="viewer-type-caption mb-3 space-y-2 text-slate-600">
+              <div className="rounded-md border border-slate-300/55 bg-slate-100 px-2 py-1.5">
                 <dt className="text-[9px] font-medium uppercase tracking-wide text-slate-500">
                   File name
                 </dt>
-                <dd className="mt-0.5 break-all leading-snug text-slate-200">{fileName ?? "—"}</dd>
+                <dd className="mt-0.5 break-all leading-snug text-slate-700">{fileName ?? "—"}</dd>
               </div>
-              <div className="flex justify-between gap-2 border-b border-slate-600/45 pb-1.5">
+              <div className="flex justify-between gap-2 border-b border-slate-300/45 pb-1.5">
                 <dt className="text-slate-500">File size</dt>
-                <dd className="shrink-0 tabular-nums text-slate-200">
+                <dd className="shrink-0 tabular-nums text-slate-700">
                   {fileSizeBytes != null ? formatFileSize(fileSizeBytes) : "—"}
                 </dd>
               </div>
-              <div className="flex justify-between gap-2 border-b border-slate-600/45 pb-1.5">
+              <div className="flex justify-between gap-2 border-b border-slate-300/45 pb-1.5">
                 <dt className="text-slate-500">Pages</dt>
-                <dd className="tabular-nums text-slate-200">{numPages > 0 ? numPages : "—"}</dd>
+                <dd className="tabular-nums text-slate-700">{numPages > 0 ? numPages : "—"}</dd>
               </div>
-              <div className="flex justify-between gap-2 border-b border-slate-600/45 pb-1.5">
+              <div className="flex justify-between gap-2 border-b border-slate-300/45 pb-1.5">
                 <dt className="text-slate-500">Current page</dt>
-                <dd className="tabular-nums text-slate-200">
+                <dd className="tabular-nums text-slate-700">
                   {pdfUrl && numPages > 0 ? `${currentPage} / ${numPages}` : "—"}
                 </dd>
               </div>
@@ -759,22 +818,22 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   <dt className="text-[9px] font-medium uppercase tracking-wide text-slate-500">
                     This page size
                   </dt>
-                  <dd className="mt-0.5 whitespace-pre-line text-[10px] leading-snug text-slate-300">
+                  <dd className="mt-0.5 whitespace-pre-line text-[10px] leading-snug text-slate-600">
                     {pagePaperTitle}
                   </dd>
                 </div>
               )}
-              <div className="flex justify-between gap-2 border-b border-slate-600/45 pb-1.5">
+              <div className="flex justify-between gap-2 border-b border-slate-300/45 pb-1.5">
                 <dt className="text-slate-500">Zoom</dt>
                 <dd className="tabular-nums text-blue-400">{zoomPct}%</dd>
               </div>
-              <div className="flex justify-between gap-2 border-b border-slate-600/45 pb-1.5">
+              <div className="flex justify-between gap-2 border-b border-slate-300/45 pb-1.5">
                 <dt className="text-slate-500">Markups</dt>
-                <dd className="tabular-nums text-slate-200">{annotations.length}</dd>
+                <dd className="tabular-nums text-slate-700">{annotations.length}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-slate-500">Calibrated pages</dt>
-                <dd className="tabular-nums text-slate-200">
+                <dd className="tabular-nums text-slate-700">
                   {Object.keys(calibrationByPage).length}
                 </dd>
               </div>
@@ -797,7 +856,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   }
                   deleteAllMarkupsOnPage(currentPage - 1);
                 }}
-                className="rounded-lg border border-slate-600/60 bg-slate-800/50 px-2 py-1.5 text-[10px] font-medium text-slate-200 transition hover:bg-slate-700/75 disabled:opacity-40"
+                className="rounded-lg border border-slate-300/60 bg-slate-100 px-2 py-1.5 text-[10px] font-medium text-slate-700 transition hover:bg-slate-200/75 disabled:opacity-40"
               >
                 Clear drawings on this page
               </button>
@@ -814,7 +873,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   }
                   deleteAllMarkupsInDocument();
                 }}
-                className="rounded-lg border border-slate-600/60 bg-slate-800/50 px-2 py-1.5 text-[10px] font-medium text-slate-200 transition hover:bg-slate-700/75 disabled:opacity-40"
+                className="rounded-lg border border-slate-300/60 bg-slate-100 px-2 py-1.5 text-[10px] font-medium text-slate-700 transition hover:bg-slate-200/75 disabled:opacity-40"
               >
                 Clear all drawings (all pages)
               </button>
@@ -945,7 +1004,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   a.click();
                   URL.revokeObjectURL(a.href);
                 }}
-                className="rounded-lg border border-slate-600/60 bg-slate-800/50 px-2 py-1.5 text-[10px] font-medium text-slate-200 transition hover:bg-slate-700/75 disabled:opacity-40"
+                className="rounded-lg border border-slate-300/60 bg-slate-100 px-2 py-1.5 text-[10px] font-medium text-slate-700 transition hover:bg-slate-200/75 disabled:opacity-40"
               >
                 Download session JSON
               </button>
@@ -953,7 +1012,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                 type="button"
                 disabled={!pdfUrl || numPages < 1}
                 onClick={() => backupInputRef.current?.click()}
-                className="rounded-lg border border-slate-600/60 bg-slate-800/50 px-2 py-1.5 text-[10px] font-medium text-slate-200 transition hover:bg-slate-700/75 disabled:opacity-40"
+                className="rounded-lg border border-slate-300/60 bg-slate-100 px-2 py-1.5 text-[10px] font-medium text-slate-700 transition hover:bg-slate-200/75 disabled:opacity-40"
               >
                 Restore from JSON
               </button>
@@ -967,14 +1026,14 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             </p>
             <p className="mb-2 text-[10px] leading-snug text-slate-500">
               Markups, calibration, zoom, and page for this file are stored in{" "}
-              <strong className="font-medium text-slate-400">local storage</strong> on this device
+              <strong className="font-medium text-slate-500">local storage</strong> on this device
               only—not on a server.
             </p>
             <button
               type="button"
               disabled={!pdfUrl || numPages < 1}
               onClick={() => setClearMarkupDialogOpen(true)}
-              className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-red-900/60 bg-red-950/40 px-2 py-2 text-[11px] font-medium text-red-200 transition hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-40"
+              className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-2 py-2 text-[11px] font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Trash2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
               Clear saved markups &amp; calibration
@@ -993,7 +1052,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                   setDisplayName(e.target.value);
                   saveDisplayNameToStorage(e.target.value);
                 }}
-                className="mt-1 w-full rounded-md border border-slate-600/70 bg-slate-800/80 px-2 py-1.5 text-[11px] text-slate-100"
+                className="mt-1 w-full rounded-md border border-slate-300 bg-slate-100 px-2 py-1.5 text-[11px] text-slate-900"
               />
             </label>
             <label className="block text-[11px] text-slate-500">
@@ -1003,7 +1062,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value)}
                 title="Same ID in this browser syncs annotations across tabs"
-                className="mt-1 w-full rounded-md border border-slate-600/70 bg-slate-800/80 px-2 py-1.5 text-[11px] text-slate-100"
+                className="mt-1 w-full rounded-md border border-slate-300 bg-slate-100 px-2 py-1.5 text-[11px] text-slate-900"
               />
             </label>
             <p className="mt-2 text-[10px] leading-snug text-slate-500">
@@ -1016,44 +1075,44 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
       <div className="relative" ref={helpRef}>
         {helpOpen && (
           <div
-            className="fixed right-3 top-11 z-[60] w-[min(calc(100vw-1rem),320px)] rounded-xl border border-[#334155] bg-[#1E293B] p-3 text-[11px] leading-relaxed text-[#94A3B8] shadow-2xl ring-1 ring-black/25"
+            className="fixed right-3 top-11 z-[60] w-[min(calc(100vw-1rem),320px)] rounded-xl border border-slate-200 bg-white p-3 text-[11px] leading-relaxed text-slate-500 shadow-2xl ring-1 ring-black/25"
             role="tooltip"
           >
-            <p className="mb-2 font-semibold text-[#F8FAFC]">Shortcuts</p>
+            <p className="mb-2 font-semibold text-slate-900">Shortcuts</p>
             <p>
-              <kbd className="rounded border border-slate-500/60 bg-slate-700/90 px-1 font-mono text-slate-200">
+              <kbd className="rounded border border-slate-300/60 bg-slate-200/90 px-1 font-mono text-slate-700">
                 Esc
               </kbd>{" "}
               or right-click cancels in-progress markup, measure, or calibrate.
             </p>
             <p className="mt-2">
-              <kbd className="rounded border border-slate-500/60 bg-slate-700/90 px-1 font-mono text-slate-200">
+              <kbd className="rounded border border-slate-300/60 bg-slate-200/90 px-1 font-mono text-slate-700">
                 Ctrl+Z
               </kbd>{" "}
               undo markup / calibration;{" "}
-              <kbd className="rounded border border-slate-500/60 bg-slate-700/90 px-1 font-mono text-slate-200">
+              <kbd className="rounded border border-slate-300/60 bg-slate-200/90 px-1 font-mono text-slate-700">
                 Ctrl+Shift+Z
               </kbd>{" "}
               redo.
             </p>
             <p className="mt-2">
-              <kbd className="rounded border border-slate-500/60 bg-slate-700/90 px-1 font-mono text-slate-200">
+              <kbd className="rounded border border-slate-300/60 bg-slate-200/90 px-1 font-mono text-slate-700">
                 Enter
               </kbd>{" "}
               places a line segment when both ends are set, or ends the chain when only the start is
               set. Area / path: closes when enough points are set.
             </p>
             <p className="mt-2">
-              <kbd className="rounded border border-slate-500/60 bg-slate-700/90 px-1 font-mono text-slate-200">
+              <kbd className="rounded border border-slate-300/60 bg-slate-200/90 px-1 font-mono text-slate-700">
                 Delete
               </kbd>{" "}
               or{" "}
-              <kbd className="rounded border border-slate-500/60 bg-slate-700/90 px-1 font-mono text-slate-200">
+              <kbd className="rounded border border-slate-300/60 bg-slate-200/90 px-1 font-mono text-slate-700">
                 Backspace
               </kbd>{" "}
               removes the selected item (Measure mode).
             </p>
-            <p className="mt-3 border-t border-slate-600/45 pt-3 font-semibold text-slate-200">
+            <p className="mt-3 border-t border-slate-300/45 pt-3 font-semibold text-slate-700">
               Measure &amp; snap
             </p>
             <p className="mt-2">
@@ -1065,11 +1124,11 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
               Line ruler: drag the start or end handle, or the segment itself, to reposition before
               you place. Second click fixes the segment; move the pointer to slide the dimension
               line in or out, then click or{" "}
-              <kbd className="rounded border border-slate-500/60 bg-slate-700/90 px-1 font-mono text-slate-200">
+              <kbd className="rounded border border-slate-300/60 bg-slate-200/90 px-1 font-mono text-slate-700">
                 Enter
               </kbd>{" "}
               to place. The next segment starts from that end.{" "}
-              <kbd className="rounded border border-slate-500/60 bg-slate-700/90 px-1 font-mono text-slate-200">
+              <kbd className="rounded border border-slate-300/60 bg-slate-200/90 px-1 font-mono text-slate-700">
                 Enter
               </kbd>{" "}
               with only the first point stops the chain.
@@ -1080,7 +1139,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             </p>
             <p className="mt-2 text-slate-500">
               Pinch-zoom (trackpad) or{" "}
-              <kbd className="rounded border border-slate-500/60 bg-slate-700/90 px-1 font-mono text-slate-200">
+              <kbd className="rounded border border-slate-300/60 bg-slate-200/90 px-1 font-mono text-slate-700">
                 Ctrl
               </kbd>{" "}
               + wheel zooms. Session (markups, zoom, page) saves for the same file name in this
@@ -1092,7 +1151,7 @@ export function ViewerTopBar({ pdfDoc = null, exportCanvasRef }: TopBarProps = {
             </p>
             <button
               type="button"
-              className="mt-3 w-full rounded-lg border border-slate-600/60 bg-slate-800/85 py-2 text-[11px] font-medium text-slate-100 transition hover:bg-slate-700/90"
+              className="mt-3 w-full rounded-lg border border-slate-300/60 bg-slate-100/85 py-2 text-[11px] font-medium text-slate-900 transition hover:bg-slate-200/90"
               onClick={() => {
                 setShortcutsOpen(true);
                 setHelpOpen(false);

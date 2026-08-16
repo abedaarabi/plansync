@@ -14,8 +14,8 @@ export type EnterpriseResponsiveDialogProps = {
   ariaLabelledBy?: string;
   ariaDescribedBy?: string;
   overlayZClass?: string;
-  /** Light enterprise chrome vs dark viewer chrome */
-  variant?: "enterprise" | "viewer-dark";
+  /** App-shell chrome vs viewer chrome (both light; the viewer keeps a stronger scrim) */
+  variant?: "enterprise" | "viewer";
   panelClassName?: string;
   bodyClassName?: string;
   footerClassName?: string;
@@ -27,13 +27,13 @@ export type EnterpriseResponsiveDialogProps = {
 const VARIANT_PANEL: Record<NonNullable<EnterpriseResponsiveDialogProps["variant"]>, string> = {
   enterprise:
     "rounded-xl border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] shadow-2xl shadow-black/20",
-  "viewer-dark":
-    "rounded-xl border border-white/10 bg-slate-900 text-slate-100 shadow-2xl ring-1 ring-white/5",
+  viewer:
+    "rounded-xl border border-[var(--viewer-border)] bg-[var(--viewer-panel)] text-[var(--viewer-text)] shadow-xl ring-1 ring-slate-900/5",
 };
 
 const VARIANT_BACKDROP: Record<NonNullable<EnterpriseResponsiveDialogProps["variant"]>, string> = {
   enterprise: "bg-black/60 backdrop-blur-[2px]",
-  "viewer-dark": "bg-slate-950/70 backdrop-blur-sm",
+  viewer: "bg-slate-900/50 backdrop-blur-sm",
 };
 
 /**
@@ -128,7 +128,7 @@ export function EnterpriseResponsiveDialog({
         closeOnBackdrop={closeOnBackdrop}
         closeOnEscape={closeOnEscape}
         showDragHandle={showDragHandle}
-        variant={variant === "viewer-dark" ? "viewer-dark" : "enterprise"}
+        variant={variant === "viewer" ? "viewer" : "enterprise"}
         bodyClassName={bodyClassName}
         footerClassName={footerClassName}
         footer={footer}

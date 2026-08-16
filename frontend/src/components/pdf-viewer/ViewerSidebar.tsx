@@ -84,7 +84,7 @@ const markupShapes: {
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
-    <h3 className="mb-2.5 px-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#64748b]">
+    <h3 className="mb-2.5 px-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">
       {children}
     </h3>
   );
@@ -692,7 +692,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
           liftForBottomChrome={takeoffInventoryDrawerFromSidebar || sheetAiDrawerFromSidebar}
           onClose={closeDock}
         >
-          <div className="min-h-0 w-full px-2 py-2 text-[#F8FAFC] [scrollbar-width:thin]">
+          <div className="min-h-0 w-full px-2 py-2 text-slate-900 [scrollbar-width:thin]">
             {sidebarTab === "pages" && <SidebarPagesTab pdfDoc={pdfDoc} />}
             {sidebarTab === "outline" && <SidebarOutlineTab pdfDoc={pdfDoc} />}
             {sidebarTab === "issues" && showProTabs && <SidebarIssuesTab />}
@@ -702,8 +702,8 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                 <CalibrationGuide />
                 <CalibrateTargetRow />
                 <SectionTitle>Units &amp; calibration</SectionTitle>
-                <div className="mb-2 space-y-1.5 rounded-md border border-[#334155] bg-[#1E293B] p-1.5">
-                  <label className="flex items-center justify-between gap-1 text-[10px] text-[#94A3B8]">
+                <div className="mb-2 space-y-1.5 rounded-md border border-slate-200 bg-white p-1.5">
+                  <label className="flex items-center justify-between gap-1 text-[10px] text-slate-500">
                     <span>Units</span>
                     <select
                       value={measureUnit}
@@ -719,7 +719,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                       <option value="ft">ft</option>
                     </select>
                   </label>
-                  <p className="text-[8px] leading-snug text-[#64748B]">
+                  <p className="text-[8px] leading-snug text-slate-500">
                     Units and snap presets are saved with this document when you close the tab.
                   </p>
                   <button
@@ -727,7 +727,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                     disabled={!pdfUrl || !pageCal}
                     onClick={() => clearCalibration(pageIdx0)}
                     title="Remove scale for this page"
-                    className="w-full rounded-md border border-[#334155] py-1 text-[9px] font-medium text-[#94A3B8] transition hover:bg-[#334155] hover:text-[#F8FAFC] disabled:opacity-40"
+                    className="w-full rounded-md border border-slate-200 py-1 text-[9px] font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40"
                   >
                     Clear calibration
                   </button>
@@ -758,8 +758,8 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
             {sidebarTab === "draw" && (
               <div className="w-full">
                 <SectionTitle>Stroke color</SectionTitle>
-                <div className="mb-2 shrink-0 rounded-lg border border-[#334155] bg-[#1e293b]/80 p-2">
-                  <p className="mb-2 text-[9px] leading-snug text-[#64748b]">
+                <div className="mb-2 shrink-0 rounded-lg border border-slate-200 bg-white/80 p-2">
+                  <p className="mb-2 text-[9px] leading-snug text-slate-500">
                     Used for new markups while drawing. Selecting an existing shape updates this to
                     match its color.
                   </p>
@@ -782,7 +782,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                       type="color"
                       value={strokeColor}
                       onChange={(e) => setStrokeColor(e.target.value)}
-                      className="h-7 w-9 cursor-pointer rounded border border-[#475569] bg-transparent"
+                      className="h-7 w-9 cursor-pointer rounded border border-slate-200 bg-transparent"
                     />
                   </div>
                 </div>
@@ -803,11 +803,11 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                   !annotationIsIssueLinkedMarkup(selectedAnn) && (
                     <>
                       <SectionTitle>Selection</SectionTitle>
-                      <div className="mb-2 space-y-2 rounded-lg border border-blue-900/45 bg-[var(--viewer-surface-elevated)] p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] ring-1 ring-blue-800/45">
-                        <p className="text-[9px] font-medium text-blue-200/90">
+                      <div className="mb-2 space-y-2 rounded-lg border border-blue-200 bg-[var(--viewer-surface-elevated)] p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] ring-1 ring-blue-800/45">
+                        <p className="text-[9px] font-medium text-blue-700">
                           {annotationKindLabel(selectedAnn.type, selectedAnn.measurementKind)}
                         </p>
-                        <label className="flex items-center justify-between gap-1 text-[10px] text-slate-400">
+                        <label className="flex items-center justify-between gap-1 text-[10px] text-slate-500">
                           <span>{selectedAnn.type === "text" ? "Frame color" : "Color"}</span>
                           <input
                             type="color"
@@ -815,12 +815,12 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                             onChange={(e) =>
                               updateAnnotation(selectedAnn.id, { color: e.target.value })
                             }
-                            className="h-7 w-10 cursor-pointer rounded border border-slate-700 bg-transparent"
+                            className="h-7 w-10 cursor-pointer rounded border border-slate-200 bg-transparent"
                           />
                         </label>
                         {selectedAnn.type === "text" && (
                           <>
-                            <label className="flex items-center justify-between gap-1 text-[10px] text-slate-400">
+                            <label className="flex items-center justify-between gap-1 text-[10px] text-slate-500">
                               <span>Text color</span>
                               <input
                                 type="color"
@@ -828,10 +828,10 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                                 onChange={(e) =>
                                   updateAnnotation(selectedAnn.id, { textColor: e.target.value })
                                 }
-                                className="h-7 w-10 cursor-pointer rounded border border-slate-700 bg-transparent"
+                                className="h-7 w-10 cursor-pointer rounded border border-slate-200 bg-transparent"
                               />
                             </label>
-                            <label className="block text-[10px] text-slate-400">
+                            <label className="block text-[10px] text-slate-500">
                               <span className="mb-0.5 flex items-center justify-between">
                                 <span>Font size</span>
                                 <span className="tabular-nums text-slate-500">
@@ -851,10 +851,10 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                                 className="w-full accent-[var(--viewer-primary)]"
                               />
                             </label>
-                            <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-slate-400">
+                            <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-slate-500">
                               <input
                                 type="checkbox"
-                                className="rounded border-slate-600"
+                                className="rounded border-slate-300"
                                 checked={!!selectedAnn.textBoxFillFromFrame}
                                 onChange={(e) =>
                                   updateAnnotation(selectedAnn.id, {
@@ -866,7 +866,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                             </label>
                           </>
                         )}
-                        <label className="block text-[10px] text-slate-400">
+                        <label className="block text-[10px] text-slate-500">
                           <span className="mb-0.5 block">
                             {selectedAnn.type === "text" ? "Frame width" : "Width"}
                           </span>
@@ -883,7 +883,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                             className="w-full accent-[var(--viewer-primary)]"
                           />
                         </label>
-                        <label className="block text-[10px] text-slate-400">
+                        <label className="block text-[10px] text-slate-500">
                           <span className="mb-0.5 flex items-center justify-between">
                             <span>Rotation</span>
                             <span className="tabular-nums text-slate-500">
@@ -904,10 +904,10 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                           />
                         </label>
                         {selectedAnn.type === "line" && (
-                          <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-slate-400">
+                          <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-slate-500">
                             <input
                               type="checkbox"
-                              className="rounded border-slate-600"
+                              className="rounded border-slate-300"
                               checked={!!selectedAnn.arrowHead}
                               onChange={(e) =>
                                 updateAnnotation(selectedAnn.id, { arrowHead: e.target.checked })
@@ -921,7 +921,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                             type="button"
                             onClick={() => setEditTextOpen(true)}
                             title="Edit the comment text on the sheet"
-                            className="flex w-full items-center justify-center gap-1 rounded-md border border-slate-600 py-1.5 text-[10px] font-medium text-slate-200 hover:bg-slate-800"
+                            className="flex w-full items-center justify-center gap-1 rounded-md border border-slate-300 py-1.5 text-[10px] font-medium text-slate-700 hover:bg-slate-100"
                           >
                             <Type className="h-3 w-3" strokeWidth={2} />
                             Edit text
@@ -931,7 +931,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                           type="button"
                           onClick={() => removeAnnotation(selectedAnn.id)}
                           title="Delete this markup permanently"
-                          className="flex w-full items-center justify-center gap-1 rounded-md border border-red-900/60 bg-red-950/40 py-1.5 text-[10px] font-medium text-red-200 hover:bg-red-950/70"
+                          className="flex w-full items-center justify-center gap-1 rounded-md border border-red-200 bg-red-50 py-1.5 text-[10px] font-medium text-red-600 hover:bg-red-50"
                         >
                           <Trash2 className="h-3 w-3" strokeWidth={2} />
                           Delete
@@ -972,8 +972,8 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                 {sidebarTab === "draw" && tool === "annotate" && (
                   <>
                     <SectionTitle>Style</SectionTitle>
-                    <div className="mb-2 space-y-1.5 rounded-md border border-[#334155] bg-[#1E293B] p-1.5">
-                      <label className="block text-[10px] text-[#94A3B8]">
+                    <div className="mb-2 space-y-1.5 rounded-md border border-slate-200 bg-white p-1.5">
+                      <label className="block text-[10px] text-slate-500">
                         <span className="mb-0.5 block">Width</span>
                         <input
                           type="range"
@@ -985,10 +985,10 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                         />
                       </label>
                       {markupShape === "text" && (
-                        <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-[#94A3B8]">
+                        <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-slate-500">
                           <input
                             type="checkbox"
-                            className="rounded border-[#64748B] bg-[#1E293B] accent-[#2563EB]"
+                            className="rounded border-slate-300 bg-white accent-[#2563EB]"
                             checked={textBoxFillFromFrame}
                             onChange={(e) => setTextBoxFillFromFrame(e.target.checked)}
                           />
@@ -1000,7 +1000,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                 )}
 
                 <SectionTitle>All markups</SectionTitle>
-                <div className="mb-2 max-h-36 overflow-y-auto rounded-md border border-[#334155] bg-[#0F172A] [scrollbar-width:thin] sm:max-h-44">
+                <div className="mb-2 max-h-36 overflow-y-auto rounded-md border border-slate-200 bg-white [scrollbar-width:thin] sm:max-h-44">
                   {markupAnnotations.length === 0 ? (
                     <div className="p-1.5">
                       <DockEmptyState
@@ -1031,17 +1031,17 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                                 e.preventDefault();
                                 setListMenu({ clientX: e.clientX, clientY: e.clientY, id: a.id });
                               }}
-                              className="flex w-full items-start gap-2 rounded-md border border-transparent bg-[#1E293B] px-2 py-2 text-left text-[9px] leading-tight text-[#F8FAFC] transition hover:border-sky-500/25 hover:bg-sky-950/25"
+                              className="flex w-full items-start gap-2 rounded-md border border-transparent bg-white px-2 py-2 text-left text-[9px] leading-tight text-slate-900 transition hover:border-sky-500/25 hover:bg-sky-50"
                             >
-                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#334155] bg-[#0F172A] text-[#94A3B8]">
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500">
                                 <MuIcon className="h-4 w-4" strokeWidth={1.75} />
                               </span>
                               <span className="min-w-0 flex-1 pr-7">
-                                <span className="font-semibold text-[#94A3B8]">
+                                <span className="font-semibold text-slate-500">
                                   p.{a.pageIndex + 1}
                                 </span>{" "}
                                 {annotationKindLabel(a.type, a.measurementKind)}
-                                <span className="mt-0.5 block text-[8px] tabular-nums text-[#94A3B8]">
+                                <span className="mt-0.5 block text-[8px] tabular-nums text-slate-500">
                                   {formatAnnotationCreatedTooltip(a.createdAt)}
                                 </span>
                               </span>
@@ -1053,7 +1053,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                                 e.stopPropagation();
                                 removeAnnotation(a.id);
                               }}
-                              className="viewer-focus-ring absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md border border-red-900/40 bg-red-950/50 text-red-100 opacity-0 transition hover:bg-red-950/75 group-hover:opacity-100"
+                              className="viewer-focus-ring absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-700 opacity-0 transition hover:bg-red-50 group-hover:opacity-100"
                             >
                               <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
                             </button>
@@ -1064,10 +1064,10 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                   )}
                 </div>
 
-                <p className="rounded-md border border-slate-800/80 bg-slate-900/60 px-1.5 py-1.5 text-[9px] leading-snug text-slate-500">
-                  Map &amp; snap: top bar <strong className="text-slate-400">settings</strong> icon
+                <p className="rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[9px] leading-snug text-slate-500">
+                  Map &amp; snap: top bar <strong className="text-slate-500">settings</strong> icon
                   (right panel). Pan: top bar. Use the{" "}
-                  <strong className="text-slate-400">Measure</strong> tab for calibration and
+                  <strong className="text-slate-500">Measure</strong> tab for calibration and
                   dimensions.
                 </p>
               </div>
@@ -1093,7 +1093,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                         <p className="text-[9px] font-medium text-[var(--viewer-text)]">
                           {annotationKindLabel(selectedAnn.type, selectedAnn.measurementKind)}
                         </p>
-                        <label className="flex items-center justify-between gap-1 text-[10px] text-slate-400">
+                        <label className="flex items-center justify-between gap-1 text-[10px] text-slate-500">
                           <span>Color</span>
                           <input
                             type="color"
@@ -1101,10 +1101,10 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                             onChange={(e) =>
                               updateAnnotation(selectedAnn.id, { color: e.target.value })
                             }
-                            className="h-7 w-10 cursor-pointer rounded border border-slate-700 bg-transparent"
+                            className="h-7 w-10 cursor-pointer rounded border border-slate-200 bg-transparent"
                           />
                         </label>
-                        <label className="block text-[10px] text-slate-400">
+                        <label className="block text-[10px] text-slate-500">
                           <span className="mb-0.5 block">Line width</span>
                           <input
                             type="range"
@@ -1119,18 +1119,18 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                             className="viewer-range w-full"
                           />
                         </label>
-                        <label className="flex items-center justify-between gap-1 text-[10px] text-slate-400">
+                        <label className="flex items-center justify-between gap-1 text-[10px] text-slate-500">
                           <span>Label color</span>
                           <input
                             type="color"
-                            value={selectedAnn.textColor ?? "#475569"}
+                            value={selectedAnn.textColor ?? "#E2E8F0"}
                             onChange={(e) =>
                               updateAnnotation(selectedAnn.id, { textColor: e.target.value })
                             }
-                            className="h-7 w-10 cursor-pointer rounded border border-slate-700 bg-transparent"
+                            className="h-7 w-10 cursor-pointer rounded border border-slate-200 bg-transparent"
                           />
                         </label>
-                        <label className="block text-[10px] text-slate-400">
+                        <label className="block text-[10px] text-slate-500">
                           <span className="mb-0.5 flex items-center justify-between">
                             <span>Label size</span>
                             <span className="tabular-nums text-slate-500">
@@ -1152,7 +1152,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                           type="button"
                           onClick={() => removeAnnotation(selectedAnn.id)}
                           title="Delete this measure permanently"
-                          className="flex w-full items-center justify-center gap-1 rounded-md border border-red-900/60 bg-red-950/40 py-1.5 text-[10px] font-medium text-red-200 hover:bg-red-950/70"
+                          className="flex w-full items-center justify-center gap-1 rounded-md border border-red-200 bg-red-50 py-1.5 text-[10px] font-medium text-red-600 hover:bg-red-50"
                         >
                           <Trash2 className="h-3 w-3" strokeWidth={2} />
                           Delete
@@ -1162,7 +1162,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                   )}
 
                 {tool === "select" && selectedOnPageIds.length === 0 && (
-                  <p className="mb-2 rounded-md border border-slate-800/80 bg-slate-900/40 px-1.5 py-1.5 text-[9px] leading-snug text-slate-500">
+                  <p className="mb-2 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1.5 text-[9px] leading-snug text-slate-500">
                     Click a measure on the page. Drag to move; drag handles to resize. ⌘/Ctrl+click
                     or Shift+click for multi-select; drag a box on empty space. Label options appear
                     here.
@@ -1194,17 +1194,17 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                   })}
                 </div>
                 <SectionTitle>Measure style</SectionTitle>
-                <div className="mb-2 space-y-1.5 rounded-md border border-[#334155] bg-[#1E293B] p-1.5">
-                  <label className="flex items-center justify-between gap-1 text-[10px] text-[#94A3B8]">
+                <div className="mb-2 space-y-1.5 rounded-md border border-slate-200 bg-white p-1.5">
+                  <label className="flex items-center justify-between gap-1 text-[10px] text-slate-500">
                     <span>Line color</span>
                     <input
                       type="color"
                       value={strokeColor}
                       onChange={(e) => setStrokeColor(e.target.value)}
-                      className="h-7 w-10 cursor-pointer rounded border border-[#334155] bg-transparent"
+                      className="h-7 w-10 cursor-pointer rounded border border-slate-200 bg-transparent"
                     />
                   </label>
-                  <label className="block text-[10px] text-[#94A3B8]">
+                  <label className="block text-[10px] text-slate-500">
                     <span className="mb-0.5 block">Line width</span>
                     <input
                       type="range"
@@ -1215,19 +1215,19 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                       className="viewer-range w-full"
                     />
                   </label>
-                  <label className="flex items-center justify-between gap-1 text-[10px] text-[#94A3B8]">
+                  <label className="flex items-center justify-between gap-1 text-[10px] text-slate-500">
                     <span>Label color</span>
                     <input
                       type="color"
                       value={measureLabelColor}
                       onChange={(e) => setMeasureLabelColor(e.target.value)}
-                      className="h-7 w-10 cursor-pointer rounded border border-[#334155] bg-transparent"
+                      className="h-7 w-10 cursor-pointer rounded border border-slate-200 bg-transparent"
                     />
                   </label>
-                  <label className="block text-[10px] text-[#94A3B8]">
+                  <label className="block text-[10px] text-slate-500">
                     <span className="mb-0.5 flex items-center justify-between">
                       <span>Label size</span>
-                      <span className="tabular-nums text-[#94A3B8]">{measureLabelFontSize}px</span>
+                      <span className="tabular-nums text-slate-500">{measureLabelFontSize}px</span>
                     </span>
                     <input
                       type="range"
@@ -1241,7 +1241,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                 </div>
 
                 <SectionTitle>All measures</SectionTitle>
-                <div className="mb-2 max-h-36 overflow-y-auto rounded-md border border-[#334155] bg-[#0F172A] [scrollbar-width:thin] sm:max-h-44">
+                <div className="mb-2 max-h-36 overflow-y-auto rounded-md border border-slate-200 bg-white [scrollbar-width:thin] sm:max-h-44">
                   {measureAnnotations.length === 0 ? (
                     <div className="p-1.5">
                       <DockEmptyState
@@ -1272,7 +1272,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                                 e.preventDefault();
                                 setListMenu({ clientX: e.clientX, clientY: e.clientY, id: a.id });
                               }}
-                              className="flex w-full items-start gap-1 rounded-md bg-[#1E293B] px-1.5 py-1.5 text-left text-[9px] leading-tight text-[#F8FAFC] hover:bg-[#334155]"
+                              className="flex w-full items-start gap-1 rounded-md bg-white px-1.5 py-1.5 text-left text-[9px] leading-tight text-slate-900 hover:bg-slate-100"
                             >
                               <MkIcon
                                 className="mt-0.5 h-3 w-3 shrink-0 text-[var(--viewer-primary)]/90"
@@ -1283,7 +1283,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                                   p.{a.pageIndex + 1}
                                 </span>{" "}
                                 {annotationKindLabel(a.type, a.measurementKind)}
-                                <span className="mt-0.5 block text-[8px] tabular-nums text-[#94A3B8]">
+                                <span className="mt-0.5 block text-[8px] tabular-nums text-slate-500">
                                   {formatAnnotationCreatedTooltip(a.createdAt)}
                                 </span>
                               </span>
@@ -1295,7 +1295,7 @@ export function ViewerSidebar({ pdfDoc }: ViewerSidebarProps) {
                   )}
                 </div>
 
-                <p className="rounded-md border border-[#334155] bg-[#1E293B]/80 px-2 py-2 text-[9px] italic leading-snug text-[#94A3B8]">
+                <p className="rounded-md border border-slate-200 bg-white/80 px-2 py-2 text-[9px] italic leading-snug text-slate-500">
                   Map &amp; snap are under Sheet settings (top bar). Pan and zoom from the top
                   toolbar.
                 </p>

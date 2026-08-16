@@ -3314,7 +3314,7 @@ export function PdfPageView({
               />
               {selectedLinkedIssueLabel && selectionBounds ? (
                 <div
-                  className="pointer-events-none absolute z-[6] max-w-[min(240px,72vw)] truncate rounded-md border border-sky-500/40 bg-[#0F172A]/95 px-2 py-0.5 text-[10px] font-medium leading-tight text-sky-100 shadow-md ring-1 ring-sky-500/20 backdrop-blur-sm print:hidden"
+                  className="pointer-events-none absolute z-[6] max-w-[min(240px,72vw)] truncate rounded-md border border-sky-500/40 bg-white/95 px-2 py-0.5 text-[10px] font-medium leading-tight text-sky-700 shadow-md ring-1 ring-sky-500/20 backdrop-blur-sm print:hidden"
                   style={{
                     left: selectionBounds.minX,
                     top: Math.max(2, selectionBounds.minY - 24),

@@ -1,6 +1,13 @@
 export type BimLoadPhase =
   | { kind: "resolving" }
   | {
+      /** The engine is preparing source data; this is not a network download yet. */
+      kind: "preparing";
+      label?: string;
+      index?: number;
+      total?: number;
+    }
+  | {
       kind: "downloading";
       label?: string;
       index?: number;
@@ -33,7 +40,7 @@ export function overallLoadFraction(
 /** `fast` = fragments/cache reopen; `convert` = client IFC conversion. */
 export type BimLoadPath = "fast" | "convert";
 
-export type BimLoadStepId = "resolve" | "download" | "convert" | "ready";
+export type BimLoadStepId = "resolve" | "prepare" | "download" | "convert" | "ready";
 export type BimLoadStepState = "done" | "active" | "pending";
 
 export type BimLoadStep = {
@@ -42,12 +49,13 @@ export type BimLoadStep = {
   state: BimLoadStepState;
 };
 
-const FAST_STEPS: BimLoadStepId[] = ["resolve", "download", "ready"];
-const CONVERT_STEPS: BimLoadStepId[] = ["resolve", "download", "convert", "ready"];
+const FAST_STEPS: BimLoadStepId[] = ["resolve", "prepare", "download", "ready"];
+const CONVERT_STEPS: BimLoadStepId[] = ["resolve", "prepare", "download", "convert", "ready"];
 
 const STEP_LABELS: Record<BimLoadStepId, string> = {
-  resolve: "Prepare",
-  download: "Load",
+  resolve: "Open",
+  prepare: "Prepare",
+  download: "Download",
   convert: "Convert",
   ready: "Ready",
 };
@@ -98,6 +106,7 @@ function stepOrder(path: BimLoadPath): BimLoadStepId[] {
 
 function activeStepId(phase: BimLoadPhase, path: BimLoadPath): BimLoadStepId {
   if (phase.kind === "resolving") return "resolve";
+  if (phase.kind === "preparing") return "prepare";
   if (phase.kind === "converting") return "convert";
   if (phase.kind === "downloading") return "download";
   // Fallback — converting path without a convert phase still lands on load.
@@ -111,10 +120,11 @@ export function buildLoadSteps(
   const path = opts?.path ?? "fast";
   const order = stepOrder(path);
   if (opts?.complete) {
+    // Ready only becomes active once load finishes — keep it highlighted through the exit beat.
     return order.map((id) => ({
       id,
       label: STEP_LABELS[id],
-      state: "done" as const,
+      state: id === "ready" ? ("active" as const) : ("done" as const),
     }));
   }
   const active = activeStepId(phase, path);
@@ -146,20 +156,26 @@ export function stepProgressPercent(phase: BimLoadPhase): number | null {
   return null;
 }
 
+function modelOrdinal(index?: number, total?: number): string | null {
+  if (total == null || total <= 1) return null;
+  return ` ${(index ?? 0) + 1} of ${total}`;
+}
+
 export function phaseHeadline(phase: BimLoadPhase, path: BimLoadPath = "fast"): string {
-  if (phase.kind === "resolving") return "Preparing workspace";
+  if (phase.kind === "resolving") return "Opening 3D workspace";
+  if (phase.kind === "preparing") {
+    return `Preparing model${modelOrdinal(phase.index, phase.total) ?? ""}`;
+  }
   if (phase.kind === "converting") {
-    if (phase.total != null && phase.total > 1) {
-      return `Converting model ${(phase.index ?? 0) + 1} of ${phase.total}`;
-    }
-    return "Converting model";
+    return `Converting model${modelOrdinal(phase.index, phase.total) ?? ""}`;
   }
-  if (phase.total != null && phase.total > 1) {
-    return path === "convert"
-      ? `Downloading model ${(phase.index ?? 0) + 1} of ${phase.total}`
-      : `Loading model ${(phase.index ?? 0) + 1} of ${phase.total}`;
-  }
-  return path === "convert" ? "Downloading model" : "Loading model";
+  const ordinal = modelOrdinal(phase.index, phase.total) ?? "";
+  return path === "convert" ? `Downloading model${ordinal}` : `Loading model${ordinal}`;
+}
+
+/** Headline while the overlay is finishing / Ready is active. */
+export function completeHeadline(): string {
+  return "Ready";
 }
 
 export function shouldShowFirstConvertTip(): boolean {

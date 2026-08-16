@@ -53,6 +53,13 @@ import {
 import { assertIfcBytesIntact } from "@/lib/bim/ifcBytes";
 import { convertIfcInWorker } from "@/lib/bim/ifcConvertClient";
 import { getBimCameraNavigationProfile } from "@/lib/bim/cameraNavigation";
+import {
+  MEASURE_ACCENT,
+  MEASURE_LABEL_SELECTED_CLASS,
+  MEASURE_LINE_WIDTH,
+  createMeasureEndpointElement,
+  observeMeasurementLabels,
+} from "@/lib/bim/measurementStyle";
 import { bimViewportPixelRatio } from "@/lib/bim/viewportPixelRatio";
 import { ViewCubeOverlay } from "@/lib/bim/viewCube";
 import {
@@ -186,6 +193,8 @@ export class BimEngine {
 
   private tool: BimTool = "select";
   private cameraMode: BimCameraMode = "orbit";
+  /** Camera after the initial first-geometry fit — Home restores this, not a live re-fit. */
+  private homeCameraState: Record<string, unknown> | null = null;
 
   /** name → ModelIdMap resolved once after classification. */
   private storeyMaps = new Map<string, OBC.ModelIdMap>();
@@ -214,6 +223,7 @@ export class BimEngine {
   private walkPointerLocked = false;
   private walkShiftHeld = false;
   private resizeObserver: ResizeObserver | null = null;
+  private disposeMeasureLabelObserver: (() => void) | null = null;
   private pointerDown = { x: 0, y: 0 };
   private pointerMoved = false;
   private longPressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -229,6 +239,8 @@ export class BimEngine {
     active: boolean;
     additive: boolean;
   } | null = null;
+  /** Measurement picked with the pointer — Delete removes it. */
+  private measureSelection: { labelEl: HTMLElement; remove: () => void } | null = null;
   private disposed = false;
   private rimLight: THREE.DirectionalLight | null = null;
   private hemiLight: THREE.HemisphereLight | null = null;
@@ -1894,11 +1906,12 @@ export class BimEngine {
     world: OBC.SimpleWorld<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBF.PostproductionRenderer>,
   ): void {
     const components = this.mustComponents();
-    const accent = new THREE.Color(MARKUP_ACCENT);
+    const accent = new THREE.Color(MEASURE_ACCENT);
+    const clipAccent = new THREE.Color(MARKUP_ACCENT);
 
     const clipper = components.get(OBC.Clipper);
     clipper.setup({
-      color: accent,
+      color: clipAccent,
       opacity: 0,
       size: 8,
     });
@@ -1926,6 +1939,10 @@ export class BimEngine {
       m.delay = 120;
       m.pickMode = OBF.MeasurementPickMode.MOUSE_MOVE;
       m.snappings = snap;
+      // Basic lines ignore width in WebGL and read as 1px hairlines on HiDPI.
+      m.lineType = OBF.MeasurementLineType.Fat;
+      m.lineWidth = MEASURE_LINE_WIDTH;
+      m.linesEndpointElement = createMeasureEndpointElement();
     };
 
     configure(components.get(OBF.LengthMeasurement));
@@ -1933,6 +1950,8 @@ export class BimEngine {
     configure(components.get(OBF.AngleMeasurement));
 
     components.get(OBF.LengthMeasurement).mode = "free";
+    // Keep the canvas clean until the user opens measure tools.
+    this.setMeasurementsVisible(false);
   }
 
   /** Pass live clip planes to fragment worker meshes + refresh on plane changes. */
@@ -2930,6 +2949,8 @@ export class BimEngine {
       css2d.style.width = "100%";
       css2d.style.height = "100%";
       css2d.style.pointerEvents = "none";
+      this.disposeMeasureLabelObserver?.();
+      this.disposeMeasureLabelObserver = observeMeasurementLabels(css2d);
     }
 
     this.resizeObserver?.disconnect();
@@ -3475,12 +3496,14 @@ export class BimEngine {
   // fallow-ignore-next-line complexity
   setTool(tool: BimTool): void {
     this.tool = tool;
+    this.clearMeasureSelection();
     const components = this.mustComponents();
     const clipper = components.get(OBC.Clipper);
     clipper.enabled = tool === "clip";
     components.get(OBF.LengthMeasurement).enabled = tool === "length";
     components.get(OBF.AreaMeasurement).enabled = tool === "area";
     components.get(OBF.AngleMeasurement).enabled = tool === "angle";
+    this.setMeasurementsVisible(tool === "length" || tool === "area" || tool === "angle");
     const highlighter = components.get(OBF.Highlighter);
     highlighter.config.selectEnabled = tool === "select";
     highlighter.enabled = true;
@@ -3498,6 +3521,20 @@ export class BimEngine {
     }
     this.applyBim360Navigation();
     this.events.onToolChange?.(tool);
+  }
+
+  /**
+   * Shows or hides all length / area / angle graphics. Keeps the model clean
+   * until the measure tools (or measure flyout) are open.
+   */
+  setMeasurementsVisible(visible: boolean): void {
+    const components = this.components;
+    if (!components) return;
+    components.get(OBF.LengthMeasurement).visible = visible;
+    components.get(OBF.AreaMeasurement).visible = visible;
+    components.get(OBF.AngleMeasurement).visible = visible;
+    if (!visible) this.clearMeasureSelection();
+    this.bumpRender();
   }
 
   // fallow-ignore-next-line complexity
@@ -3524,9 +3561,76 @@ export class BimEngine {
   deleteMeasurements(): void {
     const components = this.components;
     if (!components) return;
+    this.clearMeasureSelection();
     components.get(OBF.LengthMeasurement).list.clear();
     components.get(OBF.AreaMeasurement).list.clear();
     components.get(OBF.AngleMeasurement).list.clear();
+  }
+
+  /**
+   * Length lines and area fills expose pickable meshes, so they can be selected
+   * with a click. Angle visuals are private to the tool — those still delete
+   * from under the cursor.
+   */
+  private pickMeasurementAt(e: PointerEvent): { labelEl: HTMLElement; remove: () => void } | null {
+    const world = this.world;
+    const components = this.components;
+    if (!world || !components) return null;
+
+    const lengths = components.get(OBF.LengthMeasurement);
+    const areas = components.get(OBF.AreaMeasurement);
+    const dimensions = [...lengths.lines];
+    const fills = [...areas.fills];
+    if (dimensions.length === 0 && fills.length === 0) return null;
+
+    const targets = [...dimensions.map((d) => d.boundingBox), ...fills.map((f) => f.three)];
+    const hit = components
+      .get(OBC.Raycasters)
+      .get(world)
+      .castRayToObjects(targets, this.pointerNdc(e));
+    if (!hit) return null;
+
+    const dimension = dimensions.find((d) => d.boundingBox === hit.object);
+    if (dimension) {
+      return {
+        labelEl: dimension.label.three.element,
+        remove: () => lengths.list.delete(dimension.line),
+      };
+    }
+    const fill = fills.find((f) => f.three === hit.object);
+    if (fill) {
+      return { labelEl: fill.label.three.element, remove: () => areas.list.delete(fill.area) };
+    }
+    return null;
+  }
+
+  /** Click-selects the measurement under the pointer. True when one was hit. */
+  private selectMeasurementAt(e: PointerEvent): boolean {
+    const picked = this.pickMeasurementAt(e);
+    this.clearMeasureSelection();
+    if (!picked) return false;
+    picked.labelEl.classList.add(MEASURE_LABEL_SELECTED_CLASS);
+    this.measureSelection = picked;
+    this.bumpRender();
+    return true;
+  }
+
+  private clearMeasureSelection(): void {
+    const selected = this.measureSelection;
+    if (!selected) return;
+    selected.labelEl.classList.remove(MEASURE_LABEL_SELECTED_CLASS);
+    this.measureSelection = null;
+    this.bumpRender();
+  }
+
+  /** Removes the click-selected measurement. True when something was deleted. */
+  private deleteSelectedMeasurement(): boolean {
+    const selected = this.measureSelection;
+    if (!selected) return false;
+    this.clearMeasureSelection();
+    selected.remove();
+    this.bumpRender();
+    return true;
   }
 
   deleteClippingPlanes(): void {
@@ -3552,13 +3656,30 @@ export class BimEngine {
 
     if (e.key === "Escape") {
       if (this.walkPointerLocked) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         this.exitWalkPointerLock();
         return;
       }
-      e.preventDefault();
-      this.activeMeasurement()?.cancelCreation();
-      // Same as context-menu "Show all objects": restore visibility, clip, selection.
-      void this.showAllElements();
+      const measuring = this.activeMeasurement();
+      if (measuring) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        measuring.cancelCreation();
+        this.setTool("select");
+        return;
+      }
+      if (this.measureSelection) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        this.clearMeasureSelection();
+        return;
+      }
+      // Markup / clip / measure: exit tool, but let the shell also clear flyouts.
+      if (this.tool !== "select") {
+        e.preventDefault();
+        this.setTool("select");
+      }
       return;
     }
 
@@ -3599,6 +3720,10 @@ export class BimEngine {
     }
 
     if (e.key === "Delete" || e.key === "Backspace") {
+      if (this.deleteSelectedMeasurement()) {
+        e.preventDefault();
+        return;
+      }
       if (this.tool === "select" && this.selectedGuids.size > 0) {
         void this.hideSelection();
         return;
@@ -3858,6 +3983,8 @@ export class BimEngine {
     if (!world?.renderer || !components) return;
 
     if (this.tool === "select" && this.cameraMode !== "walk") {
+      // A measurement under the cursor wins over element picking so it can be deleted.
+      if (this.selectMeasurementAt(e)) return;
       this.pickSelection(e);
       return;
     }
@@ -4262,6 +4389,86 @@ export class BimEngine {
       world.camera.controls.setOrbitPoint(sphere.center.x, sphere.center.y, sphere.center.z);
     } else {
       await world.camera.fitToItems();
+    }
+  }
+
+  /** Snapshot the current camera as the Home view (call after initial fit). */
+  captureHomeCamera(): void {
+    if (this.disposed || !this.world) return;
+    const state = this.getCameraState();
+    if (!Array.isArray(state.position) || !Array.isArray(state.target)) return;
+    this.homeCameraState = state;
+  }
+
+  /**
+   * Restore the first-load Home camera with an eased fly-back; falls back to an
+   * animated fit when no home pose was captured yet.
+   */
+  // fallow-ignore-next-line unused-class-member
+  async goHome(): Promise<void> {
+    if (this.disposed) return;
+    const world = this.world;
+    const controls = world?.camera?.controls;
+    const home = this.homeCameraState;
+    const pos = home?.position;
+    const tgt = home?.target;
+
+    if (!world || !controls || !Array.isArray(pos) || !Array.isArray(tgt)) {
+      await this.flyToFitView();
+      return;
+    }
+
+    if (home?.projection === "Orthographic" || home?.projection === "Perspective") {
+      if (world.camera.projection.current !== home.projection) {
+        await world.camera.projection.set(home.projection);
+        this.renderEffects?.updateCamera();
+      }
+    }
+
+    const prevSmooth = controls.smoothTime;
+    controls.smoothTime = Math.max(
+      prevSmooth,
+      getBimCameraNavigationProfile(this.appearance.navigationSpeed).flyToSmoothTime,
+    );
+    try {
+      const sphere = this.getModelBoundingSphere();
+      if (sphere && sphere.radius > 0 && Number.isFinite(sphere.radius)) {
+        this.adjustCameraClipping(sphere);
+      }
+      await controls.setLookAt(
+        pos[0] as number,
+        pos[1] as number,
+        pos[2] as number,
+        tgt[0] as number,
+        tgt[1] as number,
+        tgt[2] as number,
+        true,
+      );
+      controls.setOrbitPoint(tgt[0] as number, tgt[1] as number, tgt[2] as number);
+      this.bumpRender();
+    } finally {
+      if (!this.disposed) controls.smoothTime = prevSmooth;
+    }
+  }
+
+  /** Animated variant of {@link fitToView} used when no home pose exists. */
+  private async flyToFitView(): Promise<void> {
+    const controls = this.world?.camera?.controls;
+    const sphere = this.getModelBoundingSphere();
+    if (!controls || !sphere || !(sphere.radius > 0) || !Number.isFinite(sphere.radius)) {
+      await this.fitToView();
+      return;
+    }
+    const prevSmooth = controls.smoothTime;
+    controls.smoothTime = Math.max(
+      prevSmooth,
+      getBimCameraNavigationProfile(this.appearance.navigationSpeed).flyToSmoothTime,
+    );
+    try {
+      await this.focusCameraOnSphere(sphere);
+      this.bumpRender();
+    } finally {
+      if (!this.disposed) controls.smoothTime = prevSmooth;
     }
   }
 
@@ -6630,6 +6837,7 @@ export class BimEngine {
   // fallow-ignore-next-line complexity
   dispose(): void {
     this.disposed = true;
+    this.homeCameraState = null;
     this.selectionLoadId += 1;
     this.selectionDetailsCache.clear();
     this.exitWalkPointerLock();
@@ -6653,6 +6861,8 @@ export class BimEngine {
     }
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    this.disposeMeasureLabelObserver?.();
+    this.disposeMeasureLabelObserver = null;
     if (this.world?.renderer && this.onViewportOverlayAfterUpdate) {
       this.world.renderer.onAfterUpdate.remove(this.onViewportOverlayAfterUpdate);
     }

@@ -1,7 +1,9 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ViewerMarkupLockActions } from "./ViewerMarkupLockActions";
 
 type Props = {
   clientX: number;
@@ -13,6 +15,10 @@ type Props = {
   onToggleLock: () => void;
   onDelete: () => void;
 };
+
+const dangerItemClass =
+  "flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50";
+const dangerIconClass = "h-3.5 w-3.5 shrink-0 text-red-600";
 
 export function AnnotationListContextMenu({
   clientX,
@@ -62,51 +68,26 @@ export function AnnotationListContextMenu({
       ref={ref}
       role="menu"
       aria-label="Markup actions"
-      className="fixed z-[200] min-w-[10rem] rounded-lg border border-slate-600/90 bg-slate-900 py-1 text-[13px] text-slate-100 shadow-2xl ring-1 ring-black/50"
+      className="fixed z-[200] min-w-[10rem] rounded-lg border border-slate-300/90 bg-white py-1 text-[13px] text-slate-900 shadow-2xl ring-1 ring-slate-900/5"
       style={{ left: pos.left, top: pos.top }}
     >
+      <ViewerMarkupLockActions
+        locked={locked}
+        onCopy={onCopy}
+        onDuplicate={onDuplicate}
+        onToggleLock={onToggleLock}
+        onClose={onClose}
+      />
       <button
         type="button"
         role="menuitem"
-        className="flex w-full items-center px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
-        onClick={() => {
-          onCopy();
-          onClose();
-        }}
-      >
-        Copy
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        className="flex w-full items-center px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
-        onClick={() => {
-          onDuplicate();
-          onClose();
-        }}
-      >
-        Duplicate
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        className="flex w-full items-center px-3 py-2 text-left text-slate-100 hover:bg-slate-800"
-        onClick={() => {
-          onToggleLock();
-          onClose();
-        }}
-      >
-        {locked ? "Unlock" : "Lock"}
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        className="flex w-full items-center px-3 py-2 text-left text-red-200 hover:bg-red-950/50"
+        className={dangerItemClass}
         onClick={() => {
           onDelete();
           onClose();
         }}
       >
+        <Trash2 className={dangerIconClass} aria-hidden strokeWidth={1.75} />
         Delete
       </button>
     </div>

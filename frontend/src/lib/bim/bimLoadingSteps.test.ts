@@ -35,17 +35,32 @@ describe("bimLoadingSteps", () => {
 
   it("uses a short ladder for fast reopen (no Convert)", () => {
     const steps = buildLoadSteps({ kind: "downloading", fraction: 0.4 }, { path: "fast" });
-    expect(steps.map((s) => s.id)).toEqual(["resolve", "download", "ready"]);
-    expect(steps.map((s) => s.label)).toEqual(["Prepare", "Load", "Ready"]);
-    expect(steps.map((s) => s.state)).toEqual(["done", "active", "pending"]);
+    expect(steps.map((s) => s.id)).toEqual(["resolve", "prepare", "download", "ready"]);
+    expect(steps.map((s) => s.label)).toEqual(["Open", "Prepare", "Download", "Ready"]);
+    expect(steps.map((s) => s.state)).toEqual(["done", "done", "active", "pending"]);
     expect(phaseHeadline({ kind: "downloading" }, "fast")).toBe("Loading model");
+  });
+
+  it("keeps source preparation distinct from downloading", () => {
+    const steps = buildLoadSteps({ kind: "preparing" }, { path: "fast" });
+    expect(steps.map((s) => s.state)).toEqual(["done", "active", "pending", "pending"]);
+    expect(phaseHeadline({ kind: "preparing", index: 1, total: 4 })).toBe("Preparing model 2 of 4");
+  });
+
+  it("activates Ready when the overlay completes", () => {
+    const steps = buildLoadSteps(
+      { kind: "downloading", fraction: 1 },
+      { complete: true, path: "fast" },
+    );
+    expect(steps.map((s) => s.state)).toEqual(["done", "done", "done", "active"]);
+    expect(steps.at(-1)?.id).toBe("ready");
   });
 
   it("includes Convert only on the convert path", () => {
     const steps = buildLoadSteps({ kind: "converting", fraction: 0.4 }, { path: "convert" });
-    expect(steps.map((s) => s.id)).toEqual(["resolve", "download", "convert", "ready"]);
-    expect(steps.map((s) => s.state)).toEqual(["done", "done", "active", "pending"]);
-    expect(phaseHeadline({ kind: "resolving" })).toBe("Preparing workspace");
+    expect(steps.map((s) => s.id)).toEqual(["resolve", "prepare", "download", "convert", "ready"]);
+    expect(steps.map((s) => s.state)).toEqual(["done", "done", "done", "active", "pending"]);
+    expect(phaseHeadline({ kind: "resolving" })).toBe("Opening 3D workspace");
     expect(stepProgressPercent({ kind: "converting", fraction: 0.42 })).toBe(42);
   });
 

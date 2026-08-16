@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ListChecks, X } from "lucide-react";
+import { ListChecks, X } from "lucide-react";
 import { displayLengthToMm, mmToDisplayLength, type MeasureUnit } from "@/lib/coords";
 import { fileFingerprint } from "@/lib/sessionPersistence";
 import { useViewerStore } from "@/store/viewerStore";
+import { ViewerGuideSteps } from "./ViewerGuideSteps";
 
 function storageKeyForFile(fileName: string | null, numPages: number) {
   return `plansync-cal-guide-${fileFingerprint(fileName, numPages)}`;
@@ -43,7 +44,7 @@ export function CalibrateTargetRow() {
   if (tool !== "calibrate") return null;
 
   return (
-    <div className="viewer-card mb-2 border border-slate-700/60 p-2">
+    <div className="viewer-card mb-2 border border-slate-200 p-2">
       <label className="block text-[9px] font-medium text-slate-500">
         Target length (optional)
         <span className="mt-0.5 block font-normal leading-snug text-slate-600">
@@ -54,7 +55,7 @@ export function CalibrateTargetRow() {
             type="number"
             min={0}
             step="any"
-            className="min-w-0 flex-1 rounded border border-slate-600 bg-slate-900/80 px-1.5 py-1 text-[10px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-blue-500/50"
+            className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-1.5 py-1 text-[10px] text-slate-700 outline-none placeholder:text-slate-600 focus:border-blue-500/50"
             placeholder="e.g. 5000"
             value={targetInputDisplay(calibrateTargetMm, measureUnit)}
             onChange={(e) => {
@@ -124,18 +125,21 @@ export function CalibrationGuide() {
 
   const steps = [
     {
+      key: "first",
       title: "First end of a known length",
       detail:
         "Choose a printed dimension, scale bar, or grid — click one end (snaps to PDF geometry when snap is on).",
       done: hasFirst,
     },
     {
+      key: "second",
       title: "Second end",
       detail:
         "Move the pointer to the other end — the line follows smoothly over the drawing; geometry gently pulls the segment (same as Measure). Hold Shift to lock horizontal or vertical from the first point. Hold Option (Alt) to turn off snap and use the cursor exactly. Click along the same straight edge.",
       done: hasSecond,
     },
     {
+      key: "enter",
       title: "Enter the real distance",
       detail: `When prompted, type the length in ${measureUnit} and choose Apply. The last value you used on this page is prefilled when you calibrate again.`,
       done: false,
@@ -152,35 +156,14 @@ export function CalibrationGuide() {
         <button
           type="button"
           onClick={dismiss}
-          className="rounded-md p-0.5 text-slate-500 transition hover:bg-slate-800 hover:text-slate-300"
+          className="rounded-md p-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-600"
           title="Hide checklist for this sheet"
           aria-label="Dismiss calibration checklist"
         >
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
-      <ol className="space-y-2">
-        {steps.map((s, i) => (
-          <li key={s.title} className="flex gap-2 text-[10px] leading-snug">
-            <span
-              className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold ${
-                s.done
-                  ? "border-blue-500/60 bg-blue-600/25 text-blue-200"
-                  : "border-slate-600 text-slate-500"
-              }`}
-              aria-hidden
-            >
-              {s.done ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : i + 1}
-            </span>
-            <span>
-              <span className={`font-medium ${s.done ? "text-slate-200" : "text-slate-400"}`}>
-                {s.title}
-              </span>
-              <span className="mt-0.5 block text-slate-500">{s.detail}</span>
-            </span>
-          </li>
-        ))}
-      </ol>
+      <ViewerGuideSteps steps={steps} />
     </div>
   );
 }

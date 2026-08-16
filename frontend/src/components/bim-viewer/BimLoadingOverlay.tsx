@@ -9,6 +9,7 @@ import { peekModelThumbnail } from "@/lib/bim/modelThumbnail";
 import {
   buildLoadSteps,
   buildModelMetaLine,
+  completeHeadline,
   markFirstConvertTipSeen,
   phaseHeadline,
   phaseModelLabel,
@@ -53,22 +54,22 @@ function useCachedModelThumbnail(fileVersionId?: string | null, previewUrl?: str
 
 function BimLoadingBrandMark() {
   return (
-    <div className="bim-loading-brand-mark">
+    <div className="bim-loading-brand">
       <Image
         src="/logo.svg"
         alt=""
-        width={28}
-        height={28}
-        className="bim-loading-brand-mark__logo"
-        style={{ width: 28, height: 28 }}
+        width={32}
+        height={32}
+        className="bim-loading-brand__logo"
+        style={{ width: 32, height: 32 }}
         priority
       />
-      <div className="bim-loading-brand-mark__text">
-        <span>
-          <span className="text-[var(--bim-text)]">Plan</span>
-          <span className="text-[var(--bim-accent)]">Sync</span>
-        </span>
-        <span className="bim-loading-brand-mark__sub">3D Engine</span>
+      <div className="bim-loading-brand__copy">
+        <p className="bim-loading-brand__word">
+          <span>Plan</span>
+          <span>Sync</span>
+        </p>
+        <p className="bim-loading-brand__sub">3D Engine</p>
       </div>
     </div>
   );
@@ -98,8 +99,14 @@ function BimLoadingSteps({
   );
 }
 
-function BimLoadingProgress({ phase }: { phase: BimLoadPhase }) {
-  const percent = stepProgressPercent(phase);
+function BimLoadingProgress({
+  phase,
+  forceComplete,
+}: {
+  phase: BimLoadPhase;
+  forceComplete?: boolean;
+}) {
+  const percent = forceComplete ? 100 : stepProgressPercent(phase);
   return (
     <div className="bim-loading-progress">
       <div className="bim-loading-progress__track">
@@ -158,9 +165,13 @@ function BimLoadingShell(props: LoadingShellProps) {
   const rawName = phase.kind === "resolving" ? modelName : (phase.label ?? modelName ?? null);
   const bytesTotal = phase.kind === "downloading" ? (phase.bytesTotal ?? null) : null;
   const modelIndex =
-    phase.kind === "downloading" || phase.kind === "converting" ? (phase.index ?? null) : null;
+    phase.kind === "preparing" || phase.kind === "downloading" || phase.kind === "converting"
+      ? (phase.index ?? null)
+      : null;
   const modelTotal =
-    phase.kind === "downloading" || phase.kind === "converting" ? (phase.total ?? null) : null;
+    phase.kind === "preparing" || phase.kind === "downloading" || phase.kind === "converting"
+      ? (phase.total ?? null)
+      : null;
   const meta = buildModelMetaLine({
     fileName: rawName ?? modelName,
     version,
@@ -168,8 +179,8 @@ function BimLoadingShell(props: LoadingShellProps) {
     modelIndex,
     modelTotal,
   });
-  const headline = phaseHeadline(phase, path);
-  const showTip = useFirstConvertTip(phase) && path === "convert";
+  const headline = exiting ? completeHeadline() : phaseHeadline(phase, path);
+  const showTip = useFirstConvertTip(phase) && path === "convert" && !exiting;
 
   return (
     <div
@@ -180,18 +191,14 @@ function BimLoadingShell(props: LoadingShellProps) {
       aria-label={headline}
       data-exiting={exiting ? "true" : undefined}
     >
-      <div className="bim-loading-topbar">
-        <BimLoadingBrandMark />
-      </div>
-
       <div className="bim-loading-stage enterprise-animate-in">
+        <BimLoadingBrandMark />
+
         {thumbnailUrl ? (
           <div className="bim-loading-preview" aria-hidden>
             <img src={thumbnailUrl} alt="" className="bim-loading-preview__img" />
           </div>
-        ) : (
-          <div className="bim-loading-preview bim-loading-preview--empty" aria-hidden />
-        )}
+        ) : null}
 
         {displayName ? (
           <h1 className="bim-loading-model-name" title={rawName ?? displayName}>
@@ -210,6 +217,7 @@ function BimLoadingShell(props: LoadingShellProps) {
                 : { kind: "downloading", fraction: 1 }
               : phase
           }
+          forceComplete={exiting}
         />
 
         {showTip ? (

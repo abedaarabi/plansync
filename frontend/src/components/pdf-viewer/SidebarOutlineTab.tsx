@@ -81,7 +81,7 @@ export function SidebarOutlineTab({ pdfDoc }: SidebarOutlineTabProps) {
           value={outlineQuery}
           onChange={(e) => setOutlineQuery(e.target.value)}
           placeholder="Filter…"
-          className="w-full rounded-md border border-slate-700/80 bg-slate-900/80 px-2 py-1 text-[10px] text-slate-200 placeholder:text-slate-600"
+          className="w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-700 placeholder:text-slate-600"
         />
       </label>
       <ul className="space-y-0.5 px-0.5 pb-2">
@@ -97,7 +97,7 @@ export function SidebarOutlineTab({ pdfDoc }: SidebarOutlineTabProps) {
                 if (it.pageNumber != null) setCurrentPage(it.pageNumber);
               }}
               style={{ paddingLeft: `${6 + it.depth * 6}px` }}
-              className="w-full rounded-md py-1.5 text-left text-[10px] leading-snug text-slate-300 hover:bg-slate-800/90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="w-full rounded-md py-1.5 text-left text-[10px] leading-snug text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
               title={
                 it.pageNumber != null
                   ? `Jump to: ${it.title} (page ${it.pageNumber})`

@@ -76,22 +76,22 @@ export function ViewerStepIndicator() {
       role="status"
       aria-live="polite"
     >
-      <div className="pointer-events-auto flex max-w-[min(100%,42rem)] flex-wrap items-center justify-center gap-2 rounded-xl border border-sky-500/40 bg-slate-950/94 px-3 py-2 shadow-lg ring-1 ring-sky-500/20 backdrop-blur-md">
+      <div className="pointer-events-auto flex max-w-[min(100%,42rem)] flex-wrap items-center justify-center gap-2 rounded-xl border border-sky-500/40 bg-white/94 px-3 py-2 shadow-lg ring-1 ring-sky-500/20 backdrop-blur-md">
         <div className="flex flex-wrap items-center gap-1.5">
           {steps.map((step, idx) => {
             const Icon = step.icon;
             return (
               <div key={step.id} className="flex items-center gap-1.5">
                 {idx > 0 ? (
-                  <span className="hidden h-px w-4 bg-slate-600 sm:block" aria-hidden />
+                  <span className="hidden h-px w-4 bg-slate-300 sm:block" aria-hidden />
                 ) : null}
                 <span
                   className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-medium transition ${
                     step.done
-                      ? "border-emerald-500/40 bg-emerald-950/50 text-emerald-100"
+                      ? "border-emerald-500/40 bg-emerald-50 text-emerald-700"
                       : step.active
-                        ? "border-sky-500/50 bg-sky-950/60 text-sky-50"
-                        : "border-slate-700/60 bg-slate-900/50 text-slate-500"
+                        ? "border-sky-500/50 bg-sky-50 text-sky-700"
+                        : "border-slate-200 bg-slate-50 text-slate-500"
                   }`}
                 >
                   {step.done ? (
@@ -108,7 +108,7 @@ export function ViewerStepIndicator() {
         <button
           type="button"
           onClick={onCancel}
-          className="viewer-focus-ring inline-flex items-center gap-1 rounded-lg border border-slate-600/70 bg-slate-900/80 px-2 py-1 text-[10px] font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+          className="viewer-focus-ring inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
         >
           <X className="h-3 w-3" strokeWidth={2} aria-hidden />
           Cancel

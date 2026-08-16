@@ -25,7 +25,7 @@ export function ViewerUserThumb({
   const radius = shape === "circle" ? "rounded-full" : "rounded-md";
   return (
     <span
-      className={`relative flex shrink-0 items-center justify-center overflow-hidden ${radius} border border-[#475569] bg-[#1E293B] font-semibold tabular-nums text-[#94A3B8] ${className}`}
+      className={`relative flex shrink-0 items-center justify-center overflow-hidden ${radius} border border-slate-200 bg-white font-semibold tabular-nums text-slate-500 ${className}`}
       aria-hidden
     >
       {photo ? (

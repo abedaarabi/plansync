@@ -112,7 +112,7 @@ export function IssueReferenceLiveCapture(props: Props) {
       <button
         type="button"
         aria-label="Close camera"
-        className="absolute inset-0 bg-slate-950/75 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-white/75 backdrop-blur-[2px]"
         onClick={() => {
           stopStream();
           onClose();
@@ -122,12 +122,12 @@ export function IssueReferenceLiveCapture(props: Props) {
         role="dialog"
         aria-modal
         aria-label="Take a photo"
-        className="relative z-[1] flex w-full max-w-md flex-col overflow-hidden rounded-xl border border-slate-700/90 bg-slate-950 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.75)]"
+        className="relative z-[1] flex w-full max-w-md flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between gap-2 border-b border-slate-800 px-3 py-2.5">
-          <div className="flex items-center gap-2 text-[12px] font-semibold text-white">
-            <Camera className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+        <header className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-2.5">
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-slate-900">
+            <Camera className="h-3.5 w-3.5 text-[var(--viewer-icon)]" strokeWidth={2} aria-hidden />
             In-browser camera
           </div>
           <button
@@ -136,7 +136,7 @@ export function IssueReferenceLiveCapture(props: Props) {
               stopStream();
               onClose();
             }}
-            className="viewer-focus-ring rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
+            className="viewer-focus-ring rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
             aria-label="Close"
           >
             <X className="h-4 w-4" strokeWidth={2} />
@@ -145,19 +145,19 @@ export function IssueReferenceLiveCapture(props: Props) {
         <div className="relative aspect-[4/3] w-full bg-black">
           <video ref={videoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
           {!ready ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 text-[12px] text-slate-400">
+            <div className="absolute inset-0 flex items-center justify-center bg-white text-[12px] text-slate-500">
               Starting camera…
             </div>
           ) : null}
         </div>
-        <footer className="flex justify-end gap-2 border-t border-slate-800/90 px-3 py-3">
+        <footer className="flex justify-end gap-2 border-t border-slate-200 px-3 py-3">
           <button
             type="button"
             onClick={() => {
               stopStream();
               onClose();
             }}
-            className="viewer-focus-ring rounded-lg border border-slate-600/80 px-3 py-1.5 text-[11px] text-slate-300 transition hover:bg-slate-800/80"
+            className="viewer-focus-ring rounded-lg border border-slate-300 px-3 py-1.5 text-[11px] text-slate-600 transition hover:bg-slate-100"
           >
             Cancel
           </button>

@@ -1170,12 +1170,12 @@ export function PdfViewer() {
                 aria-busy="true"
               >
                 <div
-                  className="pointer-events-none absolute inset-x-0 top-0 z-[41] h-1 overflow-hidden bg-slate-800/40"
+                  className="pointer-events-none absolute inset-x-0 top-0 z-[41] h-1 overflow-hidden bg-slate-50"
                   aria-hidden
                 >
                   <div className="viewer-pdf-load-indeterminate h-full w-[38%] bg-[#2563eb]" />
                 </div>
-                <div className="relative w-full max-w-[min(100%,22rem)] overflow-hidden rounded-2xl border border-[var(--viewer-border-strong)] bg-[var(--viewer-panel)]/98 p-6 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.5)] ring-1 ring-[var(--viewer-primary)]/25 backdrop-blur-md">
+                <div className="relative w-full max-w-[min(100%,22rem)] overflow-hidden rounded-2xl border border-[var(--viewer-border-strong)] bg-[var(--viewer-panel)]/98 p-6 shadow-xl ring-1 ring-[var(--viewer-primary)]/25 backdrop-blur-md">
                   <div
                     className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[var(--viewer-primary)]/70 to-transparent"
                     aria-hidden
@@ -1211,8 +1211,8 @@ export function PdfViewer() {
                         {numPages > 0 ? ` of ${numPages}` : ""}…
                       </p>
                     </div>
-                    <div className="w-full overflow-hidden rounded-full bg-slate-800/80 py-px">
-                      <div className="h-1 w-full overflow-hidden rounded-full bg-slate-700/60">
+                    <div className="w-full overflow-hidden rounded-full bg-slate-100 py-px">
+                      <div className="h-1 w-full overflow-hidden rounded-full bg-slate-200">
                         <div className="viewer-pdf-load-indeterminate h-full w-[42%] rounded-full bg-gradient-to-r from-[var(--viewer-primary)] to-[#60a5fa]" />
                       </div>
                     </div>
@@ -1222,7 +1222,7 @@ export function PdfViewer() {
             )}
             {!pdfUrl && (
               <div className="viewer-loading-canvas flex min-h-0 flex-1 cursor-crosshair flex-col items-center justify-center gap-5 p-8 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--viewer-border-strong)] bg-[color-mix(in_srgb,var(--viewer-input-bg)_92%,transparent)] shadow-[0_8px_32px_-12px_rgba(0,0,0,0.35)] ring-1 ring-[var(--viewer-primary)]/15">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--viewer-border-strong)] bg-[color-mix(in_srgb,var(--viewer-input-bg)_92%,transparent)] shadow-sm ring-1 ring-[var(--viewer-primary)]/15">
                   <LayoutTemplate
                     className="h-9 w-9 text-[var(--viewer-text-muted)]"
                     strokeWidth={1.25}
@@ -1265,7 +1265,7 @@ export function PdfViewer() {
               </div>
             )}
             {loadError && (
-              <div className="max-h-40 overflow-y-auto border-b border-red-900/40 bg-red-950/30 p-4 text-center text-sm text-red-200">
+              <div className="max-h-40 overflow-y-auto border-b border-red-200 bg-red-50 p-4 text-center text-sm text-red-700">
                 {loadError}
               </div>
             )}
@@ -1287,7 +1287,7 @@ export function PdfViewer() {
                           className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain"
                         >
                           <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
-                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                               Rev A — v{revisionCompareBaseVersion ?? "—"}
                             </p>
                             {revisionBasePdf.doc ? (
@@ -1300,7 +1300,7 @@ export function PdfViewer() {
                                 pageWrapperRef={pageWrapperCompareRef}
                               />
                             ) : (
-                              <p className="py-8 text-center text-[12px] text-[#64748b]">
+                              <p className="py-8 text-center text-[12px] text-slate-500">
                                 {revisionBasePdf.loading
                                   ? "Loading Rev A…"
                                   : (revisionBasePdf.error ?? "Rev A unavailable")}
@@ -1313,7 +1313,7 @@ export function PdfViewer() {
                           className="viewer-compare-pane min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y"
                         >
                           <div className="mx-auto max-w-[min(100%,960px)] p-4 sm:p-5">
-                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                               Rev B — open sheet
                             </p>
                             <PdfPageView
@@ -1368,7 +1368,7 @@ export function PdfViewer() {
                             onClick={() => setCompareLayout(id)}
                             className={`rounded-md px-2 py-1 font-medium transition ${
                               compareLayout === id
-                                ? "bg-[#2563eb] text-white shadow-sm"
+                                ? "bg-[var(--viewer-primary-muted)] text-[var(--viewer-primary)] ring-1 ring-[var(--viewer-primary)]/45"
                                 : "bg-white/80 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
                             }`}
                           >

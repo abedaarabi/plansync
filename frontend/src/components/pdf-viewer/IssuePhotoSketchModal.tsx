@@ -379,18 +379,18 @@ export function IssuePhotoSketchModal(props: Props) {
       <button
         type="button"
         aria-label="Close sketch editor"
-        className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-white backdrop-blur-[2px]"
         onClick={onClose}
       />
       <div
         role="dialog"
         aria-modal
-        className="relative z-[1] flex min-h-0 max-h-[min(92vh,980px)] w-full max-w-[min(96vw,1120px)] flex-col overflow-y-auto overflow-x-hidden rounded-xl border border-slate-700/90 bg-slate-950 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.75)]"
+        className="relative z-[1] flex min-h-0 max-h-[min(92vh,980px)] w-full max-w-[min(96vw,1120px)] flex-col overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <header className="flex items-start justify-between gap-2 border-b border-slate-800 px-4 py-3">
+        <header className="flex items-start justify-between gap-2 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">
-            <h2 className="text-[13px] font-semibold text-white">
+            <h2 className="text-[13px] font-semibold text-slate-900">
               {drawEnabled ? "Markup on photo" : "Reference photo"}
             </h2>
             <p className="truncate text-[11px] text-slate-500" title={fileName}>
@@ -400,7 +400,7 @@ export function IssuePhotoSketchModal(props: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="viewer-focus-ring rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
+            className="viewer-focus-ring rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
             aria-label="Close"
           >
             <X className="h-4 w-4" strokeWidth={2} />
@@ -408,7 +408,7 @@ export function IssuePhotoSketchModal(props: Props) {
         </header>
 
         {drawEnabled ? (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-slate-800/90 px-4 py-1.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-slate-200 px-4 py-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
                 Tool
@@ -426,10 +426,10 @@ export function IssuePhotoSketchModal(props: Props) {
                     type="button"
                     title={label}
                     onClick={() => setTool(t)}
-                    className={`viewer-focus-ring flex h-8 w-8 items-center justify-center rounded-lg border text-slate-300 transition ${
+                    className={`viewer-focus-ring flex h-8 w-8 items-center justify-center rounded-lg border text-slate-600 transition ${
                       tool === t
-                        ? "border-[var(--viewer-primary)]/60 bg-[var(--viewer-primary-muted)] text-white"
-                        : "border-slate-700/80 bg-slate-900/60 hover:bg-slate-800/80"
+                        ? "border-[var(--viewer-primary)]/60 bg-[var(--viewer-primary-muted)] text-[var(--viewer-primary-hover)]"
+                        : "border-slate-200 bg-white hover:bg-slate-100"
                     }`}
                   >
                     <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
@@ -441,11 +441,11 @@ export function IssuePhotoSketchModal(props: Props) {
             <label className="flex w-[6.75rem] shrink-0 flex-col gap-0.5 sm:w-28">
               <div className="flex items-center justify-between gap-1 text-[9px] font-medium text-slate-500">
                 <span className="uppercase tracking-wide">Line</span>
-                <span className="tabular-nums text-slate-400" aria-hidden>
+                <span className="tabular-nums text-slate-500" aria-hidden>
                   {Math.round(strokeTargetPx(strokeSw))}px
                 </span>
               </div>
-              <div className="rounded-full bg-slate-800/80 px-0.5 py-px ring-1 ring-slate-700/50">
+              <div className="rounded-full bg-slate-100 px-0.5 py-px ring-1 ring-slate-200/50">
                 <input
                   type="range"
                   min={STROKE_SW_MIN}
@@ -460,19 +460,19 @@ export function IssuePhotoSketchModal(props: Props) {
             </label>
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+              <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
                 Color
                 <input
                   type="color"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
-                  className="h-7 w-10 cursor-pointer rounded border border-slate-700 bg-slate-900 p-0"
+                  className="h-7 w-10 cursor-pointer rounded border border-slate-200 bg-white p-0"
                 />
               </label>
               <button
                 type="button"
                 onClick={() => setStrokes([])}
-                className="viewer-focus-ring inline-flex items-center gap-1 rounded-lg border border-slate-700/80 px-2 py-1 text-[11px] text-slate-300 transition hover:bg-slate-800/80"
+                className="viewer-focus-ring inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-600 transition hover:bg-slate-100"
               >
                 <Trash2 className="h-3 w-3" strokeWidth={2} aria-hidden />
                 Clear
@@ -485,7 +485,7 @@ export function IssuePhotoSketchModal(props: Props) {
         <div className="flex min-h-[min(48vh,420px)] flex-1 flex-col p-3 sm:min-h-0 sm:p-4">
           <div
             ref={boardRef}
-            className={`relative isolate mx-auto min-h-[min(44vh,360px)] w-full max-w-full flex-1 overflow-hidden rounded-lg border border-slate-800 bg-black/40 sm:min-h-[min(52vh,480px)] sm:flex-none sm:h-[min(58vh,560px)] lg:h-[min(62vh,640px)] ${drawEnabled ? "touch-none" : ""}`}
+            className={`relative isolate mx-auto min-h-[min(44vh,360px)] w-full max-w-full flex-1 overflow-hidden rounded-lg border border-slate-200 bg-black/40 sm:min-h-[min(52vh,480px)] sm:flex-none sm:h-[min(58vh,560px)] lg:h-[min(62vh,640px)] ${drawEnabled ? "touch-none" : ""}`}
             style={drawEnabled ? { touchAction: "none" } : undefined}
           >
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -525,19 +525,19 @@ export function IssuePhotoSketchModal(props: Props) {
             ) : (
               <>
                 Saved markups are overlaid on the photo. Tap{" "}
-                <span className="font-medium text-slate-400">Draw</span> to add or change them.
+                <span className="font-medium text-slate-500">Draw</span> to add or change them.
               </>
             )}
           </p>
         </div>
 
-        <footer className="flex flex-wrap justify-end gap-2 border-t border-slate-800/90 px-4 py-3">
+        <footer className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-4 py-3">
           {!drawEnabled ? (
             <>
               <button
                 type="button"
                 onClick={onClose}
-                className="viewer-focus-ring rounded-lg border border-slate-600/80 px-3 py-1.5 text-[11px] text-slate-300 transition hover:bg-slate-800/80"
+                className="viewer-focus-ring rounded-lg border border-slate-300 px-3 py-1.5 text-[11px] text-slate-600 transition hover:bg-slate-100"
               >
                 Close
               </button>
@@ -555,7 +555,7 @@ export function IssuePhotoSketchModal(props: Props) {
                 <button
                   type="button"
                   onClick={() => setDrawEnabled(false)}
-                  className="viewer-focus-ring rounded-lg border border-slate-600/80 px-3 py-1.5 text-[11px] text-slate-300 transition hover:bg-slate-800/80"
+                  className="viewer-focus-ring rounded-lg border border-slate-300 px-3 py-1.5 text-[11px] text-slate-600 transition hover:bg-slate-100"
                 >
                   Back to preview
                 </button>
@@ -563,7 +563,7 @@ export function IssuePhotoSketchModal(props: Props) {
                 <button
                   type="button"
                   onClick={onClose}
-                  className="viewer-focus-ring rounded-lg border border-slate-600/80 px-3 py-1.5 text-[11px] text-slate-300 transition hover:bg-slate-800/80"
+                  className="viewer-focus-ring rounded-lg border border-slate-300 px-3 py-1.5 text-[11px] text-slate-600 transition hover:bg-slate-100"
                 >
                   Cancel
                 </button>

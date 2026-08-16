@@ -62,7 +62,7 @@ export function BimSplitViewPane(props: {
         <div className="flex rounded-full border border-[var(--bim-border)] bg-[var(--bim-surface)]/95 p-0.5 text-[10px]">
           <button
             type="button"
-            className={`rounded-full px-2.5 py-1 font-medium transition ${props.planPanelMode === "minimap" ? "bg-[var(--bim-accent)] text-white" : "text-[var(--bim-text-muted)]"}`}
+            className={`rounded-full px-2.5 py-1 font-medium transition ${props.planPanelMode === "minimap" ? "bg-[var(--bim-accent-muted)] text-[var(--bim-accent)] ring-1 ring-[var(--bim-accent)]/45" : "text-[var(--bim-text-muted)]"}`}
             onClick={() => props.onPlanPanelModeChange("minimap")}
           >
             Plan
@@ -75,7 +75,7 @@ export function BimSplitViewPane(props: {
                 ? "Synced PDF navigation"
                 : "Register or align a mapped sheet first"
             }
-            className={`rounded-full px-2.5 py-1 font-medium transition disabled:opacity-40 ${props.planPanelMode === "drawingSync" ? "bg-[var(--bim-accent)] text-white" : "text-[var(--bim-text-muted)]"}`}
+            className={`rounded-full px-2.5 py-1 font-medium transition disabled:opacity-40 ${props.planPanelMode === "drawingSync" ? "bg-[var(--bim-accent-muted)] text-[var(--bim-accent)] ring-1 ring-[var(--bim-accent)]/45" : "text-[var(--bim-text-muted)]"}`}
             onClick={() => props.onPlanPanelModeChange("drawingSync")}
           >
             Drawing

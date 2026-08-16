@@ -132,15 +132,15 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
   const statusBorderHex = issueStatusMarkerStrokeHex(issue.status);
 
   const actionBtn =
-    "viewer-focus-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-600/60 bg-slate-900/70 text-slate-200 transition hover:border-slate-500/70 hover:bg-slate-700/80 active:scale-[0.98]";
+    "viewer-focus-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-300/60 bg-white text-slate-700 transition hover:border-slate-300/70 hover:bg-slate-200 active:scale-[0.98]";
 
   return (
     <li id={`sidebar-issue-${issue.id}`}>
       <article
         className={`relative overflow-hidden rounded-lg border transition-[box-shadow,background-color,border-color] duration-200 ${
           isHighlighted
-            ? "border-sky-500/45 bg-slate-800/95 shadow-[0_0_0_1px_rgba(56,189,248,0.2),0_12px_28px_-8px_rgba(0,0,0,0.45)]"
-            : "bg-slate-800/45 hover:bg-slate-800/60"
+            ? "border-sky-500/45 bg-slate-100 shadow-sm"
+            : "bg-slate-50 hover:bg-slate-100"
         }`}
         style={isHighlighted ? undefined : { borderColor: `${statusBorderHex}73` }}
       >
@@ -152,22 +152,22 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
           />
         ) : null}
         <div
-          className={`border-b border-slate-700/40 pl-3 pr-2.5 py-1.5 ${isHighlighted ? "bg-sky-950/15" : "bg-slate-900/30"}`}
+          className={`border-b border-slate-200/40 pl-3 pr-2.5 py-1.5 ${isHighlighted ? "bg-sky-50" : "bg-slate-50"}`}
         >
           <div className="flex flex-wrap items-center justify-between gap-1.5">
             <div className="flex min-w-0 flex-wrap items-center gap-1">
               {issue.issueKind === "WORK_ORDER" ? (
-                <span className="shrink-0 rounded border border-slate-500/50 bg-slate-950/80 px-1 py-0.5 text-[8px] font-bold text-slate-400">
+                <span className="shrink-0 rounded border border-slate-300/50 bg-white px-1 py-0.5 text-[8px] font-bold text-slate-500">
                   ISSUE
                 </span>
               ) : issue.issueKind === "OCCUPANT" ? (
-                <span className="shrink-0 rounded border border-sky-500/40 bg-sky-950/80 px-1 py-0.5 text-[8px] font-bold text-sky-200">
+                <span className="shrink-0 rounded border border-sky-500/40 bg-sky-50 px-1 py-0.5 text-[8px] font-bold text-sky-700">
                   TN
                 </span>
               ) : null}
               {attachments ? (
                 <span
-                  className="inline-flex shrink-0 items-center gap-0.5 rounded border border-amber-500/25 bg-amber-950/35 px-1 py-0.5 text-[8px] font-medium text-amber-100/90"
+                  className="inline-flex shrink-0 items-center gap-0.5 rounded border border-amber-500/25 bg-amber-50 px-1 py-0.5 text-[8px] font-medium text-amber-700"
                   title="Has reference photos, linked markups, or RFIs"
                 >
                   <Paperclip className="h-2 w-2 opacity-90" strokeWidth={2.5} aria-hidden />
@@ -191,7 +191,7 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
                     className={`viewer-focus-ring rounded-md px-1.5 py-0.5 text-[9px] font-semibold transition disabled:opacity-50 ${
                       issue.status === s
                         ? issueStatusBadgeClass(s)
-                        : "border border-slate-700/60 bg-slate-950/50 text-slate-500 hover:text-slate-300"
+                        : "border border-slate-200 bg-slate-50 text-slate-500 hover:text-slate-600"
                     }`}
                   >
                     {ISSUE_STATUS_LABEL[s]}
@@ -203,7 +203,7 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
                 onClick={() => onToggleCollapse(issue.id)}
                 aria-label={isCollapsed ? "Expand issue card" : "Collapse issue card"}
                 aria-expanded={!isCollapsed}
-                className="viewer-focus-ring flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-600/60 bg-slate-900/70 text-slate-300 transition hover:bg-slate-700/80"
+                className="viewer-focus-ring flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-300/60 bg-white text-slate-600 transition hover:bg-slate-200"
                 title={isCollapsed ? "Expand" : "Collapse"}
               >
                 <ChevronDown
@@ -222,14 +222,14 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
           {isCollapsed ? null : (
             <>
               <div className="flex flex-wrap gap-1 text-[9px]">
-                <span className="inline-flex max-w-full items-center rounded bg-slate-950/70 px-1.5 py-0.5 font-medium text-slate-300 ring-1 ring-slate-700/50">
+                <span className="inline-flex max-w-full items-center rounded bg-white px-1.5 py-0.5 font-medium text-slate-600 ring-1 ring-slate-200/50">
                   <span className="truncate">{sheetLabel}</span>
                 </span>
-                <span className="inline-flex items-center rounded bg-slate-950/70 px-1.5 py-0.5 tabular-nums font-medium text-slate-400 ring-1 ring-slate-700/50">
+                <span className="inline-flex items-center rounded bg-white px-1.5 py-0.5 tabular-nums font-medium text-slate-500 ring-1 ring-slate-200/50">
                   Rev {rev}
                 </span>
                 {issue.pageNumber != null ? (
-                  <span className="inline-flex items-center rounded bg-slate-950/70 px-1.5 py-0.5 tabular-nums font-medium text-slate-400 ring-1 ring-slate-700/50">
+                  <span className="inline-flex items-center rounded bg-white px-1.5 py-0.5 tabular-nums font-medium text-slate-500 ring-1 ring-slate-200/50">
                     p.{issue.pageNumber}
                   </span>
                 ) : null}
@@ -239,7 +239,7 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
                 <p className="truncate text-[9px] leading-tight text-slate-500">{issue.location}</p>
               ) : null}
 
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-slate-950/30 px-1.5 py-1 ring-1 ring-slate-700/35">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-slate-50 px-1.5 py-1 ring-1 ring-slate-200/35">
                 {issue.assignee ? (
                   <div className="flex min-w-0 max-w-full flex-1 items-center gap-1.5">
                     <ViewerUserThumb
@@ -248,7 +248,7 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
                       image={issue.assignee.image}
                       className="h-5 w-5 shrink-0 text-[8px]"
                     />
-                    <span className="min-w-0 truncate text-[10px] font-medium text-slate-300">
+                    <span className="min-w-0 truncate text-[10px] font-medium text-slate-600">
                       {issue.assignee.name || issue.assignee.email}
                     </span>
                   </div>
@@ -256,16 +256,16 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
                   <span className="text-[9px] italic text-slate-600">Unassigned</span>
                 )}
                 <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
-                  <span className="rounded bg-slate-950/80 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-400 ring-1 ring-slate-700/50">
+                  <span className="rounded bg-white px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-500 ring-1 ring-slate-200/50">
                     {ISSUE_PRIORITY_LABEL[pri] ?? pri}
                   </span>
                   {due ? (
                     <span
-                      className="inline-flex shrink-0 items-center gap-0.5 rounded border border-amber-500/35 bg-amber-950/70 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-amber-50 ring-1 ring-amber-600/25"
+                      className="inline-flex shrink-0 items-center gap-0.5 rounded border border-amber-500/35 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-amber-700 ring-1 ring-amber-600/25"
                       title={`Due ${due}`}
                     >
                       <Calendar
-                        className="h-3 w-3 shrink-0 text-amber-200"
+                        className="h-3 w-3 shrink-0 text-amber-700"
                         strokeWidth={2}
                         aria-hidden
                       />
@@ -275,7 +275,7 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
                 </div>
               </div>
               <div
-                className="flex flex-wrap items-center justify-end gap-1 border-t border-slate-700/35 pt-1.5 mt-1"
+                className="flex flex-wrap items-center justify-end gap-1 border-t border-slate-200/35 pt-1.5 mt-1"
                 role="toolbar"
                 aria-label="Issue actions"
               >
@@ -283,7 +283,7 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
                   type="button"
                   title="Edit details"
                   onClick={() => onEditClick(issue)}
-                  className={`${actionBtn} border-slate-600/60 bg-slate-900/80`}
+                  className={`${actionBtn} border-slate-300/60 bg-white`}
                 >
                   <Pencil className="h-3 w-3" strokeWidth={2} />
                 </button>
@@ -293,8 +293,8 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
                   onClick={() => onSetLinkTarget(issue)}
                   className={`${actionBtn} ${
                     isHighlighted
-                      ? "border-emerald-500/50 bg-emerald-950/50 text-emerald-50"
-                      : "border-slate-600/60 bg-slate-900/80"
+                      ? "border-emerald-500/50 bg-emerald-50 text-emerald-700"
+                      : "border-slate-300/60 bg-white"
                   }`}
                 >
                   <Link2 className="h-3 w-3" strokeWidth={2} />
@@ -304,7 +304,7 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
                   title="Delete issue"
                   disabled={isDeleting}
                   onClick={() => onDeleteClick(issue)}
-                  className={`${actionBtn} border-red-500/30 bg-red-950/35 text-red-100 hover:bg-red-950/55 disabled:opacity-40`}
+                  className={`${actionBtn} border-red-500/30 bg-red-50 text-red-700 hover:bg-red-50 disabled:opacity-40`}
                 >
                   <Trash2 className="h-3 w-3" strokeWidth={2} />
                 </button>
@@ -313,7 +313,7 @@ const SidebarIssueCard = memo(function SidebarIssueCard({
                   title={canFocus ? "Zoom to linked markup" : "No sheet link yet"}
                   disabled={!canFocus}
                   onClick={() => onFocusClick(issue)}
-                  className={`${actionBtn} border-slate-600/60 bg-slate-900/80 disabled:cursor-not-allowed disabled:opacity-35`}
+                  className={`${actionBtn} border-slate-300/60 bg-white disabled:cursor-not-allowed disabled:opacity-35`}
                 >
                   <Crosshair className="h-3 w-3" strokeWidth={2} />
                 </button>
@@ -740,11 +740,11 @@ export function SidebarIssuesTab() {
   if (!cloudFileVersionId || !viewerProjectId) {
     return (
       <div className="flex flex-col items-center gap-3 px-2 py-4 text-center">
-        <FolderOpen className="h-10 w-10 text-[#475569]" strokeWidth={1.25} aria-hidden />
-        <p className="text-[11px] leading-relaxed text-[#94A3B8]">
+        <FolderOpen className="h-10 w-10 text-slate-400" strokeWidth={1.25} aria-hidden />
+        <p className="text-[11px] leading-relaxed text-slate-500">
           Issues are tied to a{" "}
-          <span className="font-medium text-[#CBD5E1]">project file revision</span>. Open this PDF
-          from <span className="font-medium text-[#CBD5E1]">Files</span> inside a project (not a
+          <span className="font-medium text-slate-700">project file revision</span>. Open this PDF
+          from <span className="font-medium text-slate-700">Files</span> inside a project (not a
           standalone upload) so the viewer receives project and sheet context.
         </p>
       </div>
@@ -754,10 +754,10 @@ export function SidebarIssuesTab() {
   return (
     <div className="flex w-full flex-col gap-2">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-1">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#94A3B8]">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           Sheet issues
           {filteredIssues.length !== issues.length ? (
-            <span className="ml-1 font-normal normal-case text-[#64748B]">
+            <span className="ml-1 font-normal normal-case text-slate-500">
               ({filteredIssues.length}/{issues.length})
             </span>
           ) : null}
@@ -777,7 +777,7 @@ export function SidebarIssuesTab() {
       <div className="shrink-0 space-y-1.5">
         <div className="relative">
           <Search
-            className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[#64748B]"
+            className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[var(--viewer-icon)]"
             strokeWidth={2}
             aria-hidden
           />
@@ -786,7 +786,7 @@ export function SidebarIssuesTab() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search issues…"
-            className="viewer-focus-ring w-full rounded-md border border-[#334155] bg-[#1E293B] py-1.5 pl-8 pr-2 text-[11px] text-[#F8FAFC] placeholder:text-[#64748B]"
+            className="viewer-focus-ring w-full rounded-md border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-[11px] text-slate-900 placeholder:text-slate-500"
             aria-label="Search issues"
           />
         </div>
@@ -799,9 +799,9 @@ export function SidebarIssuesTab() {
               className={`viewer-focus-ring rounded-md px-2 py-0.5 text-[9px] font-semibold transition ${
                 statusFilter === st
                   ? st === "ALL"
-                    ? "bg-[#2563EB] text-white"
+                    ? "border border-[var(--viewer-primary)]/45 bg-[var(--viewer-primary-muted)] text-[var(--viewer-primary)]"
                     : issueStatusBadgeClass(st)
-                  : "border border-[#334155] bg-[#1E293B] text-[#94A3B8] hover:bg-[#334155]"
+                  : "border border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
               }`}
             >
               {st === "ALL" ? "All" : ISSUE_STATUS_LABEL[st]}
@@ -811,7 +811,7 @@ export function SidebarIssuesTab() {
       </div>
 
       {newIssuePlacementActive ? (
-        <div className="shrink-0 rounded-md border border-sky-500/35 bg-sky-950/40 px-2 py-1.5 text-[10px] leading-snug text-sky-100">
+        <div className="shrink-0 rounded-md border border-sky-500/35 bg-sky-50 px-2 py-1.5 text-[10px] leading-snug text-sky-700">
           Click the drawing to place a pin, or{" "}
           <button
             type="button"
@@ -820,7 +820,7 @@ export function SidebarIssuesTab() {
               setNewIssuePlacementActive(false);
               setIssueCreateDraft({ annotationId: null, createIntent: intent });
             }}
-            className="font-semibold text-sky-200 underline decoration-sky-400/60 underline-offset-2 hover:text-white"
+            className="font-semibold text-sky-700 underline decoration-sky-400/60 underline-offset-2 hover:text-slate-900"
           >
             skip pin
           </button>
@@ -828,10 +828,10 @@ export function SidebarIssuesTab() {
       ) : null}
 
       {tool === "select" && selectedAnnotationIds.length > 0 ? (
-        <div className="shrink-0 rounded-md border border-emerald-500/35 bg-emerald-950/35 px-2 py-1.5 text-[10px] leading-snug text-emerald-50">
+        <div className="shrink-0 rounded-md border border-emerald-500/35 bg-emerald-50 px-2 py-1.5 text-[10px] leading-snug text-emerald-700">
           {focusedIssue ? (
             <>
-              <span className="font-semibold text-emerald-100/95">
+              <span className="font-semibold text-emerald-700">
                 {selectedAnnotationIds.length} selected
                 {eligibleLinkIds.length !== selectedAnnotationIds.length
                   ? ` · ${eligibleLinkIds.length} can link`
@@ -845,13 +845,13 @@ export function SidebarIssuesTab() {
                     disabled={patchingIssueId === focusedIssue.id}
                     title={focusedIssue.title}
                     onClick={() => void linkSelectionToFocusedIssue()}
-                    className="font-semibold text-emerald-200 underline decoration-emerald-400/60 underline-offset-2 hover:text-white disabled:opacity-40"
+                    className="font-semibold text-emerald-700 underline decoration-emerald-400/60 underline-offset-2 hover:text-slate-900 disabled:opacity-40"
                   >
                     Add to current issue
                   </button>
                 </>
               ) : (
-                <span className="block pt-0.5 text-[9px] text-emerald-200/80">
+                <span className="block pt-0.5 text-[9px] text-emerald-700/80">
                   Nothing in this selection can attach to the highlighted issue (same page only).
                   Choose another issue with{" "}
                   <Link2 className="mx-0.5 inline h-3 w-3 align-text-bottom" strokeWidth={2} /> on
@@ -860,7 +860,7 @@ export function SidebarIssuesTab() {
               )}
             </>
           ) : (
-            <span className="text-emerald-100/90">
+            <span className="text-emerald-700">
               <span className="font-semibold">Link markups:</span> click the{" "}
               <Link2 className="mx-0.5 inline h-3 w-3 align-text-bottom" strokeWidth={2} /> icon on
               an issue row to pick it, then press{" "}
@@ -872,15 +872,15 @@ export function SidebarIssuesTab() {
 
       <div className="w-full">
         {!issueCreateDraft && issuesPending ? (
-          <p className="py-6 text-center text-[11px] text-[#64748B]">Loading…</p>
+          <p className="py-6 text-center text-[11px] text-slate-500">Loading…</p>
         ) : issues.length === 0 && !issueCreateDraft ? (
           <div className="flex flex-col items-center gap-3 py-10 px-3 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#334155] bg-[#1E293B]">
-              <AlertCircle className="h-6 w-6 text-[#64748B]" strokeWidth={1.5} aria-hidden />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white">
+              <AlertCircle className="h-6 w-6 text-slate-500" strokeWidth={1.5} aria-hidden />
             </div>
             <div>
-              <p className="text-[12px] font-semibold text-[#E2E8F0]">No issues on this sheet</p>
-              <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
+              <p className="text-[12px] font-semibold text-slate-700">No issues on this sheet</p>
+              <p className="mt-1 text-[11px] leading-snug text-slate-500">
                 Drop your first pin on the drawing, then add title and assignee in the panel on the
                 right.
               </p>
@@ -894,24 +894,24 @@ export function SidebarIssuesTab() {
             </button>
           </div>
         ) : filteredIssues.length === 0 && !issueCreateDraft ? (
-          <p className="py-8 text-center text-[11px] text-[#64748B]">
+          <p className="py-8 text-center text-[11px] text-slate-500">
             No issues match your filters.
           </p>
         ) : (
           <ul className="space-y-2 px-0.5 pb-1">
             {issueCreateDraft ? (
               <li>
-                <article className="relative overflow-hidden rounded-lg border border-sky-500/35 bg-sky-950/35">
+                <article className="relative overflow-hidden rounded-lg border border-sky-500/35 bg-sky-50">
                   <span
                     aria-hidden
                     className="pointer-events-none absolute inset-y-0 left-0 w-1 rounded-l-lg bg-sky-400/90"
                   />
-                  <div className="border-b border-sky-700/30 bg-sky-950/30 pl-3 pr-2.5 py-1.5">
+                  <div className="border-b border-sky-700/30 bg-sky-50 pl-3 pr-2.5 py-1.5">
                     <div className="flex flex-wrap items-center justify-between gap-1.5">
-                      <span className="rounded border border-sky-500/50 bg-sky-950/80 px-1 py-0.5 text-[8px] font-bold text-sky-100">
+                      <span className="rounded border border-sky-500/50 bg-sky-50 px-1 py-0.5 text-[8px] font-bold text-sky-700">
                         DRAFT
                       </span>
-                      <span className="text-[9px] font-medium text-sky-200/90">
+                      <span className="text-[9px] font-medium text-sky-700/90">
                         {draftIssuePageNumber ? `p.${draftIssuePageNumber}` : "Unsaved"}
                       </span>
                     </div>
@@ -920,14 +920,14 @@ export function SidebarIssuesTab() {
                     <h3 className="text-[12px] font-semibold leading-tight tracking-tight text-slate-50">
                       New issue
                     </h3>
-                    <p className="text-[9px] leading-tight text-sky-100/85">
+                    <p className="text-[9px] leading-tight text-sky-700">
                       This issue is not saved yet.
                     </p>
                     <div className="mt-1 flex flex-wrap items-center justify-end gap-1 border-t border-sky-700/30 pt-1.5">
                       <button
                         type="button"
                         onClick={() => setRightFlyout("issue")}
-                        className="viewer-focus-ring rounded-md border border-slate-600/60 bg-slate-900/70 px-2 py-1 text-[9px] font-semibold text-slate-100 transition hover:bg-slate-700/80"
+                        className="viewer-focus-ring rounded-md border border-slate-300/60 bg-white px-2 py-1 text-[9px] font-semibold text-slate-900 transition hover:bg-slate-200"
                       >
                         Open form
                       </button>
@@ -939,7 +939,7 @@ export function SidebarIssuesTab() {
                           }
                           closeIssueFlyout();
                         }}
-                        className="viewer-focus-ring rounded-md border border-red-500/30 bg-red-950/35 px-2 py-1 text-[9px] font-semibold text-red-100 transition hover:bg-red-950/55"
+                        className="viewer-focus-ring rounded-md border border-red-500/30 bg-red-50 px-2 py-1 text-[9px] font-semibold text-red-700 transition hover:bg-red-50"
                       >
                         Discard
                       </button>
@@ -965,7 +965,7 @@ export function SidebarIssuesTab() {
               />
             ))}
             {issuesPending ? (
-              <li className="px-2 py-1 text-[10px] text-[#64748B]">Loading saved issues…</li>
+              <li className="px-2 py-1 text-[10px] text-slate-500">Loading saved issues…</li>
             ) : null}
           </ul>
         )}

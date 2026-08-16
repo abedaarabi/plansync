@@ -217,7 +217,14 @@ export function BimMarkupOverlay({ interactive, engine, container, projectId }: 
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.key === "Escape") {
+        const hadDraft = Boolean(
+          draftPoints || rectDrag || lineMarkup || textAnchor != null || textValue.trim(),
+        );
         cancelDrafts();
+        if (hadDraft) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
         return;
       }
       if (e.key === "Delete" || e.key === "Backspace") {
@@ -229,9 +236,21 @@ export function BimMarkupOverlay({ interactive, engine, container, projectId }: 
         }
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [interactive, selectedIds, cancelDrafts, removeAnnotations, setSelectedIds]);
+    // Capture so a draft cancel wins over shell/engine Esc exit handlers.
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [
+    interactive,
+    selectedIds,
+    cancelDrafts,
+    removeAnnotations,
+    setSelectedIds,
+    draftPoints,
+    rectDrag,
+    lineMarkup,
+    textAnchor,
+    textValue,
+  ]);
 
   const onPointerDown = useCallback(
     // fallow-ignore-next-line complexity

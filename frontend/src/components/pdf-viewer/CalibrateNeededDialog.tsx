@@ -16,11 +16,11 @@ export function CalibrateNeededDialog({ open, onClose }: Props) {
       open={open}
       onClose={onClose}
       ariaLabelledBy="calibrate-needed-title"
-      variant="viewer-dark"
+      variant="viewer"
       footer={
         <button
           type="button"
-          className={`${MOBILE_DIALOG_BTN_PRIMARY} bg-[#2563EB] text-white shadow-sm hover:bg-[#1D4ED8]`}
+          className={`${MOBILE_DIALOG_BTN_PRIMARY} bg-(--viewer-primary) text-white shadow-sm hover:bg-(--viewer-primary-hover)`}
           title="Close"
           onClick={onClose}
         >
@@ -30,14 +30,14 @@ export function CalibrateNeededDialog({ open, onClose }: Props) {
     >
       <h2
         id="calibrate-needed-title"
-        className="text-lg font-semibold tracking-tight text-[#F8FAFC]"
+        className="text-lg font-semibold tracking-tight text-slate-900"
       >
         Calibrate this page first
       </h2>
-      <p className="mt-2 text-sm leading-relaxed text-[#94A3B8]">
-        Use the <strong className="font-medium text-[#E2E8F0]">Calibrate</strong> tool: two clicks
+      <p className="mt-2 text-sm leading-relaxed text-slate-500">
+        Use the <strong className="font-medium text-slate-700">Calibrate</strong> tool: two clicks
         on a known distance, then enter that length when prompted. After that you can use{" "}
-        <strong className="font-medium text-[#E2E8F0]">Measure</strong>.
+        <strong className="font-medium text-slate-700">Measure</strong>.
       </p>
     </EnterpriseResponsiveDialog>
   );

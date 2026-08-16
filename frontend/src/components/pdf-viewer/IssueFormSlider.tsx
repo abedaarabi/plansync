@@ -156,7 +156,7 @@ function CollapsibleSection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-slate-800/80 bg-slate-900/25 ring-1 ring-white/[0.02]">
+    <section className="rounded-xl border border-slate-200 bg-slate-50 ring-1 ring-slate-900/5">
       <button
         type="button"
         id={`${id}-trigger`}
@@ -165,17 +165,17 @@ function CollapsibleSection({
         onClick={onToggle}
         className="viewer-focus-ring flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
       >
-        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
           {title}
         </span>
         <ChevronDown
-          className={`h-3.5 w-3.5 shrink-0 text-slate-500 transition ${open ? "rotate-180" : ""}`}
+          className={`h-3.5 w-3.5 shrink-0 text-[var(--viewer-icon)] transition ${open ? "rotate-180" : ""}`}
           strokeWidth={2}
           aria-hidden
         />
       </button>
       {open ? (
-        <div id={`${id}-panel`} className="space-y-3 border-t border-slate-800/80 px-3 py-3">
+        <div id={`${id}-panel`} className="space-y-3 border-t border-slate-200 px-3 py-3">
           {children}
         </div>
       ) : null}
@@ -1051,27 +1051,26 @@ export function IssueFormSlider(props: Props) {
 
   const fieldClass = embedded
     ? "bim-focus-ring w-full rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_55%,transparent)] px-2.5 py-2 text-[12px] leading-snug text-[var(--bim-text)] shadow-sm placeholder:text-[var(--bim-text-muted)] outline-none transition focus:border-[var(--bim-accent)]/55"
-    : "w-full rounded-lg border border-slate-600/70 bg-slate-900/60 px-2.5 py-2 text-[12px] leading-snug text-slate-100 shadow-sm placeholder:text-slate-500 outline-none transition focus:border-[var(--viewer-primary)]/55 focus:ring-2 focus:ring-[var(--viewer-primary)]/20";
-  /** Native date picker icon: align with dark chrome (WebKit + `color-scheme`). */
-  /** Calendar glyph → solid white (WebKit); `color-scheme: dark` helps Firefox/native chrome. */
-  const dateFieldClass = `${fieldClass} tabular-nums ${embedded ? "text-[var(--bim-text)]" : "text-slate-100"} [color-scheme:dark] [&::-webkit-datetime-edit]:text-inherit [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:[filter:brightness(0)_invert(1)]`;
+    : "w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-[12px] leading-snug text-slate-900 shadow-sm placeholder:text-slate-500 outline-none transition focus:border-[var(--viewer-primary)]/55 focus:ring-2 focus:ring-[var(--viewer-primary)]/20";
+  /** WebKit hides the calendar glyph at partial opacity; force it visible and clickable. */
+  const dateFieldClass = `${fieldClass} tabular-nums ${embedded ? "text-[var(--bim-text)]" : "text-slate-900"} [&::-webkit-datetime-edit]:text-inherit [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100`;
   const labelClass = embedded
     ? "mb-1 block text-[10px] font-medium text-[var(--bim-text-muted)]"
-    : "mb-1 block text-[10px] font-medium text-slate-400";
+    : "mb-1 block text-[10px] font-medium text-slate-500";
   const sectionTitleClass = embedded
     ? "text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]"
     : viewerOperationsMode
-      ? "text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-300/80"
+      ? "text-[10px] font-semibold uppercase tracking-[0.08em] text-blue-600"
       : "text-[10px] font-semibold uppercase tracking-wider text-slate-500";
   const sectionBlockClass = embedded
     ? "space-y-2.5 rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_35%,transparent)] p-2.5"
     : viewerOperationsMode
-      ? "space-y-2.5 rounded-xl border border-slate-800/80 bg-slate-900/35 p-2.5 ring-1 ring-white/[0.025]"
+      ? "space-y-2.5 rounded-xl border border-slate-200 bg-slate-50 p-2.5 ring-1 ring-slate-900/5"
       : "space-y-3";
   const sectionCompactCardClass = embedded
     ? "space-y-2 rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_25%,transparent)] p-2.5"
     : viewerOperationsMode
-      ? "space-y-2 rounded-xl border border-slate-800/80 bg-slate-900/25 p-2.5"
+      ? "space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5"
       : "space-y-2";
   const entityLabel = "issue";
   const focusRingClass = embedded ? "bim-focus-ring" : "viewer-focus-ring";
@@ -1083,13 +1082,13 @@ export function IssueFormSlider(props: Props) {
     uploadRefPhotoMut.isPending || saveEditMut.isPending || createMut.isPending;
   const refPhotoLabelClass = embedded
     ? `${focusRingClass} relative inline-flex min-h-[2.5rem] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_55%,transparent)] px-2.5 py-2 text-[12px] text-[var(--bim-text)] transition hover:bg-[color-mix(in_srgb,var(--bim-panel)_70%,transparent)]`
-    : "viewer-focus-ring relative inline-flex min-h-[2.5rem] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/60 px-2.5 py-2 text-[12px] text-slate-200 transition hover:bg-slate-800/80";
+    : "viewer-focus-ring relative inline-flex min-h-[2.5rem] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[12px] text-slate-700 transition hover:bg-slate-100";
 
   const asideClass = embedded
     ? "flex h-full min-h-0 w-full flex-col overflow-x-hidden bg-transparent text-[var(--bim-text)]"
     : isDocked
-      ? "flex h-full min-h-0 w-full flex-col overflow-x-hidden bg-slate-950"
-      : "absolute right-0 top-0 flex h-full w-full min-w-0 max-w-[min(480px,calc(100dvw-1rem))] flex-col overflow-x-hidden border-l border-slate-700/80 bg-slate-950 shadow-none";
+      ? "flex h-full min-h-0 w-full flex-col overflow-x-hidden bg-white"
+      : "absolute right-0 top-0 flex h-full w-full min-w-0 max-w-[min(480px,calc(100dvw-1rem))] flex-col overflow-x-hidden border-l border-slate-200 bg-white shadow-none";
 
   const panelBody = (
     <aside
@@ -1101,12 +1100,12 @@ export function IssueFormSlider(props: Props) {
     >
       {embedded ? null : (
         <header
-          className={`flex shrink-0 items-start justify-between gap-3 border-b border-slate-800/90 bg-slate-950 ${isDocked ? "px-3 py-2.5" : "px-5 py-3.5"}`}
+          className={`flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-white ${isDocked ? "px-3 py-2.5" : "px-5 py-3.5"}`}
         >
           <div className="min-w-0 space-y-0.5 pr-2">
             <h2
               id="issue-form-title"
-              className="text-[15px] font-semibold tracking-tight text-white"
+              className="text-[15px] font-semibold tracking-tight text-slate-900"
             >
               {variant === "create" ? `New ${entityLabel}` : `Edit ${entityLabel}`}
             </h2>
@@ -1132,7 +1131,7 @@ export function IssueFormSlider(props: Props) {
               uploadRefPhotoMut.isPending ||
               removeRefPhotoMut.isPending
             }
-            className="viewer-focus-ring shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40"
+            className="viewer-focus-ring shrink-0 rounded-lg p-2 text-[var(--viewer-icon)] transition hover:bg-[var(--viewer-primary-muted)] hover:text-[var(--viewer-primary-hover)] disabled:opacity-40"
             aria-label="Close"
           >
             <X className="h-4 w-4" strokeWidth={2} />
@@ -1154,32 +1153,32 @@ export function IssueFormSlider(props: Props) {
           hasAssignee={Boolean(assigneeId)}
         />
         <div
-          className="mb-3 flex flex-col gap-1.5 rounded-lg border border-slate-800/90 bg-slate-900/50 px-3 py-2 ring-1 ring-white/[0.03] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3 sm:gap-y-1"
+          className="mb-3 flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 ring-1 ring-slate-900/5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3 sm:gap-y-1"
           role="group"
           aria-label={isBimCreate ? "Model context" : "Sheet context"}
         >
           <div className="flex min-w-0 items-start gap-2 sm:items-center">
             <FileStack
-              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500 sm:mt-0"
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--viewer-icon)] sm:mt-0"
               strokeWidth={2}
               aria-hidden
             />
-            <p className="min-w-0 text-[11px] font-medium leading-snug text-slate-200 [overflow-wrap:anywhere]">
+            <p className="min-w-0 text-[11px] font-medium leading-snug text-slate-700 [overflow-wrap:anywhere]">
               {sheetContext.sheetName}
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
             {isBimCreate ? (
-              <span className="inline-flex items-center rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
+              <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
                 BIM
               </span>
             ) : (
-              <span className="inline-flex items-center rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-400">
+              <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-500">
                 Rev {versionLabel}
               </span>
             )}
-            <span className="inline-flex items-center gap-0.5 rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-400">
-              <Hash className="h-2.5 w-2.5 text-slate-500" strokeWidth={2} aria-hidden />
+            <span className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-500">
+              <Hash className="h-2.5 w-2.5 text-[var(--viewer-icon)]" strokeWidth={2} aria-hidden />
               {pageLabel}
             </span>
           </div>
@@ -1193,7 +1192,7 @@ export function IssueFormSlider(props: Props) {
             <h3 id="issue-section-model-snapshot" className={sectionTitleClass}>
               Model snapshot
             </h3>
-            <div className="overflow-hidden rounded-xl border border-slate-700/80 bg-slate-950">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
               <img
                 src={pendingSnapshotPreviewUrl}
@@ -1215,14 +1214,14 @@ export function IssueFormSlider(props: Props) {
               aria-label="Issue quick context"
             >
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-700/80 bg-slate-900/70 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-300">
-                  <Wrench className="h-3 w-3 text-sky-300/90" strokeWidth={2} aria-hidden />
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-600">
+                  <Wrench className="h-3 w-3 text-blue-600/90" strokeWidth={2} aria-hidden />
                   Operations
                 </span>
-                <span className="inline-flex items-center rounded-md border border-slate-700/80 bg-slate-900/70 px-2 py-1 text-[10px] font-medium text-slate-300">
+                <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600">
                   Status: {ISSUE_STATUS_LABEL[status as keyof typeof ISSUE_STATUS_LABEL]}
                 </span>
-                <span className="inline-flex items-center rounded-md border border-slate-700/80 bg-slate-900/70 px-2 py-1 text-[10px] font-medium text-slate-300">
+                <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600">
                   Priority: {ISSUE_PRIORITY_LABEL[priority as keyof typeof ISSUE_PRIORITY_LABEL]}
                 </span>
               </div>
@@ -1266,11 +1265,11 @@ export function IssueFormSlider(props: Props) {
 
           {!viewerOperationsMode ? (
             <section
-              className="rounded-xl border border-slate-800/80 bg-slate-900/25 p-3 ring-1 ring-white/[0.02]"
+              className="rounded-xl border border-slate-200 bg-slate-50 p-3 ring-1 ring-slate-900/5"
               aria-labelledby="issue-section-rfis"
             >
               <div className="mb-2 flex items-center gap-2">
-                <Link2 className="h-3 w-3 text-slate-500" strokeWidth={2} aria-hidden />
+                <Link2 className="h-3 w-3 text-[var(--viewer-icon)]" strokeWidth={2} aria-hidden />
                 <h3 id="issue-section-rfis" className={sectionTitleClass}>
                   Related RFIs{" "}
                   <span className="font-normal normal-case text-slate-600">(optional)</span>
@@ -1288,7 +1287,7 @@ export function IssueFormSlider(props: Props) {
               ) : rfisPending ? (
                 <p className="text-[12px] text-slate-500">Loading RFIs…</p>
               ) : rfisError ? (
-                <p className="text-[12px] leading-relaxed text-amber-200/90">
+                <p className="text-[12px] leading-relaxed text-amber-700">
                   Could not load RFIs. A Pro subscription and project access are required.
                 </p>
               ) : linkableRfis.length === 0 ? (
@@ -1298,15 +1297,15 @@ export function IssueFormSlider(props: Props) {
                 </p>
               ) : (
                 <>
-                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-800/60 bg-slate-950/40 p-1 [scrollbar-width:thin]">
+                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-1 [scrollbar-width:thin]">
                     {linkableRfis.map((r) => (
                       <label
                         key={r.id}
-                        className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-[12px] leading-snug text-slate-200 transition hover:bg-slate-800/50"
+                        className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-[12px] leading-snug text-slate-700 transition hover:bg-slate-100"
                       >
                         <input
                           type="checkbox"
-                          className="viewer-focus-ring mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 accent-[var(--viewer-primary)]"
+                          className="viewer-focus-ring mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 bg-white accent-[var(--viewer-primary)]"
                           checked={rfiLinkIds.includes(r.id)}
                           onChange={() => {
                             setRfiLinkIds((prev) =>
@@ -1317,7 +1316,7 @@ export function IssueFormSlider(props: Props) {
                           }}
                         />
                         <span className="min-w-0">
-                          <span className="font-medium text-slate-300">
+                          <span className="font-medium text-slate-600">
                             RFI #{String(r.rfiNumber).padStart(3, "0")}
                           </span>
                           <span className="text-slate-500"> — </span>
@@ -1354,15 +1353,15 @@ export function IssueFormSlider(props: Props) {
                   No other markups on this page yet. Draw on the sheet, then reopen this form.
                 </p>
               ) : (
-                <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border border-slate-800/60 bg-slate-950/40 p-1 [scrollbar-width:thin]">
+                <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-1 [scrollbar-width:thin]">
                   {attachableMarkups.map((a) => (
                     <label
                       key={a.id}
-                      className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-[12px] leading-snug text-slate-200 transition hover:bg-slate-800/50"
+                      className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-[12px] leading-snug text-slate-700 transition hover:bg-slate-100"
                     >
                       <input
                         type="checkbox"
-                        className="viewer-focus-ring mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 accent-[var(--viewer-primary)]"
+                        className="viewer-focus-ring mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 bg-white accent-[var(--viewer-primary)]"
                         checked={linkedMarkupIds.includes(a.id)}
                         onChange={() => {
                           setLinkedMarkupIds((prev) =>
@@ -1370,7 +1369,7 @@ export function IssueFormSlider(props: Props) {
                           );
                         }}
                       />
-                      <span className="min-w-0 font-mono text-[11px] text-slate-300">
+                      <span className="min-w-0 font-mono text-[11px] text-slate-600">
                         {markupAttachLabel(a.type)} ·{" "}
                         <span className="text-slate-500">{a.id.slice(0, 8)}…</span>
                       </span>
@@ -1389,16 +1388,16 @@ export function IssueFormSlider(props: Props) {
               {variant === "create" ? (
                 <>
                   Add photos now — they upload when you create the {entityLabel}. Tap{" "}
-                  <span className="font-medium text-slate-400">Take photo</span>,{" "}
-                  <span className="font-medium text-slate-400">Web camera</span>, or{" "}
-                  <span className="font-medium text-slate-400">From library</span>.
+                  <span className="font-medium text-slate-500">Take photo</span>,{" "}
+                  <span className="font-medium text-slate-500">Web camera</span>, or{" "}
+                  <span className="font-medium text-slate-500">From library</span>.
                 </>
               ) : (
                 <>
-                  Tap <span className="font-medium text-slate-400">Take photo</span> so the browser
+                  Tap <span className="font-medium text-slate-500">Take photo</span> so the browser
                   opens the camera (required on many phones). If nothing happens, try{" "}
-                  <span className="font-medium text-slate-400">Web camera</span> (HTTPS) or{" "}
-                  <span className="font-medium text-slate-400">From library</span>. Markups stay on
+                  <span className="font-medium text-slate-500">Web camera</span> (HTTPS) or{" "}
+                  <span className="font-medium text-slate-500">From library</span>. Markups stay on
                   the image only.
                 </>
               )}
@@ -1408,7 +1407,11 @@ export function IssueFormSlider(props: Props) {
                 <span
                   className={`${refPhotoLabelClass} pointer-events-none cursor-not-allowed opacity-40`}
                 >
-                  <Camera className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                  <Camera
+                    className="h-3.5 w-3.5 text-[var(--viewer-icon)]"
+                    strokeWidth={2}
+                    aria-hidden
+                  />
                   Take photo
                 </span>
               ) : (
@@ -1425,7 +1428,11 @@ export function IssueFormSlider(props: Props) {
                     }}
                   />
                   <span className="pointer-events-none flex items-center gap-2">
-                    <Camera className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                    <Camera
+                      className="h-3.5 w-3.5 text-[var(--viewer-icon)]"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
                     Take photo
                   </span>
                 </label>
@@ -1435,7 +1442,7 @@ export function IssueFormSlider(props: Props) {
                   type="button"
                   disabled={refPhotoPickDisabled}
                   onClick={() => setLiveCaptureOpen(true)}
-                  className="viewer-focus-ring inline-flex items-center gap-2 rounded-lg border border-slate-700/50 bg-slate-900/40 px-2.5 py-2 text-[12px] text-slate-300 transition hover:bg-slate-800/80 disabled:opacity-40"
+                  className="viewer-focus-ring inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[12px] text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
                   title="Opens the camera inside the browser (needs permission)"
                 >
                   Web camera…
@@ -1445,7 +1452,11 @@ export function IssueFormSlider(props: Props) {
                 <span
                   className={`${refPhotoLabelClass} pointer-events-none cursor-not-allowed opacity-40`}
                 >
-                  <ImagePlus className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                  <ImagePlus
+                    className="h-3.5 w-3.5 text-[var(--viewer-icon)]"
+                    strokeWidth={2}
+                    aria-hidden
+                  />
                   From library…
                 </span>
               ) : (
@@ -1461,7 +1472,11 @@ export function IssueFormSlider(props: Props) {
                     }}
                   />
                   <span className="pointer-events-none flex items-center gap-2">
-                    <ImagePlus className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                    <ImagePlus
+                      className="h-3.5 w-3.5 text-[var(--viewer-icon)]"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
                     From library…
                   </span>
                 </label>
@@ -1470,30 +1485,30 @@ export function IssueFormSlider(props: Props) {
             {referencePhotos.length === 0 && pendingPhotos.length === 0 ? (
               <p className="text-[11px] text-slate-500">No reference photos yet.</p>
             ) : (
-              <ul className="space-y-1 rounded-lg border border-slate-800/60 bg-slate-950/40 p-1.5">
+              <ul className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-1.5">
                 {pendingPhotos.map((p) => (
                   <li
                     key={p.id}
-                    className="flex flex-wrap items-center gap-2.5 rounded-md px-1.5 py-1.5 text-[11px] text-slate-200"
+                    className="flex flex-wrap items-center gap-2.5 rounded-md px-1.5 py-1.5 text-[11px] text-slate-700"
                   >
-                    <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900">
+                    <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
                       {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
                       <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
                     </div>
                     <span
-                      className="min-w-0 flex-1 truncate font-medium text-slate-300"
+                      className="min-w-0 flex-1 truncate font-medium text-slate-600"
                       title={p.file.name}
                     >
                       {p.file.name}
                     </span>
-                    <span className="shrink-0 rounded bg-sky-950/60 px-1 py-0.5 text-[9px] font-medium text-sky-200/90">
+                    <span className="shrink-0 rounded bg-sky-50 px-1 py-0.5 text-[9px] font-medium text-sky-700/90">
                       Pending
                     </span>
                     <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1">
                       <button
                         type="button"
                         disabled={createMut.isPending}
-                        className="viewer-focus-ring rounded-md border border-red-500/30 px-2 py-0.5 text-[10px] text-red-200/90 hover:bg-red-950/40 disabled:opacity-40"
+                        className="viewer-focus-ring rounded-md border border-red-500/30 px-2 py-0.5 text-[10px] text-red-600/90 hover:bg-red-50 disabled:opacity-40"
                         onClick={() => removePendingPhoto(p.id)}
                       >
                         Remove
@@ -1504,9 +1519,9 @@ export function IssueFormSlider(props: Props) {
                 {referencePhotos.map((p) => (
                   <li
                     key={p.id}
-                    className="flex flex-wrap items-center gap-2.5 rounded-md px-1.5 py-1.5 text-[11px] text-slate-200"
+                    className="flex flex-wrap items-center gap-2.5 rounded-md px-1.5 py-1.5 text-[11px] text-slate-700"
                   >
-                    <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900">
+                    <div className="relative h-24 w-36 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
                       {photoThumbUrls[p.id] ? (
                         // eslint-disable-next-line @next/next/no-img-element -- presigned S3 URL
                         <img
@@ -1525,13 +1540,13 @@ export function IssueFormSlider(props: Props) {
                       )}
                     </div>
                     <span
-                      className="min-w-0 flex-1 truncate font-medium text-slate-300"
+                      className="min-w-0 flex-1 truncate font-medium text-slate-600"
                       title={p.fileName}
                     >
                       {p.fileName}
                     </span>
                     {referencePhotoHasSketch(p.sketch) ? (
-                      <span className="shrink-0 rounded bg-amber-950/60 px-1 py-0.5 text-[9px] font-medium text-amber-200/90">
+                      <span className="shrink-0 rounded bg-amber-50 px-1 py-0.5 text-[9px] font-medium text-amber-700">
                         Markup
                       </span>
                     ) : null}
@@ -1540,7 +1555,7 @@ export function IssueFormSlider(props: Props) {
                         <button
                           type="button"
                           title="Open the photo here with any markups; tap Draw in the viewer to edit."
-                          className="viewer-focus-ring inline-flex items-center gap-0.5 rounded-md border border-slate-700/80 px-2 py-0.5 text-[10px] text-slate-300 hover:bg-slate-800/80"
+                          className="viewer-focus-ring inline-flex items-center gap-0.5 rounded-md border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600 hover:bg-slate-100"
                           onClick={() => void openSketchEditor(p)}
                         >
                           <Pencil className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
@@ -1551,7 +1566,7 @@ export function IssueFormSlider(props: Props) {
                         <button
                           type="button"
                           disabled={removeRefPhotoMut.isPending || saveEditMut.isPending}
-                          className="viewer-focus-ring rounded-md border border-red-500/30 px-2 py-0.5 text-[10px] text-red-200/90 hover:bg-red-950/40 disabled:opacity-40"
+                          className="viewer-focus-ring rounded-md border border-red-500/30 px-2 py-0.5 text-[10px] text-red-600/90 hover:bg-red-50 disabled:opacity-40"
                           onClick={() =>
                             removeRefPhotoMut.mutate(referencePhotos.filter((q) => q.id !== p.id))
                           }
@@ -1619,7 +1634,7 @@ export function IssueFormSlider(props: Props) {
                     return next;
                   });
                 }}
-                className="viewer-focus-ring flex w-full items-center gap-2 rounded-lg border border-slate-600/70 bg-slate-900/60 px-2.5 py-2 text-left text-[12px] text-slate-100 shadow-sm outline-none transition focus:border-[var(--viewer-primary)]/55 focus:ring-2 focus:ring-[var(--viewer-primary)]/20"
+                className="viewer-focus-ring flex w-full items-center gap-2 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-left text-[12px] text-slate-900 shadow-sm outline-none transition focus:border-[var(--viewer-primary)]/55 focus:ring-2 focus:ring-[var(--viewer-primary)]/20"
               >
                 {assigneeDisplay ? (
                   <>
@@ -1637,20 +1652,20 @@ export function IssueFormSlider(props: Props) {
                   <span className="min-w-0 flex-1 truncate text-slate-500">Choose a teammate…</span>
                 )}
                 <ChevronDown
-                  className={`h-3.5 w-3.5 shrink-0 text-slate-500 transition ${assigneePickerOpen ? "rotate-180" : ""}`}
+                  className={`h-3.5 w-3.5 shrink-0 text-[var(--viewer-icon)] transition ${assigneePickerOpen ? "rotate-180" : ""}`}
                   strokeWidth={2}
                   aria-hidden
                 />
               </button>
               {assigneePickerOpen ? (
                 <div
-                  className="absolute left-0 right-0 z-30 mt-1.5 overflow-hidden rounded-xl border border-slate-700/90 bg-slate-900 shadow-[0_16px_40px_-8px_rgba(0,0,0,0.65)] ring-1 ring-black/20"
+                  className="absolute left-0 right-0 z-30 mt-1.5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5"
                   role="presentation"
                 >
-                  <div className="border-b border-slate-800 p-2.5">
+                  <div className="border-b border-slate-200 p-2.5">
                     <div className="relative">
                       <Search
-                        className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-500"
+                        className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[var(--viewer-icon)]"
                         strokeWidth={2}
                         aria-hidden
                       />
@@ -1662,7 +1677,7 @@ export function IssueFormSlider(props: Props) {
                         placeholder="Search by name or email…"
                         autoComplete="off"
                         aria-label="Filter assignees by name or email"
-                        className="viewer-focus-ring w-full rounded-lg border border-slate-700/80 bg-slate-950 py-1.5 pl-8 pr-2.5 text-[11px] text-slate-100 placeholder:text-slate-500 outline-none focus:border-[var(--viewer-primary)]/50 focus:ring-2 focus:ring-[var(--viewer-primary)]/15"
+                        className="viewer-focus-ring w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2.5 text-[11px] text-slate-900 placeholder:text-slate-500 outline-none focus:border-[var(--viewer-primary)]/50 focus:ring-2 focus:ring-[var(--viewer-primary)]/15"
                       />
                     </div>
                   </div>
@@ -1682,11 +1697,11 @@ export function IssueFormSlider(props: Props) {
                         }}
                         className={`flex w-full items-center gap-2 px-2.5 py-2 text-left text-[12px] transition ${
                           assigneeId === ""
-                            ? "bg-[var(--viewer-primary-muted)] text-white"
-                            : "text-slate-200 hover:bg-slate-800/80"
+                            ? "bg-[var(--viewer-primary-muted)] text-[var(--viewer-primary-hover)]"
+                            : "text-slate-700 hover:bg-slate-100"
                         }`}
                       >
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-slate-600 text-[10px] text-slate-500">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-slate-300 text-[10px] text-slate-500">
                           —
                         </span>
                         <span>Unassigned</span>
@@ -1706,8 +1721,8 @@ export function IssueFormSlider(props: Props) {
                             }}
                             className={`flex w-full items-center gap-2 px-2.5 py-2 text-left text-[12px] transition ${
                               selected
-                                ? "bg-[var(--viewer-primary-muted)] text-white"
-                                : "text-slate-200 hover:bg-slate-800/80"
+                                ? "bg-[var(--viewer-primary-muted)] text-[var(--viewer-primary-hover)]"
+                                : "text-slate-700 hover:bg-slate-100"
                             }`}
                           >
                             <ViewerUserThumb
@@ -1798,7 +1813,7 @@ export function IssueFormSlider(props: Props) {
         className={
           embedded
             ? "flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--bim-chrome-border)] bg-transparent px-3 py-2.5"
-            : `flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-800/90 bg-slate-950 ${isDocked ? "px-3 py-2.5" : "px-4 py-2.5"}`
+            : `flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white ${isDocked ? "px-3 py-2.5" : "px-4 py-2.5"}`
         }
       >
         {variant === "edit" ? (
@@ -1806,7 +1821,7 @@ export function IssueFormSlider(props: Props) {
             type="button"
             disabled={deleteMut.isPending}
             onClick={() => setDeleteDialogOpen(true)}
-            className={`${focusRingClass} inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-950/40 px-2.5 py-1.5 text-[11px] font-semibold text-red-100 transition hover:bg-red-950/65 disabled:opacity-40`}
+            className={`${focusRingClass} inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-50 px-2.5 py-1.5 text-[11px] font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-40`}
           >
             <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
             Delete
@@ -1831,7 +1846,7 @@ export function IssueFormSlider(props: Props) {
             className={
               embedded
                 ? `${focusRingClass} rounded-lg border border-[var(--bim-chrome-border)] bg-transparent px-3 py-1.5 text-[11px] font-medium text-[var(--bim-text-muted)] transition hover:bg-[color-mix(in_srgb,var(--bim-panel)_70%,transparent)] hover:text-[var(--bim-text)] disabled:opacity-40`
-                : "viewer-focus-ring rounded-lg border border-slate-600/80 bg-transparent px-3 py-1.5 text-[11px] font-medium text-slate-300 transition hover:bg-slate-800/80 disabled:opacity-40"
+                : "viewer-focus-ring rounded-lg border border-slate-300 bg-transparent px-3 py-1.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
             }
           >
             Cancel
@@ -1852,7 +1867,7 @@ export function IssueFormSlider(props: Props) {
               className={
                 embedded
                   ? `${focusRingClass} rounded-lg border border-[var(--bim-chrome-border)] bg-[color-mix(in_srgb,var(--bim-panel)_55%,transparent)] px-3 py-1.5 text-[11px] font-medium text-[var(--bim-text)] transition hover:bg-[color-mix(in_srgb,var(--bim-panel)_70%,transparent)] disabled:opacity-40`
-                  : "viewer-focus-ring rounded-lg border border-slate-600/80 bg-slate-800/80 px-3 py-1.5 text-[11px] font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-40"
+                  : "viewer-focus-ring rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-200 disabled:opacity-40"
               }
             >
               {createMut.isPending ? "Saving…" : "Save & next"}
@@ -1954,7 +1969,7 @@ export function IssueFormSlider(props: Props) {
         <button
           type="button"
           aria-label={`Close ${entityLabel} form`}
-          className="absolute inset-0 bg-slate-950/55 transition hover:bg-slate-950/65"
+          className="absolute inset-0 bg-white/55 transition hover:bg-white/65"
           onClick={onCancel}
           onMouseDown={(e) => e.preventDefault()}
         />

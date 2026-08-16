@@ -338,8 +338,8 @@ export const BottomDrawer = forwardRef<HTMLDivElement, BottomDrawerProps>(functi
     <div
       ref={ref}
       data-takeoff-inventory-drawer
-      className={`pointer-events-auto relative flex max-h-[min(100dvh,100vh)] flex-col rounded-t-lg border border-[#334155] border-b-0 bg-[#0f172a] shadow-[0_-8px_24px_-8px_rgba(0,0,0,0.45)] ${
-        inventoryFullscreen ? "ring-1 ring-[#475569]/60" : ""
+      className={`pointer-events-auto relative flex max-h-[min(100dvh,100vh)] flex-col rounded-t-lg border border-slate-200 border-b-0 bg-white shadow-[0_-4px_16px_-4px_rgba(12,18,34,0.12)] ${
+        inventoryFullscreen ? "ring-1 ring-slate-300" : ""
       } ${className}`}
       style={{
         height: heightPx,
@@ -348,14 +348,14 @@ export const BottomDrawer = forwardRef<HTMLDivElement, BottomDrawerProps>(functi
     >
       {isDragging ? (
         <div
-          className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-[#475569] bg-[#0f172a]/95 px-2 py-1 text-[10px] font-medium tabular-nums text-[#e2e8f0] shadow-lg"
+          className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-slate-200 bg-white/95 px-2 py-1 text-[10px] font-medium tabular-nums text-slate-700 shadow-lg"
           aria-hidden
         >
           {Math.round(heightPx)} px · {pctOfVh}% · {snapLabel(previewSnap)}
         </div>
       ) : null}
 
-      <div className="flex shrink-0 flex-col border-b border-[#334155] bg-[#0f172a] select-none">
+      <div className="flex shrink-0 flex-col border-b border-slate-200 bg-white select-none">
         <div
           role="slider"
           tabIndex={0}
@@ -378,7 +378,11 @@ export const BottomDrawer = forwardRef<HTMLDivElement, BottomDrawerProps>(functi
           }}
           className="flex h-5 cursor-ns-resize flex-col items-center justify-center rounded-t-lg pt-0.5"
         >
-          <GripHorizontal className="h-4 w-4 text-[#94a3b8]" strokeWidth={2.25} aria-hidden />
+          <GripHorizontal
+            className="h-4 w-4 text-[var(--viewer-icon)]"
+            strokeWidth={2.25}
+            aria-hidden
+          />
           {showSnapIndicators ? (
             <div className="flex w-full justify-center gap-3 px-4 pb-0.5">
               {targetsForDots.map(({ snap: ds }) => {
@@ -387,7 +391,7 @@ export const BottomDrawer = forwardRef<HTMLDivElement, BottomDrawerProps>(functi
                   <span
                     key={ds}
                     className={`h-1 w-6 rounded-full transition-colors ${
-                      active ? "bg-[#38bdf8]" : "bg-[#334155]"
+                      active ? "bg-[#38bdf8]" : "bg-slate-100"
                     }`}
                   />
                 );
@@ -405,7 +409,7 @@ export const BottomDrawer = forwardRef<HTMLDivElement, BottomDrawerProps>(functi
           }}
         >
           <span
-            className="pointer-events-none flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#334155] bg-[#1e293b]/90 text-[#cbd5e1] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
+            className="pointer-events-none flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white/90 text-slate-700 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
             aria-hidden
           >
             {expanded ? (
@@ -414,7 +418,7 @@ export const BottomDrawer = forwardRef<HTMLDivElement, BottomDrawerProps>(functi
               <ChevronDown className="h-4 w-4" strokeWidth={2.25} />
             )}
           </span>
-          <div className="min-w-0 flex-1 text-[11px] font-semibold text-[#e2e8f0]">
+          <div className="min-w-0 flex-1 text-[11px] font-semibold text-slate-700">
             {chromeTitle}
           </div>
           {headerRight ? (

@@ -88,16 +88,16 @@ function PageThumbnailCard({
         title={`Open page ${pageNumber}${sizeLabel ? ` — ${sizeLabel}` : ""}${markupCount > 0 ? ` — ${markupCount} markup${markupCount === 1 ? "" : "s"}` : ""}`}
         className={`flex w-full flex-col items-center rounded-lg border p-1 text-center transition focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 ${
           isActive
-            ? "border-blue-500/70 bg-blue-600/15 ring-1 ring-blue-500/40"
-            : "border-slate-700/90 bg-slate-900/60 hover:border-slate-600 hover:bg-slate-800/80"
+            ? "border-blue-500/70 bg-blue-50 ring-1 ring-blue-500/40"
+            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-100"
         }`}
       >
         <div
-          className="relative mx-auto flex min-h-18 w-full items-center justify-center overflow-hidden rounded border border-slate-800 bg-white"
+          className="relative mx-auto flex min-h-18 w-full items-center justify-center overflow-hidden rounded border border-slate-200 bg-white"
           style={{ maxWidth: THUMB_MAX_CSS_PX }}
         >
           {!rendered && (
-            <span className="absolute inset-0 animate-pulse bg-slate-200/90 dark:bg-slate-700/50" />
+            <span className="absolute inset-0 animate-pulse bg-slate-200/90 dark:bg-slate-200" />
           )}
           <canvas
             ref={canvasRef}
@@ -107,7 +107,7 @@ function PageThumbnailCard({
           />
         </div>
         <div className="mt-1 w-full px-0.5">
-          <p className="text-[10px] font-semibold tabular-nums text-slate-200">Page {pageNumber}</p>
+          <p className="text-[10px] font-semibold tabular-nums text-slate-700">Page {pageNumber}</p>
           <p className="truncate text-[8px] text-slate-500" title={sizeLabel}>
             {sizeLabel}
           </p>

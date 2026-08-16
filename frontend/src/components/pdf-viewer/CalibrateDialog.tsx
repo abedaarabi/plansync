@@ -190,36 +190,36 @@ export function CalibrateDialog({
       <button
         type="button"
         aria-label="Dismiss calibration"
-        className="fixed inset-0 z-[90] cursor-default bg-slate-950/35 print:hidden"
+        className="fixed inset-0 z-[90] cursor-default bg-white/35 print:hidden"
         onClick={onCancel}
       />
       <div
         ref={panelRef}
         style={safeStyle}
-        className="rounded-lg border border-[#334155] bg-[#1E293B] p-3 text-[#F8FAFC] shadow-2xl ring-1 ring-black/25 print:hidden"
+        className="rounded-lg border border-slate-200 bg-white p-3 text-slate-900 shadow-2xl ring-1 ring-black/25 print:hidden"
         role="dialog"
         aria-labelledby="calibrate-title"
         onClick={(e) => e.stopPropagation()}
       >
         <h2
           id="calibrate-title"
-          className="text-[13px] font-semibold tracking-tight text-[#F8FAFC]"
+          className="text-[13px] font-semibold tracking-tight text-slate-900"
         >
           Known distance
         </h2>
-        <p className="mt-1 text-[11px] leading-snug text-[#94A3B8]">
+        <p className="mt-1 text-[11px] leading-snug text-slate-500">
           Between the two snapped points ({measureUnit} on the sheet). While you drag to the second
           point, the live label uses your selected measure unit; before Apply it reflects PDF
           coordinate space (72 pt = 1 in), not site scale until you enter the known length. If you
           calibrated this page before, the last known distance is prefilled.
         </p>
-        <label className="mt-2 block text-[11px] font-medium text-[#94A3B8]">
+        <label className="mt-2 block text-[11px] font-medium text-slate-500">
           {measureUnit}
           <input
             type="number"
             min={0.001}
             step="any"
-            className="mt-1 w-full rounded-md border border-[#334155] bg-[#0F172A] px-2 py-1.5 text-[12px] text-[#F8FAFC] outline-none transition placeholder:text-[#64748B] focus:border-[#2563EB]/60 focus:ring-1 focus:ring-[#2563EB]/35"
+            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-[#2563EB]/60 focus:ring-1 focus:ring-[#2563EB]/35"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             title={`Real-world distance between calibration points (${measureUnit})`}
@@ -229,7 +229,7 @@ export function CalibrateDialog({
         <div className="mt-3 flex justify-end gap-1.5">
           <button
             type="button"
-            className="rounded-md px-2.5 py-1.5 text-[11px] font-medium text-[#94A3B8] transition hover:bg-[#334155] hover:text-[#F8FAFC]"
+            className="rounded-md px-2.5 py-1.5 text-[11px] font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
             title="Cancel calibration"
             onClick={onCancel}
           >
@@ -237,7 +237,7 @@ export function CalibrateDialog({
           </button>
           <button
             type="button"
-            className="rounded-md bg-[#2563EB] px-2.5 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-[#1D4ED8]"
+            className="rounded-md bg-(--viewer-primary) px-2.5 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-(--viewer-primary-hover)"
             title="Apply scale"
             onClick={() => {
               const n = parseFloat(value);

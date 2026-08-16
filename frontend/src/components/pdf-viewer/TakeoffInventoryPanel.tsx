@@ -408,8 +408,8 @@ export function TakeoffInventoryPanel() {
   const renderZoneRows = (item: TakeoffItem, zones: TakeoffZone[]) => {
     if (zones.length === 0) {
       return (
-        <div className="rounded-md border border-dashed border-[#334155] bg-[#0f172a]/80 px-3 py-3 text-center">
-          <p className="text-[10px] leading-relaxed text-[#94a3b8]">
+        <div className="rounded-md border border-dashed border-slate-200 bg-white/80 px-3 py-3 text-center">
+          <p className="text-[10px] leading-relaxed text-slate-500">
             No zones yet — draw on the sheet with the Takeoff tool, then save.
           </p>
           <button
@@ -421,7 +421,7 @@ export function TakeoffInventoryPanel() {
               setTakeoffMode(true);
               setTool("takeoff");
             }}
-            className="viewer-focus-ring mt-2 inline-flex items-center gap-1 rounded-md border border-[#2563EB]/50 bg-[#2563EB]/10 px-2 py-1.5 text-[10px] font-semibold text-[#93c5fd] hover:bg-[#2563EB]/20"
+            className="viewer-focus-ring mt-2 inline-flex items-center gap-1 rounded-md border border-[#2563EB]/50 bg-[#2563EB]/10 px-2 py-1.5 text-[10px] font-semibold text-blue-700 hover:bg-[#2563EB]/20"
           >
             <Plus className="h-3 w-3" />
             Start drawing
@@ -436,7 +436,7 @@ export function TakeoffInventoryPanel() {
           <button
             type="button"
             onClick={() => selectAllZonesForItem(item.id)}
-            className="viewer-focus-ring rounded border border-[#334155] bg-[#1e293b] px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-[#94a3b8] hover:border-sky-500/40 hover:text-sky-200"
+            className="viewer-focus-ring rounded border border-slate-200 bg-white px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-slate-500 hover:border-sky-500/40 hover:text-sky-700"
           >
             Select all zones
           </button>
@@ -448,7 +448,7 @@ export function TakeoffInventoryPanel() {
               key={z.id}
               data-takeoff-zone-id={z.id}
               className={`flex items-center gap-1.5 rounded-md border px-1.5 py-1.5 text-[10px] ${
-                checked ? "border-sky-500/50 bg-sky-950/35" : "border-[#334155] bg-[#0f172a]"
+                checked ? "border-sky-500/50 bg-sky-50" : "border-slate-200 bg-white"
               }`}
               onMouseEnter={() => {
                 setTakeoffHoverZoneId(z.id);
@@ -461,22 +461,22 @@ export function TakeoffInventoryPanel() {
                 onChange={() => toggleZoneCheckbox(z.id, item.id)}
                 onClick={(ev) => ev.stopPropagation()}
                 disabled={false}
-                className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded border-[#475569] bg-[#0f172a] accent-[#2563EB]"
+                className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded border-slate-200 bg-white accent-[#2563EB]"
                 aria-label={`Select zone ${i + 1}`}
               />
               <button
                 type="button"
                 onClick={() => focusZoneOnCanvas(z, item)}
-                className="viewer-focus-ring min-w-0 flex-1 truncate text-left text-[#cbd5e1] hover:text-white"
+                className="viewer-focus-ring min-w-0 flex-1 truncate text-left text-slate-700 hover:text-slate-900"
               >
-                <span className="font-medium text-[#94a3b8]">Zone {i + 1}</span>
-                <span className="ml-1 tabular-nums text-[#f8fafc]">
+                <span className="font-medium text-slate-500">Zone {i + 1}</span>
+                <span className="ml-1 tabular-nums text-slate-900">
                   {z.computedQuantity.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
                   {displayUnit(item.unit)}
                 </span>
-                <span className="ml-1 text-[#64748b]">p.{z.pageIndex + 1}</span>
+                <span className="ml-1 text-slate-500">p.{z.pageIndex + 1}</span>
                 {z.noSheetGeometry ? (
-                  <span className="ml-1 text-[9px] font-medium text-violet-300">Manual</span>
+                  <span className="ml-1 text-[9px] font-medium text-violet-600">Manual</span>
                 ) : null}
                 {z.locked ? (
                   <span className="ml-1 text-[9px] font-medium text-amber-400">Locked</span>
@@ -492,7 +492,7 @@ export function TakeoffInventoryPanel() {
                   setTakeoffSelectedZoneIds([z.id]);
                   openTakeoffSlider({ editZoneId: z.id });
                 }}
-                className="viewer-focus-ring shrink-0 rounded p-1 text-[#94a3b8] hover:bg-[#334155] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="viewer-focus-ring shrink-0 rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Pencil className="h-3.5 w-3.5" />
               </button>
@@ -501,7 +501,7 @@ export function TakeoffInventoryPanel() {
                 title={z.locked ? "Zone is locked" : "Delete zone"}
                 disabled={z.locked}
                 onClick={() => deleteOneZone(z)}
-                className="viewer-focus-ring shrink-0 rounded p-1 text-red-300/90 hover:bg-red-950/50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="viewer-focus-ring shrink-0 rounded p-1 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -527,12 +527,12 @@ export function TakeoffInventoryPanel() {
           setTakeoffHoverItemId(item.id);
           setTakeoffHoverZoneId(null);
         }}
-        className={`border-b border-[#334155] transition-colors duration-150 ${
+        className={`border-b border-slate-200 transition-colors duration-150 ${
           sel
-            ? "bg-[#1e3a5f]"
+            ? "bg-blue-50"
             : bulk
-              ? "bg-[#1e293b] ring-1 ring-inset ring-[#2563EB]/40"
-              : "bg-[#1e293b] hover:bg-[#334155]"
+              ? "bg-white ring-1 ring-inset ring-[#2563EB]/40"
+              : "bg-white hover:bg-slate-100"
         }`}
       >
         <td className="w-9 px-1 py-2 align-middle" style={{ paddingLeft: Math.min(indentPx, 32) }}>
@@ -544,7 +544,7 @@ export function TakeoffInventoryPanel() {
               setBulkForItem(item.id, e.target.checked);
             }}
             onClick={(e) => e.stopPropagation()}
-            className="h-3.5 w-3.5 cursor-pointer rounded border-[#475569] bg-[#0f172a] text-[#2563EB] accent-[#2563EB]"
+            className="h-3.5 w-3.5 cursor-pointer rounded border-slate-200 bg-white text-[#2563EB] accent-[#2563EB]"
             aria-label={`Select line ${item.name}`}
           />
         </td>
@@ -556,7 +556,7 @@ export function TakeoffInventoryPanel() {
               aria-expanded={itemOpen}
               aria-controls={`takeoff-item-zones-${item.id}`}
               title={itemOpen ? "Collapse zones" : "Expand zones"}
-              className="viewer-focus-ring shrink-0 rounded p-0.5 text-[#94a3b8] hover:bg-[#334155] hover:text-white"
+              className="viewer-focus-ring shrink-0 rounded p-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
             >
               {itemOpen ? (
                 <ChevronDown className="h-3.5 w-3.5" aria-hidden />
@@ -577,29 +577,29 @@ export function TakeoffInventoryPanel() {
                 style={{ backgroundColor: item.color }}
                 aria-hidden
               />
-              <span className="truncate text-[11px] font-medium text-[#f8fafc]">{item.name}</span>
-              <span className="shrink-0 rounded bg-[#334155] px-1 py-0.5 text-[9px] font-semibold tabular-nums text-[#cbd5e1]">
+              <span className="truncate text-[11px] font-medium text-slate-900">{item.name}</span>
+              <span className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[9px] font-semibold tabular-nums text-slate-700">
                 {r.zoneCount}z
               </span>
             </button>
           </div>
         </td>
-        <td className="w-14 px-2 py-2 text-right tabular-nums text-[11px] text-[#94a3b8]">
+        <td className="w-14 px-2 py-2 text-right tabular-nums text-[11px] text-slate-500">
           {r.zoneCount}
         </td>
-        <td className="w-24 px-2 py-2 text-right tabular-nums text-[11px] text-[#f8fafc]">
+        <td className="w-24 px-2 py-2 text-right tabular-nums text-[11px] text-slate-900">
           {r.quantity.toLocaleString(undefined, { maximumFractionDigits: 2 })}
         </td>
-        <td className="w-16 px-2 py-2 text-[11px] text-[#94a3b8]">{displayUnit(item.unit)}</td>
-        <td className="w-20 px-2 py-2 tabular-nums text-[11px] text-[#94a3b8]">{r.pageLabel}</td>
-        <td className="w-20 px-2 py-2 text-[11px] text-[#94a3b8]">
+        <td className="w-16 px-2 py-2 text-[11px] text-slate-500">{displayUnit(item.unit)}</td>
+        <td className="w-20 px-2 py-2 tabular-nums text-[11px] text-slate-500">{r.pageLabel}</td>
+        <td className="w-20 px-2 py-2 text-[11px] text-slate-500">
           {typeLabel(item.measurementType)}
         </td>
       </tr>
     );
 
     const zoneBlock = itemOpen ? (
-      <tr key={`${item.id}-zones`} className="border-b border-[#334155] bg-[#0c1219]">
+      <tr key={`${item.id}-zones`} className="border-b border-slate-200 bg-slate-50">
         <td colSpan={7} className="px-2 py-2" style={{ paddingLeft: Math.min(indentPx + 24, 40) }}>
           <div
             id={`takeoff-item-zones-${item.id}`}
@@ -628,18 +628,18 @@ export function TakeoffInventoryPanel() {
         const gkey = `g:type:${t}`;
         const open = groupExpandedKeys.has(gkey);
         nodes.push(
-          <tr key={gkey} className="bg-[#0f172a]">
+          <tr key={gkey} className="bg-white">
             <td colSpan={7} className="px-2 py-1.5">
               <button
                 type="button"
                 onClick={() => toggleGroupExpanded(gkey)}
                 aria-expanded={open}
-                className="viewer-focus-ring inline-flex items-center gap-1 text-left text-[11px] font-semibold text-[#f8fafc]"
+                className="viewer-focus-ring inline-flex items-center gap-1 text-left text-[11px] font-semibold text-slate-900"
               >
                 {open ? (
-                  <ChevronDown className="h-3.5 w-3.5 text-[#94a3b8]" aria-hidden />
+                  <ChevronDown className="h-3.5 w-3.5 text-[var(--viewer-icon)]" aria-hidden />
                 ) : (
-                  <ChevronRight className="h-3.5 w-3.5 text-[#94a3b8]" aria-hidden />
+                  <ChevronRight className="h-3.5 w-3.5 text-[var(--viewer-icon)]" aria-hidden />
                 )}
                 {typeLabel(t)}
               </button>
@@ -667,18 +667,18 @@ export function TakeoffInventoryPanel() {
         const gkey = `g:page:${p}`;
         const open = groupExpandedKeys.has(gkey);
         nodes.push(
-          <tr key={gkey} className="bg-[#0f172a]">
+          <tr key={gkey} className="bg-white">
             <td colSpan={7} className="px-2 py-1.5">
               <button
                 type="button"
                 onClick={() => toggleGroupExpanded(gkey)}
                 aria-expanded={open}
-                className="viewer-focus-ring inline-flex items-center gap-1 text-left text-[11px] font-semibold text-[#f8fafc]"
+                className="viewer-focus-ring inline-flex items-center gap-1 text-left text-[11px] font-semibold text-slate-900"
               >
                 {open ? (
-                  <ChevronDown className="h-3.5 w-3.5 text-[#94a3b8]" aria-hidden />
+                  <ChevronDown className="h-3.5 w-3.5 text-[var(--viewer-icon)]" aria-hidden />
                 ) : (
-                  <ChevronRight className="h-3.5 w-3.5 text-[#94a3b8]" aria-hidden />
+                  <ChevronRight className="h-3.5 w-3.5 text-[var(--viewer-icon)]" aria-hidden />
                 )}
                 {label}
               </button>
@@ -701,18 +701,18 @@ export function TakeoffInventoryPanel() {
         const key = pathKey ? `${pathKey}>${seg}` : `cat:${seg}`;
         const open = groupExpandedKeys.has(key);
         out.push(
-          <tr key={key} className="bg-[#0f172a]">
+          <tr key={key} className="bg-white">
             <td colSpan={7} className="px-2 py-1.5" style={{ paddingLeft: 8 + depth * 14 }}>
               <button
                 type="button"
                 onClick={() => toggleGroupExpanded(key)}
                 aria-expanded={open}
-                className="viewer-focus-ring inline-flex items-center gap-1 text-left text-[11px] font-semibold text-[#f8fafc]"
+                className="viewer-focus-ring inline-flex items-center gap-1 text-left text-[11px] font-semibold text-slate-900"
               >
                 {open ? (
-                  <ChevronDown className="h-3.5 w-3.5 text-[#94a3b8]" aria-hidden />
+                  <ChevronDown className="h-3.5 w-3.5 text-[var(--viewer-icon)]" aria-hidden />
                 ) : (
-                  <ChevronRight className="h-3.5 w-3.5 text-[#94a3b8]" aria-hidden />
+                  <ChevronRight className="h-3.5 w-3.5 text-[var(--viewer-icon)]" aria-hidden />
                 )}
                 {seg}
               </button>
@@ -735,13 +735,13 @@ export function TakeoffInventoryPanel() {
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex shrink-0 flex-col gap-2 border-b border-[#334155] bg-[#0f172a] px-2 py-2">
+      <div className="flex shrink-0 flex-col gap-2 border-b border-slate-200 bg-white px-2 py-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-medium text-[#94a3b8]">Group by</span>
+          <span className="text-[10px] font-medium text-slate-500">Group by</span>
           <select
             value={groupMode}
             onChange={(e) => setGroupMode(e.target.value as GroupMode)}
-            className="viewer-focus-ring max-w-[140px] rounded-md border border-[#334155] bg-[#1e293b] px-2 py-1 text-[10px] font-medium text-[#f8fafc]"
+            className="viewer-focus-ring max-w-[140px] rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-900"
           >
             <option value="none">None</option>
             <option value="type">Type</option>
@@ -750,20 +750,20 @@ export function TakeoffInventoryPanel() {
           </select>
           {bulkCount >= 2 ? (
             <>
-              <span className="rounded-md bg-[#1e3a5f] px-2 py-0.5 text-[10px] font-semibold text-[#93c5fd]">
+              <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
                 {bulkCount} lines
               </span>
               <button
                 type="button"
                 onClick={deleteBulk}
-                className="viewer-focus-ring rounded-md border border-red-500/40 bg-red-950/50 px-2 py-1 text-[10px] font-medium text-red-200 hover:bg-red-950/80"
+                className="viewer-focus-ring rounded-md border border-red-500/40 bg-red-50 px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-50"
               >
                 Delete lines
               </button>
               <button
                 type="button"
                 onClick={clearBulk}
-                className="viewer-focus-ring text-[10px] text-[#94a3b8] underline hover:text-[#cbd5e1]"
+                className="viewer-focus-ring text-[10px] text-slate-500 underline hover:text-slate-700"
               >
                 Clear
               </button>
@@ -773,7 +773,7 @@ export function TakeoffInventoryPanel() {
               type="button"
               onClick={selectAllVisible}
               disabled={rows.length === 0}
-              className="viewer-focus-ring text-[10px] text-[#94a3b8] underline hover:text-[#cbd5e1] disabled:opacity-40"
+              className="viewer-focus-ring text-[10px] text-slate-500 underline hover:text-slate-700 disabled:opacity-40"
             >
               Select all lines
             </button>
@@ -792,41 +792,41 @@ export function TakeoffInventoryPanel() {
               openTakeoffSlider({ manualLine: true });
               bumpTakeoffInventoryExpand();
             }}
-            className="viewer-focus-ring inline-flex items-center gap-1 rounded-md border border-emerald-500/45 bg-emerald-950/35 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-100 hover:bg-emerald-950/55 disabled:cursor-not-allowed disabled:opacity-40"
+            className="viewer-focus-ring inline-flex items-center gap-1 rounded-md border border-emerald-500/45 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
             Add from material
           </button>
         </div>
         {zoneBulkCount > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-md border border-sky-500/30 bg-sky-950/25 px-2 py-1.5">
-            <span className="text-[10px] font-semibold text-sky-200">
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-sky-500/30 bg-sky-50 px-2 py-1.5">
+            <span className="text-[10px] font-semibold text-sky-700">
               {zoneBulkCount} zone{zoneBulkCount === 1 ? "" : "s"} selected
             </span>
             <button
               type="button"
               onClick={fitSelectedZones}
-              className="viewer-focus-ring rounded border border-sky-500/40 bg-sky-950/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-100 hover:bg-sky-950/70"
+              className="viewer-focus-ring rounded border border-sky-500/40 bg-sky-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-700 hover:bg-sky-50"
             >
               Fit on sheet
             </button>
             <button
               type="button"
               onClick={() => deleteZonesWithToast([...takeoffSelectedZoneIds])}
-              className="viewer-focus-ring rounded border border-red-500/35 bg-red-950/40 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-red-200 hover:bg-red-950/65"
+              className="viewer-focus-ring rounded border border-red-500/35 bg-red-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-red-600 hover:bg-red-50"
             >
               Delete zones
             </button>
             <button
               type="button"
               onClick={() => setTakeoffSelectedZoneIds([])}
-              className="viewer-focus-ring text-[9px] text-[#94a3b8] underline hover:text-[#cbd5e1]"
+              className="viewer-focus-ring text-[9px] text-slate-500 underline hover:text-slate-700"
             >
               Clear selection
             </button>
             <button
               type="button"
-              className="shrink-0 rounded p-0.5 text-[#64748b] hover:bg-[#1e293b] hover:text-[#94a3b8]"
+              className="shrink-0 rounded p-0.5 text-slate-500 hover:bg-white hover:text-slate-500"
               title="⌘/Ctrl-click a zone on the sheet to add or remove from selection."
               aria-label="Multi-select on sheet help"
             >
@@ -847,8 +847,8 @@ export function TakeoffInventoryPanel() {
       >
         {takeoffItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center">
-            <p className="text-[12px] font-medium text-[#f8fafc]">No takeoff items yet</p>
-            <p className="max-w-sm text-[11px] leading-relaxed text-[#94a3b8]">
+            <p className="text-[12px] font-medium text-slate-900">No takeoff items yet</p>
+            <p className="max-w-sm text-[11px] leading-relaxed text-slate-500">
               Draw on the sheet to start measuring. Use the Takeoff tool, then finish a shape and
               save in the side panel.
             </p>
@@ -858,7 +858,7 @@ export function TakeoffInventoryPanel() {
                 setTakeoffMode(true);
                 setTool("takeoff");
               }}
-              className="viewer-focus-ring inline-flex items-center gap-1.5 rounded-md border border-[#2563EB] bg-[#2563EB]/15 px-3 py-2 text-[11px] font-semibold text-[#60a5fa] transition hover:bg-[#2563EB]/25"
+              className="viewer-focus-ring inline-flex items-center gap-1.5 rounded-md border border-[#2563EB] bg-[#2563EB]/15 px-3 py-2 text-[11px] font-semibold text-blue-600 transition hover:bg-[#2563EB]/25"
             >
               Start drawing
               <ChevronRight className="h-3.5 w-3.5" aria-hidden />
@@ -866,17 +866,17 @@ export function TakeoffInventoryPanel() {
           </div>
         ) : (
           <table className="w-full min-w-[640px] table-fixed border-collapse text-left">
-            <thead className="sticky top-0 z-10 border-b border-[#334155] bg-[#0f172a] shadow-sm">
-              <tr className="text-[9px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-white shadow-sm">
+              <tr className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">
                 <th className="w-9 px-1 py-2" aria-label="Select line" />
                 <th className="min-w-0 px-2 py-2">
                   <button
                     type="button"
                     onClick={() => setNameSortDesc((d) => !d)}
-                    className="viewer-focus-ring inline-flex items-center gap-0.5 hover:text-[#cbd5e1]"
+                    className="viewer-focus-ring inline-flex items-center gap-0.5 hover:text-slate-700"
                   >
                     Name
-                    <span className="tabular-nums text-[#64748b]">{nameSortDesc ? "↓" : "↑"}</span>
+                    <span className="tabular-nums text-slate-500">{nameSortDesc ? "↓" : "↑"}</span>
                   </button>
                 </th>
                 <th className="w-14 px-2 py-2 text-right">Zones</th>

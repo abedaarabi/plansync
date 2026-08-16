@@ -35,14 +35,14 @@ export function DeleteIssueConfirmDialog({
       ariaDescribedBy="delete-issue-desc"
       closeOnBackdrop={!isDeleting}
       closeOnEscape={!isDeleting}
-      variant="viewer-dark"
+      variant="viewer"
       overlayZClass="z-[130]"
       footer={
         <>
           <button
             type="button"
             disabled={isDeleting}
-            className={`${MOBILE_DIALOG_BTN_PRIMARY} border border-red-800/80 bg-red-950/80 text-red-100 shadow-sm hover:bg-red-900/90 disabled:opacity-40`}
+            className={`${MOBILE_DIALOG_BTN_PRIMARY} border border-red-800/80 bg-red-50 text-red-700 shadow-sm hover:bg-red-100 disabled:opacity-40`}
             onClick={onConfirm}
           >
             {isDeleting ? "Deleting…" : "Delete issue"}
@@ -50,7 +50,7 @@ export function DeleteIssueConfirmDialog({
           <button
             type="button"
             disabled={isDeleting}
-            className={`${MOBILE_DIALOG_BTN_SECONDARY} text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40`}
+            className={`${MOBILE_DIALOG_BTN_SECONDARY} text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40`}
             onClick={onCancel}
           >
             Cancel
@@ -60,17 +60,20 @@ export function DeleteIssueConfirmDialog({
     >
       <div className="flex gap-3">
         <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-950/50"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-50"
           aria-hidden
         >
-          <AlertTriangle className="h-5 w-5 text-amber-200/90" strokeWidth={2} />
+          <AlertTriangle className="h-5 w-5 text-amber-700" strokeWidth={2} />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 id="delete-issue-title" className="text-lg font-semibold tracking-tight text-white">
+          <h2
+            id="delete-issue-title"
+            className="text-lg font-semibold tracking-tight text-slate-900"
+          >
             Delete this issue?
           </h2>
-          <p id="delete-issue-desc" className="mt-2 text-sm leading-relaxed text-slate-400">
-            <span className="font-medium text-slate-300">
+          <p id="delete-issue-desc" className="mt-2 text-sm leading-relaxed text-slate-500">
+            <span className="font-medium text-slate-600">
               &ldquo;{issueTitle || "Untitled"}&rdquo;
             </span>{" "}
             will be removed from the project and its pin will disappear from the sheet. This cannot

@@ -447,7 +447,7 @@ export function PdfPageMinimap({
             : "With markups — map, click or drag to pan"
         }
       >
-        <div className="rounded-[12px] border border-[#334155]/90 bg-[#0a0f1e]/96 p-2 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.45),0_0_0_1px_rgba(37,99,235,0.12)] ring-1 ring-[var(--viewer-primary)]/15 backdrop-blur-sm">
+        <div className="rounded-[12px] border border-slate-200 bg-white/96 p-2 shadow-[0_8px_24px_-8px_rgba(12,18,34,0.12),0_0_0_1px_rgba(37,99,235,0.1)] ring-1 ring-[var(--viewer-primary)]/15 backdrop-blur-sm">
           <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
             <span
               className={`text-[9px] font-semibold uppercase tracking-[0.1em] ${
@@ -459,7 +459,7 @@ export function PdfPageMinimap({
             <span
               className={`rounded border px-1.5 py-0.5 font-mono text-[9px] tabular-nums ${
                 isOriginal
-                  ? "border-[var(--viewer-border-strong)] bg-[#1e293b] text-[var(--viewer-text)]"
+                  ? "border-[var(--viewer-border-strong)] bg-slate-100 text-[var(--viewer-text)]"
                   : "border-[var(--viewer-primary)]/40 bg-[rgba(37,99,235,0.15)] text-[var(--viewer-text)]"
               }`}
             >
@@ -488,7 +488,7 @@ export function PdfPageMinimap({
       role="navigation"
       aria-label="Page overview — click or drag to scroll"
     >
-      <div className="rounded-[12px] border border-[#334155]/90 bg-[#0a0f1e]/96 p-2.5 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.45),0_0_0_1px_rgba(37,99,235,0.12)] ring-1 ring-[var(--viewer-primary)]/15 backdrop-blur-sm">
+      <div className="rounded-[12px] border border-slate-200 bg-white/96 p-2.5 shadow-[0_8px_24px_-8px_rgba(12,18,34,0.12),0_0_0_1px_rgba(37,99,235,0.1)] ring-1 ring-[var(--viewer-primary)]/15 backdrop-blur-sm">
         <p className="mb-2 select-none text-center text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--viewer-text-muted)]">
           Map
         </p>

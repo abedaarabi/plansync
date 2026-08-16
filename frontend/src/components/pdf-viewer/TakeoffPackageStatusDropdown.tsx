@@ -39,7 +39,7 @@ export function TakeoffPackageStatusDropdown({ className = "" }: { className?: s
   };
 
   const btnClass =
-    "viewer-focus-ring inline-flex items-center gap-0.5 rounded-md border border-[#475569] bg-[#0f172a] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#e2e8f0] transition-colors hover:bg-[#1e293b]";
+    "viewer-focus-ring inline-flex items-center gap-0.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700 transition-colors hover:bg-white";
 
   return (
     <div className={`relative ${className}`} ref={wrapRef}>
@@ -58,7 +58,7 @@ export function TakeoffPackageStatusDropdown({ className = "" }: { className?: s
       </button>
       {open ? (
         <div
-          className="absolute bottom-full left-0 z-30 mb-1 min-w-[140px] rounded-md border border-[#334155] bg-[#1e293b] py-1 shadow-lg"
+          className="absolute bottom-full left-0 z-30 mb-1 min-w-[140px] rounded-md border border-slate-200 bg-white py-1 shadow-lg"
           role="listbox"
         >
           {OPTIONS.map((opt) => {
@@ -71,7 +71,7 @@ export function TakeoffPackageStatusDropdown({ className = "" }: { className?: s
                 aria-selected={sel}
                 onClick={() => setAndPersist(opt.id)}
                 className={`flex w-full items-center px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide ${
-                  sel ? "bg-sky-950/50 text-sky-100" : "text-[#f8fafc] hover:bg-[#334155]"
+                  sel ? "bg-sky-50 text-sky-700" : "text-slate-900 hover:bg-slate-100"
                 }`}
               >
                 {opt.label}
