@@ -10,6 +10,7 @@ import {
   EyeOff,
   FileBox,
   Layers,
+  MousePointerSquareDashed,
   Palette,
   Search,
   Shapes,
@@ -78,6 +79,8 @@ export function BimFiltersPanel(props: {
   onFilterStateChange: (state: BimFilterState) => void;
   matchCount: number;
   legend: ColorizeLegendEntry[];
+  selectMatches: boolean;
+  onToggleSelectMatches: (next: boolean) => void;
   savedViews: BimSavedViewRecord[];
   onSaveFilter: () => void;
   onApplySavedView: (view: BimSavedViewRecord) => void;
@@ -412,6 +415,28 @@ export function BimFiltersPanel(props: {
               );
             })}
           </div>
+        </div>
+
+        <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] px-2.5 py-2">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={props.selectMatches}
+              onChange={(e) => props.onToggleSelectMatches(e.target.checked)}
+              className="rounded border-[var(--bim-border)]"
+            />
+            <MousePointerSquareDashed
+              className="h-3.5 w-3.5 text-[var(--bim-accent)]"
+              aria-hidden
+            />
+            <span className="flex-1 text-[12px] font-medium text-[var(--bim-text)]">
+              Select matches
+            </span>
+          </label>
+          <p className="mt-1 pl-6 text-[10px] leading-relaxed text-[var(--bim-text-subtle)]">
+            Selects all {props.matchCount.toLocaleString()} matching elements in the viewer for
+            properties, issues, and takeoff.
+          </p>
         </div>
 
         <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] px-2.5 py-2">

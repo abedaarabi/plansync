@@ -308,6 +308,8 @@ export class BimEngine {
   private activeFilterGhostOpacity = 0.18;
   /** Match set for filter Ghost picking / solid overlays (small). */
   private activeFilterMatchMap: OBC.ModelIdMap | null = null;
+  /** Cached drawable local ids per fragment model (see {@link geometryIdsForModel}). */
+  private geometryIdsByModel = new Map<string, Set<number>>();
   /** Cached match paint groups (original colors) — valid while scene ghost is on. */
   private filterMatchPaintGroups: {
     modelId: string;
@@ -367,6 +369,17 @@ export class BimEngine {
   /** Serialize fragment highlight paints — parallel reset/highlight races wipe tints. */
   private highlightPaintInFlight: Promise<void> | null = null;
   private highlightPaintQueued = false;
+  /**
+   * When set, the next highlight drain applies scene ghost after painting
+   * overlays. Keeps ghost/colorize on the same serialized path as resetHighlight.
+   */
+  private pendingFilterSceneGhostOpacity: number | null = null;
+  /** Bumped on each selectByGuids/clearSelection so superseded awaits bail. */
+  private selectionOpSeq = 0;
+  /** Single-flight GUID index rebuild — concurrent syncs coalesce on the latest. */
+  private guidSyncSeq = 0;
+  private guidSyncDirty = false;
+  private guidSyncInFlight: Promise<void> | null = null;
   /** Material sync deferred while selection/filter overlays are active. */
   private pendingMaterialSync = false;
   private planSilhouette: ImageBitmap | null = null;
@@ -623,6 +636,7 @@ export class BimEngine {
     }
 
     this.modelRegistry.delete(modelId);
+    this.geometryIdsByModel.delete(modelId);
     this.renderEffects?.setModelCount(this.modelRegistry.size);
     await this.buildClassifications();
     await fragments.core.update(true);
@@ -971,6 +985,7 @@ export class BimEngine {
     modelId = buildModelId(member),
   ): void {
     this.modelRegistry.set(modelId, { ...member, model, visible: true });
+    this.geometryIdsByModel.delete(modelId);
     this.renderEffects?.setModelCount(this.modelRegistry.size);
     const baseId = buildModelId(member);
     if (!this.primaryModelId || this.primaryModelId === baseId) {
@@ -1324,20 +1339,26 @@ export class BimEngine {
     });
   }
 
-  /** Queue a single coalesced repaint of selection + filter overlays. */
+  /**
+   * Queue a coalesced repaint of selection + filter overlays.
+   * Awaiters wait until the drain finishes — including paints queued while an
+   * earlier paint was in flight — so ghost/colorize applied after await cannot
+   * be wiped by a late resetHighlight.
+   */
   private requestFragmentHighlights(): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    if (this.highlightPaintInFlight) {
-      this.highlightPaintQueued = true;
-      return this.highlightPaintInFlight;
-    }
-    this.highlightPaintInFlight = this.runFragmentHighlightPaint().finally(() => {
+    this.highlightPaintQueued = true;
+    if (this.highlightPaintInFlight) return this.highlightPaintInFlight;
+
+    this.highlightPaintInFlight = (async () => {
+      while (!this.disposed && this.highlightPaintQueued) {
+        this.highlightPaintQueued = false;
+        await this.runFragmentHighlightPaint();
+      }
+    })().finally(() => {
       this.highlightPaintInFlight = null;
       if (this.highlightPaintQueued && !this.disposed) {
-        this.highlightPaintQueued = false;
         void this.requestFragmentHighlights();
-      } else {
-        this.highlightPaintQueued = false;
       }
     });
     return this.highlightPaintInFlight;
@@ -1443,17 +1464,19 @@ export class BimEngine {
       }
 
       for (const group of this.activeColorizeGroups) {
-        const clashSolid = group.styleId.startsWith("clash-item");
+        const solid =
+          group.styleId.startsWith("clash-item") || group.styleId.startsWith("colorize:");
         await paint(
           group.styleId,
           {
             color: new THREE.Color(group.color),
-            opacity: clashSolid ? 1 : COLORIZE_HIGHLIGHT_OPACITY,
-            // Clash Item 1/2 must be truly opaque (Navisworks solid red/green).
-            transparent: !clashSolid,
+            // Property colorize must read as solid fills; translucent overlays
+            // disappear under scene ghost / tile material restores.
+            opacity: solid ? 1 : COLORIZE_HIGHLIGHT_OPACITY,
+            transparent: !solid,
             renderedFaces: 0,
             depthTest: true,
-            depthWrite: clashSolid,
+            depthWrite: solid,
           },
           group.map,
         );
@@ -1507,15 +1530,16 @@ export class BimEngine {
       }
       for (const group of this.activeColorizeGroups) {
         if (group.styleId.startsWith("clash-item")) continue;
+        const solid = group.styleId.startsWith("colorize:");
         await paint(
           group.styleId,
           {
             color: new THREE.Color(group.color),
-            opacity: COLORIZE_HIGHLIGHT_OPACITY,
-            transparent: true,
+            opacity: solid ? 1 : COLORIZE_HIGHLIGHT_OPACITY,
+            transparent: !solid,
             renderedFaces: 0,
             depthTest: true,
-            depthWrite: false,
+            depthWrite: solid,
           },
           group.map,
         );
@@ -1523,6 +1547,20 @@ export class BimEngine {
       await this.paintClashItemHighlights();
       if (this.clashSceneGhostOpacity != null) {
         this.applyClashSceneGhost(this.clashSceneGhostOpacity);
+      }
+      // Scene ghost + colorize must stay inside this drain so a coalesced
+      // resetHighlight cannot wipe overlays painted out-of-band.
+      const ghostOpacity = this.pendingFilterSceneGhostOpacity ?? this.filterSceneGhostOpacity;
+      this.pendingFilterSceneGhostOpacity = null;
+      if (ghostOpacity != null) {
+        if (this.activeColorizeGroups.length === 0) {
+          await this.paintFilterMatchHighlights();
+        }
+        this.applyFilterSceneGhost(ghostOpacity);
+        if (this.activeColorizeGroups.length > 0) {
+          await this.paintColorizeGroups(this.activeColorizeGroups);
+          this.solidifyFilterOverlayMaterials();
+        }
       }
       if (!this.disposed) this.bumpRender();
     } finally {
@@ -3481,6 +3519,7 @@ export class BimEngine {
   }
 
   clearSelection(): void {
+    this.selectionOpSeq += 1;
     this.selectedGuids.clear();
     this.lastPickMap = null;
     this.lastPickedModelId = null;
@@ -4170,20 +4209,24 @@ export class BimEngine {
       return;
     }
 
+    const seq = ++this.selectionOpSeq;
     if (!additive) this.selectedGuids.clear();
     for (const g of guids) this.selectedGuids.add(g);
 
     const map =
       (await this.resolveModelIdMapFromGuids([...this.selectedGuids])) ??
       (Object.keys(pickMap).length > 0 ? pickMap : null);
+    if (seq !== this.selectionOpSeq) return;
     if (!map) {
-      if (!additive) this.clearSelection();
+      if (!additive && seq === this.selectionOpSeq) this.clearSelection();
       return;
     }
 
     this.lastPickMap = map;
     await this.requestFragmentHighlights();
+    if (seq !== this.selectionOpSeq) return;
     await this.handleHighlight(map);
+    if (seq !== this.selectionOpSeq) return;
     void this.focusOrbitOnSelectionMap(map);
     this.bumpRender();
     this.events.onMultiSelection?.([...this.selectedGuids]);
@@ -4232,6 +4275,7 @@ export class BimEngine {
     }
 
     const additive = opts.additive ?? false;
+    const seq = ++this.selectionOpSeq;
     if (opts.forContextMenu) {
       if (guid) {
         if (!additive) {
@@ -4264,6 +4308,7 @@ export class BimEngine {
     if (this.selectedGuids.size > 0) {
       map = await this.resolveModelIdMapFromGuids([...this.selectedGuids]);
     }
+    if (seq !== this.selectionOpSeq) return false;
     if (!map && pickMap) {
       map = pickMap;
     } else if (map && pickMap && hit) {
@@ -4272,14 +4317,16 @@ export class BimEngine {
     }
 
     if (!map) {
-      if (!additive) this.clearSelection();
+      if (!additive && seq === this.selectionOpSeq) this.clearSelection();
       return false;
     }
 
     this.lastPickMap = map;
     this.lastPickedModelId = hit.modelId;
     await this.requestFragmentHighlights();
+    if (seq !== this.selectionOpSeq) return false;
     await this.handleHighlight(map, hit.modelId);
+    if (seq !== this.selectionOpSeq) return false;
     void this.focusOrbitOnSelectionMap(map);
     this.bumpRender();
     this.events.onMultiSelection?.([...this.selectedGuids]);
@@ -4709,8 +4756,28 @@ export class BimEngine {
     return ids;
   }
 
-  // fallow-ignore-next-line complexity
   private async syncGuidLocalIdMap(): Promise<void> {
+    this.guidSyncDirty = true;
+    if (!this.guidSyncInFlight) {
+      this.guidSyncInFlight = (async () => {
+        while (!this.disposed && this.guidSyncDirty) {
+          this.guidSyncDirty = false;
+          const seq = ++this.guidSyncSeq;
+          await this.runSyncGuidLocalIdMap(seq);
+        }
+      })().finally(() => {
+        this.guidSyncInFlight = null;
+      });
+    }
+    await this.guidSyncInFlight;
+    // Dirty bit set in the finally gap — restart so awaiters see a warm index.
+    if (!this.disposed && this.guidSyncDirty) {
+      await this.syncGuidLocalIdMap();
+    }
+  }
+
+  // fallow-ignore-next-line complexity
+  private async runSyncGuidLocalIdMap(seq: number): Promise<void> {
     this.guidIndex.clear();
     const index = this.quantityIndex;
     const fragments = this.components?.get(OBC.FragmentsManager);
@@ -4749,26 +4816,37 @@ export class BimEngine {
     }
 
     for (const [memberModelId, bucket] of modelBuckets) {
+      if (seq !== this.guidSyncSeq || this.disposed) return;
       // Progressive tiles use `${memberId}__${tileId}` — bare member id is often absent.
       const fragmentIds = this.fragmentModelIdsForMember(memberModelId);
       if (fragmentIds.length === 0) continue;
 
       const pending = new Set(bucket.guids);
+      // Weak hits: the tile knows the guid but cannot draw it. Kept only if no
+      // tile owns the geometry, so properties still resolve for hidden items.
+      const weak = new Map<string, { modelId: string; localId: number }>();
       for (const fragmentModelId of fragmentIds) {
-        if (pending.size === 0) break;
+        if (pending.size === 0 || seq !== this.guidSyncSeq) break;
         const model = fragments.list.get(fragmentModelId);
         if (!model) continue;
+        const drawable = await this.geometryIdsForModel(fragmentModelId, model);
+        if (seq !== this.guidSyncSeq) return;
         const guids = [...pending];
         for (let i = 0; i < guids.length; i += BimEngine.GUID_SYNC_CHUNK) {
           const chunk = guids.slice(i, i + BimEngine.GUID_SYNC_CHUNK);
           try {
             const localIds = await model.getLocalIdsByGuids(chunk);
+            if (seq !== this.guidSyncSeq) return;
             for (let j = 0; j < chunk.length; j++) {
               const guid = chunk[j]!;
               const localId = localIds[j];
               if (localId == null) continue;
               const meta = bucket.meta.get(guid);
               if (!meta) continue;
+              if (drawable && !drawable.has(localId)) {
+                if (!weak.has(guid)) weak.set(guid, { modelId: fragmentModelId, localId });
+                continue;
+              }
               this.guidIndex.set(guid, {
                 modelId: fragmentModelId,
                 localId,
@@ -4776,12 +4854,47 @@ export class BimEngine {
                 sourceLabel: meta.sourceLabel,
               });
               pending.delete(guid);
+              weak.delete(guid);
             }
           } catch {
             /* best-effort per tile */
           }
         }
       }
+
+      if (seq !== this.guidSyncSeq) return;
+      for (const [guid, hit] of weak) {
+        const meta = bucket.meta.get(guid);
+        if (!meta) continue;
+        this.guidIndex.set(guid, {
+          modelId: hit.modelId,
+          localId: hit.localId,
+          fileVersionId: meta.fileVersionId,
+          sourceLabel: meta.sourceLabel,
+        });
+      }
+    }
+  }
+
+  /**
+   * Local ids this fragment model can actually draw. Progressive tiles answer
+   * `getLocalIdsByGuids` for elements they only carry metadata for, so resolving
+   * to the first responder points highlights at geometry that is not there.
+   */
+  private async geometryIdsForModel(
+    modelId: string,
+    model: FRAGS.FragmentsModel,
+  ): Promise<Set<number> | null> {
+    const cached = this.geometryIdsByModel.get(modelId);
+    if (cached) return cached;
+    try {
+      const ids = await model.getItemsIdsWithGeometry();
+      if (!ids?.length) return null;
+      const set = new Set(ids);
+      this.geometryIdsByModel.set(modelId, set);
+      return set;
+    } catch {
+      return null;
     }
   }
 
@@ -4876,6 +4989,7 @@ export class BimEngine {
   ): Promise<void> {
     const pending = new Map<string, string | null>();
     for (const ref of refs) pending.set(ref.guid, ref.fileVersionId ?? null);
+    const weak = new Map<string, { modelId: string; localId: number; sourceLabel: string }>();
 
     for (const [modelId, model] of fragments.list) {
       if (pending.size === 0) break;
@@ -4886,6 +5000,7 @@ export class BimEngine {
           !wantFileVersionId || !entry || entry.fileVersionId === wantFileVersionId,
       );
       if (guids.length === 0) continue;
+      const drawable = await this.geometryIdsForModel(modelId, model);
 
       for (let i = 0; i < guids.length; i += BimEngine.GUID_SYNC_CHUNK) {
         const chunk = guids.slice(i, i + BimEngine.GUID_SYNC_CHUNK).map(([guid]) => guid);
@@ -4895,6 +5010,12 @@ export class BimEngine {
             const localId = localIds[j];
             if (localId == null) continue;
             const guid = chunk[j]!;
+            if (drawable && !drawable.has(localId)) {
+              if (!weak.has(guid)) {
+                weak.set(guid, { modelId, localId, sourceLabel: entry?.name ?? "Model" });
+              }
+              continue;
+            }
             if (!map[modelId]) map[modelId] = new Set<number>();
             (map[modelId] as Set<number>).add(localId);
             this.guidIndex.set(guid, {
@@ -4904,11 +5025,18 @@ export class BimEngine {
               sourceLabel: entry?.name ?? "Model",
             });
             pending.delete(guid);
+            weak.delete(guid);
           }
         } catch {
           /* try next chunk / model */
         }
       }
+    }
+
+    for (const [guid, hit] of weak) {
+      if (!map[hit.modelId]) map[hit.modelId] = new Set<number>();
+      (map[hit.modelId] as Set<number>).add(hit.localId);
+      pending.delete(guid);
     }
 
     if (pending.size === 0) return;
@@ -4956,17 +5084,22 @@ export class BimEngine {
 
   // fallow-ignore-next-line complexity
   async selectByGuids(guids: string[], additive = false): Promise<void> {
+    const seq = ++this.selectionOpSeq;
     if (!additive) this.selectedGuids.clear();
     for (const g of guids) this.selectedGuids.add(g);
     const map = await this.resolveModelIdMapFromGuids([...this.selectedGuids]);
+    if (seq !== this.selectionOpSeq) return;
     if (!map) {
-      if (!additive) this.clearSelection();
+      if (!additive && seq === this.selectionOpSeq) this.clearSelection();
       return;
     }
     this.lastPickMap = map;
     await this.requestFragmentHighlights();
+    if (seq !== this.selectionOpSeq) return;
     await this.handleHighlight(map);
+    if (seq !== this.selectionOpSeq) return;
     void this.focusOrbitOnSelectionMap(map);
+    this.bumpRender();
     this.events.onMultiSelection?.([...this.selectedGuids]);
   }
 
@@ -4976,6 +5109,7 @@ export class BimEngine {
    */
   // fallow-ignore-next-line unused-class-member
   rememberSelectionGuids(guids: string[]): void {
+    this.selectionOpSeq += 1;
     this.selectedGuids.clear();
     for (const g of guids) this.selectedGuids.add(g);
     this.lastPickMap = this.buildModelIdMapFromGuids(guids);
@@ -5041,15 +5175,14 @@ export class BimEngine {
       needsUpdate: boolean;
     };
     this.filterGhostMatBackup.delete(m);
-    const customId = m.userData?.customId;
-    const colorize = typeof customId === "string" && customId.startsWith("colorize:");
-    const pipelineChanged = m.transparent !== colorize || !m.depthWrite || m.opacity < 1;
-    m.opacity = colorize ? COLORIZE_HIGHLIGHT_OPACITY : 1;
-    m.transparent = colorize;
-    m.depthWrite = !colorize;
+    // Colorize and filter:match are both solid overlays on a faded scene.
+    const pipelineChanged = m.transparent || !m.depthWrite || m.opacity < 1;
+    m.opacity = 1;
+    m.transparent = false;
+    m.depthWrite = true;
     m.depthTest = true;
     if ("highlightOpacity" in m) {
-      (m as THREE.Material & { highlightOpacity: number }).highlightOpacity = m.opacity;
+      (m as THREE.Material & { highlightOpacity: number }).highlightOpacity = 1;
     }
     if (pipelineChanged) m.needsUpdate = true;
   }
@@ -5074,14 +5207,14 @@ export class BimEngine {
   private scheduleFilterSceneGhostRefresh(): void {
     if (this.disposed || this.filterSceneGhostOpacity == null) return;
     if (this.filterGhostRefreshTimer != null) window.clearTimeout(this.filterGhostRefreshTimer);
+    const seq = this.filterPresentSeq;
     this.filterGhostRefreshTimer = window.setTimeout(() => {
       this.filterGhostRefreshTimer = null;
-      if (this.filterSceneGhostOpacity == null) return;
-      void this.paintFilterMatchHighlights().then(() => {
-        if (this.filterSceneGhostOpacity == null) return;
-        this.applyFilterSceneGhost(this.filterSceneGhostOpacity);
-        this.solidifyFilterOverlayMaterials();
-      });
+      if (this.disposed || this.filterSceneGhostOpacity == null) return;
+      if (seq !== this.filterPresentSeq) return;
+      // Re-enter the highlight drain so refresh cannot race a mid-flight reset.
+      this.pendingFilterSceneGhostOpacity = this.filterSceneGhostOpacity;
+      void this.requestFragmentHighlights();
     }, 240);
   }
 
@@ -5181,6 +5314,7 @@ export class BimEngine {
       this.filterGhostRefreshTimer = null;
     }
     this.filterSceneGhostOpacity = null;
+    this.pendingFilterSceneGhostOpacity = null;
     this.filterMatchPaintGroups = [];
     for (const [mat, prev] of this.filterGhostMatBackup) {
       try {
@@ -5916,9 +6050,8 @@ export class BimEngine {
     const visualize = opts.filterActive ? opts.visualize : "none";
 
     // Resolve isolate / ghost / colorize into locals, then commit once.
-    let nextGhostMap: OBC.ModelIdMap | null = null;
     let nextMatchMap: OBC.ModelIdMap | null = null;
-    let nextGhostOpacity = opts.ghostOpacity ?? 0.28;
+    const nextGhostOpacity = opts.ghostOpacity ?? 0.28;
     let isolateMap: OBC.ModelIdMap | null = null;
     const nextGroups: { styleId: string; color: string; map: OBC.ModelIdMap }[] = [];
     const nextStyleIds: string[] = [];
@@ -5932,16 +6065,14 @@ export class BimEngine {
         : await this.resolveModelIdMapFromGuids(opts.matchGuids);
       if (!stillCurrent()) return;
     } else if (opts.matchGuids.length > 0) {
-      // Ghost: tint only non-matches. Matches keep real base materials/colors.
+      // Ghost: fade every base material once and repaint matches solid on top.
+      // Highlighting each non-match instead melts down on real models.
       await this.ensureBaseVisibilityForFilter();
       if (!stillCurrent()) return;
-      const built = await this.buildFilterGhostMaps(opts.matchGuids, nextGhostOpacity);
+      nextMatchMap = opts.matchRefs?.length
+        ? await this.resolveGuidRefsToModelIdMap(opts.matchRefs)
+        : await this.resolveModelIdMapFromGuids(opts.matchGuids);
       if (!stillCurrent()) return;
-      if (built) {
-        nextGhostMap = built.ghostMap;
-        nextMatchMap = built.matchMap;
-        nextGhostOpacity = built.opacity;
-      }
     } else {
       await this.ensureBaseVisibilityForFilter();
       if (!stillCurrent()) return;
@@ -5973,7 +6104,7 @@ export class BimEngine {
       this.activeFilterMatchMap = null;
       this.activeFilterGhostMap = null;
     } else {
-      this.activeFilterGhostMap = nextGhostMap;
+      this.activeFilterGhostMap = null;
       this.activeFilterMatchMap = nextMatchMap;
       this.activeFilterGhostOpacity = nextGhostOpacity;
     }
@@ -5982,10 +6113,49 @@ export class BimEngine {
     this.activeColorizeGroups = nextGroups;
     this.syncHoverEnabled();
 
+    if (visualize === "ghost" && nextMatchMap) {
+      // Apply ghost inside the upcoming highlight drain (not after await) so a
+      // queued resetHighlight cannot wipe the overlays.
+      this.pendingFilterSceneGhostOpacity = nextGhostOpacity;
+    } else {
+      this.pendingFilterSceneGhostOpacity = null;
+    }
+
     await this.requestFragmentHighlights();
     if (!stillCurrent()) return;
+    if (visualize === "ghost" && nextMatchMap) {
+      this.scheduleFilterSceneGhostRefresh();
+    }
     if (!this.hasActiveFragmentHighlights()) {
       this.maybeScheduleDeferredMaterialSync();
+    }
+  }
+
+  /** Paint property-colorize groups as solid fills (used after scene ghost). */
+  private async paintColorizeGroups(
+    groups: { styleId: string; color: string; map: OBC.ModelIdMap }[],
+  ): Promise<void> {
+    const fragments = this.readyFragments();
+    if (!fragments || this.disposed || groups.length === 0) return;
+    for (const group of groups) {
+      const safeMap = this.sanitizeHighlightMap(group.map, fragments);
+      if (!safeMap) continue;
+      try {
+        await fragments.highlight(
+          {
+            color: new THREE.Color(group.color),
+            opacity: 1,
+            transparent: false,
+            renderedFaces: 0,
+            depthTest: true,
+            depthWrite: true,
+            customId: group.styleId,
+          },
+          safeMap,
+        );
+      } catch {
+        /* stale maps during tile churn */
+      }
     }
   }
 

@@ -301,6 +301,7 @@ export function BimViewerShell(props: {
     quantityIndex,
     filterState,
   );
+  const [selectFilterMatches, setSelectFilterMatches] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1023px)");
@@ -636,6 +637,7 @@ export function BimViewerShell(props: {
   const issueFocusConsumedRef = useRef<string | null>(null);
   const filterZoomTimerRef = useRef<number | null>(null);
   const filterApplyGenRef = useRef(0);
+  const selectMatchesGenRef = useRef(0);
   /** Skip one filter zoom after clash review ends (restore Ghost without yanking camera). */
   const skipFilterZoomOnceRef = useRef(false);
   /** Last applied visualize — mode-only toggles should not re-zoom. */
@@ -1620,13 +1622,18 @@ export function BimViewerShell(props: {
 
     if (!filterActive && !colorizeActive) {
       skipFilterZoomOnceRef.current = false;
-      void engine.applyFilterPresentation({
-        filterActive: false,
-        visualize: "none",
-        matchGuids: [],
-        colorizeGroups: [],
-      });
-      return;
+      void (async () => {
+        if (applyGen !== filterApplyGenRef.current) return;
+        await engine.applyFilterPresentation({
+          filterActive: false,
+          visualize: "none",
+          matchGuids: [],
+          colorizeGroups: [],
+        });
+      })();
+      return () => {
+        filterApplyGenRef.current += 1;
+      };
     }
 
     const textOnly = filterState.rules.length === 0 && filterState.textQuery.trim().length > 0;
@@ -1678,8 +1685,13 @@ export function BimViewerShell(props: {
     return () => {
       if (filterZoomTimerRef.current != null) {
         window.clearTimeout(filterZoomTimerRef.current);
+        filterZoomTimerRef.current = null;
       }
-      filterApplyGenRef.current += 1;
+      // Invalidate in-flight applies from this effect instance only when a
+      // newer effect has not already claimed a higher generation.
+      if (filterApplyGenRef.current === applyGen) {
+        filterApplyGenRef.current += 1;
+      }
     };
   }, [filterState, filterMatches, filterLegend, phase.kind, clash.selectedClashId]);
 
@@ -2259,6 +2271,33 @@ export function BimViewerShell(props: {
     },
     [quantityIndex, selectAndFrameGuids],
   );
+
+  const onToggleSelectFilterMatches = useCallback((next: boolean) => {
+    setSelectFilterMatches(next);
+    if (!next) engineRef.current?.clearSelection();
+  }, []);
+
+  /** Keep the viewer selection in sync with filter matches while the toggle is on. */
+  useEffect(() => {
+    if (!selectFilterMatches || phase.kind !== "ready") return;
+    const engine = engineRef.current;
+    if (!engine) return;
+    const gen = ++selectMatchesGenRef.current;
+    const guids = filterMatches.map((m) => m.guid);
+    void (async () => {
+      if (gen !== selectMatchesGenRef.current) return;
+      if (guids.length === 0) {
+        engine.clearSelection();
+        return;
+      }
+      await engine.selectByGuids(guids, false);
+    })();
+    return () => {
+      if (selectMatchesGenRef.current === gen) {
+        selectMatchesGenRef.current += 1;
+      }
+    };
+  }, [selectFilterMatches, filterMatches, phase.kind]);
 
   const onContextAction = useCallback(
     (action: string) => {
@@ -3184,6 +3223,8 @@ export function BimViewerShell(props: {
               onFilterStateChange={setFilterState}
               matchCount={filterMatches.length}
               legend={filterLegend}
+              selectMatches={selectFilterMatches}
+              onToggleSelectMatches={onToggleSelectFilterMatches}
               savedViews={savedViews}
               onSaveFilter={() => void saveFilterView()}
               onApplySavedView={(v) => void applySavedView(v)}
