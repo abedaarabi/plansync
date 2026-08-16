@@ -21,10 +21,12 @@ env:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       # Prisma schema reads env("DATABASE_URL"); validate/generate do not open a DB.
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/plansync
+      # Next/webpack + PWA can OOM on the default ~2GB heap during CI.
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +37,20 @@ jobs:
 
       - name: Install
         run: npm ci
+
+      # npm workspaces sometimes omit Tailwind v4 Linux GNU optional bindings (same fix as Dockerfiles).
+      - name: Ensure Tailwind Linux native bindings
+        run: |
+          set -eu
+          LC_VER=$(node -p "require('./package-lock.json').packages['node_modules/lightningcss']?.version ?? ''")
+          OX_VER=$(node -p "require('./package-lock.json').packages['node_modules/@tailwindcss/oxide']?.version ?? ''")
+          if [ -z "$LC_VER" ] || [ -z "$OX_VER" ]; then
+            echo "Could not read lightningcss / @tailwindcss/oxide versions from package-lock.json"
+            exit 1
+          fi
+          npm install --no-save --legacy-peer-deps \
+            "lightningcss-linux-x64-gnu@${LC_VER}" \
+            "@tailwindcss/oxide-linux-x64-gnu@${OX_VER}"
 
       - name: Lint
         run: npm run lint
@@ -51,8 +67,11 @@ jobs:
       - name: Prisma validate, format, generate
         run: npm run db:precommit
 
-      - name: Build
-        run: npm run build
+      - name: Build frontend
+        run: npm run build -w @plansync/web
+
+      - name: Build backend
+        run: npm run build -w backend
 
   e2e-smoke:
     runs-on: ubuntu-latest

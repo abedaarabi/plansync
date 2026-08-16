@@ -6,6 +6,9 @@ node_modules/
 .env.prod
 .env.*.local
 
+# Local tooling binaries (e.g. gh)
+.tools/
+
 # Local backup of former nested frontend repo (remove when no longer needed)
 .frontend-git-backup/
 
