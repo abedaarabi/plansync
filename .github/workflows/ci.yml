@@ -38,6 +38,33 @@ jobs:
       - name: Install
         run: npm ci
 
+      # `npm ci` can omit Tailwind v4 Linux GNU bindings (they are absent from the lockfile).
+      # Install into a temp prefix and copy in, so the workspace dependency tree is untouched.
+      - name: Ensure Tailwind Linux native bindings
+        run: |
+          set -eu
+          if [ -f node_modules/lightningcss/lightningcss.linux-x64-gnu.node ] \
+            && [ -d node_modules/@tailwindcss/oxide-linux-x64-gnu ]; then
+            echo "Linux Tailwind native bindings already present"
+            exit 0
+          fi
+          LC_VER=$(node -p "require('./package-lock.json').packages['node_modules/lightningcss']?.version ?? ''")
+          OX_VER=$(node -p "require('./package-lock.json').packages['node_modules/@tailwindcss/oxide']?.version ?? ''")
+          if [ -z "$LC_VER" ] || [ -z "$OX_VER" ]; then
+            echo "Could not read lightningcss / @tailwindcss/oxide versions from package-lock.json"
+            exit 1
+          fi
+          NATIVES=$(mktemp -d)
+          npm install --prefix "$NATIVES" --no-save --no-package-lock --no-audit --no-fund \
+            "lightningcss-linux-x64-gnu@${LC_VER}" \
+            "@tailwindcss/oxide-linux-x64-gnu@${OX_VER}"
+          cp -R "$NATIVES/node_modules/lightningcss-linux-x64-gnu" node_modules/
+          mkdir -p node_modules/@tailwindcss
+          cp -R "$NATIVES/node_modules/@tailwindcss/oxide-linux-x64-gnu" node_modules/@tailwindcss/
+          # `lightningcss` resolves the binary relative to its own package directory.
+          cp node_modules/lightningcss-linux-x64-gnu/lightningcss.linux-x64-gnu.node \
+            node_modules/lightningcss/lightningcss.linux-x64-gnu.node
+
       - name: Lint
         run: npm run lint
 
