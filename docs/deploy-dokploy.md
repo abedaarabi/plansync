@@ -108,7 +108,9 @@ After the first successful image push:
 
 Create a Compose application pointing at this repo with compose file **`docker-compose.deploy.yml`**.
 
-**Disable source-triggered builds / auto-deploy from git.** Dokploy must not run `docker build` on the VPS. Deployment should be **pull images + recreate**, triggered by the webhook from GitHub Actions.
+Dokploy must not run `docker build` on the VPS — [`docker-compose.deploy.yml`](../docker-compose.deploy.yml) only references prebuilt GHCR images, so a deploy is always **pull images + recreate**.
+
+**Turn the compose app’s “Auto Deploy” toggle on.** The deploy webhook is rejected with `{"message":"Automatic deployments are disabled for this compose"}` while it is off. Keeping it on is safe here as long as no Git provider webhook points at Dokploy, so the GitHub Actions `deploy` job stays the only trigger. Verify with `gh api repos/<owner>/<repo>/hooks` (should be empty) and remove the Dokploy GitHub App from the repository if it was installed.
 
 ### 2. Registry login (private GHCR)
 
@@ -147,15 +149,17 @@ The compose file does **not** publish Next on a host port; Traefik routes using 
 
 ### 4. Wire the webhook
 
-1. In Dokploy, open the compose application → copy the **Deploy webhook** URL.
+1. In Dokploy, open the compose application → enable **Auto Deploy** → copy the **Deploy webhook** URL.
 2. Paste it into the GitHub secret `DOKPLOY_DEPLOY_WEBHOOK`.
 3. Push to `main` (or re-run the workflow) and confirm Actions → **deploy** job succeeds and Dokploy pulls new images.
+
+Dokploy validates the request against a Git provider push payload, so the deploy job sends `POST` with `x-github-event: push` and a body containing `ref: refs/heads/main`. If the compose app tracks another branch, set the repository variable `DOKPLOY_DEPLOY_BRANCH` to match, otherwise Dokploy answers `Branch Not Match`.
 
 ## First release checklist
 
 1. GitHub variables + `DOKPLOY_DEPLOY_WEBHOOK` secret set.
 2. Dokploy logged into `ghcr.io` with a read-only packages token.
-3. Dokploy auto-build from git **off**; compose uses `docker-compose.deploy.yml`.
+3. Dokploy compose uses `docker-compose.deploy.yml` with **Auto Deploy on** and no Git provider webhook installed on the repository.
 4. Merge/push to `main` → Actions **check** green → **build-\*** jobs push images → **deploy** webhook fires.
 5. Confirm packages exist under GHCR and are **private**.
 6. Confirm containers are healthy in Dokploy and the public site/API respond.
