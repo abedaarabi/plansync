@@ -38,20 +38,6 @@ jobs:
       - name: Install
         run: npm ci
 
-      # npm workspaces sometimes omit Tailwind v4 Linux GNU optional bindings (same fix as Dockerfiles).
-      - name: Ensure Tailwind Linux native bindings
-        run: |
-          set -eu
-          LC_VER=$(node -p "require('./package-lock.json').packages['node_modules/lightningcss']?.version ?? ''")
-          OX_VER=$(node -p "require('./package-lock.json').packages['node_modules/@tailwindcss/oxide']?.version ?? ''")
-          if [ -z "$LC_VER" ] || [ -z "$OX_VER" ]; then
-            echo "Could not read lightningcss / @tailwindcss/oxide versions from package-lock.json"
-            exit 1
-          fi
-          npm install --no-save --legacy-peer-deps \
-            "lightningcss-linux-x64-gnu@${LC_VER}" \
-            "@tailwindcss/oxide-linux-x64-gnu@${OX_VER}"
-
       - name: Lint
         run: npm run lint
 
