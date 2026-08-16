@@ -252,13 +252,52 @@ jobs:
             exit 1
           fi
 
+      # Dokploy validates the webhook against a Git provider push payload and
+      # rejects anything whose `ref` does not match the branch configured on the compose app.
       - name: Trigger Dokploy pull-and-restart
         env:
           DOKPLOY_DEPLOY_WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
+          DEPLOY_BRANCH: ${{ vars.DOKPLOY_DEPLOY_BRANCH || 'main' }}
         run: |
-          curl --fail --silent --show-error \
-            --request GET \
-            --max-time 60 \
-            "$DOKPLOY_DEPLOY_WEBHOOK"
+          set -eu
+          payload=$(
+            DEPLOY_SHA="${{ github.sha }}" \
+            DEPLOY_REPO="${{ github.repository }}" \
+            node -e '
+              const branch = process.env.DEPLOY_BRANCH;
+              const [owner, name] = process.env.DEPLOY_REPO.split("/");
+              process.stdout.write(
+                JSON.stringify({
+                  ref: `refs/heads/${branch}`,
+                  repository: {
+                    name,
+                    full_name: process.env.DEPLOY_REPO,
+                    owner: { name: owner, login: owner },
+                  },
+                  head_commit: {
+                    id: process.env.DEPLOY_SHA,
+                    message: "Deploy prebuilt images from GitHub Actions",
+                  },
+                }),
+              );
+            '
+          )
+          status=$(
+            curl --silent --show-error \
+              --request POST \
+              --max-time 120 \
+              --header "Content-Type: application/json" \
+              --header "x-github-event: push" \
+              --data "$payload" \
+              --output /tmp/dokploy-response.txt \
+              --write-out '%{http_code}' \
+              "$DOKPLOY_DEPLOY_WEBHOOK"
+          )
+          echo "Dokploy responded with HTTP $status"
+          cat /tmp/dokploy-response.txt
           echo
-          echo "Dokploy deploy webhook accepted."
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "Dokploy rejected the deploy webhook."
+            echo "Check that Auto Deploy is enabled and that the compose branch matches '$DEPLOY_BRANCH'."
+            exit 1
+          fi
