@@ -53,14 +53,22 @@ RUN set -eu; \
   else \
     echo "Unsupported arch for Tailwind native deps: $ARCH (need x86_64 or aarch64)"; \
     exit 1; \
-  fi; \
-  # Platform-only install can prune nested That Open deps — ensure camera-controls stays.
-  test -d node_modules/camera-controls \
-    || npm install --no-save --legacy-peer-deps "camera-controls@>=3.1.2"
+  fi
+# The platform-only install above can prune packages npm did not hoist: `camera-controls`
+# (nested That Open dep) and `frontend/node_modules/@hookform/resolvers` (see package-lock).
+RUN --mount=type=cache,target=/root/.npm \
+  set -eu; \
+  [ -d node_modules/camera-controls ] \
+    || npm install --no-save --legacy-peer-deps "camera-controls@>=3.1.2"; \
+  mkdir -p frontend/node_modules; \
+  [ -d frontend/node_modules/@hookform/resolvers ] \
+    || npm install --no-save --legacy-peer-deps -w @plansync/web "@hookform/resolvers@^5.9.0"
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Nested workspace installs are not hoisted; Next resolves them from frontend/node_modules.
+COPY --from=deps /app/frontend/node_modules ./frontend/node_modules
 ENV NEXT_TELEMETRY_DISABLED=1
 
 ARG NEXT_PUBLIC_SITE_URL=
