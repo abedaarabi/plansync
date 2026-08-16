@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
-import { loadProjectForMember } from "../../lib/projectAccess.js";
-import { isWorkspacePro } from "../../lib/subscription.js";
+import { isProjectAccessError, loadProjectForMember } from "../../lib/projectAccess.js";
+import { requireBimProPlusAccess } from "../../lib/planFeatureGates.js";
 import { getObjectStream } from "../../lib/s3.js";
 import { parseQuantityIndexBuffer } from "../../lib/bim/quantityIndexBuilder.js";
 import { webStreamToBuffer } from "../../lib/bim/streamUtils.js";
@@ -11,18 +11,16 @@ export async function loadBimFileVersion(fileVersionId) {
     });
 }
 export function requireBimPro(workspace) {
-    if (!isWorkspacePro(workspace)) {
-        return { error: "Pro subscription required", status: 402 };
-    }
-    return null;
+    return requireBimProPlusAccess(workspace);
 }
 export async function authorizeBimFileVersion(c, fileVersionId, opts) {
     const fv = await loadBimFileVersion(fileVersionId);
     if (!fv)
         return { response: c.json({ error: "Not found" }, 404) };
     const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-    if (!access)
-        return { response: c.json({ error: "Forbidden" }, 403) };
+    if (isProjectAccessError(access)) {
+        return { response: c.json({ error: access.error }, access.status) };
+    }
     if (opts?.requirePro) {
         const pro = requireBimPro(fv.file.project.workspace);
         if (pro)

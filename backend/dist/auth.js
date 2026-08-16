@@ -1,7 +1,9 @@
 import { betterAuth } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./lib/prisma.js";
 import { buildCorsAllowList } from "./lib/env.js";
+import { AUTH_PASSWORD_HINT, AUTH_PASSWORD_MIN_LENGTH, isStrongAuthPassword, } from "./lib/password-policy.js";
 import { queuePasswordResetEmail } from "./lib/send-password-reset-email.js";
 import { queueVerificationEmail } from "./lib/send-verification-email.js";
 function buildSocialProviders(env) {
@@ -26,6 +28,16 @@ function buildSocialProviders(env) {
     }
     return Object.keys(out).length ? out : undefined;
 }
+function passwordFromAuthBody(body) {
+    if (!body || typeof body !== "object")
+        return null;
+    const o = body;
+    if (typeof o.password === "string")
+        return o.password;
+    if (typeof o.newPassword === "string")
+        return o.newPassword;
+    return null;
+}
 export function createAuth(env) {
     const socialProviders = buildSocialProviders(env);
     const cookieDomain = env.BETTER_AUTH_COOKIE_DOMAIN?.trim();
@@ -36,6 +48,7 @@ export function createAuth(env) {
         database: prismaAdapter(prisma, { provider: "postgresql" }),
         emailAndPassword: {
             enabled: true,
+            minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
             /** Verification is enforced on API routes via `sessionMiddleware`; set false so invite sign-up gets a session. */
             requireEmailVerification: false,
             sendResetPassword: async ({ user, url }) => {
@@ -58,6 +71,22 @@ export function createAuth(env) {
                     verifyUrl: url,
                 });
             },
+        },
+        hooks: {
+            before: createAuthMiddleware(async (ctx) => {
+                const path = ctx.path ?? "";
+                if (path !== "/sign-up/email" &&
+                    path !== "/reset-password" &&
+                    path !== "/change-password") {
+                    return;
+                }
+                const password = passwordFromAuthBody(ctx.body);
+                if (password == null)
+                    return;
+                if (!isStrongAuthPassword(password)) {
+                    throw new APIError("BAD_REQUEST", { message: AUTH_PASSWORD_HINT });
+                }
+            }),
         },
         ...(socialProviders ? { socialProviders } : {}),
         advanced: {

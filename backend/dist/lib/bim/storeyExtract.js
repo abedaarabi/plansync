@@ -18,11 +18,13 @@ export async function extractStoreysFromIfc(ifcBytes) {
                 ifcStrVal(rec.Description) ??
                 `Level ${id}`;
             const elevation = ifcNumVal(rec.Elevation);
+            const globalId = ifcStrVal(rec.GlobalId);
             storeys.push({
                 sourceName: name,
                 displayName: name,
                 elevationMeters: elevation ?? null,
                 elementCount: 0,
+                sourceIfcGuid: globalId ?? null,
             });
         }
         catch {

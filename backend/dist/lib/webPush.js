@@ -12,9 +12,13 @@ function pushKindCategoryLabel(kind) {
         RFI_CLOSED: "RFI",
         RFI_OVERDUE: "RFI",
         PUNCH_ASSIGNED: "Punch list",
-        ISSUE_ASSIGNED: "Site issue",
+        ISSUE_ASSIGNED: "Issue",
         HANDOVER_FM: "O&M handover",
         ISSUE_CREATED: "O&M request",
+        MAINTENANCE_DUE: "Maintenance",
+        MAINTENANCE_ASSIGNED: "Maintenance",
+        INSPECTION_DUE: "Inspections",
+        WORK_ORDER_AGING: "Work orders",
         PROPOSAL_VIEWED: "Proposal",
         PROPOSAL_ACCEPTED: "Proposal",
         PROPOSAL_DECLINED: "Proposal",
@@ -70,6 +74,10 @@ export async function sendWebPushForUsers(opts) {
     const displayBody = buildPushDisplayBody(categoryLabel, opts.body);
     const tag = pushNotificationTag(opts.kind, opts.href);
     const timestamp = Date.now();
+    const image = typeof opts.imageUrl === "string" &&
+        (opts.imageUrl.startsWith("https://") || opts.imageUrl.startsWith("http://"))
+        ? opts.imageUrl
+        : undefined;
     const payload = JSON.stringify({
         title: opts.title.trim() || "PlanSync",
         body: displayBody,
@@ -78,6 +86,7 @@ export async function sendWebPushForUsers(opts) {
         categoryLabel,
         tag,
         timestamp,
+        ...(image ? { image } : {}),
     });
     await Promise.allSettled(subs.map(async (s) => {
         const subscription = {

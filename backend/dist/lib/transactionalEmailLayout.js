@@ -19,10 +19,14 @@ export function escapeHtml(s) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
 }
-/** API origin for `/api/v1/public/*` assets (email images); falls back to app URL. */
-function publicApiBaseFromEnv(env) {
-    const app = env.PUBLIC_APP_URL.replace(/\/$/, "");
-    return env.PUBLIC_API_URL?.replace(/\/$/, "") || app;
+/**
+ * Colored PlanSync wordmark for email chrome (header / footer).
+ * Sync always defaults to brand primary (`#2563eb`); override Plan for dark headers.
+ */
+export function planSyncWordmarkHtml(opts) {
+    const planColor = opts?.planColor ?? C.ink;
+    const syncColor = opts?.syncColor ?? C.primary;
+    return `<span style="color:${escapeHtml(planColor)}">Plan</span><span style="color:${escapeHtml(syncColor)}">Sync</span>`;
 }
 /** Same icon as `frontend/public/icons/icon-180.png` — must be an absolute app URL for email clients. */
 export function planSyncEmailIconPublicUrl(publicAppUrl) {
@@ -49,7 +53,7 @@ export function planSyncBrandHeaderHtml(iconUrl, tagline = "Construction collabo
       </td>
       <td style="vertical-align:middle">
         <p style="margin:0;font-size:20px;font-weight:800;letter-spacing:-0.03em;line-height:1.1;font-family:${FF}">
-          <span style="color:${C.ink}">Plan</span><span style="color:${C.primary}">Sync</span>
+          ${planSyncWordmarkHtml()}
         </p>
         <p style="margin:4px 0 0;font-size:10px;font-weight:650;color:${C.muted};letter-spacing:0.08em;text-transform:uppercase;font-family:${FF}">${escapeHtml(tagline)}</p>
       </td>
@@ -158,7 +162,7 @@ export function buildTransactionalEmailHtml(env, content) {
             <td class="email-footer" style="padding:20px 28px 26px;background:${C.surface};border-top:1px solid ${C.borderSoft}">
               <p style="margin:0;font-size:12px;line-height:1.65;color:${C.faint};text-align:center;font-family:${FF}">${escapeHtml(footerNote)}</p>
               <p style="margin:14px 0 0;font-size:11px;line-height:1.5;color:#cbd5e1;text-align:center;font-family:${FF}">${escapeHtml(appBase)}</p>
-              <p style="margin:12px 0 0;font-size:11px;color:#cbd5e1;text-align:center;font-family:${FF}">© PlanSync</p>
+              <p style="margin:12px 0 0;font-size:11px;color:#cbd5e1;text-align:center;font-family:${FF}">© ${planSyncWordmarkHtml({ planColor: C.faint })}</p>
             </td>
           </tr>
         </table>

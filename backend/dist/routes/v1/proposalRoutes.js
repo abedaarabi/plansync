@@ -2,8 +2,9 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { ActivityType, Prisma, ProposalDeclineReason, ProposalStatus, WorkspaceRole, } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
-import { isWorkspacePro } from "../../lib/subscription.js";
+import { requireProPlusAccess as requirePro } from "../../lib/planFeatureGates.js";
 import { loadProjectForMember } from "../../lib/projectAccess.js";
+import { parseProjectCurrency } from "../../lib/projectSettings.js";
 import { logActivitySafe } from "../../lib/activity.js";
 import { createUserNotifications } from "../../lib/userNotifications.js";
 import { deleteObject, presignGet } from "../../lib/s3.js";
@@ -17,12 +18,6 @@ import { geminiConfigured } from "../../lib/geminiSheetAi.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { resolveGeminiApiKey } from "../../lib/env.js";
 import { fetchWorkspaceLogoImageBuffer, prepareWorkspaceLogoBufferForPdf, workspaceLogoUrlForClients, } from "../../lib/workspaceLogo.js";
-function requirePro(workspace) {
-    if (!isWorkspacePro(workspace)) {
-        return { error: "Pro subscription required", status: 402 };
-    }
-    return null;
-}
 const takeoffInclude = {
     file: { select: { name: true } },
     fileVersion: { select: { version: true } },
@@ -176,20 +171,65 @@ function proposalJson(p, env) {
             : null,
     };
 }
+/**
+ * Cover letter source of truth is always `coverNote` (what the user edited in TipTap).
+ * Templates are applied into `coverNote` on the client when selected — never override at send/preview.
+ */
+function mergedCoverLetter(p, takeoffTableHtml) {
+    const ctx = buildTemplateContext(p, takeoffTableHtml);
+    const source = (p.coverNote ?? "").trim() || (p.template?.body ?? "");
+    return applyProposalTemplate(source, ctx);
+}
 /** Cover text for PDFs: same merge as preview/email, but omit {{takeoff.table}} (shown in breakdown below). */
 function mergedProposalCoverForPdf(p) {
-    const ctxIntro = buildTemplateContext(p, "");
-    let bodyText = p.template?.body ?? p.coverNote;
-    if (p.template?.body) {
-        bodyText = applyProposalTemplate(p.template.body, ctxIntro);
-    }
-    const mergedIntro = applyProposalTemplate(bodyText, ctxIntro);
+    const mergedIntro = mergedCoverLetter(p, "");
     try {
         return sanitizeProposalCoverHtml(mergedIntro);
     }
     catch {
         return mergedIntro;
     }
+}
+async function buildProposalPdfForFull(env, p) {
+    const br = proposalBreakdown(p);
+    const rawLogo = await fetchWorkspaceLogoImageBuffer(env, p.workspace);
+    const logoBuf = await prepareWorkspaceLogoBufferForPdf(rawLogo);
+    const buffer = await buildProposalPdfBuffer({
+        title: p.title,
+        reference: p.reference,
+        workspaceName: p.workspace.name,
+        clientName: p.clientName,
+        clientCompany: p.clientCompany ?? undefined,
+        projectName: p.project.name,
+        validUntilLabel: p.validUntil.toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+        }),
+        coverHtml: mergedProposalCoverForPdf(p),
+        lines: p.items.map((it) => ({
+            itemName: it.itemName,
+            quantity: it.quantity.toString(),
+            unit: it.unit,
+            rate: formatMoneyAmount(it.rate.toString(), p.currency),
+            lineTotal: formatMoneyAmount(it.lineTotal.toString(), p.currency),
+        })),
+        subtotal: formatMoneyAmount(p.subtotal.toString(), p.currency),
+        workFeeLabel: p.workPricePercent.gt(0) ? `Work (${p.workPricePercent.toString()}%)` : undefined,
+        workFeeAmount: p.workPricePercent.gt(0)
+            ? formatMoneyAmount(br.workAmount.toString(), p.currency)
+            : undefined,
+        taxLabel: `Tax (${p.taxPercent.toString()}%)`,
+        taxAmount: formatMoneyAmount(br.taxAmount.toString(), p.currency),
+        discount: formatMoneyAmount(p.discount.toString(), p.currency),
+        total: formatMoneyAmount(p.total.toString(), p.currency),
+        signedAtIso: p.acceptedAt?.toISOString(),
+        signerName: p.signerName ?? undefined,
+        signaturePngBuffer: p.signatureData ? dataUrlToPngBuffer(p.signatureData) : null,
+        logoImageBuffer: logoBuf,
+    });
+    const safeName = p.reference.replace(/[^a-z0-9-_]/gi, "_");
+    return { buffer, filename: `${safeName}-proposal.pdf` };
 }
 function buildTemplateContext(p, takeoffTableHtml) {
     return {
@@ -342,6 +382,7 @@ export function registerProposalRoutes(r, needUser, env) {
                 clientName: p.clientName,
                 clientEmail: p.clientEmail,
                 sentAt: p.sentAt?.toISOString() ?? null,
+                validUntil: p.validUntil.toISOString(),
                 total: p.total.toString(),
                 currency: p.currency,
                 createdAt: p.createdAt.toISOString(),
@@ -356,6 +397,7 @@ export function registerProposalRoutes(r, needUser, env) {
             },
         });
     });
+    // fallow-ignore-next-line complexity
     r.post("/projects/:projectId/proposals", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const access = await loadProjectForMember(projectId, c.get("user").id);
@@ -405,7 +447,11 @@ export function registerProposalRoutes(r, needUser, env) {
         const validUntil = body.data.validUntil
             ? new Date(body.data.validUntil)
             : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-        const currency = body.data.currency ?? access.project.currency;
+        const currencyRaw = body.data.currency ?? access.project.currency;
+        const currency = parseProjectCurrency(currencyRaw);
+        if (!currency) {
+            return c.json({ error: "Invalid currency" }, 400);
+        }
         const zdec = new Prisma.Decimal(0);
         const created = await prisma.proposal.create({
             data: {
@@ -462,6 +508,7 @@ export function registerProposalRoutes(r, needUser, env) {
             return c.json({ error: "Not found" }, 404);
         return c.json(proposalJson(p, env));
     });
+    // fallow-ignore-next-line complexity
     r.patch("/projects/:projectId/proposals/:proposalId", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const proposalId = c.req.param("proposalId");
@@ -495,7 +542,7 @@ export function registerProposalRoutes(r, needUser, env) {
             taxPercent: z.union([z.number(), z.string()]).optional(),
             workPricePercent: z.union([z.number(), z.string()]).optional(),
             discount: z.union([z.number(), z.string()]).optional(),
-            coverNote: z.string().max(200_000).optional(),
+            coverNote: z.string().max(500_000).optional(),
             attachmentFileVersionIds: z.array(z.string()).optional(),
             items: z
                 .array(z.object({
@@ -523,8 +570,12 @@ export function registerProposalRoutes(r, needUser, env) {
             data.clientCompany = body.data.clientCompany;
         if (body.data.clientPhone !== undefined)
             data.clientPhone = body.data.clientPhone;
-        if (body.data.currency !== undefined)
-            data.currency = body.data.currency;
+        if (body.data.currency !== undefined) {
+            const currency = parseProjectCurrency(body.data.currency);
+            if (!currency)
+                return c.json({ error: "Invalid currency" }, 400);
+            data.currency = currency;
+        }
         if (body.data.validUntil !== undefined)
             data.validUntil = new Date(body.data.validUntil);
         if (body.data.templateId !== undefined)
@@ -754,12 +805,7 @@ export function registerProposalRoutes(r, needUser, env) {
         if (!p)
             return c.json({ error: "Not found" }, 404);
         const table = takeoffTableHtmlFromProposalFull(p);
-        const ctx = buildTemplateContext(p, table);
-        let bodyText = p.template?.body ?? p.coverNote;
-        if (p.template?.body) {
-            bodyText = applyProposalTemplate(p.template.body, ctx);
-        }
-        const merged = applyProposalTemplate(bodyText, ctx);
+        const merged = mergedCoverLetter(p, table);
         let html;
         try {
             html = sanitizeProposalCoverHtml(merged);
@@ -767,12 +813,7 @@ export function registerProposalRoutes(r, needUser, env) {
         catch {
             html = merged;
         }
-        const ctxNoTable = buildTemplateContext(p, "");
-        let bodyLetter = p.template?.body ?? p.coverNote;
-        if (p.template?.body) {
-            bodyLetter = applyProposalTemplate(p.template.body, ctxNoTable);
-        }
-        const mergedLetterOnly = applyProposalTemplate(bodyLetter, ctxNoTable).trim();
+        const mergedLetterOnly = mergedCoverLetter(p, "").trim();
         let letterHtml = null;
         let letterMarkdown = mergedLetterOnly;
         if (/^\s*</.test(mergedLetterOnly) && /<[a-z]/i.test(mergedLetterOnly)) {
@@ -792,6 +833,7 @@ export function registerProposalRoutes(r, needUser, env) {
             letterHtml,
         });
     });
+    // fallow-ignore-next-line complexity
     r.post("/projects/:projectId/proposals/:proposalId/send", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const proposalId = c.req.param("proposalId");
@@ -822,9 +864,7 @@ export function registerProposalRoutes(r, needUser, env) {
         }
         const token = p.publicToken ?? newPublicToken();
         const table = takeoffTableHtmlFromProposalFull(p);
-        const ctx = buildTemplateContext(p, table);
-        let letter = p.template?.body ? applyProposalTemplate(p.template.body, ctx) : p.coverNote;
-        letter = applyProposalTemplate(letter, ctx);
+        const letter = mergedCoverLetter(p, table);
         let coverSanitized;
         try {
             coverSanitized = sanitizeProposalCoverHtml(letter);
@@ -867,6 +907,17 @@ export function registerProposalRoutes(r, needUser, env) {
             return u;
         });
         const sender = await prisma.user.findUnique({ where: { id: c.get("user").id } });
+        let pdfAttachment = null;
+        try {
+            const pdf = await buildProposalPdfForFull(env, updated);
+            pdfAttachment = {
+                filename: pdf.filename,
+                contentBase64: pdf.buffer.toString("base64"),
+            };
+        }
+        catch (e) {
+            console.error("[proposal] PDF attach for send failed (continuing without attachment)", e);
+        }
         try {
             await sendProposalSentToClient({
                 env,
@@ -877,6 +928,7 @@ export function registerProposalRoutes(r, needUser, env) {
                 senderName: sender?.name ?? "PlanSync user",
                 portalUrl: proposalPortalUrl(env, token),
                 workspaceLogoUrl: workspaceLogoUrlForClients(env, updated.workspace),
+                pdfAttachment,
             });
         }
         catch (e) {
@@ -906,10 +958,7 @@ export function registerProposalRoutes(r, needUser, env) {
             return c.json({ error: gate.error }, gate.status);
         const p = await prisma.proposal.findFirst({
             where: { id: proposalId, projectId },
-            include: {
-                createdBy: { select: { name: true } },
-                workspace: { select: { id: true, logoUrl: true, logoS3Key: true } },
-            },
+            include: proposalFullInclude,
         });
         if (!p)
             return c.json({ error: "Not found" }, 404);
@@ -922,6 +971,17 @@ export function registerProposalRoutes(r, needUser, env) {
             return c.json({ error: "Proposal has expired" }, 400);
         try {
             assertProposalEmailReady(env);
+            let pdfAttachment = null;
+            try {
+                const pdf = await buildProposalPdfForFull(env, p);
+                pdfAttachment = {
+                    filename: pdf.filename,
+                    contentBase64: pdf.buffer.toString("base64"),
+                };
+            }
+            catch (e) {
+                console.error("[proposal] PDF attach for resend failed (continuing without attachment)", e);
+            }
             await sendProposalSentToClient({
                 env,
                 toEmail: p.clientEmail,
@@ -931,6 +991,7 @@ export function registerProposalRoutes(r, needUser, env) {
                 senderName: p.createdBy.name,
                 portalUrl: proposalPortalUrl(env, p.publicToken),
                 workspaceLogoUrl: workspaceLogoUrlForClients(env, p.workspace),
+                pdfAttachment,
             });
         }
         catch (e) {
@@ -1070,50 +1131,11 @@ export function registerProposalRoutes(r, needUser, env) {
         });
         if (!p)
             return c.json({ error: "Not found" }, 404);
-        const br = proposalBreakdown(p);
-        const rawLogo = await fetchWorkspaceLogoImageBuffer(env, p.workspace);
-        const logoBuf = await prepareWorkspaceLogoBufferForPdf(rawLogo);
-        const buf = await buildProposalPdfBuffer({
-            title: p.title,
-            reference: p.reference,
-            workspaceName: p.workspace.name,
-            clientName: p.clientName,
-            clientCompany: p.clientCompany ?? undefined,
-            projectName: p.project.name,
-            validUntilLabel: p.validUntil.toLocaleDateString("en-GB", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-            }),
-            coverHtml: mergedProposalCoverForPdf(p),
-            lines: p.items.map((it) => ({
-                itemName: it.itemName,
-                quantity: it.quantity.toString(),
-                unit: it.unit,
-                rate: formatMoneyAmount(it.rate.toString(), p.currency),
-                lineTotal: formatMoneyAmount(it.lineTotal.toString(), p.currency),
-            })),
-            subtotal: formatMoneyAmount(p.subtotal.toString(), p.currency),
-            workFeeLabel: p.workPricePercent.gt(0)
-                ? `Work (${p.workPricePercent.toString()}%)`
-                : undefined,
-            workFeeAmount: p.workPricePercent.gt(0)
-                ? formatMoneyAmount(br.workAmount.toString(), p.currency)
-                : undefined,
-            taxLabel: `Tax (${p.taxPercent.toString()}%)`,
-            taxAmount: formatMoneyAmount(br.taxAmount.toString(), p.currency),
-            discount: formatMoneyAmount(p.discount.toString(), p.currency),
-            total: formatMoneyAmount(p.total.toString(), p.currency),
-            signedAtIso: p.acceptedAt?.toISOString(),
-            signerName: p.signerName ?? undefined,
-            signaturePngBuffer: p.signatureData ? dataUrlToPngBuffer(p.signatureData) : null,
-            logoImageBuffer: logoBuf,
-        });
-        const safeName = p.reference.replace(/[^a-z0-9-_]/gi, "_");
-        return new Response(new Uint8Array(buf), {
+        const { buffer, filename } = await buildProposalPdfForFull(env, p);
+        return new Response(new Uint8Array(buffer), {
             headers: {
                 "Content-Type": "application/pdf",
-                "Content-Disposition": `attachment; filename="${safeName}-proposal.pdf"`,
+                "Content-Disposition": `attachment; filename="${filename}"`,
             },
         });
     });

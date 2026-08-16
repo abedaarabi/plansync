@@ -1,4 +1,4 @@
-import { EMAIL_RESPONSIVE_CSS, escapeHtml, planSyncBrandHeaderHtml, planSyncEmailIconPublicUrl, } from "./transactionalEmailLayout.js";
+import { EMAIL_RESPONSIVE_CSS, escapeHtml, planSyncBrandHeaderHtml, planSyncEmailIconPublicUrl, planSyncWordmarkHtml, } from "./transactionalEmailLayout.js";
 const FF = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
 /** Inline brand tokens (mirrors enterprise / landing palette). */
 const C = {
@@ -482,7 +482,7 @@ export function buildMarketingEmailHtml(recipient, opts) {
             <td style="padding:22px 30px 26px;background:${C.surface};border-top:1px solid ${C.borderSoft}">
               <p style="margin:0;font-size:12px;line-height:1.65;color:${C.faint};text-align:center;font-family:${FF}">Questions? Reply to this message or contact ${escapeHtml(MARKETING_LINKS.supportEmail)}.</p>
               <p style="margin:10px 0 0;font-size:11px;line-height:1.55;color:#cbd5e1;text-align:center;font-family:${FF}">If you'd prefer not to receive outreach from PlanSync, reply with "unsubscribe" and we'll remove you.</p>
-              <p style="margin:12px 0 0;font-size:11px;color:#cbd5e1;text-align:center;font-family:${FF}">© PlanSync · <a href="${escapeHtml(appBase)}" style="color:#94a3b8;text-decoration:none">${escapeHtml(appDisplay)}</a></p>
+              <p style="margin:12px 0 0;font-size:11px;color:#cbd5e1;text-align:center;font-family:${FF}">© ${planSyncWordmarkHtml({ planColor: C.faint })} · <a href="${escapeHtml(appBase)}" style="color:#94a3b8;text-decoration:none">${escapeHtml(appDisplay)}</a></p>
             </td>
           </tr>
         </table>

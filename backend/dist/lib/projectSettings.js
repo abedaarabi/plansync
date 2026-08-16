@@ -244,9 +244,3 @@ export function mergeProjectSettingsPatch(current, patch) {
         omTenantPortalUi: { ...current.omTenantPortalUi },
     };
 }
-/** When enabling `operationsMode`, optionally turn off construction-heavy modules (Super Admin choice). */
-const OM_DEFAULT_MODULES_WHEN_ENABLING = {
-    rfis: false,
-    takeoff: false,
-    proposals: false,
-};

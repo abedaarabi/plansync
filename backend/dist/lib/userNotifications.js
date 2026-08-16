@@ -46,6 +46,7 @@ export async function createUserNotifications(opts) {
                 body: opts.body,
                 href: opts.href,
                 kind: opts.kind,
+                imageUrl: opts.imageUrl ?? null,
             }).catch((e) => console.error("[web-push-notify]", e));
         }
     }

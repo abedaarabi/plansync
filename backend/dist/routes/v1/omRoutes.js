@@ -1,7 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import PDFDocument from "pdfkit";
 import { z } from "zod";
-import { ActivityType, AssetMeterType, InspectionRunStatus, IssueKind, IssuePriority, IssueStatus, MaintenanceFrequency, Prisma, PunchStatus, } from "@prisma/client";
+import { ActivityType, AssetMeterType, InspectionRunStatus, IssueKind, IssuePriority, IssueStatus, MaintenanceFrequency, Prisma, PunchStatus, WorkOrderType, } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { isWorkspaceOmBilling, isWorkspacePro } from "../../lib/subscription.js";
 import { loadProjectWithAuth } from "../../lib/permissions.js";
@@ -20,6 +19,9 @@ import { inviteFromAddress } from "../../lib/inviteEmail.js";
 import { buildViewerIssuePath } from "../../lib/issueAssignEmail.js";
 import { occupantSubmitRateLimited } from "../../lib/occupantSubmitRateLimit.js";
 import { buildTransactionalEmailHtml } from "../../lib/transactionalEmailLayout.js";
+import { buildInspectionReportPdfBuffer } from "../../lib/omInspectionReportPdf.js";
+import { resolveLevelForCreate, resolveLevelIdFromDrawing, } from "../../lib/locations/resolveLevelFromDrawing.js";
+import { addUtcDays, inspectionFrequencyToIntervalDays, validateFailEvidence, } from "../../lib/omInspectionSchedule.js";
 function startOfUtcWeek(d) {
     const x = new Date(d);
     const day = x.getUTCDay();
@@ -93,8 +95,56 @@ function ppmHealthLabel(nextDueAt, now = new Date()) {
         return "dueSoon";
     return "onTrack";
 }
+function inspectionResultHasFail(resultJson) {
+    if (!Array.isArray(resultJson))
+        return false;
+    return resultJson.some((r) => r != null &&
+        typeof r === "object" &&
+        String(r.outcome ?? "").toLowerCase() === "fail");
+}
+function inspectionRunJson(r) {
+    return {
+        ...r,
+        dueAt: r.dueAt?.toISOString() ?? null,
+        completedAt: r.completedAt?.toISOString() ?? null,
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString(),
+    };
+}
+function workspaceInspectionTemplateJson(t) {
+    return {
+        id: t.id,
+        workspaceId: t.workspaceId,
+        name: t.name,
+        description: t.description,
+        frequency: t.frequency,
+        checklistJson: t.checklistJson,
+        createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
+    };
+}
+function workspaceWorkOrderTemplateJson(t) {
+    return {
+        id: t.id,
+        workspaceId: t.workspaceId,
+        name: t.name,
+        description: t.description,
+        workOrderType: t.workOrderType,
+        priority: t.priority,
+        procedureJson: t.procedureJson,
+        createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
+    };
+}
+const WORK_ORDER_TYPE_VALUES = [
+    "CORRECTIVE",
+    "PREVENTIVE",
+    "INSPECTION_FOLLOWUP",
+    "TENANT",
+    "OCCUPANT",
+];
 const maintenanceScheduleInclude = {
-    asset: { select: { id: true, tag: true, name: true } },
+    asset: { select: { id: true, tag: true, name: true, imageS3Key: true } },
     assignedTo: { select: { id: true, name: true, email: true, image: true } },
 };
 function maintenanceScheduleJson(r, now = new Date()) {
@@ -119,7 +169,12 @@ function maintenanceScheduleJson(r, now = new Date()) {
         isActive: r.isActive,
         meterType: r.meterType,
         meterThreshold: r.meterThreshold != null ? Number(r.meterThreshold) : null,
-        asset: r.asset,
+        asset: {
+            id: r.asset.id,
+            tag: r.asset.tag,
+            name: r.asset.name,
+            hasImage: Boolean(r.asset.imageS3Key),
+        },
         createdAt: r.createdAt.toISOString(),
         updatedAt: r.updatedAt.toISOString(),
         health: ppmHealthLabel(r.nextDueAt, now),
@@ -204,8 +259,10 @@ async function createWorkOrderForDueSchedule(opts, db = prisma) {
             title,
             description: `Preventive maintenance due for asset ${opts.schedule.asset.tag} (${opts.schedule.asset.name}). Schedule: ${opts.schedule.frequency}. Next due: ${opts.schedule.nextDueAt.toISOString()}.`,
             issueKind: IssueKind.WORK_ORDER,
+            workOrderType: WorkOrderType.PREVENTIVE,
             assetId: opts.schedule.assetId,
             status: IssueStatus.OPEN,
+            statusChangedAt: new Date(),
             priority: IssuePriority.MEDIUM,
             creatorId: opts.actorUserId,
             assigneeId: opts.schedule.assignedToUserId ?? null,
@@ -234,10 +291,62 @@ async function getDefaultFileVersion(projectId, db = prisma) {
     };
 }
 const OCCUPANT_PHOTO_TOKEN_MS = 60 * 60 * 1000;
+const omAssetBimAnchorSchema = z
+    .object({
+    ifcGuid: z.string().min(1).max(64),
+    localId: z.number().int().optional(),
+    name: z.string().max(300).optional(),
+    ifcType: z.string().max(120).optional(),
+    spatialPath: z.array(z.string().max(300)).max(20).optional(),
+    position: z.object({ x: z.number(), y: z.number(), z: z.number() }).optional(),
+    fileVersionId: z.string().max(64).optional(),
+})
+    .nullable()
+    .optional();
+/** Shared optional fields on create/patch asset bodies (keeps routes from cloning). */
+const omAssetSharedBodyFields = {
+    category: z.string().max(120).nullable().optional(),
+    manufacturer: z.string().max(200).nullable().optional(),
+    model: z.string().max(200).nullable().optional(),
+    serialNumber: z.string().max(200).nullable().optional(),
+    locationLabel: z.string().max(500).nullable().optional(),
+    hall: z.string().max(120).nullable().optional(),
+    rowLabel: z.string().max(120).nullable().optional(),
+    rack: z.string().max(120).nullable().optional(),
+    positionU: z.string().max(120).nullable().optional(),
+    installDate: z.string().datetime().nullable().optional(),
+    warrantyExpires: z.string().datetime().nullable().optional(),
+    lastServiceAt: z.string().datetime().nullable().optional(),
+    notes: z.string().max(5000).nullable().optional(),
+    fileId: z.string().nullable().optional(),
+    fileVersionId: z.string().nullable().optional(),
+    pageNumber: z.number().int().min(1).nullable().optional(),
+    annotationId: z.string().nullable().optional(),
+    levelId: z.string().nullable().optional(),
+    bimAnchor: omAssetBimAnchorSchema,
+};
+const omAssetInclude = {
+    file: { select: { id: true, name: true } },
+    fileVersion: { select: { id: true, version: true } },
+    level: {
+        select: {
+            id: true,
+            displayName: true,
+            buildingId: true,
+            building: { select: { id: true, name: true } },
+        },
+    },
+};
 function toOmAssetJson(a) {
-    const { occupantScanSecret, imageS3Key, imageMimeType, imageFileName, imageSizeBytes, installDate, warrantyExpires, lastServiceAt, createdAt, updatedAt, ...rest } = a;
+    const { occupantScanSecret, imageS3Key, imageMimeType: _imageMimeType, imageFileName: _imageFileName, 
+    // BigInt — must not be spread into JSON (throws "Do not know how to serialize a BigInt").
+    imageSizeBytes: _imageSizeBytes, installDate, warrantyExpires, lastServiceAt, createdAt, updatedAt, level, ...rest } = a;
     return {
         ...rest,
+        levelId: a.levelId ?? level?.id ?? null,
+        levelName: level?.displayName ?? null,
+        buildingId: level?.buildingId ?? level?.building?.id ?? null,
+        buildingName: level?.building?.name ?? null,
         hasOccupantQr: Boolean(occupantScanSecret),
         hasImage: Boolean(imageS3Key),
         installDate: installDate?.toISOString() ?? null,
@@ -277,12 +386,20 @@ async function createInspectionRunWorkOrderIssue(projectId, workspaceId, userId,
     });
     if (!fv)
         return { error: "File version not found" };
+    const now = new Date();
     const descLines = [
-        `From inspection: ${run.template.name} (run ${run.id.slice(0, 8)}…)`,
+        `From inspection: ${run.template.name}`,
+        `Source inspection run: ${run.id}`,
         `Item: ${params.itemLabel}`,
     ];
     if (params.note?.trim())
         descLines.push(`Note: ${params.note.trim()}`);
+    const levelResolve = await resolveLevelForCreate({
+        projectId,
+        fileId: file.id,
+        pageNumber: draw.pageNumber,
+    });
+    const resolvedLevel = levelResolve.level;
     const issue = await db.issue.create({
         data: {
             workspaceId,
@@ -292,206 +409,22 @@ async function createInspectionRunWorkOrderIssue(projectId, workspaceId, userId,
             title: params.title.trim(),
             description: descLines.join("\n"),
             status: IssueStatus.OPEN,
+            statusChangedAt: now,
             priority: IssuePriority.MEDIUM,
             pageNumber: draw.pageNumber,
             sheetName: file.name,
             sheetVersion: fv.version,
             issueKind: IssueKind.WORK_ORDER,
+            workOrderType: WorkOrderType.INSPECTION_FOLLOWUP,
+            ...(run.assetId ? { assetId: run.assetId } : {}),
+            ...(resolvedLevel
+                ? { levelId: resolvedLevel.levelId, buildingId: resolvedLevel.buildingId }
+                : {}),
+            sourceInspectionRunId: run.id,
             creatorId: userId,
         },
     });
     return { id: issue.id, title: issue.title };
-}
-function sortInspectionLevelKeys(keys) {
-    return [...keys].sort((a, b) => {
-        const na = Number.parseInt(a, 10);
-        const nb = Number.parseInt(b, 10);
-        const aIsNum = !Number.isNaN(na) && String(na) === a.trim();
-        const bIsNum = !Number.isNaN(nb) && String(nb) === b.trim();
-        if (aIsNum && bIsNum)
-            return na - nb;
-        if (aIsNum)
-            return -1;
-        if (bIsNum)
-            return 1;
-        return a.localeCompare(b);
-    });
-}
-function inspectionDataUrlToBuffer(dataUrl) {
-    const m = /^data:image\/(png|jpe?g|webp);base64,([\s\S]+)$/i.exec(dataUrl.trim());
-    if (!m)
-        return null;
-    try {
-        return Buffer.from(m[2].replace(/\s/g, ""), "base64");
-    }
-    catch {
-        return null;
-    }
-}
-async function buildInspectionReportPdfBuffer(run) {
-    const margin = 48;
-    const checklistRaw = Array.isArray(run.template.checklistJson)
-        ? run.template.checklistJson
-        : [];
-    const checklist = checklistRaw.filter((it) => typeof it.id === "string" && it.id.length > 0);
-    const results = Array.isArray(run.resultJson) ? run.resultJson : [];
-    const chunks = [];
-    const doc = new PDFDocument({
-        margin,
-        size: "LETTER",
-        info: { Title: `Inspection — ${run.template.name}`, Author: "PlanSync" },
-    });
-    doc.on("data", (b) => chunks.push(b));
-    const done = new Promise((resolve, reject) => {
-        doc.on("end", () => resolve(Buffer.concat(chunks)));
-        doc.on("error", reject);
-    });
-    const contentW = doc.page.width - margin * 2;
-    const pageBottom = () => doc.page.height - doc.page.margins.bottom;
-    const ensureSpace = (need) => {
-        if (doc.y + need > pageBottom() - 8) {
-            doc.addPage();
-            doc.x = margin;
-            doc.fillColor("#64748b").font("Helvetica").fontSize(8);
-            doc.text(`${run.project.name} · ${run.template.name} (continued)`, margin, margin, {
-                width: contentW,
-            });
-            doc.moveDown(1.2);
-            doc.fillColor("#0f172a");
-        }
-    };
-    // —— Cover banner ——
-    const bannerH = 86;
-    const y0 = margin;
-    doc.save();
-    doc.rect(margin, y0, contentW, bannerH).fill("#0f172a");
-    doc.fillColor("#f8fafc").font("Helvetica-Bold").fontSize(22);
-    doc.text("Inspection report", margin + 22, y0 + 20, { width: contentW - 44 });
-    doc.font("Helvetica").fontSize(12).fillColor("#94a3b8");
-    doc.text(run.template.name, margin + 22, y0 + 50, { width: contentW - 44 });
-    doc.restore();
-    doc.y = y0 + bannerH + 22;
-    doc.x = margin;
-    // —— Summary ——
-    doc.font("Helvetica").fontSize(9).fillColor("#475569");
-    const meta = [];
-    meta.push(`Project: ${run.project.name}`);
-    meta.push(`Checklist template: ${run.template.name}`);
-    if (run.template.frequency?.trim())
-        meta.push(`Cadence: ${run.template.frequency.trim()}`);
-    if (run.template.description?.trim())
-        meta.push(`Template notes: ${run.template.description.trim()}`);
-    if (run.file?.name) {
-        const fv = run.fileVersion != null ? ` · Sheet version v${run.fileVersion.version}` : "";
-        meta.push(`Linked drawing file: ${run.file.name}${fv}`);
-    }
-    if (run.completedAt) {
-        meta.push(`Completed (UTC): ${run.completedAt.toISOString().replace("T", " ").slice(0, 19)}`);
-    }
-    else {
-        meta.push(`Generated (UTC): ${new Date().toISOString().replace("T", " ").slice(0, 19)}`);
-    }
-    if (run.signedOffBy?.name?.trim())
-        meta.push(`Signed off by: ${run.signedOffBy.name.trim()}`);
-    meta.push(`Status: ${run.status}`);
-    meta.push(`Run ID: ${run.id}`);
-    doc.text(meta.join("\n"), { width: contentW });
-    doc.moveDown(1);
-    doc
-        .strokeColor("#e2e8f0")
-        .lineWidth(1)
-        .moveTo(margin, doc.y)
-        .lineTo(margin + contentW, doc.y)
-        .stroke();
-    doc.moveDown(1);
-    doc.fillColor("#0f172a");
-    // —— Group by level ——
-    const byLevel = new Map();
-    for (const it of checklist) {
-        const key = typeof it.level === "string" && it.level.trim().length > 0 ? it.level.trim() : "General";
-        const list = byLevel.get(key) ?? [];
-        list.push(it);
-        byLevel.set(key, list);
-    }
-    const levelKeys = sortInspectionLevelKeys([...byLevel.keys()]);
-    const outcomeLabel = (o) => o === "pass" ? "PASS" : o === "fail" ? "FAIL" : o === "na" ? "N/A" : "—";
-    const outcomeColor = (o) => o === "pass" ? "#059669" : o === "fail" ? "#dc2626" : o === "na" ? "#64748b" : "#94a3b8";
-    let itemNum = 0;
-    for (const levelKey of levelKeys) {
-        const items = byLevel.get(levelKey) ?? [];
-        ensureSpace(40);
-        doc.font("Helvetica-Bold").fontSize(11).fillColor("#1d4ed8");
-        const levelHeading = Number.isFinite(Number(levelKey)) && String(Number(levelKey)) === levelKey.trim()
-            ? `LEVEL ${levelKey}`
-            : levelKey.toUpperCase();
-        doc.text(levelHeading, { width: contentW });
-        doc.moveDown(0.5);
-        doc.fillColor("#0f172a").font("Helvetica");
-        for (const item of items) {
-            itemNum += 1;
-            const res = results.find((r) => r.itemId === item.id);
-            const oc = (res?.outcome ?? "").toLowerCase();
-            const note = typeof res?.note === "string" ? res.note.trim() : "";
-            const photo = typeof res?.photoDataUrl === "string" ? res.photoDataUrl : "";
-            const photoFile = typeof res?.photoFileName === "string" && res.photoFileName.trim()
-                ? res.photoFileName.trim()
-                : "";
-            ensureSpace(56);
-            doc.font("Helvetica-Bold").fontSize(10.5).fillColor("#0f172a");
-            doc.text(`${itemNum}. ${item.label ?? item.id ?? "Item"}`, { width: contentW });
-            doc.moveDown(0.35);
-            doc.font("Helvetica").fontSize(9);
-            doc
-                .fillColor(outcomeColor(oc))
-                .font("Helvetica-Bold")
-                .text(`Outcome: ${outcomeLabel(oc)}`, {
-                width: contentW,
-            });
-            doc.fillColor("#334155").font("Helvetica").moveDown(0.4);
-            if (note) {
-                ensureSpace(28);
-                doc.fontSize(9).text(`Notes: ${note}`, { width: contentW });
-                doc.moveDown(0.45);
-            }
-            if (photo.startsWith("data:image")) {
-                const buf = inspectionDataUrlToBuffer(photo);
-                if (buf) {
-                    ensureSpace(photoFile ? 230 : 210);
-                    if (photoFile) {
-                        doc.fontSize(8).fillColor("#475569").text(`Photo file name: ${photoFile}`, {
-                            width: contentW,
-                        });
-                        doc.moveDown(0.25);
-                    }
-                    try {
-                        doc.image(buf, margin, doc.y, {
-                            fit: [contentW, 200],
-                            align: "center",
-                        });
-                        doc.moveDown(0.4);
-                    }
-                    catch {
-                        doc
-                            .fillColor("#94a3b8")
-                            .fontSize(8)
-                            .text("A photo was saved for this item but could not be embedded in this PDF (format).", { width: contentW });
-                        doc.moveDown(0.35);
-                    }
-                    doc.fillColor("#0f172a");
-                }
-            }
-            doc.moveDown(0.35);
-            doc
-                .strokeColor("#f1f5f9")
-                .lineWidth(0.5)
-                .moveTo(margin, doc.y)
-                .lineTo(margin + contentW, doc.y)
-                .stroke();
-            doc.moveDown(0.55);
-        }
-    }
-    doc.end();
-    return done;
 }
 async function tryEmailInspectionReportToBuildingOwner(opts) {
     const key = opts.env.RESEND_API_KEY?.trim();
@@ -567,13 +500,11 @@ export function registerOmRoutes(r, needUser, env) {
         const rows = await prisma.asset.findMany({
             where: { projectId, ...searchWhere },
             orderBy: [{ tag: "asc" }],
-            include: {
-                file: { select: { id: true, name: true } },
-                fileVersion: { select: { id: true, version: true } },
-            },
+            include: omAssetInclude,
         });
         return c.json(rows.map(toOmAssetJson));
     });
+    // fallow-ignore-next-line complexity
     r.post("/projects/:projectId/om/assets", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const auth = await loadProjectWithAuth(projectId, c.get("user").id);
@@ -592,23 +523,7 @@ export function registerOmRoutes(r, needUser, env) {
             .object({
             tag: z.string().min(1).max(80),
             name: z.string().min(1).max(500),
-            category: z.string().max(120).nullable().optional(),
-            manufacturer: z.string().max(200).nullable().optional(),
-            model: z.string().max(200).nullable().optional(),
-            serialNumber: z.string().max(200).nullable().optional(),
-            locationLabel: z.string().max(500).nullable().optional(),
-            hall: z.string().max(120).nullable().optional(),
-            rowLabel: z.string().max(120).nullable().optional(),
-            rack: z.string().max(120).nullable().optional(),
-            positionU: z.string().max(120).nullable().optional(),
-            installDate: z.string().datetime().nullable().optional(),
-            warrantyExpires: z.string().datetime().nullable().optional(),
-            lastServiceAt: z.string().datetime().nullable().optional(),
-            notes: z.string().max(5000).nullable().optional(),
-            fileId: z.string().nullable().optional(),
-            fileVersionId: z.string().nullable().optional(),
-            pageNumber: z.number().int().min(1).nullable().optional(),
-            annotationId: z.string().nullable().optional(),
+            ...omAssetSharedBodyFields,
             pinJson: z.unknown().optional(),
         })
             .safeParse(await c.req.json());
@@ -625,6 +540,20 @@ export function registerOmRoutes(r, needUser, env) {
         else if (d.fileId || d.fileVersionId) {
             return c.json({ error: "fileId and fileVersionId must be set together" }, 400);
         }
+        if (d.bimAnchor && !(d.fileId && d.fileVersionId)) {
+            return c.json({ error: "bimAnchor requires fileId and fileVersionId" }, 400);
+        }
+        const levelResolve = await resolveLevelForCreate({
+            projectId,
+            fileId: d.fileId ?? null,
+            pageNumber: d.pageNumber ?? null,
+            explicitLevelId: d.levelId,
+            bimStoreyName: d.bimAnchor?.spatialPath?.[0] ?? null,
+        });
+        if (levelResolve.error)
+            return c.json({ error: levelResolve.error }, 400);
+        const resolvedLevel = levelResolve.level;
+        const locationLabel = d.locationLabel !== undefined ? d.locationLabel : (resolvedLevel?.levelName ?? null);
         const occupantScanSecret = ctx.settings.modules.omTenantPortal
             ? randomBytes(24).toString("hex")
             : null;
@@ -639,7 +568,7 @@ export function registerOmRoutes(r, needUser, env) {
                     manufacturer: d.manufacturer ?? null,
                     model: d.model ?? null,
                     serialNumber: d.serialNumber ?? null,
-                    locationLabel: d.locationLabel ?? null,
+                    locationLabel,
                     hall: d.hall ?? null,
                     rowLabel: d.rowLabel ?? null,
                     rack: d.rack ?? null,
@@ -652,13 +581,14 @@ export function registerOmRoutes(r, needUser, env) {
                     fileVersionId: d.fileVersionId ?? null,
                     pageNumber: d.pageNumber ?? null,
                     annotationId: d.annotationId ?? null,
+                    levelId: resolvedLevel?.levelId ?? null,
                     pinJson: d.pinJson === undefined ? undefined : d.pinJson,
+                    bimAnchor: d.bimAnchor === undefined || d.bimAnchor === null
+                        ? undefined
+                        : d.bimAnchor,
                     ...(occupantScanSecret ? { occupantScanSecret } : {}),
                 },
-                include: {
-                    file: { select: { id: true, name: true } },
-                    fileVersion: { select: { id: true, version: true } },
-                },
+                include: omAssetInclude,
             });
         }
         catch (e) {
@@ -679,6 +609,7 @@ export function registerOmRoutes(r, needUser, env) {
         });
         return c.json(toOmAssetJson(row));
     });
+    // fallow-ignore-next-line complexity
     r.patch("/projects/:projectId/om/assets/:assetId", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const assetId = c.req.param("assetId");
@@ -701,23 +632,7 @@ export function registerOmRoutes(r, needUser, env) {
             .object({
             tag: z.string().min(1).max(80).optional(),
             name: z.string().min(1).max(500).optional(),
-            category: z.string().max(120).nullable().optional(),
-            manufacturer: z.string().max(200).nullable().optional(),
-            model: z.string().max(200).nullable().optional(),
-            serialNumber: z.string().max(200).nullable().optional(),
-            locationLabel: z.string().max(500).nullable().optional(),
-            hall: z.string().max(120).nullable().optional(),
-            rowLabel: z.string().max(120).nullable().optional(),
-            rack: z.string().max(120).nullable().optional(),
-            positionU: z.string().max(120).nullable().optional(),
-            installDate: z.string().datetime().nullable().optional(),
-            warrantyExpires: z.string().datetime().nullable().optional(),
-            lastServiceAt: z.string().datetime().nullable().optional(),
-            notes: z.string().max(5000).nullable().optional(),
-            fileId: z.string().nullable().optional(),
-            fileVersionId: z.string().nullable().optional(),
-            pageNumber: z.number().int().min(1).nullable().optional(),
-            annotationId: z.string().nullable().optional(),
+            ...omAssetSharedBodyFields,
             pinJson: z.unknown().nullable().optional(),
         })
             .safeParse(await c.req.json());
@@ -736,6 +651,44 @@ export function registerOmRoutes(r, needUser, env) {
             }
             else if (nf || nv) {
                 return c.json({ error: "fileId and fileVersionId must be set together" }, 400);
+            }
+        }
+        if (d.bimAnchor) {
+            const nf = d.fileId !== undefined ? d.fileId : existing.fileId;
+            const nv = d.fileVersionId !== undefined ? d.fileVersionId : existing.fileVersionId;
+            if (!nf || !nv) {
+                return c.json({ error: "bimAnchor requires fileId and fileVersionId" }, 400);
+            }
+        }
+        let patchLevelId = undefined;
+        if (d.levelId !== undefined) {
+            if (d.levelId === null) {
+                patchLevelId = null;
+            }
+            else {
+                const resolved = await resolveLevelIdFromDrawing({
+                    projectId,
+                    explicitLevelId: d.levelId,
+                });
+                if (!resolved)
+                    return c.json({ error: "Level not found in this project" }, 400);
+                patchLevelId = resolved.levelId;
+            }
+        }
+        else if (d.fileId !== undefined || d.pageNumber !== undefined) {
+            const nextFileId = d.fileId !== undefined ? d.fileId : existing.fileId;
+            const nextPage = d.pageNumber !== undefined ? d.pageNumber : existing.pageNumber;
+            if (nextFileId) {
+                const resolved = await resolveLevelIdFromDrawing({
+                    projectId,
+                    fileId: nextFileId,
+                    pageNumber: nextPage,
+                });
+                if (resolved)
+                    patchLevelId = resolved.levelId;
+            }
+            else if (d.fileId === null) {
+                patchLevelId = null;
             }
         }
         const row = await prisma.asset.update({
@@ -768,14 +721,17 @@ export function registerOmRoutes(r, needUser, env) {
                 ...(d.fileVersionId !== undefined ? { fileVersionId: d.fileVersionId } : {}),
                 ...(d.pageNumber !== undefined ? { pageNumber: d.pageNumber } : {}),
                 ...(d.annotationId !== undefined ? { annotationId: d.annotationId } : {}),
+                ...(patchLevelId !== undefined ? { levelId: patchLevelId } : {}),
                 ...(d.pinJson !== undefined
                     ? { pinJson: d.pinJson }
                     : {}),
+                ...(d.bimAnchor !== undefined
+                    ? {
+                        bimAnchor: d.bimAnchor === null ? Prisma.DbNull : d.bimAnchor,
+                    }
+                    : {}),
             },
-            include: {
-                file: { select: { id: true, name: true } },
-                fileVersion: { select: { id: true, version: true } },
-            },
+            include: omAssetInclude,
         });
         return c.json(toOmAssetJson(row));
     });
@@ -1104,6 +1060,7 @@ export function registerOmRoutes(r, needUser, env) {
         }
         return c.json({ uploadUrl: url, key });
     });
+    // fallow-ignore-next-line complexity
     r.post("/projects/:projectId/om/assets/:assetId/image/complete", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const assetId = c.req.param("assetId");
@@ -1166,10 +1123,7 @@ export function registerOmRoutes(r, needUser, env) {
                     imageFileName: body.data.fileName,
                     imageSizeBytes: body.data.sizeBytes,
                 },
-                include: {
-                    file: { select: { id: true, name: true } },
-                    fileVersion: { select: { id: true, version: true } },
-                },
+                include: omAssetInclude,
             });
             if (storageDelta !== 0n) {
                 await tx.workspace.update({
@@ -1247,10 +1201,7 @@ export function registerOmRoutes(r, needUser, env) {
                     imageFileName: null,
                     imageSizeBytes: null,
                 },
-                include: {
-                    file: { select: { id: true, name: true } },
-                    fileVersion: { select: { id: true, version: true } },
-                },
+                include: omAssetInclude,
             });
             if (dec > 0n) {
                 await tx.workspace.update({
@@ -1752,7 +1703,346 @@ export function registerOmRoutes(r, needUser, env) {
             completion: maintenanceCompletionJson(completion),
         });
     });
+    // --- Workspace inspection templates (org library) ---
+    // fallow-ignore-next-line code-duplication
+    r.get("/workspaces/:workspaceId/om/inspection-templates", needUser, async (c) => {
+        const workspaceId = c.req.param("workspaceId");
+        const m = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId, userId: c.get("user").id } },
+            include: {
+                workspace: {
+                    select: {
+                        subscriptionStatus: true,
+                        currentPeriodEnd: true,
+                        stripeSubscriptionId: true,
+                        billingPlan: true,
+                    },
+                },
+            },
+        });
+        if (!m || m.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        const gate = requireOmBilling(m.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const rows = await prisma.workspaceInspectionTemplate.findMany({
+            where: { workspaceId },
+            orderBy: { name: "asc" },
+        });
+        return c.json(rows.map(workspaceInspectionTemplateJson));
+    });
+    // fallow-ignore-next-line code-duplication
+    r.post("/workspaces/:workspaceId/om/inspection-templates", needUser, async (c) => {
+        const workspaceId = c.req.param("workspaceId");
+        const m = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId, userId: c.get("user").id } },
+            include: {
+                workspace: {
+                    select: {
+                        subscriptionStatus: true,
+                        currentPeriodEnd: true,
+                        stripeSubscriptionId: true,
+                        billingPlan: true,
+                    },
+                },
+            },
+        });
+        if (!m || m.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        const gate = requireOmBilling(m.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const body = z
+            .object({
+            name: z.string().min(1).max(300),
+            description: z.string().max(2000).nullable().optional(),
+            // fallow-ignore-next-line code-duplication
+            frequency: z.string().max(80).nullable().optional(),
+            checklistJson: z.array(z.object({
+                id: z.string(),
+                label: z.string(),
+                type: z.enum(["checkbox", "passfail", "text", "photo"]),
+                level: z.string().max(120).optional(),
+            })),
+        })
+            .safeParse(await c.req.json());
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const row = await prisma.workspaceInspectionTemplate.create({
+            data: {
+                workspaceId,
+                name: body.data.name.trim(),
+                description: body.data.description ?? null,
+                frequency: body.data.frequency?.trim() || null,
+                checklistJson: body.data.checklistJson,
+            },
+        });
+        return c.json(workspaceInspectionTemplateJson(row));
+    });
+    // fallow-ignore-next-line code-duplication
+    r.patch("/workspaces/:workspaceId/om/inspection-templates/:id", needUser, async (c) => {
+        const workspaceId = c.req.param("workspaceId");
+        const id = c.req.param("id");
+        const m = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId, userId: c.get("user").id } },
+            include: {
+                workspace: {
+                    select: {
+                        subscriptionStatus: true,
+                        currentPeriodEnd: true,
+                        stripeSubscriptionId: true,
+                        billingPlan: true,
+                    },
+                },
+            },
+        });
+        if (!m || m.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        const gate = requireOmBilling(m.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const existing = await prisma.workspaceInspectionTemplate.findFirst({
+            where: { id, workspaceId },
+        });
+        if (!existing)
+            return c.json({ error: "Not found" }, 404);
+        const body = z
+            .object({
+            name: z.string().min(1).max(300).optional(),
+            description: z.string().max(2000).nullable().optional(),
+            // fallow-ignore-next-line code-duplication
+            frequency: z.string().max(80).nullable().optional(),
+            checklistJson: z
+                .array(z.object({
+                id: z.string(),
+                label: z.string(),
+                type: z.enum(["checkbox", "passfail", "text", "photo"]),
+                level: z.string().max(120).optional(),
+                // fallow-ignore-next-line code-duplication
+            }))
+                .optional(),
+        })
+            .safeParse(await c.req.json());
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const row = await prisma.workspaceInspectionTemplate.update({
+            where: { id },
+            data: {
+                ...(body.data.name !== undefined ? { name: body.data.name.trim() } : {}),
+                ...(body.data.description !== undefined ? { description: body.data.description } : {}),
+                ...(body.data.frequency !== undefined
+                    ? { frequency: body.data.frequency?.trim() || null }
+                    : {}),
+                ...(body.data.checklistJson !== undefined
+                    ? { checklistJson: body.data.checklistJson }
+                    : {}),
+            },
+        });
+        return c.json(workspaceInspectionTemplateJson(row));
+    });
+    // fallow-ignore-next-line code-duplication
+    r.delete("/workspaces/:workspaceId/om/inspection-templates/:id", needUser, async (c) => {
+        const workspaceId = c.req.param("workspaceId");
+        const id = c.req.param("id");
+        const m = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId, userId: c.get("user").id } },
+            include: {
+                workspace: {
+                    select: {
+                        subscriptionStatus: true,
+                        currentPeriodEnd: true,
+                        stripeSubscriptionId: true,
+                        billingPlan: true,
+                    },
+                },
+            },
+        });
+        if (!m || m.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        const gate = requireOmBilling(m.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const existing = await prisma.workspaceInspectionTemplate.findFirst({
+            where: { id, workspaceId },
+            select: { id: true },
+        });
+        if (!existing)
+            return c.json({ error: "Not found" }, 404);
+        await prisma.workspaceInspectionTemplate.delete({ where: { id } });
+        return c.json({ ok: true });
+    });
+    // --- Workspace work-order templates (org library) ---
+    // fallow-ignore-next-line code-duplication
+    r.get("/workspaces/:workspaceId/om/work-order-templates", needUser, async (c) => {
+        const workspaceId = c.req.param("workspaceId");
+        const m = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId, userId: c.get("user").id } },
+            include: {
+                workspace: {
+                    select: {
+                        subscriptionStatus: true,
+                        currentPeriodEnd: true,
+                        stripeSubscriptionId: true,
+                        billingPlan: true,
+                    },
+                },
+            },
+        });
+        if (!m || m.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        const gate = requireOmBilling(m.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const rows = await prisma.workspaceWorkOrderTemplate.findMany({
+            where: { workspaceId },
+            orderBy: { name: "asc" },
+        });
+        return c.json(rows.map(workspaceWorkOrderTemplateJson));
+    });
+    // fallow-ignore-next-line code-duplication
+    r.post("/workspaces/:workspaceId/om/work-order-templates", needUser, async (c) => {
+        const workspaceId = c.req.param("workspaceId");
+        const m = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId, userId: c.get("user").id } },
+            include: {
+                workspace: {
+                    select: {
+                        subscriptionStatus: true,
+                        currentPeriodEnd: true,
+                        stripeSubscriptionId: true,
+                        billingPlan: true,
+                    },
+                },
+            },
+        });
+        if (!m || m.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        const gate = requireOmBilling(m.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const body = z
+            .object({
+            name: z.string().min(1).max(300),
+            description: z.string().max(2000).nullable().optional(),
+            workOrderType: z.enum(WORK_ORDER_TYPE_VALUES).optional(),
+            priority: z.nativeEnum(IssuePriority).nullable().optional(),
+            procedureJson: z.array(z.object({
+                id: z.string(),
+                label: z.string(),
+                type: z.enum(["checkbox", "passfail", "text", "photo"]).optional(),
+                required: z.boolean().optional(),
+            })),
+        })
+            .safeParse(await c.req.json());
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const row = await prisma.workspaceWorkOrderTemplate.create({
+            data: {
+                workspaceId,
+                name: body.data.name.trim(),
+                description: body.data.description ?? null,
+                workOrderType: body.data.workOrderType ?? "CORRECTIVE",
+                priority: body.data.priority ?? null,
+                procedureJson: body.data.procedureJson,
+            },
+        });
+        return c.json(workspaceWorkOrderTemplateJson(row));
+    });
+    // fallow-ignore-next-line code-duplication
+    r.patch("/workspaces/:workspaceId/om/work-order-templates/:id", needUser, async (c) => {
+        const workspaceId = c.req.param("workspaceId");
+        const id = c.req.param("id");
+        const m = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId, userId: c.get("user").id } },
+            include: {
+                workspace: {
+                    select: {
+                        subscriptionStatus: true,
+                        currentPeriodEnd: true,
+                        stripeSubscriptionId: true,
+                        billingPlan: true,
+                    },
+                },
+            },
+        });
+        if (!m || m.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        const gate = requireOmBilling(m.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const existing = await prisma.workspaceWorkOrderTemplate.findFirst({
+            where: { id, workspaceId },
+        });
+        if (!existing)
+            return c.json({ error: "Not found" }, 404);
+        const body = z
+            .object({
+            name: z.string().min(1).max(300).optional(),
+            description: z.string().max(2000).nullable().optional(),
+            workOrderType: z.enum(WORK_ORDER_TYPE_VALUES).optional(),
+            priority: z.nativeEnum(IssuePriority).nullable().optional(),
+            procedureJson: z
+                .array(z.object({
+                id: z.string(),
+                label: z.string(),
+                type: z.enum(["checkbox", "passfail", "text", "photo"]).optional(),
+                required: z.boolean().optional(),
+                // fallow-ignore-next-line code-duplication
+            }))
+                .optional(),
+        })
+            .safeParse(await c.req.json());
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const row = await prisma.workspaceWorkOrderTemplate.update({
+            where: { id },
+            data: {
+                ...(body.data.name !== undefined ? { name: body.data.name.trim() } : {}),
+                ...(body.data.description !== undefined ? { description: body.data.description } : {}),
+                ...(body.data.workOrderType !== undefined
+                    ? { workOrderType: body.data.workOrderType }
+                    : {}),
+                ...(body.data.priority !== undefined ? { priority: body.data.priority } : {}),
+                ...(body.data.procedureJson !== undefined
+                    ? { procedureJson: body.data.procedureJson }
+                    : {}),
+            },
+        });
+        return c.json(workspaceWorkOrderTemplateJson(row));
+    });
+    // fallow-ignore-next-line code-duplication
+    r.delete("/workspaces/:workspaceId/om/work-order-templates/:id", needUser, async (c) => {
+        const workspaceId = c.req.param("workspaceId");
+        const id = c.req.param("id");
+        const m = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId, userId: c.get("user").id } },
+            include: {
+                workspace: {
+                    select: {
+                        subscriptionStatus: true,
+                        currentPeriodEnd: true,
+                        stripeSubscriptionId: true,
+                        billingPlan: true,
+                    },
+                },
+            },
+        });
+        if (!m || m.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        const gate = requireOmBilling(m.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const existing = await prisma.workspaceWorkOrderTemplate.findFirst({
+            where: { id, workspaceId },
+            select: { id: true },
+        });
+        if (!existing)
+            return c.json({ error: "Not found" }, 404);
+        await prisma.workspaceWorkOrderTemplate.delete({ where: { id } });
+        return c.json({ ok: true });
+    });
     // --- Inspection templates ---
+    // fallow-ignore-next-line code-duplication
     r.get("/projects/:projectId/om/inspection-templates", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const auth = await loadProjectWithAuth(projectId, c.get("user").id);
@@ -1773,10 +2063,13 @@ export function registerOmRoutes(r, needUser, env) {
         });
         return c.json(rows.map((t) => ({
             ...t,
+            nextDueAt: t.nextDueAt?.toISOString() ?? null,
+            lastCompletedAt: t.lastCompletedAt?.toISOString() ?? null,
             createdAt: t.createdAt.toISOString(),
             updatedAt: t.updatedAt.toISOString(),
         })));
     });
+    // fallow-ignore-next-line code-duplication
     r.post("/projects/:projectId/om/inspection-templates", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const auth = await loadProjectWithAuth(projectId, c.get("user").id);
@@ -1796,6 +2089,8 @@ export function registerOmRoutes(r, needUser, env) {
             name: z.string().min(1).max(300),
             description: z.string().max(2000).nullable().optional(),
             frequency: z.string().max(80).nullable().optional(),
+            // fallow-ignore-next-line code-duplication
+            requireFailEvidence: z.boolean().optional(),
             checklistJson: z.array(z.object({
                 id: z.string(),
                 label: z.string(),
@@ -1806,23 +2101,109 @@ export function registerOmRoutes(r, needUser, env) {
             .safeParse(await c.req.json());
         if (!body.success)
             return c.json({ error: body.error.flatten() }, 400);
+        const frequency = body.data.frequency?.trim() || null;
+        const intervalDays = inspectionFrequencyToIntervalDays(frequency);
+        const now = new Date();
+        // fallow-ignore-next-line code-duplication
         const row = await prisma.inspectionTemplate.create({
             data: {
                 projectId,
                 name: body.data.name.trim(),
                 description: body.data.description ?? null,
-                frequency: body.data.frequency?.trim() || null,
+                frequency,
+                intervalDays,
+                nextDueAt: intervalDays != null ? addUtcDays(now, intervalDays) : null,
+                requireFailEvidence: body.data.requireFailEvidence ?? true,
                 checklistJson: body.data.checklistJson,
             },
         });
         return c.json({
             ...row,
+            nextDueAt: row.nextDueAt?.toISOString() ?? null,
+            lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
+            createdAt: row.createdAt.toISOString(),
+            updatedAt: row.updatedAt.toISOString(),
+        });
+    });
+    r.patch("/projects/:projectId/om/inspection-templates/:templateId", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const templateId = c.req.param("templateId");
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
+            return c.json({ error: "Inspections are not enabled" }, 403);
+        }
+        const gate = requireOmBilling(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const existing = await prisma.inspectionTemplate.findFirst({
+            where: { id: templateId, projectId },
+        });
+        if (!existing)
+            return c.json({ error: "Not found" }, 404);
+        const body = z
+            .object({
+            name: z.string().min(1).max(300).optional(),
+            description: z.string().max(2000).nullable().optional(),
+            frequency: z.string().max(80).nullable().optional(),
+            // fallow-ignore-next-line code-duplication
+            requireFailEvidence: z.boolean().optional(),
+            checklistJson: z
+                .array(z.object({
+                id: z.string(),
+                label: z.string(),
+                type: z.enum(["checkbox", "passfail", "text", "photo"]),
+                level: z.string().max(120).optional(),
+            }))
+                .optional(),
+        })
+            .safeParse(await c.req.json());
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const data = {};
+        if (body.data.name !== undefined)
+            data.name = body.data.name.trim();
+        if (body.data.description !== undefined)
+            data.description = body.data.description;
+        if (body.data.requireFailEvidence !== undefined) {
+            data.requireFailEvidence = body.data.requireFailEvidence;
+        }
+        if (body.data.frequency !== undefined) {
+            const frequency = body.data.frequency?.trim() || null;
+            data.frequency = frequency;
+            const intervalDays = inspectionFrequencyToIntervalDays(frequency);
+            data.intervalDays = intervalDays;
+            if (intervalDays != null) {
+                const base = existing.lastCompletedAt ?? new Date();
+                data.nextDueAt = addUtcDays(base, intervalDays);
+            }
+            else {
+                data.nextDueAt = null;
+            }
+        }
+        if (body.data.checklistJson !== undefined) {
+            data.checklistJson = body.data.checklistJson;
+        }
+        // fallow-ignore-next-line code-duplication
+        const row = await prisma.inspectionTemplate.update({
+            where: { id: templateId },
+            data,
+        });
+        return c.json({
+            ...row,
+            nextDueAt: row.nextDueAt?.toISOString() ?? null,
+            lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
             createdAt: row.createdAt.toISOString(),
             updatedAt: row.updatedAt.toISOString(),
         });
     });
     r.delete("/projects/:projectId/om/inspection-templates/:templateId", needUser, async (c) => {
         const projectId = c.req.param("projectId");
+        // fallow-ignore-next-line code-duplication
         const templateId = c.req.param("templateId");
         const auth = await loadProjectWithAuth(projectId, c.get("user").id);
         if ("error" in auth)
@@ -1845,7 +2226,58 @@ export function registerOmRoutes(r, needUser, env) {
         await prisma.inspectionTemplate.delete({ where: { id: templateId } });
         return c.json({ ok: true });
     });
+    /** Clone a workspace inspection template into this project. */
+    // fallow-ignore-next-line code-duplication
+    r.post("/projects/:projectId/om/inspection-templates/from-workspace", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
+            return c.json({ error: "Inspections are not enabled" }, 403);
+        }
+        const gate = requireOmBilling(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const body = z.object({ workspaceTemplateId: z.string().min(1) }).safeParse(await c.req.json());
+        if (!body.success)
+            return c.json({ error: body.error.flatten() }, 400);
+        const src = await prisma.workspaceInspectionTemplate.findFirst({
+            where: {
+                id: body.data.workspaceTemplateId,
+                workspaceId: ctx.project.workspaceId,
+            },
+        });
+        if (!src)
+            return c.json({ error: "Workspace template not found" }, 404);
+        const frequency = src.frequency?.trim() || null;
+        const intervalDays = inspectionFrequencyToIntervalDays(frequency);
+        const now = new Date();
+        const row = await prisma.inspectionTemplate.create({
+            data: {
+                projectId,
+                name: src.name,
+                description: src.description,
+                frequency,
+                intervalDays,
+                nextDueAt: intervalDays != null ? addUtcDays(now, intervalDays) : null,
+                requireFailEvidence: true,
+                checklistJson: src.checklistJson,
+            },
+        });
+        return c.json({
+            ...row,
+            nextDueAt: row.nextDueAt?.toISOString() ?? null,
+            lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
+            createdAt: row.createdAt.toISOString(),
+            updatedAt: row.updatedAt.toISOString(),
+        });
+    });
     // --- Inspection runs ---
+    // fallow-ignore-next-line code-duplication
     r.get("/projects/:projectId/om/inspection-runs", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const auth = await loadProjectWithAuth(projectId, c.get("user").id);
@@ -1865,16 +2297,12 @@ export function registerOmRoutes(r, needUser, env) {
             orderBy: { updatedAt: "desc" },
             include: {
                 template: { select: { id: true, name: true } },
-                createdBy: { select: { id: true, name: true } },
+                createdBy: { select: { id: true, name: true, email: true, image: true } },
             },
         });
-        return c.json(rows.map((r) => ({
-            ...r,
-            completedAt: r.completedAt?.toISOString() ?? null,
-            createdAt: r.createdAt.toISOString(),
-            updatedAt: r.updatedAt.toISOString(),
-        })));
+        return c.json(rows.map((r) => inspectionRunJson(r)));
     });
+    // fallow-ignore-next-line code-duplication
     r.post("/projects/:projectId/om/inspection-runs", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const auth = await loadProjectWithAuth(projectId, c.get("user").id);
@@ -1892,9 +2320,12 @@ export function registerOmRoutes(r, needUser, env) {
         const body = z
             .object({
             templateId: z.string(),
+            assetId: z.string().nullable().optional(),
+            dueAt: z.string().datetime().nullable().optional(),
             fileId: z.string().nullable().optional(),
             fileVersionId: z.string().nullable().optional(),
             pageNumber: z.number().int().min(1).nullable().optional(),
+            // fallow-ignore-next-line code-duplication
             resultJson: z.array(z.unknown()).optional(),
         })
             .safeParse(await c.req.json());
@@ -1905,6 +2336,14 @@ export function registerOmRoutes(r, needUser, env) {
         });
         if (!tpl)
             return c.json({ error: "Template not found" }, 404);
+        if (body.data.assetId) {
+            const asset = await prisma.asset.findFirst({
+                where: { id: body.data.assetId, projectId },
+                select: { id: true },
+            });
+            if (!asset)
+                return c.json({ error: "Asset not found" }, 400);
+        }
         if (body.data.fileId && body.data.fileVersionId) {
             const ok = await prisma.fileVersion.findFirst({
                 where: { id: body.data.fileVersionId, fileId: body.data.fileId, file: { projectId } },
@@ -1912,10 +2351,17 @@ export function registerOmRoutes(r, needUser, env) {
             if (!ok)
                 return c.json({ error: "File version not found" }, 400);
         }
+        const dueAt = body.data.dueAt !== undefined
+            ? body.data.dueAt
+                ? new Date(body.data.dueAt)
+                : null
+            : (tpl.nextDueAt ?? null);
         const row = await prisma.inspectionRun.create({
             data: {
                 projectId,
                 templateId: tpl.id,
+                assetId: body.data.assetId ?? null,
+                dueAt,
                 fileId: body.data.fileId ?? null,
                 fileVersionId: body.data.fileVersionId ?? null,
                 pageNumber: body.data.pageNumber ?? null,
@@ -1925,12 +2371,7 @@ export function registerOmRoutes(r, needUser, env) {
             },
             include: { template: { select: { id: true, name: true } } },
         });
-        return c.json({
-            ...row,
-            completedAt: row.completedAt?.toISOString() ?? null,
-            createdAt: row.createdAt.toISOString(),
-            updatedAt: row.updatedAt.toISOString(),
-        });
+        return c.json(inspectionRunJson(row));
     });
     r.patch("/projects/:projectId/om/inspection-runs/:runId", needUser, async (c) => {
         const projectId = c.req.param("projectId");
@@ -1986,12 +2427,7 @@ export function registerOmRoutes(r, needUser, env) {
             },
             include: { template: true },
         });
-        return c.json({
-            ...row,
-            completedAt: row.completedAt?.toISOString() ?? null,
-            createdAt: row.createdAt.toISOString(),
-            updatedAt: row.updatedAt.toISOString(),
-        });
+        return c.json(inspectionRunJson(row));
     });
     r.delete("/projects/:projectId/om/inspection-runs/:runId", needUser, async (c) => {
         const projectId = c.req.param("projectId");
@@ -2017,6 +2453,7 @@ export function registerOmRoutes(r, needUser, env) {
     /**
      * Complete inspection: persist results, mark run completed, optionally create work orders for failed items.
      */
+    // fallow-ignore-next-line code-duplication
     r.post("/projects/:projectId/om/inspection-runs/:runId/complete", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const runId = c.req.param("runId");
@@ -2045,6 +2482,7 @@ export function registerOmRoutes(r, needUser, env) {
                 followUpIssueId: z.string().optional(),
             })),
             createWorkOrdersForFailures: z.boolean().default(true),
+            signatureDataUrl: z.string().max(2_000_000).nullable().optional(),
         })
             .safeParse(await c.req.json());
         if (!body.success)
@@ -2075,6 +2513,22 @@ export function registerOmRoutes(r, needUser, env) {
         if (body.data.resultJson.length !== ids.size) {
             return c.json({ error: "Result count must match checklist items" }, 400);
         }
+        const evidenceIssues = validateFailEvidence({
+            requireFailEvidence: run.template.requireFailEvidence,
+            checklist: checklist.map((it) => ({
+                id: it.id,
+                label: it.label,
+                type: it.type,
+            })),
+            results: body.data.resultJson,
+        });
+        if (evidenceIssues.length > 0) {
+            const first = evidenceIssues[0];
+            return c.json({
+                error: `Fail evidence required for “${first.label}”: add ${first.missing.join(" and ")}.`,
+                evidenceIssues,
+            }, 400);
+        }
         const userId = c.get("user").id;
         const wantWo = body.data.createWorkOrdersForFailures;
         const fails = body.data.resultJson.filter((r) => r.outcome === "fail");
@@ -2085,16 +2539,7 @@ export function registerOmRoutes(r, needUser, env) {
         const createdWorkOrders = [];
         try {
             updated = await prisma.$transaction(async (tx) => {
-                const txUpdated = await tx.inspectionRun.update({
-                    where: { id: runId },
-                    data: {
-                        resultJson: body.data.resultJson,
-                        status: InspectionRunStatus.COMPLETED,
-                        completedAt: new Date(),
-                        signedOffById: userId,
-                    },
-                    include: { template: { select: { id: true, name: true } } },
-                });
+                const resultRows = body.data.resultJson.map((r) => ({ ...r }));
                 if (wantWo && fails.length > 0) {
                     for (const f of fails) {
                         if (f.followUpIssueId?.trim())
@@ -2109,7 +2554,39 @@ export function registerOmRoutes(r, needUser, env) {
                             throw new Error(`WORK_ORDER_CREATE_FAILED:${created.error}`);
                         }
                         createdWorkOrders.push({ id: created.id, title: created.title });
+                        const row = resultRows.find((r) => r.itemId === f.itemId);
+                        if (row)
+                            row.followUpIssueId = created.id;
                     }
+                }
+                const completedAt = new Date();
+                const txUpdated = await tx.inspectionRun.update({
+                    where: { id: runId },
+                    data: {
+                        resultJson: resultRows,
+                        status: InspectionRunStatus.COMPLETED,
+                        completedAt,
+                        signedOffById: userId,
+                        signatureDataUrl: body.data.signatureDataUrl?.trim() || null,
+                    },
+                    include: { template: { select: { id: true, name: true } } },
+                });
+                const interval = run.template.intervalDays ?? inspectionFrequencyToIntervalDays(run.template.frequency);
+                if (interval != null && interval > 0) {
+                    await tx.inspectionTemplate.update({
+                        where: { id: run.templateId },
+                        data: {
+                            lastCompletedAt: completedAt,
+                            nextDueAt: addUtcDays(completedAt, interval),
+                            intervalDays: interval,
+                        },
+                    });
+                }
+                else {
+                    await tx.inspectionTemplate.update({
+                        where: { id: run.templateId },
+                        data: { lastCompletedAt: completedAt },
+                    });
                 }
                 return txUpdated;
             });
@@ -2142,7 +2619,8 @@ export function registerOmRoutes(r, needUser, env) {
                 project: { select: { name: true } },
                 file: { select: { name: true } },
                 fileVersion: { select: { version: true } },
-                signedOffBy: { select: { name: true } },
+                signedOffBy: { select: { name: true, email: true } },
+                createdBy: { select: { name: true, email: true } },
             },
         });
         const handover = parseProjectSettingsJson(ctx.project.settingsJson).omHandover;
@@ -2186,8 +2664,10 @@ export function registerOmRoutes(r, needUser, env) {
             buildingOwnerNotify,
         });
     });
+    // fallow-ignore-next-line code-duplication
     r.get("/projects/:projectId/om/inspection-runs/:runId/report.pdf", needUser, async (c) => {
         const projectId = c.req.param("projectId");
+        // fallow-ignore-next-line code-duplication
         const runId = c.req.param("runId");
         const auth = await loadProjectWithAuth(projectId, c.get("user").id);
         if ("error" in auth)
@@ -2208,7 +2688,8 @@ export function registerOmRoutes(r, needUser, env) {
                 project: { select: { name: true } },
                 file: { select: { name: true } },
                 fileVersion: { select: { version: true } },
-                signedOffBy: { select: { name: true } },
+                signedOffBy: { select: { name: true, email: true } },
+                createdBy: { select: { name: true, email: true } },
             },
         });
         if (!run)
@@ -2361,6 +2842,7 @@ export function registerOmRoutes(r, needUser, env) {
         });
     });
     // --- Handover hub: readiness metrics + team brief (notes / completion) ---
+    // fallow-ignore-next-line code-duplication
     r.get("/projects/:projectId/om/handover-summary", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const auth = await loadProjectWithAuth(projectId, c.get("user").id);
@@ -2468,6 +2950,7 @@ export function registerOmRoutes(r, needUser, env) {
             },
         });
     });
+    // fallow-ignore-next-line code-duplication
     r.patch("/projects/:projectId/om/handover-brief", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const auth = await loadProjectWithAuth(projectId, c.get("user").id);
@@ -2498,6 +2981,7 @@ export function registerOmRoutes(r, needUser, env) {
             transferPunch: z.boolean().optional(),
             transferTeamAccess: z.boolean().optional(),
             handoverWizardCompletedAt: z.string().datetime().nullable().optional(),
+            // fallow-ignore-next-line code-duplication
             buildingOwnerEmail: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
         })
             .safeParse(await c.req.json());
@@ -2545,6 +3029,7 @@ export function registerOmRoutes(r, needUser, env) {
         });
     });
     /** FM dashboard KPIs + lists (operations mode). */
+    // fallow-ignore-next-line code-duplication
     r.get("/projects/:projectId/om/fm-dashboard", needUser, async (c) => {
         const projectId = c.req.param("projectId");
         const auth = await loadProjectWithAuth(projectId, c.get("user").id);
@@ -2562,12 +3047,13 @@ export function registerOmRoutes(r, needUser, env) {
         const settings = parseProjectSettingsJson(ctx.project.settingsJson);
         const now = new Date();
         const weekStart = startOfUtcWeek(now);
+        // fallow-ignore-next-line code-duplication
         const weekEnd = endOfUtcWeek(weekStart);
         const sevenDaysAgo = new Date(now);
         sevenDaysAgo.setUTCDate(sevenDaysAgo.getUTCDate() - 7);
         const thirtyDaysAgo = new Date(now);
         thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
-        const [assetTotal, assetsLinkedToDrawing, openWo, inProgressWo, openTenantReq, inProgressTenantReq, maintRows, schedulesForWeek, recentWo, recentTenantReq, backlogOver7, backlogOver30, pmCompletions,] = await Promise.all([
+        const [assetTotal, assetsLinkedToDrawing, openWo, inProgressWo, openTenantReq, inProgressTenantReq, maintRows, schedulesForWeek, recentWo, recentTenantReq, backlogOver7, backlogOver30, pmCompletions, openInspectionDrafts, overdueInspectionTemplates, completedInspectionsLast30,] = await Promise.all([
             prisma.asset.count({ where: { projectId } }),
             prisma.asset.count({ where: { projectId, fileId: { not: null } } }),
             prisma.issue.count({
@@ -2644,7 +3130,38 @@ export function registerOmRoutes(r, needUser, env) {
                 orderBy: { completedAt: "desc" },
                 take: 200,
             }),
+            prisma.inspectionRun.count({
+                where: { projectId, status: InspectionRunStatus.DRAFT },
+            }),
+            prisma.inspectionTemplate.count({
+                where: { projectId, nextDueAt: { not: null, lt: now } },
+            }),
+            prisma.inspectionRun.findMany({
+                where: {
+                    projectId,
+                    status: InspectionRunStatus.COMPLETED,
+                    completedAt: { gte: thirtyDaysAgo },
+                },
+                select: {
+                    id: true,
+                    templateId: true,
+                    assetId: true,
+                    completedAt: true,
+                    resultJson: true,
+                    template: { select: { id: true, name: true } },
+                },
+                orderBy: { completedAt: "desc" },
+                take: 100,
+            }),
         ]);
+        const deficientLast30 = completedInspectionsLast30.filter((r) => inspectionResultHasFail(r.resultJson));
+        const recentDeficientInspections = deficientLast30.slice(0, 6).map((r) => ({
+            id: r.id,
+            templateId: r.templateId,
+            templateName: r.template.name,
+            assetId: r.assetId,
+            completedAt: r.completedAt?.toISOString() ?? null,
+        }));
         let maintenanceOverdue = 0;
         let maintenanceDueSoon = 0;
         for (const row of maintRows) {
@@ -2689,6 +3206,9 @@ export function registerOmRoutes(r, needUser, env) {
                 workOrderBacklogOver7Days: backlogOver7,
                 workOrderBacklogOver30Days: backlogOver30,
                 pmCompliancePct,
+                openInspectionDrafts,
+                deficientInspectionsLast30Days: deficientLast30.length,
+                overdueInspectionTemplates,
             },
             buildingHealthPct,
             upcomingMaintenanceThisWeek: schedulesForWeek.map((s) => ({
@@ -2714,7 +3234,190 @@ export function registerOmRoutes(r, needUser, env) {
                 priority: i.priority,
                 updatedAt: i.updatedAt.toISOString(),
             })),
+            recentDeficientInspections,
         });
+    });
+    /** Recent inspection runs for an asset (asset hub). */
+    r.get("/projects/:projectId/om/assets/:assetId/inspections", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        // fallow-ignore-next-line code-duplication
+        const assetId = c.req.param("assetId");
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        if (!ctx.project.operationsMode || !ctx.settings.modules.omInspections) {
+            return c.json({ error: "Inspections are not enabled" }, 403);
+        }
+        const gate = requireOmBilling(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const asset = await prisma.asset.findFirst({
+            where: { id: assetId, projectId },
+            select: { id: true, tag: true, name: true },
+        });
+        if (!asset)
+            return c.json({ error: "Asset not found" }, 404);
+        const rows = await prisma.inspectionRun.findMany({
+            where: { projectId, assetId },
+            orderBy: { updatedAt: "desc" },
+            take: 50,
+            include: {
+                template: { select: { id: true, name: true } },
+                createdBy: { select: { id: true, name: true, email: true, image: true } },
+            },
+        });
+        return c.json({
+            assetId: asset.id,
+            assetTag: asset.tag,
+            assetName: asset.name,
+            runs: rows.map((r) => inspectionRunJson(r)),
+        });
+    });
+    /**
+     * Period export pack (JSON): asset register summary, completed inspections,
+     * maintenance completions, and closed work orders in [from, to].
+     */
+    // fallow-ignore-next-line code-duplication
+    r.get("/projects/:projectId/om/reports/period-pack.json", needUser, async (c) => {
+        const projectId = c.req.param("projectId");
+        const auth = await loadProjectWithAuth(projectId, c.get("user").id);
+        if ("error" in auth)
+            return c.json({ error: auth.error }, auth.status);
+        const { ctx } = auth;
+        if (ctx.workspaceMember.isExternal)
+            return c.json({ error: "Forbidden" }, 403);
+        if (!ctx.project.operationsMode) {
+            return c.json({ error: "Operations mode is not enabled for this project" }, 403);
+        }
+        const gate = requireOmBilling(ctx.project.workspace);
+        if (gate)
+            return c.json({ error: gate.error }, gate.status);
+        const fromRaw = c.req.query("from")?.trim();
+        const toRaw = c.req.query("to")?.trim();
+        if (!fromRaw || !toRaw) {
+            return c.json({ error: "Query params from and to (ISO dates) are required" }, 400);
+        }
+        const from = new Date(fromRaw);
+        const to = new Date(toRaw);
+        if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+            return c.json({ error: "Invalid from/to date" }, 400);
+        }
+        if (from > to)
+            return c.json({ error: "from must be before to" }, 400);
+        const [assets, completedInspections, maintenanceCompletions, closedWorkOrders] = await Promise.all([
+            prisma.asset.findMany({
+                where: { projectId },
+                orderBy: { tag: "asc" },
+                select: {
+                    id: true,
+                    tag: true,
+                    name: true,
+                    category: true,
+                    locationLabel: true,
+                    manufacturer: true,
+                    model: true,
+                    serialNumber: true,
+                    warrantyExpires: true,
+                    lastServiceAt: true,
+                },
+            }),
+            prisma.inspectionRun.findMany({
+                where: {
+                    projectId,
+                    status: InspectionRunStatus.COMPLETED,
+                    completedAt: { gte: from, lte: to },
+                },
+                orderBy: { completedAt: "asc" },
+                include: {
+                    template: { select: { id: true, name: true } },
+                    asset: { select: { id: true, tag: true, name: true } },
+                },
+            }),
+            prisma.maintenanceCompletion.findMany({
+                where: { projectId, completedAt: { gte: from, lte: to } },
+                orderBy: { completedAt: "asc" },
+                include: {
+                    asset: { select: { id: true, tag: true, name: true } },
+                    schedule: { select: { id: true, title: true, frequency: true } },
+                },
+            }),
+            prisma.issue.findMany({
+                where: {
+                    projectId,
+                    issueKind: IssueKind.WORK_ORDER,
+                    status: IssueStatus.RESOLVED,
+                    OR: [
+                        { resolvedAt: { gte: from, lte: to } },
+                        { resolvedAt: null, updatedAt: { gte: from, lte: to } },
+                    ],
+                },
+                orderBy: { updatedAt: "asc" },
+                select: {
+                    id: true,
+                    title: true,
+                    status: true,
+                    priority: true,
+                    assetId: true,
+                    resolvedAt: true,
+                    updatedAt: true,
+                    createdAt: true,
+                },
+            }),
+        ]);
+        const pack = {
+            projectId,
+            projectName: ctx.project.name,
+            from: from.toISOString(),
+            to: to.toISOString(),
+            generatedAt: new Date().toISOString(),
+            assetRegisterSummary: {
+                total: assets.length,
+                assets: assets.map((a) => ({
+                    ...a,
+                    warrantyExpires: a.warrantyExpires?.toISOString() ?? null,
+                    lastServiceAt: a.lastServiceAt?.toISOString() ?? null,
+                })),
+            },
+            completedInspections: completedInspections.map((r) => ({
+                id: r.id,
+                templateId: r.templateId,
+                templateName: r.template.name,
+                assetId: r.assetId,
+                assetTag: r.asset?.tag ?? null,
+                assetName: r.asset?.name ?? null,
+                completedAt: r.completedAt?.toISOString() ?? null,
+                hasFail: inspectionResultHasFail(r.resultJson),
+                signaturePresent: Boolean(r.signatureDataUrl),
+            })),
+            maintenanceCompletions: maintenanceCompletions.map((m) => ({
+                id: m.id,
+                scheduleId: m.scheduleId,
+                scheduleTitle: m.schedule?.title ?? null,
+                frequency: m.schedule?.frequency ?? null,
+                assetId: m.assetId,
+                assetTag: m.asset?.tag ?? null,
+                assetName: m.asset?.name ?? null,
+                completedAt: m.completedAt.toISOString(),
+                previousDueAt: m.previousDueAt?.toISOString() ?? null,
+                workOrderId: m.workOrderId,
+            })),
+            closedWorkOrders: closedWorkOrders.map((i) => ({
+                id: i.id,
+                title: i.title,
+                status: i.status,
+                priority: i.priority,
+                assetId: i.assetId,
+                resolvedAt: i.resolvedAt?.toISOString() ?? null,
+                updatedAt: i.updatedAt.toISOString(),
+                createdAt: i.createdAt.toISOString(),
+            })),
+        };
+        c.header("Content-Type", "application/json; charset=utf-8");
+        c.header("Content-Disposition", `attachment; filename="period-pack-${projectId.slice(0, 8)}.json"`);
+        return c.body(JSON.stringify(pack, null, 2));
     });
     /** CSV export: asset register. */
     r.get("/projects/:projectId/om/reports/asset-register.csv", needUser, async (c) => {
@@ -2868,6 +3571,64 @@ function occupantPortalHeadlineFromSettingsJson(raw) {
     const h = ui.headline;
     return typeof h === "string" && h.trim() ? h.trim().slice(0, 200) : null;
 }
+/** Public-safe element summary from an asset bimAnchor (null when unlinked / invalid). */
+function occupantElementFromBimAnchor(bimAnchor) {
+    const parsed = omAssetBimAnchorSchema.safeParse(bimAnchor);
+    if (!parsed.success || !parsed.data)
+        return null;
+    return {
+        name: parsed.data.name?.trim() ? parsed.data.name.trim() : null,
+        ifcType: parsed.data.ifcType?.trim() ? parsed.data.ifcType.trim() : null,
+    };
+}
+function occupantLevelFromBimAnchor(bimAnchor) {
+    const parsed = omAssetBimAnchorSchema.safeParse(bimAnchor);
+    if (!parsed.success || !parsed.data)
+        return null;
+    const level = parsed.data.spatialPath?.[0]?.trim();
+    return level ? level : null;
+}
+const occupantAssetPublicSelect = {
+    tag: true,
+    name: true,
+    category: true,
+    locationLabel: true,
+    hall: true,
+    rowLabel: true,
+    rack: true,
+    positionU: true,
+    manufacturer: true,
+    model: true,
+    serialNumber: true,
+    notes: true,
+    imageS3Key: true,
+    bimAnchor: true,
+};
+function toOccupantAssetPublicJson(a) {
+    return {
+        tag: a.tag,
+        name: a.name,
+        category: a.category,
+        locationLabel: a.locationLabel,
+        hall: a.hall,
+        rowLabel: a.rowLabel,
+        rack: a.rack,
+        positionU: a.positionU,
+        manufacturer: a.manufacturer,
+        model: a.model,
+        serialNumber: a.serialNumber,
+        notes: a.notes,
+        hasImage: Boolean(a.imageS3Key),
+        level: occupantLevelFromBimAnchor(a.bimAnchor),
+        element: occupantElementFromBimAnchor(a.bimAnchor),
+    };
+}
+function bimAnchorJsonForIssue(bimAnchor) {
+    const parsed = omAssetBimAnchorSchema.safeParse(bimAnchor);
+    if (!parsed.success || !parsed.data)
+        return null;
+    return parsed.data;
+}
 /** Public occupant routes (no session). */
 export function registerOccupantPublicRoutes(r, env) {
     r.get("/occupant/:token/meta", async (c) => {
@@ -2901,11 +3662,11 @@ export function registerOccupantPublicRoutes(r, env) {
         if (assetSecretRaw) {
             const a = await prisma.asset.findFirst({
                 where: { projectId: row.projectId, occupantScanSecret: assetSecretRaw },
-                select: { tag: true, name: true, category: true, locationLabel: true },
+                select: occupantAssetPublicSelect,
             });
             if (!a)
                 return c.json({ error: "Invalid equipment link" }, 404);
-            asset = a;
+            asset = toOccupantAssetPublicJson(a);
         }
         const occupantHeadline = occupantPortalHeadlineFromSettingsJson(row.project.settingsJson);
         return c.json({
@@ -2915,6 +3676,50 @@ export function registerOccupantPublicRoutes(r, env) {
             asset,
         });
     });
+    /** Public equipment photo for a scanned asset QR (token + asset secret). */
+    r.get("/occupant/:token/asset-image", async (c) => {
+        const token = c.req.param("token");
+        const assetSecretRaw = c.req.query("a")?.trim();
+        if (!assetSecretRaw || assetSecretRaw.length > 80) {
+            return c.json({ error: "Invalid equipment link" }, 400);
+        }
+        const row = await prisma.occupantPortalToken.findFirst({
+            where: { token, revokedAt: null },
+            include: {
+                project: {
+                    select: {
+                        id: true,
+                        operationsMode: true,
+                    },
+                },
+            },
+        });
+        if (!row)
+            return c.json({ error: "Invalid or expired link" }, 404);
+        if (!row.project.operationsMode)
+            return c.json({ error: "This portal is not active" }, 403);
+        if (row.expiresAt && row.expiresAt < new Date()) {
+            return c.json({ error: "This link has expired" }, 403);
+        }
+        const asset = await prisma.asset.findFirst({
+            where: { projectId: row.projectId, occupantScanSecret: assetSecretRaw },
+            select: { imageS3Key: true },
+        });
+        if (!asset?.imageS3Key)
+            return c.json({ error: "Not found" }, 404);
+        let url;
+        try {
+            url = await presignGet(env, asset.imageS3Key);
+        }
+        catch (e) {
+            console.error("[occupant asset image]", e);
+            return c.json({ error: "Could not create download link (S3)." }, 503);
+        }
+        if (!url)
+            return c.json({ error: "S3 not configured" }, 503);
+        return c.json({ url });
+    });
+    // fallow-ignore-next-line complexity
     r.post("/occupant/:token/submit", async (c) => {
         const token = c.req.param("token");
         const body = z
@@ -2924,6 +3729,7 @@ export function registerOccupantPublicRoutes(r, env) {
             room: z.string().max(120).optional(),
             reporterName: z.string().min(1).max(200),
             reporterEmail: z.string().email(),
+            // fallow-ignore-next-line code-duplication
             assetSecret: z.string().min(1).max(80).optional(),
         })
             .safeParse(await c.req.json());
@@ -2972,12 +3778,14 @@ export function registerOccupantPublicRoutes(r, env) {
                     fileVersionId: true,
                     pageNumber: true,
                     annotationId: true,
+                    bimAnchor: true,
                 },
             });
             if (!a)
                 return c.json({ error: "Invalid equipment link" }, 400);
             boundAsset = a;
         }
+        const issueBimAnchor = boundAsset ? bimAnchorJsonForIssue(boundAsset.bimAnchor) : null;
         let resolvedDrawing;
         if (boundAsset?.fileId && boundAsset?.fileVersionId) {
             const fv = await prisma.fileVersion.findFirst({
@@ -3038,11 +3846,13 @@ export function registerOccupantPublicRoutes(r, env) {
                 sheetVersion,
                 pageNumber,
                 annotationId,
+                ...(issueBimAnchor ? { bimAnchor: issueBimAnchor } : {}),
                 title,
                 description: body.data.description,
                 location: location || null,
                 issueKind: IssueKind.OCCUPANT,
                 status: IssueStatus.OPEN,
+                statusChangedAt: new Date(),
                 priority: IssuePriority.MEDIUM,
                 reporterName: body.data.reporterName.trim(),
                 reporterEmail: body.data.reporterEmail.trim().toLowerCase(),
@@ -3081,6 +3891,7 @@ export function registerOccupantPublicRoutes(r, env) {
                 projectId: issue.projectId,
                 fileName: sheetName?.trim() ? sheetName.trim() : "Drawing",
                 version: sheetVersion ?? 1,
+                bimAnchor: issueBimAnchor,
             })
             : `/projects/${link.projectId}/om/tenant-requests/${issue.id}`;
         const baseUrl = env.PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";

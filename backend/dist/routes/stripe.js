@@ -3,10 +3,16 @@ import Stripe from "stripe";
 import { ActivityType, WorkspaceRole } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { logActivity } from "../lib/activity.js";
-import { inferBillingPlanFromSubscription } from "../lib/stripeBillingPlan.js";
-import { resolveEnterpriseMonthlyPriceId } from "../lib/stripeEnterprisePrice.js";
-import { resolveProMonthlyPriceId } from "../lib/stripeProPrice.js";
+import { inferBillingPlanFromSubscription, pickSubscriptionLineItem, resolvePriceIdForBillingPlan, } from "../lib/stripeBillingPlan.js";
+import { stripeSubscriptionRequiresCheckout } from "../lib/planFeatureGates.js";
+import { processStripeWebhookOnce } from "../lib/stripeWebhookProcess.js";
+import { syncWorkspaceSeatOverageSafe } from "../lib/syncSeatOverageSubscription.js";
 import { sessionMiddleware } from "../middleware/session.js";
+function parsePaidBillingPlan(raw) {
+    if (raw === "team" || raw === "pro" || raw === "enterprise")
+        return raw;
+    return null;
+}
 function subscriptionPeriodEnd(sub) {
     const t = sub.current_period_end;
     return typeof t === "number" ? new Date(t * 1000) : null;
@@ -45,7 +51,7 @@ async function persistCheckoutSubscriptionToWorkspace(stripe, env, wsId, custome
     const sub = await stripe.subscriptions.retrieve(subId, {
         expand: ["items.data.price"],
     });
-    let billingPlan = checkoutPlanTier === "pro" || checkoutPlanTier === "enterprise" ? checkoutPlanTier : null;
+    let billingPlan = checkoutPlanTier;
     if (!billingPlan) {
         billingPlan = await inferBillingPlanFromSubscription(stripe, env, sub);
     }
@@ -62,7 +68,9 @@ async function persistCheckoutSubscriptionToWorkspace(stripe, env, wsId, custome
     await logActivity(wsId, ActivityType.SUBSCRIPTION_UPDATED, {
         metadata: { status: sub.status, source, billingPlan: billingPlan ?? undefined },
     });
+    await syncWorkspaceSeatOverageSafe(env, wsId);
 }
+// fallow-ignore-next-line complexity
 async function runChangeSubscriptionPlan(c, env, workspaceId, targetPlan) {
     if (!env.STRIPE_SECRET_KEY) {
         return c.json({ error: "Stripe not configured" }, 503);
@@ -82,11 +90,10 @@ async function runChangeSubscriptionPlan(c, env, workspaceId, targetPlan) {
     if (!ws.stripeSubscriptionId) {
         return c.json({ error: "No subscription on file. Use checkout to connect billing first." }, 400);
     }
-    let proPriceId;
-    let enterprisePriceId;
+    let targetPriceId;
+    let currentPriceId = null;
     try {
-        proPriceId = await resolveProMonthlyPriceId(stripe, env.STRIPE_PRICE_PRO_MONTHLY);
-        enterprisePriceId = await resolveEnterpriseMonthlyPriceId(stripe, env.STRIPE_PRICE_ENTERPRISE_MONTHLY);
+        targetPriceId = await resolvePriceIdForBillingPlan(stripe, env, targetPlan);
     }
     catch (e) {
         console.error("[stripe] change-subscription-plan resolve prices", e);
@@ -103,10 +110,30 @@ async function runChangeSubscriptionPlan(c, env, workspaceId, targetPlan) {
         console.error("[stripe] change-subscription-plan retrieve", e);
         return c.json({ error: stripeThrownMessage(e) }, 502);
     }
-    const inferred = await inferBillingPlanFromSubscription(stripe, env, sub);
+    // Canceled / expired subs cannot change price items — client should run Checkout again.
+    if (stripeSubscriptionRequiresCheckout(sub.status)) {
+        await prisma.workspace.update({
+            where: { id: workspaceId },
+            data: {
+                subscriptionStatus: sub.status,
+                currentPeriodEnd: subscriptionPeriodEnd(sub),
+            },
+        });
+        return c.json({
+            error: "This subscription was canceled. Start checkout again to subscribe to the plan you want.",
+            code: "requires_checkout",
+            plan: targetPlan,
+        }, 409);
+    }
+    // Prefer live catalog price match; fall back to Stripe metadata / legacy prices,
+    // then workspace.billingPlan (common in local after price catalog bumps).
+    let inferred = await inferBillingPlanFromSubscription(stripe, env, sub);
+    if (inferred === null) {
+        inferred = parsePaidBillingPlan(ws.billingPlan ?? "");
+    }
     if (inferred === null) {
         return c.json({
-            error: "This subscription does not use the configured Pro or Enterprise prices. Use Manage billing in Stripe or contact support.",
+            error: "This subscription does not use a configured PlanSync price. Cancel and re-subscribe with checkout, or use Manage billing in Stripe.",
         }, 400);
     }
     if (inferred === targetPlan) {
@@ -118,21 +145,25 @@ async function runChangeSubscriptionPlan(c, env, workspaceId, targetPlan) {
                 currentPeriodEnd: subscriptionPeriodEnd(sub),
             },
         });
+        await syncWorkspaceSeatOverageSafe(env, workspaceId);
         return c.json({
             ok: true,
             alreadyOnPlan: true,
             plan: targetPlan,
         });
     }
-    const currentPriceId = inferred === "pro" ? proPriceId : enterprisePriceId;
-    const targetPriceId = targetPlan === "pro" ? proPriceId : enterprisePriceId;
-    const lineItem = sub.items.data.find((item) => {
-        const pid = typeof item.price === "string" ? item.price : item.price?.id;
-        return pid === currentPriceId;
-    });
+    try {
+        currentPriceId = await resolvePriceIdForBillingPlan(stripe, env, inferred);
+    }
+    catch (e) {
+        console.error("[stripe] change-subscription-plan resolve current price", e);
+        // Still allow switch: line item pick falls back to the first subscription item.
+        currentPriceId = null;
+    }
+    const lineItem = pickSubscriptionLineItem(sub, currentPriceId);
     if (!lineItem) {
         return c.json({
-            error: `Could not find the ${inferred} subscription line item. Contact support.`,
+            error: `Could not find a subscription line item to switch from ${inferred}. Contact support.`,
         }, 400);
     }
     const meta = {};
@@ -154,7 +185,19 @@ async function runChangeSubscriptionPlan(c, env, workspaceId, targetPlan) {
     }
     catch (e) {
         console.error("[stripe] change-subscription-plan subscriptions.update", e);
-        return c.json({ error: stripeThrownMessage(e) }, 502);
+        const msg = stripeThrownMessage(e);
+        if (/canceled subscription/i.test(msg)) {
+            await prisma.workspace.update({
+                where: { id: workspaceId },
+                data: { subscriptionStatus: "canceled" },
+            });
+            return c.json({
+                error: "This subscription was canceled. Start checkout again to subscribe to the plan you want.",
+                code: "requires_checkout",
+                plan: targetPlan,
+            }, 409);
+        }
+        return c.json({ error: msg }, 502);
     }
     const full = await stripe.subscriptions.retrieve(updated.id, {
         expand: ["items.data.price"],
@@ -178,6 +221,7 @@ async function runChangeSubscriptionPlan(c, env, workspaceId, targetPlan) {
             billingPlan: billingPlan ?? targetPlan,
         },
     });
+    await syncWorkspaceSeatOverageSafe(env, workspaceId);
     return c.json({
         ok: true,
         alreadyOnPlan: false,
@@ -194,7 +238,7 @@ export function stripeRoutes(env, auth) {
         const stripe = new Stripe(env.STRIPE_SECRET_KEY);
         const body = await c.req.json().catch(() => ({}));
         const planRaw = typeof body.plan === "string" ? body.plan.trim().toLowerCase() : "";
-        const planTier = planRaw === "enterprise" ? "enterprise" : "pro";
+        const planTier = parsePaidBillingPlan(planRaw) ?? "pro";
         const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
         if (!workspaceId) {
             return c.json({ error: "workspaceId is required" }, 400);
@@ -212,10 +256,7 @@ export function stripeRoutes(env, auth) {
         }
         let priceId;
         try {
-            priceId =
-                planTier === "enterprise"
-                    ? await resolveEnterpriseMonthlyPriceId(stripe, env.STRIPE_PRICE_ENTERPRISE_MONTHLY)
-                    : await resolveProMonthlyPriceId(stripe, env.STRIPE_PRICE_PRO_MONTHLY);
+            priceId = await resolvePriceIdForBillingPlan(stripe, env, planTier);
         }
         catch (e) {
             console.error("[stripe] resolve subscription price failed", e);
@@ -298,12 +339,12 @@ export function stripeRoutes(env, auth) {
         const body = await c.req.json().catch(() => ({}));
         const workspaceId = typeof body.workspaceId === "string" ? body.workspaceId.trim() : "";
         const planRaw = typeof body.plan === "string" ? body.plan.trim().toLowerCase() : "";
-        const targetPlan = planRaw === "enterprise" ? "enterprise" : planRaw === "pro" ? "pro" : null;
+        const targetPlan = parsePaidBillingPlan(planRaw);
         if (!workspaceId) {
             return c.json({ error: "workspaceId is required" }, 400);
         }
         if (!targetPlan) {
-            return c.json({ error: 'plan must be "pro" or "enterprise"' }, 400);
+            return c.json({ error: 'plan must be "team", "pro", or "enterprise"' }, 400);
         }
         return runChangeSubscriptionPlan(c, env, workspaceId, targetPlan);
     });
@@ -438,8 +479,7 @@ export function stripeRoutes(env, auth) {
         if (!ids) {
             return c.json({ error: "Session missing subscription or customer" }, 400);
         }
-        const pt = session.metadata?.planTier;
-        const checkoutTier = pt === "pro" || pt === "enterprise" ? pt : null;
+        const checkoutTier = parsePaidBillingPlan(session.metadata?.planTier ?? "");
         try {
             await persistCheckoutSubscriptionToWorkspace(stripe, env, wsId, ids.customerId, ids.subId, "sync-checkout-session", checkoutTier);
         }
@@ -465,13 +505,17 @@ export function stripeRoutes(env, auth) {
         catch {
             return c.json({ error: "Invalid signature" }, 400);
         }
-        const existing = await prisma.processedStripeEvent.findUnique({
-            where: { eventId: event.id },
-        });
-        if (existing)
-            return c.json({ received: true, duplicate: true });
-        await prisma.processedStripeEvent.create({ data: { eventId: event.id } });
-        try {
+        const outcome = await processStripeWebhookOnce(event.id, {
+            hasProcessed: async (eventId) => {
+                const row = await prisma.processedStripeEvent.findUnique({ where: { eventId } });
+                return Boolean(row);
+            },
+            markProcessed: async (eventId) => {
+                await prisma.processedStripeEvent.create({ data: { eventId } });
+            },
+        }, 
+        // fallow-ignore-next-line complexity
+        async () => {
             switch (event.type) {
                 case "checkout.session.completed": {
                     const sess = event.data.object;
@@ -479,8 +523,7 @@ export function stripeRoutes(env, auth) {
                     const customerId = typeof sess.customer === "string" ? sess.customer : sess.customer?.id;
                     const wsId = sess.metadata?.workspaceId;
                     if (wsId && subId && customerId) {
-                        const pt = sess.metadata?.planTier;
-                        const checkoutTier = pt === "pro" || pt === "enterprise" ? pt : null;
+                        const checkoutTier = parsePaidBillingPlan(sess.metadata?.planTier ?? "");
                         await persistCheckoutSubscriptionToWorkspace(stripe, env, wsId, customerId, subId, "checkout.session.completed", checkoutTier);
                     }
                     break;
@@ -522,9 +565,12 @@ export function stripeRoutes(env, auth) {
                 }
                 case "invoice.payment_failed": {
                     const inv = event.data.object;
-                    const subRef = inv
-                        .subscription;
-                    const subId = typeof subRef === "string" ? subRef : subRef && "id" in subRef ? subRef.id : undefined;
+                    const subRef = inv.subscription;
+                    const subId = typeof subRef === "string"
+                        ? subRef
+                        : subRef && "id" in subRef
+                            ? subRef.id
+                            : undefined;
                     if (subId) {
                         const found = await prisma.workspace.findFirst({
                             where: { stripeSubscriptionId: subId },
@@ -544,9 +590,11 @@ export function stripeRoutes(env, auth) {
                 default:
                     break;
             }
-        }
-        catch (e) {
-            console.error("Stripe webhook handler error", e);
+        });
+        if (outcome.status === "duplicate")
+            return c.json({ received: true, duplicate: true });
+        if (outcome.status === "failed") {
+            console.error("Stripe webhook handler error", outcome.error);
             return c.json({ error: "Handler failed" }, 500);
         }
         return c.json({ received: true });

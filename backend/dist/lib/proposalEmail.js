@@ -101,10 +101,15 @@ export async function sendProposalSentToClient(opts) {
             `Hi ${opts.clientName},`,
             `${opts.senderName} has sent you a proposal.`,
             `${opts.reference}: ${opts.title}`,
-            "Open the link below to review and respond (no account required).",
+            opts.pdfAttachment
+                ? "A PDF copy is attached. You can also open the link below to review and respond online (no account required)."
+                : "Open the link below to review and respond (no account required).",
         ],
         actionUrl: opts.portalUrl,
         actionLabel: "View proposal",
+        attachments: opts.pdfAttachment
+            ? [{ filename: opts.pdfAttachment.filename, content: opts.pdfAttachment.contentBase64 }]
+            : undefined,
     });
 }
 export async function sendProposalViewedToSender(opts) {

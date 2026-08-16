@@ -1,15 +1,9 @@
 import { z } from "zod";
 import { Prisma, WorkspaceRole } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
-import { isWorkspacePro } from "../../lib/subscription.js";
+import { requireProPlusAccess as requirePro } from "../../lib/planFeatureGates.js";
 import { jsonObjectForResponse, mergeCustomAttributes, normalizeCustomAttributes, parseMaterialTemplateJson, parseMaterialTemplatePatchBody, templateToDbJson, } from "../../lib/materialTemplate.js";
 import { buildMaterialsTemplateBuffer, parseMaterialsImportBuffer, } from "../../lib/materialsExcel.js";
-function requirePro(workspace) {
-    if (!isWorkspacePro(workspace)) {
-        return { error: "Pro subscription required", status: 402 };
-    }
-    return null;
-}
 function normalizeMaterialKey(s) {
     return s.trim().toLowerCase().replace(/\s+/g, " ");
 }

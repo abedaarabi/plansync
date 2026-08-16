@@ -1,52 +1,22 @@
-import { Resend } from "resend";
-import { WorkspaceRole } from "@prisma/client";
+// fallow-ignore-next-line code-duplication
 import { prisma } from "./prisma.js";
-import { inviteFromAddress } from "./inviteEmail.js";
 import { isWorkspaceOmBilling } from "./subscription.js";
 import { parseProjectSettingsJson } from "./projectSettings.js";
-import { createUserNotifications } from "./userNotifications.js";
-function addDays(d, n) {
-    const x = new Date(d);
-    x.setUTCDate(x.getUTCDate() + n);
-    return x;
-}
-function escapeHtml(s) {
-    return s
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-}
+import { buildTransactionalEmailHtml, escapeHtml } from "./transactionalEmailLayout.js";
+import { createOmDigestResend, emptyDigestCounters, filterItemsForMemberAccess, formatDigestPreviewBody, isWorkspaceManagerRole, loadScopedProjectsByUser, sendDigestResendEmail, summarizeOverdueDueSoon, tryNotify, } from "./omReminderDigestShared.js";
 function maintenanceAppHref(projectId) {
     return `/projects/${projectId}/om/maintenance`;
 }
-function memberCanAccessProject(member, scopedProjectIds, projectId) {
-    if (member.isExternal)
-        return false;
-    const isManager = member.role === WorkspaceRole.SUPER_ADMIN || member.role === WorkspaceRole.ADMIN;
-    if (isManager || !scopedProjectIds || scopedProjectIds.size === 0)
-        return true;
-    return scopedProjectIds.has(projectId);
-}
-function itemsForMember(items, member, scopedProjectIds) {
-    return items.filter((it) => memberCanAccessProject(member, scopedProjectIds, it.projectId));
-}
 function notificationBody(items) {
     const sorted = [...items].sort((a, b) => a.nextDueAt.getTime() - b.nextDueAt.getTime());
-    const preview = sorted
-        .slice(0, 3)
-        .map((it) => `${it.projectName} · ${it.assetTag}: ${it.title}`)
-        .join(" · ");
-    if (sorted.length > 3)
-        return `${preview} · +${sorted.length - 3} more`;
-    return preview;
+    return formatDigestPreviewBody(sorted.map((it) => `${it.projectName} · ${it.assetTag}: ${it.title}`));
 }
-function buildDigestEmail(workspaceName, items, appOrigin) {
+function buildDigestTableHtml(items, appOrigin) {
     const sorted = [...items].sort((a, b) => a.nextDueAt.getTime() - b.nextDueAt.getTime());
     const rowsHtml = sorted
         .map((it) => {
         const due = it.nextDueAt.toISOString().slice(0, 10);
-        const status = it.overdue ? "Overdue" : "Due soon";
+        const status = it.meterType ? "Meter/calendar" : it.overdue ? "Overdue" : "Due soon";
         const href = `${appOrigin}${maintenanceAppHref(it.projectId)}`;
         return `<tr>
       <td style="padding:8px;border-bottom:1px solid #e2e8f0;">${escapeHtml(it.projectName)}</td>
@@ -58,10 +28,7 @@ function buildDigestEmail(workspaceName, items, appOrigin) {
     </tr>`;
     })
         .join("");
-    const html = `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#0f172a;">
-  <h2 style="margin:0 0 12px;">Maintenance reminders — ${escapeHtml(workspaceName)}</h2>
-  <p style="margin:0 0 16px;color:#64748b;font-size:14px;">You have <strong>${sorted.length}</strong> preventive maintenance item(s) that are overdue or due within the next 7 days (UTC).</p>
-  <table style="border-collapse:collapse;width:100%;max-width:720px;font-size:14px;">
+    return `<table style="border-collapse:collapse;width:100%;max-width:720px;font-size:14px;">
     <thead>
       <tr style="background:#f8fafc;text-align:left;">
         <th style="padding:8px;border-bottom:1px solid #cbd5e1;">Project</th>
@@ -73,39 +40,67 @@ function buildDigestEmail(workspaceName, items, appOrigin) {
       </tr>
     </thead>
     <tbody>${rowsHtml}</tbody>
-  </table>
-  <p style="margin:20px 0 0;font-size:13px;color:#94a3b8;">This is an automated daily digest from PlanSync O&amp;M. Dates are UTC.</p>
-</body></html>`;
+  </table>`;
+}
+function buildReminderEmail(env, opts) {
+    const sorted = [...opts.items].sort((a, b) => a.nextDueAt.getTime() - b.nextDueAt.getTime());
+    const lead = sorted[0];
+    const { statusSummary } = summarizeOverdueDueSoon(sorted);
+    const actionUrl = `${opts.appOrigin}${maintenanceAppHref(lead.projectId)}`;
+    const subject = opts.mode === "assignee"
+        ? `PlanSync O&M: ${sorted.length} assigned maintenance reminder(s)`
+        : `PlanSync O&M: ${sorted.length} maintenance reminder(s) — ${opts.workspaceName}`;
+    const bodyLines = opts.mode === "assignee"
+        ? [
+            `You have ${sorted.length} preventive maintenance item(s) assigned to you that are overdue or due within the next 7 days (UTC).`,
+            statusSummary ? `Status: ${statusSummary}.` : "",
+            ...sorted
+                .slice(0, 5)
+                .map((it) => `${it.assetTag}: ${it.title} — due ${it.nextDueAt.toISOString().slice(0, 10)} (${it.overdue ? "overdue" : "due soon"})`),
+            sorted.length > 5 ? `…and ${sorted.length - 5} more.` : "",
+        ].filter(Boolean)
+        : [
+            `Your workspace has ${sorted.length} preventive maintenance item(s) overdue or due within the next 7 days (UTC).`,
+            statusSummary ? `Status: ${statusSummary}.` : "",
+        ].filter(Boolean);
+    const html = buildTransactionalEmailHtml(env, {
+        eyebrow: "Maintenance",
+        title: opts.mode === "assignee"
+            ? "Your maintenance reminders"
+            : `Maintenance digest — ${opts.workspaceName}`,
+        bodyLines,
+        extraHtml: opts.mode === "manager" ? buildDigestTableHtml(sorted, opts.appOrigin) : undefined,
+        primaryAction: { url: actionUrl, label: "Open maintenance" },
+        fallbackUrl: actionUrl,
+        footerNote: "Automated daily reminder from PlanSync O&M. Dates are UTC.",
+    });
     const text = [
-        `Maintenance reminders — ${workspaceName}`,
+        opts.mode === "assignee"
+            ? "Your maintenance reminders"
+            : `Maintenance reminders — ${opts.workspaceName}`,
         "",
         `${sorted.length} item(s) overdue or due within 7 days (UTC):`,
         ...sorted.map((it) => `- ${it.projectName} / ${it.assetTag}: ${it.title} — due ${it.nextDueAt.toISOString().slice(0, 10)} (${it.overdue ? "overdue" : "due soon"})`),
         "",
-        `Open: ${appOrigin}${maintenanceAppHref(sorted[0].projectId)}`,
+        `Open: ${actionUrl}`,
     ].join("\n");
-    return {
-        html,
-        text,
-        subject: `PlanSync O&M: ${sorted.length} maintenance reminder(s) — ${workspaceName}`,
-    };
+    return { html, text, subject };
 }
 /**
  * Daily digest: maintenance schedules overdue or due within the next 7 days (UTC).
- * Sends at most one email + in-app notification per member per workspace per UTC day
+ *
+ * Recipients:
+ * - Assignees: email + in-app/push for schedules assigned to them
+ * - Workspace managers (SUPER_ADMIN / ADMIN): full accessible digest
+ *
+ * At most one email + notification per member per workspace per UTC day
  * (idempotent via OmMaintenanceReminderDigest).
+ *
+ * Ops: call POST /api/v1/internal/om-maintenance-reminders daily with
+ * header x-plansync-cron-secret = INTERNAL_CRON_SECRET.
  */
 export async function runOmMaintenanceReminders(env) {
-    const now = new Date();
-    const dayKey = now.toISOString().slice(0, 10);
-    const resendKey = env.RESEND_API_KEY?.trim();
-    const from = inviteFromAddress(env);
-    const resendConfigured = Boolean(resendKey && from);
-    const resend = resendConfigured ? new Resend(resendKey) : null;
-    const startToday = new Date(now);
-    startToday.setUTCHours(0, 0, 0, 0);
-    const dueSoonEnd = addDays(startToday, 7);
-    dueSoonEnd.setUTCHours(23, 59, 59, 999);
+    const { resend, from, configured, dayKey, startToday, dueSoonEnd, appOrigin } = createOmDigestResend(env);
     const schedules = await prisma.maintenanceSchedule.findMany({
         where: {
             isActive: true,
@@ -151,6 +146,7 @@ export async function runOmMaintenanceReminders(env) {
             continue;
         const nd = s.nextDueAt;
         const overdue = nd < startToday;
+        // fallow-ignore-next-line code-duplication
         const row = {
             scheduleId: s.id,
             projectId: s.asset.project.id,
@@ -160,17 +156,14 @@ export async function runOmMaintenanceReminders(env) {
             title: s.title.trim() || s.frequency,
             nextDueAt: nd,
             overdue,
+            assignedToUserId: s.assignedToUserId,
+            meterType: s.meterType,
         };
         const list = byWorkspace.get(ws.id) ?? [];
         list.push(row);
         byWorkspace.set(ws.id, list);
     }
-    let workspacesEmailed = 0;
-    let workspacesNotified = 0;
-    let membersEmailed = 0;
-    let membersNotified = 0;
-    let workspacesSkipped = 0;
-    const appOrigin = env.PUBLIC_APP_URL.replace(/\/$/, "");
+    const counters = emptyDigestCounters();
     for (const [workspaceId, items] of byWorkspace) {
         if (items.length === 0)
             continue;
@@ -178,7 +171,7 @@ export async function runOmMaintenanceReminders(env) {
             where: { workspaceId_digestDate: { workspaceId, digestDate: dayKey } },
         });
         if (existing) {
-            workspacesSkipped += 1;
+            counters.workspacesSkipped += 1;
             continue;
         }
         const wsRow = await prisma.workspace.findUnique({
@@ -191,98 +184,91 @@ export async function runOmMaintenanceReminders(env) {
             include: { user: { select: { id: true, email: true } } },
         });
         if (members.length === 0) {
+            // fallow-ignore-next-line code-duplication
             await prisma.omMaintenanceReminderDigest.create({
                 data: { workspaceId, digestDate: dayKey },
             });
-            workspacesSkipped += 1;
+            counters.workspacesSkipped += 1;
             continue;
         }
-        const scopedRows = await prisma.projectMember.findMany({
-            where: {
-                userId: { in: members.map((m) => m.userId) },
-                project: { workspaceId },
-            },
-            select: { userId: true, projectId: true },
-        });
-        const scopedByUser = new Map();
-        for (const row of scopedRows) {
-            const set = scopedByUser.get(row.userId) ?? new Set();
-            set.add(row.projectId);
-            scopedByUser.set(row.userId, set);
-        }
+        const scopedByUser = await loadScopedProjectsByUser(members.map((m) => m.userId), workspaceId);
         let workspaceHadEmail = false;
         let workspaceHadNotification = false;
         for (const member of members) {
             const scoped = scopedByUser.get(member.userId);
-            const memberItems = itemsForMember(items, member, scoped);
-            if (memberItems.length === 0)
+            const accessible = filterItemsForMemberAccess(items, member, scoped);
+            if (accessible.length === 0)
                 continue;
+            const manager = isWorkspaceManagerRole(member.role);
+            const assignedToMe = accessible.filter((it) => it.assignedToUserId === member.userId);
+            let memberItems;
+            let mode;
+            if (manager) {
+                memberItems = accessible;
+                mode = "manager";
+            }
+            else if (assignedToMe.length > 0) {
+                memberItems = assignedToMe;
+                mode = "assignee";
+            }
+            else {
+                continue;
+            }
             const sorted = [...memberItems].sort((a, b) => a.nextDueAt.getTime() - b.nextDueAt.getTime());
             const lead = sorted[0];
-            const overdueCount = sorted.filter((it) => it.overdue).length;
-            const dueSoonCount = sorted.length - overdueCount;
-            const titleParts = [];
-            if (overdueCount > 0)
-                titleParts.push(`${overdueCount} overdue`);
-            if (dueSoonCount > 0)
-                titleParts.push(`${dueSoonCount} due soon`);
-            const notifTitle = `Maintenance: ${titleParts.join(", ")}`;
-            try {
-                await createUserNotifications({
-                    workspaceId,
-                    projectId: lead.projectId,
-                    recipientUserIds: [member.userId],
-                    kind: "MAINTENANCE_DUE",
-                    title: notifTitle,
-                    body: notificationBody(sorted),
-                    href: maintenanceAppHref(lead.projectId),
-                });
-                membersNotified += 1;
+            const { titleParts } = summarizeOverdueDueSoon(sorted);
+            const notifTitle = mode === "assignee"
+                ? `Your maintenance: ${titleParts.join(", ")}`
+                : `Maintenance: ${titleParts.join(", ")}`;
+            const notified = await tryNotify({
+                workspaceId,
+                projectId: lead.projectId,
+                recipientUserIds: [member.userId],
+                kind: "MAINTENANCE_DUE",
+                title: notifTitle,
+                body: notificationBody(sorted),
+                href: maintenanceAppHref(lead.projectId),
+            }, "[om-maintenance-reminders]");
+            if (notified) {
+                counters.membersNotified += 1;
                 workspaceHadNotification = true;
             }
-            catch (err) {
-                console.error("[om-maintenance-reminders] notification exception", err);
-            }
             const email = member.user.email?.trim();
-            if (!resend || !email)
+            if (!resend || !from || !email)
                 continue;
-            const { html, text, subject } = buildDigestEmail(workspaceName, sorted, appOrigin);
-            try {
-                const sent = await resend.emails.send({
-                    from: from,
-                    to: [email],
-                    subject,
-                    html,
-                    text,
-                });
-                if (sent.error) {
-                    console.error("[om-maintenance-reminders] resend send_failed", sent.error.message);
-                    continue;
-                }
-                membersEmailed += 1;
+            const { html, text, subject } = buildReminderEmail(env, {
+                workspaceName,
+                items: sorted,
+                appOrigin,
+                mode,
+            });
+            const sent = await sendDigestResendEmail({
+                resend,
+                from,
+                to: email,
+                subject,
+                html,
+                text,
+                logPrefix: "[om-maintenance-reminders]",
+            });
+            if (sent) {
+                counters.membersEmailed += 1;
                 workspaceHadEmail = true;
-            }
-            catch (err) {
-                console.error("[om-maintenance-reminders] resend exception", err);
             }
         }
         await prisma.omMaintenanceReminderDigest.create({
             data: { workspaceId, digestDate: dayKey },
         });
         if (workspaceHadEmail)
-            workspacesEmailed += 1;
+            counters.workspacesEmailed += 1;
         if (workspaceHadNotification)
-            workspacesNotified += 1;
+            counters.workspacesNotified += 1;
         if (!workspaceHadEmail && !workspaceHadNotification)
-            workspacesSkipped += 1;
+            counters.workspacesSkipped += 1;
     }
     return {
         dayKey,
-        workspacesEmailed,
-        workspacesNotified,
-        membersEmailed,
-        membersNotified,
-        workspacesSkipped,
-        skippedNoResend: !resendConfigured,
+        ...counters,
+        skippedNoResend: !configured,
     };
 }

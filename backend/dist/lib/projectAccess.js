@@ -1,8 +1,8 @@
 import { prisma } from "./prisma.js";
-import { isWorkspaceAdmin as isWorkspaceAdminFromPermissions, loadProjectForMember as loadProjectForMemberFromPermissions, } from "./permissions.js";
+import { isWorkspaceAdmin as isWorkspaceAdminFromPermissions, isProjectAccessError, loadProjectForMember as loadProjectForMemberFromPermissions, } from "./permissions.js";
 /** @deprecated Prefer loadProjectWithAuth from permissions.js for full RBAC context. */
 export const loadProjectForMember = loadProjectForMemberFromPermissions;
-export { isWorkspaceAdminFromPermissions as isWorkspaceAdmin };
+export { isWorkspaceAdminFromPermissions as isWorkspaceAdmin, isProjectAccessError };
 /** Workspace member + email, and project access if they are project-scoped in this workspace. */
 export async function assertUserAssignableToProject(assigneeId, projectId, workspaceId) {
     const member = await prisma.workspaceMember.findFirst({

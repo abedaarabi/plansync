@@ -30,26 +30,26 @@ export function fitSimilarityTransform(pairs) {
     srcCz /= n;
     dstCx /= n;
     dstCz /= n;
-    let num = 0;
-    let den = 0;
-    for (const p of pairs) {
-        const sx = p.src.x - srcCx;
-        const sz = p.src.z - srcCz;
-        const dx = p.dst.x - dstCx;
-        const dz = p.dst.z - dstCz;
-        num += sx * dz - sz * dx;
-        den += sx * sx + sz * sz;
+    const centered = pairs.map((p) => ({
+        sx: p.src.x - srcCx,
+        sz: p.src.z - srcCz,
+        dx: p.dst.x - dstCx,
+        dz: p.dst.z - dstCz,
+    }));
+    // θ = atan2(Σ(sx·dz − sz·dx), Σ(sx·dx + sz·dz)) for R that maps centered src → dst.
+    // (Using Σ||src||² as the atan2 denominator incorrectly under-rotates non-zero angles.)
+    let cross = 0;
+    let dot = 0;
+    for (const { sx, sz, dx, dz } of centered) {
+        cross += sx * dz - sz * dx;
+        dot += sx * dx + sz * dz;
     }
-    const rotationRad = den > 1e-12 ? Math.atan2(num, den) : 0;
+    const rotationRad = Math.atan2(cross, dot);
     const cosR = Math.cos(rotationRad);
     const sinR = Math.sin(rotationRad);
     let scaleNum = 0;
     let scaleDen = 0;
-    for (const p of pairs) {
-        const sx = p.src.x - srcCx;
-        const sz = p.src.z - srcCz;
-        const dx = p.dst.x - dstCx;
-        const dz = p.dst.z - dstCz;
+    for (const { sx, sz, dx, dz } of centered) {
         const rx = cosR * sx - sinR * sz;
         const rz = sinR * sx + cosR * sz;
         scaleNum += rx * dx + rz * dz;
@@ -119,5 +119,19 @@ export function buildTransformFromControlPoints(controlPoints, mmPerPdfUnit, pag
         mmPerPdfUnit,
         pageWidthPt,
         pageHeightPt,
+    };
+}
+/** Similarity fit from PDF-norm → plan-norm control pairs (shared FE/BE). */
+export function computeTransformFromCalibration(calibration) {
+    const pairs = calibration.pointPairs.map((p) => ({
+        src: { x: p.pdf.x, z: p.pdf.y },
+        dst: { x: p.plan.x, z: p.plan.y },
+    }));
+    const { scale, rotationRad, translation } = fitSimilarityTransform(pairs);
+    return {
+        offsetX: translation.x,
+        offsetY: translation.z,
+        scale,
+        rotationDeg: (rotationRad * 180) / Math.PI,
     };
 }

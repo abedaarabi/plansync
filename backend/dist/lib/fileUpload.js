@@ -62,6 +62,14 @@ export function s3KeyMatchesAssetImage(s3Key, workspaceId, projectId, assetId) {
     const prefix = `ws/${workspaceId}/p/${projectId}/asset/${assetId}/image/`;
     return s3Key.startsWith(prefix);
 }
+export function buildBuildingImageKey(workspaceId, projectId, buildingId, uploadId, fileName) {
+    const safe = sanitizeAttachmentFileName(fileName);
+    return `ws/${workspaceId}/p/${projectId}/building/${buildingId}/image/${uploadId}/${safe}`;
+}
+export function s3KeyMatchesBuildingImage(s3Key, workspaceId, projectId, buildingId) {
+    const prefix = `ws/${workspaceId}/p/${projectId}/building/${buildingId}/image/`;
+    return s3Key.startsWith(prefix);
+}
 /** Project-scoped issue reference images (not tied to issue id so carry-forward can reuse keys). */
 export function buildIssueReferencePhotoKey(workspaceId, projectId, uploadId, fileName) {
     const safe = sanitizeAttachmentFileName(fileName);

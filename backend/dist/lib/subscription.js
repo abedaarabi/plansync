@@ -1,6 +1,7 @@
 /**
- * Pro cloud APIs: paid (`active`), Stripe-managed trial (`trialing` + subscription id), or
+ * Paid cloud APIs: `active`, Stripe-managed trial (`trialing` + subscription id), or
  * app-only trial (`trialing` without Stripe) until `currentPeriodEnd`.
+ * Covers Team, Pro, and Enterprise.
  */
 export function isWorkspacePro(ws) {
     const s = ws.subscriptionStatus;
@@ -20,9 +21,20 @@ export function isWorkspacePro(ws) {
     return false;
 }
 /**
+ * Pro+ features (takeoff, proposals, BIM, clash): Pro and Enterprise, or legacy
+ * workspaces with `billingPlan` null. Explicit `team` does not include these.
+ */
+export function isWorkspaceProPlus(ws) {
+    if (!isWorkspacePro(ws))
+        return false;
+    if (ws.billingPlan === "team")
+        return false;
+    return true;
+}
+/**
  * Operations & Maintenance (O&M) billing: Enterprise subscribers, or legacy workspaces
- * (`billingPlan` null) that already have Pro — keeps existing customers on Pro grandfathered.
- * Explicit `pro` tier does not include O&M.
+ * (`billingPlan` null) that already have paid access — keeps existing customers grandfathered.
+ * Explicit `team` / `pro` tiers do not include O&M.
  */
 export function isWorkspaceOmBilling(ws) {
     if (!isWorkspacePro(ws))

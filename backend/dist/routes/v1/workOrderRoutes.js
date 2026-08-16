@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import { ActivityType, AssetMeterType, IssueKind, IssuePriority, IssueStatus, WorkOrderType, } from "@prisma/client";
+import { ActivityType, AssetMeterType, InspectionRunStatus, IssueKind, IssuePriority, IssueStatus, WorkOrderType, } from "@prisma/client";
 import { parseProjectSettingsJson } from "../../lib/projectSettings.js";
 import { Resend } from "resend";
 import { prisma } from "../../lib/prisma.js";
@@ -11,6 +11,7 @@ import { logActivity, logActivitySafe } from "../../lib/activity.js";
 import { inviteFromAddress } from "../../lib/inviteEmail.js";
 import { buildTransactionalEmailHtml } from "../../lib/transactionalEmailLayout.js";
 import { parsePartsUsedJson, parseWorkOrderProcedure, parseWorkOrderProcedureResults, partsUsedToJsonValue, procedureResultsToJsonValue, validateProcedureCompletion, } from "../../lib/workOrderChecklist.js";
+import { resolveSourceInspectionRunId } from "../../lib/workOrderInspectionLink.js";
 import { troubleshootWorkOrderWithAi } from "../../lib/workOrderAi.js";
 import { parseReferencePhotos } from "../../lib/issueReferencePhotos.js";
 function requireOmBilling(workspace) {
@@ -59,6 +60,7 @@ async function createMeterTriggeredWorkOrder(opts) {
         ? `${opts.schedule.title.trim()} (meter)`
         : `PPM meter: ${opts.schedule.asset.tag}`;
     const description = `Meter-triggered maintenance for ${opts.schedule.asset.tag} (${opts.schedule.asset.name}). ${opts.meterType} reading ${opts.readingValue} reached threshold ${opts.threshold}. Schedule: ${opts.schedule.frequency}.`;
+    const now = new Date();
     const issue = await prisma.issue.create({
         data: {
             workspaceId: opts.workspaceId,
@@ -77,11 +79,12 @@ async function createMeterTriggeredWorkOrder(opts) {
             workOrderType: WorkOrderType.PREVENTIVE,
             assetId: opts.schedule.assetId,
             status: IssueStatus.OPEN,
+            statusChangedAt: now,
             priority: IssuePriority.MEDIUM,
             creatorId: opts.actorUserId,
             assigneeId: opts.schedule.assignedToUserId,
             maintenanceScheduleId: opts.schedule.id,
-            maintenanceDueAt: new Date(),
+            maintenanceDueAt: now,
         },
         select: { id: true },
     });
@@ -293,6 +296,8 @@ export function registerWorkOrderRoutes(r, needUser, env) {
                     sheetVersion: occ.sheetVersion,
                     pageNumber: occ.pageNumber,
                     annotationId: occ.annotationId,
+                    levelId: occ.levelId,
+                    buildingId: occ.buildingId,
                     title,
                     description: occ.description,
                     location: occ.location,
@@ -300,6 +305,7 @@ export function registerWorkOrderRoutes(r, needUser, env) {
                     assigneeId: body.data.assigneeId ?? null,
                     creatorId: c.get("user").id,
                     status: IssueStatus.OPEN,
+                    statusChangedAt: new Date(),
                     priority: occ.priority ?? IssuePriority.MEDIUM,
                     issueKind: IssueKind.WORK_ORDER,
                     workOrderType: WorkOrderType.OCCUPANT,
@@ -350,6 +356,7 @@ export function registerWorkOrderRoutes(r, needUser, env) {
             procedureResultJson: z.array(z.unknown()).max(50).optional(),
             laborMinutes: z.number().int().min(0).max(100_000).optional(),
             partsUsedJson: z.array(z.unknown()).max(30).optional(),
+            // fallow-ignore-next-line code-duplication
             completionNotes: z.string().max(4000).optional(),
         })
             .safeParse(await c.req.json());
@@ -370,7 +377,10 @@ export function registerWorkOrderRoutes(r, needUser, env) {
         }
         const partsUsed = body.data.partsUsedJson ? parsePartsUsedJson(body.data.partsUsedJson) : [];
         const now = new Date();
-        const updated = await prisma.$transaction(async (tx) => {
+        const sourceRunId = issue.workOrderType === WorkOrderType.INSPECTION_FOLLOWUP
+            ? resolveSourceInspectionRunId(issue)
+            : null;
+        const { updated, reInspectRunId } = await prisma.$transaction(async (tx) => {
             for (const part of partsUsed) {
                 if (!part.inventoryItemId)
                     continue;
@@ -385,10 +395,11 @@ export function registerWorkOrderRoutes(r, needUser, env) {
                     data: { quantity: nextQty },
                 });
             }
-            return tx.issue.update({
+            const wo = await tx.issue.update({
                 where: { id: issueId },
                 data: {
                     status: IssueStatus.RESOLVED,
+                    statusChangedAt: now,
                     resolvedAt: now,
                     completedById: c.get("user").id,
                     procedureResultJson: results.length > 0
@@ -407,17 +418,44 @@ export function registerWorkOrderRoutes(r, needUser, env) {
                         : {}),
                 },
             });
+            let nextRunId = null;
+            if (sourceRunId) {
+                const src = await tx.inspectionRun.findFirst({
+                    where: { id: sourceRunId, projectId },
+                    select: { templateId: true, assetId: true, projectId: true },
+                });
+                if (src) {
+                    const draft = await tx.inspectionRun.create({
+                        data: {
+                            projectId: src.projectId,
+                            templateId: src.templateId,
+                            assetId: src.assetId,
+                            status: InspectionRunStatus.DRAFT,
+                            resultJson: [],
+                            createdById: c.get("user").id,
+                        },
+                        select: { id: true },
+                    });
+                    nextRunId = draft.id;
+                }
+            }
+            return { updated: wo, reInspectRunId: nextRunId };
         });
         await logActivity(auth.ctx.project.workspaceId, ActivityType.ISSUE_UPDATED, {
             actorUserId: c.get("user").id,
             entityId: issueId,
             projectId,
-            metadata: { workOrderCompleted: true, laborMinutes: updated.laborMinutes },
+            metadata: {
+                workOrderCompleted: true,
+                laborMinutes: updated.laborMinutes,
+                ...(reInspectRunId ? { reInspectRunId } : {}),
+            },
         });
         return c.json({
             id: updated.id,
             status: updated.status,
             resolvedAt: updated.resolvedAt?.toISOString() ?? null,
+            reInspectRunId,
         });
     });
     /** Email vendor a magic link to view / update the work order. */
@@ -557,6 +595,7 @@ export function registerWorkOrderRoutes(r, needUser, env) {
             reorderLevel: z.number().int().min(0).optional(),
             unitCost: z.number().min(0).optional(),
             location: z.string().max(200).optional(),
+            // fallow-ignore-next-line code-duplication
             notes: z.string().max(2000).optional(),
         })
             .safeParse(await c.req.json());
@@ -690,6 +729,7 @@ export function registerWorkOrderRoutes(r, needUser, env) {
             meterType: z.nativeEnum(AssetMeterType),
             label: z.string().max(120).optional(),
             value: z.number(),
+            // fallow-ignore-next-line code-duplication
             unit: z.string().max(40).optional(),
         })
             .safeParse(await c.req.json());
@@ -992,6 +1032,7 @@ export function registerVendorWorkOrderPublicRoutes(r) {
             .object({
             status: z.enum(["IN_PROGRESS", "RESOLVED"]).optional(),
             completionNotes: z.string().max(4000).optional(),
+            // fallow-ignore-next-line code-duplication
             procedureResultJson: z.array(z.unknown()).max(50).optional(),
         })
             .safeParse(await c.req.json());
@@ -1007,10 +1048,12 @@ export function registerVendorWorkOrderPublicRoutes(r) {
                 return c.json({ error: err }, 400);
         }
         const now = new Date();
+        const statusChanging = Boolean(body.data.status && body.data.status !== issue.status);
         const updated = await prisma.issue.update({
             where: { id: issue.id },
             data: {
                 ...(body.data.status ? { status: body.data.status } : {}),
+                ...(statusChanging ? { statusChangedAt: now } : {}),
                 ...(body.data.status === "RESOLVED" ? { resolvedAt: now } : {}),
                 ...(results.length > 0
                     ? { procedureResultJson: procedureResultsToJsonValue(results) }

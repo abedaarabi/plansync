@@ -1,4 +1,4 @@
-import { planSyncEmailIconPublicUrl } from "./transactionalEmailLayout.js";
+import { planSyncEmailIconPublicUrl, planSyncWordmarkHtml } from "./transactionalEmailLayout.js";
 import { faviconUrlFromHostname, normalizeWorkspaceWebsite } from "./workspaceBranding.js";
 /** Logo URL, else favicon from workspace website (Google s2 resolver), for email `<img src>`. */
 export function resolveWorkspaceEmailLogoUrl(publicAppUrl, logoUrl, website, opts) {
@@ -137,7 +137,7 @@ export function buildProjectInviteEmailHtml(input) {
                 <tr>
                   <td style="padding-top:18px">
                     <p style="margin:0;font-size:22px;font-weight:800;letter-spacing:-0.03em;line-height:1.2">
-                      <span style="color:#f8fafc">Plan</span><span style="color:#3b82f6">Sync</span>
+                      ${planSyncWordmarkHtml({ planColor: "#f8fafc" })}
                     </p>
                     <p style="margin:6px 0 0;font-size:12px;font-weight:500;color:#94a3b8;letter-spacing:0.04em;text-transform:uppercase">Construction collaboration</p>
                   </td>
@@ -217,7 +217,7 @@ export function buildProjectInviteEmailHtml(input) {
             <td style="padding:20px 32px 28px;background:#f8fafc;border-top:1px solid #e2e8f0">
               <p style="margin:0;font-size:12px;line-height:1.6;color:#94a3b8;text-align:center">If you didn’t expect this email, you can safely ignore it.</p>
               <p style="margin:16px 0 0;font-size:11px;line-height:1.5;color:#cbd5e1;word-break:break-all;text-align:center">${escapeHtml(input.joinUrl)}</p>
-              <p style="margin:20px 0 0;font-size:11px;color:#cbd5e1;text-align:center">© PlanSync · Construction collaboration</p>
+              <p style="margin:20px 0 0;font-size:11px;color:#cbd5e1;text-align:center">© ${planSyncWordmarkHtml({ planColor: "#94a3b8" })} · Construction collaboration</p>
             </td>
           </tr>
         </table>

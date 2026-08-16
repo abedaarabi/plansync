@@ -1,9 +1,4 @@
 import { z } from "zod";
-/** Normalized point 0–1 on the page image (full-page capture). */
-const normPointSchema = z.object({
-    x: z.number().finite(),
-    y: z.number().finite(),
-});
 const sheetAiMimeSchema = z.enum(["image/png", "image/jpeg"]);
 /** Max decoded image size (bytes). */
 const SHEET_AI_MAX_IMAGE_BYTES = 8 * 1024 * 1024;

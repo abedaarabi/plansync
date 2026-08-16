@@ -7,10 +7,6 @@ export function apiPublicOrigin(env) {
         return u.replace(/\/$/, "");
     return env.PUBLIC_APP_URL.replace(/\/$/, "");
 }
-/** Absolute URL (emails, server-side fetch). Prefer `workspaceLogoUrlForClients` for browser JSON. */
-function workspaceHostedLogoAbsoluteUrl(env, workspaceId) {
-    return `${apiPublicOrigin(env)}/api/v1/public/workspaces/${encodeURIComponent(workspaceId)}/logo`;
-}
 /**
  * Browser-safe logo URL for API JSON. S3-hosted logos use a same-origin path so `<img src>`
  * works when `PUBLIC_API_URL` is an internal hostname (Docker) while the app is served elsewhere.

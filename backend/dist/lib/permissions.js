@@ -25,40 +25,6 @@ function resolveUiMode(isExternal, projectRole) {
             return "internal";
     }
 }
-function isInternalWorkspaceRole(role) {
-    return (role === WorkspaceRole.SUPER_ADMIN ||
-        role === WorkspaceRole.ADMIN ||
-        role === WorkspaceRole.MEMBER);
-}
-function canManageBilling(role) {
-    return role === WorkspaceRole.SUPER_ADMIN;
-}
-function canEditWorkspaceOrg(role) {
-    return role === WorkspaceRole.SUPER_ADMIN;
-}
-function canEditProjectFeatureToggles(role) {
-    return role === WorkspaceRole.SUPER_ADMIN;
-}
-/** Internal users who may invite others (Admin or Super Admin). */
-function canInviteInternal(role) {
-    return role === WorkspaceRole.SUPER_ADMIN || role === WorkspaceRole.ADMIN;
-}
-function canManageWorkspaceMembers(role) {
-    return role === WorkspaceRole.SUPER_ADMIN || role === WorkspaceRole.ADMIN;
-}
-/** Proposals: create/send — Members cannot. */
-function canCreateProposals(ctx) {
-    if (ctx.workspaceMember.isExternal)
-        return false;
-    const r = ctx.workspaceMember.role;
-    return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN;
-}
-function canViewProposalsInternal(ctx) {
-    if (ctx.workspaceMember.isExternal)
-        return false;
-    const r = ctx.workspaceMember.role;
-    return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN;
-}
 export function canUploadDrawings(ctx) {
     if (ctx.workspaceMember.isExternal)
         return false;
@@ -84,18 +50,6 @@ export function canCreateIssues(ctx) {
         ctx.workspaceMember.role === WorkspaceRole.ADMIN ||
         ctx.workspaceMember.role === WorkspaceRole.MEMBER);
 }
-function canCloseIssues(ctx) {
-    if (ctx.uiMode === "client")
-        return false;
-    if (ctx.uiMode === "sub") {
-        return true; /* assigned-only list; closing own assigned handled in route */
-    }
-    if (ctx.uiMode === "contractor")
-        return true;
-    if (ctx.workspaceMember.isExternal)
-        return false;
-    return true;
-}
 export function canCreateRfis(ctx) {
     if (!ctx.settings.modules.rfis)
         return false;
@@ -103,39 +57,6 @@ export function canCreateRfis(ctx) {
         return false;
     const r = ctx.workspaceMember.role;
     return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN || r === WorkspaceRole.MEMBER;
-}
-function canEditTakeoff(ctx) {
-    if (ctx.uiMode !== "internal")
-        return false;
-    const r = ctx.workspaceMember.role;
-    return r === WorkspaceRole.SUPER_ADMIN || r === WorkspaceRole.ADMIN;
-}
-function canViewTakeoff(ctx) {
-    if (!ctx.settings.modules.takeoff)
-        return false;
-    return ctx.uiMode === "internal";
-}
-function canViewFieldReports(ctx) {
-    if (!ctx.settings.modules.fieldReports)
-        return false;
-    if (ctx.uiMode === "client")
-        return ctx.settings.clientVisibility.showFieldReports;
-    if (ctx.uiMode === "contractor" || ctx.uiMode === "sub")
-        return false;
-    return ctx.uiMode === "internal";
-}
-function canViewPunch(ctx) {
-    if (!ctx.settings.modules.punch)
-        return false;
-    if (ctx.uiMode === "client")
-        return ctx.settings.clientVisibility.showPunchList;
-    return true;
-}
-function canViewIssuesForClient(ctx) {
-    return ctx.settings.clientVisibility.showIssues;
-}
-function canViewRfisForClient(ctx) {
-    return ctx.settings.clientVisibility.showRfis;
 }
 /** List/detail RFI API access (internal team, or client when module + visibility allow). */
 export function canAccessRfisList(ctx) {
@@ -174,21 +95,6 @@ export function canViewFolderForUser(ctx, folder, userId) {
     if (folder.accessMode === FolderAccessMode.ALL)
         return true;
     return folder.allowedUserIds.includes(userId);
-}
-function filesWhereForAuth(ctx) {
-    if (ctx.uiMode === "internal")
-        return {};
-    if (ctx.uiMode === "client") {
-        return canViewDrawingsForClient(ctx) ? {} : { id: { in: [] } };
-    }
-    const tr = normalizeTrade(ctx.projectMember?.trade ?? null);
-    if (!tr)
-        return { id: { in: [] } };
-    return {
-        disciplines: {
-            hasSome: [tr, tr.toLowerCase(), tr.toUpperCase()],
-        },
-    };
 }
 /**
  * Load project + authorization context (replaces loadProjectForMember).
@@ -250,19 +156,19 @@ export async function loadProjectWithAuth(projectId, userId) {
         },
     };
 }
+/**
+ * Discriminator for {@link loadProjectForMember} results.
+ * Never use `if (!access)` — denied access is still a truthy `{ error }` object.
+ */
+export function isProjectAccessError(access) {
+    return "error" in access;
+}
 /** Backwards-compatible wrapper returning only project or error. */
 export async function loadProjectForMember(projectId, userId) {
     const r = await loadProjectWithAuth(projectId, userId);
     if ("error" in r)
         return r;
     return { project: r.ctx.project };
-}
-async function isWorkspaceSuperAdmin(workspaceId, userId) {
-    const m = await prisma.workspaceMember.findUnique({
-        where: { workspaceId_userId: { workspaceId, userId } },
-        select: { role: true },
-    });
-    return m?.role === WorkspaceRole.SUPER_ADMIN;
 }
 /** Admin or Super Admin (internal management). */
 async function isWorkspaceAdminOrSuper(workspaceId, userId) {

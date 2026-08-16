@@ -30,8 +30,13 @@ const schema = z.object({
         message: "STRIPE_SECRET_KEY must be a secret key (sk_test_… or sk_live_… from Stripe Dashboard → Developers → API keys), not a publishable key (pk_…).",
     })),
     STRIPE_WEBHOOK_SECRET: z.string().optional(),
+    STRIPE_PRICE_TEAM_MONTHLY: z.string().optional(),
     STRIPE_PRICE_PRO_MONTHLY: z.string().optional(),
     STRIPE_PRICE_ENTERPRISE_MONTHLY: z.string().optional(),
+    /** Optional `price_…` for extra seats beyond the plan pack (auto-created if unset). */
+    STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: z.string().optional(),
+    STRIPE_PRICE_PRO_EXTRA_SEAT_MONTHLY: z.string().optional(),
+    STRIPE_PRICE_ENTERPRISE_EXTRA_SEAT_MONTHLY: z.string().optional(),
     /**
      * Stripe Checkout shows “Add promotion code” when true (default). Create Coupons + Promotion codes in the Dashboard.
      * Set to 0 / false / off / no to disable.
@@ -47,7 +52,8 @@ const schema = z.object({
     PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
     /**
      * Optional secret for internal cron POST routes (header `x-plansync-cron-secret`), e.g.
-     * `/api/v1/internal/rfi-overdue-reminders`, `/api/v1/internal/om-maintenance-reminders`.
+     * `/api/v1/internal/rfi-overdue-reminders`, `/api/v1/internal/om-maintenance-reminders`,
+     * `/api/v1/internal/om-inspection-reminders`, `/api/v1/internal/om-work-order-aging-reminders`.
      */
     INTERNAL_CRON_SECRET: z.string().optional(),
     /** OAuth — optional; set both id + secret to enable each provider */
