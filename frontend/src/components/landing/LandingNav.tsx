@@ -142,7 +142,7 @@ export function LandingNav({
           <span
             className={`text-base font-bold tracking-tight ${dark ? "text-white" : "text-slate-900"}`}
           >
-            Plan<span className="text-blue-500">Sync</span>
+            Plan<span className="text-[var(--landing-cta)]">Sync</span>
           </span>
         </Link>
 

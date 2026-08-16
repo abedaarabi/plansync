@@ -54,7 +54,9 @@ export function LandingHeroProductMockup({ className = "" }: LandingHeroProductM
             <span className="h-2 w-2 rounded-full bg-white/20" />
             <span className="h-2 w-2 rounded-full bg-white/20" />
           </span>
-          <span className="text-[11px] font-semibold tracking-tight text-white">PlanSync</span>
+          <span className="text-[11px] font-semibold tracking-tight text-white">
+            Plan<span className="text-[var(--landing-cta)]">Sync</span>
+          </span>
           <span className="rounded border border-white/12 bg-white/6 px-1.5 py-0.5 text-[10px] font-medium text-slate-300">
             DC-01
           </span>

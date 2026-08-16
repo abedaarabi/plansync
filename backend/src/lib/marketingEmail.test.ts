@@ -53,7 +53,8 @@ describe("buildMarketingEmailHtml", () => {
   it("includes personalized founder note, offer, and preview images", () => {
     const html = buildMarketingEmailHtml({ email: "x@y.com", name: "Sam", rowIndex: 0 });
     expect(html).toContain("Hi Sam,");
-    expect(html).toContain("founder of PlanSync");
+    expect(html).toContain("founder of ");
+    expect(html).toContain('<span style="color:#2563eb">Sync</span>');
     expect(html).toContain("From PDF drawing to sent proposal");
     expect(html).toContain("6 months of Pro");
     expect(html).toContain("Open the PDF");

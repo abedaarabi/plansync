@@ -64,7 +64,7 @@ export function LandingHeroSection({ onGoToFreeViewer }: LandingHeroSectionProps
           <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-12">
             <div className="order-1 text-center lg:text-left">
               <p className="mb-5 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
-                Plan<span className="text-blue-400">Sync</span>
+                Plan<span className="text-[var(--landing-cta)]">Sync</span>
               </p>
 
               <p className="landing-type-label mb-4 inline-flex items-center rounded-md border border-white/18 bg-white/8 px-3 py-1.5 text-sky-100">

@@ -25,13 +25,24 @@ export function escapeHtml(s: string): string {
 }
 
 /**
- * Colored PlanSync wordmark for email chrome (header / footer).
+ * Colored PlanSync wordmark for email chrome (header / footer / body brand mentions).
  * Sync always defaults to brand primary (`#2563eb`); override Plan for dark headers.
  */
 export function planSyncWordmarkHtml(opts?: { planColor?: string; syncColor?: string }): string {
   const planColor = opts?.planColor ?? C.ink;
   const syncColor = opts?.syncColor ?? C.primary;
   return `<span style="color:${escapeHtml(planColor)}">Plan</span><span style="color:${escapeHtml(syncColor)}">Sync</span>`;
+}
+
+/**
+ * Escape plain text for email HTML and color every PlanSync brand mention
+ * (Plan + blue Sync), matching the landing wordmark.
+ */
+export function escapeHtmlWithPlanSyncWordmark(
+  s: string,
+  opts?: { planColor?: string; syncColor?: string },
+): string {
+  return escapeHtml(s).replace(/PlanSync/g, planSyncWordmarkHtml(opts));
 }
 
 /** Same icon as `frontend/public/icons/icon-180.png` — must be an absolute app URL for email clients. */
@@ -142,13 +153,13 @@ export function buildTransactionalEmailHtml(env: Env, content: TransactionalEmai
   const iconUrl = planSyncEmailIconUrl(env);
   const header = planSyncBrandHeaderHtml(iconUrl, "Construction collaboration", undefined, appBase);
   const eyebrow = content.eyebrow
-    ? `<p style="margin:0 0 8px;font-size:11px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:0.08em;font-family:${FF}">${escapeHtml(content.eyebrow)}</p>`
+    ? `<p style="margin:0 0 8px;font-size:11px;font-weight:700;color:${C.muted};text-transform:uppercase;letter-spacing:0.08em;font-family:${FF}">${escapeHtmlWithPlanSyncWordmark(content.eyebrow, { planColor: C.muted })}</p>`
     : "";
   const linesHtml = content.bodyLines
     .filter((l) => l.trim().length > 0)
     .map(
       (l) =>
-        `<p style="margin:0 0 12px;font-size:15px;line-height:1.65;color:${C.body};font-family:${FF}">${escapeHtml(l)}</p>`,
+        `<p style="margin:0 0 12px;font-size:15px;line-height:1.65;color:${C.body};font-family:${FF}">${escapeHtmlWithPlanSyncWordmark(l, { planColor: C.body })}</p>`,
     )
     .join("");
   const preBody = content.preBodyHtml ?? "";
@@ -197,7 +208,7 @@ export function buildTransactionalEmailHtml(env: Env, content: TransactionalEmai
           </tr>
           <tr>
             <td class="email-footer" style="padding:20px 28px 26px;background:${C.surface};border-top:1px solid ${C.borderSoft}">
-              <p style="margin:0;font-size:12px;line-height:1.65;color:${C.faint};text-align:center;font-family:${FF}">${escapeHtml(footerNote)}</p>
+              <p style="margin:0;font-size:12px;line-height:1.65;color:${C.faint};text-align:center;font-family:${FF}">${escapeHtmlWithPlanSyncWordmark(footerNote, { planColor: C.faint })}</p>
               <p style="margin:14px 0 0;font-size:11px;line-height:1.5;color:#cbd5e1;text-align:center;font-family:${FF}">${escapeHtml(appBase)}</p>
               <p style="margin:12px 0 0;font-size:11px;color:#cbd5e1;text-align:center;font-family:${FF}">© ${planSyncWordmarkHtml({ planColor: C.faint })}</p>
             </td>

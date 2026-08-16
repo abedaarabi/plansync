@@ -91,7 +91,9 @@ export function LandingProblemSection() {
                 data-problem-connect
                 className="inline-flex flex-col items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--landing-cta)_45%,transparent)] bg-[color-mix(in_srgb,var(--landing-cta)_18%,transparent)] px-5 py-3"
               >
-                <span className="text-sm font-bold text-sky-200">PlanSync</span>
+                <span className="text-sm font-bold text-sky-200">
+                  Plan<span className="text-[var(--landing-cta)]">Sync</span>
+                </span>
                 <span className="text-xs font-semibold uppercase tracking-[0.12em] text-white">
                   {t("connected")}
                 </span>

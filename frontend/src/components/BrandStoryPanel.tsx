@@ -92,7 +92,7 @@ export function BrandStoryPanel({
           </span>
           <span className="min-w-0 text-left">
             <span className="block text-base font-semibold tracking-tight text-white">
-              PlanSync
+              Plan<span className="text-[var(--landing-cta)]">Sync</span>
             </span>
             <span className="mt-0.5 block text-[11px] font-medium text-slate-400">
               AEC project workspace

@@ -1,6 +1,10 @@
 import type { FieldReport } from "@prisma/client";
 import type { Env } from "./env.js";
-import { buildTransactionalEmailHtml, escapeHtml } from "./transactionalEmailLayout.js";
+import {
+  buildTransactionalEmailHtml,
+  escapeHtml,
+  planSyncWordmarkHtml,
+} from "./transactionalEmailLayout.js";
 
 export function buildFieldReportsPageUrl(env: Env, projectId: string, reportQuery?: string | null) {
   const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
@@ -200,7 +204,7 @@ function buildDailyBlocksHtml(report: FieldReport, include: FieldReportEmailIncl
     parts.push(
       sectionHtml(
         "Photos",
-        `<p style="margin:0;font-size:14px;line-height:1.6;color:#334155">${escapeHtml(String(n))} photo(s) on file in PlanSync.</p>${capBlock}`,
+        `<p style="margin:0;font-size:14px;line-height:1.6;color:#334155">${escapeHtml(String(n))} photo(s) on file in ${planSyncWordmarkHtml({ planColor: "#334155" })}.</p>${capBlock}`,
       ),
     );
   }

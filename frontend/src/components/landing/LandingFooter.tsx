@@ -26,7 +26,9 @@ export function LandingFooter({ onGoToFreeViewer }: LandingFooterProps) {
                 className="h-8 w-8 shrink-0"
                 unoptimized
               />
-              <span className="text-base font-bold tracking-tight">PlanSync</span>
+              <span className="text-base font-bold tracking-tight">
+                Plan<span className="text-[var(--landing-cta)]">Sync</span>
+              </span>
             </div>
             <p className="landing-type-body mt-4 max-w-xs text-slate-400">
               {t.has("taglineDc") ? t("taglineDc") : t("tagline")}

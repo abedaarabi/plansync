@@ -1,6 +1,7 @@
 import {
   EMAIL_RESPONSIVE_CSS,
   escapeHtml,
+  escapeHtmlWithPlanSyncWordmark,
   planSyncBrandHeaderHtml,
   planSyncEmailIconPublicUrl,
   planSyncWordmarkHtml,
@@ -338,8 +339,8 @@ function founderNoteHtml(greet: string): string {
     <tr>
       <td style="padding:16px 18px">
         <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:${C.primary};text-transform:uppercase;letter-spacing:0.1em;font-family:${FF}">Personal note</p>
-        <p style="margin:0;font-size:15px;line-height:1.65;color:${C.ink};font-family:${FF}"><strong>${escapeHtml(greet)}</strong> I'm ${escapeHtml(MARKETING_FOUNDER.name)}, founder of PlanSync.</p>
-        <p style="margin:10px 0 0;font-size:14px;line-height:1.7;color:${C.body};font-family:${FF}">I'm reaching out personally because I think PlanSync could save your team real time on every bid — especially when a PDF drawing lands in your inbox and you need to measure, take off, and send a proposal without juggling five different tools.</p>
+        <p style="margin:0;font-size:15px;line-height:1.65;color:${C.ink};font-family:${FF}"><strong>${escapeHtml(greet)}</strong> I'm ${escapeHtml(MARKETING_FOUNDER.name)}, founder of ${planSyncWordmarkHtml()}.</p>
+        <p style="margin:10px 0 0;font-size:14px;line-height:1.7;color:${C.body};font-family:${FF}">${escapeHtmlWithPlanSyncWordmark("I'm reaching out personally because I think PlanSync could save your team real time on every bid — especially when a PDF drawing lands in your inbox and you need to measure, take off, and send a proposal without juggling five different tools.", { planColor: C.body })}</p>
       </td>
     </tr>
   </table>`;
@@ -351,7 +352,7 @@ function featureCardsHtml(): string {
           <tr>
             <td style="padding:16px">
               <p style="margin:0 0 7px;font-size:13px;font-weight:700;color:${C.ink};line-height:1.35;font-family:${FF}">${escapeHtml(f.title)}</p>
-              <p style="margin:0;font-size:12px;line-height:1.6;color:${C.muted};font-family:${FF}">${escapeHtml(f.body)}</p>
+              <p style="margin:0;font-size:12px;line-height:1.6;color:${C.muted};font-family:${FF}">${escapeHtmlWithPlanSyncWordmark(f.body, { planColor: C.muted })}</p>
             </td>
           </tr>
         </table>
@@ -425,7 +426,9 @@ export function buildMarketingEmailHtml(
   const founderNote = founderNoteHtml(greet);
   const workflowSteps = workflowStepsHtml();
   const social = socialLinksHtml();
-  const founderSignOff = escapeHtml(`${MARKETING_FOUNDER.name}, ${MARKETING_FOUNDER.title}`);
+  const founderSignOff = escapeHtmlWithPlanSyncWordmark(
+    `${MARKETING_FOUNDER.name}, ${MARKETING_FOUNDER.title}`,
+  );
   const previewReferrerMeta = embedVideo
     ? `\n  <meta name="referrer" content="strict-origin-when-cross-origin" />`
     : "";
@@ -455,7 +458,7 @@ export function buildMarketingEmailHtml(
               ${founderNote}
               <h1 class="mkt-title" style="margin:0 0 14px;font-size:27px;font-weight:800;color:${C.ink};line-height:1.18;letter-spacing:-0.04em;font-family:${FF}">From PDF drawing to sent proposal — in one app.</h1>
               <p style="margin:0 0 14px;font-size:15px;line-height:1.75;color:${C.body};font-family:${FF}">Most construction teams still bounce between PDF viewers, spreadsheets, email threads, and separate proposal tools just to turn a drawing set into a bid. That handoff costs hours on every project — and mistakes when numbers get copied twice.</p>
-              <p style="margin:0;font-size:15px;line-height:1.75;color:${C.body};font-family:${FF}"><strong style="color:${C.ink}">PlanSync is the value:</strong> one workspace where you open the PDF, calibrate scale, run takeoff, mark up issues, and send a professional proposal — without switching apps or retyping quantities. And when the project hands over, the same platform supports O&amp;M — asset registers, inspections, work orders, and facilities management.</p>
+              <p style="margin:0;font-size:15px;line-height:1.75;color:${C.body};font-family:${FF}"><strong style="color:${C.ink}">${planSyncWordmarkHtml()} is the value:</strong> one workspace where you open the PDF, calibrate scale, run takeoff, mark up issues, and send a professional proposal — without switching apps or retyping quantities. And when the project hands over, the same platform supports O&amp;M — asset registers, inspections, work orders, and facilities management.</p>
             </td>
           </tr>
           <tr>
@@ -539,7 +542,7 @@ export function buildMarketingEmailHtml(
           <tr>
             <td style="padding:22px 30px 26px;background:${C.surface};border-top:1px solid ${C.borderSoft}">
               <p style="margin:0;font-size:12px;line-height:1.65;color:${C.faint};text-align:center;font-family:${FF}">Questions? Reply to this message or contact ${escapeHtml(MARKETING_LINKS.supportEmail)}.</p>
-              <p style="margin:10px 0 0;font-size:11px;line-height:1.55;color:#cbd5e1;text-align:center;font-family:${FF}">If you'd prefer not to receive outreach from PlanSync, reply with "unsubscribe" and we'll remove you.</p>
+              <p style="margin:10px 0 0;font-size:11px;line-height:1.55;color:#cbd5e1;text-align:center;font-family:${FF}">If you'd prefer not to receive outreach from ${planSyncWordmarkHtml({ planColor: "#cbd5e1" })}, reply with "unsubscribe" and we'll remove you.</p>
               <p style="margin:12px 0 0;font-size:11px;color:#cbd5e1;text-align:center;font-family:${FF}">© ${planSyncWordmarkHtml({ planColor: C.faint })} · <a href="${escapeHtml(appBase)}" style="color:#94a3b8;text-decoration:none">${escapeHtml(appDisplay)}</a></p>
             </td>
           </tr>
