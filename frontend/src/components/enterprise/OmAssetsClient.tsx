@@ -583,24 +583,23 @@ export function OmAssetsClient({ projectId }: Props) {
           />
         }
         footer={
-          <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2">
             {justCreatedAsset ? (
               <>
                 <EnterpriseButton
                   variant="secondary"
-                  size="lg"
-                  fullWidth
-                  className="sm:w-auto"
+                  size="sm"
                   onClick={() => startPlacePinForAsset(justCreatedAsset)}
                 >
-                  <Package className="h-4 w-4 text-[var(--enterprise-primary)]" strokeWidth={2} />
+                  <Package
+                    className="h-3.5 w-3.5 text-[var(--enterprise-primary)]"
+                    strokeWidth={2}
+                  />
                   Place on drawing
                 </EnterpriseButton>
                 <EnterpriseButton
                   variant="secondary"
-                  size="lg"
-                  fullWidth
-                  className="sm:w-auto"
+                  size="sm"
                   onClick={() => {
                     setJustCreatedAsset(null);
                     setCreateDraft(emptyAssetDraft());
@@ -612,9 +611,7 @@ export function OmAssetsClient({ projectId }: Props) {
                 </EnterpriseButton>
                 <EnterpriseButton
                   variant="secondary"
-                  size="lg"
-                  fullWidth
-                  className="sm:w-auto"
+                  size="sm"
                   onClick={() => {
                     const assetId = justCreatedAsset.id;
                     closeAddSlide();
@@ -623,25 +620,17 @@ export function OmAssetsClient({ projectId }: Props) {
                 >
                   Create maintenance schedule
                 </EnterpriseButton>
-                <EnterpriseButton size="lg" fullWidth className="sm:w-auto" onClick={closeAddSlide}>
+                <EnterpriseButton size="sm" onClick={closeAddSlide}>
                   Done
                 </EnterpriseButton>
               </>
             ) : (
               <>
-                <EnterpriseButton
-                  variant="secondary"
-                  size="lg"
-                  fullWidth
-                  className="sm:w-auto"
-                  onClick={closeAddSlide}
-                >
+                <EnterpriseButton variant="secondary" size="sm" onClick={closeAddSlide}>
                   Cancel
                 </EnterpriseButton>
                 <EnterpriseButton
-                  size="lg"
-                  fullWidth
-                  className="sm:w-auto"
+                  size="sm"
                   disabled={
                     !createDraft.tag.trim() || !createDraft.name.trim() || createMut.isPending
                   }
@@ -702,13 +691,11 @@ export function OmAssetsClient({ projectId }: Props) {
           />
         }
         footer={
-          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
             {editingAsset ? (
               <EnterpriseButton
                 variant="danger"
-                size="md"
-                fullWidth
-                className="sm:w-auto sm:justify-start"
+                size="sm"
                 disabled={deleteMut.isPending}
                 loading={deleteMut.isPending}
                 onClick={() => {
@@ -721,26 +708,18 @@ export function OmAssetsClient({ projectId }: Props) {
                   deleteMut.mutate(editingAsset.id);
                 }}
               >
-                <Trash2 className="h-4 w-4" strokeWidth={2} />
+                <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
                 Delete
               </EnterpriseButton>
             ) : (
-              <span className="hidden sm:block" />
+              <span />
             )}
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-              <EnterpriseButton
-                variant="secondary"
-                size="lg"
-                fullWidth
-                className="sm:w-auto"
-                onClick={closeEditSlide}
-              >
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <EnterpriseButton variant="secondary" size="sm" onClick={closeEditSlide}>
                 Cancel
               </EnterpriseButton>
               <EnterpriseButton
-                size="lg"
-                fullWidth
-                className="sm:w-auto"
+                size="sm"
                 disabled={!editDraft.tag.trim() || !editDraft.name.trim() || updateMut.isPending}
                 loading={updateMut.isPending}
                 onClick={() => updateMut.mutate()}

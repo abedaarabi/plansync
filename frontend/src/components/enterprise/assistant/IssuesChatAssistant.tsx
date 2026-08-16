@@ -2,12 +2,11 @@
 
 import { AlertCircle, Bot, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { nanoid } from "nanoid";
-import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IssueRow } from "@/lib/api-client";
 import { fetchProjectIssuesChat } from "@/lib/api-client";
 import { ProRequiredError } from "@/lib/api-client/errors";
-import { projectScopedBaseFromPathname } from "@/lib/projectScopedPath";
+import { projectPlainHref } from "@/lib/projectScopedPath";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { EnterpriseButton } from "@/components/enterprise/EnterpriseButton";
 import { IssueChatCard } from "./IssueChatCard";
@@ -99,7 +98,6 @@ function MessageBubble({
 
 // fallow-ignore-next-line complexity
 export function IssuesChatAssistant({ projectId }: { projectId: string }) {
-  const pathname = usePathname();
   const prefersReducedMotion = usePrefersReducedMotion();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -108,11 +106,6 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
   const [inputValue, setInputValue] = useState("");
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
-
-  const projectBase = useMemo(
-    () => projectScopedBaseFromPathname(pathname) ?? `/projects/${projectId}`,
-    [pathname, projectId],
-  );
 
   const userMessageCount = useMemo(
     () => messages.filter((m) => m.sender === "user").length,
@@ -393,7 +386,7 @@ export function IssuesChatAssistant({ projectId }: { projectId: string }) {
                               <li key={issue.id}>
                                 <IssueChatCard
                                   issue={issue}
-                                  href={`${projectBase}/issues/${issue.id}`}
+                                  href={projectPlainHref(projectId, `/issues/${issue.id}`)}
                                   onNavigate={closePanel}
                                 />
                               </li>

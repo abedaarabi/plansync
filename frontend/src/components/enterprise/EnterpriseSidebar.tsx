@@ -32,7 +32,11 @@ import {
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { fetchProjectSession } from "@/lib/api-client";
-import { projectScopedBaseFromPathname, extractProjectIdFromPath } from "@/lib/projectScopedPath";
+import {
+  projectScopedBaseFromPathname,
+  extractProjectIdFromPath,
+  projectPlainHref,
+} from "@/lib/projectScopedPath";
 import {
   faviconUrlFromHostname,
   isGoogleFaviconUrl,
@@ -325,7 +329,9 @@ export function EnterpriseSidebar({
     const coordinationItems: NavItem[] = [];
     if (mod.issues) {
       coordinationItems.push({
-        href: operationsMode ? `${omBase}/issues?issueKind=CONSTRUCTION` : `${omBase}/issues`,
+        href: operationsMode
+          ? projectPlainHref(projectId, "/issues?issueKind=CONSTRUCTION")
+          : projectPlainHref(projectId, "/issues"),
         label: t("issues"),
         icon: MapPin,
       });

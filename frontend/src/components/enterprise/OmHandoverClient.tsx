@@ -44,6 +44,7 @@ import { isWorkspaceOmBillingClient } from "@/lib/workspaceSubscription";
 import { useEnterpriseWorkspace } from "./EnterpriseWorkspaceContext";
 import { OmSubPageHeader } from "@/components/enterprise/OmSubPageHeader";
 import { OM_COMPACT_INPUT, OM_COMPACT_LABEL, OM_PAGE_CLASS } from "@/lib/omCompactStyles";
+import { projectPlainHref } from "@/lib/projectScopedPath";
 import { HandoverWizardModal } from "./HandoverWizardModal";
 
 type Props = { projectId: string };
@@ -598,7 +599,7 @@ export function OmHandoverClient({ projectId }: Props) {
             title="Punch list"
             ok={punchOk}
             detail={r.punchOpen === 0 ? "No open punch items." : `${r.punchOpen} open items`}
-            href={`${pBase}/punch`}
+            href={projectPlainHref(projectId, "/punch")}
           />
           <StatCard
             title="Construction issues"
@@ -608,7 +609,7 @@ export function OmHandoverClient({ projectId }: Props) {
                 ? "No open construction issues."
                 : `${r.constructionIssuesOpen} open (construction)`
             }
-            href={`${pBase}/issues?issueKind=CONSTRUCTION`}
+            href={projectPlainHref(projectId, "/issues?issueKind=CONSTRUCTION")}
           />
           <StatCard
             title="Occupant program"
@@ -777,7 +778,9 @@ export function OmHandoverClient({ projectId }: Props) {
           {QUICK_LINKS.map(({ path, label, hint, icon: Icon }) => (
             <li key={label} className="min-w-0">
               <Link
-                href={`${pBase}${path}`}
+                href={
+                  path.startsWith("/om/") ? `${pBase}${path}` : projectPlainHref(projectId, path)
+                }
                 className="enterprise-card enterprise-card-hover group flex min-h-10 items-center gap-2.5 rounded-md p-2.5 outline-none ring-[var(--enterprise-primary)]/40 transition-transform focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--enterprise-bg)] active:scale-[0.98]"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] text-[var(--enterprise-primary)]">
