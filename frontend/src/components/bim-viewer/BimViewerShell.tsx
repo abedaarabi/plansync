@@ -2231,12 +2231,21 @@ export function BimViewerShell(props: {
     void engineRef.current?.selectByGuids(guids, additive);
   }, []);
 
+  /** Select a catalog group and frame it, so picking a row is visible in the viewport. */
+  const selectAndFrameGuids = useCallback((guids: string[], additive: boolean) => {
+    const engine = engineRef.current;
+    if (!engine || guids.length === 0) return;
+    void (async () => {
+      await engine.selectByGuids(guids, additive);
+      await engine.zoomToGuids(guids);
+    })();
+  }, []);
+
   const onSelectType = useCallback(
     (ifcType: string, additive: boolean) => {
-      const guids = quantityIndex?.byType[ifcType]?.guids ?? [];
-      if (guids.length) void engineRef.current?.selectByGuids(guids, additive);
+      selectAndFrameGuids(quantityIndex?.byType[ifcType]?.guids ?? [], additive);
     },
-    [quantityIndex],
+    [quantityIndex, selectAndFrameGuids],
   );
 
   const onSelectTypeName = useCallback(
@@ -2246,9 +2255,9 @@ export function BimViewerShell(props: {
         fromAgg ??
         quantityIndex?.elements.filter((e) => e.typeName?.trim() === typeName).map((e) => e.guid) ??
         [];
-      if (guids.length) void engineRef.current?.selectByGuids(guids, additive);
+      selectAndFrameGuids(guids, additive);
     },
-    [quantityIndex],
+    [quantityIndex, selectAndFrameGuids],
   );
 
   const onContextAction = useCallback(
