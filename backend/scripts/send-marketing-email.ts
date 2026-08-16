@@ -11,6 +11,7 @@
  *   npm run send:marketing -- --file marketing/recipients.xlsx --confirm --limit 5
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
@@ -120,6 +121,15 @@ function writePreview(outPath: string): void {
     { publicAppUrl, embedVideo: true, previewOrigin: MARKETING_PREVIEW_ORIGIN },
   );
   writeFileSync(outPath, html);
+  // Keep CI `prettier --check` green after regenerating this checked-in artifact.
+  const prettier = spawnSync("npx", ["prettier", "--write", outPath], {
+    cwd: repoRoot,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (prettier.status !== 0) {
+    throw new Error(`Prettier failed on ${outPath} (exit ${prettier.status ?? "?"})`);
+  }
   console.log(`Wrote preview: ${outPath}`);
 }
 
