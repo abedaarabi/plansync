@@ -22,6 +22,9 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # Prisma schema reads env("DATABASE_URL"); validate/generate do not open a DB.
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/plansync
     steps:
       - uses: actions/checkout@v4
 
@@ -33,8 +36,23 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Lint, test, Prisma, build
-        run: npm run check
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Test
+        run: npm run test
+
+      - name: Prisma validate, format, generate
+        run: npm run db:precommit
+
+      - name: Build
+        run: npm run build
 
   e2e-smoke:
     runs-on: ubuntu-latest
