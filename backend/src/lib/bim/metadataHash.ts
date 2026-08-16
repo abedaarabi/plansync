@@ -41,6 +41,7 @@ export function canonicalElementMetadata(entry: BimQuantityEntry): Record<string
     guid: entry.guid,
     ifcType: entry.ifcType,
     name: entry.name,
+    typeName: entry.typeName ?? null,
     level: entry.level,
     material: entry.material,
     discipline: entry.discipline,

@@ -164,6 +164,27 @@ export function BimPropertiesPanel(props: {
   const tableRows = useMemo(() => {
     if (!selection) return [];
     const extras: PropertyTableRow[] = [];
+    if (quantityEntry?.typeName) {
+      extras.push({
+        key: "general-type-name",
+        group: "General",
+        property: "Type name",
+        value: quantityEntry.typeName,
+      });
+    } else {
+      const objectType =
+        selection.attributes.find((a) => /^object\s*type$/i.test(a.label))?.value?.trim() ||
+        selection.attributes.find((a) => a.label === "ObjectType")?.value?.trim() ||
+        null;
+      if (objectType) {
+        extras.push({
+          key: "general-type-name",
+          group: "General",
+          property: "Type name",
+          value: objectType,
+        });
+      }
+    }
     if (displayColor) {
       extras.push({
         key: "appearance-color",
@@ -190,7 +211,13 @@ export function BimPropertiesPanel(props: {
       }
     }
     return buildPropertyRows(selection, extras);
-  }, [selection, displayColor, quantityEntry?.material]);
+  }, [
+    selection,
+    displayColor,
+    quantityEntry?.material,
+    quantityEntry?.typeName,
+    selection?.attributes,
+  ]);
 
   const filteredRows = useMemo(() => {
     const q = propertySearch.trim().toLowerCase();

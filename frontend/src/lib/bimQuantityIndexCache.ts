@@ -4,7 +4,11 @@
  */
 
 import type { BimQuantityIndex } from "@/lib/bim/types";
-import { readAndTouchIndexedDbRow, writeIndexedDbRow } from "@/lib/indexedDbHelpers";
+import {
+  deleteIndexedDbRow,
+  readAndTouchIndexedDbRow,
+  writeIndexedDbRow,
+} from "@/lib/indexedDbHelpers";
 
 const DB_NAME = "plansync-bim-quantity-index";
 const STORE = "indices";
@@ -21,7 +25,8 @@ type CacheRow = {
 };
 
 export function buildQuantityIndexCacheKey(fileVersionId: string): string {
-  return `qty:${fileVersionId}`;
+  // v3: invalidate empty typeName indexes built by the stale dist conversion worker.
+  return `qty:v3:${fileVersionId}`;
 }
 
 export async function readCachedQuantityIndex(
@@ -33,6 +38,14 @@ export async function readCachedQuantityIndex(
     return { index: JSON.parse(row.indexJson) as BimQuantityIndex, partial: row.partial };
   } catch {
     return null;
+  }
+}
+
+export async function removeCachedQuantityIndex(key: string): Promise<void> {
+  try {
+    await deleteIndexedDbRow(DB_NAME, STORE, key, DB_VERSION);
+  } catch {
+    /* best-effort */
   }
 }
 

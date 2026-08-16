@@ -42,9 +42,18 @@ export function BimQuantitiesPanel(props: {
         <div>
           <p className="bim-section-title">Model quantities</p>
           <p className="mt-1 text-[12px] font-medium text-[var(--bim-text)]">{summaryLabel}</p>
-          {props.selectionSummary?.ifcTypes[0] ? (
+          {props.selectionSummary?.sampleName ? (
+            <p className="mt-0.5 text-[11px] text-[var(--bim-text-muted)]">
+              {props.selectionSummary.sampleName}
+            </p>
+          ) : props.selectionSummary?.ifcTypes[0] ? (
             <p className="mt-0.5 text-[11px] text-[var(--bim-text-muted)]">
               {props.selectionSummary.ifcTypes.slice(0, 2).join(", ")}
+            </p>
+          ) : null}
+          {props.selectionSummary?.costGroupingHint ? (
+            <p className="mt-1.5 text-[10px] leading-relaxed text-[var(--bim-text-muted)]">
+              {props.selectionSummary.costGroupingHint}
             </p>
           ) : null}
         </div>

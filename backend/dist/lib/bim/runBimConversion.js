@@ -155,14 +155,29 @@ export async function processBimConversion(env, fileVersionId, jobRunId) {
                 data: { sha256: hashBufferSha256(buf) },
             });
         }
-        const alias = await tryAliasIdenticalIfcVersion({
-            env,
-            fileVersionId,
-            fileId,
-            version: fv.version,
-            sha256: fv.sha256,
-            ifcBytes,
-        });
+        let forceRebuild = false;
+        if (jobRunId) {
+            const job = await prisma.jobRun.findUnique({
+                where: { id: jobRunId },
+                select: { payloadJson: true },
+            });
+            const payload = job?.payloadJson;
+            forceRebuild =
+                Boolean(payload) &&
+                    typeof payload === "object" &&
+                    !Array.isArray(payload) &&
+                    payload.force === true;
+        }
+        const alias = forceRebuild
+            ? { aliased: false, priorFileVersionId: null }
+            : await tryAliasIdenticalIfcVersion({
+                env,
+                fileVersionId,
+                fileId,
+                version: fv.version,
+                sha256: fv.sha256,
+                ifcBytes,
+            });
         if (alias.aliased) {
             const updated = await prisma.fileVersion.findUnique({
                 where: { id: fileVersionId },

@@ -21,6 +21,12 @@ export type BimQuantityEntry = {
   guid: string;
   ifcType: string;
   name: string | null;
+  /**
+   * IFC type-object name from IfcRelDefinesByType → RelatingType.Name
+   * (e.g. Revit type / family type). Null when the export has no type relation.
+   * Absent on legacy indexes until rebuild.
+   */
+  typeName?: string | null;
   level: string | null;
   material: string | null;
   discipline: string | null;
@@ -65,6 +71,13 @@ export type BimLevelAggregate = {
   guids: string[];
 };
 
+/** IFC type-object name (Revit type / family type) rollup. */
+export type BimTypeNameAggregate = {
+  typeName: string;
+  count: number;
+  guids: string[];
+};
+
 export type BimQuantityIndex = {
   version: 1;
   fileVersionId: string;
@@ -73,6 +86,8 @@ export type BimQuantityIndex = {
   elements: BimQuantityEntry[];
   byType: Record<string, BimTypeAggregate>;
   byLevel: Record<string, BimLevelAggregate>;
+  /** Present on indexes built after type-name extraction; absent on legacy caches. */
+  byTypeName?: Record<string, BimTypeNameAggregate>;
   /** Fast pass — byType/byLevel only; elements may be empty. */
   partial?: boolean;
 };

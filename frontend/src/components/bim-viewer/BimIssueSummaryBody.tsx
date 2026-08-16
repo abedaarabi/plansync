@@ -3,11 +3,7 @@
 import type { ReactNode } from "react";
 import { Calendar, MapPin, MessageSquare, Paperclip } from "lucide-react";
 import type { IssueRow } from "@/lib/api-client/core-issues-takeoff";
-import {
-  ISSUE_STATUS_LABEL,
-  issueStatusBadgeClass,
-  issueStatusDotSolidFill,
-} from "@/lib/issueStatusStyle";
+import { ISSUE_STATUS_LABEL, issueStatusDotSolidFill } from "@/lib/issueStatusStyle";
 import {
   formatIssueDueDate,
   isIssueDueOverdue,
@@ -19,6 +15,7 @@ import {
   issueLocationLabel,
   issuePriorityBadgeClass,
   issuePriorityLabel,
+  issueStatusBadgeClassBim,
   issueUserInitials,
 } from "@/lib/bim/bimIssueMarkerUtils";
 
@@ -30,13 +27,13 @@ function MetaPill(props: {
 }) {
   const toneClass =
     props.tone === "danger"
-      ? "text-[var(--bim-danger)] ring-[color-mix(in_srgb,var(--bim-danger)_28%,transparent)]"
-      : "text-[var(--bim-text-muted)] ring-[var(--bim-border)]";
+      ? "border-[color-mix(in_srgb,var(--bim-danger)_32%,transparent)] bg-[color-mix(in_srgb,var(--bim-danger)_10%,var(--bim-panel))] text-[var(--bim-danger)]"
+      : "border-[var(--bim-border)] bg-[var(--bim-hover)] text-[var(--bim-text-muted)]";
 
   return (
     <span
       title={props.title}
-      className={`bim-issue-meta-chip inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium ring-1 ${toneClass}`}
+      className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-medium ${toneClass}`}
     >
       {props.icon}
       <span className="truncate">{props.label}</span>
@@ -45,12 +42,15 @@ function MetaPill(props: {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const color = issueStatusDotSolidFill(status);
-  const label = ISSUE_STATUS_LABEL[status] ?? status.replace(/_/g, " ");
+  const color = issueStatusDotSolidFill(status.toUpperCase());
+  const label =
+    ISSUE_STATUS_LABEL[status] ??
+    ISSUE_STATUS_LABEL[status.toUpperCase()] ??
+    status.replace(/_/g, " ");
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] ${issueStatusBadgeClass(status)}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] ${issueStatusBadgeClassBim(status)}`}
     >
       <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
       {label}
@@ -136,10 +136,10 @@ function DueDateChip({ issue }: { issue: IssueRow }) {
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium ring-1 ${
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-medium ${
         overdue
-          ? "bg-[color-mix(in_srgb,var(--bim-danger)_14%,transparent)] text-[var(--bim-danger)] ring-[color-mix(in_srgb,var(--bim-danger)_30%,transparent)]"
-          : "bg-[var(--bim-hover)] text-[var(--bim-text-muted)] ring-[var(--bim-border)]"
+          ? "border-[color-mix(in_srgb,var(--bim-danger)_32%,transparent)] bg-[color-mix(in_srgb,var(--bim-danger)_10%,var(--bim-panel))] text-[var(--bim-danger)]"
+          : "border-[var(--bim-border)] bg-[var(--bim-hover)] text-[var(--bim-text-muted)]"
       }`}
     >
       <Calendar className="h-3 w-3 shrink-0 opacity-80" aria-hidden />

@@ -1,23 +1,27 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BookmarkPlus,
+  Boxes,
   Check,
   ChevronDown,
   Eye,
   EyeOff,
+  FileBox,
   Layers,
   Palette,
   Search,
+  Shapes,
+  Tag,
   Trash2,
+  Wrench,
   X,
 } from "lucide-react";
 import type { BimQuantityIndex, BimSavedViewRecord } from "@/lib/bim/types";
 import {
   BIM_FILTER_FIELD_OPTIONS,
   type BimFilterField,
-  type BimFilterRule,
   type BimFilterState,
   type BimFilterVisualize,
   buildColorizeFromElements,
@@ -31,12 +35,29 @@ import {
 } from "@/lib/bim/bimFilters";
 import type { ColorizeLegendEntry } from "@/lib/bim/colorizePalette";
 
-const PICKER_FIELDS = ["ifcType", "level", "model"] as const satisfies readonly BimFilterField[];
+const PICKER_FIELDS = [
+  "ifcType",
+  "typeName",
+  "name",
+  "level",
+  "model",
+  "discipline",
+] as const satisfies readonly BimFilterField[];
 
-const PICKER_LABELS: Record<(typeof PICKER_FIELDS)[number], string> = {
-  ifcType: "Category",
-  level: "Level",
-  model: "Model",
+const PICKER_META: Record<
+  (typeof PICKER_FIELDS)[number],
+  { label: string; hint: string; icon: typeof Shapes }
+> = {
+  ifcType: { label: "Category", hint: "IFC class — walls, doors, ducts…", icon: Shapes },
+  typeName: {
+    label: "Type name",
+    hint: "IFC type object — best for cost / takeoff grouping",
+    icon: Boxes,
+  },
+  name: { label: "Name", hint: "Instance / element name", icon: Tag },
+  level: { label: "Level", hint: "Building storey / level", icon: Layers },
+  model: { label: "Model", hint: "Federated file / model", icon: FileBox },
+  discipline: { label: "Discipline", hint: "Architectural, MEP, structure…", icon: Wrench },
 };
 
 const DISPLAY_MODES: {
@@ -65,31 +86,56 @@ export function BimFiltersPanel(props: {
   const { filterState, onFilterStateChange } = props;
   const [pickerField, setPickerField] = useState<(typeof PICKER_FIELDS)[number]>("ifcType");
   const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerMenuOpen, setPickerMenuOpen] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
+  const pickerMenuRef = useRef<HTMLDivElement>(null);
 
   const active = hasActiveFilter(filterState);
   const colorizeOn = Boolean(filterState.colorize?.enabled);
+  const activePicker = PICKER_META[pickerField];
+  const ActivePickerIcon = activePicker.icon;
 
-  const pickerOptions = useMemo(
-    () => listFilterFieldValues(props.index, pickerField, pickerQuery),
-    [props.index, pickerField, pickerQuery],
-  );
+  useEffect(() => {
+    if (!pickerMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (pickerMenuRef.current?.contains(e.target as Node)) return;
+      setPickerMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPickerMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [pickerMenuOpen]);
+
+  const pickerOptions = useMemo(() => {
+    if (pickerField === "name") {
+      // Prefer names that match the search; without a query show the densest names.
+      return listFilterFieldValues(props.index, "name", pickerQuery).slice(0, 200);
+    }
+    return listFilterFieldValues(props.index, pickerField, pickerQuery);
+  }, [props.index, pickerField, pickerQuery]);
 
   const patch = (partial: Partial<BimFilterState>) => {
     onFilterStateChange({ ...filterState, ...partial });
   };
 
-  /** One active rule per field — picking a new value replaces the previous. */
-  const setFieldRule = (rule: Omit<BimFilterRule, "id">) => {
-    const next = filterState.rules.filter((r) => r.field !== rule.field);
+  /** Toggle a value for a field — multiple Type/Level picks OR together. */
+  const toggleFieldValue = (field: BimFilterField, value: string, label: string) => {
     const existing = filterState.rules.find(
-      (r) => r.field === rule.field && r.op === rule.op && r.value === rule.value,
+      (r) => r.field === field && r.op === "eq" && r.value === value,
     );
     if (existing) {
-      patch({ rules: next });
+      patch({ rules: filterState.rules.filter((r) => r.id !== existing.id) });
       return;
     }
-    patch({ rules: [...next, { ...rule, id: createFilterRuleId() }] });
+    patch({
+      rules: [...filterState.rules, { id: createFilterRuleId(), field, op: "eq", value, label }],
+    });
   };
 
   const applyTextFilter = () => {
@@ -128,7 +174,7 @@ export function BimFiltersPanel(props: {
         <Layers className="h-8 w-8 text-[var(--bim-text-muted)]" aria-hidden />
         <p className="text-[13px] font-medium text-[var(--bim-text)]">Loading model index</p>
         <p className="max-w-[14rem] text-[11px] text-[var(--bim-text-muted)]">
-          Categories appear here once indexing completes.
+          Filter values appear here once indexing completes.
         </p>
       </div>
     );
@@ -156,7 +202,8 @@ export function BimFiltersPanel(props: {
           </div>
         ) : (
           <p className="text-[11px] text-[var(--bim-text-muted)]">
-            Pick a category, level, or model to filter the view.
+            Filter by category, name, level, model, or discipline. Pick several values to combine
+            them.
           </p>
         )}
         {filterState.rules.length > 0 ? (
@@ -214,27 +261,97 @@ export function BimFiltersPanel(props: {
           ) : null}
         </div>
 
-        <div className="bim-segment bim-segment-compact mb-2">
-          {PICKER_FIELDS.map((field) => (
-            <button
-              key={field}
-              type="button"
-              data-active={pickerField === field}
-              onClick={() => setPickerField(field)}
-              className="bim-segment-btn text-[10px]"
+        <div className="relative mb-2" ref={pickerMenuRef}>
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={pickerMenuOpen}
+            aria-label="Filter by field"
+            onClick={() => setPickerMenuOpen((open) => !open)}
+            className="bim-focus-ring flex w-full items-center gap-2.5 rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)] px-3 py-2.5 text-left hover:bg-[var(--bim-hover)]"
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--bim-accent-muted)] text-[var(--bim-accent)]">
+              <ActivePickerIcon className="h-4 w-4" aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[12px] font-semibold text-[var(--bim-text)]">
+                {activePicker.label}
+              </span>
+              <span className="block truncate text-[10px] text-[var(--bim-text-muted)]">
+                {activePicker.hint}
+              </span>
+            </span>
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 text-[var(--bim-text-muted)] transition-transform ${
+                pickerMenuOpen ? "rotate-180" : ""
+              }`}
+              aria-hidden
+            />
+          </button>
+
+          {pickerMenuOpen ? (
+            <ul
+              role="listbox"
+              aria-label="Filter fields"
+              className="absolute left-0 right-0 z-20 mt-1.5 overflow-hidden rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)] py-1 shadow-[var(--bim-panel-shadow)]"
             >
-              {PICKER_LABELS[field]}
-            </button>
-          ))}
+              {PICKER_FIELDS.map((field) => {
+                const meta = PICKER_META[field];
+                const Icon = meta.icon;
+                const selected = pickerField === field;
+                return (
+                  <li key={field} role="option" aria-selected={selected}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPickerField(field);
+                        setPickerMenuOpen(false);
+                        setPickerQuery("");
+                      }}
+                      className={`bim-focus-ring flex w-full items-center gap-2.5 px-2.5 py-2 text-left ${
+                        selected ? "bg-[var(--bim-accent-muted)]" : "hover:bg-[var(--bim-hover)]"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                          selected
+                            ? "bg-[var(--bim-accent)] text-white"
+                            : "bg-[var(--bim-hover)] text-[var(--bim-accent)]"
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5" aria-hidden />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12px] font-medium text-[var(--bim-text)]">
+                          {meta.label}
+                        </span>
+                        <span className="block truncate text-[10px] text-[var(--bim-text-muted)]">
+                          {meta.hint}
+                        </span>
+                      </span>
+                      {selected ? (
+                        <Check
+                          className="h-3.5 w-3.5 shrink-0 text-[var(--bim-accent)]"
+                          aria-hidden
+                        />
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
         </div>
 
         <ul
           className="bim-dock-scroll rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)]"
-          aria-label={`${PICKER_LABELS[pickerField]} list`}
+          aria-label={`${activePicker.label} list`}
         >
           {pickerOptions.length === 0 ? (
             <li className="px-4 py-8 text-center text-[11px] text-[var(--bim-text-muted)]">
-              No results. Try another search or press Enter to filter by text.
+              {pickerField === "typeName"
+                ? "No type names in this index yet. Rebuild the model index (Quality panel) to extract them."
+                : "No results. Try another search or press Enter to filter by text."}
             </li>
           ) : (
             pickerOptions.map((opt) => {
@@ -245,14 +362,7 @@ export function BimFiltersPanel(props: {
                 <li key={opt.value}>
                   <button
                     type="button"
-                    onClick={() =>
-                      setFieldRule({
-                        field: pickerField,
-                        op: "eq",
-                        value: opt.value,
-                        label: PICKER_LABELS[pickerField],
-                      })
-                    }
+                    onClick={() => toggleFieldValue(pickerField, opt.value, activePicker.label)}
                     className="bim-focus-ring flex w-full items-center gap-2.5 border-b border-[var(--bim-border)] px-3 py-2.5 text-left last:border-b-0 hover:bg-[var(--bim-hover)]"
                   >
                     <span
@@ -279,11 +389,11 @@ export function BimFiltersPanel(props: {
         </ul>
       </div>
 
-      {/* View options */}
-      <div className="space-y-3 border-t border-[var(--bim-border)] px-3 py-3">
+      {/* View options — compact so the type list keeps the room */}
+      <div className="space-y-2.5 border-t border-[var(--bim-border)] px-3 py-2.5">
         <div>
-          <p className="bim-section-title mb-2">Display</p>
-          <div className="grid grid-cols-3 gap-1.5">
+          <p className="bim-section-title mb-1.5">Display</p>
+          <div className="bim-segment bim-segment-compact" role="group" aria-label="Display mode">
             {DISPLAY_MODES.map((mode) => {
               const Icon = mode.icon;
               const selected = filterState.visualize === mode.id;
@@ -294,22 +404,18 @@ export function BimFiltersPanel(props: {
                   data-active={selected}
                   title={mode.hint}
                   onClick={() => patch({ visualize: mode.id })}
-                  className={`bim-focus-ring flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-center transition-colors ${
-                    selected
-                      ? "border-[var(--bim-accent)] bg-[var(--bim-accent-muted)] text-[var(--bim-text)]"
-                      : "border-[var(--bim-border)] bg-[var(--bim-panel)] text-[var(--bim-text-muted)] hover:bg-[var(--bim-hover)]"
-                  }`}
+                  className="bim-segment-btn inline-flex items-center justify-center gap-1 text-[10px]"
                 >
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                  <span className="text-[10px] font-medium">{mode.label}</span>
+                  <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {mode.label}
                 </button>
               );
             })}
           </div>
         </div>
 
-        <div className="rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)] p-2.5">
-          <label className="flex cursor-pointer items-center gap-2.5">
+        <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] px-2.5 py-2">
+          <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               checked={colorizeOn}

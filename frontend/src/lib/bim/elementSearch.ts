@@ -13,6 +13,7 @@ export function filterBimElements(
     if (
       el.guid.toLowerCase().includes(q) ||
       (el.name?.toLowerCase().includes(q) ?? false) ||
+      (el.typeName?.toLowerCase().includes(q) ?? false) ||
       el.ifcType.toLowerCase().includes(q) ||
       (el.level?.toLowerCase().includes(q) ?? false) ||
       (el.sourceLabel?.toLowerCase().includes(q) ?? false)

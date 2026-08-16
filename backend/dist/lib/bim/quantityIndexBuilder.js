@@ -133,6 +133,22 @@ function aggregateByLevel(elements) {
     }
     return out;
 }
+function aggregateByTypeName(elements) {
+    const out = {};
+    for (const el of elements) {
+        const typeName = el.typeName?.trim();
+        if (!typeName)
+            continue;
+        let agg = out[typeName];
+        if (!agg) {
+            agg = { typeName, count: 0, guids: [] };
+            out[typeName] = agg;
+        }
+        agg.count += 1;
+        agg.guids.push(el.guid);
+    }
+    return out;
+}
 function resolveIfcTypeName(ifcApi, modelId, expressId) {
     try {
         const line = ifcApi.GetLine(modelId, expressId);
@@ -148,6 +164,74 @@ function resolveIfcTypeName(ifcApi, modelId, expressId) {
     catch {
         return "IfcProduct";
     }
+}
+function relatedExpressIds(related) {
+    const list = Array.isArray(related) ? related : related != null ? [related] : [];
+    const out = [];
+    for (const item of list) {
+        if (typeof item === "number" && Number.isFinite(item)) {
+            out.push(item);
+            continue;
+        }
+        if (!item || typeof item !== "object")
+            continue;
+        const rec = item;
+        const value = rec.value ?? rec.expressID;
+        if (typeof value === "number" && Number.isFinite(value))
+            out.push(value);
+    }
+    return out;
+}
+function relatingTypeExpressId(relating) {
+    if (typeof relating === "number" && Number.isFinite(relating))
+        return relating;
+    if (!relating || typeof relating !== "object")
+        return null;
+    const rec = relating;
+    const value = rec.value ?? rec.expressID;
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+/**
+ * Map product expressId → IfcTypeObject.Name via IfcRelDefinesByType.
+ * Built once per IFC open for both summary and full passes.
+ */
+function buildProductTypeNameMap(ifcApi, modelId) {
+    const out = new Map();
+    try {
+        const relIds = ifcApi.GetLineIDsWithType(modelId, WebIFC.IFCRELDEFINESBYTYPE, true);
+        for (let i = 0; i < relIds.size(); i++) {
+            const relId = relIds.get(i);
+            try {
+                const rel = ifcApi.GetLine(modelId, relId);
+                const typeExpressId = relatingTypeExpressId(rel.RelatingType);
+                if (typeExpressId == null)
+                    continue;
+                let typeName = null;
+                try {
+                    const typeLine = ifcApi.GetLine(modelId, typeExpressId);
+                    typeName = strVal(typeLine.Name) ?? strVal(typeLine.ObjectType);
+                }
+                catch {
+                    continue;
+                }
+                if (!typeName)
+                    continue;
+                for (const expressId of relatedExpressIds(rel.RelatedObjects)) {
+                    out.set(expressId, typeName);
+                }
+            }
+            catch {
+                /* skip malformed relation */
+            }
+        }
+    }
+    catch {
+        /* optional — untyped IFCs */
+    }
+    return out;
+}
+function resolveEntryTypeName(expressId, typeNameMap, objectType) {
+    return typeNameMap.get(expressId) ?? objectType ?? null;
 }
 async function buildElementStoreyMap(ifcApi, modelId) {
     const storeyNames = new Map();
@@ -217,6 +301,7 @@ function readProductLineFields(ifcApi, modelId, expressId) {
     return {
         guid: strVal(line.GlobalId) ?? `express-${expressId}`,
         name: strVal(line.Name),
+        objectType: strVal(line.ObjectType),
     };
 }
 async function openIfcSession(ifcBytes) {
@@ -239,10 +324,10 @@ function collectProductIds(ifcApi, modelId) {
         allIds.push(productIds.get(i));
     return allIds;
 }
-function processSummaryExpressIdSync(ifcApi, modelId, expressId, storeyMap) {
+function processSummaryExpressIdSync(ifcApi, modelId, expressId, storeyMap, typeNameMap) {
     try {
         const ifcType = resolveIfcTypeName(ifcApi, modelId, expressId);
-        const { guid, name } = readProductLineFields(ifcApi, modelId, expressId);
+        const { guid, name, objectType } = readProductLineFields(ifcApi, modelId, expressId);
         const lodFlags = {
             identity: Boolean(guid && ifcType),
             dimensions: false,
@@ -255,6 +340,7 @@ function processSummaryExpressIdSync(ifcApi, modelId, expressId, storeyMap) {
             guid,
             ifcType,
             name,
+            typeName: resolveEntryTypeName(expressId, typeNameMap, objectType),
             level: storeyMap.get(expressId) ?? null,
             material: null,
             discipline: disciplineForIfcType(ifcType),
@@ -268,10 +354,10 @@ function processSummaryExpressIdSync(ifcApi, modelId, expressId, storeyMap) {
         return null;
     }
 }
-async function processFullExpressId(ifcApi, modelId, expressId, storeyMap) {
+async function processFullExpressId(ifcApi, modelId, expressId, storeyMap, typeNameMap) {
     try {
         const ifcType = resolveIfcTypeName(ifcApi, modelId, expressId);
-        const { guid, name } = readProductLineFields(ifcApi, modelId, expressId);
+        const { guid, name, objectType } = readProductLineFields(ifcApi, modelId, expressId);
         let psets = [];
         try {
             psets = await withTimeout(ifcApi.properties
@@ -296,6 +382,7 @@ async function processFullExpressId(ifcApi, modelId, expressId, storeyMap) {
             guid,
             ifcType,
             name,
+            typeName: resolveEntryTypeName(expressId, typeNameMap, objectType),
             level: storeyMap.get(expressId) ?? null,
             material,
             discipline: disciplineForIfcType(ifcType),
@@ -347,6 +434,7 @@ function finalizeSummaryIndex(fileVersionId, lightEntries) {
         elements: [],
         byType: aggregateByType(lightEntries),
         byLevel: aggregateByLevel(lightEntries),
+        byTypeName: aggregateByTypeName(lightEntries),
         partial: true,
     };
 }
@@ -359,6 +447,7 @@ function finalizeFullIndex(fileVersionId, elements) {
         elements,
         byType: aggregateByType(elements),
         byLevel: aggregateByLevel(elements),
+        byTypeName: aggregateByTypeName(elements),
         partial: false,
     };
 }
@@ -370,17 +459,18 @@ export async function buildQuantityIndexPhased(ifcBytes, fileVersionId, opts) {
     const session = await openIfcSession(ifcBytes);
     try {
         const storeyMap = await buildElementStoreyMap(session.ifcApi, session.modelId);
+        const typeNameMap = buildProductTypeNameMap(session.ifcApi, session.modelId);
         const allIds = collectProductIds(session.ifcApi, session.modelId);
         const total = allIds.length;
         opts?.onProgress?.(0.02, total <= SINGLE_PASS_MAX_PRODUCTS ? "full" : "summary");
         if (total <= SINGLE_PASS_MAX_PRODUCTS) {
-            const elements = await processExpressIdsSequential(allIds, (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap), (fraction) => opts?.onProgress?.(0.02 + fraction * 0.98, "full"));
+            const elements = await processExpressIdsSequential(allIds, (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap, typeNameMap), (fraction) => opts?.onProgress?.(0.02 + fraction * 0.98, "full"));
             return finalizeFullIndex(fileVersionId, elements);
         }
         if (!opts?.skipSummary) {
             const lightEntries = [];
             for (let i = 0; i < total; i++) {
-                const entry = processSummaryExpressIdSync(session.ifcApi, session.modelId, allIds[i], storeyMap);
+                const entry = processSummaryExpressIdSync(session.ifcApi, session.modelId, allIds[i], storeyMap, typeNameMap);
                 if (entry)
                     lightEntries.push(entry);
                 if (i === 0 || i === total - 1 || (i + 1) % 500 === 0) {
@@ -391,15 +481,26 @@ export async function buildQuantityIndexPhased(ifcBytes, fileVersionId, opts) {
             await opts?.onSummaryReady?.(summary);
         }
         opts?.onProgress?.(0.35, "full");
-        const elements = await processExpressIdsSequential(allIds, (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap), (fraction) => opts?.onProgress?.(0.35 + fraction * 0.65, "full"));
+        const elements = await processExpressIdsSequential(allIds, (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap, typeNameMap), (fraction) => opts?.onProgress?.(0.35 + fraction * 0.65, "full"));
         return finalizeFullIndex(fileVersionId, elements);
     }
     finally {
         session.close();
     }
 }
-/** Parse stored quantity index JSON safely. */
-function parseQuantityIndex(raw) {
+/** Normalize optional typeName on legacy or partial stored entries. */
+export function normalizeQuantityEntryTypeName(entry) {
+    if ("typeName" in entry) {
+        const raw = entry.typeName;
+        if (raw == null)
+            return { ...entry, typeName: null };
+        const trimmed = typeof raw === "string" ? raw.trim() : "";
+        return { ...entry, typeName: trimmed || null };
+    }
+    return { ...entry, typeName: null };
+}
+/** Parse stored quantity index JSON safely (legacy indexes omit typeName). */
+export function parseQuantityIndex(raw) {
     if (!raw || typeof raw !== "object")
         return null;
     const o = raw;
@@ -407,7 +508,10 @@ function parseQuantityIndex(raw) {
         return null;
     if (!o.byType || !o.byLevel)
         return null;
-    return o;
+    return {
+        ...o,
+        elements: o.elements.map((el) => normalizeQuantityEntryTypeName(el)),
+    };
 }
 /** Strip element payloads for incremental API responses. */
 export function toQuantityIndexSummary(index) {

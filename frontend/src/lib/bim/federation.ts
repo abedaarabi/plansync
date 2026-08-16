@@ -153,6 +153,7 @@ export function mergeFederatedQuantityIndices(
   const elements: BimQuantityEntry[] = [];
   const byType: BimQuantityIndex["byType"] = {};
   const byLevel: BimQuantityIndex["byLevel"] = {};
+  const byTypeName: NonNullable<BimQuantityIndex["byTypeName"]> = {};
   let anyPartial = false;
 
   // fallow-ignore-next-line complexity
@@ -186,6 +187,16 @@ export function mergeFederatedQuantityIndices(
     levelAgg.guids.push(...guids);
   };
 
+  const mergeTypeNameAgg = (typeName: string, count: number, guids: string[]) => {
+    let agg = byTypeName[typeName];
+    if (!agg) {
+      agg = { typeName, count: 0, guids: [] };
+      byTypeName[typeName] = agg;
+    }
+    agg.count += count;
+    agg.guids.push(...guids);
+  };
+
   for (const src of sources) {
     if (src.index.partial) anyPartial = true;
 
@@ -204,6 +215,7 @@ export function mergeFederatedQuantityIndices(
           totalVolume: el.quantities.volume,
         });
         mergeLevelAgg(el.level ?? "Unassigned", 1, [el.guid]);
+        if (el.typeName?.trim()) mergeTypeNameAgg(el.typeName.trim(), 1, [el.guid]);
       }
       continue;
     }
@@ -211,9 +223,14 @@ export function mergeFederatedQuantityIndices(
     // Summary indexes strip `elements` but keep guid lists in byType/byLevel.
     // Rebuild stubs so clash sets (and other guid-driven tools) still resolve.
     const levelByGuid = new Map<string, string>();
+    const typeNameByGuid = new Map<string, string>();
     for (const agg of Object.values(src.index.byLevel)) {
       mergeLevelAgg(agg.level, agg.count, agg.guids);
       for (const guid of agg.guids) levelByGuid.set(guid, agg.level);
+    }
+    for (const agg of Object.values(src.index.byTypeName ?? {})) {
+      mergeTypeNameAgg(agg.typeName, agg.count, agg.guids);
+      for (const guid of agg.guids) typeNameByGuid.set(guid, agg.typeName);
     }
     for (const agg of Object.values(src.index.byType)) {
       mergeTypeAgg(agg.ifcType, agg.count, agg.guids, {
@@ -227,6 +244,7 @@ export function mergeFederatedQuantityIndices(
           guid,
           ifcType: agg.ifcType,
           name: null,
+          typeName: typeNameByGuid.get(guid) ?? null,
           level: levelByGuid.get(guid) ?? null,
           material: null,
           discipline: disciplineForIfcType(agg.ifcType),
@@ -256,6 +274,7 @@ export function mergeFederatedQuantityIndices(
     elements,
     byType,
     byLevel,
+    byTypeName: Object.keys(byTypeName).length > 0 ? byTypeName : undefined,
     partial: anyPartial ? true : undefined,
   };
 }

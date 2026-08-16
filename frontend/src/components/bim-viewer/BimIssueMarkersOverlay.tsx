@@ -17,7 +17,10 @@ import type { BimEngine } from "./bimEngine";
 
 function pinsSnapshot(pins: ProjectedIssuePin[]): string {
   return pins
-    .map((p) => `${p.id}:${Math.round(p.x)}:${Math.round(p.y)}:${p.visible ? 1 : 0}`)
+    .map(
+      (p) =>
+        `${p.id}:${Math.round(p.x)}:${Math.round(p.y)}:${p.visible ? 1 : 0}:${p.issue.status}:${p.issue.priority ?? ""}:${p.issue.commentCount ?? 0}`,
+    )
     .join("|");
 }
 
@@ -102,18 +105,13 @@ function renderMarkerItem(
   const { issue } = pin;
   if (!pin.visible) return null;
   const expanded = props.expandedClusters.size > 0;
-  const isWo = issue.issueKind === "WORK_ORDER";
   return (
     <PinButton
       key={pin.id}
       x={pin.x}
       y={pin.y}
       label={issuePinDisplayNumber(issue)}
-      color={
-        isWo
-          ? "color-mix(in srgb, var(--bim-accent) 72%, #0ea5e9)"
-          : issueStatusMarkerStrokeHex(issue.status)
-      }
+      color={issueStatusMarkerStrokeHex(issue.status)}
       selected={props.selectedIssueId === issue.id}
       expanded={expanded}
       title={issue.title}

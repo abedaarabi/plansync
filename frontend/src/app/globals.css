@@ -3025,13 +3025,9 @@ button:active:not(:disabled),
   }
 
   .bim-issue-marker-card__surface {
-    border: 1px solid color-mix(in srgb, var(--bim-border) 55%, transparent);
-    background: color-mix(in srgb, var(--bim-shell-deep) 82%, transparent);
-    box-shadow:
-      0 4px 6px rgba(15, 23, 42, 0.18),
-      0 16px 40px rgba(15, 23, 42, 0.42);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid var(--bim-border);
+    background: var(--bim-panel);
+    box-shadow: var(--bim-panel-shadow);
   }
 
   .bim-issue-marker-card__action {
@@ -3049,12 +3045,8 @@ button:active:not(:disabled),
   }
 
   .bim-issue-marker-card__action:hover {
-    background: color-mix(in srgb, var(--bim-hover) 70%, transparent);
+    background: var(--bim-hover);
     color: var(--bim-text);
-  }
-
-  .bim-issue-meta-chip {
-    background: color-mix(in srgb, var(--bim-panel) 65%, transparent);
   }
 
   /* Clash status pills */

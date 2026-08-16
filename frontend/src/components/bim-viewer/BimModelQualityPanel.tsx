@@ -16,7 +16,12 @@ import {
 } from "lucide-react";
 import { BimKeyboardShortcutsPanel } from "./BimKeyboardShortcutsPanel";
 import { resolveAuthoredColorPct } from "@/lib/bim/loqHelpers";
-import { bimIndexBlockingLoad, bimIndexEnriching } from "@/lib/bim/indexStatus";
+import {
+  bimIndexBlockingLoad,
+  bimIndexBuilding,
+  bimIndexEnriching,
+  bimIndexStatusLabel,
+} from "@/lib/bim/indexStatus";
 import type { BimLoqReport, BimQuantityIndex } from "@/lib/bim/types";
 import { BIM_GEOMETRY_PROFILE } from "@/lib/bim/renderingProfile";
 import {
@@ -39,6 +44,8 @@ export function BimModelQualityPanel(props: {
   loq: BimLoqReport | null;
   quantityIndex: BimQuantityIndex | null;
   conversionStatus: string;
+  indexProgress?: number | null;
+  indexPhase?: "summary" | "full" | null;
   appearance: BimViewportAppearance;
   qualityState: BimQualityState | null;
   onAppearanceChange: (patch: Partial<BimViewportAppearance>) => void;
@@ -47,8 +54,14 @@ export function BimModelQualityPanel(props: {
   const [qualityTab, setQualityTab] = useState<"appearance" | "shortcuts">("appearance");
   const blocking = bimIndexBlockingLoad(props.conversionStatus, props.quantityIndex, props.loq);
   const enriching = bimIndexEnriching(props.conversionStatus, props.quantityIndex, props.loq);
+  const building = bimIndexBuilding(props.conversionStatus);
   const failed = !props.loq && props.conversionStatus === "failed";
   const authoredColorPct = resolveAuthoredColorPct(props.loq, props.quantityIndex);
+  const indexingLabel = bimIndexStatusLabel(props.conversionStatus, props.indexPhase);
+  const indexingPct =
+    props.indexProgress != null && Number.isFinite(props.indexProgress)
+      ? Math.max(0, Math.min(100, Math.round(props.indexProgress)))
+      : null;
 
   return (
     <div className="bim-dock-scroll px-4 py-4">
@@ -209,22 +222,29 @@ export function BimModelQualityPanel(props: {
         )}
       </div>
 
-      {blocking ? (
+      {blocking || building ? (
         <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] px-3 py-4">
           <div className="flex items-center gap-2 text-[12px] font-medium text-[var(--bim-text)]">
             <Loader2 className="h-4 w-4 animate-spin text-[var(--bim-accent)]" aria-hidden />
-            Building quantity index…
+            {indexingLabel}
+            {indexingPct != null ? (
+              <span className="ml-auto tabular-nums text-[var(--bim-text-muted)]">
+                {indexingPct}%
+              </span>
+            ) : null}
+          </div>
+          <div className="bim-loading-progress__track mt-3">
+            {indexingPct != null ? (
+              <div className="bim-loading-progress__fill" style={{ width: `${indexingPct}%` }} />
+            ) : (
+              <div className="bim-loading-bar bim-loading-progress__fill bim-loading-progress__fill--indeterminate" />
+            )}
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-[var(--bim-text-muted)]">
-            This runs once per model revision and powers search, quantities, and auto-map.
+            {enriching
+              ? "Summary is ready. Detailed quantities are still loading."
+              : "This runs once per model revision and powers search, quantities, type names, and auto-map."}
           </p>
-        </div>
-      ) : null}
-
-      {enriching ? (
-        <div className="rounded-lg border border-[var(--bim-border)] bg-[var(--bim-hover)] px-3 py-2.5 text-[11px] text-[var(--bim-text-muted)]">
-          Detailed quantities are still loading. Charts and level coverage below are already
-          available.
         </div>
       ) : null}
 
@@ -254,11 +274,12 @@ export function BimModelQualityPanel(props: {
         </div>
       ) : null}
 
-      {props.loq ? (
+      {props.loq && !blocking ? (
         <LoqMetrics
           loq={props.loq}
           authoredColorPct={authoredColorPct}
           onRebuildIndex={props.onRebuildIndex}
+          rebuildDisabled={building}
         />
       ) : !blocking && !failed ? (
         <div className="space-y-3 rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)] p-3">
@@ -396,6 +417,7 @@ function LoqMetrics(props: {
   loq: BimLoqReport;
   authoredColorPct: number;
   onRebuildIndex?: () => void;
+  rebuildDisabled?: boolean;
 }) {
   const { loq } = props;
 
@@ -432,7 +454,8 @@ function LoqMetrics(props: {
         <button
           type="button"
           onClick={props.onRebuildIndex}
-          className="bim-btn-secondary w-full justify-center py-2 text-[11px]"
+          disabled={props.rebuildDisabled}
+          className="bim-btn-secondary w-full justify-center py-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           Rebuild index

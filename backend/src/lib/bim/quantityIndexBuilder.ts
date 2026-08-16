@@ -10,6 +10,7 @@ import type {
   BimQuantityEntry,
   BimQuantityIndex,
   BimTypeAggregate,
+  BimTypeNameAggregate,
 } from "./types.js";
 
 type SpatialNode = { expressID: number; type: string; children: SpatialNode[] };
@@ -150,6 +151,22 @@ function aggregateByLevel(elements: BimQuantityEntry[]): Record<string, BimLevel
   return out;
 }
 
+function aggregateByTypeName(elements: BimQuantityEntry[]): Record<string, BimTypeNameAggregate> {
+  const out: Record<string, BimTypeNameAggregate> = {};
+  for (const el of elements) {
+    const typeName = el.typeName?.trim();
+    if (!typeName) continue;
+    let agg = out[typeName];
+    if (!agg) {
+      agg = { typeName, count: 0, guids: [] };
+      out[typeName] = agg;
+    }
+    agg.count += 1;
+    agg.guids.push(el.guid);
+  }
+  return out;
+}
+
 function resolveIfcTypeName(ifcApi: WebIFC.IfcAPI, modelId: number, expressId: number): string {
   try {
     const line = ifcApi.GetLine(modelId, expressId) as { constructor?: { name?: string } };
@@ -162,6 +179,73 @@ function resolveIfcTypeName(ifcApi: WebIFC.IfcAPI, modelId: number, expressId: n
   } catch {
     return "IfcProduct";
   }
+}
+
+function relatedExpressIds(related: unknown): number[] {
+  const list = Array.isArray(related) ? related : related != null ? [related] : [];
+  const out: number[] = [];
+  for (const item of list) {
+    if (typeof item === "number" && Number.isFinite(item)) {
+      out.push(item);
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const rec = item as { value?: unknown; expressID?: unknown };
+    const value = rec.value ?? rec.expressID;
+    if (typeof value === "number" && Number.isFinite(value)) out.push(value);
+  }
+  return out;
+}
+
+function relatingTypeExpressId(relating: unknown): number | null {
+  if (typeof relating === "number" && Number.isFinite(relating)) return relating;
+  if (!relating || typeof relating !== "object") return null;
+  const rec = relating as { value?: unknown; expressID?: unknown };
+  const value = rec.value ?? rec.expressID;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Map product expressId → IfcTypeObject.Name via IfcRelDefinesByType.
+ * Built once per IFC open for both summary and full passes.
+ */
+function buildProductTypeNameMap(ifcApi: WebIFC.IfcAPI, modelId: number): Map<number, string> {
+  const out = new Map<number, string>();
+  try {
+    const relIds = ifcApi.GetLineIDsWithType(modelId, WebIFC.IFCRELDEFINESBYTYPE, true);
+    for (let i = 0; i < relIds.size(); i++) {
+      const relId = relIds.get(i);
+      try {
+        const rel = ifcApi.GetLine(modelId, relId) as Record<string, unknown>;
+        const typeExpressId = relatingTypeExpressId(rel.RelatingType);
+        if (typeExpressId == null) continue;
+        let typeName: string | null = null;
+        try {
+          const typeLine = ifcApi.GetLine(modelId, typeExpressId) as Record<string, unknown>;
+          typeName = strVal(typeLine.Name) ?? strVal(typeLine.ObjectType);
+        } catch {
+          continue;
+        }
+        if (!typeName) continue;
+        for (const expressId of relatedExpressIds(rel.RelatedObjects)) {
+          out.set(expressId, typeName);
+        }
+      } catch {
+        /* skip malformed relation */
+      }
+    }
+  } catch {
+    /* optional — untyped IFCs */
+  }
+  return out;
+}
+
+function resolveEntryTypeName(
+  expressId: number,
+  typeNameMap: Map<number, string>,
+  objectType: string | null,
+): string | null {
+  return typeNameMap.get(expressId) ?? objectType ?? null;
 }
 
 async function buildElementStoreyMap(
@@ -243,11 +327,12 @@ function readProductLineFields(
   ifcApi: WebIFC.IfcAPI,
   modelId: number,
   expressId: number,
-): { guid: string; name: string | null } {
+): { guid: string; name: string | null; objectType: string | null } {
   const line = ifcApi.GetLine(modelId, expressId) as Record<string, unknown>;
   return {
     guid: strVal(line.GlobalId) ?? `express-${expressId}`,
     name: strVal(line.Name),
+    objectType: strVal(line.ObjectType),
   };
 }
 
@@ -277,10 +362,11 @@ function processSummaryExpressIdSync(
   modelId: number,
   expressId: number,
   storeyMap: Map<number, string>,
+  typeNameMap: Map<number, string>,
 ): BimQuantityEntry | null {
   try {
     const ifcType = resolveIfcTypeName(ifcApi, modelId, expressId);
-    const { guid, name } = readProductLineFields(ifcApi, modelId, expressId);
+    const { guid, name, objectType } = readProductLineFields(ifcApi, modelId, expressId);
     const lodFlags: BimLodFlags = {
       identity: Boolean(guid && ifcType),
       dimensions: false,
@@ -293,6 +379,7 @@ function processSummaryExpressIdSync(
       guid,
       ifcType,
       name,
+      typeName: resolveEntryTypeName(expressId, typeNameMap, objectType),
       level: storeyMap.get(expressId) ?? null,
       material: null,
       discipline: disciplineForIfcType(ifcType),
@@ -311,10 +398,11 @@ async function processFullExpressId(
   modelId: number,
   expressId: number,
   storeyMap: Map<number, string>,
+  typeNameMap: Map<number, string>,
 ): Promise<BimQuantityEntry | null> {
   try {
     const ifcType = resolveIfcTypeName(ifcApi, modelId, expressId);
-    const { guid, name } = readProductLineFields(ifcApi, modelId, expressId);
+    const { guid, name, objectType } = readProductLineFields(ifcApi, modelId, expressId);
 
     let psets: unknown[] = [];
     try {
@@ -346,6 +434,7 @@ async function processFullExpressId(
       guid,
       ifcType,
       name,
+      typeName: resolveEntryTypeName(expressId, typeNameMap, objectType),
       level: storeyMap.get(expressId) ?? null,
       material,
       discipline: disciplineForIfcType(ifcType),
@@ -403,6 +492,7 @@ function finalizeSummaryIndex(
     elements: [],
     byType: aggregateByType(lightEntries),
     byLevel: aggregateByLevel(lightEntries),
+    byTypeName: aggregateByTypeName(lightEntries),
     partial: true,
   };
 }
@@ -416,6 +506,7 @@ function finalizeFullIndex(fileVersionId: string, elements: BimQuantityEntry[]):
     elements,
     byType: aggregateByType(elements),
     byLevel: aggregateByLevel(elements),
+    byTypeName: aggregateByTypeName(elements),
     partial: false,
   };
 }
@@ -438,6 +529,7 @@ export async function buildQuantityIndexPhased(
   const session = await openIfcSession(ifcBytes);
   try {
     const storeyMap = await buildElementStoreyMap(session.ifcApi, session.modelId);
+    const typeNameMap = buildProductTypeNameMap(session.ifcApi, session.modelId);
     const allIds = collectProductIds(session.ifcApi, session.modelId);
     const total = allIds.length;
 
@@ -446,7 +538,7 @@ export async function buildQuantityIndexPhased(
     if (total <= SINGLE_PASS_MAX_PRODUCTS) {
       const elements = await processExpressIdsSequential(
         allIds,
-        (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap),
+        (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap, typeNameMap),
         (fraction) => opts?.onProgress?.(0.02 + fraction * 0.98, "full"),
       );
       return finalizeFullIndex(fileVersionId, elements);
@@ -460,6 +552,7 @@ export async function buildQuantityIndexPhased(
           session.modelId,
           allIds[i]!,
           storeyMap,
+          typeNameMap,
         );
         if (entry) lightEntries.push(entry);
         if (i === 0 || i === total - 1 || (i + 1) % 500 === 0) {
@@ -473,7 +566,7 @@ export async function buildQuantityIndexPhased(
     opts?.onProgress?.(0.35, "full");
     const elements = await processExpressIdsSequential(
       allIds,
-      (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap),
+      (id) => processFullExpressId(session.ifcApi, session.modelId, id, storeyMap, typeNameMap),
       (fraction) => opts?.onProgress?.(0.35 + fraction * 0.65, "full"),
     );
     return finalizeFullIndex(fileVersionId, elements);
@@ -482,13 +575,27 @@ export async function buildQuantityIndexPhased(
   }
 }
 
-/** Parse stored quantity index JSON safely. */
-function parseQuantityIndex(raw: unknown): BimQuantityIndex | null {
+/** Normalize optional typeName on legacy or partial stored entries. */
+export function normalizeQuantityEntryTypeName(entry: BimQuantityEntry): BimQuantityEntry {
+  if ("typeName" in entry) {
+    const raw = entry.typeName;
+    if (raw == null) return { ...entry, typeName: null };
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+    return { ...entry, typeName: trimmed || null };
+  }
+  return { ...entry, typeName: null };
+}
+
+/** Parse stored quantity index JSON safely (legacy indexes omit typeName). */
+export function parseQuantityIndex(raw: unknown): BimQuantityIndex | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as BimQuantityIndex;
   if (o.version !== 1 || !Array.isArray(o.elements)) return null;
   if (!o.byType || !o.byLevel) return null;
-  return o;
+  return {
+    ...o,
+    elements: o.elements.map((el) => normalizeQuantityEntryTypeName(el)),
+  };
 }
 
 /** Strip element payloads for incremental API responses. */

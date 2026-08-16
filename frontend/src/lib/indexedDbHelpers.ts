@@ -56,6 +56,19 @@ export async function writeIndexedDbRow<
   db.close();
 }
 
+export async function deleteIndexedDbRow(
+  dbName: string,
+  storeName: string,
+  key: string,
+  version = 1,
+): Promise<void> {
+  const db = await openIndexedDb(dbName, storeName, version);
+  const tx = db.transaction(storeName, "readwrite");
+  tx.objectStore(storeName).delete(key);
+  await txDone(tx);
+  db.close();
+}
+
 async function evictIndexedDbLru(
   db: IDBDatabase,
   storeName: string,

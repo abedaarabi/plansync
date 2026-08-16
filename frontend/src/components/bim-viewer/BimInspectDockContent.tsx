@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { BimQuantityEntry, BimQuantityIndex } from "@/lib/bim/types";
 import type { IssueBimAnchor } from "@/lib/api-client/core-issues-takeoff";
 import type { BimSelection } from "./bimEngine";
+import type { BimTakeoffSelectionSummary } from "./BimAddToTakeoffDialog";
 import { BimPropertiesPanel } from "./BimPropertiesPanel";
 import { BimQuantitiesPanel } from "./BimQuantitiesPanel";
 
@@ -25,11 +26,7 @@ export function BimInspectDockContent(props: {
     area: number | null;
     volume: number | null;
   };
-  takeoffSelectionSummary: {
-    elementCount: number;
-    ifcTypes: string[];
-    sampleName: string | null;
-  } | null;
+  takeoffSelectionSummary: BimTakeoffSelectionSummary | null;
   initialTab?: BimInspectTab;
   onStartCreateIssue?: (anchor: IssueBimAnchor) => void;
   onAddFilterRule?: (group: string, property: string, value: string) => void;

@@ -187,14 +187,30 @@ export async function processBimConversion(
       });
     }
 
-    const alias = await tryAliasIdenticalIfcVersion({
-      env,
-      fileVersionId,
-      fileId,
-      version: fv.version,
-      sha256: fv.sha256,
-      ifcBytes,
-    });
+    let forceRebuild = false;
+    if (jobRunId) {
+      const job = await prisma.jobRun.findUnique({
+        where: { id: jobRunId },
+        select: { payloadJson: true },
+      });
+      const payload = job?.payloadJson;
+      forceRebuild =
+        Boolean(payload) &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        (payload as { force?: unknown }).force === true;
+    }
+
+    const alias = forceRebuild
+      ? { aliased: false as const, priorFileVersionId: null }
+      : await tryAliasIdenticalIfcVersion({
+          env,
+          fileVersionId,
+          fileId,
+          version: fv.version,
+          sha256: fv.sha256,
+          ifcBytes,
+        });
 
     if (alias.aliased) {
       const updated = await prisma.fileVersion.findUnique({

@@ -1,5 +1,5 @@
 import type { IssueRow } from "@/lib/api-client/core-issues-takeoff";
-import { ISSUE_PRIORITY_LABEL, issuePriorityPinAccent } from "@/lib/issueStatusStyle";
+import { ISSUE_PRIORITY_LABEL, issueStatusDotSolidFill } from "@/lib/issueStatusStyle";
 
 type IssueNumberSource = Pick<IssueRow, "id" | "displayNumber">;
 
@@ -37,9 +37,9 @@ export function issuePinDisplayNumber(
   return n > 999 ? String(n % 1000) : String(n);
 }
 
-/** Left-edge accent on floating cards. */
-export function issuePriorityAccentColor(priority: string | undefined | null): string {
-  return issuePriorityPinAccent(priority);
+/** Left-edge accent on floating cards (matches pin / status color). */
+export function issueStatusAccentColor(status: string | undefined | null): string {
+  return issueStatusDotSolidFill((status ?? "OPEN").toUpperCase());
 }
 
 export function issuePriorityLabel(priority: string | undefined | null): string {
@@ -47,23 +47,38 @@ export function issuePriorityLabel(priority: string | undefined | null): string 
   return ISSUE_PRIORITY_LABEL[k] ?? k.replace(/_/g, " ");
 }
 
+/** Status chip on light BIM panels (viewer chrome is light after theme refresh). */
+export function issueStatusBadgeClassBim(status: string | undefined | null): string {
+  switch ((status ?? "").toUpperCase()) {
+    case "OPEN":
+      return "border border-[color-mix(in_srgb,var(--bim-danger)_32%,transparent)] bg-[color-mix(in_srgb,var(--bim-danger)_10%,var(--bim-panel))] text-[var(--bim-danger)]";
+    case "IN_PROGRESS":
+      return "border border-[color-mix(in_srgb,var(--bim-warning)_36%,transparent)] bg-[color-mix(in_srgb,var(--bim-warning)_12%,var(--bim-panel))] text-[var(--bim-warning)]";
+    case "RESOLVED":
+      return "border border-[color-mix(in_srgb,var(--bim-success)_32%,transparent)] bg-[color-mix(in_srgb,var(--bim-success)_10%,var(--bim-panel))] text-[var(--bim-success)]";
+    case "CLOSED":
+    default:
+      return "border border-[var(--bim-border)] bg-[var(--bim-hover)] text-[var(--bim-text-muted)]";
+  }
+}
+
 // fallow-ignore-next-line complexity
 export function issuePriorityBadgeClass(priority: string | undefined | null): string {
   switch ((priority ?? "MEDIUM").toUpperCase()) {
     case "CRITICAL":
     case "HIGH":
-      return "bg-[color-mix(in_srgb,var(--bim-danger)_16%,transparent)] text-[var(--bim-danger)] ring-1 ring-[color-mix(in_srgb,var(--bim-danger)_32%,transparent)]";
+      return "border border-[color-mix(in_srgb,var(--bim-danger)_32%,transparent)] bg-[color-mix(in_srgb,var(--bim-danger)_10%,var(--bim-panel))] text-[var(--bim-danger)]";
     case "LOW":
-      return "bg-[var(--bim-hover)] text-[var(--bim-text-muted)] ring-1 ring-[var(--bim-border)]";
+      return "border border-[var(--bim-border)] bg-[var(--bim-hover)] text-[var(--bim-text-muted)]";
     case "MEDIUM":
     default:
-      return "bg-[color-mix(in_srgb,var(--bim-warning)_16%,transparent)] text-[var(--bim-warning)] ring-1 ring-[color-mix(in_srgb,var(--bim-warning)_32%,transparent)]";
+      return "border border-[color-mix(in_srgb,var(--bim-accent)_28%,transparent)] bg-[color-mix(in_srgb,var(--bim-accent)_10%,var(--bim-panel))] text-[var(--bim-accent)]";
   }
 }
 
-/** Pill styling for issue kind on dark BIM surfaces. */
+/** Pill styling for issue kind on light BIM surfaces. */
 export function issueKindBadgeClass(_kind: string | undefined | null): string {
-  return "bg-[color-mix(in_srgb,var(--bim-accent)_14%,transparent)] text-[var(--bim-text-muted)] ring-1 ring-[color-mix(in_srgb,var(--bim-accent)_28%,transparent)]";
+  return "border border-[color-mix(in_srgb,var(--bim-accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--bim-accent)_8%,var(--bim-panel))] text-[var(--bim-text-muted)]";
 }
 
 // fallow-ignore-next-line complexity

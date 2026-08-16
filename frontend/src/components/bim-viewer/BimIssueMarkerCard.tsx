@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Crosshair, FileText, MessageSquarePlus } from "lucide-react";
 import type { IssueRow } from "@/lib/api-client/core-issues-takeoff";
 import { presignReadIssueReferencePhoto } from "@/lib/api-client";
-import { issuePriorityAccentColor, type CardPlacement } from "@/lib/bim/bimIssueMarkerUtils";
+import { issueStatusAccentColor, type CardPlacement } from "@/lib/bim/bimIssueMarkerUtils";
 import { BimIssuePhotoLightbox } from "./BimIssuePhotoLightbox";
 import { BimIssueSummaryBody } from "./BimIssueSummaryBody";
 
@@ -23,7 +23,7 @@ export function BimIssueMarkerCard(props: {
   const { issue } = props;
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoOpen, setPhotoOpen] = useState(false);
-  const priorityAccent = issuePriorityAccentColor(issue.priority);
+  const statusAccent = issueStatusAccentColor(issue.status);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,7 +60,7 @@ export function BimIssueMarkerCard(props: {
       >
         <div
           className="bim-issue-marker-card__surface overflow-hidden rounded-2xl"
-          style={{ borderLeft: `3px solid ${priorityAccent}` }}
+          style={{ borderLeft: `3px solid ${statusAccent}` }}
         >
           <div className="px-3 pb-2 pt-3">
             <BimIssueSummaryBody
@@ -71,7 +71,7 @@ export function BimIssueMarkerCard(props: {
             />
           </div>
 
-          <footer className="flex items-center gap-1.5 border-t border-white/8 px-2 py-1.5">
+          <footer className="flex items-center gap-1.5 border-t border-[var(--bim-border)] px-2 py-1.5">
             <button
               type="button"
               onClick={props.onOpenDetails}

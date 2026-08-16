@@ -1,6 +1,6 @@
 import { apiUrl } from "@/lib/api-url";
 import type { BimConversionStatus, BimQuantityIndex, BimSavedViewRecord } from "@/lib/bim/types";
-import { apiJsonFetch } from "./shared";
+import { apiJsonFetch, jsonHeaders } from "./shared";
 
 const BIM_STATUS_TIMEOUT_MS = 30_000;
 const BIM_FRAGMENTS_FETCH_TIMEOUT_MS = 120_000;
@@ -26,9 +26,14 @@ export async function fetchBimStatus(
   });
 }
 
-export async function triggerBimConversion(fileVersionId: string): Promise<{ jobRunId: string }> {
+export async function triggerBimConversion(
+  fileVersionId: string,
+  opts?: { force?: boolean },
+): Promise<{ jobRunId: string }> {
   return apiJsonFetch(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/convert`, {
     method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({ force: opts?.force === true }),
   });
 }
 

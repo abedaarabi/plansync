@@ -44,6 +44,7 @@ function filterBimElementsForSearch(
 export type BimFilterField =
   | "level"
   | "ifcType"
+  | "typeName"
   | "material"
   | "discipline"
   | "name"
@@ -90,12 +91,24 @@ export type BimFilterFieldOption = {
 };
 
 export const BIM_FILTER_FIELD_OPTIONS: BimFilterFieldOption[] = [
-  { field: "model", label: "Model / file", quickAccess: true },
   { field: "ifcType", label: "Category", quickAccess: true },
+  { field: "typeName", label: "Type name", quickAccess: true },
+  { field: "name", label: "Name", quickAccess: true },
   { field: "level", label: "Level", quickAccess: true },
   { field: "material", label: "Material" },
-  { field: "discipline", label: "Discipline" },
-  { field: "name", label: "Name" },
+  { field: "discipline", label: "Discipline", quickAccess: true },
+  { field: "model", label: "Model / file", quickAccess: true },
+];
+
+const FILTER_FIELD_KEYS: readonly BimFilterField[] = [
+  "level",
+  "ifcType",
+  "typeName",
+  "material",
+  "discipline",
+  "name",
+  "model",
+  "any",
 ];
 
 export function createFilterRuleId(): string {
@@ -115,6 +128,8 @@ function fieldValue(el: BimQuantityEntry, field: BimFilterField): string | null 
       return el.level;
     case "ifcType":
       return el.ifcType;
+    case "typeName":
+      return el.typeName ?? null;
     case "material":
       return el.material;
     case "discipline":
@@ -141,6 +156,7 @@ function compareField(raw: string | null, op: BimFilterOp, expected: string): bo
 function matchesAnyField(el: BimQuantityEntry, op: BimFilterOp, expected: string): boolean {
   const parts = [
     el.name,
+    el.typeName,
     el.ifcType,
     el.level,
     el.material,
@@ -187,7 +203,20 @@ export function matchFilteredElements(
     return text ? pool : [];
   }
 
-  return pool.filter((el) => state.rules.every((rule) => matchesRule(el, rule)));
+  // AND across fields, OR within the same field (multi-select Type / Level / …).
+  const byField = new Map<BimFilterField, BimFilterRule[]>();
+  for (const rule of state.rules) {
+    const list = byField.get(rule.field);
+    if (list) list.push(rule);
+    else byField.set(rule.field, [rule]);
+  }
+
+  return pool.filter((el) => {
+    for (const group of byField.values()) {
+      if (!group.some((rule) => matchesRule(el, rule))) return false;
+    }
+    return true;
+  });
 }
 
 // fallow-ignore-next-line complexity
@@ -243,6 +272,7 @@ export function ruleFromPropertyRow(
     if (property === "Category") {
       return { ...base, field: "ifcType", label: "Category", value: normalizeIfcType(trimmed) };
     }
+    if (property === "Type name") return { ...base, field: "typeName", label: "Type name" };
     if (property === "Level") return { ...base, field: "level", label: "Level" };
     if (property === "Name") return { ...base, field: "name", label: "Name" };
     if (property === "Model") return { ...base, field: "model", label: "Model" };
@@ -272,7 +302,7 @@ export function parseFilterState(raw: unknown): BimFilterState | null {
     const op = rec.op;
     const value = rec.value;
     if (typeof field !== "string" || typeof op !== "string") continue;
-    if (!["level", "ifcType", "material", "discipline", "name", "model", "any"].includes(field)) {
+    if (!(FILTER_FIELD_KEYS as readonly string[]).includes(field)) {
       continue;
     }
     if (!["eq", "contains", "exists"].includes(op)) continue;
@@ -296,9 +326,7 @@ export function parseFilterState(raw: unknown): BimFilterState | null {
   if (o.colorize && typeof o.colorize === "object") {
     const c = o.colorize as Record<string, unknown>;
     if (c.enabled === true && typeof c.field === "string") {
-      if (
-        ["level", "ifcType", "material", "discipline", "name", "model", "any"].includes(c.field)
-      ) {
+      if ((FILTER_FIELD_KEYS as readonly string[]).includes(c.field)) {
         colorize = {
           enabled: true,
           field: c.field as BimFilterField,
@@ -361,10 +389,24 @@ export function listFilterFieldValues(
       .map((l) => ({ value: l.level, label: l.level, count: l.count }));
   }
 
+  if (field === "typeName") {
+    const fromAgg = index.byTypeName ? Object.values(index.byTypeName) : null;
+    if (fromAgg && fromAgg.length > 0) {
+      return fromAgg
+        .filter((t) => !q || t.typeName.toLowerCase().includes(q))
+        .sort((a, b) => b.count - a.count || a.typeName.localeCompare(b.typeName))
+        .map((t) => ({ value: t.typeName, label: t.typeName, count: t.count }));
+    }
+    // Fall through to element scan for older indexes that lack byTypeName.
+  }
+
   const counts = new Map<string, number>();
   for (const el of index.elements) {
     let v: string | null = null;
     switch (field) {
+      case "typeName":
+        v = el.typeName ?? null;
+        break;
       case "material":
         v = el.material;
         break;

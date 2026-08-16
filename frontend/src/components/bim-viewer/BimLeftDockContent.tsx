@@ -23,9 +23,12 @@ export function BimLeftDockContent(props: {
   quantityIndex: BimQuantityIndex | null;
   quantityIndexError?: string | null;
   conversionStatus?: string;
+  indexProgress?: number | null;
+  indexPhase?: "summary" | "full" | null;
   selectedGuids: Set<string>;
   onSelectGuids: (guids: string[], additive: boolean) => void;
   onSelectType: (ifcType: string, additive: boolean) => void;
+  onSelectTypeName?: (typeName: string, additive: boolean) => void;
   loq: BimLoqReport | null;
   onRebuildIndex?: () => void;
   appearance: BimViewportAppearance;
@@ -46,6 +49,8 @@ export function BimLeftDockContent(props: {
         loq={props.loq}
         quantityIndex={props.quantityIndex}
         conversionStatus={props.conversionStatus ?? "pending"}
+        indexProgress={props.indexProgress}
+        indexPhase={props.indexPhase}
         appearance={props.appearance}
         qualityState={props.qualityState}
         onAppearanceChange={props.onAppearanceChange}
@@ -85,10 +90,14 @@ export function BimLeftDockContent(props: {
     <BimElementCatalog
       index={props.quantityIndex}
       conversionStatus={props.conversionStatus}
+      indexProgress={props.indexProgress}
+      indexPhase={props.indexPhase}
       errorMessage={props.quantityIndexError}
       selectedGuids={props.selectedGuids}
       onSelectGuids={props.onSelectGuids}
       onSelectType={props.onSelectType}
+      onSelectTypeName={props.onSelectTypeName}
+      onRebuildIndex={props.onRebuildIndex}
     />
   );
 }

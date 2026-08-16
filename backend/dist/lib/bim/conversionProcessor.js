@@ -15,8 +15,15 @@ function attachWorkerHandlers(worker, fileVersionId) {
     });
 }
 function workerEntryCandidates() {
+    // Prefer the worker next to this module (src when running via tsx, dist in production).
+    // Never fall back from a /src/ API process onto a stale /dist/ worker — that silently
+    // ships old index builders (e.g. missing typeName) after source changes.
+    const sibling = fileURLToPath(new URL("./bimConversionWorker.js", import.meta.url));
+    if (sibling.includes("/src/") || sibling.includes("\\src\\")) {
+        return [sibling];
+    }
     return [
-        fileURLToPath(new URL("./bimConversionWorker.js", import.meta.url)),
+        sibling,
         fileURLToPath(new URL("../../../dist/lib/bim/bimConversionWorker.js", import.meta.url)),
     ];
 }
@@ -92,15 +99,28 @@ export function recoverStuckBimConversions(fileVersionIds) {
     })();
 }
 /** Enqueue conversion as async background job (returns JobRun id). */
-export async function enqueueBimConversion(_env, fileVersionId, userId) {
+export async function enqueueBimConversion(_env, fileVersionId, userId, opts) {
     const fv = await prisma.fileVersion.findUnique({
         where: { id: fileVersionId },
         include: { file: { include: { project: true } } },
     });
     if (!fv)
         throw new Error("File version not found");
-    if (fv.bimConversionStatus === "ready" && fv.quantityIndexS3Key && fv.fragmentsS3Key) {
+    if (!opts?.force &&
+        fv.bimConversionStatus === "ready" &&
+        fv.quantityIndexS3Key &&
+        fv.fragmentsS3Key) {
         return fv.bimConversionJobRunId ?? fileVersionId;
+    }
+    if (opts?.force) {
+        // Keep fragments; clear index so processBimConversion rebuilds typeName metadata.
+        await prisma.fileVersion.update({
+            where: { id: fileVersionId },
+            data: {
+                bimConversionStatus: "pending",
+                quantityIndexS3Key: null,
+            },
+        });
     }
     const activeJob = await prisma.jobRun.findFirst({
         where: {
@@ -111,7 +131,7 @@ export async function enqueueBimConversion(_env, fileVersionId, userId) {
         orderBy: { createdAt: "desc" },
         select: { id: true, status: true },
     });
-    if (activeJob) {
+    if (activeJob && !opts?.force) {
         await prisma.fileVersion.update({
             where: { id: fileVersionId },
             data: { bimConversionJobRunId: activeJob.id },
@@ -132,7 +152,7 @@ export async function enqueueBimConversion(_env, fileVersionId, userId) {
             kind: "bim.convert",
             status: "QUEUED",
             createdById: userId,
-            payloadJson: { fileVersionId },
+            payloadJson: { fileVersionId, force: Boolean(opts?.force) },
         },
     });
     await prisma.fileVersion.update({

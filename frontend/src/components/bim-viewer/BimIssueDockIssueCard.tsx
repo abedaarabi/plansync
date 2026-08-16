@@ -2,7 +2,7 @@
 
 import { Crosshair } from "lucide-react";
 import type { IssueRow } from "@/lib/api-client/core-issues-takeoff";
-import { issuePriorityAccentColor } from "@/lib/bim/bimIssueMarkerUtils";
+import { issueStatusAccentColor } from "@/lib/bim/bimIssueMarkerUtils";
 import { BimIssueSummaryBody } from "./BimIssueSummaryBody";
 
 export function BimIssueDockIssueCard(props: {
@@ -13,7 +13,7 @@ export function BimIssueDockIssueCard(props: {
   onFocusIssue: (issue: IssueRow) => void;
   onPhotoClick?: () => void;
 }) {
-  const priorityAccent = issuePriorityAccentColor(props.issue.priority);
+  const statusAccent = issueStatusAccentColor(props.issue.status);
 
   return (
     <li key={props.issue.id} id={`bim-sidebar-issue-${props.issue.id}`}>
@@ -23,7 +23,7 @@ export function BimIssueDockIssueCard(props: {
             ? "border-[var(--bim-accent)] bg-[var(--bim-accent-muted)] shadow-sm"
             : "border-[var(--bim-border)] bg-[var(--bim-panel)] hover:bg-[var(--bim-hover)]"
         }`}
-        style={{ borderLeft: `3px solid ${priorityAccent}` }}
+        style={{ borderLeft: `3px solid ${statusAccent}` }}
       >
         <div className="px-2.5 py-2.5">
           <BimIssueSummaryBody

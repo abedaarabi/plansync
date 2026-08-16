@@ -22,6 +22,7 @@ import {
   pickModelQuantityAndUnit,
   type BimModelQuantityRollup,
 } from "@/lib/bim/modelQuantity";
+import type { BimCostGroup } from "@/lib/bim/takeoffGrouping";
 import { useProjectMeasurementSystem } from "@/hooks/useProjectMeasurementSystem";
 import {
   MOBILE_FIELD_INPUT,
@@ -33,6 +34,9 @@ export type BimTakeoffSelectionSummary = {
   elementCount: number;
   ifcTypes: string[];
   sampleName?: string | null;
+  /** Recommended cost/takeoff groups (Type name preferred). */
+  costGroups?: BimCostGroup[];
+  costGroupingHint?: string;
 };
 
 function defaultLabel(m: MaterialRow): string {
@@ -363,6 +367,21 @@ export function BimAddToTakeoffDialog(props: {
             <p className="mt-0.5 truncate text-xs text-[var(--enterprise-text-muted)]">
               {props.selectionSummary.sampleName}
             </p>
+          ) : null}
+          {props.selectionSummary?.costGroupingHint ? (
+            <p className="mt-2 text-xs leading-relaxed text-[var(--enterprise-text-muted)]">
+              {props.selectionSummary.costGroupingHint}
+            </p>
+          ) : null}
+          {props.selectionSummary?.costGroups && props.selectionSummary.costGroups.length > 1 ? (
+            <ul className="mt-2 max-h-28 space-y-1 overflow-y-auto text-xs text-[var(--enterprise-text)]">
+              {props.selectionSummary.costGroups.slice(0, 8).map((g) => (
+                <li key={g.key} className="flex items-baseline justify-between gap-2">
+                  <span className="min-w-0 truncate">{g.label}</span>
+                  <span className="shrink-0 text-[var(--enterprise-text-muted)]">{g.count}</span>
+                </li>
+              ))}
+            </ul>
           ) : null}
           {modelQtyHint ? (
             <p className="mt-2 text-xs text-[var(--enterprise-text-muted)]">

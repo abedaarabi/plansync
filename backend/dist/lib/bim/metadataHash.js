@@ -40,6 +40,7 @@ export function canonicalElementMetadata(entry) {
         guid: entry.guid,
         ifcType: entry.ifcType,
         name: entry.name,
+        typeName: entry.typeName ?? null,
         level: entry.level,
         material: entry.material,
         discipline: entry.discipline,

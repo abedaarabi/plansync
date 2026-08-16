@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Boxes,
@@ -11,6 +11,7 @@ import {
   Eye,
   Filter,
   Home,
+  Loader2,
   ScanSearch,
   Sparkles,
   TableProperties,
@@ -80,6 +81,7 @@ import type { IssueRow } from "@/lib/api-client/core-issues-takeoff";
 import { fetchIssue } from "@/lib/api-client";
 import { compareBimQuantities } from "@/lib/api-client/bim-viewer";
 import { rollupBimQuantities, type BimModelQuantityRollup } from "@/lib/bim/modelQuantity";
+import { groupEntriesForCost, recommendedCostGroupingHint } from "@/lib/bim/takeoffGrouping";
 import { mergeViewportAppearance, type BimViewportAppearance } from "@/lib/bim/viewportAppearance";
 import type { BimQualityState } from "@/lib/bim/renderQuality";
 import {
@@ -143,6 +145,7 @@ import {
 import { BimFiltersPanel, useBimFilterPreview } from "./BimFiltersPanel";
 import { BimLoadingOverlay } from "./BimLoadingOverlay";
 import { overallLoadFraction, type BimLoadPhase } from "@/lib/bim/bimLoadingSteps";
+import { bimIndexBuilding, bimIndexStatusLabel } from "@/lib/bim/indexStatus";
 import { subscribeFullscreenChange, toggleElementFullscreen } from "@/lib/viewerFullscreen";
 import { readModelThumbnailDataUrl } from "@/lib/bim/bimThumbnailCache";
 import { BimLoadAbortedError } from "@/lib/bim/loadFetch";
@@ -276,6 +279,10 @@ export function BimViewerShell(props: {
   const currentUserId = session?.user?.id ?? null;
   const [loq, setLoq] = useState<BimLoqReport | null>(null);
   const [conversionStatus, setConversionStatus] = useState("pending");
+  /** Bumped after a forced rebuild so the status poll (which stops once ready) starts again. */
+  const [indexRefreshNonce, setIndexRefreshNonce] = useState(0);
+  const [indexProgress, setIndexProgress] = useState<number | null>(null);
+  const [indexPhase, setIndexPhase] = useState<"summary" | "full" | null>(null);
   const [quantityIndexError, setQuantityIndexError] = useState<string | null>(null);
   const [selectedGuids, setSelectedGuids] = useState<Set<string>>(new Set());
 
@@ -581,7 +588,40 @@ export function BimViewerShell(props: {
     };
   }, [props.fileName, federationMembers.length]);
 
-  const [issues, setIssues] = useState<IssueRow[]>([]);
+  const queryClient = useQueryClient();
+  const federationIssueVersionIds = useMemo(
+    () => federationMembers.map((m) => m.fileVersionId).filter((id): id is string => Boolean(id)),
+    [federationMembers],
+  );
+  const federationIssuesReady = phase.kind === "ready" && federationIssueVersionIds.length > 0;
+  const federationIssueQueries = useQueries({
+    queries: federationIssueVersionIds.map((fileVersionId) => ({
+      queryKey: qk.issuesForFileVersion(fileVersionId),
+      queryFn: () => fetchIssuesForFileVersion(fileVersionId),
+      enabled: federationIssuesReady,
+    })),
+  });
+  const issues = useMemo(() => {
+    const byId = new Map<string, IssueRow>();
+    for (const q of federationIssueQueries) {
+      for (const row of q.data ?? []) {
+        if (row.bimAnchor?.ifcGuid || row.bimAnchor?.position) {
+          byId.set(row.id, row);
+        }
+      }
+    }
+    return [...byId.values()];
+  }, [federationIssueQueries]);
+
+  const reloadIssues = useCallback(() => {
+    for (const fileVersionId of federationIssueVersionIds) {
+      void queryClient.invalidateQueries({
+        queryKey: ["issues", "fileVersion", fileVersionId],
+        exact: false,
+      });
+    }
+  }, [federationIssueVersionIds, queryClient]);
+
   const [compareDeltas, setCompareDeltas] = useState<{
     baseVersion: number;
     compareVersion: number;
@@ -985,6 +1025,10 @@ export function BimViewerShell(props: {
           if (member.fileVersionId === resolvedFileVersionId) {
             setConversionStatus(status.conversionStatus);
             setLoq(status.loq);
+            setIndexProgress(
+              typeof status.indexProgress === "number" ? status.indexProgress : null,
+            );
+            setIndexPhase(status.indexPhase ?? null);
           }
         }
 
@@ -1010,6 +1054,9 @@ export function BimViewerShell(props: {
 
         if (anyFailed && sources.length === 0) {
           setQuantityIndexError("Quantity index build failed. Open the Quality tab to rebuild.");
+        } else if (!anyPending) {
+          setIndexProgress(null);
+          setIndexPhase(null);
         }
       } catch (e) {
         if (cancelled) return;
@@ -1024,7 +1071,7 @@ export function BimViewerShell(props: {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [federationMembers, phase.kind, resolvedFileVersionId]);
+  }, [federationMembers, phase.kind, resolvedFileVersionId, indexRefreshNonce]);
 
   useEffect(() => {
     const fvId = resolvedFileVersionId;
@@ -1033,49 +1080,6 @@ export function BimViewerShell(props: {
       .then((res) => setSavedViews(res.views))
       .catch(() => undefined);
   }, [resolvedFileVersionId, phase.kind]);
-
-  useEffect(() => {
-    const members = federationMembers.filter((m) => m.fileVersionId);
-    if (members.length === 0 || phase.kind !== "ready") return;
-    let cancelled = false;
-    void Promise.all(members.map((m) => fetchIssuesForFileVersion(m.fileVersionId)))
-      // fallow-ignore-next-line complexity
-      .then((rows) => {
-        if (cancelled) return;
-        const byId = new Map<string, IssueRow>();
-        for (const list of rows) {
-          for (const row of list) {
-            if (row.bimAnchor?.ifcGuid || row.bimAnchor?.position) {
-              byId.set(row.id, row);
-            }
-          }
-        }
-        setIssues([...byId.values()]);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [federationMembers, phase.kind]);
-
-  const reloadIssues = useCallback(() => {
-    const members = federationMembers.filter((m) => m.fileVersionId);
-    if (members.length === 0) return;
-    void Promise.all(members.map((m) => fetchIssuesForFileVersion(m.fileVersionId)))
-      // fallow-ignore-next-line complexity
-      .then((rows) => {
-        const byId = new Map<string, IssueRow>();
-        for (const list of rows) {
-          for (const row of list) {
-            if (row.bimAnchor?.ifcGuid || row.bimAnchor?.position) {
-              byId.set(row.id, row);
-            }
-          }
-        }
-        setIssues([...byId.values()]);
-      })
-      .catch(() => undefined);
-  }, [federationMembers]);
 
   useEffect(() => {
     const fvId = resolvedFileVersionId;
@@ -2190,10 +2194,19 @@ export function BimViewerShell(props: {
         ? quantityRollup.entries
         : (quantityIndex?.elements.filter((e) => selectedGuids.has(e.guid)) ?? []);
     const ifcTypes = [...new Set(entries.map((e) => e.ifcType).filter(Boolean))];
+    const costGroups = groupEntriesForCost(entries);
+    const sample =
+      entries.find((e) => e.typeName?.trim())?.typeName?.trim() ||
+      entries[0]?.typeName?.trim() ||
+      entries[0]?.name ||
+      costGroups[0]?.label ||
+      null;
     return {
       elementCount: selectedGuids.size,
       ifcTypes,
-      sampleName: entries[0]?.name ?? null,
+      sampleName: sample,
+      costGroups,
+      costGroupingHint: recommendedCostGroupingHint(costGroups),
     };
   }, [quantityRollup.entries, quantityIndex, selectedGuids]);
 
@@ -2221,6 +2234,18 @@ export function BimViewerShell(props: {
   const onSelectType = useCallback(
     (ifcType: string, additive: boolean) => {
       const guids = quantityIndex?.byType[ifcType]?.guids ?? [];
+      if (guids.length) void engineRef.current?.selectByGuids(guids, additive);
+    },
+    [quantityIndex],
+  );
+
+  const onSelectTypeName = useCallback(
+    (typeName: string, additive: boolean) => {
+      const fromAgg = quantityIndex?.byTypeName?.[typeName]?.guids;
+      const guids =
+        fromAgg ??
+        quantityIndex?.elements.filter((e) => e.typeName?.trim() === typeName).map((e) => e.guid) ??
+        [];
       if (guids.length) void engineRef.current?.selectByGuids(guids, additive);
     },
     [quantityIndex],
@@ -2440,21 +2465,37 @@ export function BimViewerShell(props: {
     setCommentDialogIssue(issue);
   }, []);
 
-  const onIssueCommentAdded = useCallback((issueId: string, commentCount: number) => {
-    setIssues((prev) => prev.map((row) => (row.id === issueId ? { ...row, commentCount } : row)));
-    setEditIssue((prev) => (prev?.id === issueId ? { ...prev, commentCount } : prev));
-  }, []);
+  const onIssueCommentAdded = useCallback(
+    (issueId: string, commentCount: number) => {
+      for (const fileVersionId of federationIssueVersionIds) {
+        queryClient.setQueryData<IssueRow[]>(qk.issuesForFileVersion(fileVersionId), (old) =>
+          old?.map((row) => (row.id === issueId ? { ...row, commentCount } : row)),
+        );
+      }
+      setEditIssue((prev) => (prev?.id === issueId ? { ...prev, commentCount } : prev));
+    },
+    [federationIssueVersionIds, queryClient],
+  );
 
   const onMarkerResolveIssue = useCallback(
     (issue: IssueRow) => {
       void patchIssue(issue.id, { status: "RESOLVED" })
         .then(() => {
           toast.success("Issue resolved.");
-          reloadIssues();
+          const fvId = issue.fileVersionId;
+          if (fvId) {
+            void queryClient.invalidateQueries({
+              queryKey: ["issues", "fileVersion", fvId],
+              exact: false,
+            });
+          } else {
+            reloadIssues();
+          }
+          void queryClient.invalidateQueries({ queryKey: ["issues", "project"], exact: false });
         })
         .catch((e) => toast.error(e instanceof Error ? e.message : "Could not resolve issue."));
     },
-    [reloadIssues],
+    [queryClient, reloadIssues],
   );
 
   const onAppearanceChange = useCallback((patch: Partial<BimViewportAppearance>) => {
@@ -2469,16 +2510,34 @@ export function BimViewerShell(props: {
   const rebuildIndex = useCallback(() => {
     const members = federationMembers.filter((m) => m.fileVersionId);
     if (members.length === 0) return;
+    // Drop stale metadata so panels show the indexing loader instead of old type names.
     setConversionStatus("pending");
+    setIndexProgress(null);
+    setIndexPhase(null);
+    setQuantityIndex(null);
+    setLoq(null);
     setQuantityIndexError(null);
-    void Promise.all(members.map((m) => triggerBimConversion(m.fileVersionId)))
-      .then(() =>
-        toast.success(
-          members.length > 1
-            ? `Index rebuild queued for ${members.length} models.`
-            : "Index rebuild queued.",
-        ),
-      )
+    engineRef.current?.setQuantityIndex(null);
+    setActiveDock("quality");
+    setIndexRefreshNonce((n) => n + 1);
+    void Promise.all(
+      members.map(async (m) => {
+        try {
+          const { removeCachedQuantityIndex, buildQuantityIndexCacheKey } =
+            await import("@/lib/bimQuantityIndexCache");
+          await removeCachedQuantityIndex(buildQuantityIndexCacheKey(m.fileVersionId));
+        } catch {
+          /* cache clear best-effort */
+        }
+        return triggerBimConversion(m.fileVersionId, { force: true });
+      }),
+    )
+      .then(() => {
+        setIndexRefreshNonce((n) => n + 1);
+        toast.message(
+          members.length > 1 ? `Indexing ${members.length} models…` : "Indexing model…",
+        );
+      })
       .catch((e) => toast.error(e instanceof Error ? e.message : "Could not rebuild index."));
   }, [federationMembers]);
 
@@ -2724,6 +2783,12 @@ export function BimViewerShell(props: {
   const mappingUiReady =
     mappingEditActive && phase.kind === "ready" && Boolean(props.locationId && resolvedProjectId);
   const workChromeReady = phase.kind === "ready" && !mappingEditActive;
+  const indexingActive = workChromeReady && bimIndexBuilding(conversionStatus);
+  const indexingLabel = bimIndexStatusLabel(conversionStatus, indexPhase);
+  const indexingPct =
+    indexProgress != null && Number.isFinite(indexProgress)
+      ? Math.max(0, Math.min(100, Math.round(indexProgress)))
+      : null;
 
   const clashTypeOptionsA = useMemo(
     () => ifcTypeCountsForModel(quantityIndex, modelIdFromSet(clash.setA)),
@@ -3047,9 +3112,12 @@ export function BimViewerShell(props: {
               quantityIndex={quantityIndex}
               quantityIndexError={quantityIndexError}
               conversionStatus={conversionStatus}
+              indexProgress={indexProgress}
+              indexPhase={indexPhase}
               selectedGuids={selectedGuids}
               onSelectGuids={onSelectGuids}
               onSelectType={onSelectType}
+              onSelectTypeName={onSelectTypeName}
               loq={loq}
               onRebuildIndex={rebuildIndex}
               appearance={appearance}
@@ -3264,6 +3332,35 @@ export function BimViewerShell(props: {
               >
                 Back to files
               </button>
+            </div>
+          </div>
+        ) : null}
+
+        {indexingActive ? (
+          <div
+            className="pointer-events-none absolute left-1/2 top-[calc(0.75rem+env(safe-area-inset-top))] z-10 w-[min(20rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-[var(--bim-border)] bg-[var(--bim-panel)]/95 px-3 py-2.5 shadow-sm backdrop-blur-sm"
+            role="status"
+            aria-live="polite"
+            aria-label={indexingPct != null ? `${indexingLabel} ${indexingPct}%` : indexingLabel}
+          >
+            <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px] text-[var(--bim-text-muted)]">
+              <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
+                <Loader2
+                  className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--bim-accent)]"
+                  aria-hidden
+                />
+                <span className="truncate text-[var(--bim-text)]">{indexingLabel}</span>
+              </span>
+              {indexingPct != null ? (
+                <span className="shrink-0 tabular-nums text-[var(--bim-text)]">{indexingPct}%</span>
+              ) : null}
+            </div>
+            <div className="bim-loading-progress__track">
+              {indexingPct != null ? (
+                <div className="bim-loading-progress__fill" style={{ width: `${indexingPct}%` }} />
+              ) : (
+                <div className="bim-loading-bar bim-loading-progress__fill bim-loading-progress__fill--indeterminate" />
+              )}
             </div>
           </div>
         ) : null}

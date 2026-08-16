@@ -4833,6 +4833,11 @@ export class BimEngine {
     const fragments = this.components?.get(OBC.FragmentsManager);
     if (!fragments?.initialized) return null;
 
+    // Warm the index if empty (tiles may have landed after the last sync).
+    if (this.guidIndex.size === 0 && this.quantityIndex) {
+      await this.syncGuidLocalIdMap();
+    }
+
     const unresolved: { guid: string; fileVersionId?: string | null }[] = [];
 
     for (const ref of refs) {
@@ -4851,55 +4856,73 @@ export class BimEngine {
       unresolved.push({ guid, fileVersionId: ref.fileVersionId });
     }
 
-    for (const ref of unresolved) {
-      const candidates = [...this.modelRegistry.entries()].filter(([, entry]) =>
-        ref.fileVersionId ? entry.fileVersionId === ref.fileVersionId : true,
-      );
-      let found = false;
-      for (const [modelId, entry] of candidates) {
-        const model = fragments.list.get(modelId);
-        if (!model) continue;
-        try {
-          const [localId] = await model.getLocalIdsByGuids([ref.guid]);
-          if (localId == null) continue;
-          if (!map[modelId]) map[modelId] = new Set<number>();
-          (map[modelId] as Set<number>).add(localId);
-          this.guidIndex.set(ref.guid, {
-            modelId,
-            localId,
-            fileVersionId: entry.fileVersionId,
-            sourceLabel: entry.name,
-          });
-          found = true;
-          break;
-        } catch {
-          /* try next model */
-        }
-      }
-      if (found || ref.fileVersionId) continue;
-      try {
-        const fallback = await fragments.guidsToModelIdMap([ref.guid]);
-        if (!fallback) continue;
-        for (const [modelId, ids] of Object.entries(fallback)) {
-          if (!(ids instanceof Set) || ids.size === 0) continue;
-          if (!map[modelId]) map[modelId] = new Set<number>();
-          for (const id of ids) {
-            (map[modelId] as Set<number>).add(id);
-            const meta = this.modelRegistry.get(modelId);
-            this.guidIndex.set(ref.guid, {
-              modelId,
-              localId: id,
-              fileVersionId: meta?.fileVersionId ?? "",
-              sourceLabel: meta?.name ?? "Model",
-            });
-          }
-        }
-      } catch {
-        /* optional */
-      }
+    if (unresolved.length > 0) {
+      await this.resolveGuidRefsAgainstFragments(unresolved, map, fragments);
     }
 
     return Object.keys(map).length > 0 ? map : null;
+  }
+
+  /**
+   * Batch-resolve guids the index missed against every loaded fragment model.
+   * Progressive tiles are keyed `${memberId}__${tileId}`, so the member ids in
+   * `modelRegistry` alone miss most geometry and filters light up one element.
+   */
+  // fallow-ignore-next-line complexity
+  private async resolveGuidRefsAgainstFragments(
+    refs: { guid: string; fileVersionId?: string | null }[],
+    map: OBC.ModelIdMap,
+    fragments: OBC.FragmentsManager,
+  ): Promise<void> {
+    const pending = new Map<string, string | null>();
+    for (const ref of refs) pending.set(ref.guid, ref.fileVersionId ?? null);
+
+    for (const [modelId, model] of fragments.list) {
+      if (pending.size === 0) break;
+      const entry =
+        this.modelRegistry.get(modelId) ?? this.modelRegistry.get(baseFederationModelId(modelId));
+      const guids = [...pending].filter(
+        ([, wantFileVersionId]) =>
+          !wantFileVersionId || !entry || entry.fileVersionId === wantFileVersionId,
+      );
+      if (guids.length === 0) continue;
+
+      for (let i = 0; i < guids.length; i += BimEngine.GUID_SYNC_CHUNK) {
+        const chunk = guids.slice(i, i + BimEngine.GUID_SYNC_CHUNK).map(([guid]) => guid);
+        try {
+          const localIds = await model.getLocalIdsByGuids(chunk);
+          for (let j = 0; j < chunk.length; j++) {
+            const localId = localIds[j];
+            if (localId == null) continue;
+            const guid = chunk[j]!;
+            if (!map[modelId]) map[modelId] = new Set<number>();
+            (map[modelId] as Set<number>).add(localId);
+            this.guidIndex.set(guid, {
+              modelId,
+              localId,
+              fileVersionId: entry?.fileVersionId ?? "",
+              sourceLabel: entry?.name ?? "Model",
+            });
+            pending.delete(guid);
+          }
+        } catch {
+          /* try next chunk / model */
+        }
+      }
+    }
+
+    if (pending.size === 0) return;
+    try {
+      const fallback = await fragments.guidsToModelIdMap([...pending.keys()]);
+      if (!fallback) return;
+      for (const [modelId, ids] of Object.entries(fallback)) {
+        if (!(ids instanceof Set) || ids.size === 0) continue;
+        if (!map[modelId]) map[modelId] = new Set<number>();
+        for (const id of ids) (map[modelId] as Set<number>).add(id);
+      }
+    } catch {
+      /* optional */
+    }
   }
 
   // fallow-ignore-next-line complexity
@@ -5849,7 +5872,15 @@ export class BimEngine {
       fileVersionId?: string | null;
     }[];
     /** Color-by-property field — enables storey/category map fast-path. */
-    colorizeField?: "level" | "ifcType" | "material" | "discipline" | "name" | "model" | "any";
+    colorizeField?:
+      | "level"
+      | "ifcType"
+      | "typeName"
+      | "material"
+      | "discipline"
+      | "name"
+      | "model"
+      | "any";
     /** Ghost opacity for surrounding context (clash review). Default 0.18. */
     ghostOpacity?: number;
     /**
@@ -5969,7 +6000,7 @@ export class BimEngine {
       value?: string;
       fileVersionId?: string | null;
     },
-    field?: "level" | "ifcType" | "material" | "discipline" | "name" | "model" | "any",
+    field?: "level" | "ifcType" | "typeName" | "material" | "discipline" | "name" | "model" | "any",
     useClassifierMaps = false,
   ): Promise<OBC.ModelIdMap | null> {
     const value = group.value?.trim();

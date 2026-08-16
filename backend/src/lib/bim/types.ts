@@ -6,4 +6,5 @@ export type {
   BimQuantityEntry,
   BimQuantityIndex,
   BimTypeAggregate,
+  BimTypeNameAggregate,
 } from "../../shared/bimTypes.js";

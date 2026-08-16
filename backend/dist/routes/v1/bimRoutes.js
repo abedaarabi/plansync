@@ -7,6 +7,7 @@ import { webStreamToBuffer } from "../../lib/bim/streamUtils.js";
 import { notifyBimJobEvent } from "../../lib/bim/bimJobNotify.js";
 import { toQuantityIndexSummary } from "../../lib/bim/quantityIndexBuilder.js";
 import { enqueueBimConversion, processBimConversion, storeFragmentsBuffer, } from "../../lib/bim/conversionProcessor.js";
+import { groupEntriesForCostTakeoff } from "../../lib/bim/takeoffGrouping.js";
 import { clearCoordTransform, getDrawingLevelMaps, getDrawingSheets, getPublishedModelLevels, getPublishStatusCounts, getStoreysResponseForFileVersion, getSyncContext, publishModel, saveCoordTransform, suggestMappingsForVersion, updateDrawingMaps, } from "../../lib/bim/bimPublish.js";
 import { drawingCoordTransformPutSchema } from "../../lib/bim/coordTransformSchema.js";
 import { authorizeBimFileVersion, loadBimFileVersion, readBimQuantityIndex, requireBimPro, } from "./bimRouteHelpers.js";
@@ -222,13 +223,19 @@ export function registerBimRoutes(r, needUser, env) {
         });
     });
     r.post("/file-versions/:fileVersionId/bim/convert", needUser, async (c) => {
+        const body = z
+            .object({ force: z.boolean().optional() })
+            .partial()
+            .parse(await c.req.json().catch(() => ({})));
         const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
             requirePro: true,
         });
         if ("response" in auth)
             return auth.response;
         const { fv } = auth;
-        const jobId = await enqueueBimConversion(env, fv.id, c.get("user").id);
+        const jobId = await enqueueBimConversion(env, fv.id, c.get("user").id, {
+            force: body.force === true,
+        });
         return c.json({ jobRunId: jobId, status: "queued" });
     });
     r.get("/file-versions/:fileVersionId/bim/fragments", needUser, async (c) => {
@@ -426,10 +433,11 @@ export function registerBimRoutes(r, needUser, env) {
             ? `guid:${sortedGuids[0]}`
             : `agg:${sortedGuids.length}:${sortedGuids[0]?.slice(0, 8)}`;
         const ifcType = entries[0]?.ifcType ?? null;
+        const typeName = entries[0]?.typeName?.trim() || null;
         const label = body.label ??
             (entries.length === 1
-                ? (entries[0]?.name ?? entries[0]?.ifcType ?? "BIM element")
-                : `${entries.length}× ${ifcType ?? "elements"}`);
+                ? (typeName ?? entries[0]?.name ?? entries[0]?.ifcType ?? "BIM element")
+                : `${entries.length}× ${typeName ?? ifcType ?? "elements"}`);
         const line = await prisma.takeoffLine.upsert({
             where: { fileVersionId_sourceBimKey: { fileVersionId: fv.id, sourceBimKey } },
             create: {
@@ -449,7 +457,11 @@ export function registerBimRoutes(r, needUser, env) {
                 ifcType,
                 quantitySource: entries[0]?.quantitySource ?? "computed",
                 sourceFileVersionAtCreate: fv.version,
-                bimMetadata: { quantityKind: body.quantityKind, guids: sortedGuids },
+                bimMetadata: {
+                    quantityKind: body.quantityKind,
+                    guids: sortedGuids,
+                    typeName,
+                },
             },
             update: {
                 label,
@@ -458,7 +470,11 @@ export function registerBimRoutes(r, needUser, env) {
                 notes: body.notes ?? null,
                 materialId: body.materialId ?? undefined,
                 sourceIfcGuids: sortedGuids,
-                bimMetadata: { quantityKind: body.quantityKind, guids: sortedGuids },
+                bimMetadata: {
+                    quantityKind: body.quantityKind,
+                    guids: sortedGuids,
+                    typeName,
+                },
             },
         });
         return c.json({ takeoffLineId: line.id, quantity: quantity.toString(), unit });
@@ -482,47 +498,72 @@ export function registerBimRoutes(r, needUser, env) {
             where: { workspaceId: fv.file.project.workspaceId },
             select: { id: true, name: true, unit: true },
         });
-        const types = body.ifcTypes?.length ? body.ifcTypes : Object.keys(index.byType);
+        const pool = body.ifcTypes?.length
+            ? index.elements.filter((e) => body.ifcTypes.includes(e.ifcType))
+            : index.elements;
+        const groups = groupEntriesForCostTakeoff(pool);
         const mapped = [];
         const created = [];
-        for (const ifcType of types) {
-            const agg = index.byType[ifcType];
-            if (!agg)
+        for (const group of groups) {
+            if (group.guids.length === 0)
                 continue;
-            const clean = ifcType.replace(/^Ifc/i, "");
-            const mat = materials.find((m) => m.name.toLowerCase().includes(clean.toLowerCase())) ??
-                materials.find((m) => clean.toLowerCase().includes(m.name.toLowerCase().slice(0, 4))) ??
+            const matchNeedle = group.label;
+            const mat = materials.find((m) => m.name.toLowerCase().includes(matchNeedle.toLowerCase())) ??
+                materials.find((m) => matchNeedle.toLowerCase().includes(m.name.toLowerCase().slice(0, 4))) ??
                 null;
-            mapped.push({ ifcType, materialId: mat?.id ?? null, materialName: mat?.name ?? null });
-            if (body.createLines && agg.guids.length > 0) {
-                const entries = index.elements.filter((e) => e.ifcType === ifcType);
-                const rollup = rollupQuantities(entries);
-                const unit = rollup.volume != null ? "m³" : rollup.area != null ? "m²" : "ea";
-                const quantity = rollup.volume ?? rollup.area ?? rollup.count;
-                const sourceBimKey = `type:${ifcType}`;
-                const line = await prisma.takeoffLine.upsert({
-                    where: { fileVersionId_sourceBimKey: { fileVersionId: fv.id, sourceBimKey } },
-                    create: {
-                        workspaceId: fv.file.project.workspaceId,
-                        projectId: fv.file.projectId,
-                        fileId: fv.fileId,
-                        fileVersionId: fv.id,
-                        materialId: mat?.id ?? null,
-                        label: clean,
-                        quantity,
-                        unit,
-                        sourceType: "bim",
-                        sourceBimKey,
-                        ifcType,
-                        sourceIfcGuids: agg.guids,
-                        quantitySource: "computed",
-                        sourceFileVersionAtCreate: fv.version,
-                        bimMetadata: { autoMapped: true, ifcType },
+            mapped.push({
+                ifcType: group.ifcType,
+                typeName: group.typeName,
+                label: group.label,
+                materialId: mat?.id ?? null,
+                materialName: mat?.name ?? null,
+                source: group.source,
+            });
+            if (!body.createLines)
+                continue;
+            const rollup = rollupQuantities(group.entries);
+            const unit = rollup.volume != null ? "m³" : rollup.area != null ? "m²" : "ea";
+            const quantity = rollup.volume ?? rollup.area ?? rollup.count;
+            const sourceBimKey = group.key;
+            const line = await prisma.takeoffLine.upsert({
+                where: { fileVersionId_sourceBimKey: { fileVersionId: fv.id, sourceBimKey } },
+                create: {
+                    workspaceId: fv.file.project.workspaceId,
+                    projectId: fv.file.projectId,
+                    fileId: fv.fileId,
+                    fileVersionId: fv.id,
+                    materialId: mat?.id ?? null,
+                    label: group.label,
+                    quantity,
+                    unit,
+                    sourceType: "bim",
+                    sourceBimKey,
+                    ifcType: group.ifcType,
+                    sourceIfcGuids: group.guids,
+                    quantitySource: "computed",
+                    sourceFileVersionAtCreate: fv.version,
+                    bimMetadata: {
+                        autoMapped: true,
+                        ifcType: group.ifcType,
+                        typeName: group.typeName,
+                        costGroupSource: group.source,
                     },
-                    update: { quantity, unit, materialId: mat?.id ?? undefined, sourceIfcGuids: agg.guids },
-                });
-                created.push(line.id);
-            }
+                },
+                update: {
+                    quantity,
+                    unit,
+                    materialId: mat?.id ?? undefined,
+                    sourceIfcGuids: group.guids,
+                    label: group.label,
+                    bimMetadata: {
+                        autoMapped: true,
+                        ifcType: group.ifcType,
+                        typeName: group.typeName,
+                        costGroupSource: group.source,
+                    },
+                },
+            });
+            created.push(line.id);
         }
         return c.json({ mapped, createdLineIds: created });
     });

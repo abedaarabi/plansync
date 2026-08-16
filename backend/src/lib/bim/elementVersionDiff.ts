@@ -22,6 +22,7 @@ function searchableAttrs(entry: BimQuantityEntry): { key: string; value: string 
   };
   push("ifc_type", entry.ifcType);
   push("name", entry.name);
+  push("type_name", entry.typeName);
   push("level", entry.level);
   push("material", entry.material);
   push("discipline", entry.discipline);
