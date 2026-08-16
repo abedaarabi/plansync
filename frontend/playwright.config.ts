@@ -14,4 +14,11 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // CI builds then `next start`. Locally reuse an existing `npm run dev` when present.
+  webServer: {
+    command: process.env.CI ? "npm run start" : "npm run dev",
+    url: baseURL,
+    reuseExistingServer: !process.env.CI,
+    timeout: 180_000,
+  },
 });
