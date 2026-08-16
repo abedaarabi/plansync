@@ -1,4 +1,4 @@
-import { buildTransactionalEmailHtml, escapeHtml } from "./transactionalEmailLayout.js";
+import { buildTransactionalEmailHtml, escapeHtml, planSyncWordmarkHtml, } from "./transactionalEmailLayout.js";
 export function buildFieldReportsPageUrl(env, projectId, reportQuery) {
     const base = env.PUBLIC_APP_URL.replace(/\/$/, "");
     const q = reportQuery && reportQuery.length > 0 ? `?report=${encodeURIComponent(reportQuery)}` : "";
@@ -157,7 +157,7 @@ function buildDailyBlocksHtml(report, include) {
         const capBlock = caps.length > 0
             ? `<p style="margin:8px 0 0;font-size:13px;color:#475569">${escapeHtml(caps.join(" · "))}</p>`
             : "";
-        parts.push(sectionHtml("Photos", `<p style="margin:0;font-size:14px;line-height:1.6;color:#334155">${escapeHtml(String(n))} photo(s) on file in PlanSync.</p>${capBlock}`));
+        parts.push(sectionHtml("Photos", `<p style="margin:0;font-size:14px;line-height:1.6;color:#334155">${escapeHtml(String(n))} photo(s) on file in ${planSyncWordmarkHtml({ planColor: "#334155" })}.</p>${capBlock}`));
     }
     const notes = report.notes?.trim();
     if (notes) {
