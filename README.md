@@ -3,7 +3,7 @@
 - **`frontend/`** — Next.js 16 app (marketing, local PDF viewer, enterprise shell, PWA).
 - **`backend/`** — Hono API and **Prisma** schema (`backend/prisma/`), Better Auth, Stripe webhooks, S3 presigns, workspaces/projects/files/issues, audit log, sheet locks, storage alerts (Resend).
 
-**Full developer guide** (architecture, environments, Prisma, troubleshooting): [docs/getting-started.md](docs/getting-started.md). **CI** runs `npm run check` on PRs and pushes (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+**Full developer guide** (architecture, environments, Prisma, troubleshooting): [docs/getting-started.md](docs/getting-started.md). **CI** runs `npm run check` on PRs and pushes; on `main` it also builds/pushes GHCR images and triggers Dokploy pull-only deploys (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and [docs/deploy-dokploy.md](docs/deploy-dokploy.md)).
 
 ## Quick start
 

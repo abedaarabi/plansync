@@ -5,6 +5,19 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/plansync-frontend
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/plansync-backend
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -14,7 +27,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
 
       - name: Install
@@ -31,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - name: Install
         run: npm ci
@@ -39,3 +52,149 @@ jobs:
         run: cd frontend && npx playwright install --with-deps chromium
       - name: E2E smoke (toggle job if-condition to enable)
         run: cd frontend && npm run test:e2e
+
+  changes:
+    runs-on: ubuntu-latest
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+      deploy: ${{ steps.filter.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.npmrc'
+              - 'scripts/docker-npm-ci.sh'
+            backend:
+              - 'backend/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.npmrc'
+              - 'scripts/docker-npm-ci.sh'
+            deploy:
+              - 'frontend/**'
+              - 'backend/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.npmrc'
+              - 'scripts/docker-npm-ci.sh'
+              - 'docker-compose.deploy.yml'
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    needs: [check, changes]
+    if: needs.changes.outputs.frontend == 'true'
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=raw,value=production
+            type=sha,format=long,prefix=
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}
+            NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_SOCIAL_AUTH=${{ vars.NEXT_PUBLIC_SOCIAL_AUTH }}
+            NEXT_PUBLIC_SMART_UPLOAD_FLOW=${{ vars.NEXT_PUBLIC_SMART_UPLOAD_FLOW }}
+            NEXT_PUBLIC_UMAMI_URL=${{ vars.NEXT_PUBLIC_UMAMI_URL }}
+            NEXT_PUBLIC_UMAMI_WEBSITE_ID=${{ vars.NEXT_PUBLIC_UMAMI_WEBSITE_ID }}
+            API_PROXY_TARGET=http://backend:8787
+          cache-from: type=gha,scope=plansync-frontend
+          cache-to: type=gha,mode=max,scope=plansync-frontend
+
+  build-backend:
+    runs-on: ubuntu-latest
+    needs: [check, changes]
+    if: needs.changes.outputs.backend == 'true'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=raw,value=production
+            type=sha,format=long,prefix=
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=plansync-backend
+          cache-to: type=gha,mode=max,scope=plansync-backend
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [check, changes, build-frontend, build-backend]
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.check.result == 'success' &&
+      needs.changes.result == 'success' &&
+      needs.changes.outputs.deploy == 'true' &&
+      (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped') &&
+      (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped')
+    steps:
+      - name: Require Dokploy webhook secret
+        env:
+          DOKPLOY_DEPLOY_WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
+        run: |
+          if [ -z "$DOKPLOY_DEPLOY_WEBHOOK" ]; then
+            echo "Missing repository secret DOKPLOY_DEPLOY_WEBHOOK."
+            echo "Add the Dokploy compose deploy webhook URL, then re-run this workflow."
+            exit 1
+          fi
+
+      - name: Trigger Dokploy pull-and-restart
+        env:
+          DOKPLOY_DEPLOY_WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
+        run: |
+          curl --fail --silent --show-error \
+            --request GET \
+            --max-time 60 \
+            "$DOKPLOY_DEPLOY_WEBHOOK"
+          echo
+          echo "Dokploy deploy webhook accepted."

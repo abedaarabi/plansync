@@ -1,14 +1,20 @@
-# Full stack for production / Dokploy (build from repo root).
+# Full stack for production / Dokploy (pull pre-built images; do not build on the VPS).
 # Postgres is external: set DATABASE_URL to your managed DB or another container on the same Docker network.
 #
-# Usage:
+# Images are built and pushed by GitHub Actions (see .github/workflows/ci.yml):
+#   ghcr.io/<owner>/plansync-frontend:<tag>
+#   ghcr.io/<owner>/plansync-backend:<tag>
+#
+# Usage (after images exist in GHCR and the host is logged in):
 #   export DATABASE_URL="postgresql://user:pass@host:5432/plansync"
 #   export PUBLIC_APP_URL=https://your-domain.example
 #   export BETTER_AUTH_SECRET=...
-#   docker compose -f docker-compose.deploy.yml up -d --build
+#   docker compose -f docker-compose.deploy.yml pull
+#   docker compose -f docker-compose.deploy.yml up -d
 #
 # Dokploy: set env in the UI (project or compose env). Traefik needs external network `dokploy-network`.
 # Web Push: add VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT here so the `backend` service receives them (not only on `frontend`).
+# Rollback: set FRONTEND_IMAGE_TAG / BACKEND_IMAGE_TAG to a prior git SHA (full 40-char) and redeploy.
 
 networks:
   internal:
@@ -18,9 +24,8 @@ networks:
 
 services:
   backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    image: ${BACKEND_IMAGE:-ghcr.io/abedaarabi/plansync-backend}:${BACKEND_IMAGE_TAG:-production}
+    pull_policy: always
     restart: unless-stopped
     networks:
       - internal
@@ -70,6 +75,18 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/',{headers:{Accept:'application/json'}}).then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dokploy-network"
@@ -79,24 +96,15 @@ services:
       - "traefik.http.services.plansync-api.loadbalancer.server.port=${BACKEND_PORT:-8787}"
 
   frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-      args:
-        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-${PUBLIC_APP_URL:-}}
-        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-${PUBLIC_APP_URL:-}}
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
-        NEXT_PUBLIC_SOCIAL_AUTH: ${NEXT_PUBLIC_SOCIAL_AUTH:-}
-        NEXT_PUBLIC_SMART_UPLOAD_FLOW: ${NEXT_PUBLIC_SMART_UPLOAD_FLOW:-}
-        NEXT_PUBLIC_UMAMI_URL: ${NEXT_PUBLIC_UMAMI_URL:-}
-        NEXT_PUBLIC_UMAMI_WEBSITE_ID: ${NEXT_PUBLIC_UMAMI_WEBSITE_ID:-}
-        API_PROXY_TARGET: http://backend:${BACKEND_PORT:-8787}
+    image: ${FRONTEND_IMAGE:-ghcr.io/abedaarabi/plansync-frontend}:${FRONTEND_IMAGE_TAG:-production}
+    pull_policy: always
     restart: unless-stopped
     networks:
       - internal
       - dokploy-network
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     # No host `ports:` — Traefik reaches this service on dokploy-network (see labels). Publishing
     # 3000:3000 conflicts with other stacks / Dokploy’s gateway on the same host.
     environment:
@@ -105,6 +113,18 @@ services:
       PORT: "3000"
       API_PROXY_TARGET: http://backend:${BACKEND_PORT:-8787}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dokploy-network"

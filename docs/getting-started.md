@@ -222,13 +222,13 @@ This runs lint, typecheck, `format:check`, **`npm run test`** (Vitest in `backen
 
 From the repo root, **`npm run test`** runs both. Add tests for new behavior next to the code under test (`*.test.ts`). End-to-end tests with a browser are not in this repo yet; add Playwright or similar in CI when you need full user flows.
 
-On **GitHub**, the workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs **`npm run check`** on pushes and pull requests to `main`.
+On **GitHub**, the workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs **`npm run check`** on pushes and pull requests. On **`main`**, after checks pass, it builds/pushes private GHCR images for changed services and triggers a Dokploy pull-only deploy webhook (see [deploy-dokploy.md](./deploy-dokploy.md)).
 
 ---
 
 ## 9. Production deployment
 
-- **Docker Compose** (Next + API + external Postgres): [deploy-dokploy.md](./deploy-dokploy.md).
+- **Docker Compose / Dokploy** (pull pre-built GHCR images; Next + API + external Postgres): [deploy-dokploy.md](./deploy-dokploy.md).
 
 Production databases should use **`prisma migrate deploy`**, not `db push`, unless you have a deliberate exception.
 
