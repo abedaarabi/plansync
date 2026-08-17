@@ -909,7 +909,11 @@ button:active:not(:disabled),
     --bim-disabled: #94a3b8;
     /* Fits 40–44px rail buttons + padding so icons stay centered. */
     --bim-rail-w: 3.25rem;
-    --bim-dock-w: 20rem;
+    --bim-dock-w: 22.5rem;
+    /* Side docks stay translucent so the model reads through them. */
+    --bim-dock-bg: color-mix(in srgb, var(--bim-panel) 84%, transparent);
+    --bim-dock-header-bg: color-mix(in srgb, var(--bim-panel) 78%, transparent);
+    --bim-dock-blur: 18px;
     --bim-bottom-bar-h: 3.25rem;
     --bim-bottom-bar-offset: calc(
       var(--bim-bottom-bar-h) + env(safe-area-inset-bottom, 0px) + 12px
@@ -937,7 +941,7 @@ button:active:not(:disabled),
 
   @media (min-width: 640px) and (max-width: 1023px) {
     .bim-viewer {
-      --bim-dock-w: min(24rem, 44vw);
+      --bim-dock-w: min(26rem, 48vw);
       --bim-bottom-bar-h: 3.375rem;
       --bim-joystick-pad: 120px;
       --bim-joystick-knob: 52px;
@@ -2110,11 +2114,32 @@ button:active:not(:disabled),
   .bim-glass-dock__header {
     @apply flex shrink-0 flex-col gap-0 border-b px-3 py-2;
     border-color: var(--bim-border);
-    background: color-mix(in srgb, var(--bim-panel) 94%, transparent);
+    background: var(--bim-dock-header-bg);
+  }
+
+  .bim-glass-dock__header[data-movable="true"] {
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .bim-glass-dock__header[data-movable="true"]:active {
+    cursor: grabbing;
   }
 
   .bim-glass-dock__header-row {
     @apply flex items-center gap-2;
+  }
+
+  .bim-glass-dock__grip {
+    display: none;
+    color: var(--bim-text-subtle);
+  }
+
+  @media (min-width: 640px) {
+    .bim-glass-dock__grip {
+      display: inline-flex;
+      flex-shrink: 0;
+    }
   }
 
   .bim-canvas-wrap {
@@ -2563,7 +2588,7 @@ button:active:not(:disabled),
 
   .bim-glass-dock-backdrop {
     @apply fixed inset-0 z-30;
-    background: rgba(15, 23, 42, 0.18);
+    background: transparent;
   }
 
   .bim-glass-dock__grab {
@@ -2588,9 +2613,15 @@ button:active:not(:disabled),
     right: calc(env(safe-area-inset-right, 0px) + var(--bim-rail-w) + 12px);
   }
 
+  .bim-glass-dock.bim-glass-surface {
+    background: var(--bim-dock-bg);
+    backdrop-filter: blur(var(--bim-dock-blur)) saturate(1.05);
+    -webkit-backdrop-filter: blur(var(--bim-dock-blur)) saturate(1.05);
+  }
+
   .bim-glass-dock__body {
     @apply flex min-h-0 flex-1 flex-col overflow-hidden;
-    background: var(--bim-panel);
+    background: transparent;
   }
 
   /* Single scroll owner inside glass docks / clash sheet (avoids nested iOS scroll lock). */

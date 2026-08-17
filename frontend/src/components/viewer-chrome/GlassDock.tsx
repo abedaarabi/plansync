@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { useEffect, type ReactNode } from "react";
+import { GripVertical, X } from "lucide-react";
+import { useDockDrag } from "./useDockDrag";
 
 export type ChromeDockTone = "viewer" | "bim";
 
@@ -14,11 +15,14 @@ export function GlassDock(props: {
   onClose: () => void;
   closeOnOutsideClick?: boolean;
   liftForBottomChrome?: boolean;
+  /** Allow dragging the panel by its header to any spot over the canvas. */
+  movable?: boolean;
   children: ReactNode;
 }) {
   const tone = props.tone ?? "viewer";
   const prefix = tone === "bim" ? "bim" : "viewer";
-  const panelRef = useRef<HTMLElement | null>(null);
+  const movable = props.movable === true;
+  const { panelRef, panelStyle, handleProps } = useDockDrag(movable);
   const closeOnOutsideClick = props.closeOnOutsideClick !== false;
 
   useEffect(() => {
@@ -60,11 +64,25 @@ export function GlassDock(props: {
         aria-label={props.title}
         data-side={props.side}
         data-lift={props.liftForBottomChrome ? "bottom-chrome" : undefined}
+        style={panelStyle}
         className={`${prefix}-glass-dock ${prefix}-glass-surface ${prefix}-glass-dock-enter`}
       >
-        <div className={`${prefix}-glass-dock__header`}>
+        <div
+          className={`${prefix}-glass-dock__header`}
+          data-movable={movable ? "true" : undefined}
+          {...(movable ? handleProps : null)}
+        >
           <span className={`${prefix}-glass-dock__grab`} aria-hidden />
           <div className={`${prefix}-glass-dock__header-row`}>
+            {movable ? (
+              <span
+                className={`${prefix}-glass-dock__grip`}
+                title="Drag to move, double-click to reset"
+                aria-hidden
+              >
+                <GripVertical className="h-3.5 w-3.5" />
+              </span>
+            ) : null}
             <div className="min-w-0 flex-1">
               <p className={tone === "bim" ? "bim-panel-header-title" : "viewer-dock-header-title"}>
                 {props.title}

@@ -16,5 +16,5 @@ export function BimGlassDock(props: {
   closeOnOutsideClick?: boolean;
   children: ReactNode;
 }) {
-  return <GlassDock tone="bim" {...props} />;
+  return <GlassDock tone="bim" movable {...props} />;
 }
