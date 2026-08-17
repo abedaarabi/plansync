@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CircleAlert, Filter, Loader2, Search, X } from "lucide-react";
+import { CircleAlert, Filter, Loader2, Search, TableProperties, X } from "lucide-react";
 import { toast } from "sonner";
 import { resolveElementDisplayColor } from "@/lib/bim/elementDisplay";
 import type { BimQuantityIndex } from "@/lib/bim/types";
@@ -325,6 +325,9 @@ export function BimPropertiesPanel(props: {
         aria-label="Object properties"
       >
         <div className="bim-panel-header">
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--bim-border)] bg-[var(--bim-hover)] text-[var(--bim-icon)]">
+            <TableProperties className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+          </span>
           <div className="min-w-0 flex-1">
             <p className="bim-panel-header-title">
               {selection.name ?? selection.ifcType ?? "Object"}

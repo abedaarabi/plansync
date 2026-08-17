@@ -13,9 +13,11 @@ import {
   GitCompare,
   Home,
   Loader2,
+  Pencil,
   ScanSearch,
   Sparkles,
   TableProperties,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiUrl } from "@/lib/api-url";
@@ -194,6 +196,19 @@ type BimDockId =
   | "filters"
   | "clashes"
   | "compare";
+
+const BIM_DOCK_ICONS: Record<BimDockId, LucideIcon> = {
+  objects: ScanSearch,
+  models: Boxes,
+  visibility: Eye,
+  quality: Sparkles,
+  properties: TableProperties,
+  filters: Filter,
+  compare: GitCompare,
+  takeoffViews: ClipboardList,
+  issues: CircleAlert,
+  clashes: Crosshair,
+};
 
 type Phase = BimLoadPhase | { kind: "ready" } | { kind: "error"; message: string };
 
@@ -2991,25 +3006,25 @@ export function BimViewerShell(props: {
         {
           id: "issues",
           label: "Issues",
-          icon: CircleAlert,
+          icon: BIM_DOCK_ICONS.issues,
           badge: issues.length > 0 ? issues.length : undefined,
         },
         {
           id: "clashes",
           label: "Clashes",
-          icon: Crosshair,
+          icon: BIM_DOCK_ICONS.clashes,
           badge: clash.openCount > 0 ? clash.openCount : undefined,
         },
         {
           id: "properties",
           label: "Properties",
-          icon: TableProperties,
+          icon: BIM_DOCK_ICONS.properties,
           badge: selectionCount > 0 ? selectionCount : undefined,
         },
         {
           id: "filters",
           label: "Filters",
-          icon: Filter,
+          icon: BIM_DOCK_ICONS.filters,
           badge:
             hasActiveFilter(filterState) || filterState.colorize?.enabled
               ? filterMatches.length
@@ -3018,22 +3033,22 @@ export function BimViewerShell(props: {
         {
           id: "compare",
           label: "Compare",
-          icon: GitCompare,
+          icon: BIM_DOCK_ICONS.compare,
           badge:
             activeDock === "compare" && compare.changedCount > 0 ? compare.changedCount : undefined,
         },
-        { id: "takeoffViews", label: "Takeoff and views", icon: ClipboardList },
+        { id: "takeoffViews", label: "Takeoff and views", icon: BIM_DOCK_ICONS.takeoffViews },
       ],
       [
-        { id: "objects", label: "Objects", icon: ScanSearch },
+        { id: "objects", label: "Objects", icon: BIM_DOCK_ICONS.objects },
         {
           id: "models",
           label: "Models",
-          icon: Boxes,
+          icon: BIM_DOCK_ICONS.models,
           badge: isFederated ? federationMembers.length : undefined,
         },
-        { id: "visibility", label: "Visibility", icon: Eye },
-        { id: "quality", label: "Quality", icon: Sparkles },
+        { id: "visibility", label: "Visibility", icon: BIM_DOCK_ICONS.visibility },
+        { id: "quality", label: "Quality", icon: BIM_DOCK_ICONS.quality },
       ],
     ],
     [
@@ -3049,17 +3064,34 @@ export function BimViewerShell(props: {
     ],
   );
 
-  const dockMeta: Record<BimDockId, { title: string; subtitle: string }> = {
-    objects: { title: "Objects", subtitle: "Browse and search IFC elements" },
-    models: { title: "Models", subtitle: "Federation and loaded files" },
-    visibility: { title: "Visibility", subtitle: "Levels and disciplines" },
-    quality: { title: "Quality", subtitle: "LOQ and viewport appearance" },
+  const dockMeta: Record<BimDockId, { title: string; subtitle: string; icon: LucideIcon }> = {
+    objects: {
+      title: "Objects",
+      subtitle: "Browse and search IFC elements",
+      icon: BIM_DOCK_ICONS.objects,
+    },
+    models: {
+      title: "Models",
+      subtitle: "Federation and loaded files",
+      icon: BIM_DOCK_ICONS.models,
+    },
+    visibility: {
+      title: "Visibility",
+      subtitle: "Levels and disciplines",
+      icon: BIM_DOCK_ICONS.visibility,
+    },
+    quality: {
+      title: "Quality",
+      subtitle: "LOQ and viewport appearance",
+      icon: BIM_DOCK_ICONS.quality,
+    },
     properties: {
       title: "Properties",
       subtitle:
         selectionCount > 0
           ? `${selectionCount} element${selectionCount === 1 ? "" : "s"} selected`
           : "IFC element data",
+      icon: BIM_DOCK_ICONS.properties,
     },
     filters: {
       title: "Filters",
@@ -3067,23 +3099,31 @@ export function BimViewerShell(props: {
         hasActiveFilter(filterState) || filterState.colorize?.enabled
           ? `${filterMatches.length.toLocaleString()} elements`
           : "Search, isolate, and colorize",
+      icon: BIM_DOCK_ICONS.filters,
     },
     compare: {
       title: "Compare",
       subtitle: compare.changes
         ? `v${compare.changes.baseVersion} → v${compare.changes.compareVersion}`
         : "Added, modified, and removed elements",
+      icon: BIM_DOCK_ICONS.compare,
     },
     takeoffViews: {
       title: "Takeoff & views",
       subtitle: "Quantities, export, and saved cameras",
+      icon: BIM_DOCK_ICONS.takeoffViews,
     },
-    issues: { title: "Issues", subtitle: `${issues.length} on this model` },
+    issues: {
+      title: "Issues",
+      subtitle: `${issues.length} on this model`,
+      icon: BIM_DOCK_ICONS.issues,
+    },
     clashes: {
       title: "Clash detection",
       subtitle: clash.activeTest
         ? `${clash.openCount} open · ${clash.activeTest.name}`
         : "Setup sets, run tests, review results",
+      icon: BIM_DOCK_ICONS.clashes,
     },
   };
 
@@ -3414,6 +3454,7 @@ export function BimViewerShell(props: {
             open
             title={dockMeta[activeDock].title}
             subtitle={dockMeta[activeDock].subtitle}
+            icon={dockMeta[activeDock].icon}
             onClose={() => setActiveDock(null)}
           >
             <BimLeftDockContent
@@ -3454,6 +3495,7 @@ export function BimViewerShell(props: {
             open
             title={dockMeta.properties.title}
             subtitle={dockMeta.properties.subtitle}
+            icon={dockMeta.properties.icon}
             closeOnOutsideClick={false}
             onClose={() => setActiveDock(null)}
           >
@@ -3481,6 +3523,7 @@ export function BimViewerShell(props: {
             open
             title={dockMeta.filters.title}
             subtitle={dockMeta.filters.subtitle}
+            icon={dockMeta.filters.icon}
             onClose={() => setActiveDock(null)}
           >
             <BimFiltersPanel
@@ -3506,6 +3549,7 @@ export function BimViewerShell(props: {
             open
             title={dockMeta.compare.title}
             subtitle={dockMeta.compare.subtitle}
+            icon={dockMeta.compare.icon}
             onClose={() => setActiveDock(null)}
           >
             <BimCompareDockContent
@@ -3522,6 +3566,7 @@ export function BimViewerShell(props: {
             open
             title={dockMeta.takeoffViews.title}
             subtitle={dockMeta.takeoffViews.subtitle}
+            icon={dockMeta.takeoffViews.icon}
             onClose={() => setActiveDock(null)}
           >
             <BimTakeoffViewsDockContent
@@ -3556,6 +3601,7 @@ export function BimViewerShell(props: {
             open
             title={dockMeta.issues.title}
             subtitle={dockMeta.issues.subtitle}
+            icon={dockMeta.issues.icon}
             onClose={() => {
               setActiveDock(null);
               setIssuePlacementActive(false);
@@ -3597,6 +3643,7 @@ export function BimViewerShell(props: {
             open
             title={dockMeta.clashes.title}
             subtitle={dockMeta.clashes.subtitle}
+            icon={dockMeta.clashes.icon}
             closeOnOutsideClick={false}
             onClose={closeClashDock}
           >
@@ -3856,6 +3903,7 @@ export function BimViewerShell(props: {
               issueCreateDraft.bimAnchor?.ifcType ||
               props.fileName
             }
+            icon={CircleAlert}
             onClose={() => setIssueCreateDraft(null)}
             closeOnOutsideClick={false}
           >
@@ -3924,6 +3972,7 @@ export function BimViewerShell(props: {
             open
             title="Edit issue"
             subtitle={editIssue.title}
+            icon={Pencil}
             onClose={() => {
               setEditIssue(null);
               reloadIssues();

@@ -1,5 +1,6 @@
 "use client";
 
+import { GitCompare } from "lucide-react";
 import { useProjectMeasurementSystem } from "@/hooks/useProjectMeasurementSystem";
 import {
   projectDisplayUnits,
@@ -43,7 +44,10 @@ export function BimComparePanel(props: {
 
   return (
     <div className="bim-detail-card">
-      <p className="bim-section-title mb-1">Version compare</p>
+      <p className="bim-section-title mb-1 inline-flex items-center gap-1.5">
+        <GitCompare className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+        Version compare
+      </p>
       <p className="mb-3 text-[11px] text-[var(--bim-text-muted)]">
         v{props.baseVersion} → v{props.compareVersion}
       </p>

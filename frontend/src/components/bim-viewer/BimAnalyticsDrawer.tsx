@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BarChart3, Layers3, Shapes, X } from "lucide-react";
+import { BarChart3, Layers3, Shapes, Wrench, X } from "lucide-react";
 import type { BimQuantityIndex } from "@/lib/bim/types";
 import { bimIndexBlockingLoad } from "@/lib/bim/indexStatus";
 import {
@@ -72,13 +72,25 @@ export function BimAnalyticsDrawer(props: {
             <TabBtn
               active={tab === "overview"}
               label="Overview"
+              icon={BarChart3}
               onClick={() => setTab("overview")}
             />
-            <TabBtn active={tab === "types"} label="Types" onClick={() => setTab("types")} />
-            <TabBtn active={tab === "levels"} label="Levels" onClick={() => setTab("levels")} />
+            <TabBtn
+              active={tab === "types"}
+              label="Types"
+              icon={Shapes}
+              onClick={() => setTab("types")}
+            />
+            <TabBtn
+              active={tab === "levels"}
+              label="Levels"
+              icon={Layers3}
+              onClick={() => setTab("levels")}
+            />
             <TabBtn
               active={tab === "disciplines"}
               label="Disciplines"
+              icon={Wrench}
               onClick={() => setTab("disciplines")}
             />
           </div>
@@ -135,7 +147,13 @@ export function BimAnalyticsDrawer(props: {
   );
 }
 
-function TabBtn(props: { active: boolean; label: string; onClick: () => void }) {
+function TabBtn(props: {
+  active: boolean;
+  label: string;
+  icon: typeof BarChart3;
+  onClick: () => void;
+}) {
+  const Icon = props.icon;
   return (
     <button
       type="button"
@@ -143,8 +161,9 @@ function TabBtn(props: { active: boolean; label: string; onClick: () => void }) 
       aria-selected={props.active}
       data-active={props.active ? "true" : undefined}
       onClick={props.onClick}
-      className="bim-analytics-drawer__tab"
+      className="bim-analytics-drawer__tab inline-flex items-center gap-1"
     >
+      <Icon className="h-3 w-3 shrink-0" aria-hidden />
       {props.label}
     </button>
   );

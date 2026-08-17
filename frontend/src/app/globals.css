@@ -534,6 +534,19 @@ button:active:not(:disabled),
   gap: 0.5rem;
 }
 
+.viewer-glass-dock__icon {
+  display: inline-flex;
+  height: 1.75rem;
+  width: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  border: 1px solid var(--viewer-border);
+  background: var(--viewer-panel);
+  color: var(--viewer-icon);
+}
+
 .viewer-dock-header-title {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2130,6 +2143,13 @@ button:active:not(:disabled),
 
   .bim-glass-dock__header-row {
     @apply flex items-center gap-2;
+  }
+
+  .bim-glass-dock__icon {
+    @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border;
+    border-color: var(--bim-border);
+    background: var(--bim-hover);
+    color: var(--bim-icon);
   }
 
   .bim-glass-dock__grip {

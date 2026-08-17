@@ -14,7 +14,10 @@ export function BimSavedViewsPanel(props: {
     <div className="bim-detail-card">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
-          <p className="bim-section-title">Saved views</p>
+          <p className="bim-section-title inline-flex items-center gap-1.5">
+            <Bookmark className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+            Saved views
+          </p>
           <p className="mt-1 text-[11px] text-[var(--bim-text-muted)]">
             Bookmark camera positions for reviews and coordination.
           </p>

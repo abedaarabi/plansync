@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, MessageSquarePlus, TicketPlus, Trash2 } from "lucide-react";
+import {
+  Boxes,
+  CircleDot,
+  Loader2,
+  MessageSquare,
+  MessageSquarePlus,
+  TicketPlus,
+  Trash2,
+} from "lucide-react";
 import type { BimClashCommentRow, BimClashRow } from "@/lib/api-client/bim-clash";
 import { createClashComment, fetchClashComments, patchClash } from "@/lib/api-client/bim-clash";
 import type { BimClashStatus } from "@plansync/shared/bimClashTypes";
@@ -97,7 +105,10 @@ export function BimClashDetailPanel(props: {
       </div>
 
       <div className="space-y-1">
-        <p className="bim-section-title">Elements</p>
+        <p className="bim-section-title inline-flex items-center gap-1.5">
+          <Boxes className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+          Elements
+        </p>
         <div className="space-y-1">
           <button
             type="button"
@@ -137,7 +148,10 @@ export function BimClashDetailPanel(props: {
       </div>
 
       <div>
-        <p className="bim-section-title mb-1.5">Status</p>
+        <p className="bim-section-title mb-1.5 inline-flex items-center gap-1.5">
+          <CircleDot className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+          Status
+        </p>
         <div className="bim-segment">
           {STATUSES.map((s) => (
             <button
@@ -181,7 +195,10 @@ export function BimClashDetailPanel(props: {
       </div>
 
       <div>
-        <p className="bim-section-title mb-1.5">Comments</p>
+        <p className="bim-section-title mb-1.5 inline-flex items-center gap-1.5">
+          <MessageSquare className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+          Comments
+        </p>
         {loadingComments ? (
           <p className="text-[10px] text-[var(--bim-text-muted)]">Loading…</p>
         ) : comments.length === 0 ? (

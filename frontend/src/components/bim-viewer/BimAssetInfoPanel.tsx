@@ -58,6 +58,7 @@ export function BimAssetInfoPanel(props: {
       open
       title={asset.tag}
       subtitle={asset.name}
+      icon={Wrench}
       onClose={props.onClose}
       closeOnOutsideClick={false}
     >

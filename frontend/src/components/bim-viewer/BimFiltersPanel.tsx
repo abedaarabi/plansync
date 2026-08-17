@@ -200,7 +200,10 @@ export function BimFiltersPanel(props: {
       {/* Find & pick */}
       <div className="flex min-h-0 flex-1 flex-col px-3 pt-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="bim-section-title mb-0">Find elements</p>
+          <p className="bim-section-title mb-0 inline-flex items-center gap-1.5">
+            <Search className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+            Find elements
+          </p>
           {active ? (
             <button
               type="button"
@@ -377,7 +380,10 @@ export function BimFiltersPanel(props: {
       {/* View options — compact so the type list keeps the room */}
       <div className="space-y-2.5 border-t border-[var(--bim-border)] px-3 py-2.5">
         <div>
-          <p className="bim-section-title mb-1.5">Display</p>
+          <p className="bim-section-title mb-1.5 inline-flex items-center gap-1.5">
+            <Eye className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+            Display
+          </p>
           <div className="bim-segment bim-segment-compact" role="group" aria-label="Display mode">
             {DISPLAY_MODES.map((mode) => {
               const Icon = mode.icon;

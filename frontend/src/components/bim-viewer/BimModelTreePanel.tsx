@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  Layers,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -85,7 +86,8 @@ export function BimModelTreePanel(props: {
         </div>
       ) : (
         <div className="flex items-center justify-between border-b border-[var(--bim-border)] px-4 py-2">
-          <p className="text-[11px] font-medium text-[var(--bim-text-muted)]">
+          <p className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--bim-text-muted)]">
+            <Layers className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
             Levels & disciplines
           </p>
           <button

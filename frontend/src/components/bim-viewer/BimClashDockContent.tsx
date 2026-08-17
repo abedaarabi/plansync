@@ -309,20 +309,21 @@ export function BimClashDockContent(props: {
         <div className="bim-segment bim-segment-compact">
           {(
             [
-              ["results", "Results"],
-              ["setup", "Setup"],
+              ["results", "Results", List],
+              ["setup", "Setup", Settings2],
             ] as const
-          ).map(([id, label]) => (
+          ).map(([id, label, Icon]) => (
             <button
               key={id}
               type="button"
-              className="bim-segment-btn"
+              className="bim-segment-btn inline-flex items-center justify-center gap-1"
               data-active={tab === id ? "true" : undefined}
               onClick={() => {
                 setTab(id);
                 if (id === "results") setResultsPane("list");
               }}
             >
+              <Icon className="h-3 w-3 shrink-0" aria-hidden />
               {label}
               {id === "results" && props.clashes.length > 0 ? (
                 <span className="ml-1 tabular-nums opacity-70">{props.clashes.length}</span>

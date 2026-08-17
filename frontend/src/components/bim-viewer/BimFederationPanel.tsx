@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Loader2 } from "lucide-react";
+import { Boxes, Loader2 } from "lucide-react";
 import type { BimFederationMember } from "@/lib/bim/federation";
 import type { CloudFile } from "@/types/projects";
 import type { BimLoadedModel } from "./bimEngine";
@@ -58,7 +58,10 @@ export function BimFederationPanel(props: {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-[var(--bim-border)] px-4 py-3">
-        <p className="text-[12px] font-medium text-[var(--bim-text)]">Federated models</p>
+        <p className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--bim-text)]">
+          <Boxes className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+          Federated models
+        </p>
         <p className="mt-1 text-[11px] leading-relaxed text-[var(--bim-text-muted)]">
           Add IFC files from your project folders. Browsing starts in the same folder as the model
           you opened.

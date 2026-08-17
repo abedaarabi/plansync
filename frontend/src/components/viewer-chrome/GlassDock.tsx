@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { GripVertical, X } from "lucide-react";
+import { GripVertical, X, type LucideIcon } from "lucide-react";
 import { useDockDrag } from "./useDockDrag";
 
 export type ChromeDockTone = "viewer" | "bim";
@@ -12,6 +12,7 @@ export function GlassDock(props: {
   open: boolean;
   title: string;
   subtitle?: string;
+  icon?: LucideIcon;
   onClose: () => void;
   closeOnOutsideClick?: boolean;
   liftForBottomChrome?: boolean;
@@ -21,6 +22,7 @@ export function GlassDock(props: {
 }) {
   const tone = props.tone ?? "viewer";
   const prefix = tone === "bim" ? "bim" : "viewer";
+  const Icon = props.icon;
   const movable = props.movable === true;
   const { panelRef, panelStyle, handleProps } = useDockDrag(movable);
   const closeOnOutsideClick = props.closeOnOutsideClick !== false;
@@ -81,6 +83,11 @@ export function GlassDock(props: {
                 aria-hidden
               >
                 <GripVertical className="h-3.5 w-3.5" />
+              </span>
+            ) : null}
+            {Icon ? (
+              <span className={`${prefix}-glass-dock__icon`} aria-hidden>
+                <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
               </span>
             ) : null}
             <div className="min-w-0 flex-1">

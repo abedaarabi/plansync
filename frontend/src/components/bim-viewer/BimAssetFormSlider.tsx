@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { Wrench } from "lucide-react";
 import { toast } from "sonner";
 import {
   assetDraftFromRow,
@@ -147,6 +148,7 @@ export function BimAssetFormSlider(props: CreateProps | EditProps) {
       open={props.open}
       title={isEdit ? "Edit asset" : "New asset"}
       subtitle={`Linked to ${linkedLabel}${level ? ` · ${level}` : ""} · ${props.modelName}`}
+      icon={Wrench}
       onClose={props.onClose}
       closeOnOutsideClick={false}
     >

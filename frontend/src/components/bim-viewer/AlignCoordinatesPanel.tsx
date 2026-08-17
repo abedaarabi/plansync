@@ -372,13 +372,21 @@ export function AlignCoordinatesPanel(props: {
       onClose={props.onClose}
       panelMaxWidthClass="max-w-[min(960px,100vw)]"
       header={
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Align coordinates
-          </p>
-          <h2 className="text-base font-semibold text-[var(--enterprise-text)]">
-            {props.map.pdfFileName ?? "Drawing"} · page {props.map.pageIndex + 1}
-          </h2>
+        <div className="flex min-w-0 items-start gap-2.5">
+          <div
+            className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]"
+            aria-hidden
+          >
+            <Compass className="h-4 w-4 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Align coordinates
+            </p>
+            <h2 className="truncate text-base font-semibold text-[var(--enterprise-text)]">
+              {props.map.pdfFileName ?? "Drawing"} · page {props.map.pageIndex + 1}
+            </h2>
+          </div>
         </div>
       }
       footer={

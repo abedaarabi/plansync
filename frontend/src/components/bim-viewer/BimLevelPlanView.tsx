@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Box, Loader2 } from "lucide-react";
+import { Box, Loader2, Map } from "lucide-react";
 import type { BimEngine } from "./bimEngine";
 import { BimPdfPageEmbed } from "./BimPdfPageEmbed";
 import { drawPlanMinimap } from "@/lib/bim/planMinimap";
@@ -105,11 +105,16 @@ export function BimLevelPlanView({ engine, storey, level, onShowModel }: Props) 
   return (
     <div className="bim-level-plan absolute inset-0 z-[6] flex flex-col bg-[var(--bim-canvas)]">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--bim-border)] bg-[var(--bim-panel)] px-3 py-2">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]">
-            {drawing ? "Matched drawing" : "2D plan"}
-          </p>
-          <p className="truncate text-sm font-medium text-[var(--bim-text)]">{levelName}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--bim-border)] bg-[var(--bim-hover)] text-[var(--bim-icon)]">
+            <Map className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--bim-text-muted)]">
+              {drawing ? "Matched drawing" : "2D plan"}
+            </p>
+            <p className="truncate text-sm font-medium text-[var(--bim-text)]">{levelName}</p>
+          </div>
         </div>
         <button
           type="button"

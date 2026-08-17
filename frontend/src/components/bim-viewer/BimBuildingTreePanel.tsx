@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronRight, Folder, FolderOpen, Layers, Loader2, Pencil, Plus } from "lucide-react";
+import {
+  Building2,
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  Layers,
+  Loader2,
+  Pencil,
+  Plus,
+} from "lucide-react";
 import { toast } from "sonner";
 import { IfcFileIcon } from "@/components/icons/IfcFileIcon";
 import { PdfFileIcon } from "@/components/icons/PdfFileIcon";
@@ -122,10 +131,20 @@ export function BimBuildingTreePanel({
   return (
     <aside className="flex h-full min-h-0 w-full min-w-0 flex-col bg-[var(--enterprise-bg)] text-[var(--enterprise-text)]">
       <header className="shrink-0 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 py-3">
-        <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Building</p>
-        <p className="mt-0.5 truncate text-sm font-semibold text-[var(--enterprise-text)]">
-          {modelName.replace(/\.ifc$/i, "")}
-        </p>
+        <div className="flex min-w-0 items-start gap-2.5">
+          <div
+            className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]"
+            aria-hidden
+          >
+            <Building2 className="h-4 w-4 text-[var(--enterprise-text-muted)]" strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0">
+            <p className="enterprise-type-label text-[var(--enterprise-text-muted)]">Building</p>
+            <p className="mt-0.5 truncate text-sm font-semibold text-[var(--enterprise-text)]">
+              {modelName.replace(/\.ifc$/i, "")}
+            </p>
+          </div>
+        </div>
       </header>
 
       <div className="enterprise-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-2">

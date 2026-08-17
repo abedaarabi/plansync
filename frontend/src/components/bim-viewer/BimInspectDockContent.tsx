@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Box, TableProperties } from "lucide-react";
 import type { BimQuantityEntry, BimQuantityIndex } from "@/lib/bim/types";
 import type { IssueBimAnchor } from "@/lib/api-client/core-issues-takeoff";
 import type { BimSelection } from "./bimEngine";
@@ -66,11 +67,13 @@ export function BimInspectDockContent(props: {
           <SegmentBtn
             active={tab === "properties"}
             label="Properties"
+            icon={TableProperties}
             onClick={() => setTab("properties")}
           />
           <SegmentBtn
             active={tab === "quantities"}
             label="Quantities"
+            icon={Box}
             onClick={() => setTab("quantities")}
           />
         </div>
@@ -107,14 +110,21 @@ export function BimInspectDockContent(props: {
   );
 }
 
-function SegmentBtn(props: { active: boolean; label: string; onClick: () => void }) {
+function SegmentBtn(props: {
+  active: boolean;
+  label: string;
+  icon: typeof TableProperties;
+  onClick: () => void;
+}) {
+  const Icon = props.icon;
   return (
     <button
       type="button"
       onClick={props.onClick}
       data-active={props.active}
-      className="bim-segment-btn text-[10px]"
+      className="bim-segment-btn inline-flex items-center justify-center gap-1 text-[10px]"
     >
+      <Icon className="h-3 w-3 shrink-0" aria-hidden />
       {props.label}
     </button>
   );

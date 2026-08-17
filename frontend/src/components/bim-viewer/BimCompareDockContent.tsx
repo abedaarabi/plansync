@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff, Loader2, Minus, Plus, Search, SquarePen, X } from "lucide-react";
+import { Eye, EyeOff, GitCompare, Loader2, Minus, Plus, Search, SquarePen, X } from "lucide-react";
 import {
   COMPARE_COLORS,
   COMPARE_KIND_LABEL,
@@ -66,7 +66,10 @@ export function BimCompareDockContent(props: {
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 space-y-3 border-b border-[var(--bim-border)] px-3 py-3">
         <div>
-          <p className="bim-section-title mb-1">Compare against</p>
+          <p className="bim-section-title mb-1 inline-flex items-center gap-1.5">
+            <GitCompare className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+            Compare against
+          </p>
           {older.length === 0 ? (
             <p className="text-[12px] text-[var(--bim-text-muted)]">
               Publish another revision of this model to compare versions.

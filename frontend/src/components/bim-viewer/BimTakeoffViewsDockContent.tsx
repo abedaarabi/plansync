@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Bookmark, ClipboardList, Pencil } from "lucide-react";
 import type { BimSavedViewRecord } from "@/lib/bim/types";
 import type { BimModelQuantityRollup } from "@/lib/bim/modelQuantity";
 import type { BimAnnotation } from "@/store/bimMarkupStore";
@@ -56,10 +57,16 @@ export function BimTakeoffViewsDockContent(props: {
           <SegmentBtn
             active={tab === "takeoff"}
             label="Takeoff"
+            icon={ClipboardList}
             badge={props.selectedGuids.length > 0 ? props.selectedGuids.length : undefined}
             onClick={() => setTab("takeoff")}
           />
-          <SegmentBtn active={tab === "views"} label="Views" onClick={() => setTab("views")} />
+          <SegmentBtn
+            active={tab === "views"}
+            label="Views"
+            icon={Bookmark}
+            onClick={() => setTab("views")}
+          />
         </div>
       </div>
 
@@ -96,7 +103,10 @@ export function BimTakeoffViewsDockContent(props: {
               />
             ) : null}
             <div className="bim-detail-card">
-              <p className="bim-section-title">Markups</p>
+              <p className="bim-section-title mb-1 inline-flex items-center gap-1.5">
+                <Pencil className="h-3.5 w-3.5 text-[var(--bim-accent)]" aria-hidden />
+                Markups
+              </p>
               <p className="mb-3 text-[11px] text-[var(--bim-text-muted)]">
                 Saved view markups for this model revision.
               </p>
@@ -117,9 +127,11 @@ export function BimTakeoffViewsDockContent(props: {
 function SegmentBtn(props: {
   active: boolean;
   label: string;
+  icon: typeof ClipboardList;
   onClick: () => void;
   badge?: number;
 }) {
+  const Icon = props.icon;
   return (
     <button
       type="button"
@@ -127,6 +139,7 @@ function SegmentBtn(props: {
       data-active={props.active}
       className="bim-segment-btn inline-flex items-center justify-center gap-1"
     >
+      <Icon className="h-3 w-3 shrink-0" aria-hidden />
       {props.label}
       {props.badge != null && props.badge > 0 ? (
         <span className="rounded-full bg-[var(--bim-accent-muted)] px-1.5 py-px text-[9px] font-bold tabular-nums text-[var(--bim-accent)]">
