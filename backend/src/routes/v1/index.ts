@@ -3665,7 +3665,13 @@ export function v1Routes(
         project: { include: { workspace: true } },
         versions: {
           orderBy: { version: "desc" },
-          select: { id: true, version: true },
+          select: {
+            id: true,
+            version: true,
+            bimConversionStatus: true,
+            bimPublishedAt: true,
+            fragmentsS3Key: true,
+          },
         },
       },
     });
@@ -3691,7 +3697,12 @@ export function v1Routes(
       version: fv.version,
       projectId: file.projectId,
       /** Newest-first — used by PDF revision compare picker. */
-      versions: file.versions.map((x) => ({ id: x.id, version: x.version })),
+      versions: file.versions.map((x) => ({
+        id: x.id,
+        version: x.version,
+        bimReady: x.bimConversionStatus === "ready" && Boolean(x.fragmentsS3Key),
+        bimPublishedAt: x.bimPublishedAt?.toISOString() ?? null,
+      })),
     });
   });
 

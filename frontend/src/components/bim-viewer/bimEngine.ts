@@ -19,6 +19,7 @@ import {
   upgradeLambertToStandard,
 } from "@/lib/bim/materialColor";
 import { COLORIZE_HIGHLIGHT_OPACITY } from "@/lib/bim/colorizePalette";
+import { COMPARE_COLORS, COMPARE_STYLE_IDS, isCompareStyleId } from "@/lib/bim/bimCompare";
 import type { BimClashType } from "@plansync/shared/bimClashTypes";
 import {
   CLASH_CLEARANCE_MARKER_COLOR,
@@ -339,6 +340,8 @@ export class BimEngine {
    * skip default select tint and block the filter-dock idle clear from wiping it.
    */
   private clashReviewSuppressSelectPaint = false;
+  private compareReviewActive = false;
+  private compareOverlayFileVersionId: string | null = null;
   /** Fast Navisworks-style context: fade whole-scene materials instead of per-element ghost maps. */
   private clashSceneGhostOpacity: number | null = null;
   /**
@@ -411,14 +414,17 @@ export class BimEngine {
   }
 
   getLoadedModels(): BimLoadedModel[] {
-    return [...this.modelRegistry.entries()].map(([modelId, entry]) => ({
-      modelId,
-      fileId: entry.fileId,
-      fileVersionId: entry.fileVersionId,
-      version: entry.version ?? null,
-      name: entry.name,
-      visible: entry.visible,
-    }));
+    const overlayFv = this.compareOverlayFileVersionId;
+    return [...this.modelRegistry.entries()]
+      .filter(([, entry]) => !overlayFv || entry.fileVersionId !== overlayFv)
+      .map(([modelId, entry]) => ({
+        modelId,
+        fileId: entry.fileId,
+        fileVersionId: entry.fileVersionId,
+        version: entry.version ?? null,
+        name: entry.name,
+        visible: entry.visible,
+      }));
   }
 
   /**
@@ -1259,6 +1265,10 @@ export class BimEngine {
     return this.clashReviewSuppressSelectPaint;
   }
 
+  isCompareReviewActive(): boolean {
+    return this.compareReviewActive;
+  }
+
   /** True when Item 1 / Item 2 clash colors are painted (guids resolved). */
   hasClashPairColors(): boolean {
     return hasClashPairColors(this.activeColorizeGroups);
@@ -1470,7 +1480,9 @@ export class BimEngine {
 
       for (const group of this.activeColorizeGroups) {
         const solid =
-          group.styleId.startsWith("clash-item") || group.styleId.startsWith("colorize:");
+          group.styleId.startsWith("clash-item") ||
+          group.styleId.startsWith("colorize:") ||
+          isCompareStyleId(group.styleId);
         await paint(
           group.styleId,
           {
@@ -1535,7 +1547,7 @@ export class BimEngine {
       }
       for (const group of this.activeColorizeGroups) {
         if (group.styleId.startsWith("clash-item")) continue;
-        const solid = group.styleId.startsWith("colorize:");
+        const solid = group.styleId.startsWith("colorize:") || isCompareStyleId(group.styleId);
         await paint(
           group.styleId,
           {
@@ -5232,7 +5244,9 @@ export class BimEngine {
     const customId = mat.userData?.customId;
     return (
       typeof customId === "string" &&
-      (customId === BimEngine.FILTER_MATCH_STYLE || customId.startsWith("colorize:"))
+      (customId === BimEngine.FILTER_MATCH_STYLE ||
+        customId.startsWith("colorize:") ||
+        isCompareStyleId(customId))
     );
   }
 
@@ -6238,6 +6252,133 @@ export class BimEngine {
     }
   }
 
+  beginCompareOverlay(fileVersionId: string): void {
+    this.compareOverlayFileVersionId = fileVersionId;
+  }
+
+  async removeCompareOverlay(): Promise<void> {
+    const fvId = this.compareOverlayFileVersionId;
+    this.compareOverlayFileVersionId = null;
+    if (!fvId) return;
+    const ids = [...this.modelRegistry.entries()]
+      .filter(([, entry]) => entry.fileVersionId === fvId)
+      .map(([id]) => id);
+    for (const id of ids) {
+      try {
+        await this.removeModel(id);
+      } catch {
+        /* overlay is never the primary model */
+      }
+    }
+  }
+
+  async clearComparePresentation(): Promise<void> {
+    const wasActive = this.compareReviewActive;
+    this.compareReviewActive = false;
+    if (wasActive) {
+      await this.applyFilterPresentation({
+        filterActive: false,
+        visualize: "none",
+        matchGuids: [],
+        colorizeGroups: [],
+        force: true,
+      });
+    }
+    await this.removeCompareOverlay();
+  }
+
+  // fallow-ignore-next-line complexity
+  async applyComparePresentation(opts: {
+    isolate: boolean;
+    currentFileVersionId: string;
+    overlayFileVersionId: string | null;
+    addedGuids: string[];
+    modifiedGuids: string[];
+    deletedGuids: string[];
+  }): Promise<void> {
+    this.compareReviewActive = true;
+    const matchRefs = [
+      ...opts.addedGuids.map((guid) => ({ guid, fileVersionId: opts.currentFileVersionId })),
+      ...opts.modifiedGuids.map((guid) => ({
+        guid,
+        fileVersionId: opts.currentFileVersionId,
+      })),
+      ...opts.deletedGuids.map((guid) => ({
+        guid,
+        fileVersionId: opts.overlayFileVersionId,
+      })),
+    ];
+    const colorizeGroups: {
+      styleId: string;
+      color: string;
+      guids: string[];
+      fileVersionId?: string | null;
+    }[] = [];
+    if (opts.addedGuids.length > 0) {
+      colorizeGroups.push({
+        styleId: COMPARE_STYLE_IDS.added,
+        color: COMPARE_COLORS.added,
+        guids: opts.addedGuids,
+        fileVersionId: opts.currentFileVersionId,
+      });
+    }
+    if (opts.modifiedGuids.length > 0) {
+      colorizeGroups.push({
+        styleId: COMPARE_STYLE_IDS.modified,
+        color: COMPARE_COLORS.modified,
+        guids: opts.modifiedGuids,
+        fileVersionId: opts.currentFileVersionId,
+      });
+    }
+    if (opts.deletedGuids.length > 0 && opts.overlayFileVersionId) {
+      colorizeGroups.push({
+        styleId: COMPARE_STYLE_IDS.deleted,
+        color: COMPARE_COLORS.deleted,
+        guids: opts.deletedGuids,
+        fileVersionId: opts.overlayFileVersionId,
+      });
+    }
+
+    const hasChanges = matchRefs.length > 0;
+    await this.applyFilterPresentation({
+      filterActive: hasChanges,
+      visualize: !hasChanges ? "none" : opts.isolate ? "isolate" : "ghost",
+      matchGuids: matchRefs.map((r) => r.guid),
+      matchRefs,
+      colorizeGroups,
+      force: true,
+    });
+
+    if (hasChanges && !opts.isolate && opts.overlayFileVersionId && opts.deletedGuids.length > 0) {
+      await this.hideFileVersionExcept(opts.overlayFileVersionId, opts.deletedGuids);
+    }
+  }
+
+  private async hideFileVersionExcept(fileVersionId: string, keepGuids: string[]): Promise<void> {
+    const keepMap = await this.resolveGuidRefsToModelIdMap(
+      keepGuids.map((guid) => ({ guid, fileVersionId })),
+    );
+    const full: OBC.ModelIdMap = {};
+    const fragments = this.readyFragments();
+    if (!fragments) return;
+    for (const [modelId, entry] of this.fragmentEntriesForFileVersion(fileVersionId)) {
+      const drawable = await this.geometryIdsForModel(modelId, entry.model);
+      if (drawable && drawable.size > 0) full[modelId] = new Set(drawable);
+    }
+    const hideMap: OBC.ModelIdMap = {};
+    for (const [modelId, ids] of Object.entries(full)) {
+      const keepIds = keepMap?.[modelId];
+      const next = new Set<number>();
+      for (const id of ids) {
+        if (keepIds instanceof Set && keepIds.has(id)) continue;
+        next.add(id);
+      }
+      if (next.size > 0) hideMap[modelId] = next;
+    }
+    if (Object.keys(hideMap).length === 0) return;
+    await this.mustComponents().get(OBC.Hider).set(false, hideMap);
+  }
+
   /** Paint property-colorize groups as solid fills (used after scene ghost). */
   private async paintColorizeGroups(
     groups: { styleId: string; color: string; map: OBC.ModelIdMap }[],
@@ -6294,6 +6435,12 @@ export class BimEngine {
     }
 
     if (group.guids.length === 0) return null;
+
+    if (group.fileVersionId) {
+      return this.resolveGuidRefsToModelIdMap(
+        group.guids.map((guid) => ({ guid, fileVersionId: group.fileVersionId })),
+      );
+    }
 
     // Sync path from guidIndex — avoids per-guid awaits when the index is warm.
     const cached = this.buildModelIdMapFromGuids(group.guids);

@@ -354,7 +354,12 @@ export async function patchMeViewerPresence(hideViewerPresence: boolean): Promis
   }
 }
 
-export type FileRevisionListItem = { id: string; version: number };
+export type FileRevisionListItem = {
+  id: string;
+  version: number;
+  bimReady?: boolean;
+  bimPublishedAt?: string | null;
+};
 
 /** When `/viewer` has `fileId` (+ optional `version`) but no `fileVersionId`, resolve the revision row for Pro sync (takeoff publish, viewer-state). */
 export async function fetchResolvedFileRevision(

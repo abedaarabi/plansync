@@ -10,6 +10,7 @@ import {
   Crosshair,
   Eye,
   Filter,
+  GitCompare,
   Home,
   Loader2,
   ScanSearch,
@@ -76,6 +77,8 @@ import {
 import { BimLeftDockContent, type BimLeftDockId } from "./BimLeftDockContent";
 import { BimInspectDockContent, type BimInspectTab } from "./BimInspectDockContent";
 import { BimTakeoffViewsDockContent } from "./BimTakeoffViewsDockContent";
+import { BimCompareDockContent, BimCompareCanvasLegend } from "./BimCompareDockContent";
+import { useBimCompareSession } from "@/lib/bim/useBimCompareSession";
 import { fetchIssuesForFileVersion, patchIssue } from "@/lib/api-client/core-issues-takeoff";
 import type { IssueRow } from "@/lib/api-client/core-issues-takeoff";
 import { fetchIssue } from "@/lib/api-client";
@@ -182,7 +185,14 @@ const UnmappedDrawingPreview = dynamic(
 
 type PlanPanelMode = "minimap" | "drawingSync";
 
-type BimDockId = BimLeftDockId | "properties" | "takeoffViews" | "issues" | "filters" | "clashes";
+type BimDockId =
+  | BimLeftDockId
+  | "properties"
+  | "takeoffViews"
+  | "issues"
+  | "filters"
+  | "clashes"
+  | "compare";
 
 type Phase = BimLoadPhase | { kind: "ready" } | { kind: "error"; message: string };
 
@@ -325,10 +335,10 @@ export function BimViewerShell(props: {
   useEffect(() => {
     if (initialPanelApplied.current) return;
     if (phase.kind !== "ready") return;
-    if (props.initialPanel !== "clashes") return;
+    if (props.initialPanel !== "clashes" && props.initialPanel !== "compare") return;
     if (props.workspaceMode === "edit") return;
     initialPanelApplied.current = true;
-    setActiveDock("clashes");
+    setActiveDock(props.initialPanel as "clashes" | "compare");
   }, [phase.kind, props.initialPanel, props.workspaceMode]);
 
   const logicalLoadedModels = useMemo(
@@ -353,6 +363,20 @@ export function BimViewerShell(props: {
     initialClashId: props.initialClashId,
   });
 
+  const pickedGuid = useMemo(
+    () => [...selectedGuids][0] ?? selection?.ifcGuid ?? null,
+    [selectedGuids, selection?.ifcGuid],
+  );
+  const compare = useBimCompareSession({
+    enabled: activeDock === "compare" && phase.kind === "ready",
+    fileId: props.fileId,
+    fileName: props.fileName,
+    currentFileVersionId: resolvedFileVersionId,
+    initialBaseFileVersionId: props.compareFileVersionId,
+    engine: activeEngine,
+    pickedGuid,
+  });
+
   const prevActiveDockRef = useRef<BimDockId | null>(null);
   useEffect(() => {
     const prev = prevActiveDockRef.current;
@@ -361,7 +385,10 @@ export function BimViewerShell(props: {
     if (activeDock === "clashes" && prev !== "clashes" && clash.selectedClashId) {
       void clash.reapplyClashPresentation();
     }
-  }, [activeDock, clash.selectedClashId, clash.reapplyClashPresentation]);
+    if (activeDock === "compare" && prev !== "compare" && clash.selectedClashId) {
+      void clash.clearFocusMode();
+    }
+  }, [activeDock, clash.selectedClashId, clash.reapplyClashPresentation, clash.clearFocusMode]);
 
   const { data: projectSession } = useQuery({
     queryKey: qk.projectSession(resolvedProjectId ?? ""),
@@ -1378,7 +1405,7 @@ export function BimViewerShell(props: {
     const guids = takeoffFocusGuids?.map((g) => g.trim()).filter((g) => g.length > 0) ?? [];
     if (guids.length === 0 || phase.kind !== "ready") return;
     const engine = engineRef.current;
-    if (!engine || engine.isClashReviewActive()) return;
+    if (!engine || engine.isClashReviewActive() || engine.isCompareReviewActive()) return;
 
     const guidSet = new Set(guids);
     const fromIndex =
@@ -1703,9 +1730,10 @@ export function BimViewerShell(props: {
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine || phase.kind !== "ready") return;
-    // Clash review owns ghost/colorize — filter dock must not overwrite it.
+    // Clash / version-compare own ghost/colorize — filter dock must not overwrite them.
     // Re-runs when selectedClashId clears so Ghost/colorize restore after review.
-    if (engine.isClashReviewActive()) return;
+    if (engine.isClashReviewActive() || engine.isCompareReviewActive() || activeDock === "compare")
+      return;
     // Takeoff focus owns ghost until Filters are edited.
     if (takeoffFocusGuids?.length) return;
 
@@ -1760,7 +1788,7 @@ export function BimViewerShell(props: {
       // fallow-ignore-next-line complexity
       void (async () => {
         if (applyGen !== filterApplyGenRef.current) return;
-        if (engine.isClashReviewActive()) return;
+        if (engine.isClashReviewActive() || engine.isCompareReviewActive()) return;
 
         await engine.applyFilterPresentation({
           filterActive,
@@ -1779,7 +1807,7 @@ export function BimViewerShell(props: {
               : [],
         });
         if (applyGen !== filterApplyGenRef.current) return;
-        if (engine.isClashReviewActive()) return;
+        if (engine.isClashReviewActive() || engine.isCompareReviewActive()) return;
 
         // Ghost/Hide/All toggles and post-clash restores should not re-frame the camera.
         const skipZoom = skipFilterZoomOnceRef.current || visualizeChanged;
@@ -1809,6 +1837,7 @@ export function BimViewerShell(props: {
     clash.selectedClashId,
     guidIndexEpoch,
     takeoffFocusGuids,
+    activeDock,
   ]);
 
   const clearMarkups = useCallback(() => {
@@ -1841,6 +1870,19 @@ export function BimViewerShell(props: {
   const toggleDock = useCallback((id: BimDockId) => {
     setActiveDock((prev) => (prev === id ? null : id));
   }, []);
+
+  const onFocusCompareGuid = useCallback(
+    (guid: string) => {
+      const engine = engineRef.current;
+      if (!engine) return;
+      const deleted = compare.changes?.deleted.some((r) => r.guid === guid);
+      const fileVersionId = deleted ? compare.baseFileVersionId : resolvedFileVersionId;
+      void engine
+        .selectByElementRefs([{ guid, fileVersionId }], false)
+        .then(() => engine.zoomToSelection());
+    },
+    [compare.changes, compare.baseFileVersionId, resolvedFileVersionId],
+  );
 
   const openIssueDetail = useCallback(
     async (issue: IssueRow, opts?: { fly?: boolean; openForm?: boolean }) => {
@@ -2892,6 +2934,13 @@ export function BimViewerShell(props: {
               ? filterMatches.length
               : undefined,
         },
+        {
+          id: "compare",
+          label: "Compare",
+          icon: GitCompare,
+          badge:
+            activeDock === "compare" && compare.changedCount > 0 ? compare.changedCount : undefined,
+        },
         { id: "takeoffViews", label: "Takeoff and views", icon: ClipboardList },
       ],
       [
@@ -2914,6 +2963,8 @@ export function BimViewerShell(props: {
       selectionCount,
       filterState,
       filterMatches.length,
+      compare.changedCount,
+      activeDock,
     ],
   );
 
@@ -2935,6 +2986,12 @@ export function BimViewerShell(props: {
         hasActiveFilter(filterState) || filterState.colorize?.enabled
           ? `${filterMatches.length.toLocaleString()} elements`
           : "Search, isolate, and colorize",
+    },
+    compare: {
+      title: "Compare",
+      subtitle: compare.changes
+        ? `v${compare.changes.baseVersion} → v${compare.changes.compareVersion}`
+        : "Added, modified, and removed elements",
     },
     takeoffViews: {
       title: "Takeoff & views",
@@ -3362,6 +3419,22 @@ export function BimViewerShell(props: {
           </BimGlassDock>
         ) : null}
 
+        {workChromeReady && activeDock === "compare" ? (
+          <BimGlassDock
+            side="right"
+            open
+            title={dockMeta.compare.title}
+            subtitle={dockMeta.compare.subtitle}
+            onClose={() => setActiveDock(null)}
+          >
+            <BimCompareDockContent
+              session={compare}
+              currentVersionLabel={props.version ? `v${props.version}` : "Current revision"}
+              onFocusGuid={onFocusCompareGuid}
+            />
+          </BimGlassDock>
+        ) : null}
+
         {workChromeReady && activeDock === "takeoffViews" ? (
           <BimGlassDock
             side="right"
@@ -3575,6 +3648,10 @@ export function BimViewerShell(props: {
               />
             </div>
           </div>
+        ) : null}
+
+        {workChromeReady && activeDock === "compare" && compare.changes ? (
+          <BimCompareCanvasLegend counts={compare.changes} visibleKinds={compare.visibleKinds} />
         ) : null}
 
         {workChromeReady ? (

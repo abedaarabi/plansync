@@ -1,5 +1,6 @@
 import { apiUrl } from "@/lib/api-url";
 import type { BimConversionStatus, BimQuantityIndex, BimSavedViewRecord } from "@/lib/bim/types";
+import type { BimElementChanges, BimElementCompare } from "@/lib/bim/bimCompare";
 import { apiJsonFetch, jsonHeaders } from "./shared";
 
 const BIM_STATUS_TIMEOUT_MS = 30_000;
@@ -170,6 +171,27 @@ export async function compareBimQuantities(
   const q = new URLSearchParams({ otherFileVersionId });
   return apiJsonFetch(
     `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/quantity-compare?${q}`,
+  );
+}
+
+export async function fetchBimElementChanges(
+  fileVersionId: string,
+  baseFileVersionId: string,
+): Promise<BimElementChanges> {
+  const q = new URLSearchParams({ baseFileVersionId });
+  return apiJsonFetch(
+    `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/changes?${q}`,
+  );
+}
+
+export async function fetchBimElementCompare(
+  fileVersionId: string,
+  baseFileVersionId: string,
+  guid: string,
+): Promise<BimElementCompare> {
+  const q = new URLSearchParams({ baseFileVersionId, guid });
+  return apiJsonFetch(
+    `/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/bim/element-compare?${q}`,
   );
 }
 

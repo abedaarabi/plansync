@@ -37,6 +37,11 @@ import {
   readBimQuantityIndex,
   requireBimPro,
 } from "./bimRouteHelpers.js";
+import {
+  diffElementMetadata,
+  diffElementVersions,
+  type ElementVersionSnapshot,
+} from "../../lib/bim/elementVersionCompare.js";
 
 function rollupQuantities(entries: BimQuantityEntry[]) {
   let length = 0;
@@ -194,49 +199,133 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     });
   });
 
+  // fallow-ignore-next-line complexity
   r.get("/file-versions/:fileVersionId/bim/changes", needUser, async (c) => {
     const baseId = c.req.query("baseFileVersionId");
     if (!baseId) return c.json({ error: "baseFileVersionId required" }, 400);
 
-    const fv = await loadBimFileVersion(c.req.param("fileVersionId"));
+    const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+      requirePro: true,
+    });
+    if ("response" in auth) return auth.response;
+    const { fv } = auth;
     const base = await loadBimFileVersion(baseId);
-    if (!fv || !base) return c.json({ error: "Not found" }, 404);
+    if (!base) return c.json({ error: "Not found" }, 404);
     if (fv.fileId !== base.fileId) return c.json({ error: "Versions must be same file" }, 400);
-
-    const access = await loadProjectForMember(fv.file.projectId, c.get("user").id);
-    if (isProjectAccessError(access)) return c.json({ error: access.error }, access.status);
 
     const [currentRows, baseRows] = await Promise.all([
       prisma.bimElementVersion.findMany({
         where: { fileVersionId: fv.id },
-        include: { element: { select: { ifcGuid: true } } },
+        select: {
+          metadataHash: true,
+          changeType: true,
+          element: { select: { ifcGuid: true, ifcType: true, name: true } },
+        },
       }),
       prisma.bimElementVersion.findMany({
-        where: { fileVersionId: base.id, changeType: { not: "DELETED" } },
-        include: { element: { select: { ifcGuid: true } } },
+        where: { fileVersionId: base.id },
+        select: {
+          metadataHash: true,
+          changeType: true,
+          element: { select: { ifcGuid: true, ifcType: true, name: true } },
+        },
       }),
     ]);
 
-    const added = currentRows.filter((r) => r.changeType === "ADDED").map((r) => r.element.ifcGuid);
-    const modified = currentRows
-      .filter((r) => r.changeType === "MODIFIED")
-      .map((r) => r.element.ifcGuid);
-    const deleted = currentRows
-      .filter((r) => r.changeType === "DELETED")
-      .map((r) => r.element.ifcGuid);
-    const unchanged = currentRows
-      .filter((r) => r.changeType === "UNCHANGED")
-      .map((r) => r.element.ifcGuid);
+    const toSnap = (row: (typeof currentRows)[number]): ElementVersionSnapshot => ({
+      ifcGuid: row.element.ifcGuid,
+      name: row.element.name,
+      ifcType: row.element.ifcType,
+      metadataHash: row.metadataHash,
+      live: row.changeType !== "DELETED",
+    });
+    const diff = diffElementVersions(currentRows.map(toSnap), baseRows.map(toSnap));
 
     return c.json({
+      baseFileVersionId: base.id,
+      compareFileVersionId: fv.id,
       baseVersion: base.version,
       compareVersion: fv.version,
-      added,
-      modified,
-      deleted,
-      unchanged,
-      baseElementCount: baseRows.length,
-      compareElementCount: currentRows.filter((r) => r.changeType !== "DELETED").length,
+      added: diff.added,
+      modified: diff.modified,
+      deleted: diff.deleted,
+      counts: {
+        added: diff.added.length,
+        modified: diff.modified.length,
+        deleted: diff.deleted.length,
+        unchanged: diff.unchangedCount,
+        baseLive: diff.baseLiveCount,
+        currentLive: diff.currentLiveCount,
+      },
+    });
+  });
+
+  // fallow-ignore-next-line complexity
+  r.get("/file-versions/:fileVersionId/bim/element-compare", needUser, async (c) => {
+    const baseId = c.req.query("baseFileVersionId");
+    const guid = c.req.query("guid")?.trim();
+    if (!baseId) return c.json({ error: "baseFileVersionId required" }, 400);
+    if (!guid) return c.json({ error: "guid required" }, 400);
+
+    const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
+      requirePro: true,
+    });
+    if ("response" in auth) return auth.response;
+    const { fv } = auth;
+    const base = await loadBimFileVersion(baseId);
+    if (!base) return c.json({ error: "Not found" }, 404);
+    if (fv.fileId !== base.fileId) return c.json({ error: "Versions must be same file" }, 400);
+
+    const [currentRow, baseRow] = await Promise.all([
+      prisma.bimElementVersion.findFirst({
+        where: { fileVersionId: fv.id, element: { fileId: fv.fileId, ifcGuid: guid } },
+        select: {
+          metadataS3Key: true,
+          changeType: true,
+          element: { select: { ifcGuid: true, ifcType: true, name: true } },
+        },
+      }),
+      prisma.bimElementVersion.findFirst({
+        where: { fileVersionId: base.id, element: { fileId: fv.fileId, ifcGuid: guid } },
+        select: {
+          metadataS3Key: true,
+          changeType: true,
+          element: { select: { ifcGuid: true, ifcType: true, name: true } },
+        },
+      }),
+    ]);
+
+    const readMeta = async (key: string | undefined): Promise<Record<string, unknown> | null> => {
+      if (!key) return null;
+      const obj = await getObjectStream(env, key);
+      if (!obj.ok) return null;
+      try {
+        const raw = await webStreamToBuffer(obj.stream);
+        const parsed: unknown = JSON.parse(raw.toString("utf8"));
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const [before, after] = await Promise.all([
+      readMeta(baseRow?.changeType === "DELETED" ? undefined : baseRow?.metadataS3Key),
+      readMeta(currentRow?.changeType === "DELETED" ? undefined : currentRow?.metadataS3Key),
+    ]);
+    const fields = diffElementMetadata(before, after);
+    const currentLive = Boolean(currentRow && currentRow.changeType !== "DELETED");
+    const baseLive = Boolean(baseRow && baseRow.changeType !== "DELETED");
+    const kind =
+      !baseLive && currentLive ? "added" : baseLive && !currentLive ? "deleted" : "modified";
+
+    return c.json({
+      guid,
+      kind,
+      name: currentRow?.element.name ?? baseRow?.element.name ?? null,
+      ifcType: currentRow?.element.ifcType ?? baseRow?.element.ifcType ?? null,
+      fields,
     });
   });
 

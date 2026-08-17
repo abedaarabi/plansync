@@ -136,4 +136,8 @@ export const qk = {
   locationDetail: (locationId: string) => ["locationDetail", locationId] as const,
   /** Short-lived S3 GET URL for building cover photo. */
   buildingImageReadUrl: (buildingId: string) => ["buildingImageReadUrl", buildingId] as const,
+  bimElementChanges: (fileVersionId: string, baseFileVersionId: string) =>
+    ["bim", "changes", fileVersionId, baseFileVersionId] as const,
+  bimElementCompare: (fileVersionId: string, baseFileVersionId: string, guid: string) =>
+    ["bim", "elementCompare", fileVersionId, baseFileVersionId, guid] as const,
 };
