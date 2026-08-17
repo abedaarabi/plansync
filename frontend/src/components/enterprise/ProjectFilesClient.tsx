@@ -1186,7 +1186,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         }
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="enterprise-card flex min-h-0 flex-1 flex-col overflow-hidden p-0">
         <FileExplorerTopBar
           breadcrumbs={breadcrumbItems}
           onNavigate={openFolderOrRequest}
@@ -1216,7 +1216,7 @@ export function ProjectFilesClient({ projectId }: { projectId: string }) {
         />
 
         <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="hidden min-h-0 shrink-0 flex-col bg-[var(--enterprise-hover-surface)]/50 lg:flex">
+          <aside className="hidden min-h-0 shrink-0 flex-col border-r border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/50 lg:flex">
             <FileExplorerTree
               className="h-full"
               folders={project.folders}

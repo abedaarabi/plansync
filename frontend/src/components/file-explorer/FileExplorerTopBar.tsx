@@ -94,7 +94,7 @@ export function FileExplorerTopBar({
   }, []);
 
   return (
-    <header className="flex flex-col gap-2 bg-[var(--enterprise-surface)] px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between lg:gap-3 lg:px-5">
+    <header className="flex flex-col gap-2 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between lg:gap-3 lg:px-5">
       <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
         <div className="flex min-w-0 items-center gap-1 lg:hidden">
           {parent ? (
