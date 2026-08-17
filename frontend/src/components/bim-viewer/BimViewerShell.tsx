@@ -196,7 +196,7 @@ type GeometryStreamProgress = {
 
 const TOOL_HINTS: Record<BimTool, string | null> = {
   select: null,
-  clip: "Drag green (top) or blue (side) arrow inward · Fits selection when elements are selected · Esc exits",
+  clip: "Click a surface to cut · Drag the blue plane to set depth · Click again to choose another side",
   length: "Click two points to measure length · Esc cancels",
   area: "Click corners, double-click to finish · Esc cancels",
   angle: "Click three points for angle · Esc cancels",
@@ -3589,6 +3589,8 @@ export function BimViewerShell(props: {
             conversionStatus={conversionStatus}
             selectedGuids={selectedGuids}
             onSelectTool={selectTool}
+            onResetSection={() => engineRef.current?.resetSection()}
+            onFlipSection={() => engineRef.current?.flipSection()}
             onSelectCameraMode={selectCameraMode}
             onToggleFlyout={toggleFlyout}
             onFitToView={fitToView}

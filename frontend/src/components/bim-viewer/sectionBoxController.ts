@@ -1,35 +1,22 @@
 import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
-
-export type SectionHandle = "top" | "side";
-type SideAxis = "x" | "z";
-
-const HANDLES: SectionHandle[] = ["top", "side"];
-const PAD_RATIO = 0.015;
-
-type SectionPlaneSlot = {
-  handle: SectionHandle;
-  plane: OBC.SimplePlane;
-};
+import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 
 /**
- * BIM-style section box: two draggable handles (top + camera-relative side),
- * invisible clip planes, world-space gizmo arrows, optional bbox outline.
+ * Surface-first sectioning: choose a model face, then pull its cut plane
+ * through the model along the face normal.
  */
 export class SectionBoxController {
   private bounds: THREE.Box3 | null = null;
-  private sideAxis: SideAxis = "x";
-  private slots = new Map<SectionHandle, SectionPlaneSlot>();
-  private arrows = new Map<SectionHandle, THREE.Group>();
-  private gizmoRoot: THREE.Group | null = null;
-  private boxOutline: THREE.LineSegments | null = null;
-  private drag: {
-    handle: SectionHandle;
-    startOrigin: THREE.Vector3;
-    startPlaneT: number;
-    startPointerT: number;
-  } | null = null;
+  private plane: OBC.SimplePlane | null = null;
+  private cutNormal: THREE.Vector3 | null = null;
+  private cutGuide: THREE.Group | null = null;
+  private previewGuide: THREE.Group | null = null;
+  private initialPoint: THREE.Vector3 | null = null;
+  private depthLabel: HTMLDivElement | null = null;
+  private drag: { startOrigin: THREE.Vector3; startPlaneT: number; startPointerT: number } | null =
+    null;
 
   constructor(
     private readonly getWorld: () => OBC.SimpleWorld<
@@ -39,60 +26,60 @@ export class SectionBoxController {
     > | null,
     private readonly getClipper: () => OBC.Clipper,
     private readonly getCamera: () => THREE.Camera | null,
-    private readonly getRaycaster: () => OBC.SimpleRaycaster | null,
     private readonly onRender: () => void,
+    private readonly formatDistance: (distance: number) => string,
   ) {}
 
-  isActive(): boolean {
-    return this.slots.size > 0;
-  }
-
-  /**
-   * Activate section box on model or custom bounds.
-   * Default: handles sit just outside the box (no clip until drag).
-   * `fitTight`: clip immediately to the given bounds (context-menu selection).
-   */
-  // fallow-ignore-next-line complexity
-  activate(bounds: THREE.Box3, opts?: { fitTight?: boolean }): void {
-    const world = this.getWorld();
-    if (!world?.renderer) return;
-
+  /** Enter surface-pick mode. The first face click creates the cut plane. */
+  activate(bounds: THREE.Box3): void {
     this.deactivate();
     this.bounds = bounds.clone();
-    this.sideAxis = this.resolveSideAxis();
-
-    const clipper = this.getClipper();
-    const center = bounds.getCenter(new THREE.Vector3());
-    const fitTight = opts?.fitTight === true;
-    const pad = fitTight ? 0 : bounds.getSize(new THREE.Vector3()).length() * PAD_RATIO;
-
-    for (const handle of HANDLES) {
-      const normal = this.clipNormal(handle);
-      const point = this.startPoint(handle, bounds, center, pad);
-      const id = clipper.createFromNormalAndCoplanarPoint(world, normal, point);
-      const plane = clipper.list.get(id);
-      if (!plane) continue;
-      plane.type = `section-${handle}`;
-      plane.enabled = fitTight;
-      plane.helper.visible = false;
-      if (fitTight) hideClipPlaneFace(plane);
-      this.slots.set(handle, { handle, plane });
-    }
-
-    this.buildGizmo();
-    if (fitTight) world.renderer.updateClippingPlanes();
-    this.onRender();
   }
 
-  /** 4. Tear down planes, gizmo, and drag state. */
+  hasSurface(): boolean {
+    return this.plane != null;
+  }
+
+  /** Create a cut plane that moves inward from the selected face. */
+  selectSurface(point: THREE.Vector3, surfaceNormal: THREE.Vector3): boolean {
+    const world = this.getWorld();
+    if (!world?.renderer || !this.bounds || surfaceNormal.lengthSq() < 1e-8) return false;
+
+    // A click without dragging re-picks the cutting face instead of accumulating planes.
+    if (this.plane) {
+      const bounds = this.bounds.clone();
+      this.deactivate();
+      this.bounds = bounds;
+    }
+    const normal = this.snapNormal(surfaceNormal).negate();
+    const id = this.getClipper().createFromNormalAndCoplanarPoint(world, normal, point);
+    const plane = this.getClipper().list.get(id);
+    if (!plane) return false;
+
+    plane.type = "surface-section";
+    plane.enabled = true;
+    hideClipPlaneFace(plane);
+    this.plane = plane;
+    this.cutNormal = normal;
+    this.initialPoint = point.clone();
+    this.disposePreviewGuide();
+    this.buildCutGuide(point, normal);
+    world.renderer.updateClippingPlanes();
+    this.onRender();
+    return true;
+  }
+
   deactivate(): void {
     this.endDrag();
-    this.disposeGizmo();
-    this.slots.clear();
+    this.disposeCutGuide();
+    this.disposePreviewGuide();
+    this.plane = null;
+    this.cutNormal = null;
     this.bounds = null;
+    this.initialPoint = null;
+    // Scrub any orphaned CSS2D label nodes left by earlier previews.
+    document.querySelectorAll(".bim-section-depth-label").forEach((el) => el.remove());
     const clipper = this.getClipper();
-    // SimplePlane.dispose() removes the helper before detaching TransformControls.
-    // deleteAll → setPlane → renderer.update then throws if controls are still attached.
     for (const [, plane] of clipper.list) {
       plane.controls.detach();
       plane.controls.enabled = false;
@@ -100,94 +87,44 @@ export class SectionBoxController {
     clipper.deleteAll();
   }
 
-  /** 3. Pick handle for drag. */
-  // fallow-ignore-next-line complexity
-  pick(ndc: THREE.Vector2): { handle: SectionHandle; plane: OBC.SimplePlane } | null {
-    const world = this.getWorld();
-    if (!world?.renderer || this.arrows.size === 0) return null;
-
-    const meshes: THREE.Object3D[] = [];
-    for (const [handle, arrow] of this.arrows) {
-      arrow.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          meshes.push(child);
-          child.userData.sectionHandle = handle;
-        }
-      });
-    }
-    if (meshes.length === 0) return null;
-
-    const caster = this.getRaycaster();
-    if (!caster) return null;
-
-    const hit = caster.castRayToObjects(meshes, ndc);
-    if (!hit?.object) return null;
-
-    const handle = hit.object.userData.sectionHandle as SectionHandle | undefined;
-    if (!handle) return null;
-    const slot = this.slots.get(handle);
-    if (!slot) return null;
-    return { handle, plane: slot.plane };
-  }
-
-  beginDrag(handle: SectionHandle, plane: OBC.SimplePlane, pointerT: number): void {
-    const startPlaneT = this.scalar(handle, plane.origin);
+  beginDrag(pointerT: number): void {
+    const plane = this.plane;
+    if (!plane) return;
     this.drag = {
-      handle,
       startOrigin: plane.origin.clone(),
-      startPlaneT,
+      startPlaneT: this.scalar(plane.origin),
       startPointerT: pointerT,
     };
   }
 
-  /** 3. Incremental axis drag with clamp — clip only once plane enters bbox. */
-  // fallow-ignore-next-line complexity
-  dragTo(pointerT: number): void {
-    const drag = this.drag;
-    const bounds = this.bounds;
-    if (!drag || !bounds) return;
-
-    const slot = this.slots.get(drag.handle);
-    if (!slot) return;
-
-    const delta = pointerT - drag.startPointerT;
-    const min = this.minScalar(drag.handle, bounds);
-    const max = this.maxScalar(drag.handle, bounds);
-    const pad = bounds.getSize(new THREE.Vector3()).length() * PAD_RATIO;
-    const newT = THREE.MathUtils.clamp(drag.startPlaneT + delta, min, max + pad);
-    const point = this.pointOnAxis(drag.handle, drag.startOrigin, newT);
-    const clip = this.shouldClip(drag.handle, newT);
-
-    this.applyPlane(slot.plane, point, clip);
-
-    const arrow = this.arrows.get(drag.handle);
-    if (arrow) arrow.position.copy(point);
-
-    this.onRender();
-  }
-
-  // fallow-ignore-next-line complexity
-  pointerAxisT(handle: SectionHandle, refPoint: THREE.Vector3, ndc: THREE.Vector2): number | null {
-    const world = this.getWorld();
+  pointerAxisT(ndc: THREE.Vector2): number | null {
     const camera = this.getCamera();
-    if (!world || !camera) return null;
+    const normal = this.cutNormal;
+    const point = this.plane?.origin;
+    if (!camera || !normal || !point) return null;
 
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(ndc, camera);
-
-    const axisDir = this.dragAxis(handle);
-    const camDir = new THREE.Vector3();
-    camera.getWorldDirection(camDir);
-    let dragNormal = new THREE.Vector3().crossVectors(axisDir, camDir);
-    if (dragNormal.lengthSq() < 1e-6) {
-      dragNormal = new THREE.Vector3().crossVectors(axisDir, new THREE.Vector3(0, 1, 0));
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection);
+    let dragPlaneNormal = new THREE.Vector3().crossVectors(normal, cameraDirection);
+    if (dragPlaneNormal.lengthSq() < 1e-6) {
+      dragPlaneNormal = new THREE.Vector3().crossVectors(normal, new THREE.Vector3(0, 1, 0));
     }
-    dragNormal.normalize();
+    dragPlaneNormal.normalize();
 
     const hit = new THREE.Vector3();
-    const dragPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(dragNormal, refPoint);
+    const dragPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(dragPlaneNormal, point);
     if (!raycaster.ray.intersectPlane(dragPlane, hit)) return null;
-    return this.scalar(handle, hit);
+    return this.scalar(hit);
+  }
+
+  pointerMove(ndc: THREE.Vector2): void {
+    const drag = this.drag;
+    if (!drag) return;
+    const pointerT = this.pointerAxisT(ndc);
+    if (pointerT == null) return;
+    this.dragTo(pointerT);
   }
 
   endDrag(): void {
@@ -198,272 +135,215 @@ export class SectionBoxController {
     return this.drag != null;
   }
 
-  /** Continue incremental drag from pointer position. */
-  pointerMove(ndc: THREE.Vector2): void {
+  /** Show a non-clipping preview while the user chooses a surface. */
+  previewSurface(point: THREE.Vector3, surfaceNormal: THREE.Vector3): void {
+    if (!this.bounds || this.plane || surfaceNormal.lengthSq() < 1e-8) return;
+    const normal = this.snapNormal(surfaceNormal).negate();
+    if (!this.previewGuide) {
+      this.previewGuide = this.createGuide(point, normal, {
+        fillOpacity: 0.16,
+        withLabel: false,
+      });
+      return;
+    }
+    this.previewGuide.position.copy(point);
+    this.previewGuide.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+    this.onRender();
+  }
+
+  clearPreview(): void {
+    this.disposePreviewGuide();
+  }
+
+  reset(): boolean {
+    if (!this.plane || !this.initialPoint) return false;
+    this.applyPlane(this.plane, this.initialPoint);
+    this.cutGuide?.position.copy(this.initialPoint);
+    this.updateDepthLabel();
+    this.onRender();
+    return true;
+  }
+
+  flip(): boolean {
+    const plane = this.plane;
+    const normal = this.cutNormal;
+    if (!plane || !normal) return false;
+    normal.negate();
+    plane.normal.copy(normal);
+    this.applyPlane(plane, plane.origin);
+    this.cutGuide?.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+    this.onRender();
+    return true;
+  }
+
+  private dragTo(pointerT: number): void {
     const drag = this.drag;
-    if (!drag) return;
-    const pointerT = this.pointerAxisT(drag.handle, drag.startOrigin, ndc);
-    if (pointerT == null) return;
-    this.dragTo(pointerT);
-  }
-
-  // ------------------------------------------------------------------ internals
-
-  /** 6. Side handle follows the axis most aligned with camera right (flattened to XZ). */
-  private resolveSideAxis(): SideAxis {
-    const camera = this.getCamera();
-    if (!camera) return "x";
-
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-    right.y = 0;
-    if (right.lengthSq() < 1e-8) return "x";
-    right.normalize();
-    return Math.abs(right.x) >= Math.abs(right.z) ? "x" : "z";
-  }
-
-  private clipNormal(handle: SectionHandle): THREE.Vector3 {
-    if (handle === "top") return new THREE.Vector3(0, -1, 0);
-    return this.sideAxis === "x" ? new THREE.Vector3(-1, 0, 0) : new THREE.Vector3(0, 0, -1);
-  }
-
-  private dragAxis(handle: SectionHandle): THREE.Vector3 {
-    if (handle === "top") return new THREE.Vector3(0, 1, 0);
-    return this.sideAxis === "x" ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
-  }
-
-  // fallow-ignore-next-line complexity
-  private outwardDir(
-    handle: SectionHandle,
-    center: THREE.Vector3,
-    point: THREE.Vector3,
-  ): THREE.Vector3 {
-    if (handle === "top") {
-      return new THREE.Vector3(0, point.y >= center.y ? 1 : -1, 0);
-    }
-    if (this.sideAxis === "x") {
-      return new THREE.Vector3(point.x >= center.x ? 1 : -1, 0, 0);
-    }
-    return new THREE.Vector3(0, 0, point.z >= center.z ? 1 : -1);
-  }
-
-  private startPoint(
-    handle: SectionHandle,
-    box: THREE.Box3,
-    center: THREE.Vector3,
-    pad: number,
-  ): THREE.Vector3 {
-    if (handle === "top") {
-      return new THREE.Vector3(center.x, box.max.y + pad, center.z);
-    }
-    if (this.sideAxis === "x") {
-      return new THREE.Vector3(box.max.x + pad, center.y, center.z);
-    }
-    return new THREE.Vector3(center.x, center.y, box.max.z + pad);
-  }
-
-  private scalar(handle: SectionHandle, point: THREE.Vector3): number {
-    if (handle === "top") return point.y;
-    return this.sideAxis === "x" ? point.x : point.z;
-  }
-
-  private pointOnAxis(handle: SectionHandle, ref: THREE.Vector3, value: number): THREE.Vector3 {
-    const next = ref.clone();
-    if (handle === "top") next.y = value;
-    else if (this.sideAxis === "x") next.x = value;
-    else next.z = value;
-    return next;
-  }
-
-  private minScalar(handle: SectionHandle, box: THREE.Box3): number {
-    if (handle === "top") return box.min.y;
-    return this.sideAxis === "x" ? box.min.x : box.min.z;
-  }
-
-  private maxScalar(handle: SectionHandle, box: THREE.Box3): number {
-    if (handle === "top") return box.max.y;
-    return this.sideAxis === "x" ? box.max.x : box.max.z;
-  }
-
-  private shouldClip(handle: SectionHandle, t: number): boolean {
     const bounds = this.bounds;
-    if (!bounds) return false;
-    return t <= this.maxScalar(handle, bounds) + 1e-4;
+    const plane = this.plane;
+    const normal = this.cutNormal;
+    if (!drag || !bounds || !plane || !normal) return;
+
+    const [min, max] = this.boundScalars(bounds);
+    const nextT = THREE.MathUtils.clamp(drag.startPlaneT + pointerT - drag.startPointerT, min, max);
+    const point = drag.startOrigin.clone().addScaledVector(normal, nextT - drag.startPlaneT);
+    this.applyPlane(plane, point);
+    this.cutGuide?.position.copy(point);
+    this.updateDepthLabel();
+    this.onRender();
   }
 
-  // fallow-ignore-next-line complexity
-  private applyPlane(plane: OBC.SimplePlane, point: THREE.Vector3, clip: boolean): void {
-    // SimplePlane.update() reads helper.position — keep origin, helper, and three in sync.
+  private scalar(point: THREE.Vector3): number {
+    return point.dot(this.cutNormal!);
+  }
+
+  private boundScalars(bounds: THREE.Box3): [number, number] {
+    const values = [
+      new THREE.Vector3(bounds.min.x, bounds.min.y, bounds.min.z),
+      new THREE.Vector3(bounds.min.x, bounds.min.y, bounds.max.z),
+      new THREE.Vector3(bounds.min.x, bounds.max.y, bounds.min.z),
+      new THREE.Vector3(bounds.min.x, bounds.max.y, bounds.max.z),
+      new THREE.Vector3(bounds.max.x, bounds.min.y, bounds.min.z),
+      new THREE.Vector3(bounds.max.x, bounds.min.y, bounds.max.z),
+      new THREE.Vector3(bounds.max.x, bounds.max.y, bounds.min.z),
+      new THREE.Vector3(bounds.max.x, bounds.max.y, bounds.max.z),
+    ].map((corner) => this.scalar(corner));
+    return [Math.min(...values), Math.max(...values)];
+  }
+
+  private applyPlane(plane: OBC.SimplePlane, point: THREE.Vector3): void {
     plane.origin.copy(point);
     plane.helper.position.copy(point);
     plane.three.setFromNormalAndCoplanarPoint(plane.normal, point);
-
-    const clipper = this.getClipper();
     const renderer = this.getWorld()?.renderer;
-
-    if (clip !== plane.enabled) {
-      plane.enabled = clip;
-      if (clip) hideClipPlaneFace(plane);
-    } else if (clip && renderer) {
-      renderer.setPlane(true, plane.three, clipper.localClippingPlanes);
-    }
-
+    if (renderer) renderer.setPlane(true, plane.three, this.getClipper().localClippingPlanes);
     renderer?.updateClippingPlanes();
   }
 
-  /** 2. World-space gizmo: bbox outline + two arrows. */
-  // fallow-ignore-next-line complexity
-  private buildGizmo(): void {
-    this.disposeGizmo();
+  private buildCutGuide(point: THREE.Vector3, normal: THREE.Vector3): void {
+    this.disposeCutGuide();
+    this.cutGuide = this.createGuide(point, normal, { fillOpacity: 0.1, withLabel: true });
+    this.updateDepthLabel();
+  }
+
+  private createGuide(
+    point: THREE.Vector3,
+    normal: THREE.Vector3,
+    opts: { fillOpacity: number; withLabel: boolean },
+  ): THREE.Group | null {
     const world = this.getWorld();
     const bounds = this.bounds;
-    if (!world || !bounds) return;
-
-    const center = bounds.getCenter(new THREE.Vector3());
-    const size = bounds.getSize(new THREE.Vector3());
-    const root = new THREE.Group();
-    root.name = "section-gizmo-root";
-
-    const boxGeom = new THREE.BoxGeometry(size.x, size.y, size.z);
-    const edges = new THREE.EdgesGeometry(boxGeom);
-    boxGeom.dispose();
-    this.boxOutline = new THREE.LineSegments(
-      edges,
-      new THREE.LineBasicMaterial({
-        color: 0x06b6d4,
+    if (!world || !bounds) return null;
+    const guide = new THREE.Group();
+    guide.name = "surface-section-guide";
+    const side = bounds.getSize(new THREE.Vector3()).length() * 1.35;
+    const fill = new THREE.Mesh(
+      new THREE.PlaneGeometry(side, side),
+      new THREE.MeshBasicMaterial({
+        color: 0x3b82f6,
         transparent: true,
-        opacity: 0.25,
+        opacity: opts.fillOpacity,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    const edge = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.PlaneGeometry(side, side)),
+      new THREE.LineBasicMaterial({
+        color: 0x3b82f6,
+        transparent: true,
+        opacity: 0.9,
         depthTest: false,
       }),
     );
-    this.boxOutline.position.copy(center);
-    this.boxOutline.renderOrder = 999;
-    root.add(this.boxOutline);
-
-    for (const handle of HANDLES) {
-      const slot = this.slots.get(handle);
-      if (!slot) continue;
-      const outward = this.outwardDir(handle, center, slot.plane.origin);
-      const arrow = this.buildArrow(handle);
-      arrow.position.copy(slot.plane.origin);
-      arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), outward);
-      root.add(arrow);
-      this.arrows.set(handle, arrow);
+    edge.renderOrder = 999;
+    fill.renderOrder = 998;
+    guide.add(fill, edge);
+    guide.position.copy(point);
+    guide.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+    if (opts.withLabel) {
+      const label = document.createElement("div");
+      label.className = "bim-section-depth-label";
+      label.style.cssText =
+        "border:1px solid #3B82F6;border-radius:4px;background:rgba(15,23,42,.9);color:#BFDBFE;font:600 12px Inter,sans-serif;padding:4px 6px;white-space:nowrap;pointer-events:none";
+      const labelObject = new CSS2DObject(label);
+      labelObject.position.set(0, 0, 0.02);
+      guide.add(labelObject);
+      this.depthLabel = label;
     }
-
-    world.scene.three.add(root);
-    this.gizmoRoot = root;
+    world.scene.three.add(guide);
+    return guide;
   }
 
-  private buildArrow(handle: SectionHandle): THREE.Group {
-    const color = handle === "top" ? new THREE.Color("#22C55E") : new THREE.Color("#3B82F6");
-    const mat = new THREE.MeshBasicMaterial({
-      color,
-      depthTest: false,
-      transparent: true,
-      opacity: 0.96,
-    });
-    const rim = new THREE.MeshBasicMaterial({
-      color: new THREE.Color("#F9FAFB"),
-      depthTest: false,
-      transparent: true,
-      opacity: 0.35,
-    });
-
-    const arrow = new THREE.Group();
-    arrow.name = "section-arrow-root";
-    arrow.userData.sectionHandle = handle;
-    arrow.renderOrder = 1000;
-
-    const shaftLen = 1.6;
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, shaftLen, 14), mat);
-    shaft.rotation.x = Math.PI / 2;
-    shaft.position.z = 0.2 + shaftLen / 2;
-
-    const shaftRim = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, shaftLen, 14), rim);
-    shaftRim.rotation.copy(shaft.rotation);
-    shaftRim.position.copy(shaft.position);
-
-    const headH = 0.48;
-    const head = new THREE.Mesh(new THREE.ConeGeometry(0.22, headH, 16), mat);
-    head.rotation.x = Math.PI / 2;
-    head.position.z = 0.2 + shaftLen + headH / 2;
-
-    const headRim = new THREE.Mesh(new THREE.ConeGeometry(0.28, headH, 16), rim);
-    headRim.rotation.copy(head.rotation);
-    headRim.position.copy(head.position);
-
-    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 18), mat);
-    knob.position.z = 0.2;
-
-    const hit = new THREE.Mesh(
-      new THREE.SphereGeometry(0.55, 16, 16),
-      new THREE.MeshBasicMaterial({ visible: false }),
-    );
-    hit.position.z = 0.85;
-    hit.userData.sectionHandle = handle;
-
-    for (const part of [shaft, shaftRim, head, headRim, knob, hit]) {
-      part.userData.sectionHandle = handle;
-    }
-
-    arrow.add(shaftRim, shaft, headRim, head, knob, hit);
-
-    if (this.bounds) {
-      const size = this.bounds.getSize(new THREE.Vector3());
-      const scale = Math.max(size.x, size.y, size.z) * 0.045;
-      arrow.scale.setScalar(THREE.MathUtils.clamp(scale, 2, 50));
-    }
-
-    return arrow;
+  private disposeCutGuide(): void {
+    this.disposeGuide(this.cutGuide);
+    this.cutGuide = null;
+    this.depthLabel = null;
   }
 
-  private disposeGizmo(): void {
-    if (!this.gizmoRoot) {
-      this.arrows.clear();
-      this.boxOutline = null;
-      return;
-    }
-    this.gizmoRoot.removeFromParent();
-    this.gizmoRoot.traverse((child) => {
+  private disposePreviewGuide(): void {
+    this.disposeGuide(this.previewGuide);
+    this.previewGuide = null;
+  }
+
+  private disposeGuide(guide: THREE.Group | null): void {
+    if (!guide) return;
+    guide.traverse((child) => {
+      // CSS2D labels leave orphan DOM nodes (tiny dots) if only the Object3D is removed.
+      if (child instanceof CSS2DObject) {
+        child.element.remove();
+      }
       if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
         child.geometry.dispose();
-        const m = child.material;
-        if (Array.isArray(m)) m.forEach((x) => x.dispose());
-        else m.dispose();
+        const material = child.material;
+        if (Array.isArray(material)) material.forEach((item) => item.dispose());
+        else material.dispose();
       }
     });
-    this.gizmoRoot = null;
-    this.boxOutline = null;
-    this.arrows.clear();
+    guide.removeFromParent();
+  }
+
+  private updateDepthLabel(): void {
+    if (!this.depthLabel || !this.plane || !this.initialPoint) return;
+    this.depthLabel.textContent = `Cut depth ${this.formatDistance(
+      this.plane.origin.distanceTo(this.initialPoint),
+    )}`;
+  }
+
+  private snapNormal(normal: THREE.Vector3): THREE.Vector3 {
+    const normalized = normal.clone().normalize();
+    const axes = [
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(0, 0, 1),
+    ];
+    const closest = axes.reduce((best, axis) =>
+      Math.abs(normalized.dot(axis)) > Math.abs(normalized.dot(best)) ? axis : best,
+    );
+    return Math.abs(normalized.dot(closest)) >= 0.985
+      ? closest.clone().multiplyScalar(Math.sign(normalized.dot(closest)))
+      : normalized;
   }
 }
 
-/** Hide SimplePlane face mesh — clipping only, no fill quad. */
-// fallow-ignore-next-line complexity
+/** Hide the built-in SimplePlane face; our outlined guide communicates the cut. */
 export function hideClipPlaneFace(plane: OBC.SimplePlane): void {
-  const mat = plane.planeMaterial;
-  const hide = (m: THREE.Material) => {
-    m.transparent = true;
-    m.opacity = 0;
-    m.visible = false;
-    m.depthWrite = false;
+  const hide = (material: THREE.Material) => {
+    material.transparent = true;
+    material.opacity = 0;
+    material.visible = false;
+    material.depthWrite = false;
   };
-  if (Array.isArray(mat)) mat.forEach(hide);
-  else hide(mat as THREE.Material);
-
+  const material = plane.planeMaterial;
+  if (Array.isArray(material)) material.forEach(hide);
+  else hide(material as THREE.Material);
   for (const child of plane.helper.children) {
-    if (child instanceof THREE.Mesh && child.name !== "section-arrow-root") {
-      child.visible = false;
-    }
+    if (child instanceof THREE.Mesh) child.visible = false;
   }
   plane.helper.visible = false;
-  // Custom section gizmos replace built-in TransformControls — detach so
-  // clipper teardown / renderer.update never see an orphan attached object.
-  const controls = plane.controls;
-  controls.detach();
-  controls.showX = false;
-  controls.showY = false;
-  controls.showZ = false;
-  controls.enabled = false;
-  controls.getHelper().visible = false;
+  plane.controls.detach();
+  plane.controls.showX = false;
+  plane.controls.showY = false;
+  plane.controls.showZ = false;
+  plane.controls.enabled = false;
+  plane.controls.getHelper().visible = false;
 }

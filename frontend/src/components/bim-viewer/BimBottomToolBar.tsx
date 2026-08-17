@@ -19,6 +19,8 @@ import {
   Ruler,
   Scan,
   Scissors,
+  RotateCcw,
+  RefreshCw,
   Search,
   TriangleRight,
 } from "lucide-react";
@@ -53,6 +55,8 @@ export function BimBottomToolBar(props: {
   conversionStatus: string;
   selectedGuids: Set<string>;
   onSelectTool: (tool: BimTool) => void;
+  onResetSection: () => void;
+  onFlipSection: () => void;
   onSelectCameraMode: (mode: BimCameraMode) => void;
   onToggleFlyout: (flyout: Exclude<BimBottomFlyout, null>) => void;
   onFitToView: () => void;
@@ -212,17 +216,35 @@ export function BimBottomToolBar(props: {
         <button
           type="button"
           aria-label="Section"
-          title={
-            props.selectedGuids.size > 0
-              ? `Section box on ${props.selectedGuids.size} selected`
-              : "Section box (full model)"
-          }
+          title="Section — click a surface, then drag the cut plane"
           data-active={props.tool === "clip"}
           onClick={() => props.onSelectTool("clip")}
           className="bim-bottom-bar-btn mobile-touch-target"
         >
           <Scissors className="h-[18px] w-[18px]" aria-hidden />
         </button>
+        {props.tool === "clip" ? (
+          <>
+            <button
+              type="button"
+              aria-label="Reset section depth"
+              title="Reset section depth"
+              onClick={props.onResetSection}
+              className="bim-bottom-bar-btn mobile-touch-target"
+            >
+              <RotateCcw className="h-[18px] w-[18px]" aria-hidden />
+            </button>
+            <button
+              type="button"
+              aria-label="Flip section side"
+              title="Flip section side"
+              onClick={props.onFlipSection}
+              className="bim-bottom-bar-btn mobile-touch-target"
+            >
+              <RefreshCw className="h-[18px] w-[18px]" aria-hidden />
+            </button>
+          </>
+        ) : null}
 
         <div className="flex items-center">
           <button

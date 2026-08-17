@@ -144,6 +144,10 @@ const FRAGMENTS_WORKER_URL = "/bim/fragments-worker.mjs";
 
 /** Minimum canvas size before we trust a resize (avoids 0×0 WebGL init). */
 const MIN_CANVAS_PX = 2;
+const SECTION_SURFACE_CURSOR = "crosshair";
+/** Blue scissors cursor after a face is picked (matches BIM accent `#3B82F6`). */
+const SECTION_DRAG_CURSOR =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%233B82F6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='6' cy='6' r='3'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Cline x1='20' y1='4' x2='8.12' y2='15.88'/%3E%3Cline x1='14.47' y1='14.48' x2='20' y2='20'/%3E%3Cline x1='8.12' y1='8.12' x2='12' y2='12'/%3E%3C/svg%3E\") 4 4, crosshair";
 /** Ignore tiny hand jitter when distinguishing click vs drag. */
 const POINTER_CLICK_THRESHOLD_PX = 8;
 /** Minimum rubber-band size before Ctrl/Cmd-drag commits a box select. */
@@ -292,6 +296,7 @@ export class BimEngine {
   private static readonly GUID_SYNC_CHUNK = 1000;
   private contextMenuPickPromise: Promise<boolean> | null = null;
   private sectionBox: SectionBoxController | null = null;
+  private sectionPreviewAt = 0;
   /** Active colorize highlighter style ids (filter visualization). */
   private colorizeStyleIds: string[] = [];
   private static readonly FILTER_GHOST_STYLE = "filter:ghost";
@@ -2607,12 +2612,11 @@ export class BimEngine {
         () => this.world,
         () => this.mustComponents().get(OBC.Clipper),
         () => this.world?.camera.three ?? null,
-        () => {
-          const world = this.world;
-          if (!world) return null;
-          return this.mustComponents().get(OBC.Raycasters).get(world);
-        },
         () => this.bumpRender(),
+        (distance) => {
+          const mm = this.detectModelUnits() === "mm";
+          return mm ? `${Math.round(distance)} mm` : `${distance.toFixed(2)} m`;
+        },
       );
     }
     return this.sectionBox;
@@ -3549,17 +3553,57 @@ export class BimEngine {
     this.syncHoverEnabled();
     if (tool !== "select" && tool !== "markup") this.clearSelection();
     if (tool !== "clip") {
-      // Clears both the 2-handle gizmo and any 6-plane selection section box.
+      this.setSectionCursor("");
       this.deleteClippingPlanes();
     } else {
       const box = this.getModelBoundingBox();
       if (box) {
         this.ensureSectionController();
         this.sectionBox?.activate(box);
+        this.setSectionCursor(SECTION_SURFACE_CURSOR);
       }
     }
     this.applyBim360Navigation();
     this.events.onToolChange?.(tool);
+  }
+
+  private setSectionCursor(cursor: string): void {
+    const canvas = this.world?.renderer?.three.domElement;
+    if (canvas) canvas.style.cursor = cursor;
+  }
+
+  /** Pick the exact facade, roof, or floor face that the user wants to cut from. */
+  private async selectSectionSurface(e: PointerEvent): Promise<void> {
+    const hit = await this.castPickAtPointer(e);
+    if (!hit?.normal) return;
+    if (this.sectionBox?.selectSurface(hit.point, hit.normal)) {
+      this.setSectionCursor(SECTION_DRAG_CURSOR);
+    }
+  }
+
+  /** Surface preview is throttled because fragment raycasts can be expensive on large models. */
+  private previewSectionSurface(e: PointerEvent): void {
+    if (this.tool !== "clip" || this.sectionBox?.hasSurface()) return;
+    const now = performance.now();
+    if (now - this.sectionPreviewAt < 80) return;
+    this.sectionPreviewAt = now;
+    void this.castPickAtPointer(e).then((hit) => {
+      if (this.tool === "clip" && hit?.normal) {
+        this.sectionBox?.previewSurface(hit.point, hit.normal);
+      } else {
+        this.sectionBox?.clearPreview();
+      }
+    });
+  }
+
+  // fallow-ignore-next-line unused-class-member
+  resetSection(): void {
+    this.sectionBox?.reset();
+  }
+
+  // fallow-ignore-next-line unused-class-member
+  flipSection(): void {
+    this.sectionBox?.flip();
   }
 
   /**
@@ -3926,17 +3970,14 @@ export class BimEngine {
 
     if (this.tool !== "clip" || e.button !== 0) return;
 
-    if (!this.sectionBox?.isActive()) return;
+    if (!this.sectionBox?.hasSurface()) return;
 
     const ndc = this.pointerNdc(e);
-    const pick = this.sectionBox.pick(ndc);
-    if (!pick) return;
-
-    const startPointerT = this.sectionBox.pointerAxisT(pick.handle, pick.plane.origin, ndc);
+    const startPointerT = this.sectionBox.pointerAxisT(ndc);
     if (startPointerT == null) return;
 
     this.clearLongPressTimer();
-    this.sectionBox.beginDrag(pick.handle, pick.plane, startPointerT);
+    this.sectionBox.beginDrag(startPointerT);
     if (this.world) this.world.camera.enabled = false;
     this.container?.setPointerCapture(e.pointerId);
     e.preventDefault();
@@ -3959,6 +4000,8 @@ export class BimEngine {
     if (this.sectionBox?.isDragging()) {
       this.sectionBox.pointerMove(this.pointerNdc(e));
       e.preventDefault();
+    } else {
+      this.previewSectionSurface(e);
     }
   };
 
@@ -3974,6 +4017,7 @@ export class BimEngine {
       this.sectionBox.endDrag();
       if (this.world) this.world.camera.enabled = true;
       this.container?.releasePointerCapture(e.pointerId);
+      if (!this.pointerMoved) void this.selectSectionSurface(e);
       e.preventDefault();
       return;
     }
@@ -3997,6 +4041,12 @@ export class BimEngine {
     }
 
     if (this.tool === "markup") return;
+    if (this.tool === "clip") {
+      if (!this.sectionBox?.hasSurface()) {
+        void this.selectSectionSurface(e);
+      }
+      return;
+    }
 
     if (this.cameraMode === "walk") {
       const target = e.target as HTMLElement | null;
@@ -4027,8 +4077,6 @@ export class BimEngine {
       this.pickSelection(e);
       return;
     }
-    if (this.tool === "clip") return;
-
     this.syncPointerForRaycast(e);
     const m = this.activeMeasurement();
     if (m) {
