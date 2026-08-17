@@ -206,6 +206,120 @@ namespace PlansyncRevitPlugin.Services.Api
             return comment;
         }
 
+        public async Task<List<ClashTestInfo>> GetClashTestsAsync(
+            string projectId,
+            CancellationToken cancellationToken = default)
+        {
+            PlansyncHttp.EnsureInitialized();
+            using HttpResponseMessage response = await PlansyncHttp.Client
+                .GetAsync($"/api/v1/projects/{projectId}/clash-tests", cancellationToken)
+                .ConfigureAwait(false);
+            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+            ClashTestsResponse? payload = await response.Content
+                .ReadFromJsonAsync<ClashTestsResponse>(JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            return payload?.Tests ?? new List<ClashTestInfo>();
+        }
+
+        public async Task<ProjectClashesResponse> GetProjectClashesAsync(
+            string projectId,
+            string? testId = null,
+            string? status = null,
+            CancellationToken cancellationToken = default)
+        {
+            PlansyncHttp.EnsureInitialized();
+            var query = new List<string>();
+            if (!string.IsNullOrWhiteSpace(testId))
+            {
+                query.Add($"testId={Uri.EscapeDataString(testId)}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                query.Add($"status={Uri.EscapeDataString(status)}");
+            }
+
+            string path = $"/api/v1/projects/{projectId}/clashes";
+            if (query.Count > 0)
+            {
+                path += "?" + string.Join("&", query);
+            }
+
+            using HttpResponseMessage response = await PlansyncHttp.Client
+                .GetAsync(path, cancellationToken)
+                .ConfigureAwait(false);
+            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+            ProjectClashesResponse? payload = await response.Content
+                .ReadFromJsonAsync<ProjectClashesResponse>(JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            return payload ?? new ProjectClashesResponse();
+        }
+
+        public async Task<ClashInfo> PatchClashAsync(
+            string clashId,
+            ClashPatchRequest patch,
+            CancellationToken cancellationToken = default)
+        {
+            PlansyncHttp.EnsureInitialized();
+            using HttpResponseMessage response = await PlansyncHttp.Client
+                .PatchAsJsonAsync($"/api/v1/clashes/{clashId}", patch, PatchJsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+            ClashInfo? clash = await response.Content
+                .ReadFromJsonAsync<ClashInfo>(JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            if (clash is null || string.IsNullOrWhiteSpace(clash.Id))
+            {
+                throw new InvalidOperationException("Clash update did not return a row.");
+            }
+
+            return clash;
+        }
+
+        public async Task<List<IssueCommentInfo>> GetClashCommentsAsync(
+            string clashId,
+            CancellationToken cancellationToken = default)
+        {
+            PlansyncHttp.EnsureInitialized();
+            using HttpResponseMessage response = await PlansyncHttp.Client
+                .GetAsync($"/api/v1/clashes/{clashId}/comments", cancellationToken)
+                .ConfigureAwait(false);
+            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+            IssueCommentsResponse? payload = await response.Content
+                .ReadFromJsonAsync<IssueCommentsResponse>(JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            return payload?.Comments ?? new List<IssueCommentInfo>();
+        }
+
+        public async Task<IssueCommentInfo> CreateClashCommentAsync(
+            string clashId,
+            string body,
+            CancellationToken cancellationToken = default)
+        {
+            PlansyncHttp.EnsureInitialized();
+            using HttpResponseMessage response = await PlansyncHttp.Client
+                .PostAsJsonAsync(
+                    $"/api/v1/clashes/{clashId}/comments",
+                    new { body },
+                    cancellationToken)
+                .ConfigureAwait(false);
+            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+            IssueCommentInfo? comment = await response.Content
+                .ReadFromJsonAsync<IssueCommentInfo>(JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            if (comment is null || string.IsNullOrWhiteSpace(comment.Id))
+            {
+                throw new InvalidOperationException("Comment create did not return a row.");
+            }
+
+            return comment;
+        }
+
         public async Task<IssueInfo> PatchIssueAsync(
             string issueId,
             IssuePatchRequest patch,
@@ -348,6 +462,11 @@ namespace PlansyncRevitPlugin.Services.Api
             }
 
             string message = TryExtractError(text) ?? $"Request failed ({(int)response.StatusCode}).";
+            if ((int)response.StatusCode == 402)
+            {
+                throw new PlansyncProRequiredException(message);
+            }
+
             throw new InvalidOperationException(message);
         }
 

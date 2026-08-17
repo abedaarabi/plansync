@@ -119,6 +119,34 @@ const clashInclude = {
   issue: { select: { id: true, status: true, title: true } },
 } as const;
 
+const clashReviewInclude = {
+  ...clashInclude,
+  test: { select: { id: true, name: true } },
+  fileVersionA: { select: { file: { select: { id: true, name: true } } } },
+  fileVersionB: { select: { file: { select: { id: true, name: true } } } },
+} as const;
+
+const PROJECT_CLASH_CAP = 2000;
+
+function fileRefJson(fv?: { file: { id: string; name: string } } | null) {
+  return fv?.file ? { id: fv.file.id, name: fv.file.name } : null;
+}
+
+function clashReviewRowJson(
+  c: Parameters<typeof clashRowJson>[0] & {
+    test?: { id: string; name: string } | null;
+    fileVersionA?: { file: { id: string; name: string } } | null;
+    fileVersionB?: { file: { id: string; name: string } } | null;
+  },
+) {
+  return {
+    ...clashRowJson(c),
+    test: c.test ? { id: c.test.id, name: c.test.name } : null,
+    fileA: fileRefJson(c.fileVersionA),
+    fileB: fileRefJson(c.fileVersionB),
+  };
+}
+
 function testRowJson(t: {
   id: string;
   projectId: string;
@@ -187,6 +215,37 @@ export function registerClashRoutes(
       include: { _count: { select: { clashes: true } } },
     });
     return c.json({ tests: tests.map(testRowJson) });
+  });
+
+  r.get("/projects/:projectId/clashes", needUser, async (c) => {
+    const projectId = c.req.param("projectId");
+    const auth = await authorizeClashProject(projectId, c.get("user").id);
+    if ("error" in auth) return c.json({ error: auth.error }, auth.status);
+
+    const testId = c.req.query("testId")?.trim() || undefined;
+    const statusRaw = c.req.query("status")?.trim();
+    const where: {
+      projectId: string;
+      testId?: string;
+      status?: BimClashStatus | { in: BimClashStatus[] };
+    } = { projectId };
+    if (testId) where.testId = testId;
+    if (statusRaw === "open") {
+      where.status = { in: [BimClashStatus.NEW, BimClashStatus.ACTIVE] };
+    } else if (statusRaw && Object.values(BimClashStatus).includes(statusRaw as BimClashStatus)) {
+      where.status = statusRaw as BimClashStatus;
+    }
+
+    const clashes = await prisma.bimClash.findMany({
+      where,
+      include: clashReviewInclude,
+      orderBy: [{ status: "asc" }, { lastSeenAt: "desc" }],
+      take: PROJECT_CLASH_CAP,
+    });
+    return c.json({
+      clashes: clashes.map(clashReviewRowJson),
+      truncated: clashes.length >= PROJECT_CLASH_CAP,
+    });
   });
 
   r.post("/projects/:projectId/clash-tests", needUser, async (c) => {

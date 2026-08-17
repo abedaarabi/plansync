@@ -165,6 +165,16 @@ namespace PlansyncRevitPlugin.Services.Auth
         }
     }
 
+    internal sealed class PlansyncProRequiredException : InvalidOperationException
+    {
+        public PlansyncProRequiredException(string message)
+            : base(string.IsNullOrWhiteSpace(message)
+                ? "Clash detection needs BIM Pro."
+                : message)
+        {
+        }
+    }
+
     internal sealed class PlansyncAuthException : Exception
     {
         public PlansyncAuthException(string message, bool unverified = false, string? details = null)

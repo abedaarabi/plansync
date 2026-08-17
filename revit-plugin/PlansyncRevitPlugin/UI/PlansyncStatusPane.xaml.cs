@@ -36,45 +36,75 @@ namespace PlansyncRevitPlugin.UI
         {
             _ = RefreshAsync();
             IssuesPanelHost.NotifySessionChanged();
+            ClashesPanelHost.NotifySessionChanged();
         }
 
         private void StatusTab_Click(object sender, RoutedEventArgs e)
         {
-            ShowTab(issues: false);
+            ShowTab(PaneTab.Status);
         }
 
         private void IssuesTab_Click(object sender, RoutedEventArgs e)
         {
-            ShowTab(issues: true);
+            ShowTab(PaneTab.Issues);
             IssuesPanelHost.NotifySessionChanged();
+        }
+
+        private void ClashesTab_Click(object sender, RoutedEventArgs e)
+        {
+            ShowTab(PaneTab.Clashes);
+            ClashesPanelHost.NotifySessionChanged();
         }
 
         public void ShowIssuesTab()
         {
-            ShowTab(issues: true);
+            ShowTab(PaneTab.Issues);
             IssuesPanelHost?.NotifySessionChanged();
         }
 
-        private void ShowTab(bool issues)
+        public void ShowClashesTab()
+        {
+            ShowTab(PaneTab.Clashes);
+            ClashesPanelHost?.NotifySessionChanged();
+        }
+
+        private enum PaneTab
+        {
+            Status,
+            Issues,
+            Clashes
+        }
+
+        private void ShowTab(PaneTab tab)
         {
             if (StatusTabButton is not null)
             {
-                StatusTabButton.IsChecked = !issues;
+                StatusTabButton.IsChecked = tab == PaneTab.Status;
             }
 
             if (IssuesTabButton is not null)
             {
-                IssuesTabButton.IsChecked = issues;
+                IssuesTabButton.IsChecked = tab == PaneTab.Issues;
+            }
+
+            if (ClashesTabButton is not null)
+            {
+                ClashesTabButton.IsChecked = tab == PaneTab.Clashes;
             }
 
             if (StatusContent is not null)
             {
-                StatusContent.Visibility = issues ? Visibility.Collapsed : Visibility.Visible;
+                StatusContent.Visibility = tab == PaneTab.Status ? Visibility.Visible : Visibility.Collapsed;
             }
 
             if (IssuesPanelHost is not null)
             {
-                IssuesPanelHost.Visibility = issues ? Visibility.Visible : Visibility.Collapsed;
+                IssuesPanelHost.Visibility = tab == PaneTab.Issues ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (ClashesPanelHost is not null)
+            {
+                ClashesPanelHost.Visibility = tab == PaneTab.Clashes ? Visibility.Visible : Visibility.Collapsed;
             }
         }
 
@@ -106,6 +136,7 @@ namespace PlansyncRevitPlugin.UI
                     PlansyncSessionState.Me = login.SignedInMe;
                     PublishStatusHub.Notify($"Signed in as {login.SignedInMe.User.Email}");
                     IssuesPanelHost.NotifySessionChanged();
+                    ClashesPanelHost.NotifySessionChanged();
                 }
             }
             finally
@@ -128,6 +159,7 @@ namespace PlansyncRevitPlugin.UI
                 PlansyncSessionState.ClearDestination();
                 PublishStatusHub.Notify("Signed out.");
                 IssuesPanelHost.NotifySessionChanged();
+                ClashesPanelHost.NotifySessionChanged();
             }
             catch
             {
@@ -136,6 +168,7 @@ namespace PlansyncRevitPlugin.UI
                 PlansyncSessionState.ClearDestination();
                 PublishStatusHub.Notify("Signed out.");
                 IssuesPanelHost.NotifySessionChanged();
+                ClashesPanelHost.NotifySessionChanged();
             }
             finally
             {

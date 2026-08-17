@@ -109,6 +109,19 @@ namespace PlansyncRevitPlugin
                     LargeImage = LoadIcon("fluent_issues_32.png", "plansync_32.png"),
                     Image = LoadIcon("fluent_issues_16.png", "plansync_16.png")
                 });
+
+            AddButton(
+                panel,
+                new PushButtonData(
+                    "PlansyncClashes",
+                    "Clashes",
+                    assemblyPath,
+                    "PlansyncRevitPlugin.ShowClashesPanelCommand")
+                {
+                    ToolTip = "Review Plansync clash detection in Revit — isolate in 3D, set status, comment",
+                    LargeImage = LoadIcon("fluent_issues_32.png", "plansync_32.png"),
+                    Image = LoadIcon("fluent_issues_16.png", "plansync_16.png")
+                });
         }
 
         private static System.Windows.Media.ImageSource? LoadIcon(string primary, string fallback)

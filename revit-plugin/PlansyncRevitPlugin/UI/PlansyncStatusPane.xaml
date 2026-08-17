@@ -84,7 +84,7 @@
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="3">
-                <UniformGrid Columns="2">
+                <UniformGrid Columns="3">
                     <ToggleButton x:Name="StatusTabButton"
                                   Style="{StaticResource PlansyncSegmentToggle}"
                                   IsChecked="True"
@@ -102,13 +102,27 @@
                                   Style="{StaticResource PlansyncSegmentToggle}"
                                   IsChecked="False"
                                   Click="IssuesTab_Click"
-                                  Margin="2,0,0,0">
+                                  Margin="1,0">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <iconPacks:PackIconLucide Kind="CircleAlert"
                                                       Width="13" Height="13"
                                                       Margin="0,0,6,0"
                                                       VerticalAlignment="Center" />
                             <TextBlock Text="Issues" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton x:Name="ClashesTabButton"
+                                  Style="{StaticResource PlansyncSegmentToggle}"
+                                  IsChecked="False"
+                                  Click="ClashesTab_Click"
+                                  Margin="2,0,0,0"
+                                  ToolTip="Clash detection">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <iconPacks:PackIconLucide Kind="Crosshair"
+                                                      Width="13" Height="13"
+                                                      Margin="0,0,6,0"
+                                                      VerticalAlignment="Center" />
+                            <TextBlock Text="Clashes" VerticalAlignment="Center" />
                         </StackPanel>
                     </ToggleButton>
                 </UniformGrid>
@@ -334,6 +348,7 @@
             </ScrollViewer>
 
             <local:IssuesPanel x:Name="IssuesPanelHost" Visibility="Collapsed" />
+            <local:ClashesPanel x:Name="ClashesPanelHost" Visibility="Collapsed" />
         </Grid>
     </Grid>
 </UserControl>

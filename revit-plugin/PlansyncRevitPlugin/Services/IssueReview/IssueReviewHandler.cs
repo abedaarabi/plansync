@@ -19,7 +19,9 @@ namespace PlansyncRevitPlugin.Services.IssueReview
         public IssueReviewMode Mode { get; init; } = IssueReviewMode.OpenIn3d;
         public IssueBimAnchor? Anchor { get; init; }
         public string? IssueTitle { get; init; }
+        public bool TightClip { get; init; }
         public Action<bool, string>? Completed { get; init; }
+        public Action<bool, string, bool, bool>? CompletedHits { get; init; }
     }
 
     /// <summary>
@@ -63,7 +65,7 @@ namespace PlansyncRevitPlugin.Services.IssueReview
                 UIDocument? uidoc = app.ActiveUIDocument;
                 if (uidoc is null)
                 {
-                    request.Completed?.Invoke(false, "Open a model in Revit first.");
+                    Finish(request, false, "Open a model in Revit first.");
                     return;
                 }
 
@@ -71,14 +73,14 @@ namespace PlansyncRevitPlugin.Services.IssueReview
                 if (request.Mode == IssueReviewMode.Reset)
                 {
                     ResetReviewView(uidoc, doc);
-                    request.Completed?.Invoke(true, "Review view reset.");
+                    Finish(request, true, "Review view reset.");
                     return;
                 }
 
                 IssueBimAnchor? anchor = request.Anchor;
                 if (anchor is null || string.IsNullOrWhiteSpace(anchor.IfcGuid))
                 {
-                    request.Completed?.Invoke(false, "This issue has no BIM element link.");
+                    Finish(request, false, "This issue has no BIM element link.");
                     return;
                 }
 
@@ -100,28 +102,41 @@ namespace PlansyncRevitPlugin.Services.IssueReview
 
                 if (hitA is null && hitB is null)
                 {
-                    request.Completed?.Invoke(
+                    Finish(
+                        request,
                         false,
                         "Could not find linked elements in this model (IFC GUID mismatch). Publish IFC from this project and try again.");
                     return;
                 }
 
+                bool tight = request.TightClip;
                 string message = request.Mode switch
                 {
                     IssueReviewMode.OpenIn2d => OpenIn2d(app, uidoc, doc, hitA, hitB),
-                    IssueReviewMode.SectionBox => OpenSectionBox(app, uidoc, doc, hitA, hitB, anchor),
-                    _ => OpenIn3d(app, uidoc, doc, hitA, hitB, anchor, want.Count)
+                    IssueReviewMode.SectionBox => OpenSectionBox(app, uidoc, doc, hitA, hitB, tight),
+                    _ => OpenIn3d(app, uidoc, doc, hitA, hitB, want.Count, tight)
                 };
 
-                request.Completed?.Invoke(true, message);
+                Finish(request, true, message, hitA is not null, hitB is not null);
             }
             catch (Exception ex)
             {
-                request.Completed?.Invoke(false, ex.Message);
+                Finish(request, false, ex.Message);
             }
         }
 
         public string GetName() => "Plansync Issue Review";
+
+        private static void Finish(
+            IssueReviewRequest request,
+            bool ok,
+            string message,
+            bool foundA = false,
+            bool foundB = false)
+        {
+            request.CompletedHits?.Invoke(ok, message, foundA, foundB);
+            request.Completed?.Invoke(ok, message);
+        }
 
         private static string OpenIn3d(
             UIApplication app,
@@ -129,13 +144,13 @@ namespace PlansyncRevitPlugin.Services.IssueReview
             Document doc,
             IfcGuidHit? hitA,
             IfcGuidHit? hitB,
-            IssueBimAnchor anchor,
-            int wantedCount)
+            int wantedCount,
+            bool tightClip)
         {
             View3D view = EnsureReviewView(doc);
-            ApplyReview(doc, view, hitA, hitB, anchor, isolate: true, sectionBox: true);
+            ApplyReview(doc, view, hitA, hitB, isolate: true, sectionBox: true, tightClip);
             uidoc.ActiveView = view;
-            HighlightAndZoom(app, uidoc, view, hitA, hitB);
+            HighlightAndZoom(app, uidoc, view, hitA, hitB, tightClip);
 
             bool anyLinked = hitA?.IsLinked == true || hitB?.IsLinked == true;
             int foundCount = (hitA is null ? 0 : 1) + (hitB is null ? 0 : 1);
@@ -154,13 +169,12 @@ namespace PlansyncRevitPlugin.Services.IssueReview
             Document doc,
             IfcGuidHit? hitA,
             IfcGuidHit? hitB,
-            IssueBimAnchor anchor)
+            bool tightClip)
         {
             View3D view = EnsureReviewView(doc);
-            // Context stays visible — only clip with a section box and select/zoom.
-            ApplyReview(doc, view, hitA, hitB, anchor, isolate: false, sectionBox: true);
+            ApplyReview(doc, view, hitA, hitB, isolate: false, sectionBox: true, tightClip);
             uidoc.ActiveView = view;
-            HighlightAndZoom(app, uidoc, view, hitA, hitB);
+            HighlightAndZoom(app, uidoc, view, hitA, hitB, tightClip);
             return hitA?.IsLinked == true || hitB?.IsLinked == true
                 ? "Section box framed around the linked element(s)."
                 : "Section box framed around the issue element(s).";
@@ -171,9 +185,9 @@ namespace PlansyncRevitPlugin.Services.IssueReview
             View3D view,
             IfcGuidHit? hitA,
             IfcGuidHit? hitB,
-            IssueBimAnchor anchor,
             bool isolate,
-            bool sectionBox)
+            bool sectionBox,
+            bool tightClip)
         {
             using var tx = new Transaction(doc, "Plansync issue review");
             tx.Start();
@@ -194,7 +208,7 @@ namespace PlansyncRevitPlugin.Services.IssueReview
 
             if (sectionBox)
             {
-                BoundingBoxXYZ? box = BuildSectionBox(hitA, hitB, anchor.Position);
+                BoundingBoxXYZ? box = BuildSectionBox(hitA, hitB, tightClip);
                 if (box is not null)
                 {
                     view.SetSectionBox(box);
@@ -237,13 +251,16 @@ namespace PlansyncRevitPlugin.Services.IssueReview
             UIDocument uidoc,
             View view,
             IfcGuidHit? hitA,
-            IfcGuidHit? hitB)
+            IfcGuidHit? hitB,
+            bool tightClip = false)
         {
             // Selecting the element makes Revit draw temporary dimensions that run off to
             // distant references, so the element is identified with graphics only.
             ClearSelection(uidoc);
 
-            BoundingBoxXYZ? box = BuildZoomBox(hitA, hitB);
+            BoundingBoxXYZ? box = tightClip
+                ? BuildSectionBox(hitA, hitB, tightClip: true)
+                : BuildZoomBox(hitA, hitB);
             if (box is not null && ZoomToBox(uidoc, view, box))
             {
                 uidoc.RefreshActiveView();
@@ -538,7 +555,7 @@ namespace PlansyncRevitPlugin.Services.IssueReview
         /// </summary>
         private static BoundingBoxXYZ? BuildZoomBox(IfcGuidHit? hitA, IfcGuidHit? hitB)
         {
-            BoundingBoxXYZ? box = BuildSectionBox(hitA, hitB, _position: null);
+            BoundingBoxXYZ? box = BuildSectionBox(hitA, hitB, tightClip: false);
             if (box is null)
             {
                 return null;
@@ -649,16 +666,32 @@ namespace PlansyncRevitPlugin.Services.IssueReview
                 .Cast<View3D>()
                 .FirstOrDefault(v => !v.IsTemplate && v.Name == ReviewViewName);
 
+        /// <summary>
+        /// Clash review uses a tight cube at the two-element closest approach (Revit coords).
+        /// IFC viewer points are a different coordinate system, so they are not applied here.
+        /// Issues without tight clip keep a padded union of both element boxes.
+        /// </summary>
         private static BoundingBoxXYZ? BuildSectionBox(
             IfcGuidHit? hitA,
             IfcGuidHit? hitB,
-            IssuePoint3d? _position)
+            bool tightClip)
         {
             BoundingBoxXYZ? a = hitA?.GetHostBoundingBox();
             BoundingBoxXYZ? b = hitB?.GetHostBoundingBox();
             if (a is null && b is null)
             {
                 return null;
+            }
+
+            if (tightClip)
+            {
+                XYZ center = ContactCenter(a, b);
+                const double halfFt = 8.0;
+                return new BoundingBoxXYZ
+                {
+                    Min = new XYZ(center.X - halfFt, center.Y - halfFt, center.Z - halfFt),
+                    Max = new XYZ(center.X + halfFt, center.Y + halfFt, center.Z + halfFt)
+                };
             }
 
             XYZ min;
@@ -687,6 +720,37 @@ namespace PlansyncRevitPlugin.Services.IssueReview
                 Min = new XYZ(min.X - padFt, min.Y - padFt, min.Z - padFt),
                 Max = new XYZ(max.X + padFt, max.Y + padFt, max.Z + padFt)
             };
+        }
+
+        private static XYZ ContactCenter(BoundingBoxXYZ? a, BoundingBoxXYZ? b)
+        {
+            if (a is not null && b is not null)
+            {
+                return new XYZ(
+                    Closest1D(a.Min.X, a.Max.X, b.Min.X, b.Max.X),
+                    Closest1D(a.Min.Y, a.Max.Y, b.Min.Y, b.Max.Y),
+                    Closest1D(a.Min.Z, a.Max.Z, b.Min.Z, b.Max.Z));
+            }
+
+            BoundingBoxXYZ src = a ?? b!;
+            return (src.Min + src.Max) * 0.5;
+        }
+
+        private static double Closest1D(double a0, double a1, double b0, double b1)
+        {
+            if (a1 < b0)
+            {
+                return (a1 + b0) * 0.5;
+            }
+
+            if (b1 < a0)
+            {
+                return (b1 + a0) * 0.5;
+            }
+
+            double lo = Math.Max(a0, b0);
+            double hi = Math.Min(a1, b1);
+            return (lo + hi) * 0.5;
         }
 
         private static OverrideGraphicSettings SolidOverride(Document doc, Color color)
@@ -741,6 +805,34 @@ namespace PlansyncRevitPlugin.Services.IssueReview
             }
 
             _externalEvent = ExternalEvent.Create(Handler);
+        }
+
+        public static void OpenClash(
+            IssueBimAnchor anchor,
+            string? title,
+            Action<bool, string, bool, bool>? onDone)
+        {
+            Raise(new IssueReviewRequest
+            {
+                Mode = IssueReviewMode.OpenIn3d,
+                Anchor = anchor,
+                IssueTitle = title,
+                TightClip = true,
+                CompletedHits = onDone
+            });
+        }
+
+        public static void OpenClashSectionBox(
+            IssueBimAnchor anchor,
+            Action<bool, string, bool, bool>? onDone)
+        {
+            Raise(new IssueReviewRequest
+            {
+                Mode = IssueReviewMode.SectionBox,
+                Anchor = anchor,
+                TightClip = true,
+                CompletedHits = onDone
+            });
         }
 
         public static void OpenIssue(IssueBimAnchor anchor, string? title, Action<bool, string>? onDone)
