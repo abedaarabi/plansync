@@ -385,4 +385,150 @@
         <Setter Property="Foreground" Value="{StaticResource PlansyncTextBrush}" />
     </Style>
 
+    <!-- Dock pane: sentence-case field labels (12px floor). -->
+    <Style x:Key="PlansyncFieldLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncMutedBrush}" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+
+    <Style x:Key="PlansyncMetaText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncMutedBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="PlansyncRowTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncTextBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="PlansyncComboBox" TargetType="ComboBox">
+        <Setter Property="Height" Value="30" />
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="PlansyncCompactButton" TargetType="Button" BasedOn="{StaticResource PlansyncSecondaryButton}">
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style x:Key="PlansyncCompactPrimaryButton" TargetType="Button" BasedOn="{StaticResource PlansyncPrimaryButton}">
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style x:Key="PlansyncIconButton" TargetType="Button" BasedOn="{StaticResource PlansyncSecondaryButton}">
+        <Setter Property="Padding" Value="5" />
+        <Setter Property="MinWidth" Value="28" />
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+    </Style>
+
+    <Style x:Key="PlansyncLinkButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncAccentBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Underline tabs for the dock (Status / Issues / Clashes). -->
+    <Style x:Key="PlansyncTabStripToggle" TargetType="ToggleButton">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource PlansyncPlaceholderTextBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="6,8" />
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border Background="Transparent" Padding="{TemplateBinding Padding}" Cursor="Hand">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="2" />
+                            </Grid.RowDefinitions>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border x:Name="Underline"
+                                    Grid.Row="1"
+                                    Height="2"
+                                    Background="Transparent"
+                                    Margin="4,4,4,0" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource PlansyncSecondaryTextBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource PlansyncTextBrush}" />
+                            <Setter TargetName="Underline" Property="Background" Value="{StaticResource PlansyncAccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PlansyncPaneListItem" TargetType="ListBoxItem">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0,0,0,6" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Bd"
+                            Background="{StaticResource PlansyncSurfaceBrush}"
+                            BorderBrush="{StaticResource PlansyncBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="10,8"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PlansyncHoverBgBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PlansyncSelectedBgBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource PlansyncAccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PlansyncFilterChip" TargetType="ToggleButton" BasedOn="{StaticResource PlansyncSegmentToggle}">
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Margin" Value="0" />
+    </Style>
+
 </ResourceDictionary>

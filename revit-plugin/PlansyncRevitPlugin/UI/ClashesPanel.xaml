@@ -7,152 +7,77 @@
              Background="{DynamicResource PlansyncSurfaceAltBrush}"
              Foreground="{DynamicResource PlansyncTextBrush}"
              FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif"
-             FontSize="12">
+             FontSize="12.5"
+             PreviewKeyDown="Panel_PreviewKeyDown">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/PlansyncRevitPlugin;component/UI/Themes/PlansyncTheme.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
-            <conv:BoolToVisibilityConverter x:Key="InvertBoolToVis" Invert="True" />
-
-            <Style x:Key="ClashFilterChip" TargetType="ToggleButton" BasedOn="{StaticResource PlansyncChipToggle}">
-                <Setter Property="Padding" Value="10,5" />
-                <Setter Property="Margin" Value="0,0,6,0" />
-                <Setter Property="FontSize" Value="11" />
-            </Style>
-
-            <Style x:Key="ClashIconButton" TargetType="Button" BasedOn="{StaticResource PlansyncSecondaryButton}">
-                <Setter Property="Padding" Value="8,7" />
-                <Setter Property="MinWidth" Value="0" />
-                <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
-            </Style>
 
             <DataTemplate DataType="{x:Type vm:ClashRowViewModel}">
-                <Border Background="{DynamicResource PlansyncSurfaceBrush}"
-                        BorderBrush="{DynamicResource PlansyncBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="6"
-                        Padding="10,8"
-                        Margin="0,0,0,4"
-                        Cursor="Hand">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <DockPanel>
-                                <Ellipse Width="8" Height="8"
-                                         Fill="{DynamicResource PlansyncClashItem1Brush}"
-                                         Margin="0,3,6,0"
-                                         VerticalAlignment="Top" />
-                                <TextBlock Text="{Binding Item1Name}"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource PlansyncClashItem1TextBrush}" />
-                            </DockPanel>
-                            <TextBlock Text="{Binding Item1Meta}"
-                                       Margin="14,1,0,6"
-                                       FontSize="10"
-                                       Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
-                                       TextTrimming="CharacterEllipsis" />
-                            <DockPanel>
-                                <Ellipse Width="8" Height="8"
-                                         Fill="{DynamicResource PlansyncClashItem2Brush}"
-                                         Margin="0,3,6,0"
-                                         VerticalAlignment="Top" />
-                                <TextBlock Text="{Binding Item2Name}"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource PlansyncClashItem2TextBrush}" />
-                            </DockPanel>
-                            <TextBlock Text="{Binding Item2Meta}"
-                                       Margin="14,1,0,6"
-                                       FontSize="10"
-                                       Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
-                                       TextTrimming="CharacterEllipsis" />
-                            <DockPanel>
-                                <Border DockPanel.Dock="Left"
-                                        CornerRadius="4"
-                                        Padding="6,2"
-                                        Margin="0,0,8,0"
-                                        BorderThickness="1"
-                                        VerticalAlignment="Center">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="{DynamicResource PlansyncErrorBgBrush}" />
-                                            <Setter Property="BorderBrush" Value="{DynamicResource PlansyncErrorBorderBrush}" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Clash.ClashType}" Value="CLEARANCE">
-                                                    <Setter Property="Background" Value="{DynamicResource PlansyncWarnBgBrush}" />
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource PlansyncWarnBorderBrush}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Clash.ClashType}" Value="DUPLICATE">
-                                                    <Setter Property="Background" Value="{DynamicResource PlansyncAccentTintBgBrush}" />
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource PlansyncAccentTintBorderBrush}" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <TextBlock Text="{Binding TypeLabel}" FontSize="10" FontWeight="SemiBold">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Foreground" Value="{DynamicResource PlansyncErrorTextBrush}" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Clash.ClashType}" Value="CLEARANCE">
-                                                        <Setter Property="Foreground" Value="{DynamicResource PlansyncWarnTextBrush}" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding Clash.ClashType}" Value="DUPLICATE">
-                                                        <Setter Property="Foreground" Value="{DynamicResource PlansyncAccentTintTextBrush}" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </Border>
-                                <TextBlock Text="{Binding DistanceLabel}"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
-                                           VerticalAlignment="Center" />
-                            </DockPanel>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Top">
-                            <TextBlock Text="{Binding StatusLabel}"
-                                       FontSize="10"
-                                       FontWeight="SemiBold"
-                                       HorizontalAlignment="Right"
-                                       Margin="8,0,0,8">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Foreground" Value="{DynamicResource PlansyncErrorAccentBrush}" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Status}" Value="ACTIVE">
-                                                <Setter Property="Foreground" Value="{DynamicResource PlansyncWarnTextBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Status}" Value="RESOLVED">
-                                                <Setter Property="Foreground" Value="{DynamicResource PlansyncSuccessTextBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Status}" Value="IGNORED">
-                                                <Setter Property="Foreground" Value="{DynamicResource PlansyncFaintTextBrush}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                            <Button Style="{StaticResource ClashIconButton}"
-                                    Padding="8,4"
-                                    FontSize="11"
-                                    Command="{Binding DataContext.ResolveRowCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                    CommandParameter="{Binding}"
-                                    PreviewMouseLeftButtonDown="Resolve_PreviewMouseLeftButtonDown"
-                                    Visibility="{Binding CanQuickResolve, Converter={StaticResource BoolToVis}}"
-                                    ToolTip="Mark resolved">
-                                <TextBlock Text="Resolve" Foreground="{DynamicResource PlansyncSuccessTextBrush}" />
-                            </Button>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <DockPanel>
+                            <Ellipse Width="8" Height="8"
+                                     Fill="{DynamicResource PlansyncClashItem1Brush}"
+                                     Margin="0,3,6,0"
+                                     VerticalAlignment="Top" />
+                            <TextBlock Text="{Binding Item1Name}"
+                                       Style="{StaticResource PlansyncRowTitle}" />
+                        </DockPanel>
+                        <DockPanel Margin="0,3,0,0">
+                            <Ellipse Width="8" Height="8"
+                                     Fill="{DynamicResource PlansyncClashItem2Brush}"
+                                     Margin="0,3,6,0"
+                                     VerticalAlignment="Top" />
+                            <TextBlock Text="{Binding Item2Name}"
+                                       Style="{StaticResource PlansyncRowTitle}" />
+                        </DockPanel>
+                        <TextBlock Text="{Binding ListMetaLine}"
+                                   Style="{StaticResource PlansyncMetaText}"
+                                   Margin="14,4,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                        <TextBlock Text="{Binding StatusLabel}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Right"
+                                   Margin="8,0,0,4">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource PlansyncErrorAccentBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Status}" Value="ACTIVE">
+                                            <Setter Property="Foreground" Value="{DynamicResource PlansyncWarnTextBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="RESOLVED">
+                                            <Setter Property="Foreground" Value="{DynamicResource PlansyncSuccessTextBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="IGNORED">
+                                            <Setter Property="Foreground" Value="{DynamicResource PlansyncFaintTextBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <Border HorizontalAlignment="Right"
+                                CornerRadius="4"
+                                Padding="6,1"
+                                Margin="8,0,0,0"
+                                BorderThickness="1"
+                                Background="{DynamicResource PlansyncHoverBgBrush}"
+                                BorderBrush="{DynamicResource PlansyncBorderBrush}">
+                            <TextBlock Text="{Binding TypeLabel}" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource PlansyncSecondaryTextBrush}" />
+                        </Border>
+                    </StackPanel>
+                </Grid>
             </DataTemplate>
         </ResourceDictionary>
     </UserControl.Resources>
@@ -168,77 +93,54 @@
                 Background="{DynamicResource PlansyncSurfaceBrush}"
                 BorderBrush="{DynamicResource PlansyncBorderBrush}"
                 BorderThickness="0,0,0,1"
-                Padding="12,10"
+                Padding="10,8"
                 Visibility="{Binding IsListOpen, Converter={StaticResource BoolToVis}}">
             <StackPanel>
-                <DockPanel LastChildFill="False" Margin="0,0,0,8">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <iconPacks:PackIconLucide Kind="Crosshair"
-                                                  Width="16" Height="16"
-                                                  Foreground="{DynamicResource PlansyncAccentBrush}"
-                                                  VerticalAlignment="Center"
-                                                  Margin="0,0,6,0" />
-                        <TextBlock Text="Clashes"
-                                   FontWeight="SemiBold"
-                                   FontSize="14"
-                                   VerticalAlignment="Center" />
-                        <Border Margin="8,0,0,0"
-                                Background="{DynamicResource PlansyncAccentTintBgBrush}"
-                                BorderBrush="{DynamicResource PlansyncAccentTintBorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Padding="6,2"
-                                VerticalAlignment="Center">
-                            <TextBlock Text="{Binding OpenCountLabel}"
-                                       FontSize="10"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource PlansyncAccentTintTextBrush}" />
-                        </Border>
-                    </StackPanel>
+                <DockPanel Margin="0,0,0,8">
                     <Button DockPanel.Dock="Right"
-                            Style="{StaticResource ClashIconButton}"
+                            Style="{StaticResource PlansyncIconButton}"
                             Command="{Binding RefreshCommand}"
                             ToolTip="Refresh from Plansync">
-                        <iconPacks:PackIconLucide Kind="RefreshCw" Width="15" Height="15"
+                        <iconPacks:PackIconLucide Kind="RefreshCw" Width="14" Height="14"
                                                   Foreground="{DynamicResource PlansyncTextBrush}" />
                     </Button>
+                    <Grid>
+                        <iconPacks:PackIconLucide Kind="Search"
+                                                  Width="13" Height="13"
+                                                  Margin="8,0,0,0"
+                                                  VerticalAlignment="Center"
+                                                  Panel.ZIndex="1"
+                                                  Foreground="{DynamicResource PlansyncFaintTextBrush}" />
+                        <TextBox Style="{StaticResource PlansyncSearchBox}"
+                                 Padding="28,5,8,5"
+                                 FontSize="12.5"
+                                 Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Search element or model name" />
+                    </Grid>
                 </DockPanel>
 
+                <TextBlock Text="Test" Style="{StaticResource PlansyncFieldLabel}" />
                 <ComboBox ItemsSource="{Binding Tests}"
                           SelectedItem="{Binding SelectedTest}"
                           DisplayMemberPath="Name"
+                          Style="{StaticResource PlansyncComboBox}"
                           Margin="0,0,0,8"
-                          Padding="8,5"
                           ToolTip="Clash test" />
 
-                <Grid Margin="0,0,0,8">
-                    <iconPacks:PackIconLucide Kind="Search"
-                                              Width="14" Height="14"
-                                              Margin="10,0,0,0"
-                                              VerticalAlignment="Center"
-                                              Panel.ZIndex="1"
-                                              Foreground="{DynamicResource PlansyncFaintTextBrush}" />
-                    <TextBox Style="{StaticResource PlansyncSearchBox}"
-                             Padding="32,6,10,6"
-                             FontSize="12"
-                             Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}"
-                             ToolTip="Search element or model name" />
-                </Grid>
-
-                <StackPanel Orientation="Horizontal">
+                <WrapPanel>
                     <ToggleButton Content="Open"
-                                  Style="{StaticResource ClashFilterChip}"
+                                  Style="{StaticResource PlansyncChipToggle}"
                                   IsChecked="{Binding IsFilterOpen, Mode=OneWay}"
                                   Command="{Binding FilterOpenCommand}" />
                     <ToggleButton Content="Resolved"
-                                  Style="{StaticResource ClashFilterChip}"
+                                  Style="{StaticResource PlansyncChipToggle}"
                                   IsChecked="{Binding IsFilterResolved, Mode=OneWay}"
                                   Command="{Binding FilterResolvedCommand}" />
                     <ToggleButton Content="All"
-                                  Style="{StaticResource ClashFilterChip}"
+                                  Style="{StaticResource PlansyncChipToggle}"
                                   IsChecked="{Binding IsFilterAll, Mode=OneWay}"
                                   Command="{Binding FilterAllCommand}" />
-                </StackPanel>
+                </WrapPanel>
             </StackPanel>
         </Border>
 
@@ -246,68 +148,57 @@
                 Background="{DynamicResource PlansyncSurfaceBrush}"
                 BorderBrush="{DynamicResource PlansyncBorderBrush}"
                 BorderThickness="0,0,0,1"
-                Padding="8,10"
+                Padding="8,6"
                 Visibility="{Binding IsDetailOpen, Converter={StaticResource BoolToVis}}">
             <DockPanel LastChildFill="True">
                 <Button DockPanel.Dock="Left"
-                        Style="{StaticResource ClashIconButton}"
+                        Style="{StaticResource PlansyncCompactButton}"
                         Command="{Binding BackToListCommand}"
                         ToolTip="Back to clashes"
                         Margin="0,0,8,0">
                     <StackPanel Orientation="Horizontal">
-                        <iconPacks:PackIconLucide Kind="ArrowLeft" Width="15" Height="15"
+                        <iconPacks:PackIconLucide Kind="ArrowLeft" Width="13" Height="13"
                                                   Foreground="{DynamicResource PlansyncTextBrush}"
                                                   VerticalAlignment="Center" />
                         <TextBlock Text="Back" Margin="6,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource ClashIconButton}"
+                    <Button Style="{StaticResource PlansyncIconButton}"
                             Command="{Binding PreviousCommand}"
                             ToolTip="Previous clash"
-                            Margin="0,0,4,0">
-                        <iconPacks:PackIconLucide Kind="ChevronLeft" Width="15" Height="15"
+                            Margin="0,0,2,0">
+                        <iconPacks:PackIconLucide Kind="ChevronLeft" Width="14" Height="14"
                                                   Foreground="{DynamicResource PlansyncTextBrush}" />
                     </Button>
-                    <Button Style="{StaticResource ClashIconButton}"
+                    <Button Style="{StaticResource PlansyncIconButton}"
                             Command="{Binding NextCommand}"
                             ToolTip="Next clash">
-                        <iconPacks:PackIconLucide Kind="ChevronRight" Width="15" Height="15"
+                        <iconPacks:PackIconLucide Kind="ChevronRight" Width="14" Height="14"
                                                   Foreground="{DynamicResource PlansyncTextBrush}" />
                     </Button>
                 </StackPanel>
                 <TextBlock Text="{Binding DetailTitle}"
-                           FontWeight="SemiBold"
-                           FontSize="13"
-                           TextWrapping="Wrap"
+                           Style="{StaticResource PlansyncRowTitle}"
+                           TextWrapping="NoWrap"
                            VerticalAlignment="Center"
                            Margin="0,0,8,0" />
             </DockPanel>
         </Border>
 
         <Grid Grid.Row="1">
-            <ListBox Margin="8"
+            <ListBox x:Name="ClashesList"
+                     Margin="8"
                      ItemsSource="{Binding FilteredClashes}"
                      SelectedItem="{Binding Selected}"
                      BorderThickness="0"
                      Background="Transparent"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     PreviewKeyDown="List_PreviewKeyDown"
                      Visibility="{Binding IsListOpen, Converter={StaticResource BoolToVis}}">
                 <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="Padding" Value="0" />
-                        <Setter Property="Margin" Value="0" />
-                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                        <Setter Property="Background" Value="Transparent" />
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="ListBoxItem">
-                                    <ContentPresenter />
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource PlansyncPaneListItem}" />
                 </ListBox.ItemContainerStyle>
             </ListBox>
 
@@ -316,138 +207,118 @@
                         Visibility="{Binding ShowEmptyState, Converter={StaticResource BoolToVis}}">
                 <TextBlock Text="{Binding EmptyTitle}"
                            FontWeight="SemiBold"
+                           FontSize="13"
                            TextWrapping="Wrap"
                            TextAlignment="Center"
                            Foreground="{DynamicResource PlansyncTextBrush}" />
                 <TextBlock Text="{Binding EmptyBody}"
-                           Margin="0,6,0,0"
+                           Margin="0,6,0,10"
                            FontSize="12"
                            TextWrapping="Wrap"
                            TextAlignment="Center"
-                           Foreground="{DynamicResource PlansyncPlaceholderTextBrush}" />
+                           Foreground="{DynamicResource PlansyncMutedBrush}" />
+                <Button Style="{StaticResource PlansyncCompactButton}"
+                        Command="{Binding RefreshCommand}"
+                        HorizontalAlignment="Center"
+                        Content="Refresh" />
             </StackPanel>
 
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
-                          Padding="12,8,12,4"
+                          Padding="12,8,12,8"
                           Visibility="{Binding IsDetailOpen, Converter={StaticResource BoolToVis}}">
                 <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Text="MODEL ELEMENTS"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource PlansyncFaintTextBrush}"
-                               Margin="0,0,0,6" />
+                    <TextBlock Text="Model elements" Style="{StaticResource PlansyncFieldLabel}" />
                     <Border Background="{DynamicResource PlansyncClashItem1BgBrush}"
                             BorderBrush="{DynamicResource PlansyncClashItem1BorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="4"
+                            CornerRadius="6"
                             Padding="8,6"
                             Margin="0,0,0,6">
                         <StackPanel>
                             <DockPanel>
-                                <Ellipse Width="10" Height="10"
+                                <Ellipse Width="8" Height="8"
                                          Fill="{DynamicResource PlansyncClashItem1Brush}"
-                                         Margin="0,0,8,0" />
+                                         Margin="0,3,8,0"
+                                         VerticalAlignment="Top" />
                                 <TextBlock Text="{Binding Selected.Item1Name}"
                                            FontWeight="SemiBold"
                                            TextWrapping="Wrap"
-                                           Foreground="{DynamicResource PlansyncClashItem1TextBrush}" />
+                                           Foreground="{DynamicResource PlansyncTextBrush}" />
                             </DockPanel>
                             <TextBlock Text="{Binding Selected.Item1Meta}"
-                                       Margin="18,4,0,0"
-                                       FontSize="11"
+                                       Style="{StaticResource PlansyncMetaText}"
                                        TextWrapping="Wrap"
-                                       Foreground="{DynamicResource PlansyncClashItem1TextBrush}" />
+                                       Margin="16,4,0,0" />
                         </StackPanel>
                     </Border>
                     <Border Background="{DynamicResource PlansyncClashItem2BgBrush}"
                             BorderBrush="{DynamicResource PlansyncClashItem2BorderBrush}"
                             BorderThickness="1"
-                            CornerRadius="4"
+                            CornerRadius="6"
                             Padding="8,6"
                             Margin="0,0,0,10">
                         <StackPanel>
                             <DockPanel>
-                                <Ellipse Width="10" Height="10"
+                                <Ellipse Width="8" Height="8"
                                          Fill="{DynamicResource PlansyncClashItem2Brush}"
-                                         Margin="0,0,8,0" />
+                                         Margin="0,3,8,0"
+                                         VerticalAlignment="Top" />
                                 <TextBlock Text="{Binding Selected.Item2Name}"
                                            FontWeight="SemiBold"
                                            TextWrapping="Wrap"
-                                           Foreground="{DynamicResource PlansyncClashItem2TextBrush}" />
+                                           Foreground="{DynamicResource PlansyncTextBrush}" />
                             </DockPanel>
                             <TextBlock Text="{Binding Selected.Item2Meta}"
-                                       Margin="18,4,0,0"
-                                       FontSize="11"
+                                       Style="{StaticResource PlansyncMetaText}"
                                        TextWrapping="Wrap"
-                                       Foreground="{DynamicResource PlansyncClashItem2TextBrush}" />
+                                       Margin="16,4,0,0" />
                         </StackPanel>
                     </Border>
 
                     <TextBlock Text="{Binding Selected.DistanceLabel}"
-                               FontWeight="SemiBold"
+                               FontSize="12.5"
                                Margin="0,0,0,10"
                                Foreground="{DynamicResource PlansyncTextBrush}" />
 
-                    <TextBlock Text="STATUS"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource PlansyncFaintTextBrush}"
-                               Margin="0,0,0,6" />
-                    <UniformGrid Columns="4" Margin="0,0,0,12">
+                    <TextBlock Text="Status" Style="{StaticResource PlansyncFieldLabel}" />
+                    <WrapPanel Margin="0,0,0,10">
                         <ToggleButton Content="New"
-                                      Style="{StaticResource ClashFilterChip}"
-                                      Margin="0,0,4,0"
+                                      Style="{StaticResource PlansyncChipToggle}"
                                       IsChecked="{Binding IsStatusNew, Mode=OneWay}"
                                       Command="{Binding SetStatusCommand}"
                                       CommandParameter="NEW" />
                         <ToggleButton Content="Active"
-                                      Style="{StaticResource ClashFilterChip}"
-                                      Margin="0,0,4,0"
+                                      Style="{StaticResource PlansyncChipToggle}"
                                       IsChecked="{Binding IsStatusActive, Mode=OneWay}"
                                       Command="{Binding SetStatusCommand}"
                                       CommandParameter="ACTIVE" />
                         <ToggleButton Content="Resolved"
-                                      Style="{StaticResource ClashFilterChip}"
-                                      Margin="0,0,4,0"
+                                      Style="{StaticResource PlansyncChipToggle}"
                                       IsChecked="{Binding IsStatusResolved, Mode=OneWay}"
                                       Command="{Binding SetStatusCommand}"
                                       CommandParameter="RESOLVED" />
                         <ToggleButton Content="Ignored"
-                                      Style="{StaticResource ClashFilterChip}"
+                                      Style="{StaticResource PlansyncChipToggle}"
                                       IsChecked="{Binding IsStatusIgnored, Mode=OneWay}"
                                       Command="{Binding SetStatusCommand}"
                                       CommandParameter="IGNORED" />
-                    </UniformGrid>
+                    </WrapPanel>
 
-                    <DockPanel Margin="0,0,0,6">
-                        <TextBlock Text="{Binding CommentsHeader}"
-                                   FontSize="10"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource PlansyncFaintTextBrush}"
-                                   VerticalAlignment="Center" />
-                        <iconPacks:PackIconLucide DockPanel.Dock="Right"
-                                                  Kind="MessageCircle"
-                                                  Width="13" Height="13"
-                                                  Foreground="{DynamicResource PlansyncFaintTextBrush}"
-                                                  HorizontalAlignment="Right" />
-                    </DockPanel>
-
-                    <Border Background="{DynamicResource PlansyncSurfaceAltBrush}"
+                    <TextBlock Text="{Binding CommentsHeader}" Style="{StaticResource PlansyncFieldLabel}" />
+                    <Border Background="{DynamicResource PlansyncSurfaceBrush}"
                             BorderBrush="{DynamicResource PlansyncBorderBrush}"
                             BorderThickness="1"
                             CornerRadius="6"
                             Margin="0,0,0,8">
-                        <Grid MinHeight="72" MaxHeight="220">
-                            <TextBlock Text="Loading comments…"
-                                       Margin="10,12"
-                                       FontSize="11"
-                                       Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
+                        <Grid MinHeight="48" MaxHeight="160">
+                            <TextBlock Text="Loading…"
+                                       Margin="10,8"
+                                       Style="{StaticResource PlansyncMetaText}"
                                        Visibility="{Binding IsCommentsLoading, Converter={StaticResource BoolToVis}}" />
                             <TextBlock Text="No comments yet."
-                                       Margin="10,12"
-                                       FontSize="11"
-                                       Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
+                                       Margin="10,8"
+                                       Style="{StaticResource PlansyncMetaText}"
                                        Visibility="{Binding CommentsEmptyVisible, Converter={StaticResource BoolToVis}}" />
                             <ScrollViewer VerticalScrollBarVisibility="Auto"
                                           Padding="8"
@@ -455,29 +326,23 @@
                                 <ItemsControl ItemsSource="{Binding Comments}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="{x:Type vm:IssueCommentRowViewModel}">
-                                            <Border BorderBrush="{DynamicResource PlansyncBorderBrush}"
-                                                    BorderThickness="0,0,0,1"
-                                                    Padding="0,0,4,8"
-                                                    Margin="0,0,0,8">
+                                            <DockPanel Margin="0,0,0,8">
+                                                <TextBlock Text="{Binding CreatedAtLabel}"
+                                                           DockPanel.Dock="Right"
+                                                           Style="{StaticResource PlansyncMetaText}"
+                                                           Margin="8,0,0,0" />
                                                 <StackPanel>
-                                                    <DockPanel>
-                                                        <TextBlock Text="{Binding CreatedAtLabel}"
-                                                                   DockPanel.Dock="Right"
-                                                                   FontSize="10"
-                                                                   Margin="8,0,0,0"
-                                                                   Foreground="{DynamicResource PlansyncFaintTextBrush}" />
-                                                        <TextBlock Text="{Binding AuthorName}"
-                                                                   FontSize="11"
-                                                                   FontWeight="SemiBold"
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                    </DockPanel>
-                                                    <TextBlock Text="{Binding Body}"
-                                                               Margin="0,3,0,0"
+                                                    <TextBlock Text="{Binding AuthorName}"
                                                                FontSize="12"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Body}"
+                                                               Margin="0,2,0,0"
+                                                               FontSize="12.5"
                                                                TextWrapping="Wrap"
                                                                Foreground="{DynamicResource PlansyncSecondaryTextBrush}" />
                                                 </StackPanel>
-                                            </Border>
+                                            </DockPanel>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -485,53 +350,19 @@
                         </Grid>
                     </Border>
 
-                    <TextBox Text="{Binding NewComment, UpdateSourceTrigger=PropertyChanged}"
-                             Style="{StaticResource PlansyncTextArea}"
-                             MinHeight="52"
-                             MaxHeight="96"
-                             Margin="0,0,0,6"
-                             ToolTip="Write a comment on this clash" />
-                    <Button Style="{StaticResource PlansyncSecondaryButton}"
-                            Command="{Binding PostCommentCommand}"
-                            HorizontalAlignment="Left"
-                            Padding="10,6"
-                            Margin="0,0,0,10">
-                        <StackPanel Orientation="Horizontal">
-                            <iconPacks:PackIconLucide Kind="Send" Width="13" Height="13" Margin="0,0,6,0" VerticalAlignment="Center" />
-                            <TextBlock Text="Add comment" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
-                    <UniformGrid Columns="2" Margin="0,0,0,6">
-                        <Button Margin="0,0,4,0"
-                                Style="{StaticResource PlansyncPrimaryButton}"
-                                Command="{Binding OpenIn3dCommand}"
-                                Padding="10,9">
-                            <StackPanel Orientation="Horizontal">
-                                <iconPacks:PackIconLucide Kind="Box" Width="14" Height="14" Foreground="White" Margin="0,0,6,0" VerticalAlignment="Center" />
-                                <TextBlock Text="Open in 3D" Foreground="White" VerticalAlignment="Center" />
-                            </StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right"
+                                Style="{StaticResource PlansyncIconButton}"
+                                Command="{Binding PostCommentCommand}"
+                                ToolTip="Add comment"
+                                Margin="6,0,0,0">
+                            <iconPacks:PackIconLucide Kind="Send" Width="13" Height="13"
+                                                      Foreground="{DynamicResource PlansyncAccentBrush}" />
                         </Button>
-                        <Button Margin="4,0,0,0"
-                                Style="{StaticResource PlansyncSecondaryButton}"
-                                Command="{Binding OpenSectionBoxCommand}"
-                                Padding="10,9"
-                                ToolTip="Clip with a section box around the clash, keep surrounding context">
-                            <StackPanel Orientation="Horizontal">
-                                <iconPacks:PackIconLucide Kind="Scan" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
-                                <TextBlock Text="Section box" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                    </UniformGrid>
-                    <Button Style="{StaticResource PlansyncSecondaryButton}"
-                            Command="{Binding ResetViewCommand}"
-                            HorizontalAlignment="Stretch"
-                            Padding="10,9">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <iconPacks:PackIconLucide Kind="RotateCcw" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" />
-                            <TextBlock Text="Reset view" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
+                        <TextBox Text="{Binding NewComment, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource PlansyncSearchBox}"
+                                 ToolTip="Write a comment" />
+                    </DockPanel>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
@@ -540,33 +371,45 @@
                 Background="{DynamicResource PlansyncSurfaceBrush}"
                 BorderBrush="{DynamicResource PlansyncBorderBrush}"
                 BorderThickness="0,1,0,0"
-                Padding="12,8">
+                Padding="10,8">
             <StackPanel>
-                <DockPanel Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
-                    <iconPacks:PackIconLucide Kind="LoaderCircle"
-                                              Width="14" Height="14"
-                                              Margin="0,0,6,0"
-                                              Foreground="{DynamicResource PlansyncAccentBrush}" />
-                    <TextBlock Text="Working…"
-                               Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
-                               FontSize="11" />
-                </DockPanel>
-                <TextBlock Text="{Binding StatusMessage}"
-                           FontSize="11"
-                           Foreground="{DynamicResource PlansyncSecondaryTextBrush}"
-                           TextWrapping="Wrap" />
-                <Border Margin="0,6,0,0"
-                        Background="{DynamicResource PlansyncErrorBgBrush}"
-                        BorderBrush="{DynamicResource PlansyncErrorBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="8,6"
-                        Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Text="{Binding ErrorMessage}"
-                               Foreground="{DynamicResource PlansyncErrorTextBrush}"
-                               FontSize="11"
-                               TextWrapping="Wrap" />
-                </Border>
+                <WrapPanel Margin="0,0,0,6" Visibility="{Binding IsDetailOpen, Converter={StaticResource BoolToVis}}">
+                    <Button Style="{StaticResource PlansyncCompactPrimaryButton}"
+                            Command="{Binding OpenIn3dCommand}"
+                            Margin="0,0,6,6">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconLucide Kind="Box" Width="13" Height="13" Foreground="White" Margin="0,0,6,0" VerticalAlignment="Center" />
+                            <TextBlock Text="Open 3D" Foreground="White" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource PlansyncCompactButton}"
+                            Command="{Binding OpenSectionBoxCommand}"
+                            Margin="0,0,6,6">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconLucide Kind="Scan" Width="13" Height="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                            <TextBlock Text="Section" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource PlansyncCompactButton}"
+                            Command="{Binding ResetViewCommand}"
+                            Margin="0,0,6,6"
+                            Content="Reset" />
+                </WrapPanel>
+                <TextBlock Text="{Binding FooterText}"
+                           TextWrapping="NoWrap">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource PlansyncMetaText}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasError}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource PlansyncErrorTextBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource PlansyncAccentBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
             </StackPanel>
         </Border>
     </Grid>

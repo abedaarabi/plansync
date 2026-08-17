@@ -27,21 +27,27 @@ namespace PlansyncRevitPlugin.UI
             _ = ViewModel.RefreshAsync();
         }
 
-        private void Resolve_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        private void Panel_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            if (sender is not Button button)
+            if (e.Key == Key.Escape && ViewModel.IsDetailOpen)
+            {
+                ViewModel.BackToListCommand.Execute(null);
+                e.Handled = true;
+            }
+        }
+
+        private void List_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter)
             {
                 return;
             }
 
-            ICommand? command = button.Command;
-            object? parameter = button.CommandParameter;
-            if (command?.CanExecute(parameter) == true)
+            if (ClashesList.SelectedItem is ClashRowViewModel row)
             {
-                command.Execute(parameter);
+                ViewModel.Selected = row;
+                e.Handled = true;
             }
-
-            e.Handled = true;
         }
     }
 }

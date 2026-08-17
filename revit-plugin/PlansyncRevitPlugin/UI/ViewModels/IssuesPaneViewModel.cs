@@ -103,8 +103,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
         {
             get
             {
-                // Assignee is rendered as an avatar chip, so this line stays state + place.
-                var parts = new List<string> { StatusLabel };
+                var parts = new List<string> { PriorityLabel, AssigneeLabel };
                 if (!string.IsNullOrWhiteSpace(_issue.Location))
                 {
                     parts.Add(_issue.Location!);
@@ -266,6 +265,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                 if (SetProperty(ref _search, value ?? string.Empty))
                 {
                     OnPropertyChanged(nameof(FilteredIssues));
+                    OnPropertyChanged(nameof(ShowEmptyState));
                 }
             }
         }
@@ -282,6 +282,10 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                     OnPropertyChanged(nameof(IsFilterBim));
                     OnPropertyChanged(nameof(IsFilterAll));
                     OnPropertyChanged(nameof(OpenCountLabel));
+                    OnPropertyChanged(nameof(TabCountLabel));
+                    OnPropertyChanged(nameof(ShowEmptyState));
+                    OnPropertyChanged(nameof(EmptyTitle));
+                    OnPropertyChanged(nameof(EmptyBody));
                 }
             }
         }
@@ -310,11 +314,50 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                 if (SetProperty(ref _isDetailOpen, value))
                 {
                     OnPropertyChanged(nameof(IsListOpen));
+                    OnPropertyChanged(nameof(ShowEmptyState));
                 }
             }
         }
 
         public bool IsListOpen => !_isDetailOpen;
+
+        public bool ShowEmptyState => IsListOpen && !IsBusy && !FilteredIssues.Any();
+
+        public string EmptyTitle
+        {
+            get
+            {
+                if (!IsSignedIn())
+                {
+                    return "Sign in to load issues";
+                }
+
+                if (string.IsNullOrWhiteSpace(PlansyncSessionState.ProjectId))
+                {
+                    return "Set a destination project";
+                }
+
+                return "No issues match";
+            }
+        }
+
+        public string EmptyBody
+        {
+            get
+            {
+                if (!IsSignedIn())
+                {
+                    return "Use the Status tab to sign in, then refresh.";
+                }
+
+                if (string.IsNullOrWhiteSpace(PlansyncSessionState.ProjectId))
+                {
+                    return "Publish or pick a Plansync project first.";
+                }
+
+                return "Try another filter or search.";
+            }
+        }
 
         public IEnumerable<IssueRowViewModel> FilteredIssues
         {
@@ -415,7 +458,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
         public bool HasComments => Comments.Count > 0;
         public bool CommentsEmptyVisible => !IsCommentsLoading && Comments.Count == 0;
         public string CommentsHeader =>
-            Comments.Count == 0 ? "HISTORY" : $"HISTORY · {Comments.Count}";
+            Comments.Count == 0 ? "History" : $"History · {Comments.Count}";
 
         public IReadOnlyList<string> StatusOptions { get; } =
             new[] { "OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED" };
@@ -431,6 +474,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                 if (SetProperty(ref _isBusy, value))
                 {
                     RaiseCommands();
+                    OnPropertyChanged(nameof(ShowEmptyState));
                 }
             }
         }
@@ -438,7 +482,13 @@ namespace PlansyncRevitPlugin.UI.ViewModels
         public string StatusMessage
         {
             get => _statusMessage;
-            private set => SetProperty(ref _statusMessage, value);
+            private set
+            {
+                if (SetProperty(ref _statusMessage, value))
+                {
+                    OnPropertyChanged(nameof(FooterText));
+                }
+            }
         }
 
         public string ErrorMessage
@@ -449,6 +499,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                 if (SetProperty(ref _errorMessage, value))
                 {
                     OnPropertyChanged(nameof(HasError));
+                    OnPropertyChanged(nameof(FooterText));
                 }
             }
         }
@@ -460,9 +511,20 @@ namespace PlansyncRevitPlugin.UI.ViewModels
             get
             {
                 int open = Issues.Count(i => i.Issue.IsOpen);
-                return open == 0 ? "No open issues" : $"{open} open";
+                return open.ToString();
             }
         }
+
+        public string TabCountLabel
+        {
+            get
+            {
+                int open = Issues.Count(i => i.Issue.IsOpen);
+                return open == 0 ? string.Empty : open.ToString();
+            }
+        }
+
+        public string FooterText => HasError ? ErrorMessage : StatusMessage;
 
         public async Task RefreshAsync()
         {
@@ -474,6 +536,10 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                 IsDetailOpen = false;
                 OnPropertyChanged(nameof(FilteredIssues));
                 OnPropertyChanged(nameof(OpenCountLabel));
+                OnPropertyChanged(nameof(TabCountLabel));
+                OnPropertyChanged(nameof(ShowEmptyState));
+                OnPropertyChanged(nameof(EmptyTitle));
+                OnPropertyChanged(nameof(EmptyBody));
                 StatusMessage = "Sign in to load issues.";
                 return;
             }
@@ -485,6 +551,10 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                 IsDetailOpen = false;
                 OnPropertyChanged(nameof(FilteredIssues));
                 OnPropertyChanged(nameof(OpenCountLabel));
+                OnPropertyChanged(nameof(TabCountLabel));
+                OnPropertyChanged(nameof(ShowEmptyState));
+                OnPropertyChanged(nameof(EmptyTitle));
+                OnPropertyChanged(nameof(EmptyBody));
                 StatusMessage = "Set a Plansync destination project first.";
                 return;
             }
@@ -539,6 +609,10 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                 OnPropertyChanged(nameof(DetailTitle));
                 OnPropertyChanged(nameof(FilteredIssues));
                 OnPropertyChanged(nameof(OpenCountLabel));
+                OnPropertyChanged(nameof(TabCountLabel));
+                OnPropertyChanged(nameof(ShowEmptyState));
+                OnPropertyChanged(nameof(EmptyTitle));
+                OnPropertyChanged(nameof(EmptyBody));
                 OnPropertyChanged(nameof(HasModelBinding));
                 OnPropertyChanged(nameof(ScopeLabel));
                 RaiseCommands();
@@ -586,6 +660,10 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                 Selected.Apply(updated);
                 OnPropertyChanged(nameof(FilteredIssues));
                 OnPropertyChanged(nameof(OpenCountLabel));
+                OnPropertyChanged(nameof(TabCountLabel));
+                OnPropertyChanged(nameof(ShowEmptyState));
+                OnPropertyChanged(nameof(EmptyTitle));
+                OnPropertyChanged(nameof(EmptyBody));
                 StatusMessage = "Saved — synced to Plansync.";
             }
             catch (Exception ex)

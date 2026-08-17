@@ -65,7 +65,7 @@
                             <TextBlock x:Name="AccountStateText"
                                        Text="Checking…"
                                        Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
-                                       FontSize="11"
+                                       FontSize="12"
                                        FontWeight="SemiBold" />
                         </StackPanel>
                     </Border>
@@ -73,12 +73,11 @@
             </Grid>
         </Border>
 
-        <!-- Premium segmented Status / Issues -->
         <Border Grid.Row="1"
                 Background="{DynamicResource PlansyncSurfaceBrush}"
                 BorderBrush="{DynamicResource PlansyncBorderBrush}"
                 BorderThickness="0,0,0,1"
-                Padding="12,10">
+                Padding="10,8">
             <Border Background="{DynamicResource PlansyncHoverBgBrush}"
                     BorderBrush="{DynamicResource PlansyncBorderBrush}"
                     BorderThickness="1"
@@ -90,13 +89,7 @@
                                   IsChecked="True"
                                   Click="StatusTab_Click"
                                   Margin="0,0,2,0">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <iconPacks:PackIconLucide Kind="Activity"
-                                                      Width="13" Height="13"
-                                                      Margin="0,0,6,0"
-                                                      VerticalAlignment="Center" />
-                            <TextBlock Text="Status" VerticalAlignment="Center" />
-                        </StackPanel>
+                        <TextBlock Text="Status" />
                     </ToggleButton>
                     <ToggleButton x:Name="IssuesTabButton"
                                   Style="{StaticResource PlansyncSegmentToggle}"
@@ -104,11 +97,12 @@
                                   Click="IssuesTab_Click"
                                   Margin="1,0">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <iconPacks:PackIconLucide Kind="CircleAlert"
-                                                      Width="13" Height="13"
-                                                      Margin="0,0,6,0"
-                                                      VerticalAlignment="Center" />
                             <TextBlock Text="Issues" VerticalAlignment="Center" />
+                            <TextBlock Margin="6,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Opacity="0.65"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding ViewModel.TabCountLabel, ElementName=IssuesPanelHost}" />
                         </StackPanel>
                     </ToggleButton>
                     <ToggleButton x:Name="ClashesTabButton"
@@ -118,11 +112,12 @@
                                   Margin="2,0,0,0"
                                   ToolTip="Clash detection">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <iconPacks:PackIconLucide Kind="Crosshair"
-                                                      Width="13" Height="13"
-                                                      Margin="0,0,6,0"
-                                                      VerticalAlignment="Center" />
                             <TextBlock Text="Clashes" VerticalAlignment="Center" />
+                            <TextBlock Margin="6,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Opacity="0.65"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding ViewModel.TabCountLabel, ElementName=ClashesPanelHost}" />
                         </StackPanel>
                     </ToggleButton>
                 </UniformGrid>
@@ -144,11 +139,10 @@
                             Margin="0,0,0,10">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,6">
-                                <TextBlock Text="ACCOUNT"
-                                           Foreground="{DynamicResource PlansyncFaintTextBrush}"
-                                           FontSize="10"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center" />
+                                <TextBlock Text="Account"
+                                           Style="{StaticResource PlansyncFieldLabel}"
+                                           VerticalAlignment="Center"
+                                           Margin="0" />
                                 <iconPacks:PackIconLucide DockPanel.Dock="Right"
                                                           Kind="UserRound"
                                                           Width="14" Height="14"
@@ -165,7 +159,7 @@
                                     Style="{StaticResource PlansyncSecondaryButton}"
                                     HorizontalAlignment="Stretch"
                                     Click="AuthAction_Click"
-                                    Padding="12,9" />
+                                    Padding="10,6" />
                         </StackPanel>
                     </Border>
 
@@ -178,21 +172,20 @@
                             Margin="0,0,0,10">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,8">
-                                <TextBlock Text="DESTINATION"
-                                           Foreground="{DynamicResource PlansyncFaintTextBrush}"
-                                           FontSize="10"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center" />
+                                <TextBlock Text="Destination"
+                                           Style="{StaticResource PlansyncFieldLabel}"
+                                           VerticalAlignment="Center"
+                                           Margin="0" />
                                 <TextBlock x:Name="DestinationReadyText"
                                            DockPanel.Dock="Right"
                                            HorizontalAlignment="Right"
                                            Text="Not set"
                                            Foreground="{DynamicResource PlansyncErrorAccentBrush}"
-                                           FontSize="11"
+                                           FontSize="12"
                                            FontWeight="SemiBold" />
                             </DockPanel>
 
-                            <TextBlock Text="Workspace" Foreground="{DynamicResource PlansyncFaintTextBrush}" FontSize="10" />
+                            <TextBlock Text="Workspace" Style="{StaticResource PlansyncFieldLabel}" Margin="0,0,0,2" />
                             <TextBlock x:Name="WorkspaceText"
                                        Text="—"
                                        Foreground="{DynamicResource PlansyncTextBrush}"
@@ -200,7 +193,7 @@
                                        Margin="0,1,0,8"
                                        TextWrapping="Wrap" />
 
-                            <TextBlock Text="Project" Foreground="{DynamicResource PlansyncFaintTextBrush}" FontSize="10" />
+                            <TextBlock Text="Project" Style="{StaticResource PlansyncFieldLabel}" Margin="0,0,0,2" />
                             <TextBlock x:Name="ProjectText"
                                        Text="—"
                                        Foreground="{DynamicResource PlansyncTextBrush}"
@@ -208,7 +201,7 @@
                                        Margin="0,1,0,8"
                                        TextWrapping="Wrap" />
 
-                            <TextBlock Text="Folder" Foreground="{DynamicResource PlansyncFaintTextBrush}" FontSize="10" />
+                            <TextBlock Text="Folder" Style="{StaticResource PlansyncFieldLabel}" Margin="0,0,0,2" />
                             <Border Background="{DynamicResource PlansyncAccentTintBgBrush}"
                                     BorderBrush="{DynamicResource PlansyncAccentTintBorderBrush}"
                                     BorderThickness="1"
@@ -241,11 +234,10 @@
                             Margin="0,0,0,10">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,6">
-                                <TextBlock Text="LAST PUBLISH"
-                                           Foreground="{DynamicResource PlansyncFaintTextBrush}"
-                                           FontSize="10"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center" />
+                                <TextBlock Text="Last publish"
+                                           Style="{StaticResource PlansyncFieldLabel}"
+                                           VerticalAlignment="Center"
+                                           Margin="0" />
                                 <iconPacks:PackIconLucide DockPanel.Dock="Right"
                                                           Kind="Upload"
                                                           Width="14" Height="14"
@@ -263,7 +255,7 @@
                             <TextBlock x:Name="LastPublishFilesText"
                                        Margin="0,8,0,0"
                                        Foreground="{DynamicResource PlansyncSecondaryTextBrush}"
-                                       FontSize="11.5"
+                                       FontSize="12"
                                        TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
@@ -277,10 +269,9 @@
                             Margin="0,0,0,12">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,6">
-                                <TextBlock Text="ACTIVITY"
-                                           Foreground="{DynamicResource PlansyncFaintTextBrush}"
-                                           FontSize="10"
-                                           FontWeight="SemiBold" />
+                                <TextBlock Text="Activity"
+                                           Style="{StaticResource PlansyncFieldLabel}"
+                                           Margin="0" />
                                 <Border x:Name="QueueBadge"
                                         DockPanel.Dock="Right"
                                         Background="{DynamicResource PlansyncWarnBgBrush}"
@@ -292,7 +283,7 @@
                                     <TextBlock x:Name="QueueBadgeText"
                                                Text="0 queued"
                                                Foreground="{DynamicResource PlansyncWarnTextBrush}"
-                                               FontSize="10"
+                                               FontSize="12"
                                                FontWeight="SemiBold" />
                                 </Border>
                             </DockPanel>
@@ -303,7 +294,7 @@
                             <TextBlock x:Name="QueueFilesText"
                                        Margin="0,8,0,0"
                                        Foreground="{DynamicResource PlansyncPlaceholderTextBrush}"
-                                       FontSize="11.5"
+                                       FontSize="12"
                                        TextWrapping="Wrap"
                                        Visibility="Collapsed" />
                         </StackPanel>
@@ -314,7 +305,7 @@
                             HorizontalAlignment="Stretch"
                             Click="OpenDestination_Click"
                             Margin="0,0,0,8"
-                            Padding="12,10">
+                            Padding="10,7">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <iconPacks:PackIconLucide Kind="ExternalLink"
                                                       Width="14" Height="14"
@@ -330,12 +321,12 @@
                             HorizontalAlignment="Stretch"
                             Click="RetryQueue_Click"
                             Margin="0,0,0,8"
-                            Padding="12,10"
+                            Padding="10,7"
                             Visibility="Collapsed" />
                     <Button Style="{StaticResource PlansyncSecondaryButton}"
                             HorizontalAlignment="Stretch"
                             Click="Refresh_Click"
-                            Padding="12,10">
+                            Padding="10,7">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <iconPacks:PackIconLucide Kind="RefreshCw"
                                                       Width="14" Height="14"

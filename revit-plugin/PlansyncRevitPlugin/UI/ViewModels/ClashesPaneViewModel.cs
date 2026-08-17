@@ -47,6 +47,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
         public string StatusLabel => ClashFormat.StatusLabel(_clash.Status);
         public string TypeLabel => ClashFormat.TypeLabel(_clash.ClashType);
         public string DistanceLabel => ClashFormat.DistanceDetail(_clash.ClashType, _clash.DistanceMm);
+        public string ListMetaLine => $"{TypeLabel} · {ClashFormat.Distance(_clash.DistanceMm)}";
         public string TestName => _clash.Test?.Name ?? string.Empty;
         public string Item1Name => ClashFormat.ElementLabel(_clash.ElementA, _clash.GuidA);
         public string Item2Name => ClashFormat.ElementLabel(_clash.ElementB, _clash.GuidB);
@@ -103,6 +104,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
             OnPropertyChanged(nameof(StatusLabel));
             OnPropertyChanged(nameof(TypeLabel));
             OnPropertyChanged(nameof(DistanceLabel));
+            OnPropertyChanged(nameof(ListMetaLine));
             OnPropertyChanged(nameof(TestName));
             OnPropertyChanged(nameof(Item1Name));
             OnPropertyChanged(nameof(Item2Name));
@@ -365,7 +367,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
         public bool HasComments => Comments.Count > 0;
         public bool CommentsEmptyVisible => !IsCommentsLoading && Comments.Count == 0;
         public string CommentsHeader =>
-            Comments.Count == 0 ? "COMMENTS" : $"COMMENTS · {Comments.Count}";
+            Comments.Count == 0 ? "Comments" : $"Comments · {Comments.Count}";
 
         public bool IsBusy
         {
@@ -383,7 +385,13 @@ namespace PlansyncRevitPlugin.UI.ViewModels
         public string StatusMessage
         {
             get => _statusMessage;
-            private set => SetProperty(ref _statusMessage, value);
+            private set
+            {
+                if (SetProperty(ref _statusMessage, value))
+                {
+                    OnPropertyChanged(nameof(FooterText));
+                }
+            }
         }
 
         public string ErrorMessage
@@ -394,6 +402,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
                 if (SetProperty(ref _errorMessage, value))
                 {
                     OnPropertyChanged(nameof(HasError));
+                    OnPropertyChanged(nameof(FooterText));
                 }
             }
         }
@@ -405,10 +414,20 @@ namespace PlansyncRevitPlugin.UI.ViewModels
             get
             {
                 int open = Clashes.Count(c => c.IsOpen);
-                string label = open == 0 ? "No open clashes" : $"{open} open";
-                return _truncated ? $"{label} · first 2000" : label;
+                return _truncated ? $"{open}*" : open.ToString();
             }
         }
+
+        public string TabCountLabel
+        {
+            get
+            {
+                int open = Clashes.Count(c => c.IsOpen);
+                return open == 0 ? string.Empty : open.ToString();
+            }
+        }
+
+        public string FooterText => HasError ? ErrorMessage : StatusMessage;
 
         public bool ShowEmptyState => IsListOpen && !IsBusy && !FilteredClashes.Any();
 
@@ -887,6 +906,7 @@ namespace PlansyncRevitPlugin.UI.ViewModels
         {
             OnPropertyChanged(nameof(FilteredClashes));
             OnPropertyChanged(nameof(OpenCountLabel));
+            OnPropertyChanged(nameof(TabCountLabel));
             OnPropertyChanged(nameof(ShowEmptyState));
             OnPropertyChanged(nameof(EmptyTitle));
             OnPropertyChanged(nameof(EmptyBody));
