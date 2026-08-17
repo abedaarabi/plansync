@@ -647,6 +647,8 @@ export function BimViewerShell(props: {
   const selectMatchesGenRef = useRef(0);
   /** Skip one filter zoom after clash review ends (restore Ghost without yanking camera). */
   const skipFilterZoomOnceRef = useRef(false);
+  /** After Filters Reset clears isolate/ghost, recenter the full model. */
+  const pendingRecenterAfterFilterClearRef = useRef(false);
   /** Last applied visualize — mode-only toggles should not re-zoom. */
   const filterVisualizeRef = useRef(filterState.visualize);
 
@@ -845,9 +847,8 @@ export function BimViewerShell(props: {
                   window.setTimeout(resolve, 2_500);
                 }),
               ]);
-              if (!cancelled) engine.captureHomeCamera();
             } catch {
-              /* fit/home capture is best-effort */
+              /* fit is best-effort */
             }
           })();
         };
@@ -1600,6 +1601,11 @@ export function BimViewerShell(props: {
     void engineRef.current?.goHome();
   }, []);
 
+  /** Clear filters first, then fit once the full model is visible again. */
+  const resetFiltersAndRecenter = useCallback(() => {
+    pendingRecenterAfterFilterClearRef.current = true;
+  }, []);
+
   const onShowAll = useCallback(() => {
     setActiveFlyout(null);
     setTakeoffFocusGuids(null);
@@ -1714,6 +1720,8 @@ export function BimViewerShell(props: {
 
     if (!filterActive && !colorizeActive) {
       skipFilterZoomOnceRef.current = false;
+      const shouldRecenter = pendingRecenterAfterFilterClearRef.current;
+      pendingRecenterAfterFilterClearRef.current = false;
       void (async () => {
         if (applyGen !== filterApplyGenRef.current) return;
         await engine.applyFilterPresentation({
@@ -1722,6 +1730,8 @@ export function BimViewerShell(props: {
           matchGuids: [],
           colorizeGroups: [],
         });
+        if (applyGen !== filterApplyGenRef.current) return;
+        if (shouldRecenter) await engine.goHome();
       })();
       return () => {
         filterApplyGenRef.current += 1;
@@ -3250,8 +3260,8 @@ export function BimViewerShell(props: {
               <button
                 type="button"
                 onClick={goHome}
-                aria-label="Reset camera to home view"
-                title="Home view"
+                aria-label="Reset camera — center model in view"
+                title="Center model"
                 className="bim-rail-btn mobile-touch-target"
               >
                 <Home className="h-[18px] w-[18px]" aria-hidden />
@@ -3343,7 +3353,7 @@ export function BimViewerShell(props: {
               legend={filterLegend}
               selectMatches={selectFilterMatches}
               onToggleSelectMatches={onToggleSelectFilterMatches}
-              onResetCamera={goHome}
+              onResetCamera={resetFiltersAndRecenter}
               savedViews={savedViews}
               onSaveFilter={() => void saveFilterView()}
               onApplySavedView={(v) => void applySavedView(v)}

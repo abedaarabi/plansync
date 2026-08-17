@@ -193,8 +193,6 @@ export class BimEngine {
 
   private tool: BimTool = "select";
   private cameraMode: BimCameraMode = "orbit";
-  /** Camera after the initial first-geometry fit — Home restores this, not a live re-fit. */
-  private homeCameraState: Record<string, unknown> | null = null;
 
   /** name → ModelIdMap resolved once after classification. */
   private storeyMaps = new Map<string, OBC.ModelIdMap>();
@@ -4441,66 +4439,15 @@ export class BimEngine {
     }
   }
 
-  /** Snapshot the current camera as the Home view (call after initial fit). */
-  captureHomeCamera(): void {
-    if (this.disposed || !this.world) return;
-    const state = this.getCameraState();
-    if (!Array.isArray(state.position) || !Array.isArray(state.target)) return;
-    this.homeCameraState = state;
-  }
-
   /**
-   * Restore the first-load Home camera with an eased fly-back; falls back to an
-   * animated fit when no home pose was captured yet.
+   * Center the model in the viewport (animated fit) — Home / Filters Reset default.
    */
-  // fallow-ignore-next-line unused-class-member
   async goHome(): Promise<void> {
     if (this.disposed) return;
-    const world = this.world;
-    const controls = world?.camera?.controls;
-    const home = this.homeCameraState;
-    const pos = home?.position;
-    const tgt = home?.target;
-
-    if (!world || !controls || !Array.isArray(pos) || !Array.isArray(tgt)) {
-      await this.flyToFitView();
-      return;
-    }
-
-    if (home?.projection === "Orthographic" || home?.projection === "Perspective") {
-      if (world.camera.projection.current !== home.projection) {
-        await world.camera.projection.set(home.projection);
-        this.renderEffects?.updateCamera();
-      }
-    }
-
-    const prevSmooth = controls.smoothTime;
-    controls.smoothTime = Math.max(
-      prevSmooth,
-      getBimCameraNavigationProfile(this.appearance.navigationSpeed).flyToSmoothTime,
-    );
-    try {
-      const sphere = this.getModelBoundingSphere();
-      if (sphere && sphere.radius > 0 && Number.isFinite(sphere.radius)) {
-        this.adjustCameraClipping(sphere);
-      }
-      await controls.setLookAt(
-        pos[0] as number,
-        pos[1] as number,
-        pos[2] as number,
-        tgt[0] as number,
-        tgt[1] as number,
-        tgt[2] as number,
-        true,
-      );
-      controls.setOrbitPoint(tgt[0] as number, tgt[1] as number, tgt[2] as number);
-      this.bumpRender();
-    } finally {
-      if (!this.disposed) controls.smoothTime = prevSmooth;
-    }
+    await this.flyToFitView();
   }
 
-  /** Animated variant of {@link fitToView} used when no home pose exists. */
+  /** Animated variant of {@link fitToView} used by Home and similar fly-backs. */
   private async flyToFitView(): Promise<void> {
     const controls = this.world?.camera?.controls;
     const sphere = this.getModelBoundingSphere();
@@ -7150,7 +7097,6 @@ export class BimEngine {
   // fallow-ignore-next-line complexity
   dispose(): void {
     this.disposed = true;
-    this.homeCameraState = null;
     this.selectionLoadId += 1;
     this.selectionDetailsCache.clear();
     this.exitWalkPointerLock();

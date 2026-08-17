@@ -80,7 +80,7 @@ export function BimFiltersPanel(props: {
   legend: ColorizeLegendEntry[];
   selectMatches: boolean;
   onToggleSelectMatches: (next: boolean) => void;
-  /** Restores the camera after filters clear (home / fit view). */
+  /** After filters clear, recenter the full model in the viewport. */
   onResetCamera?: () => void;
   savedViews: BimSavedViewRecord[];
   onSaveFilter: () => void;
