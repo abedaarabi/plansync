@@ -295,7 +295,7 @@ export function FileExplorerTree({
       aria-label="Folder tree"
     >
       {showSectionLabel ? (
-        <div className="border-b border-[var(--enterprise-border)] px-3 py-2">
+        <div className="px-3 py-2">
           <p className="enterprise-type-label">Folders</p>
         </div>
       ) : null}

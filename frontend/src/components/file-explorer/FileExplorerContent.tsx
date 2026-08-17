@@ -253,7 +253,7 @@ export function FileExplorerContent({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)]/90 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 lg:px-7">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-[var(--enterprise-surface)]/90 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 lg:px-7">
         <div className="min-w-0 flex flex-1 flex-wrap items-center gap-1.5 sm:gap-2">
           <p className="min-w-0 text-xs text-[var(--enterprise-text-muted)] sm:text-sm">
             {listScopeHint ? (

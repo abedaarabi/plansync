@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Boxes,
   Building2,
   CalendarRange,
   ChartGantt,
@@ -12,6 +11,7 @@ import {
   ClipboardCheck,
   FileCheck2,
   FileStack,
+  Folders,
   Inbox,
   LayoutDashboard,
   LayoutGrid,
@@ -167,7 +167,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           label: "Hub",
           hint: "Drawings, models & files",
           href: plain("/files"),
-          icon: Boxes,
+          icon: Folders,
         },
       );
       if (mod.issues) {
@@ -208,7 +208,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         label: "Hub",
         hint: "Drawings, models & files",
         href: plain("/files"),
-        icon: Boxes,
+        icon: Folders,
       },
     );
     if (mod.schedule) {

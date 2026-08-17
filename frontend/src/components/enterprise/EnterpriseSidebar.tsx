@@ -13,8 +13,8 @@ import {
   Inbox,
   ClipboardCheck,
   ClipboardList,
-  Boxes,
   FileStack,
+  Folders,
   LayoutDashboard,
   LayoutGrid,
   MessageSquareQuote,
@@ -213,7 +213,7 @@ export function EnterpriseSidebar({
     if (ui === "contractor" || ui === "sub") {
       const items: NavItem[] = [
         { href: `/projects/${projectId}/home`, label: t("home"), icon: House },
-        { href: `/projects/${projectId}/files`, label: t("hub"), icon: Boxes },
+        { href: `/projects/${projectId}/files`, label: t("hub"), icon: Folders },
       ];
       if (mod.issues)
         items.push({ href: `/projects/${projectId}/issues`, label: t("myIssues"), icon: MapPin });
@@ -241,7 +241,7 @@ export function EnterpriseSidebar({
 
     const projectItems: NavItem[] = [
       { href: `/projects/${projectId}/home`, label: t("home"), icon: House },
-      { href: `/projects/${projectId}/files`, label: t("hub"), icon: Boxes },
+      { href: `/projects/${projectId}/files`, label: t("hub"), icon: Folders },
       { href: `/projects/${projectId}/locations`, label: t("locations"), icon: Building2 },
     ];
     if (mod.schedule)

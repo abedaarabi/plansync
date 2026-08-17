@@ -5,11 +5,11 @@
  */
 export function FileExplorerPageSkeleton() {
   return (
-    <div className="enterprise-animate-in enterprise-card flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+    <div className="enterprise-animate-in flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="h-0.5 w-full overflow-hidden bg-[var(--enterprise-hover-surface)]">
         <div className="viewer-pdf-load-indeterminate h-full w-2/5 bg-[var(--enterprise-primary)]/40" />
       </div>
-      <div className="h-14 shrink-0 border-b border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-4 sm:px-5">
+      <div className="h-14 shrink-0 bg-[var(--enterprise-surface)] px-4 sm:px-5">
         <div className="flex h-full items-center gap-3">
           <div className="enterprise-skeleton h-8 w-8 rounded-md" />
           <div className="min-w-0 flex-1 space-y-2">
@@ -19,7 +19,7 @@ export function FileExplorerPageSkeleton() {
         </div>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
-        <aside className="hidden min-h-0 overflow-y-auto border-r border-[var(--enterprise-border)] bg-[var(--enterprise-hover-surface)]/50 p-3 lg:block">
+        <aside className="hidden min-h-0 overflow-y-auto bg-[var(--enterprise-hover-surface)]/50 p-3 lg:block">
           <div className="enterprise-skeleton mb-3 h-3 w-16 rounded-md" />
           <div className="space-y-2">
             <div className="enterprise-skeleton h-8 rounded-md" />
