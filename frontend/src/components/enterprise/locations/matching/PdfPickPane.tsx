@@ -37,12 +37,12 @@ export function PdfPickPane({
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[var(--enterprise-primary-soft)]">
             <PdfFileIcon className="h-3.5 w-3.5 shrink-0" />
           </span>
-          <p className="truncate text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--enterprise-text-muted)]">
+          <p className="truncate text-xs font-semibold uppercase tracking-[0.06em] text-[var(--enterprise-text-muted)]">
             Drawing
           </p>
         </div>
         {pdfPickActive ? (
-          <span className="shrink-0 rounded-full bg-[var(--enterprise-primary)] px-2 py-px text-[9px] font-semibold uppercase tracking-wide text-white">
+          <span className="shrink-0 rounded-full bg-[var(--enterprise-primary)] px-2 py-px text-xs font-semibold uppercase tracking-wide text-white">
             Tap a point
           </span>
         ) : null}

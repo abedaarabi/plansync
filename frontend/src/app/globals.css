@@ -1784,13 +1784,15 @@ button:active:not(:disabled),
     }
 
     .bim-viewport-pane {
-      width: 50%;
+      width: 60%;
       height: 100%;
+      flex: 1 1 60%;
     }
 
     .bim-split-pane {
-      width: 50%;
+      width: 40%;
       height: 100%;
+      flex: 1 1 40%;
       border-top: none;
       border-left: 1px solid var(--bim-border);
     }

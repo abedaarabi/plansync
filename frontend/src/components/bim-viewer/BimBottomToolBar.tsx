@@ -19,6 +19,7 @@ import {
   Ruler,
   Scan,
   Scissors,
+  Columns2,
   RotateCcw,
   RefreshCw,
   Search,
@@ -68,6 +69,8 @@ export function BimBottomToolBar(props: {
   onPlacePoint: () => void;
   walkPlanSize: BimWalkPlanSize;
   onToggleWalkPlan: () => void;
+  splitViewOpen: boolean;
+  onToggleSplitView: () => void;
   clusterByType: boolean;
   onToggleClusterByType: () => void;
   onSelectElement: (guid: string) => void;
@@ -320,7 +323,18 @@ export function BimBottomToolBar(props: {
           </div>
         </div>
 
-        {props.cameraMode === "walk" ? (
+        <button
+          type="button"
+          aria-label={props.splitViewOpen ? "Close PDF split view" : "Split PDF and 3D"}
+          title={props.splitViewOpen ? "Close split" : "Split PDF | 3D"}
+          data-active={props.splitViewOpen}
+          onClick={props.onToggleSplitView}
+          className="bim-bottom-bar-btn mobile-touch-target"
+        >
+          <Columns2 className="h-[18px] w-[18px]" aria-hidden />
+        </button>
+
+        {props.cameraMode === "walk" && !props.splitViewOpen ? (
           <button
             type="button"
             aria-label={props.walkPlanSize === "off" ? "Show 2D plan" : "Hide 2D plan"}

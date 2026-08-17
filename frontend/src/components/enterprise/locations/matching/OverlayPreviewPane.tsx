@@ -4,7 +4,11 @@ import { useRef, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import type { BimEngine } from "@/components/bim-viewer/bimEngine";
 import { BimPdfPageEmbed } from "@/components/bim-viewer/BimPdfPageEmbed";
-import { overlayTransformCss, type OverlayTransform } from "@/lib/locations/calibrationMath";
+import {
+  overlayTransformCss,
+  type CutDisplayRotation,
+  type OverlayTransform,
+} from "@/lib/locations/calibrationMath";
 import type { CanvasPoint } from "../CalibrationCanvas";
 import { PDF_MARKER_COLORS, PLAN_MARKER_COLORS, PointMarkers } from "./PointMarkers";
 import { usePlanMinimapCanvas } from "./usePlanMinimapCanvas";
@@ -21,9 +25,10 @@ type Props = {
   overlayOpacity: number;
   onPageSizePt?: (widthPt: number, heightPt: number) => void;
   controls?: ReactNode;
+  cutRotationDeg?: CutDisplayRotation;
 };
 
-/** Right region: live composite of the PDF over the IFC cut for confirming alignment. */
+/** Composite of the PDF over the IFC cut in one shared square frame. */
 export function OverlayPreviewPane({
   engine,
   planLoading,
@@ -36,53 +41,61 @@ export function OverlayPreviewPane({
   overlayOpacity,
   onPageSizePt,
   controls,
+  cutRotationDeg = 0,
 }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  usePlanMinimapCanvas(engine, containerRef, canvasRef);
+  usePlanMinimapCanvas(engine, frameRef, canvasRef);
 
   return (
-    <div ref={containerRef} className="registration-canvas relative h-full w-full overflow-hidden">
-      <div className="absolute inset-0 z-0 flex items-center justify-center">
-        {engine ? (
-          <canvas ref={canvasRef} className="h-full w-full max-h-full max-w-full object-contain" />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-            <Loader2
-              className="h-6 w-6 animate-spin text-[var(--enterprise-text-muted)]"
-              aria-hidden
-            />
-            <p className="text-sm text-[var(--enterprise-text-muted)]">Loading plan…</p>
-          </div>
-        )}
-        <PointMarkers points={planPoints} colors={PLAN_MARKER_COLORS} />
-      </div>
-
-      <div
-        className="pointer-events-none absolute inset-0 z-[5] flex flex-col"
-        style={{
-          opacity: overlayOpacity,
-          ...overlayTransformCss(transform),
-        }}
-      >
-        {pdfFileId ? (
-          <BimPdfPageEmbed
-            fileId={pdfFileId}
-            fileVersionId={pdfFileVersionId}
-            pageIndex={pdfPageIndex}
-            className="h-full w-full overflow-hidden bg-transparent"
-            quality="high"
-            fit="stretch"
-            onPageSizePt={onPageSizePt}
-            overlay={
-              <PointMarkers
-                points={pdfPoints}
-                colors={PDF_MARKER_COLORS}
-                viewScale={transform.scale}
+    <div className="registration-canvas relative flex h-full w-full flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 items-center justify-center p-2">
+        <div
+          ref={frameRef}
+          className="relative aspect-square max-h-full max-w-full"
+          style={{ transform: cutRotationDeg ? `rotate(${cutRotationDeg}deg)` : undefined }}
+        >
+          {engine ? (
+            <canvas ref={canvasRef} className="block h-full w-full" />
+          ) : (
+            <div className="flex h-full min-h-[12rem] w-full flex-col items-center justify-center gap-2 p-6 text-center">
+              <Loader2
+                className="h-6 w-6 animate-spin text-[var(--enterprise-text-muted)]"
+                aria-hidden
               />
-            }
-          />
-        ) : null}
+              <p className="text-sm text-[var(--enterprise-text-muted)]">Loading plan…</p>
+            </div>
+          )}
+          <div className="pointer-events-none absolute inset-0">
+            <PointMarkers points={planPoints} colors={PLAN_MARKER_COLORS} />
+          </div>
+          <div
+            className="pointer-events-none absolute inset-0 z-[5]"
+            style={{
+              opacity: overlayOpacity,
+              ...overlayTransformCss(transform),
+            }}
+          >
+            {pdfFileId ? (
+              <BimPdfPageEmbed
+                fileId={pdfFileId}
+                fileVersionId={pdfFileVersionId}
+                pageIndex={pdfPageIndex}
+                className="h-full w-full overflow-hidden bg-transparent"
+                quality="high"
+                fit="stretch"
+                onPageSizePt={onPageSizePt}
+                overlay={
+                  <PointMarkers
+                    points={pdfPoints}
+                    colors={PDF_MARKER_COLORS}
+                    viewScale={transform.scale}
+                  />
+                }
+              />
+            ) : null}
+          </div>
+        </div>
       </div>
 
       {engine && planLoading ? (

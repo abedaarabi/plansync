@@ -10,6 +10,7 @@ export const BIM_WALK_PLAN_SIZE_OPTIONS: {
 ];
 
 const STORAGE_KEY = "plansync-bim-walk-plan-size";
+const SPLIT_STORAGE_KEY = "plansync-bim-split-view";
 const SIZE_IDS = new Set<BimWalkPlanSize>(["off", "mini", "big"]);
 
 function isWalkPlanSize(value: unknown): value is BimWalkPlanSize {
@@ -39,5 +40,26 @@ export function writeSavedWalkPlanSize(size: BimWalkPlanSize): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ size }));
   } catch {
     /* ignore quota / private mode */
+  }
+}
+
+export function readSavedSplitView(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = localStorage.getItem(SPLIT_STORAGE_KEY);
+    if (raw === "1") return true;
+    if (raw === "0") return false;
+    return readSavedWalkPlanSize() === "big";
+  } catch {
+    return false;
+  }
+}
+
+export function writeSavedSplitView(open: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(SPLIT_STORAGE_KEY, open ? "1" : "0");
+  } catch {
+    /* ignore */
   }
 }

@@ -13,6 +13,15 @@ import { hitTestMapNavigator } from "@/lib/bim/bimMapNavigator";
 import { BimPdfPageEmbed } from "./BimPdfPageEmbed";
 import { BimMapNavigatorMarker } from "./BimMapNavigatorMarker";
 
+export type PdfFootprintHighlight = {
+  centroid: { x: number; y: number };
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  offSheet: boolean;
+};
+
 type SyncSource = "pdf" | "3d" | null;
 
 type DragMode =
@@ -42,6 +51,7 @@ export function BimDrawingSyncPanel(props: {
   syncContext: BimSyncContext;
   transform: DrawingCoordTransform;
   className?: string;
+  highlight?: PdfFootprintHighlight | null;
 }) {
   const syncSourceRef = useRef<SyncSource>(null);
   const dragRef = useRef<DragMode | null>(null);
@@ -220,9 +230,35 @@ export function BimDrawingSyncPanel(props: {
                 canvasWidth={canvasSize.w}
                 canvasHeight={canvasSize.h}
               />
+              {props.highlight && !props.highlight.offSheet ? (
+                <div
+                  className="pointer-events-none absolute border-2 border-[var(--bim-accent)] bg-[var(--bim-accent)]/15"
+                  style={{
+                    left: `${props.highlight.minX * 100}%`,
+                    top: `${props.highlight.minY * 100}%`,
+                    width: `${Math.max(props.highlight.maxX - props.highlight.minX, 0.012) * 100}%`,
+                    height: `${Math.max(props.highlight.maxY - props.highlight.minY, 0.012) * 100}%`,
+                  }}
+                />
+              ) : null}
+              {props.highlight && !props.highlight.offSheet ? (
+                <span
+                  className="pointer-events-none absolute z-[2] h-2.5 w-2.5 rounded-full border-2 border-white bg-[var(--bim-accent)] shadow"
+                  style={{
+                    left: `${props.highlight.centroid.x * 100}%`,
+                    top: `${props.highlight.centroid.y * 100}%`,
+                    transform: "translate(-50%, -50%)",
+                  }}
+                />
+              ) : null}
             </div>
           }
         />
+        {props.highlight?.offSheet ? (
+          <p className="pointer-events-none absolute bottom-2 left-1/2 z-[3] -translate-x-1/2 rounded-md bg-[var(--bim-panel)] px-2 py-1 text-xs font-medium text-[var(--bim-text-muted)] shadow">
+            Not on this sheet
+          </p>
+        ) : null}
       </div>
     </div>
   );

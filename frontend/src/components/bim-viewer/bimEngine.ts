@@ -198,6 +198,8 @@ export class BimEngine {
 
   private tool: BimTool = "select";
   private cameraMode: BimCameraMode = "orbit";
+  /** When split PDF|3D is open, walk clicks select instead of pointer-lock. */
+  private walkAllowSelect = false;
 
   /** name → ModelIdMap resolved once after classification. */
   private storeyMaps = new Map<string, OBC.ModelIdMap>();
@@ -2513,6 +2515,58 @@ export class BimEngine {
     }
   }
 
+  /** Orbit: frame the active storey's footprint. Walk teleport is handled in setPlanMinimapStorey. */
+  // fallow-ignore-next-line unused-class-member
+  async framePlanStorey(name: string | null): Promise<void> {
+    if (!name || this.cameraMode === "walk" || this.disposed) return;
+    const world = this.world;
+    if (!world) return;
+    const resolved = this.resolveStoreyName(name) ?? name;
+    const hint = await this.getStoreyWalkHint(resolved);
+    if (!hint || !this.isValidBox3(hint.bounds)) return;
+    const sphere = new THREE.Sphere();
+    hint.bounds.getBoundingSphere(sphere);
+    if (!(sphere.radius > 0) || !Number.isFinite(sphere.radius)) return;
+    const fitSphere = sphere.clone();
+    fitSphere.radius *= 0.92;
+    await world.camera.controls.fitToSphere(fitSphere, true);
+    world.camera.controls.setOrbitPoint(sphere.center.x, sphere.center.y, sphere.center.z);
+    this.bumpRender();
+  }
+
+  /** XZ AABB of a selected element for projecting a footprint onto a mapped PDF. */
+  // fallow-ignore-next-line unused-class-member
+  async getItemPlanFootprint(
+    modelId: string,
+    localId: number,
+  ): Promise<{
+    cx: number;
+    cz: number;
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+  } | null> {
+    const fragments = this.components?.get(OBC.FragmentsManager);
+    const model = fragments?.list.get(modelId);
+    if (!model) return null;
+    try {
+      const box = await model.getMergedBox([localId]);
+      if (!box || box.isEmpty() || !this.isValidBox3(box)) return null;
+      const center = box.getCenter(new THREE.Vector3());
+      return {
+        cx: center.x,
+        cz: center.z,
+        minX: box.min.x,
+        maxX: box.max.x,
+        minZ: box.min.z,
+        maxZ: box.max.z,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   // fallow-ignore-next-line complexity, unused-class-member
   async applyPlanMinimapPose(pose: PlanMinimapPose): Promise<void> {
     const world = this.world;
@@ -4063,6 +4117,10 @@ export class BimEngine {
     if (this.cameraMode === "walk") {
       const target = e.target as HTMLElement | null;
       if (target?.closest(".bim-plan-minimap, .bim-walk-chrome, .bim-split-pane")) return;
+      if (this.walkAllowSelect) {
+        void this.handleCanvasPointerUp(e);
+        return;
+      }
       if (!this.walkPointerLocked) this.requestWalkPointerLock();
       return;
     }
@@ -4441,6 +4499,13 @@ export class BimEngine {
       this.syncViewportOverlays();
       this.bumpRender();
     }
+  }
+
+  /** Split view: click-select on the 3D canvas while walking (no pointer lock). */
+  // fallow-ignore-next-line unused-class-member
+  setWalkAllowSelect(enabled: boolean): void {
+    this.walkAllowSelect = enabled;
+    if (enabled) this.exitWalkPointerLock();
   }
 
   // fallow-ignore-next-line unused-class-member
@@ -7296,6 +7361,7 @@ export class BimEngine {
     this.selectionDetailsCache.clear();
     this.exitWalkPointerLock();
     this.stopWalkLoop();
+    this.walkAllowSelect = false;
     window.removeEventListener("keydown", this.onGlobalKeyDown);
     window.removeEventListener("keydown", this.onWalkKeyDown);
     window.removeEventListener("keyup", this.onWalkKeyUp);

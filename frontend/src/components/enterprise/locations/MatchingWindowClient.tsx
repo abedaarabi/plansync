@@ -27,6 +27,9 @@ import { openBimViewer } from "@/lib/bim/openBimViewer";
 import {
   bakeTransformIntoCalibration,
   computeTransformFromCalibration,
+  invertCutDisplayPick,
+  snapCutDisplayRotation,
+  type CutDisplayRotation,
 } from "@/lib/locations/calibrationMath";
 import { remainingUnmappedDrawings } from "@/lib/locations/matchNextDrawing";
 import { invalidateBuildingQueries } from "@/lib/locations/useBuildingQueries";
@@ -73,20 +76,10 @@ type Props = {
 
 type CalStep = "pdf1" | "plan1" | "pdf2" | "plan2" | "done";
 
-const STEPS: { id: CalStep; label: string }[] = [
-  { id: "pdf1", label: "Point 1 · PDF" },
-  { id: "plan1", label: "Point 1 · Plan" },
-  { id: "pdf2", label: "Point 2 · PDF" },
-  { id: "plan2", label: "Point 2 · Plan" },
+const SCREEN_STEPS = [
+  { id: "points" as const, label: "1 · Place points" },
+  { id: "review" as const, label: "2 · Review overlay" },
 ];
-
-function stepIndex(step: CalStep): number {
-  if (step === "pdf1") return 0;
-  if (step === "plan1") return 1;
-  if (step === "pdf2") return 2;
-  if (step === "plan2") return 3;
-  return 4;
-}
 
 // fallow-ignore-next-line complexity
 export function MatchingWindowClient({
@@ -108,6 +101,8 @@ export function MatchingWindowClient({
   const [manualTransform, setManualTransform] = useState(false);
   const [pageSizePt, setPageSizePt] = useState<{ width: number; height: number } | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<SaveSuccessContext | null>(null);
+  const [cutRotationDeg, setCutRotationDeg] = useState<CutDisplayRotation>(180);
+  const [forcePointsScreen, setForcePointsScreen] = useState(false);
   const [transform, setTransform] = useState({
     offsetX: 0,
     offsetY: 0,
@@ -175,6 +170,7 @@ export function MatchingWindowClient({
       setPdfPoints(cal.pointPairs.map((p) => p.pdf));
       setPlanPoints(cal.pointPairs.map((p) => p.plan));
       setStep("done");
+      setForcePointsScreen(false);
     }
     if (
       levelMapping.offsetX != null &&
@@ -326,16 +322,21 @@ export function MatchingWindowClient({
     });
   }, [ifcAsset, saveSuccess, assetsData?.unmapped, levels, projectId, buildingId, locationId]);
 
+  const readOnly = mode === "view";
+  const screen: "points" | "review" = step === "done" && !forcePointsScreen ? "review" : "points";
+
   const instruction =
-    step === "pdf1"
-      ? "Tap a known point on your PDF."
-      : step === "plan1"
-        ? "Tap the same point on the IFC cut below."
-        : step === "pdf2"
-          ? "Tap a second point on your PDF — pick a spot far from the first."
-          : step === "plan2"
-            ? "Tap the matching second point on the IFC cut."
-            : "Fine-tune offset, scale, and rotation so the straight PDF sheet follows the IFC cut direction.";
+    screen === "review"
+      ? "Fine-tune offset, scale, and rotation so the PDF follows the IFC cut."
+      : step === "pdf1"
+        ? "Tap a known building corner on your PDF."
+        : step === "plan1"
+          ? "Tap the same corner on the IFC cut. Rotate the cut 180° if the building looks upside down."
+          : step === "pdf2"
+            ? "Tap a second point on your PDF — pick a spot far from the first."
+            : step === "plan2"
+              ? "Tap the matching second point on the IFC cut."
+              : "Review the two matching corners, then continue to overlay.";
 
   const handlePdfPick = (pt: CanvasPoint) => {
     if (mode === "view") return;
@@ -350,17 +351,51 @@ export function MatchingWindowClient({
 
   const handlePlanPick = (pt: CanvasPoint) => {
     if (mode === "view") return;
+    const stored = invertCutDisplayPick(pt, cutRotationDeg);
     if (step === "plan1") {
-      setPlanPoints([pt]);
+      setPlanPoints([stored]);
       setStep("pdf2");
     } else if (step === "plan2") {
-      setPlanPoints((p) => [p[0]!, pt]);
+      setPlanPoints((p) => [p[0]!, stored]);
       setStep("done");
+      setForcePointsScreen(false);
     }
   };
 
-  const readOnly = mode === "view";
-  const currentStepIdx = stepIndex(step);
+  const handleCutRotate = (deg: CutDisplayRotation) => {
+    setCutRotationDeg(snapCutDisplayRotation(deg));
+    if (planPoints.length > 0) {
+      setPlanPoints([]);
+      setManualTransform(false);
+      setStep(pdfPoints.length >= 1 ? "plan1" : "pdf1");
+      setForcePointsScreen(true);
+    }
+  };
+
+  const undoLastPoint = () => {
+    if (step === "done" || forcePointsScreen) {
+      setPlanPoints((p) => p.slice(0, 1));
+      setStep("plan2");
+      setManualTransform(false);
+      setForcePointsScreen(true);
+      return;
+    }
+    if (step === "plan2") {
+      setPdfPoints((p) => [p[0]!]);
+      setStep("pdf2");
+      return;
+    }
+    if (step === "pdf2") {
+      setPlanPoints([]);
+      setStep("plan1");
+      return;
+    }
+    if (step === "plan1") {
+      setPdfPoints([]);
+      setStep("pdf1");
+    }
+  };
+
   const pdfPickActive = !readOnly && (step === "pdf1" || step === "pdf2");
   const planPickActive = !readOnly && (step === "plan1" || step === "plan2");
 
@@ -384,10 +419,12 @@ export function MatchingWindowClient({
     },
     transform,
     overlayOpacity,
+    cutRotationDeg,
+    onCutRotate: handleCutRotate,
   };
 
   const overlayControls =
-    !readOnly && step === "done" ? (
+    !readOnly && screen === "review" ? (
       <>
         <TransformNudgeControls
           compact
@@ -484,9 +521,9 @@ export function MatchingWindowClient({
               </button>
             ) : null}
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-              {STEPS.map((s, i) => {
-                const done = currentStepIdx > i;
-                const active = step === s.id;
+              {SCREEN_STEPS.map((s, i) => {
+                const done = screen === "review" ? i <= 1 : i === 0 && step !== "pdf1";
+                const active = s.id === screen;
                 return (
                   <div key={s.id} className="flex items-center gap-1.5">
                     {i > 0 ? (
@@ -496,15 +533,15 @@ export function MatchingWindowClient({
                       />
                     ) : null}
                     <span
-                      className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-[9px] font-medium ${
+                      className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-px text-xs font-medium ${
                         active
-                          ? "bg-[var(--enterprise-primary)] text-white shadow-sm"
+                          ? "bg-[var(--enterprise-primary)] text-white"
                           : done
                             ? "bg-[var(--enterprise-primary-soft)] text-[var(--enterprise-primary-deep)]"
-                            : "bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-primary)]/85"
+                            : "bg-[var(--enterprise-hover-surface)] text-[var(--enterprise-text-muted)]"
                       }`}
                     >
-                      {done ? (
+                      {done && !active ? (
                         <CheckCircle2 className="h-2.5 w-2.5 shrink-0" aria-hidden />
                       ) : (
                         <Circle className="h-2.5 w-2.5 shrink-0" aria-hidden />
@@ -536,32 +573,27 @@ export function MatchingWindowClient({
             levelDisplayName={level?.name ?? null}
             alignment={alignmentProps}
             overlayControls={overlayControls}
+            screen={screen}
           />
         ) : (
           <div className="grid h-full min-h-0 flex-1 gap-1.5 p-1.5 md:grid-cols-2">
-            <div className="grid min-h-0 grid-rows-2 gap-1.5">
-              <PdfPickPane
-                pdfFileId={alignmentProps.pdfFileId}
-                pdfFileVersionId={alignmentProps.pdfFileVersionId}
-                pdfPageIndex={alignmentProps.pdfPageIndex}
-                pdfPoints={alignmentProps.pdfPoints}
-                pdfPickActive={alignmentProps.pdfPickActive}
-                onPdfPick={alignmentProps.onPdfPick}
-              />
-              <PlanPickPane
-                engine={null}
-                planLoading={false}
-                planPoints={alignmentProps.planPoints}
-                planPickActive={alignmentProps.planPickActive}
-                onPlanPick={alignmentProps.onPlanPick}
-              />
-            </div>
-            <div className="flex min-h-0 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] p-6 text-center shadow-sm">
-              <p className="text-sm font-medium text-[var(--enterprise-text)]">No IFC model yet</p>
-              <p className="max-w-xs text-xs text-[var(--enterprise-text-muted)]">
-                Upload an IFC for this building to extract the level plan.
-              </p>
-            </div>
+            <PdfPickPane
+              pdfFileId={alignmentProps.pdfFileId}
+              pdfFileVersionId={alignmentProps.pdfFileVersionId}
+              pdfPageIndex={alignmentProps.pdfPageIndex}
+              pdfPoints={alignmentProps.pdfPoints}
+              pdfPickActive={alignmentProps.pdfPickActive}
+              onPdfPick={alignmentProps.onPdfPick}
+            />
+            <PlanPickPane
+              engine={null}
+              planLoading={false}
+              planPoints={alignmentProps.planPoints}
+              planPickActive={alignmentProps.planPickActive}
+              onPlanPick={alignmentProps.onPlanPick}
+              cutRotationDeg={cutRotationDeg}
+              onCutRotate={handleCutRotate}
+            />
           </div>
         )}
       </div>
@@ -569,21 +601,27 @@ export function MatchingWindowClient({
       {!readOnly ? (
         <footer className="z-10 shrink-0 border-t border-[var(--enterprise-border)] bg-[var(--enterprise-surface)]/95 px-2.5 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto flex max-w-5xl flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-            <label className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-[var(--enterprise-text-muted)]">
-              <span className="shrink-0 whitespace-nowrap">PDF opacity</span>
-              <input
-                type="range"
-                className="h-1.5 min-w-0 flex-1 accent-[var(--enterprise-primary)]"
-                min={0.15}
-                max={1}
-                step={0.05}
-                value={overlayOpacity}
-                onChange={(e) => setOverlayOpacity(Number(e.target.value))}
-              />
-              <span className="w-7 shrink-0 text-right text-xs tabular-nums text-[var(--enterprise-text)]">
-                {Math.round(overlayOpacity * 100)}%
-              </span>
-            </label>
+            {screen === "review" ? (
+              <label className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-[var(--enterprise-text-muted)]">
+                <span className="shrink-0 whitespace-nowrap">PDF opacity</span>
+                <input
+                  type="range"
+                  className="h-1.5 min-w-0 flex-1 accent-[var(--enterprise-primary)]"
+                  min={0.15}
+                  max={1}
+                  step={0.05}
+                  value={overlayOpacity}
+                  onChange={(e) => setOverlayOpacity(Number(e.target.value))}
+                />
+                <span className="w-7 shrink-0 text-right text-xs tabular-nums text-[var(--enterprise-text)]">
+                  {Math.round(overlayOpacity * 100)}%
+                </span>
+              </label>
+            ) : (
+              <p className="min-w-0 flex-1 text-xs text-[var(--enterprise-text-muted)]">
+                Pick the same two corners on both drawings, far apart.
+              </p>
+            )}
 
             <div className="flex shrink-0 justify-end gap-1.5">
               {existingMappingId ? (
@@ -596,6 +634,24 @@ export function MatchingWindowClient({
                   {unmapMut.isPending ? "Unmapping…" : "Unmap"}
                 </button>
               ) : null}
+              {screen === "review" ? (
+                <button
+                  type="button"
+                  className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-xs font-medium text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
+                  onClick={() => setForcePointsScreen(true)}
+                >
+                  Back to points
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-xs font-medium text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)] disabled:opacity-50"
+                  disabled={pdfPoints.length === 0 && planPoints.length === 0}
+                  onClick={undoLastPoint}
+                >
+                  Undo
+                </button>
+              )}
               <button
                 type="button"
                 className="rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-surface)] px-2 py-1 text-xs font-medium text-[var(--enterprise-text-muted)] hover:bg-[var(--enterprise-hover-surface)]"
@@ -604,20 +660,35 @@ export function MatchingWindowClient({
                   setPlanPoints([]);
                   setStep("pdf1");
                   setManualTransform(false);
+                  setForcePointsScreen(false);
                 }}
               >
                 Reset points
               </button>
-              <EnterpriseButton
-                type="button"
-                size="sm"
-                className="px-2.5 text-xs"
-                loading={saveMut.isPending}
-                disabled={!calibration || unmapMut.isPending}
-                onClick={() => saveMut.mutate()}
-              >
-                {saveMut.isPending ? "Saving…" : isUpdate ? "Save updates" : "Save registration"}
-              </EnterpriseButton>
+              {screen === "points" && pdfPoints.length >= 2 && planPoints.length >= 2 ? (
+                <EnterpriseButton
+                  type="button"
+                  size="sm"
+                  className="px-2.5 text-xs"
+                  onClick={() => {
+                    setStep("done");
+                    setForcePointsScreen(false);
+                  }}
+                >
+                  Review overlay
+                </EnterpriseButton>
+              ) : (
+                <EnterpriseButton
+                  type="button"
+                  size="sm"
+                  className="px-2.5 text-xs"
+                  loading={saveMut.isPending}
+                  disabled={!calibration || unmapMut.isPending || screen !== "review"}
+                  onClick={() => saveMut.mutate()}
+                >
+                  {saveMut.isPending ? "Saving…" : isUpdate ? "Save updates" : "Save registration"}
+                </EnterpriseButton>
+              )}
             </div>
           </div>
         </footer>

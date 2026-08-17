@@ -72,6 +72,8 @@ import type { BimClashStatus } from "@plansync/shared/bimClashTypes";
 import {
   readSavedWalkPlanSize,
   writeSavedWalkPlanSize,
+  readSavedSplitView,
+  writeSavedSplitView,
   type BimWalkPlanSize,
 } from "@/lib/bim/walkPlanSize";
 import { BimLeftDockContent, type BimLeftDockId } from "./BimLeftDockContent";
@@ -160,7 +162,8 @@ import {
   type BimSyncContext,
   type DrawingMapRecord,
 } from "@/lib/api-client/bim-publish";
-import type { DrawingCoordTransform } from "@/lib/bim/drawingCoordBridge";
+import { worldXZToPdfNorm, type DrawingCoordTransform } from "@/lib/bim/drawingCoordBridge";
+import type { PdfFootprintHighlight } from "./BimDrawingSyncPanel";
 import {
   buildCoordTransformFromLocationCalibration,
   isLocationCalibration,
@@ -182,8 +185,6 @@ const UnmappedDrawingPreview = dynamic(
     ),
   { ssr: false },
 );
-
-type PlanPanelMode = "minimap" | "drawingSync";
 
 type BimDockId =
   | BimLeftDockId
@@ -212,6 +213,59 @@ const TOOL_HINTS: Record<BimTool, string | null> = {
   angle: "Click three points for angle · Esc cancels",
   markup: "Draw on the model view — markups stay with this camera angle · Right-drag to orbit",
 };
+
+function drawingMapForStorey(
+  maps: DrawingMapRecord[],
+  storey: string | null,
+  resolveStoreyName?: (name: string) => string | null,
+): DrawingMapRecord | null {
+  if (!storey) return null;
+  return (
+    maps.find((m) => {
+      const src = m.level?.sourceName;
+      const disp = m.level?.displayName;
+      if (src === storey || disp === storey) return true;
+      if (!resolveStoreyName) return false;
+      const resolvedSrc = src ? resolveStoreyName(src) : null;
+      const resolvedDisp = disp ? resolveStoreyName(disp) : null;
+      return (
+        resolvedSrc === storey ||
+        resolvedDisp === storey ||
+        resolveStoreyName(storey) === resolvedSrc
+      );
+    }) ?? null
+  );
+}
+
+function footprintToPdfHighlight(
+  footprint: {
+    cx: number;
+    cz: number;
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+  },
+  transform: DrawingCoordTransform,
+): PdfFootprintHighlight {
+  const centroid = worldXZToPdfNorm(footprint.cx, footprint.cz, transform);
+  const corners = [
+    worldXZToPdfNorm(footprint.minX, footprint.minZ, transform),
+    worldXZToPdfNorm(footprint.maxX, footprint.minZ, transform),
+    worldXZToPdfNorm(footprint.maxX, footprint.maxZ, transform),
+    worldXZToPdfNorm(footprint.minX, footprint.maxZ, transform),
+  ];
+  const xs = corners.map((c) => c.x);
+  const ys = corners.map((c) => c.y);
+  return {
+    centroid,
+    minX: Math.min(...xs),
+    minY: Math.min(...ys),
+    maxX: Math.max(...xs),
+    maxY: Math.max(...ys),
+    offSheet: centroid.x < -0.02 || centroid.x > 1.02 || centroid.y < -0.02 || centroid.y > 1.02,
+  };
+}
 
 // fallow-ignore-next-line complexity
 export function BimViewerShell(props: {
@@ -430,11 +484,13 @@ export function BimViewerShell(props: {
     hasSelection: boolean;
   } | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
-  const [walkPlanSize, setWalkPlanSize] = useState<BimWalkPlanSize>(() => readSavedWalkPlanSize());
-  const lastWalkPlanSizeRef = useRef<Exclude<BimWalkPlanSize, "off">>(
-    readSavedWalkPlanSize() === "big" ? "big" : "mini",
-  );
-  const [planPanelMode, setPlanPanelMode] = useState<PlanPanelMode>("minimap");
+  const [walkPlanSize, setWalkPlanSize] = useState<BimWalkPlanSize>(() => {
+    const saved = readSavedWalkPlanSize();
+    return saved === "big" ? "mini" : saved;
+  });
+  const lastWalkPlanSizeRef = useRef<Exclude<BimWalkPlanSize, "off">>("mini");
+  const [splitViewOpen, setSplitViewOpen] = useState(() => readSavedSplitView());
+  const [pdfHighlight, setPdfHighlight] = useState<PdfFootprintHighlight | null>(null);
   const [drawingMaps, setDrawingMaps] = useState<DrawingMapRecord[]>([]);
   const [publishedLevels, setPublishedLevels] = useState<BimModelLevelDraft[]>([]);
   const [syncContext, setSyncContext] = useState<BimSyncContext | null>(null);
@@ -1223,22 +1279,10 @@ export function BimViewerShell(props: {
 
   // fallow-ignore-next-line complexity
   const activeLevelMap = useMemo(() => {
-    if (drawingMaps.length === 0) return null;
-    if (!planMinimapStorey) return drawingMaps[0] ?? null;
-    return (
-      // fallow-ignore-next-line complexity
-      drawingMaps.find((m) => {
-        const src = m.level?.sourceName;
-        const disp = m.level?.displayName;
-        if (src === planMinimapStorey || disp === planMinimapStorey) return true;
-        const resolvedSrc = activeEngine?.resolveStoreyName(src);
-        const resolvedDisp = activeEngine?.resolveStoreyName(disp);
-        return (
-          resolvedSrc === planMinimapStorey ||
-          resolvedDisp === planMinimapStorey ||
-          activeEngine?.resolveStoreyName(planMinimapStorey) === resolvedSrc
-        );
-      }) ?? drawingMaps[0]
+    return drawingMapForStorey(
+      drawingMaps,
+      planMinimapStorey,
+      (name) => activeEngine?.resolveStoreyName(name) ?? null,
     );
   }, [drawingMaps, planMinimapStorey, activeEngine]);
 
@@ -1323,41 +1367,26 @@ export function BimViewerShell(props: {
       .then(setSyncContext)
       .catch(() => {
         setSyncContext(null);
-        if (planPanelMode === "drawingSync") {
+        if (splitViewOpen) {
           toast.error("Could not load drawing sync for this level.");
         }
       });
-  }, [resolvedFileVersionId, activeLevelMap, planPanelMode]);
-
-  useEffect(() => {
-    if (!canDrawingSync) {
-      if (planPanelMode === "drawingSync") setPlanPanelMode("minimap");
-      return;
-    }
-    // Drawing sync lives in the big split pane only.
-    if (
-      cameraMode === "walk" &&
-      walkPlanSize === "big" &&
-      locationCalibration &&
-      !alignedCoordTransform
-    ) {
-      setPlanPanelMode("drawingSync");
-    }
-  }, [
-    canDrawingSync,
-    planPanelMode,
-    cameraMode,
-    walkPlanSize,
-    locationCalibration,
-    alignedCoordTransform,
-  ]);
+  }, [resolvedFileVersionId, activeLevelMap, splitViewOpen]);
 
   useEffect(() => {
     if (!activeEngine) return;
-    void activeEngine.setPlanMinimapStorey(planMinimapStorey);
-  }, [activeEngine, planMinimapStorey]);
+    void (async () => {
+      await activeEngine.setPlanMinimapStorey(planMinimapStorey);
+      if (splitViewOpen) await activeEngine.framePlanStorey(planMinimapStorey);
+    })();
+  }, [activeEngine, planMinimapStorey, splitViewOpen]);
 
   const onWalkPlanSizeChange = useCallback((size: BimWalkPlanSize) => {
+    if (size === "big") {
+      setSplitViewOpen(true);
+      writeSavedSplitView(true);
+      return;
+    }
     if (size !== "off") lastWalkPlanSizeRef.current = size;
     setWalkPlanSize(size);
     writeSavedWalkPlanSize(size);
@@ -1371,6 +1400,58 @@ export function BimViewerShell(props: {
       return next;
     });
   }, []);
+
+  const onToggleSplitView = useCallback(() => {
+    setSplitViewOpen((open) => {
+      const next = !open;
+      writeSavedSplitView(next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!splitViewOpen) return;
+    void engineRef.current?.resizeViewport();
+    engineRef.current?.setWalkAllowSelect(true);
+    return () => engineRef.current?.setWalkAllowSelect(false);
+  }, [splitViewOpen]);
+
+  const selectionKey = selection ? `${selection.modelId}:${selection.localId}` : null;
+
+  useEffect(() => {
+    if (!splitViewOpen || !selection?.storey || !activeEngine) return;
+    const resolved = activeEngine.resolveStoreyName(selection.storey) ?? selection.storey;
+    const mapped = drawingMapForStorey(drawingMaps, resolved, (name) =>
+      activeEngine.resolveStoreyName(name),
+    );
+    if (!mapped) return;
+    if (resolved !== planMinimapStorey) setPlanMinimapStorey(resolved);
+    // Only when the selected element changes — not when the user picks a floor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectionKey is the trigger
+  }, [selectionKey, splitViewOpen]);
+
+  useEffect(() => {
+    if (!splitViewOpen || !selection || !effectiveCoordTransform || !activeEngine) {
+      setPdfHighlight(null);
+      return;
+    }
+    let cancelled = false;
+    void activeEngine
+      .getItemPlanFootprint(selection.modelId, selection.localId)
+      .then((fp) => {
+        if (cancelled || !fp) {
+          setPdfHighlight(null);
+          return;
+        }
+        setPdfHighlight(footprintToPdfHighlight(fp, effectiveCoordTransform));
+      })
+      .catch(() => {
+        if (!cancelled) setPdfHighlight(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [splitViewOpen, selectionKey, effectiveCoordTransform, activeEngine, selection]);
 
   useEffect(() => {
     if (props.issueId?.trim()) return;
@@ -3010,8 +3091,8 @@ export function BimViewerShell(props: {
     dock === "objects" || dock === "models" || dock === "visibility" || dock === "quality";
 
   const walkPlanReady = !mappingEditActive && cameraMode === "walk" && phase.kind === "ready";
-  const splitViewActive = walkPlanReady && walkPlanSize === "big";
-  const miniPlanActive = walkPlanReady && walkPlanSize === "mini";
+  const splitViewActive = !mappingEditActive && phase.kind === "ready" && splitViewOpen;
+  const miniPlanActive = walkPlanReady && walkPlanSize === "mini" && !splitViewOpen;
   const workspaceReady = workspaceActive && phase.kind === "ready";
   const mappingUiReady =
     mappingEditActive && phase.kind === "ready" && Boolean(props.locationId && resolvedProjectId);
@@ -3682,6 +3763,8 @@ export function BimViewerShell(props: {
             onPlacePoint={() => engineRef.current?.measureConfirmPoint()}
             walkPlanSize={walkPlanSize}
             onToggleWalkPlan={onToggleWalkPlan}
+            splitViewOpen={splitViewOpen}
+            onToggleSplitView={onToggleSplitView}
             clusterByType={clusterByType}
             onToggleClusterByType={onToggleClusterByType}
             onSelectElement={onSelectElementFromSearch}
@@ -3872,11 +3955,8 @@ export function BimViewerShell(props: {
 
         {splitViewActive ? (
           <BimSplitViewPane
-            planPanelMode={planPanelMode}
-            onPlanPanelModeChange={setPlanPanelMode}
             canDrawingSync={canDrawingSync}
             engine={activeEngine}
-            storeys={planStoreyOptions.map((o) => o.value)}
             storeyOptions={planStoreyOptions}
             planMinimapStorey={planMinimapStorey}
             onSelectStorey={setPlanMinimapStorey}
@@ -3884,12 +3964,35 @@ export function BimViewerShell(props: {
             activeLevelMap={activeLevelMap}
             drawingTransform={effectiveCoordTransform}
             onAlign={() => {
+              if (!activeLevelMap) return;
               setAlignMap(activeLevelMap);
               setAlignOpen(true);
             }}
             hasDrawingMaps={drawingMaps.length > 0}
-            walkPlanSize={walkPlanSize}
-            onWalkPlanSizeChange={onWalkPlanSizeChange}
+            emptyTitle={
+              drawingMaps.length === 0
+                ? "This model has no mapped drawing"
+                : "This level has no mapped drawing"
+            }
+            emptyBody={
+              drawingMaps.length === 0
+                ? "Register a PDF to a level to split the sheet with 3D."
+                : "Match a sheet to this floor, or pick another level."
+            }
+            onEmptyCta={
+              resolvedProjectId && props.locationId && props.buildingId
+                ? () =>
+                    router.push(
+                      `/projects/${resolvedProjectId}/locations/${props.locationId}/buildings/${props.buildingId}`,
+                    )
+                : undefined
+            }
+            emptyCtaLabel={
+              resolvedProjectId && props.locationId && props.buildingId
+                ? "Open building"
+                : undefined
+            }
+            highlight={pdfHighlight}
           />
         ) : null}
 

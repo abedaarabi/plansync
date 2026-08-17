@@ -68,3 +68,40 @@ export function snapRotationDeg(deg: number, step = 90): number {
   const s = step > 0 ? step : 90;
   return Math.round(deg / s) * s;
 }
+
+export type CutDisplayRotation = 0 | 90 | 180 | 270;
+
+/** Quarter-turn display rotation for the IFC cut (does not change world mapping). */
+export function snapCutDisplayRotation(deg: number): CutDisplayRotation {
+  const n = (((Math.round(deg / 90) * 90) % 360) + 360) % 360;
+  if (n === 90 || n === 180 || n === 270) return n;
+  return 0;
+}
+
+/**
+ * Rotate a normalized (0–1) point around the sheet center.
+ * Matches CSS `rotate()` on a Y-down canvas (positive = clockwise).
+ */
+export function rotateNormAroundCenter(
+  p: { x: number; y: number },
+  deg: number,
+): { x: number; y: number } {
+  if (!deg) return { x: p.x, y: p.y };
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = p.x - 0.5;
+  const dy = p.y - 0.5;
+  return {
+    x: 0.5 + cos * dx - sin * dy,
+    y: 0.5 + sin * dx + cos * dy,
+  };
+}
+
+/** Convert a click on the rotated cut display into unrotated plan UV. */
+export function invertCutDisplayPick(
+  p: { x: number; y: number },
+  deg: CutDisplayRotation,
+): { x: number; y: number } {
+  return rotateNormAroundCenter(p, -deg);
+}

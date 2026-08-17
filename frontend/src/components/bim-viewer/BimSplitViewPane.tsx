@@ -4,22 +4,13 @@ import { ChevronDown, Layers3, Map } from "lucide-react";
 import type { BimEngine } from "./bimEngine";
 import type { BimSyncContext, DrawingMapRecord } from "@/lib/api-client/bim-publish";
 import type { DrawingCoordTransform } from "@/lib/bim/drawingCoordBridge";
-import type { BimWalkPlanSize } from "@/lib/bim/walkPlanSize";
-import { BimDrawingSyncPanel } from "./BimDrawingSyncPanel";
-import { BimPlanMinimap } from "./BimPlanMinimap";
-import { BimWalkPlanSizeControl } from "./BimWalkPlanSizeControl";
-
-export type BimPlanPanelMode = "minimap" | "drawingSync";
+import { BimDrawingSyncPanel, type PdfFootprintHighlight } from "./BimDrawingSyncPanel";
 
 export type PlanStoreyOption = { value: string; label: string };
 
-// fallow-ignore-next-line complexity
 export function BimSplitViewPane(props: {
-  planPanelMode: BimPlanPanelMode;
-  onPlanPanelModeChange: (mode: BimPlanPanelMode) => void;
   canDrawingSync: boolean;
   engine: BimEngine | null;
-  storeys: string[];
   storeyOptions: PlanStoreyOption[];
   planMinimapStorey: string | null;
   onSelectStorey: (name: string | null) => void;
@@ -28,16 +19,19 @@ export function BimSplitViewPane(props: {
   drawingTransform: DrawingCoordTransform | null;
   onAlign: () => void;
   hasDrawingMaps: boolean;
-  walkPlanSize: BimWalkPlanSize;
-  onWalkPlanSizeChange: (size: BimWalkPlanSize) => void;
+  emptyTitle: string;
+  emptyBody: string;
+  onEmptyCta?: () => void;
+  emptyCtaLabel?: string;
+  highlight?: PdfFootprintHighlight | null;
 }) {
   const transform = props.drawingTransform;
+  const showDrawing = Boolean(props.canDrawingSync && props.syncContext && transform);
 
   return (
-    <aside className="bim-split-pane" aria-label="2D plan and drawing view">
+    <aside className="bim-split-pane" aria-label="Mapped PDF drawing">
       <div className="bim-split-pane__toolbar">
-        <span className="bim-split-pane__label">2D</span>
-        <BimWalkPlanSizeControl size={props.walkPlanSize} onChange={props.onWalkPlanSizeChange} />
+        <span className="bim-split-pane__label">PDF</span>
         {props.storeyOptions.length > 0 ? (
           <div className="bim-split-pane__floor-wrap">
             <select
@@ -59,32 +53,10 @@ export function BimSplitViewPane(props: {
             <ChevronDown className="bim-split-pane__floor-icon" aria-hidden />
           </div>
         ) : null}
-        <div className="flex rounded-full border border-[var(--bim-border)] bg-[var(--bim-surface)]/95 p-0.5 text-[10px]">
-          <button
-            type="button"
-            className={`rounded-full px-2.5 py-1 font-medium transition ${props.planPanelMode === "minimap" ? "bg-[var(--bim-accent-muted)] text-[var(--bim-accent)] ring-1 ring-[var(--bim-accent)]/45" : "text-[var(--bim-text-muted)]"}`}
-            onClick={() => props.onPlanPanelModeChange("minimap")}
-          >
-            Plan
-          </button>
-          <button
-            type="button"
-            disabled={!props.canDrawingSync}
-            title={
-              props.canDrawingSync
-                ? "Synced PDF navigation"
-                : "Register or align a mapped sheet first"
-            }
-            className={`rounded-full px-2.5 py-1 font-medium transition disabled:opacity-40 ${props.planPanelMode === "drawingSync" ? "bg-[var(--bim-accent-muted)] text-[var(--bim-accent)] ring-1 ring-[var(--bim-accent)]/45" : "text-[var(--bim-text-muted)]"}`}
-            onClick={() => props.onPlanPanelModeChange("drawingSync")}
-          >
-            Drawing
-          </button>
-        </div>
         {props.hasDrawingMaps ? (
           <button
             type="button"
-            className="bim-glass-surface ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium text-[var(--bim-text)]"
+            className="bim-glass-surface ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-[var(--bim-text)]"
             onClick={props.onAlign}
           >
             <Layers3 className="h-3 w-3" aria-hidden />
@@ -93,36 +65,31 @@ export function BimSplitViewPane(props: {
         ) : null}
       </div>
       <div className="bim-split-pane__body">
-        {props.planPanelMode === "drawingSync" && props.syncContext && transform ? (
+        {showDrawing && props.syncContext && transform ? (
           <BimDrawingSyncPanel
             engine={props.engine}
             syncContext={props.syncContext}
             transform={transform}
+            highlight={props.highlight}
             className="h-full min-h-0 rounded-none border-0 shadow-none"
           />
-        ) : props.planPanelMode === "drawingSync" ? (
-          <div className="flex h-full items-center justify-center px-4 text-center text-xs text-[var(--bim-text-muted)]">
-            {props.canDrawingSync
-              ? "Loading drawing sync for this level…"
-              : "Register a drawing to this level, or align a mapped sheet, to enable drawing sync."}
-          </div>
         ) : (
-          <BimPlanMinimap
-            variant="split"
-            engine={props.engine}
-            storeys={props.storeys}
-            storeyOptions={props.storeyOptions}
-            selectedStorey={props.planMinimapStorey}
-            onSelectStorey={props.onSelectStorey}
-          />
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
+            <p className="text-sm font-medium text-[var(--bim-text)]">{props.emptyTitle}</p>
+            <p className="max-w-xs text-xs text-[var(--bim-text-muted)]">{props.emptyBody}</p>
+            {props.onEmptyCta && props.emptyCtaLabel ? (
+              <button
+                type="button"
+                className="mt-1 rounded-md bg-[var(--bim-accent)] px-3 py-1.5 text-xs font-semibold text-white"
+                onClick={props.onEmptyCta}
+              >
+                {props.emptyCtaLabel}
+              </button>
+            ) : null}
+          </div>
         )}
       </div>
-      {props.planPanelMode === "minimap" ? (
-        <p className="bim-split-pane__hint">
-          <Map className="mr-1 inline h-3 w-3" aria-hidden />
-          Drag the blue dot to move · outer beam to rotate · tap plan to jump
-        </p>
-      ) : props.planPanelMode === "drawingSync" && props.canDrawingSync ? (
+      {showDrawing ? (
         <p className="bim-split-pane__hint">
           <Map className="mr-1 inline h-3 w-3" aria-hidden />
           Drag the blue dot to move · outer beam to rotate · tap sheet to jump

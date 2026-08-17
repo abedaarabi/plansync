@@ -4,7 +4,10 @@ import {
   applyTransformToPoint,
   bakeTransformIntoCalibration,
   computeTransformFromCalibration,
+  invertCutDisplayPick,
   overlayTransformCss,
+  rotateNormAroundCenter,
+  snapCutDisplayRotation,
   snapRotationDeg,
 } from "./calibrationMath";
 import type { CalibrationInput } from "@/lib/api-client/locations";
@@ -88,5 +91,28 @@ describe("snapRotationDeg", () => {
     expect(snapRotationDeg(10)).toBe(0);
     expect(snapRotationDeg(50)).toBe(90);
     expect(snapRotationDeg(-100)).toBe(-90);
+  });
+});
+
+describe("cut display rotation", () => {
+  it("snaps to 0/90/180/270", () => {
+    expect(snapCutDisplayRotation(10)).toBe(0);
+    expect(snapCutDisplayRotation(100)).toBe(90);
+    expect(snapCutDisplayRotation(200)).toBe(180);
+    expect(snapCutDisplayRotation(-90)).toBe(270);
+  });
+
+  it("inverts a 180° display pick around center", () => {
+    const stored = invertCutDisplayPick({ x: 0.2, y: 0.3 }, 180);
+    expect(stored.x).toBeCloseTo(0.8, 5);
+    expect(stored.y).toBeCloseTo(0.7, 5);
+  });
+
+  it("round-trips 90° display picks", () => {
+    const raw = { x: 0.2, y: 0.1 };
+    const stored = invertCutDisplayPick(raw, 90);
+    const visual = rotateNormAroundCenter(stored, 90);
+    expect(visual.x).toBeCloseTo(raw.x, 5);
+    expect(visual.y).toBeCloseTo(raw.y, 5);
   });
 });
