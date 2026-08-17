@@ -14,7 +14,7 @@ import {
   processBimConversion,
   storeFragmentsBuffer,
 } from "../../lib/bim/conversionProcessor.js";
-import type { BimQuantityEntry } from "../../lib/bim/types.js";
+import type { BimQuantityEntry, BimQuantityIndex } from "../../lib/bim/types.js";
 import { groupEntriesForCostTakeoff } from "../../lib/bim/takeoffGrouping.js";
 import {
   clearCoordTransform,
@@ -33,6 +33,7 @@ import { drawingCoordTransformPutSchema } from "../../lib/bim/coordTransformSche
 import type { PdfMappingCandidate } from "../../lib/bim/suggestMappings.js";
 import {
   authorizeBimFileVersion,
+  authorizeSameFileCompare,
   loadBimFileVersion,
   readBimQuantityIndex,
   requireBimPro,
@@ -40,6 +41,8 @@ import {
 import {
   diffElementMetadata,
   diffElementVersions,
+  diffQuantityIndexElements,
+  mergeElementDiffs,
   type ElementVersionSnapshot,
 } from "../../lib/bim/elementVersionCompare.js";
 
@@ -72,6 +75,35 @@ function rollupQuantities(entries: BimQuantityEntry[]) {
     area: hasArea ? area : null,
     volume: hasVolume ? volume : null,
   };
+}
+
+const ELEMENT_VERSION_SNAP_SELECT = {
+  metadataHash: true,
+  changeType: true,
+  element: { select: { ifcGuid: true, ifcType: true, name: true } },
+} as const;
+
+function loadElementVersionSnaps(fileVersionId: string) {
+  return prisma.bimElementVersion.findMany({
+    where: { fileVersionId },
+    select: ELEMENT_VERSION_SNAP_SELECT,
+  });
+}
+
+function toElementSnapshot(
+  row: Awaited<ReturnType<typeof loadElementVersionSnaps>>[number],
+): ElementVersionSnapshot {
+  return {
+    ifcGuid: row.element.ifcGuid,
+    name: row.element.name,
+    ifcType: row.element.ifcType,
+    metadataHash: row.metadataHash,
+    live: row.changeType !== "DELETED",
+  };
+}
+
+function readyIndexElements(index: BimQuantityIndex | null): BimQuantityEntry[] {
+  return index && index.partial !== true ? index.elements : [];
 }
 
 export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env): void {
@@ -199,47 +231,32 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
     });
   });
 
-  // fallow-ignore-next-line complexity
   r.get("/file-versions/:fileVersionId/bim/changes", needUser, async (c) => {
-    const baseId = c.req.query("baseFileVersionId");
-    if (!baseId) return c.json({ error: "baseFileVersionId required" }, 400);
+    const pair = await authorizeSameFileCompare(
+      c,
+      c.req.param("fileVersionId"),
+      c.req.query("baseFileVersionId"),
+    );
+    if ("response" in pair) return pair.response;
+    const { fv, base } = pair;
 
-    const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
-      requirePro: true,
-    });
-    if ("response" in auth) return auth.response;
-    const { fv } = auth;
-    const base = await loadBimFileVersion(baseId);
-    if (!base) return c.json({ error: "Not found" }, 404);
-    if (fv.fileId !== base.fileId) return c.json({ error: "Versions must be same file" }, 400);
-
-    const [currentRows, baseRows] = await Promise.all([
-      prisma.bimElementVersion.findMany({
-        where: { fileVersionId: fv.id },
-        select: {
-          metadataHash: true,
-          changeType: true,
-          element: { select: { ifcGuid: true, ifcType: true, name: true } },
-        },
-      }),
-      prisma.bimElementVersion.findMany({
-        where: { fileVersionId: base.id },
-        select: {
-          metadataHash: true,
-          changeType: true,
-          element: { select: { ifcGuid: true, ifcType: true, name: true } },
-        },
-      }),
+    const [currentRows, baseRows, currentIndex, baseIndex] = await Promise.all([
+      loadElementVersionSnaps(fv.id),
+      loadElementVersionSnaps(base.id),
+      readBimQuantityIndex(env, fv),
+      readBimQuantityIndex(env, base),
     ]);
 
-    const toSnap = (row: (typeof currentRows)[number]): ElementVersionSnapshot => ({
-      ifcGuid: row.element.ifcGuid,
-      name: row.element.name,
-      ifcType: row.element.ifcType,
-      metadataHash: row.metadataHash,
-      live: row.changeType !== "DELETED",
-    });
-    const diff = diffElementVersions(currentRows.map(toSnap), baseRows.map(toSnap));
+    const versionDiff = diffElementVersions(
+      currentRows.map(toElementSnapshot),
+      baseRows.map(toElementSnapshot),
+    );
+    const currentEls = readyIndexElements(currentIndex);
+    const baseEls = readyIndexElements(baseIndex);
+    const diff =
+      currentEls.length > 0 && baseEls.length > 0
+        ? mergeElementDiffs(versionDiff, diffQuantityIndexElements(currentEls, baseEls))
+        : versionDiff;
 
     return c.json({
       baseFileVersionId: base.id,
@@ -262,19 +279,15 @@ export function registerBimRoutes(r: Hono, needUser: MiddlewareHandler, env: Env
 
   // fallow-ignore-next-line complexity
   r.get("/file-versions/:fileVersionId/bim/element-compare", needUser, async (c) => {
-    const baseId = c.req.query("baseFileVersionId");
     const guid = c.req.query("guid")?.trim();
-    if (!baseId) return c.json({ error: "baseFileVersionId required" }, 400);
     if (!guid) return c.json({ error: "guid required" }, 400);
-
-    const auth = await authorizeBimFileVersion(c, c.req.param("fileVersionId"), {
-      requirePro: true,
-    });
-    if ("response" in auth) return auth.response;
-    const { fv } = auth;
-    const base = await loadBimFileVersion(baseId);
-    if (!base) return c.json({ error: "Not found" }, 404);
-    if (fv.fileId !== base.fileId) return c.json({ error: "Versions must be same file" }, 400);
+    const pair = await authorizeSameFileCompare(
+      c,
+      c.req.param("fileVersionId"),
+      c.req.query("baseFileVersionId"),
+    );
+    if ("response" in pair) return pair.response;
+    const { fv, base } = pair;
 
     const [currentRow, baseRow] = await Promise.all([
       prisma.bimElementVersion.findFirst({

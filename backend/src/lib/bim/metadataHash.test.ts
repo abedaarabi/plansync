@@ -36,6 +36,12 @@ describe("hashElementMetadata", () => {
     expect(hashElementMetadata(a)).not.toBe(hashElementMetadata(b));
   });
 
+  it("does not change when placement is added (legacy-compatible)", () => {
+    const a = sampleEntry();
+    const b = sampleEntry({ placement: { x: 1, y: 2, z: 3 } });
+    expect(hashElementMetadata(a)).toBe(hashElementMetadata(b));
+  });
+
   it("canonicalizes key order", () => {
     const raw = canonicalElementMetadata(sampleEntry());
     const keys = Object.keys(raw);

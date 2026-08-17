@@ -22,9 +22,13 @@ import { COLORIZE_HIGHLIGHT_OPACITY } from "@/lib/bim/colorizePalette";
 import {
   COMPARE_COLORS,
   COMPARE_STYLE_IDS,
+  compareGeometryEpsilon,
   fragmentModelMatchesFileVersion,
+  geometryCompareSets,
   guidIndexHitIsDrawable,
   isCompareStyleId,
+  type CompareGeometrySets,
+  type CompareGuidBox,
 } from "@/lib/bim/bimCompare";
 import type { BimClashType } from "@plansync/shared/bimClashTypes";
 import {
@@ -5135,8 +5139,10 @@ export class BimEngine {
       for (const [modelId] of this.fragmentEntriesForFileVersion(want)) {
         if (fragments.list.has(modelId)) candidates.push(modelId);
       }
-    }
-    if (candidates.length === 0) {
+      // Do not scan the compare overlay (or other members) when the revision
+      // is known — that paints added/modified onto the hidden previous model.
+      if (candidates.length === 0) return null;
+    } else {
       for (const modelId of fragments.list.keys()) candidates.push(modelId);
     }
 
@@ -6334,6 +6340,66 @@ export class BimEngine {
 
   beginCompareOverlay(fileVersionId: string): void {
     this.compareOverlayFileVersionId = fileVersionId;
+  }
+
+  quantityElementMetaMap(): Map<string, { name: string | null; ifcType: string | null }> {
+    const out = new Map<string, { name: string | null; ifcType: string | null }>();
+    for (const el of this.quantityIndex?.elements ?? []) {
+      if (!el.guid) continue;
+      out.set(el.guid, { name: el.name, ifcType: el.ifcType });
+    }
+    return out;
+  }
+
+  async computeGeometryCompare(
+    currentFileVersionId: string,
+    overlayFileVersionId: string,
+  ): Promise<CompareGeometrySets | null> {
+    const [current, base] = await Promise.all([
+      this.collectDrawableGuidBoxes(currentFileVersionId),
+      this.collectDrawableGuidBoxes(overlayFileVersionId),
+    ]);
+    return geometryCompareSets(current, base, compareGeometryEpsilon(this.detectModelUnits()));
+  }
+
+  // fallow-ignore-next-line complexity
+  private async collectDrawableGuidBoxes(
+    fileVersionId: string,
+  ): Promise<Map<string, CompareGuidBox>> {
+    const out = new Map<string, CompareGuidBox>();
+    const fragments = this.readyFragments();
+    if (!fragments) return out;
+    const chunkSize = 200;
+    for (const [modelId] of this.fragmentEntriesForFileVersion(fileVersionId)) {
+      const model = fragments.list.get(modelId);
+      if (!model) continue;
+      const drawable = await this.geometryIdsForModel(modelId, model);
+      if (!drawable || drawable.size === 0) continue;
+      const localIds = [...drawable];
+      for (let i = 0; i < localIds.length; i += chunkSize) {
+        const chunk = localIds.slice(i, i + chunkSize);
+        let guids: (string | null | undefined)[] = [];
+        let boxes: THREE.Box3[] = [];
+        try {
+          [guids, boxes] = await Promise.all([
+            model.getGuidsByLocalIds(chunk),
+            model.getBoxes(chunk),
+          ]);
+        } catch {
+          continue;
+        }
+        for (let j = 0; j < chunk.length; j++) {
+          const guid = guids[j]?.trim();
+          const box = boxes[j];
+          if (!guid || !box || !this.isValidBox3(box) || out.has(guid)) continue;
+          out.set(guid, {
+            min: [box.min.x, box.min.y, box.min.z],
+            max: [box.max.x, box.max.y, box.max.z],
+          });
+        }
+      }
+    }
+    return out;
   }
 
   async removeCompareOverlay(): Promise<void> {

@@ -55,6 +55,7 @@ async function ensureMetadataOnS3(
       material: entry.material,
       discipline: entry.discipline,
       surfaceColor: entry.surfaceColor ?? null,
+      placement: entry.placement ?? null,
       quantities: entry.quantities,
       quantitySource: entry.quantitySource,
       lodFlags: entry.lodFlags,

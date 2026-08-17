@@ -1,6 +1,7 @@
 import { gunzipSync } from "node:zlib";
 import * as WebIFC from "web-ifc";
 import { disciplineForIfcType } from "./discipline.js";
+import { readElementPlacement } from "./elementPlacement.js";
 import { ifcNumVal, ifcStrVal, webIfcWasmDir } from "./ifcParseUtils.js";
 import type {
   BimElementQuantities,
@@ -439,6 +440,7 @@ async function processFullExpressId(
       material,
       discipline: disciplineForIfcType(ifcType),
       surfaceColor,
+      placement: readElementPlacement(ifcApi, modelId, expressId),
       quantities,
       quantitySource: source,
       lodFlags,

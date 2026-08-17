@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   diffElementMetadata,
   diffElementVersions,
+  diffQuantityIndexElements,
   type ElementVersionSnapshot,
 } from "./elementVersionCompare.js";
+import type { BimQuantityEntry } from "./types.js";
 
 function snap(overrides: Partial<ElementVersionSnapshot>): ElementVersionSnapshot {
   return {
@@ -12,6 +14,28 @@ function snap(overrides: Partial<ElementVersionSnapshot>): ElementVersionSnapsho
     ifcType: "IfcWall",
     metadataHash: "hash-a",
     live: true,
+    ...overrides,
+  };
+}
+
+function entry(overrides: Partial<BimQuantityEntry> = {}): BimQuantityEntry {
+  return {
+    expressId: 1,
+    guid: "g",
+    ifcType: "IfcWall",
+    name: "Wall",
+    level: "L1",
+    material: null,
+    discipline: "Architecture",
+    quantities: {},
+    quantitySource: "missing",
+    lodFlags: {
+      identity: true,
+      dimensions: false,
+      quantities: false,
+      material: false,
+      color: false,
+    },
     ...overrides,
   };
 }
@@ -52,6 +76,31 @@ describe("diffElementVersions", () => {
   });
 });
 
+describe("diffQuantityIndexElements", () => {
+  it("classifies added, moved, and deleted from the quantity index", () => {
+    const base = [
+      entry({ guid: "keep" }),
+      entry({ guid: "moved", placement: { x: 0, y: 0, z: 0 } }),
+      entry({ guid: "gone" }),
+    ];
+    const current = [
+      entry({ guid: "keep" }),
+      entry({ guid: "moved", placement: { x: 4, y: 0, z: 0 } }),
+      entry({ guid: "fresh", name: "Win", ifcType: "IfcWindow" }),
+    ];
+    const diff = diffQuantityIndexElements(current, base);
+    expect(diff.added.map((r) => r.guid)).toEqual(["fresh"]);
+    expect(diff.modified.map((r) => r.guid)).toEqual(["moved"]);
+    expect(diff.deleted.map((r) => r.guid)).toEqual(["gone"]);
+  });
+
+  it("does not treat a legacy missing placement as a move", () => {
+    const base = [entry({ guid: "a" })];
+    const current = [entry({ guid: "a", placement: { x: 1, y: 0, z: 0 } })];
+    expect(diffQuantityIndexElements(current, base).modified).toEqual([]);
+  });
+});
+
 describe("diffElementMetadata", () => {
   it("returns only changed scalar and quantity fields", () => {
     const fields = diffElementMetadata(
@@ -81,6 +130,19 @@ describe("diffElementMetadata", () => {
       label: "Name",
       before: null,
       after: "New",
+    });
+  });
+
+  it("includes location when placement moves", () => {
+    const fields = diffElementMetadata(
+      { placement: { x: 0, y: 0, z: 0 } },
+      { placement: { x: 2, y: 0, z: 0 } },
+    );
+    expect(fields).toContainEqual({
+      key: "placement",
+      label: "Location",
+      before: "0, 0, 0",
+      after: "2, 0, 0",
     });
   });
 });

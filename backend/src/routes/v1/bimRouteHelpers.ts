@@ -44,6 +44,24 @@ export async function authorizeBimFileVersion(
   return { fv };
 }
 
+export async function authorizeSameFileCompare(
+  c: Context,
+  fileVersionId: string,
+  baseFileVersionId: string | undefined,
+): Promise<{ fv: BimFileVersion; base: BimFileVersion } | { response: Response }> {
+  if (!baseFileVersionId) {
+    return { response: c.json({ error: "baseFileVersionId required" }, 400) };
+  }
+  const auth = await authorizeBimFileVersion(c, fileVersionId, { requirePro: true });
+  if ("response" in auth) return auth;
+  const base = await loadBimFileVersion(baseFileVersionId);
+  if (!base) return { response: c.json({ error: "Not found" }, 404) };
+  if (auth.fv.fileId !== base.fileId) {
+    return { response: c.json({ error: "Versions must be same file" }, 400) };
+  }
+  return { fv: auth.fv, base };
+}
+
 export async function readBimQuantityIndex(
   env: Env,
   fv: { quantityIndexS3Key: string | null },

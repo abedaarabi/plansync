@@ -10,6 +10,9 @@ const HASH_EXCLUDE_KEYS = new Set([
   "sourceFileVersionId",
   "sourceModelId",
   "sourceLabel",
+  // Compared separately so a reconvert does not mark every element modified.
+  "placement",
+  "expressId",
 ]);
 
 function roundFloat(n: number): number {

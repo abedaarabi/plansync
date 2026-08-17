@@ -10,10 +10,13 @@ import {
   compareChangedCount,
   filterCompareRows,
   listCompareIfcTypes,
+  mergeCompareWithGeometry,
   pickDefaultBaseVersion,
+  withGeometryFieldFallback,
   type BimCompareKind,
   type BimCompareVisibleKinds,
   type BimElementChanges,
+  type CompareGeometrySets,
 } from "@/lib/bim/bimCompare";
 import { loadFederationMember } from "@/lib/bim/loadFederationModel";
 import type { BimEngine } from "@/components/bim-viewer/bimEngine";
@@ -27,14 +30,13 @@ async function syncCompareScene(opts: {
   baseFileVersionId: string | null;
   overlayFvRef: { current: string | null };
   setOverlayLoading: (v: boolean) => void;
+  setGeometrySets: (v: CompareGeometrySets | null) => void;
   isolate: boolean;
   visibleKinds: BimCompareVisibleKinds;
   changes: BimElementChanges;
-  deletedGuids: string[];
-  needsOverlay: boolean;
   isCancelled: () => boolean;
 }): Promise<void> {
-  const overlayId = opts.needsOverlay ? opts.baseFileVersionId : null;
+  const overlayId = opts.baseFileVersionId;
   if (opts.overlayFvRef.current && opts.overlayFvRef.current !== overlayId) {
     await opts.engine.removeCompareOverlay();
     opts.overlayFvRef.current = null;
@@ -64,13 +66,31 @@ async function syncCompareScene(opts: {
   if (opts.isCancelled()) return;
   await opts.engine.awaitGuidIndexReady();
   if (opts.isCancelled()) return;
+
+  let sceneChanges = opts.changes;
+  if (opts.overlayFvRef.current) {
+    const geo = await opts.engine.computeGeometryCompare(
+      opts.currentFileVersionId,
+      opts.overlayFvRef.current,
+    );
+    if (opts.isCancelled()) return;
+    opts.setGeometrySets(geo);
+    sceneChanges = mergeCompareWithGeometry(
+      opts.changes,
+      geo,
+      opts.engine.quantityElementMetaMap(),
+    );
+  } else {
+    opts.setGeometrySets(null);
+  }
+
   await opts.engine.applyComparePresentation({
     isolate: opts.isolate,
     currentFileVersionId: opts.currentFileVersionId,
     overlayFileVersionId: opts.overlayFvRef.current,
-    addedGuids: opts.visibleKinds.added ? opts.changes.added.map((r) => r.guid) : [],
-    modifiedGuids: opts.visibleKinds.modified ? opts.changes.modified.map((r) => r.guid) : [],
-    deletedGuids: opts.deletedGuids,
+    addedGuids: opts.visibleKinds.added ? sceneChanges.added.map((r) => r.guid) : [],
+    modifiedGuids: opts.visibleKinds.modified ? sceneChanges.modified.map((r) => r.guid) : [],
+    deletedGuids: opts.visibleKinds.deleted ? sceneChanges.deleted.map((r) => r.guid) : [],
   });
 }
 
@@ -95,6 +115,7 @@ export function useBimCompareSession(opts: {
   const [ifcType, setIfcType] = useState<string | null>(null);
   const [listGuid, setListGuid] = useState<string | null>(null);
   const [overlayLoading, setOverlayLoading] = useState(false);
+  const [geometrySets, setGeometrySets] = useState<CompareGeometrySets | null>(null);
   const overlayFvRef = useRef<string | null>(null);
 
   const revisionsQuery = useQuery({
@@ -123,7 +144,14 @@ export function useBimCompareSession(opts: {
   });
 
   const selectedGuid = listGuid ?? opts.pickedGuid;
-  const changes = changesQuery.data ?? null;
+  const apiChanges = changesQuery.data ?? null;
+  const changes = useMemo(
+    () =>
+      apiChanges
+        ? mergeCompareWithGeometry(apiChanges, geometrySets, opts.engine?.quantityElementMetaMap())
+        : null,
+    [apiChanges, geometrySets, opts.engine],
+  );
   const selectedKind = useMemo(() => {
     if (!selectedGuid || !changes) return null;
     if (changes.added.some((r) => r.guid === selectedGuid)) return "added" as const;
@@ -139,23 +167,34 @@ export function useBimCompareSession(opts: {
       opts.enabled && Boolean(currentId && baseFileVersionId && selectedGuid && selectedKind),
   });
 
+  const fieldDiff = useMemo(
+    () =>
+      withGeometryFieldFallback(
+        fieldDiffQuery.data ?? null,
+        selectedGuid,
+        selectedKind,
+        changes?.modified,
+      ),
+    [fieldDiffQuery.data, selectedGuid, selectedKind, changes],
+  );
+
   const rows = useMemo(
     () => filterCompareRows(changes, { query, ifcType, visibleKinds }),
     [changes, query, ifcType, visibleKinds],
   );
   const ifcTypes = useMemo(() => listCompareIfcTypes(changes), [changes]);
   const changedCount = compareChangedCount(changes?.counts);
-  const deletedGuids = useMemo(
-    () => (visibleKinds.deleted ? (changes?.deleted.map((r) => r.guid) ?? []) : []),
-    [changes, visibleKinds.deleted],
-  );
-  const needsOverlay = deletedGuids.length > 0;
+
+  useEffect(() => {
+    setGeometrySets(null);
+  }, [currentId, baseFileVersionId]);
 
   useEffect(() => {
     const engine = opts.engine;
-    if (!opts.enabled || !engine || !currentId || !changes) {
+    if (!opts.enabled || !engine || !currentId || !apiChanges) {
       if (!opts.enabled) {
         overlayFvRef.current = null;
+        setGeometrySets(null);
         void engine?.clearComparePresentation();
         setOverlayLoading(false);
       }
@@ -171,11 +210,10 @@ export function useBimCompareSession(opts: {
       baseFileVersionId,
       overlayFvRef,
       setOverlayLoading,
+      setGeometrySets,
       isolate,
       visibleKinds,
-      changes,
-      deletedGuids,
-      needsOverlay,
+      changes: apiChanges,
       isCancelled: () => cancelled,
     });
 
@@ -189,11 +227,9 @@ export function useBimCompareSession(opts: {
     opts.fileName,
     currentId,
     baseFileVersionId,
-    changes,
+    apiChanges,
     isolate,
     visibleKinds,
-    deletedGuids,
-    needsOverlay,
   ]);
 
   useEffect(() => {
@@ -230,7 +266,7 @@ export function useBimCompareSession(opts: {
     revisionsPending: revisionsQuery.isPending,
     changesPending: changesQuery.isPending,
     changesError: changesQuery.error instanceof Error ? changesQuery.error.message : null,
-    fieldDiff: fieldDiffQuery.data ?? null,
+    fieldDiff,
     fieldDiffPending: fieldDiffQuery.isPending,
     selectedKind,
   };

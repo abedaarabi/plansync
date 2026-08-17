@@ -170,3 +170,166 @@ export function compareRowLabel(row: BimCompareRow): string {
   const type = row.ifcType?.replace(/^Ifc/i, "") ?? "Element";
   return type;
 }
+
+export function withGeometryFieldFallback(
+  data: BimElementCompare | null,
+  selectedGuid: string | null,
+  selectedKind: BimCompareKind | null,
+  modified: BimCompareRow[] | undefined,
+): BimElementCompare | null {
+  if (!selectedGuid || selectedKind !== "modified") return data;
+  if (data && data.fields.length > 0) return data;
+  const row = modified?.find((r) => r.guid === selectedGuid);
+  if (!row) return data;
+  return {
+    guid: selectedGuid,
+    kind: "modified",
+    name: data?.name ?? row.name,
+    ifcType: data?.ifcType ?? row.ifcType,
+    fields: [COMPARE_GEOMETRY_FIELD],
+  };
+}
+
+export type CompareGuidBox = {
+  min: [number, number, number];
+  max: [number, number, number];
+};
+
+export type CompareGeometrySets = {
+  currentGuids: string[];
+  baseGuids: string[];
+  movedGuids: string[];
+};
+
+/** ~1cm in metres or millimetres. */
+export function compareGeometryEpsilon(units: "m" | "mm"): number {
+  return units === "mm" ? 10 : 0.01;
+}
+
+function guidBoxesDiffer(a: CompareGuidBox, b: CompareGuidBox, epsilon: number): boolean {
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(a.min[i]! - b.min[i]!) > epsilon) return true;
+    if (Math.abs(a.max[i]! - b.max[i]!) > epsilon) return true;
+  }
+  return false;
+}
+
+export function geometryCompareSets(
+  current: Map<string, CompareGuidBox>,
+  base: Map<string, CompareGuidBox>,
+  epsilon: number,
+): CompareGeometrySets | null {
+  if (current.size === 0 || base.size === 0) return null;
+  const movedGuids: string[] = [];
+  for (const [guid, box] of current) {
+    const prior = base.get(guid);
+    if (!prior) continue;
+    if (guidBoxesDiffer(box, prior, epsilon)) movedGuids.push(guid);
+  }
+  return {
+    currentGuids: [...current.keys()],
+    baseGuids: [...base.keys()],
+    movedGuids,
+  };
+}
+
+function metaFromRows(
+  rows: BimCompareRow[],
+  extra?: Map<string, { name: string | null; ifcType: string | null }>,
+): Map<string, { name: string | null; ifcType: string | null }> {
+  const out = extra
+    ? new Map(extra)
+    : new Map<string, { name: string | null; ifcType: string | null }>();
+  for (const row of rows) {
+    if (!out.has(row.guid)) out.set(row.guid, { name: row.name, ifcType: row.ifcType });
+  }
+  return out;
+}
+
+function rowFor(
+  guid: string,
+  kind: BimCompareKind,
+  meta: Map<string, { name: string | null; ifcType: string | null }>,
+): BimCompareRow {
+  const hit = meta.get(guid);
+  return { guid, name: hit?.name ?? null, ifcType: hit?.ifcType ?? null, kind };
+}
+
+/**
+ * Drawable GUID presence is the source of truth for added/removed in the 3D
+ * scene. Metadata-only rows from the API are kept when they have no geometry.
+ */
+// fallow-ignore-next-line complexity
+export function mergeCompareWithGeometry(
+  api: BimElementChanges,
+  geo: CompareGeometrySets | null,
+  extraMeta?: Map<string, { name: string | null; ifcType: string | null }>,
+): BimElementChanges {
+  if (!geo) return api;
+  const meta = metaFromRows([...api.added, ...api.modified, ...api.deleted], extraMeta);
+  const current = new Set(geo.currentGuids);
+  const base = new Set(geo.baseGuids);
+  const moved = new Set(geo.movedGuids);
+  const apiModified = new Set(api.modified.map((r) => r.guid));
+
+  const added: BimCompareRow[] = [];
+  const modified: BimCompareRow[] = [];
+  const deleted: BimCompareRow[] = [];
+  const addedIds = new Set<string>();
+  const modifiedIds = new Set<string>();
+  const deletedIds = new Set<string>();
+
+  for (const guid of current) {
+    if (!base.has(guid)) {
+      added.push(rowFor(guid, "added", meta));
+      addedIds.add(guid);
+    } else if (moved.has(guid) || apiModified.has(guid)) {
+      modified.push(rowFor(guid, "modified", meta));
+      modifiedIds.add(guid);
+    }
+  }
+  for (const guid of base) {
+    if (current.has(guid)) continue;
+    deleted.push(rowFor(guid, "deleted", meta));
+    deletedIds.add(guid);
+  }
+
+  for (const row of api.added) {
+    if (current.has(row.guid) || base.has(row.guid) || addedIds.has(row.guid)) continue;
+    added.push(row);
+    addedIds.add(row.guid);
+  }
+  for (const row of api.deleted) {
+    if (current.has(row.guid) || base.has(row.guid) || deletedIds.has(row.guid)) continue;
+    deleted.push(row);
+    deletedIds.add(row.guid);
+  }
+  for (const row of api.modified) {
+    if (addedIds.has(row.guid) || deletedIds.has(row.guid) || modifiedIds.has(row.guid)) continue;
+    modified.push(row);
+    modifiedIds.add(row.guid);
+  }
+
+  const unchanged = Math.max(0, current.size - added.length - modified.length);
+  return {
+    ...api,
+    added,
+    modified,
+    deleted,
+    counts: {
+      added: added.length,
+      modified: modified.length,
+      deleted: deleted.length,
+      unchanged,
+      baseLive: base.size,
+      currentLive: current.size,
+    },
+  };
+}
+
+const COMPARE_GEOMETRY_FIELD: BimElementFieldDiff = {
+  key: "geometry",
+  label: "Geometry",
+  before: "Previous",
+  after: "Current",
+};

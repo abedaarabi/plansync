@@ -3,9 +3,12 @@ import {
   compareChangedCount,
   filterCompareRows,
   fragmentModelMatchesFileVersion,
+  geometryCompareSets,
   guidIndexHitIsDrawable,
   isCompareStyleId,
+  mergeCompareWithGeometry,
   pickDefaultBaseVersion,
+  withGeometryFieldFallback,
   type BimElementChanges,
   type BimCompareRow,
 } from "./bimCompare";
@@ -99,5 +102,39 @@ describe("bimCompare helpers", () => {
     expect(guidIndexHitIsDrawable(undefined, 12)).toBe(false);
     expect(guidIndexHitIsDrawable(new Set([11, 13]), 12)).toBe(false);
     expect(guidIndexHitIsDrawable(new Set([12]), 12)).toBe(true);
+  });
+
+  it("fills a geometry field when metadata diff is empty for a modified row", () => {
+    expect(
+      withGeometryFieldFallback(null, "m", "modified", [
+        { guid: "m", name: "Wall A", ifcType: "IfcWall", kind: "modified" },
+      ]),
+    ).toEqual({
+      guid: "m",
+      kind: "modified",
+      name: "Wall A",
+      ifcType: "IfcWall",
+      fields: [{ key: "geometry", label: "Geometry", before: "Previous", after: "Current" }],
+    });
+  });
+
+  it("merges drawable added/moved/removed with API metadata changes", () => {
+    const geo = geometryCompareSets(
+      new Map([
+        ["keep", { min: [0, 0, 0], max: [1, 1, 1] }],
+        ["moved", { min: [2, 0, 0], max: [3, 1, 1] }],
+        ["fresh", { min: [0, 0, 0], max: [0.5, 0.5, 0.5] }],
+      ]),
+      new Map([
+        ["keep", { min: [0, 0, 0], max: [1, 1, 1] }],
+        ["moved", { min: [0, 0, 0], max: [1, 1, 1] }],
+        ["gone", { min: [4, 0, 0], max: [5, 1, 1] }],
+      ]),
+      0.01,
+    );
+    const merged = mergeCompareWithGeometry(sample, geo);
+    expect(merged.added.map((r) => r.guid).sort()).toEqual(["a", "fresh"]);
+    expect(merged.modified.map((r) => r.guid).sort()).toEqual(["m", "moved"]);
+    expect(merged.deleted.map((r) => r.guid).sort()).toEqual(["d", "gone"]);
   });
 });

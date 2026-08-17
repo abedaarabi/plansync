@@ -32,6 +32,8 @@ export type BimQuantityEntry = {
   discipline: string | null;
   /** Authored IFC surface color (#rrggbb), when present in export. */
   surfaceColor?: string | null;
+  /** Approximate world origin from IfcLocalPlacement. Absent on legacy indexes. */
+  placement?: { x: number; y: number; z: number } | null;
   quantities: BimElementQuantities;
   quantitySource: "base" | "qto" | "computed" | "missing";
   lodFlags: BimLodFlags;
