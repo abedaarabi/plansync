@@ -81,6 +81,30 @@ export function isCompareStyleId(styleId: string): boolean {
   return styleId.startsWith("compare:");
 }
 
+/**
+ * When resolving a GUID to a specific revision, skip fragment models we cannot
+ * attribute. Matching `!entry` as a wildcard paints modified GUIDs onto the
+ * overlay (previous version), which is then hidden — so only deletions show.
+ */
+export function fragmentModelMatchesFileVersion(
+  wantFileVersionId: string | null | undefined,
+  entryFileVersionId: string | null | undefined,
+): boolean {
+  const want = wantFileVersionId?.trim();
+  if (!want) return true;
+  const got = entryFileVersionId?.trim();
+  if (!got) return false;
+  return got === want;
+}
+
+/** Index hits without drawable geometry cannot be highlighted — keep scanning. */
+export function guidIndexHitIsDrawable(
+  drawable: Set<number> | null | undefined,
+  localId: number,
+): boolean {
+  return Boolean(drawable?.has(localId));
+}
+
 export function compareChangedCount(counts: BimCompareCounts | null | undefined): number {
   if (!counts) return 0;
   return counts.added + counts.modified + counts.deleted;

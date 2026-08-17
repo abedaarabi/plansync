@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   compareChangedCount,
   filterCompareRows,
+  fragmentModelMatchesFileVersion,
+  guidIndexHitIsDrawable,
   isCompareStyleId,
   pickDefaultBaseVersion,
   type BimElementChanges,
@@ -82,5 +84,20 @@ describe("bimCompare helpers", () => {
     expect(compareChangedCount(sample.counts)).toBe(3);
     expect(isCompareStyleId("compare:added")).toBe(true);
     expect(isCompareStyleId("colorize:0")).toBe(false);
+  });
+
+  it("does not scan unattributed fragment models when a file version is required", () => {
+    expect(fragmentModelMatchesFileVersion("fv-current", "fv-current")).toBe(true);
+    expect(fragmentModelMatchesFileVersion("fv-current", "fv-overlay")).toBe(false);
+    expect(fragmentModelMatchesFileVersion("fv-current", null)).toBe(false);
+    expect(fragmentModelMatchesFileVersion("fv-current", undefined)).toBe(false);
+    expect(fragmentModelMatchesFileVersion(null, "fv-overlay")).toBe(true);
+  });
+
+  it("rejects guid-index hits that cannot be drawn", () => {
+    expect(guidIndexHitIsDrawable(null, 12)).toBe(false);
+    expect(guidIndexHitIsDrawable(undefined, 12)).toBe(false);
+    expect(guidIndexHitIsDrawable(new Set([11, 13]), 12)).toBe(false);
+    expect(guidIndexHitIsDrawable(new Set([12]), 12)).toBe(true);
   });
 });

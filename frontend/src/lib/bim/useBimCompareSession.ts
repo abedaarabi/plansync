@@ -62,6 +62,8 @@ async function syncCompareScene(opts: {
     }
   }
   if (opts.isCancelled()) return;
+  await opts.engine.awaitGuidIndexReady();
+  if (opts.isCancelled()) return;
   await opts.engine.applyComparePresentation({
     isolate: opts.isolate,
     currentFileVersionId: opts.currentFileVersionId,

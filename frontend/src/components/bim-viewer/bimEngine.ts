@@ -19,7 +19,13 @@ import {
   upgradeLambertToStandard,
 } from "@/lib/bim/materialColor";
 import { COLORIZE_HIGHLIGHT_OPACITY } from "@/lib/bim/colorizePalette";
-import { COMPARE_COLORS, COMPARE_STYLE_IDS, isCompareStyleId } from "@/lib/bim/bimCompare";
+import {
+  COMPARE_COLORS,
+  COMPARE_STYLE_IDS,
+  fragmentModelMatchesFileVersion,
+  guidIndexHitIsDrawable,
+  isCompareStyleId,
+} from "@/lib/bim/bimCompare";
 import type { BimClashType } from "@plansync/shared/bimClashTypes";
 import {
   CLASH_CLEARANCE_MARKER_COLOR,
@@ -344,6 +350,7 @@ export class BimEngine {
   private clashReviewSuppressSelectPaint = false;
   private compareReviewActive = false;
   private compareOverlayFileVersionId: string | null = null;
+  private compareDeletedKeepGuids: string[] = [];
   /** Fast Navisworks-style context: fade whole-scene materials instead of per-element ghost maps. */
   private clashSceneGhostOpacity: number | null = null;
   /**
@@ -455,7 +462,7 @@ export class BimEngine {
       const hit = this.guidIndex.get(guid);
       if (
         hit &&
-        (!ref.fileVersionId || hit.fileVersionId === ref.fileVersionId) &&
+        fragmentModelMatchesFileVersion(ref.fileVersionId, hit.fileVersionId) &&
         this.fragmentsHasModel(hit.modelId)
       ) {
         out.set(guid, {
@@ -1269,6 +1276,11 @@ export class BimEngine {
 
   isCompareReviewActive(): boolean {
     return this.compareReviewActive;
+  }
+
+  /** Wait for GUID ↔ localId index after overlay tiles land, then compare-paint. */
+  async awaitGuidIndexReady(): Promise<void> {
+    if (this.quantityIndex) await this.syncGuidLocalIdMap();
   }
 
   /** True when Item 1 / Item 2 clash colors are painted (guids resolved). */
@@ -5080,7 +5092,7 @@ export class BimEngine {
       const indexed = this.guidIndex.get(guid);
       if (
         indexed &&
-        (!ref.fileVersionId || indexed.fileVersionId === ref.fileVersionId) &&
+        fragmentModelMatchesFileVersion(ref.fileVersionId, indexed.fileVersionId) &&
         fragments.list.has(indexed.modelId)
       ) {
         const model = fragments.list.get(indexed.modelId);
@@ -5089,8 +5101,8 @@ export class BimEngine {
           drawable = model ? await this.geometryIdsForModel(indexed.modelId, model) : null;
           drawableByModel.set(indexed.modelId, drawable);
         }
-        // Metadata-only tile hits look indexed but cannot be highlighted — re-resolve.
-        if (!drawable || drawable.has(indexed.localId)) {
+        // Metadata-only / unverified index hits cannot be highlighted — scan tiles.
+        if (guidIndexHitIsDrawable(drawable, indexed.localId)) {
           if (!map[indexed.modelId]) map[indexed.modelId] = new Set<number>();
           (map[indexed.modelId] as Set<number>).add(indexed.localId);
           continue;
@@ -5161,9 +5173,8 @@ export class BimEngine {
       if (pending.size === 0) break;
       const entry =
         this.modelRegistry.get(modelId) ?? this.modelRegistry.get(baseFederationModelId(modelId));
-      const guids = [...pending].filter(
-        ([, wantFileVersionId]) =>
-          !wantFileVersionId || !entry || entry.fileVersionId === wantFileVersionId,
+      const guids = [...pending].filter(([, wantFileVersionId]) =>
+        fragmentModelMatchesFileVersion(wantFileVersionId, entry?.fileVersionId),
       );
       if (guids.length === 0) continue;
       const drawable = await this.geometryIdsForModel(modelId, model);
@@ -5195,7 +5206,10 @@ export class BimEngine {
     }
 
     // Remaining GUIDs: manager fallback (may still miss progressive tiles).
+    // Skip when a file version was requested — the unscoped map binds modified
+    // GUIDs onto the compare overlay, which is then hidden.
     if (pending.size === 0) return;
+    if ([...pending.values()].some((fv) => Boolean(fv))) return;
     try {
       const fallback = await fragments.guidsToModelIdMap([...pending.keys()]);
       if (!fallback) return;
@@ -6150,6 +6164,7 @@ export class BimEngine {
     const hider = this.mustComponents().get(OBC.Hider);
     await hider.set(true);
     await this.reapplyGroupVisibility();
+    await this.reapplyCompareOverlayVisibility();
   }
 
   // fallow-ignore-next-line complexity
@@ -6340,6 +6355,7 @@ export class BimEngine {
   async clearComparePresentation(): Promise<void> {
     const wasActive = this.compareReviewActive;
     this.compareReviewActive = false;
+    this.compareDeletedKeepGuids = [];
     if (wasActive) {
       await this.applyFilterPresentation({
         filterActive: false,
@@ -6362,12 +6378,16 @@ export class BimEngine {
     deletedGuids: string[];
   }): Promise<void> {
     this.compareReviewActive = true;
+    this.compareDeletedKeepGuids = opts.overlayFileVersionId ? [...opts.deletedGuids] : [];
+    const expressByGuid = this.expressIdByGuidForFileVersion(opts.currentFileVersionId);
+    const currentRef = (guid: string) => ({
+      guid,
+      fileVersionId: opts.currentFileVersionId,
+      expressId: expressByGuid.get(guid) ?? null,
+    });
     const matchRefs = [
-      ...opts.addedGuids.map((guid) => ({ guid, fileVersionId: opts.currentFileVersionId })),
-      ...opts.modifiedGuids.map((guid) => ({
-        guid,
-        fileVersionId: opts.currentFileVersionId,
-      })),
+      ...opts.addedGuids.map(currentRef),
+      ...opts.modifiedGuids.map(currentRef),
       ...opts.deletedGuids.map((guid) => ({
         guid,
         fileVersionId: opts.overlayFileVersionId,
@@ -6414,27 +6434,54 @@ export class BimEngine {
       force: true,
     });
 
-    if (hasChanges && !opts.isolate && opts.overlayFileVersionId && opts.deletedGuids.length > 0) {
+    if (opts.overlayFileVersionId) {
       await this.hideFileVersionExcept(opts.overlayFileVersionId, opts.deletedGuids);
     }
   }
 
-  private async hideFileVersionExcept(fileVersionId: string, keepGuids: string[]): Promise<void> {
-    const keepMap = await this.resolveGuidRefsToModelIdMap(
-      keepGuids.map((guid) => ({ guid, fileVersionId })),
+  private expressIdByGuidForFileVersion(fileVersionId: string | null): Map<string, number> {
+    const out = new Map<string, number>();
+    const index = this.quantityIndex;
+    if (!index || !fileVersionId) return out;
+    for (const el of index.elements) {
+      if (el.expressId == null || el.expressId <= 0) continue;
+      if (el.sourceFileVersionId && el.sourceFileVersionId !== fileVersionId) continue;
+      out.set(el.guid, el.expressId);
+    }
+    return out;
+  }
+
+  private async reapplyCompareOverlayVisibility(): Promise<void> {
+    if (!this.compareReviewActive || !this.compareOverlayFileVersionId) return;
+    await this.hideFileVersionExcept(
+      this.compareOverlayFileVersionId,
+      this.compareDeletedKeepGuids,
     );
-    const full: OBC.ModelIdMap = {};
+  }
+
+  // fallow-ignore-next-line complexity
+  private async hideFileVersionExcept(fileVersionId: string, keepGuids: string[]): Promise<void> {
     const fragments = this.readyFragments();
     if (!fragments) return;
-    for (const [modelId, entry] of this.fragmentEntriesForFileVersion(fileVersionId)) {
-      const drawable = await this.geometryIdsForModel(modelId, entry.model);
-      if (drawable && drawable.size > 0) full[modelId] = new Set(drawable);
-    }
+    const keepMap =
+      keepGuids.length > 0
+        ? await this.resolveGuidRefsToModelIdMap(keepGuids.map((guid) => ({ guid, fileVersionId })))
+        : null;
+    const overlayModels = new Set(
+      [...this.fragmentEntriesForFileVersion(fileVersionId)].map(([, entry]) => entry.model),
+    );
     const hideMap: OBC.ModelIdMap = {};
-    for (const [modelId, ids] of Object.entries(full)) {
+    for (const [modelId, model] of fragments.list) {
+      const entry =
+        this.modelRegistry.get(modelId) ?? this.modelRegistry.get(baseFederationModelId(modelId));
+      const isOverlay =
+        overlayModels.has(model) || (entry != null && entry.fileVersionId === fileVersionId);
+      if (!isOverlay) continue;
+      const drawable = await this.geometryIdsForModel(modelId, model);
+      if (!drawable || drawable.size === 0) continue;
       const keepIds = keepMap?.[modelId];
       const next = new Set<number>();
-      for (const id of ids) {
+      for (const id of drawable) {
         if (keepIds instanceof Set && keepIds.has(id)) continue;
         next.add(id);
       }
@@ -6502,8 +6549,13 @@ export class BimEngine {
     if (group.guids.length === 0) return null;
 
     if (group.fileVersionId) {
+      const expressByGuid = this.expressIdByGuidForFileVersion(group.fileVersionId);
       return this.resolveGuidRefsToModelIdMap(
-        group.guids.map((guid) => ({ guid, fileVersionId: group.fileVersionId })),
+        group.guids.map((guid) => ({
+          guid,
+          fileVersionId: group.fileVersionId,
+          expressId: expressByGuid.get(guid) ?? null,
+        })),
       );
     }
 
