@@ -32,7 +32,6 @@ import {
   listFilterFieldValues,
   matchFilteredElements,
   parseFilterState,
-  ruleLabel,
 } from "@/lib/bim/bimFilters";
 import type { ColorizeLegendEntry } from "@/lib/bim/colorizePalette";
 
@@ -188,57 +187,30 @@ export function BimFiltersPanel(props: {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
-      {/* Status bar */}
-      <div className="border-b border-[var(--bim-border)] bg-[var(--bim-hover)] px-3 py-2.5">
-        {active ? (
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[12px] font-medium text-[var(--bim-text)]">
-              <span className="tabular-nums text-[var(--bim-accent)]">
-                {props.matchCount.toLocaleString()}
-              </span>{" "}
-              elements
-            </p>
-            <button
-              type="button"
-              onClick={clearAll}
-              className="bim-focus-ring rounded-md px-2 py-1 text-[11px] font-medium text-[var(--bim-accent)] hover:bg-[var(--bim-panel)]"
-            >
-              Reset
-            </button>
-          </div>
-        ) : (
+      {/* Intro */}
+      {!active ? (
+        <div className="border-b border-[var(--bim-border)] bg-[var(--bim-hover)] px-3 py-2.5">
           <p className="text-[11px] text-[var(--bim-text-muted)]">
             Filter by category, name, level, model, or discipline. Pick several values to combine
             them.
           </p>
-        )}
-        {filterState.rules.length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {filterState.rules.map((rule) => (
-              <span
-                key={rule.id}
-                className="inline-flex max-w-full items-center gap-1 rounded-md bg-[var(--bim-panel)] py-0.5 pl-2 pr-0.5 text-[10px] text-[var(--bim-text)] ring-1 ring-[var(--bim-border)]"
-              >
-                <span className="truncate">{ruleLabel(rule)}</span>
-                <button
-                  type="button"
-                  aria-label={`Remove ${ruleLabel(rule)}`}
-                  onClick={() =>
-                    patch({ rules: filterState.rules.filter((r) => r.id !== rule.id) })
-                  }
-                  className="bim-focus-ring rounded p-0.5 text-[var(--bim-text-muted)] hover:text-[var(--bim-text)]"
-                >
-                  <X className="h-3 w-3" aria-hidden />
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {/* Find & pick */}
       <div className="flex min-h-0 flex-1 flex-col px-3 pt-3">
-        <p className="bim-section-title mb-2">Find elements</p>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="bim-section-title mb-0">Find elements</p>
+          {active ? (
+            <button
+              type="button"
+              onClick={clearAll}
+              className="bim-focus-ring rounded-md px-2 py-1 text-[11px] font-medium text-[var(--bim-accent)] hover:bg-[var(--bim-hover)]"
+            >
+              Reset
+            </button>
+          ) : null}
+        </div>
         <div className="bim-property-search mb-2">
           <Search className="bim-property-search__icon" aria-hidden />
           <input
