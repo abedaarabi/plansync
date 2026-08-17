@@ -81,6 +81,8 @@ export function BimFiltersPanel(props: {
   legend: ColorizeLegendEntry[];
   selectMatches: boolean;
   onToggleSelectMatches: (next: boolean) => void;
+  /** Restores the camera after filters clear (home / fit view). */
+  onResetCamera?: () => void;
   savedViews: BimSavedViewRecord[];
   onSaveFilter: () => void;
   onApplySavedView: (view: BimSavedViewRecord) => void;
@@ -169,6 +171,7 @@ export function BimFiltersPanel(props: {
       visualize: "ghost",
     });
     setPickerQuery("");
+    props.onResetCamera?.();
   };
 
   if (!props.index) {

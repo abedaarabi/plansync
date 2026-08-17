@@ -8,7 +8,6 @@ import {
   Columns3,
   Calculator,
   Download,
-  ExternalLink,
   History,
   RefreshCw,
   Loader2,
@@ -47,11 +46,11 @@ import {
   type TakeoffViewPresetRow,
   type TakeoffLineRow,
   ProRequiredError,
-  viewerHrefForTakeoffLine,
 } from "@/lib/api-client";
 import { qk } from "@/lib/queryKeys";
 import { PROJECT_TAKEOFF_INVALIDATE_CHANNEL } from "@/lib/takeoffPublishCloud";
 import { TakeoffMaterialsSlider } from "@/components/enterprise/TakeoffMaterialsSlider";
+import { TakeoffViewerOpenLink } from "@/components/enterprise/TakeoffViewerOpenLink";
 import { useProjectCurrency } from "@/hooks/useProjectCurrency";
 
 function takeoffLineGroupKey(row: TakeoffLineRow): string {
@@ -1365,22 +1364,11 @@ export function ProjectTakeoffClient({
                     ) : null}
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       {visibleColumns.sheet ? (
-                        row.sourceZoneId?.trim() ? (
-                          <Link
-                            href={viewerHrefForTakeoffLine(row)}
-                            className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-xs font-semibold text-[#1D4ED8] hover:bg-[#DBEAFE]"
-                          >
-                            Open on sheet
-                            <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-                          </Link>
-                        ) : (
-                          <span
-                            className="inline-block rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-[#64748B]"
-                            title="Added from the takeoff page catalog — not linked to a shape on a sheet"
-                          >
-                            Added manually
-                          </span>
-                        )
+                        <TakeoffViewerOpenLink
+                          row={row}
+                          className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-xs font-semibold text-[#1D4ED8] hover:bg-[#DBEAFE]"
+                          manualClassName="inline-block rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-[#64748B]"
+                        />
                       ) : null}
                       {visibleColumns.mismatch ? (
                         row.revisionMismatch ? (
@@ -1578,22 +1566,12 @@ export function ProjectTakeoffClient({
                         <span className="line-clamp-2">{row.notes || "—"}</span>
                       </td>
                       <td className={`px-4 py-3 ${visibleColumns.sheet ? "" : "hidden"}`}>
-                        {row.sourceZoneId?.trim() ? (
-                          <Link
-                            href={viewerHrefForTakeoffLine(row)}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:underline"
-                          >
-                            Open
-                            <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-                          </Link>
-                        ) : (
-                          <span
-                            className="inline-block rounded-md border border-[#E2E8F0] bg-[#F8FAFC] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#64748B]"
-                            title="Added from the takeoff page catalog — not linked to a shape on a sheet"
-                          >
-                            Added manually
-                          </span>
-                        )}
+                        <TakeoffViewerOpenLink
+                          row={row}
+                          shortLabel
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#2563EB] hover:underline"
+                          manualClassName="inline-block rounded-md border border-[#E2E8F0] bg-[#F8FAFC] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#64748B]"
+                        />
                       </td>
                       <td className={`px-4 py-3 ${visibleColumns.mismatch ? "" : "hidden"}`}>
                         {row.revisionMismatch ? (

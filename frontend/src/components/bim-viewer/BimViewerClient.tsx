@@ -15,7 +15,7 @@ import { BimBootLoadingFromUrl } from "./BimLoadingOverlay";
 
 /**
  * Client bootstrap for `/bim-viewer?fileId=…&projectId=…` (optional `version`,
- * `fileVersionId`, `name`, `guid`, `issueId`, `compareFileVersionId`, `models`,
+ * `fileVersionId`, `name`, `guid` / `guids`, `issueId`, `compareFileVersionId`, `models`,
  * `buildingId` + `mode=work|edit`). The shell is client-only.
  */
 const BimViewerShell = dynamic(() => import("./BimViewerShell").then((m) => m.BimViewerShell), {
@@ -79,6 +79,16 @@ export function BimViewerClient() {
   const version = searchParams.get("version");
   const fileVersionId = searchParams.get("fileVersionId");
   const initialGuid = searchParams.get("guid");
+  const guidsParam = searchParams.get("guids");
+  const initialGuids = useMemo(() => {
+    const fromList = (guidsParam ?? "")
+      .split(",")
+      .map((g) => g.trim())
+      .filter((g) => g.length > 0);
+    if (fromList.length > 0) return fromList;
+    const single = initialGuid?.trim();
+    return single ? [single] : null;
+  }, [guidsParam, initialGuid]);
   const compareFileVersionId = searchParams.get("compareFileVersionId");
   const modelsParam = searchParams.get("models");
   const issueId = searchParams.get("issueId");
@@ -137,6 +147,7 @@ export function BimViewerClient() {
           version={version}
           fileVersionId={fileVersionId}
           initialGuid={initialGuid}
+          initialGuids={initialGuids}
           issueId={issueId}
           omAssetId={omAssetId}
           compareFileVersionId={compareFileVersionId}

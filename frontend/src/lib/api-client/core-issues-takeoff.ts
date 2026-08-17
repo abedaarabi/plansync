@@ -539,7 +539,22 @@ function viewerHrefForCloudRevision(input: {
   return `/viewer?${q.toString()}`;
 }
 
-/** Open viewer on this revision; when the line came from sheet takeoff, zoom to the zone. */
+/** IFC GUIDs linked to a BIM takeoff line (aggregate or single). */
+export function takeoffLineIfcGuids(row: TakeoffLineRow): string[] {
+  const fromList = (row.sourceIfcGuids ?? []).map((g) => g.trim()).filter((g) => g.length > 0);
+  if (fromList.length > 0) return fromList;
+  const single = row.sourceIfcGuid?.trim();
+  return single ? [single] : [];
+}
+
+/** True when the line can open a sheet or BIM viewer focused on its source. */
+export function takeoffLineHasViewerLink(row: TakeoffLineRow): boolean {
+  if (row.sourceZoneId?.trim()) return true;
+  if (row.sourceType === "bim") return takeoffLineIfcGuids(row).length > 0;
+  return takeoffLineIfcGuids(row).length > 0;
+}
+
+/** Open viewer on this revision; PDF zooms to the zone, BIM zooms to linked IFC guids. */
 export function viewerHrefForTakeoffLine(row: TakeoffLineRow): string {
   const q = new URLSearchParams();
   q.set("fileId", row.fileId);
@@ -547,6 +562,15 @@ export function viewerHrefForTakeoffLine(row: TakeoffLineRow): string {
   q.set("projectId", row.projectId);
   q.set("fileVersionId", row.fileVersionId);
   q.set("version", String(row.fileVersion));
+
+  const bimGuids = takeoffLineIfcGuids(row);
+  const isBim = row.sourceType === "bim" || (bimGuids.length > 0 && !row.sourceZoneId?.trim());
+  if (isBim && bimGuids.length > 0) {
+    if (bimGuids.length === 1) q.set("guid", bimGuids[0]!);
+    else q.set("guids", bimGuids.join(","));
+    return `/bim-viewer?${q.toString()}`;
+  }
+
   const zid = row.sourceZoneId?.trim();
   if (zid) q.set("takeoffZoneId", zid);
   return `/viewer?${q.toString()}`;
@@ -814,6 +838,11 @@ export type TakeoffLineRow = {
   revisionMismatch?: boolean;
   latestFileVersion?: number;
   sourceZoneId: string | null;
+  /** BIM upsert key (`guid:…` or `agg:…`). */
+  sourceBimKey?: string | null;
+  sourceIfcGuid?: string | null;
+  sourceIfcGuids?: string[] | null;
+  ifcType?: string | null;
   tags: string[];
   createdAt: string;
   updatedAt: string;
@@ -874,7 +903,9 @@ export type TakeoffViewPresetRow = {
   updatedAt: string;
 };
 
-async function fetchTakeoffLinesForFileVersion(fileVersionId: string): Promise<TakeoffLineRow[]> {
+export async function fetchTakeoffLinesForFileVersion(
+  fileVersionId: string,
+): Promise<TakeoffLineRow[]> {
   const res = await fetch(
     apiUrl(`/api/v1/file-versions/${encodeURIComponent(fileVersionId)}/takeoff-lines`),
     { credentials: "include" },

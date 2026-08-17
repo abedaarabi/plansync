@@ -121,6 +121,23 @@ function normalizeIfcType(value: string): string {
   return trimmed.startsWith("Ifc") ? trimmed : `Ifc${trimmed}`;
 }
 
+/**
+ * IFC entities the viewer never draws: voids cut into hosts and assemblies that
+ * only aggregate parts. Revit exports give openings the host wall's Name, so
+ * counting them promised e.g. 24 matches when one wall was the only geometry.
+ */
+const NON_RENDERABLE_IFC_TYPES = new Set([
+  "ifcopeningelement",
+  "ifcopeningstandardcase",
+  "ifcvoidingfeature",
+  "ifcvirtualelement",
+  "ifcelementassembly",
+]);
+
+function isRenderableEntry(el: BimQuantityEntry): boolean {
+  return !NON_RENDERABLE_IFC_TYPES.has(el.ifcType.trim().toLowerCase());
+}
+
 // fallow-ignore-next-line complexity
 function fieldValue(el: BimQuantityEntry, field: BimFilterField): string | null {
   switch (field) {
@@ -190,7 +207,7 @@ export function matchFilteredElements(
 ): BimQuantityEntry[] {
   if (!index) return [];
   const text = state.textQuery.trim();
-  let pool: BimQuantityEntry[] = index.elements;
+  let pool: BimQuantityEntry[] = index.elements.filter(isRenderableEntry);
 
   if (text) {
     const textHits = new Set(
@@ -358,8 +375,12 @@ function formatIfcTypeLabel(ifcType: string): string {
   return ifcType.replace(/^Ifc/i, "");
 }
 
-/** All distinct values for a filter field — uses byType/byLevel aggregates when available. */
-// fallow-ignore-next-line complexity
+/**
+ * All distinct values for a filter field, counted over elements the viewer can
+ * actually draw. byType/byLevel/byTypeName aggregates are deliberately not used:
+ * they include openings and assemblies, so their counts never matched what a
+ * click could highlight.
+ */
 export function listFilterFieldValues(
   index: BimQuantityIndex | null,
   field: BimFilterField,
@@ -367,68 +388,22 @@ export function listFilterFieldValues(
 ): FilterFieldValueOption[] {
   if (!index) return [];
   const q = query.trim().toLowerCase();
-
-  if (field === "ifcType") {
-    return Object.values(index.byType)
-      .filter((t) => {
-        const label = formatIfcTypeLabel(t.ifcType).toLowerCase();
-        return !q || t.ifcType.toLowerCase().includes(q) || label.includes(q);
-      })
-      .sort((a, b) => b.count - a.count || a.ifcType.localeCompare(b.ifcType))
-      .map((t) => ({
-        value: t.ifcType,
-        label: formatIfcTypeLabel(t.ifcType),
-        count: t.count,
-      }));
-  }
-
-  if (field === "level") {
-    return Object.values(index.byLevel)
-      .filter((l) => !q || l.level.toLowerCase().includes(q))
-      .sort((a, b) => b.count - a.count || a.level.localeCompare(b.level))
-      .map((l) => ({ value: l.level, label: l.level, count: l.count }));
-  }
-
-  if (field === "typeName") {
-    const fromAgg = index.byTypeName ? Object.values(index.byTypeName) : null;
-    if (fromAgg && fromAgg.length > 0) {
-      return fromAgg
-        .filter((t) => !q || t.typeName.toLowerCase().includes(q))
-        .sort((a, b) => b.count - a.count || a.typeName.localeCompare(b.typeName))
-        .map((t) => ({ value: t.typeName, label: t.typeName, count: t.count }));
-    }
-    // Fall through to element scan for older indexes that lack byTypeName.
-  }
+  const labelFor = (value: string) => (field === "ifcType" ? formatIfcTypeLabel(value) : value);
 
   const counts = new Map<string, number>();
   for (const el of index.elements) {
-    let v: string | null = null;
-    switch (field) {
-      case "typeName":
-        v = el.typeName ?? null;
-        break;
-      case "material":
-        v = el.material;
-        break;
-      case "discipline":
-        v = el.discipline;
-        break;
-      case "name":
-        v = el.name;
-        break;
-      case "model":
-        v = el.sourceLabel ?? el.sourceFileVersionId ?? null;
-        break;
-      default:
-        break;
-    }
+    if (!isRenderableEntry(el)) continue;
+    const v = fieldValue(el, field);
     if (!v?.trim()) continue;
     const key = v.trim();
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
   return [...counts.entries()]
-    .filter(([value]) => !q || value.toLowerCase().includes(q))
+    .filter(
+      ([value]) =>
+        !q || value.toLowerCase().includes(q) || labelFor(value).toLowerCase().includes(q),
+    )
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([value, count]) => ({ value, label: value, count }));
+    .map(([value, count]) => ({ value, label: labelFor(value), count }));
 }

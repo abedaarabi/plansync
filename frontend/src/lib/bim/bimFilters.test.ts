@@ -121,6 +121,34 @@ describe("bimFilters typeName", () => {
     expect(rule?.field).toBe("typeName");
   });
 
+  it("ignores openings that inherit the host element name", () => {
+    const idx = index([
+      entry({ guid: "wall", name: "Basic Wall:240mm:426134" }),
+      entry({
+        guid: "void-1",
+        ifcType: "IfcOpeningElement",
+        name: "Basic Wall:240mm:426134",
+      }),
+      entry({
+        guid: "void-2",
+        ifcType: "IfcOpeningElement",
+        name: "Basic Wall:240mm:426134",
+      }),
+    ]);
+    const values = listFilterFieldValues(idx, "name");
+    expect(values).toEqual([
+      { value: "Basic Wall:240mm:426134", label: "Basic Wall:240mm:426134", count: 1 },
+    ]);
+
+    const state: BimFilterState = {
+      rules: [{ id: "1", field: "name", op: "eq", value: "Basic Wall:240mm:426134" }],
+      textQuery: "",
+      visualize: "ghost",
+      colorize: null,
+    };
+    expect(matchFilteredElements(idx, state).map((e) => e.guid)).toEqual(["wall"]);
+  });
+
   it("keeps legacy indexes without typeName filterable as empty", () => {
     const legacy = entry({ guid: "legacy" });
     delete (legacy as { typeName?: string | null }).typeName;

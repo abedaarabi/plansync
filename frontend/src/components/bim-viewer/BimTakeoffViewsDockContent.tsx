@@ -10,6 +10,8 @@ import { BimComparePanel } from "./BimComparePanel";
 import { BimMarkupsPanel } from "./BimMarkupsPanel";
 import type { BimEngine } from "./bimEngine";
 import type { BimTakeoffSelectionSummary } from "./BimAddToTakeoffDialog";
+import type { BimFilterState } from "@/lib/bim/bimFilters";
+import type { BimQuantityEntry } from "@/lib/bim/types";
 
 export type BimTakeoffViewsTab = "takeoff" | "views";
 
@@ -18,8 +20,13 @@ export function BimTakeoffViewsDockContent(props: {
   fileVersionId: string | null;
   projectId: string | null;
   selectedGuids: string[];
+  selectedEntries: BimQuantityEntry[];
+  elementEntries: BimQuantityEntry[];
   takeoffSelectionSummary: BimTakeoffSelectionSummary | null;
   resolveModelQuantities: () => Promise<BimModelQuantityRollup>;
+  filterState: BimFilterState;
+  filterMatches: BimQuantityEntry[];
+  onFocusGuids: (guids: string[]) => void;
   savedViews: BimSavedViewRecord[];
   onSaveView: () => void;
   onApplyView: (view: BimSavedViewRecord) => void;
@@ -63,8 +70,13 @@ export function BimTakeoffViewsDockContent(props: {
               fileVersionId={props.fileVersionId}
               projectId={props.projectId}
               selectedGuids={props.selectedGuids}
+              selectedEntries={props.selectedEntries}
+              elementEntries={props.elementEntries}
               selectionSummary={props.takeoffSelectionSummary}
               resolveModelQuantities={props.resolveModelQuantities}
+              filterState={props.filterState}
+              filterMatches={props.filterMatches}
+              onFocusGuids={props.onFocusGuids}
             />
           </div>
         ) : (

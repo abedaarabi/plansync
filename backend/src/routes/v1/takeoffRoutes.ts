@@ -26,6 +26,12 @@ const takeoffInclude = {
 
 type TakeoffRow = Prisma.TakeoffLineGetPayload<{ include: typeof takeoffInclude }>;
 
+function takeoffIfcGuidsJson(value: Prisma.JsonValue | null | undefined): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const guids = value.filter((g): g is string => typeof g === "string" && g.trim().length > 0);
+  return guids.length > 0 ? guids : null;
+}
+
 function takeoffRowJson(row: TakeoffRow) {
   return {
     id: row.id,
@@ -43,6 +49,10 @@ function takeoffRowJson(row: TakeoffRow) {
     sourceType: row.sourceType,
     sourceFileVersionAtCreate: row.sourceFileVersionAtCreate,
     sourceZoneId: row.sourceZoneId,
+    sourceBimKey: row.sourceBimKey,
+    sourceIfcGuid: row.sourceIfcGuid,
+    sourceIfcGuids: takeoffIfcGuidsJson(row.sourceIfcGuids),
+    ifcType: row.ifcType,
     tags: row.tags,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

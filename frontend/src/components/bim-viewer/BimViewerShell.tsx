@@ -211,6 +211,8 @@ export function BimViewerShell(props: {
   version: string | null;
   fileVersionId: string | null;
   initialGuid?: string | null;
+  /** Deep-link focus for one or more IFC elements (`?guid=` / `?guids=`). */
+  initialGuids?: string[] | null;
   issueId?: string | null;
   /** Focus an O&M asset linked to a BIM element (`?omAssetId=`). */
   omAssetId?: string | null;
@@ -302,6 +304,8 @@ export function BimViewerShell(props: {
     filterState,
   );
   const [selectFilterMatches, setSelectFilterMatches] = useState(true);
+  /** Takeoff focus owns ghost presentation until filters change or focus clears. */
+  const [takeoffFocusGuids, setTakeoffFocusGuids] = useState<string[] | null>(null);
   /** Bumped when progressive tiles refresh GUID→localId maps — re-apply filter paint. */
   const [guidIndexEpoch, setGuidIndexEpoch] = useState(0);
   const guidIndexEpochRef = useRef(0);
@@ -1341,16 +1345,87 @@ export function BimViewerShell(props: {
   }, []);
 
   useEffect(() => {
-    const guid = props.initialGuid;
     if (props.issueId?.trim()) return;
-    if (!guid || phase.kind !== "ready") return;
-    const soft = Boolean(props.omAssetId?.trim());
-    void engineRef.current?.selectByGuids([guid], false).then(() => {
-      void engineRef.current?.zoomToSelection(
-        soft ? { fitScale: BIM_ASSET_SOFT_FIT_SCALE } : undefined,
-      );
-    });
-  }, [props.initialGuid, props.issueId, props.omAssetId, phase.kind, quantityIndex]);
+    // O&M soft focus keeps full model visible — do not claim takeoff ghost.
+    if (props.omAssetId?.trim()) {
+      const guid = props.initialGuid?.trim();
+      if (!guid || phase.kind !== "ready") return;
+      void engineRef.current?.selectByGuids([guid], false).then(() => {
+        void engineRef.current?.zoomToSelection({ fitScale: BIM_ASSET_SOFT_FIT_SCALE });
+      });
+      return;
+    }
+    const guids =
+      props.initialGuids?.map((g) => g.trim()).filter((g) => g.length > 0) ??
+      (props.initialGuid?.trim() ? [props.initialGuid.trim()] : []);
+    if (guids.length === 0 || phase.kind !== "ready") return;
+    setTakeoffFocusGuids(guids);
+  }, [props.initialGuid, props.initialGuids, props.issueId, props.omAssetId, phase.kind]);
+
+  // Clear takeoff ghost only after Filters are edited (skip mount).
+  const filterStateMountRef = useRef(true);
+  useEffect(() => {
+    if (filterStateMountRef.current) {
+      filterStateMountRef.current = false;
+      return;
+    }
+    setTakeoffFocusGuids(null);
+  }, [filterState]);
+
+  // Takeoff / QTO focus: select matches, ghost the rest, and frame them.
+  useEffect(() => {
+    const guids = takeoffFocusGuids?.map((g) => g.trim()).filter((g) => g.length > 0) ?? [];
+    if (guids.length === 0 || phase.kind !== "ready") return;
+    const engine = engineRef.current;
+    if (!engine || engine.isClashReviewActive()) return;
+
+    const guidSet = new Set(guids);
+    const fromIndex =
+      quantityIndex?.elements
+        .filter((e) => guidSet.has(e.guid))
+        .map((e) => ({
+          guid: e.guid,
+          fileVersionId: e.sourceFileVersionId ?? null,
+          expressId: e.expressId ?? null,
+        })) ?? [];
+    const matchRefs =
+      fromIndex.length > 0
+        ? fromIndex
+        : guids.map((guid) => ({ guid, fileVersionId: null, expressId: null }));
+
+    const applyGen = ++filterApplyGenRef.current;
+    // Prevent the select-matches effect from clearing this while we apply.
+    selectMatchesGenRef.current += 1;
+    void (async () => {
+      if (applyGen !== filterApplyGenRef.current) return;
+      // Prefer expressId refs so multi-element type groups all light up.
+      if (matchRefs.some((r) => r.expressId != null)) {
+        await engine.selectByElementRefs(matchRefs, false);
+      } else {
+        await engine.selectByGuids(guids, false);
+      }
+      // Keep React selection state in sync even if engine callbacks are deferred.
+      setSelectedGuids(new Set(guids));
+      if (applyGen !== filterApplyGenRef.current) return;
+      await engine.applyFilterPresentation({
+        filterActive: true,
+        visualize: "ghost",
+        matchGuids: guids,
+        matchRefs,
+        colorizeGroups: [],
+      });
+      if (applyGen !== filterApplyGenRef.current) return;
+      // Re-assert selection after ghost paint (highlight drain can drop it).
+      if (matchRefs.some((r) => r.expressId != null)) {
+        await engine.selectByElementRefs(matchRefs, false);
+      } else {
+        await engine.selectByGuids(guids, false);
+      }
+      setSelectedGuids(new Set(guids));
+      if (applyGen !== filterApplyGenRef.current) return;
+      await engine.zoomToGuids(guids);
+    })();
+  }, [takeoffFocusGuids, phase.kind, quantityIndex, guidIndexEpoch]);
 
   useEffect(() => {
     const id = props.omAssetId?.trim();
@@ -1527,6 +1602,7 @@ export function BimViewerShell(props: {
 
   const onShowAll = useCallback(() => {
     setActiveFlyout(null);
+    setTakeoffFocusGuids(null);
     setFilterState(EMPTY_BIM_FILTER_STATE);
     void engineRef.current?.showAllElements();
   }, []);
@@ -1624,6 +1700,8 @@ export function BimViewerShell(props: {
     // Clash review owns ghost/colorize — filter dock must not overwrite it.
     // Re-runs when selectedClashId clears so Ghost/colorize restore after review.
     if (engine.isClashReviewActive()) return;
+    // Takeoff focus owns ghost until Filters are edited.
+    if (takeoffFocusGuids?.length) return;
 
     if (guidIndexEpoch !== guidIndexEpochRef.current) {
       guidIndexEpochRef.current = guidIndexEpoch;
@@ -1713,7 +1791,15 @@ export function BimViewerShell(props: {
         filterApplyGenRef.current += 1;
       }
     };
-  }, [filterState, filterMatches, filterLegend, phase.kind, clash.selectedClashId, guidIndexEpoch]);
+  }, [
+    filterState,
+    filterMatches,
+    filterLegend,
+    phase.kind,
+    clash.selectedClashId,
+    guidIndexEpoch,
+    takeoffFocusGuids,
+  ]);
 
   const clearMarkups = useCallback(() => {
     setActiveFlyout(null);
@@ -2273,6 +2359,12 @@ export function BimViewerShell(props: {
     })();
   }, []);
 
+  /** Focus takeoff elements and ghost the rest of the model (same as Filters → Ghost). */
+  const focusTakeoffGuids = useCallback((guids: string[]) => {
+    if (guids.length === 0) return;
+    setTakeoffFocusGuids(guids);
+  }, []);
+
   const onSelectType = useCallback(
     (ifcType: string, additive: boolean) => {
       selectAndFrameGuids(quantityIndex?.byType[ifcType]?.guids ?? [], additive);
@@ -2300,6 +2392,8 @@ export function BimViewerShell(props: {
   /** Keep the viewer selection in sync with filter matches while the toggle is on. */
   useEffect(() => {
     if (!selectFilterMatches || phase.kind !== "ready") return;
+    // Takeoff / QTO deep-link owns selection while focused.
+    if (takeoffFocusGuids?.length) return;
     const engine = engineRef.current;
     if (!engine) return;
     const gen = ++selectMatchesGenRef.current;
@@ -2321,7 +2415,7 @@ export function BimViewerShell(props: {
         selectMatchesGenRef.current += 1;
       }
     };
-  }, [selectFilterMatches, filterMatches, phase.kind, guidIndexEpoch]);
+  }, [selectFilterMatches, filterMatches, phase.kind, guidIndexEpoch, takeoffFocusGuids]);
 
   const onContextAction = useCallback(
     (action: string) => {
@@ -3249,6 +3343,7 @@ export function BimViewerShell(props: {
               legend={filterLegend}
               selectMatches={selectFilterMatches}
               onToggleSelectMatches={onToggleSelectFilterMatches}
+              onResetCamera={goHome}
               savedViews={savedViews}
               onSaveFilter={() => void saveFilterView()}
               onApplySavedView={(v) => void applySavedView(v)}
@@ -3269,8 +3364,15 @@ export function BimViewerShell(props: {
               fileVersionId={activeFileVersionId}
               projectId={resolvedProjectId}
               selectedGuids={[...selectedGuids]}
+              selectedEntries={
+                quantityIndex?.elements.filter((entry) => selectedGuids.has(entry.guid)) ?? []
+              }
+              elementEntries={quantityIndex?.elements ?? []}
               takeoffSelectionSummary={takeoffSelectionSummary}
               resolveModelQuantities={resolveModelQuantities}
+              filterState={filterState}
+              filterMatches={filterMatches}
+              onFocusGuids={focusTakeoffGuids}
               savedViews={savedViews}
               onSaveView={() => void saveCurrentView()}
               onApplyView={(v) => void applySavedView(v)}

@@ -146,24 +146,29 @@ export function BimElementCatalog(props: {
           />
         </div>
       </div>
-      <div className="bim-dock-scroll px-2 py-2">
-        {selectedEntries.length > 0 ? (
-          <CatalogSection
-            title="Selection"
+      {selectedEntries.length > 0 ? (
+        <div className="flex max-h-[min(32dvh,260px)] min-h-0 shrink-0 flex-col border-b border-[var(--bim-border)] px-2 pt-2">
+          <SectionHeader
+            title={`Selection (${selectedEntries.length.toLocaleString()})`}
             open={selectionOpen}
             onToggle={() => setSelectionOpen((v) => !v)}
-          >
-            {selectedEntries.map((el) => (
-              <ElementRow
-                key={el.guid}
-                entry={el}
-                selected
-                onClick={(e) => props.onSelectGuids([el.guid], e.ctrlKey || e.metaKey)}
-              />
-            ))}
-          </CatalogSection>
-        ) : null}
+          />
+          {selectionOpen ? (
+            <div className="bim-dock-scroll mb-2 rounded-lg border border-[var(--bim-border)] bg-[var(--bim-panel)]">
+              {selectedEntries.map((el) => (
+                <ElementRow
+                  key={el.guid}
+                  entry={el}
+                  selected
+                  onClick={(e) => props.onSelectGuids([el.guid], e.ctrlKey || e.metaKey)}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
+      <div className="bim-dock-scroll px-2 py-2">
         <CatalogSection
           title="By type name"
           open={typeNamesOpen}
@@ -307,6 +312,25 @@ function ElementRow(props: {
   );
 }
 
+function SectionHeader(props: { title: string; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={props.onToggle}
+      className="bim-focus-ring mb-1 flex w-full shrink-0 items-center gap-1 px-2"
+    >
+      {props.open ? (
+        <ChevronDown className="h-3.5 w-3.5" />
+      ) : (
+        <ChevronRight className="h-3.5 w-3.5" />
+      )}
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--bim-text-muted)]">
+        {props.title}
+      </span>
+    </button>
+  );
+}
+
 function CatalogSection(props: {
   title: string;
   open: boolean;
@@ -315,20 +339,7 @@ function CatalogSection(props: {
 }) {
   return (
     <div className="mb-2">
-      <button
-        type="button"
-        onClick={props.onToggle}
-        className="bim-focus-ring mb-1 flex w-full items-center gap-1 px-2"
-      >
-        {props.open ? (
-          <ChevronDown className="h-3.5 w-3.5" />
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5" />
-        )}
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--bim-text-muted)]">
-          {props.title}
-        </span>
-      </button>
+      <SectionHeader title={props.title} open={props.open} onToggle={props.onToggle} />
       {props.open ? props.children : null}
     </div>
   );
