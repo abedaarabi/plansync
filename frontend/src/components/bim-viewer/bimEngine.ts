@@ -4944,10 +4944,13 @@ export class BimEngine {
   /**
    * Resolve IFC guids to fragment local ids, preferring a fileVersion when set
    * so federated models with colliding GlobalIds still map correctly.
+   * When `expressId` is present (quantity index), prefer it as the Fragments
+   * localId — GUID lookup against progressive tiles often only finds one hit
+   * for many same-Name instances.
    */
   // fallow-ignore-next-line complexity
   private async resolveGuidRefsToModelIdMap(
-    refs: { guid: string; fileVersionId?: string | null }[],
+    refs: { guid: string; fileVersionId?: string | null; expressId?: number | null }[],
   ): Promise<OBC.ModelIdMap | null> {
     if (refs.length === 0) return null;
     const map: OBC.ModelIdMap = {};
@@ -4970,6 +4973,37 @@ export class BimEngine {
 
     for (const ref of refs) {
       const guid = ref.guid?.trim();
+      const expressId =
+        typeof ref.expressId === "number" && Number.isFinite(ref.expressId) && ref.expressId > 0
+          ? ref.expressId
+          : null;
+
+      // Quantity-index expressId ≈ Fragments localId (That Open IFC import).
+      if (expressId != null) {
+        const placed = await this.placeLocalIdOnFragments(
+          expressId,
+          ref.fileVersionId,
+          fragments,
+          drawableByModel,
+        );
+        if (placed) {
+          if (!map[placed.modelId]) map[placed.modelId] = new Set<number>();
+          (map[placed.modelId] as Set<number>).add(placed.localId);
+          if (guid) {
+            const entry =
+              this.modelRegistry.get(placed.modelId) ??
+              this.modelRegistry.get(baseFederationModelId(placed.modelId));
+            this.guidIndex.set(guid, {
+              modelId: placed.modelId,
+              localId: placed.localId,
+              fileVersionId: entry?.fileVersionId ?? ref.fileVersionId ?? "",
+              sourceLabel: entry?.name ?? "Model",
+            });
+          }
+          continue;
+        }
+      }
+
       if (!guid) continue;
       const indexed = this.guidIndex.get(guid);
       if (
@@ -4998,6 +5032,43 @@ export class BimEngine {
     }
 
     return Object.keys(map).length > 0 ? map : null;
+  }
+
+  /**
+   * Place an IFC expressId / Fragments localId onto a loaded tile that actually
+   * draws it. Progressive tiles answer GUID lookups for metadata-only items.
+   */
+  // fallow-ignore-next-line complexity
+  private async placeLocalIdOnFragments(
+    localId: number,
+    fileVersionId: string | null | undefined,
+    fragments: OBC.FragmentsManager,
+    drawableByModel: Map<string, Set<number> | null>,
+  ): Promise<{ modelId: string; localId: number } | null> {
+    const want = fileVersionId?.trim() || null;
+    const candidates: string[] = [];
+    if (want) {
+      for (const [modelId] of this.fragmentEntriesForFileVersion(want)) {
+        if (fragments.list.has(modelId)) candidates.push(modelId);
+      }
+    }
+    if (candidates.length === 0) {
+      for (const modelId of fragments.list.keys()) candidates.push(modelId);
+    }
+
+    for (const modelId of candidates) {
+      const model = fragments.list.get(modelId);
+      if (!model) continue;
+      let drawable = drawableByModel.get(modelId);
+      if (drawable === undefined) {
+        drawable = await this.geometryIdsForModel(modelId, model);
+        drawableByModel.set(modelId, drawable);
+      }
+      // Only accept tiles that can draw this local id — otherwise Ghost/Select
+      // lights up a single metadata hit for a whole same-Name group.
+      if (drawable?.has(localId)) return { modelId, localId };
+    }
+    return null;
   }
 
   /**
@@ -5097,10 +5168,28 @@ export class BimEngine {
 
   // fallow-ignore-next-line complexity
   async selectByGuids(guids: string[], additive = false): Promise<void> {
+    await this.selectByElementRefs(
+      guids.map((guid) => ({ guid })),
+      additive,
+    );
+  }
+
+  /**
+   * Select elements using quantity-index refs (GUID + expressId). ExpressId maps
+   * directly to Fragments localIds so same-Name groups of N all light up.
+   */
+  // fallow-ignore-next-line complexity
+  async selectByElementRefs(
+    refs: { guid: string; fileVersionId?: string | null; expressId?: number | null }[],
+    additive = false,
+  ): Promise<void> {
     const seq = ++this.selectionOpSeq;
     if (!additive) this.selectedGuids.clear();
-    for (const g of guids) this.selectedGuids.add(g);
-    const map = await this.resolveModelIdMapFromGuids([...this.selectedGuids]);
+    for (const ref of refs) {
+      const g = ref.guid?.trim();
+      if (g) this.selectedGuids.add(g);
+    }
+    const map = await this.resolveGuidRefsToModelIdMap(refs);
     if (seq !== this.selectionOpSeq) return;
     if (!map) {
       if (!additive && seq === this.selectionOpSeq) this.clearSelection();
@@ -5114,6 +5203,16 @@ export class BimEngine {
     void this.focusOrbitOnSelectionMap(map);
     this.bumpRender();
     this.events.onMultiSelection?.([...this.selectedGuids]);
+  }
+
+  async zoomToElementRefs(
+    refs: { guid: string; fileVersionId?: string | null; expressId?: number | null }[],
+    opts?: { fitScale?: number },
+  ): Promise<void> {
+    if (refs.length === 0) return;
+    const map = await this.resolveGuidRefsToModelIdMap(refs);
+    if (!map) return;
+    await this.zoomToModelIdMap(map, opts?.fitScale);
   }
 
   /**
@@ -6009,7 +6108,7 @@ export class BimEngine {
     visualize: "isolate" | "ghost" | "none";
     matchGuids: string[];
     /** Optional fileVersion-aware refs for federated isolate/ghost match sets. */
-    matchRefs?: { guid: string; fileVersionId?: string | null }[];
+    matchRefs?: { guid: string; fileVersionId?: string | null; expressId?: number | null }[];
     colorizeGroups: {
       styleId: string;
       color: string;

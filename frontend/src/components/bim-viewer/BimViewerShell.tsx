@@ -1661,6 +1661,7 @@ export function BimViewerShell(props: {
     const matchRefs = filterMatches.map((m) => ({
       guid: m.guid,
       fileVersionId: m.sourceFileVersionId ?? null,
+      expressId: m.expressId,
     }));
     const legend = filterLegend;
     const visualize = filterState.visualize;
@@ -1695,8 +1696,8 @@ export function BimViewerShell(props: {
         // Ghost/Hide/All toggles and post-clash restores should not re-frame the camera.
         const skipZoom = skipFilterZoomOnceRef.current || visualizeChanged;
         skipFilterZoomOnceRef.current = false;
-        if (!skipZoom && filterActive && guids.length > 0) {
-          await engine.zoomToGuids(guids);
+        if (!skipZoom && filterActive && matchRefs.length > 0) {
+          await engine.zoomToElementRefs(matchRefs);
         }
       })();
     }, zoomDelay);
@@ -2302,14 +2303,18 @@ export function BimViewerShell(props: {
     const engine = engineRef.current;
     if (!engine) return;
     const gen = ++selectMatchesGenRef.current;
-    const guids = filterMatches.map((m) => m.guid);
+    const refs = filterMatches.map((m) => ({
+      guid: m.guid,
+      fileVersionId: m.sourceFileVersionId ?? null,
+      expressId: m.expressId,
+    }));
     void (async () => {
       if (gen !== selectMatchesGenRef.current) return;
-      if (guids.length === 0) {
+      if (refs.length === 0) {
         engine.clearSelection();
         return;
       }
-      await engine.selectByGuids(guids, false);
+      await engine.selectByElementRefs(refs, false);
     })();
     return () => {
       if (selectMatchesGenRef.current === gen) {

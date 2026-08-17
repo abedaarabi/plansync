@@ -361,12 +361,14 @@ export function BimFiltersPanel(props: {
               const selected = filterState.rules.some(
                 (r) => r.field === pickerField && r.op === "eq" && r.value === opt.value,
               );
+              const countLabel = opt.count != null ? opt.count.toLocaleString() : null;
               return (
                 <li key={opt.value}>
                   <button
                     type="button"
+                    title={countLabel ? `${opt.label} · ${countLabel} elements` : opt.label}
                     onClick={() => toggleFieldValue(pickerField, opt.value, activePicker.label)}
-                    className="bim-focus-ring flex w-full items-center gap-2.5 border-b border-[var(--bim-border)] px-3 py-2.5 text-left last:border-b-0 hover:bg-[var(--bim-hover)]"
+                    className="bim-focus-ring flex w-full items-center gap-2 border-b border-[var(--bim-border)] px-3 py-2.5 text-left last:border-b-0 hover:bg-[var(--bim-hover)]"
                   >
                     <span
                       className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
@@ -378,12 +380,17 @@ export function BimFiltersPanel(props: {
                     >
                       {selected ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--bim-text)]">
+                    <span className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[12px] text-[var(--bim-text)] [scrollbar-width:thin] [scrollbar-color:var(--bim-border)_transparent]">
                       {opt.label}
                     </span>
-                    <span className="shrink-0 rounded-full bg-[var(--bim-hover)] px-1.5 py-px text-[10px] tabular-nums text-[var(--bim-text-muted)]">
-                      {opt.count?.toLocaleString()}
-                    </span>
+                    {countLabel ? (
+                      <span
+                        className="shrink-0 rounded-md border border-[var(--bim-border)] bg-[var(--bim-panel)] px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-[var(--bim-text)]"
+                        aria-label={`${countLabel} elements`}
+                      >
+                        {countLabel}
+                      </span>
+                    ) : null}
                   </button>
                 </li>
               );
