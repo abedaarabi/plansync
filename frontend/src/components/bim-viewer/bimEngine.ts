@@ -380,6 +380,8 @@ export class BimEngine {
   private guidSyncSeq = 0;
   private guidSyncDirty = false;
   private guidSyncInFlight: Promise<void> | null = null;
+  /** Skip host notify while resolve() warms an empty index (avoids filter re-entry). */
+  private suppressGuidIndexUpdatedEvent = false;
   /** Material sync deferred while selection/filter overlays are active. */
   private pendingMaterialSync = false;
   private planSilhouette: ImageBitmap | null = null;
@@ -4773,12 +4775,18 @@ export class BimEngine {
     // Dirty bit set in the finally gap — restart so awaiters see a warm index.
     if (!this.disposed && this.guidSyncDirty) {
       await this.syncGuidLocalIdMap();
+      return;
+    }
+    if (!this.disposed && !this.suppressGuidIndexUpdatedEvent) {
+      this.events.onGuidIndexUpdated?.();
     }
   }
 
   // fallow-ignore-next-line complexity
   private async runSyncGuidLocalIdMap(seq: number): Promise<void> {
     this.guidIndex.clear();
+    // Tile geometry sets grow as fragments stream — never trust a stale cache here.
+    this.geometryIdsByModel.clear();
     const index = this.quantityIndex;
     const fragments = this.components?.get(OBC.FragmentsManager);
     if (!index || !fragments?.initialized) return;
@@ -4948,10 +4956,17 @@ export class BimEngine {
 
     // Warm the index if empty (tiles may have landed after the last sync).
     if (this.guidIndex.size === 0 && this.quantityIndex) {
-      await this.syncGuidLocalIdMap();
+      this.suppressGuidIndexUpdatedEvent = true;
+      try {
+        await this.syncGuidLocalIdMap();
+      } finally {
+        this.suppressGuidIndexUpdatedEvent = false;
+      }
     }
 
     const unresolved: { guid: string; fileVersionId?: string | null }[] = [];
+    /** Per-model drawable cache for this call (avoids N× Map lookups). */
+    const drawableByModel = new Map<string, Set<number> | null>();
 
     for (const ref of refs) {
       const guid = ref.guid?.trim();
@@ -4962,9 +4977,18 @@ export class BimEngine {
         (!ref.fileVersionId || indexed.fileVersionId === ref.fileVersionId) &&
         fragments.list.has(indexed.modelId)
       ) {
-        if (!map[indexed.modelId]) map[indexed.modelId] = new Set<number>();
-        (map[indexed.modelId] as Set<number>).add(indexed.localId);
-        continue;
+        const model = fragments.list.get(indexed.modelId);
+        let drawable = drawableByModel.get(indexed.modelId);
+        if (drawable === undefined) {
+          drawable = model ? await this.geometryIdsForModel(indexed.modelId, model) : null;
+          drawableByModel.set(indexed.modelId, drawable);
+        }
+        // Metadata-only tile hits look indexed but cannot be highlighted — re-resolve.
+        if (!drawable || drawable.has(indexed.localId)) {
+          if (!map[indexed.modelId]) map[indexed.modelId] = new Set<number>();
+          (map[indexed.modelId] as Set<number>).add(indexed.localId);
+          continue;
+        }
       }
       unresolved.push({ guid, fileVersionId: ref.fileVersionId });
     }
@@ -4989,7 +5013,6 @@ export class BimEngine {
   ): Promise<void> {
     const pending = new Map<string, string | null>();
     for (const ref of refs) pending.set(ref.guid, ref.fileVersionId ?? null);
-    const weak = new Map<string, { modelId: string; localId: number; sourceLabel: string }>();
 
     for (const [modelId, model] of fragments.list) {
       if (pending.size === 0) break;
@@ -5010,12 +5033,8 @@ export class BimEngine {
             const localId = localIds[j];
             if (localId == null) continue;
             const guid = chunk[j]!;
-            if (drawable && !drawable.has(localId)) {
-              if (!weak.has(guid)) {
-                weak.set(guid, { modelId, localId, sourceLabel: entry?.name ?? "Model" });
-              }
-              continue;
-            }
+            // Skip metadata-only tile answers — keep looking for drawable geometry.
+            if (drawable && !drawable.has(localId)) continue;
             if (!map[modelId]) map[modelId] = new Set<number>();
             (map[modelId] as Set<number>).add(localId);
             this.guidIndex.set(guid, {
@@ -5025,7 +5044,6 @@ export class BimEngine {
               sourceLabel: entry?.name ?? "Model",
             });
             pending.delete(guid);
-            weak.delete(guid);
           }
         } catch {
           /* try next chunk / model */
@@ -5033,12 +5051,7 @@ export class BimEngine {
       }
     }
 
-    for (const [guid, hit] of weak) {
-      if (!map[hit.modelId]) map[hit.modelId] = new Set<number>();
-      (map[hit.modelId] as Set<number>).add(hit.localId);
-      pending.delete(guid);
-    }
-
+    // Remaining GUIDs: manager fallback (may still miss progressive tiles).
     if (pending.size === 0) return;
     try {
       const fallback = await fragments.guidsToModelIdMap([...pending.keys()]);

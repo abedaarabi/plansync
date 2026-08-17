@@ -301,7 +301,10 @@ export function BimViewerShell(props: {
     quantityIndex,
     filterState,
   );
-  const [selectFilterMatches, setSelectFilterMatches] = useState(false);
+  const [selectFilterMatches, setSelectFilterMatches] = useState(true);
+  /** Bumped when progressive tiles refresh GUID→localId maps — re-apply filter paint. */
+  const [guidIndexEpoch, setGuidIndexEpoch] = useState(0);
+  const guidIndexEpochRef = useRef(0);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1023px)");
@@ -791,6 +794,12 @@ export function BimViewerShell(props: {
               () => toast.success("View link copied"),
               () => toast.error("Could not copy link"),
             );
+          },
+          onGuidIndexUpdated: () => {
+            if (cancelled) return;
+            // Skip zoom when only the tile GUID map refreshed.
+            skipFilterZoomOnceRef.current = true;
+            setGuidIndexEpoch((n) => n + 1);
           },
         });
         engineRef.current = engine;
@@ -1616,6 +1625,11 @@ export function BimViewerShell(props: {
     // Re-runs when selectedClashId clears so Ghost/colorize restore after review.
     if (engine.isClashReviewActive()) return;
 
+    if (guidIndexEpoch !== guidIndexEpochRef.current) {
+      guidIndexEpochRef.current = guidIndexEpoch;
+      skipFilterZoomOnceRef.current = true;
+    }
+
     const filterActive = hasActiveFilter(filterState);
     const colorizeActive = Boolean(filterState.colorize?.enabled);
     const applyGen = ++filterApplyGenRef.current;
@@ -1644,6 +1658,10 @@ export function BimViewerShell(props: {
     }
 
     const guids = filterMatches.map((m) => m.guid);
+    const matchRefs = filterMatches.map((m) => ({
+      guid: m.guid,
+      fileVersionId: m.sourceFileVersionId ?? null,
+    }));
     const legend = filterLegend;
     const visualize = filterState.visualize;
     const visualizeChanged = filterVisualizeRef.current !== visualize;
@@ -1659,6 +1677,7 @@ export function BimViewerShell(props: {
           filterActive,
           visualize,
           matchGuids: guids,
+          matchRefs,
           colorizeField: filterState.colorize?.field,
           colorizeGroups:
             colorizeActive && legend.length > 0
@@ -1693,7 +1712,7 @@ export function BimViewerShell(props: {
         filterApplyGenRef.current += 1;
       }
     };
-  }, [filterState, filterMatches, filterLegend, phase.kind, clash.selectedClashId]);
+  }, [filterState, filterMatches, filterLegend, phase.kind, clash.selectedClashId, guidIndexEpoch]);
 
   const clearMarkups = useCallback(() => {
     setActiveFlyout(null);
@@ -2297,7 +2316,7 @@ export function BimViewerShell(props: {
         selectMatchesGenRef.current += 1;
       }
     };
-  }, [selectFilterMatches, filterMatches, phase.kind]);
+  }, [selectFilterMatches, filterMatches, phase.kind, guidIndexEpoch]);
 
   const onContextAction = useCallback(
     (action: string) => {

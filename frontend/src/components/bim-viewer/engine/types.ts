@@ -50,4 +50,9 @@ export type BimEngineEvents = {
   onQualityChanged?: (state: BimQualityState) => void;
   /** Ctrl/Cmd+L — host should copy the current view URL. */
   onCopyViewLink?: () => void;
+  /**
+   * Fired after the GUID→localId index is rebuilt (e.g. progressive tiles landed).
+   * Host should re-apply active filters / Select matches without re-framing.
+   */
+  onGuidIndexUpdated?: () => void;
 };
