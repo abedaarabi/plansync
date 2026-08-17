@@ -253,7 +253,7 @@ export function FileExplorerContent({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-[var(--enterprise-surface)]/90 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 lg:px-7">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-[var(--enterprise-border)]/80 bg-[var(--enterprise-surface)]/90 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 lg:px-7">
         <div className="min-w-0 flex flex-1 flex-wrap items-center gap-1.5 sm:gap-2">
           <p className="min-w-0 text-xs text-[var(--enterprise-text-muted)] sm:text-sm">
             {listScopeHint ? (
@@ -381,15 +381,9 @@ export function FileExplorerContent({
                         onDragLeaveFolder ? (e) => onDragLeaveFolder(e, fol.id) : undefined
                       }
                       onDrop={onDropOnFolder ? (e) => onDropOnFolder(e, fol.id) : undefined}
-                      className={`group relative overflow-hidden rounded-lg border bg-[var(--enterprise-surface)] transition hover:border-[var(--enterprise-primary)]/30 hover:${
-                        selected
-                          ? "border-[var(--enterprise-primary)]/45 ring-2 ring-[var(--enterprise-primary)]/20"
-                          : "border-[var(--enterprise-border)]"
-                      } ${
-                        dropTarget
-                          ? "border-[var(--enterprise-primary)]/45 ring-2 ring-[var(--enterprise-primary)]/35"
-                          : ""
-                      }`}
+                      className={`group relative overflow-hidden rounded-lg bg-[var(--enterprise-surface)] transition hover:bg-[var(--enterprise-hover-surface)] ${
+                        selected ? "ring-2 ring-[var(--enterprise-primary)]/20" : ""
+                      } ${dropTarget ? "ring-2 ring-[var(--enterprise-primary)]/35" : ""}`}
                     >
                       <button
                         type="button"
@@ -500,12 +494,12 @@ export function FileExplorerContent({
                   return (
                     <div
                       key={f.id}
-                      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-[var(--enterprise-surface)] transition duration-150 hover:border-[var(--enterprise-primary)]/30 hover:${
+                      className={`group relative flex flex-col overflow-hidden rounded-lg bg-[var(--enterprise-surface)] transition duration-150 hover:bg-[var(--enterprise-hover-surface)] ${
                         selected
                           ? federationIfcIds?.has(f.id)
-                            ? "border-emerald-500/40 ring-2 ring-emerald-500/25"
-                            : "border-[var(--enterprise-primary)]/45 ring-2 ring-[var(--enterprise-primary)]/20"
-                          : "border-[var(--enterprise-border)]"
+                            ? "ring-2 ring-emerald-500/25"
+                            : "ring-2 ring-[var(--enterprise-primary)]/20"
+                          : ""
                       }`}
                     >
                       <div
@@ -644,10 +638,7 @@ export function FileExplorerContent({
                         </div>
                       </div>
                       {versionUi && sv.length > 1 && onFileVersionPick ? (
-                        <div
-                          className="border-t border-[var(--enterprise-border)]/70 px-1.5 py-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <div className="px-1.5 py-1" onClick={(e) => e.stopPropagation()}>
                           <select
                             id={`file-version-${f.id}`}
                             className="w-full rounded-md border border-[var(--enterprise-border)] bg-[var(--enterprise-bg)] py-0.5 pl-1.5 pr-5 text-xs text-[var(--enterprise-text)]"
