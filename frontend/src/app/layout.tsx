@@ -6,7 +6,7 @@ import { UmamiAnalytics } from "@/components/UmamiAnalytics";
 import { getMessagesForLocale } from "@/lib/i18n/messages";
 import { getAppLocale } from "@/lib/i18n/serverLocale";
 import appleSplashScreens from "@/lib/pwaAppleSplashScreens.json";
-import { getSiteOrigin } from "@/lib/siteUrl";
+import { getSiteOriginFromRequest, SITE_SHARE_IMAGE } from "@/lib/siteUrl";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,54 +30,67 @@ const siteTitle = "PlanSync — Digital Delivery Platform for Data Centers";
 const siteDescription =
   "From BIM to operations — connect drawings, assets, commissioning, and O&M in one facility workspace for data-center delivery.";
 
-export const metadata: Metadata = {
-  metadataBase: new URL(getSiteOrigin()),
-  /** iOS uses this for `apple-touch-startup-image` splashes; Next only adds `mobile-web-app-capable`. */
-  other: {
-    "apple-mobile-web-app-capable": "yes",
-  },
-  title: {
-    default: siteTitle,
-    template: "%s · PlanSync",
-  },
-  description: siteDescription,
-  applicationName: "PlanSync",
-  formatDetection: {
-    telephone: false,
-  },
-  icons: {
-    icon: [
-      { url: "/logo.svg", type: "image/svg+xml", sizes: "any" },
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
-    apple: [{ url: "/icons/icon-180.png", sizes: "180x180", type: "image/png" }],
-    shortcut: "/icons/icon-192.png",
-  },
-  openGraph: {
-    type: "website",
-    locale: "en_US",
-    title: siteTitle,
-    description: siteDescription,
-    siteName: "PlanSync",
-    url: "/",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "PlanSync — Digital Delivery for Data Centers",
-    description:
-      "Keep every data-center asset connected from BIM and drawings through commissioning, handover, and operations.",
-  },
-  appleWebApp: {
-    capable: true,
-    title: "PlanSync",
-    statusBarStyle: "default",
-    startupImage: appleSplashScreens.map(({ w, h, media }) => ({
-      url: `/splash/apple-splash-${w}x${h}.png`,
-      media,
-    })),
-  },
+const shareImage = {
+  url: SITE_SHARE_IMAGE.path,
+  width: SITE_SHARE_IMAGE.width,
+  height: SITE_SHARE_IMAGE.height,
+  type: SITE_SHARE_IMAGE.type,
+  alt: "PlanSync 3D BIM viewer for data-center delivery.",
 };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const origin = await getSiteOriginFromRequest();
+  return {
+    metadataBase: new URL(origin),
+    /** iOS uses this for `apple-touch-startup-image` splashes; Next only adds `mobile-web-app-capable`. */
+    other: {
+      "apple-mobile-web-app-capable": "yes",
+    },
+    title: {
+      default: siteTitle,
+      template: "%s · PlanSync",
+    },
+    description: siteDescription,
+    applicationName: "PlanSync",
+    formatDetection: {
+      telephone: false,
+    },
+    icons: {
+      icon: [
+        { url: "/logo.svg", type: "image/svg+xml", sizes: "any" },
+        { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+        { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      ],
+      apple: [{ url: "/icons/icon-180.png", sizes: "180x180", type: "image/png" }],
+      shortcut: "/icons/icon-192.png",
+    },
+    openGraph: {
+      type: "website",
+      locale: "en_US",
+      title: siteTitle,
+      description: siteDescription,
+      siteName: "PlanSync",
+      url: "/",
+      images: [shareImage],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "PlanSync — Digital Delivery for Data Centers",
+      description:
+        "Keep every data-center asset connected from BIM and drawings through commissioning, handover, and operations.",
+      images: [shareImage],
+    },
+    appleWebApp: {
+      capable: true,
+      title: "PlanSync",
+      statusBarStyle: "default",
+      startupImage: appleSplashScreens.map(({ w, h, media }) => ({
+        url: `/splash/apple-splash-${w}x${h}.png`,
+        media,
+      })),
+    },
+  };
+}
 
 export const dynamic = "force-dynamic";
 

@@ -6,6 +6,28 @@ import { MW_LOCALE, readResolvedLocaleFromRequest } from "@/lib/i18n/resolveInit
 
 const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
+function isShareAssetPath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/images/") ||
+    pathname.startsWith("/icons/") ||
+    pathname.startsWith("/splash/") ||
+    pathname.startsWith("/opengraph-image") ||
+    pathname.startsWith("/twitter-image") ||
+    pathname === "/og-image.jpg"
+  );
+}
+
+function isShareCrawler(request: NextRequest): boolean {
+  const ua = request.headers.get("user-agent") ?? "";
+  return /Twitterbot|facebookexternalhit|LinkedInBot|Slackbot|Discordbot|WhatsApp/i.test(ua);
+}
+
+function shouldSetLocaleCookie(request: NextRequest): boolean {
+  if (request.cookies.get(LOCALE_COOKIE)) return false;
+  if (isShareAssetPath(request.nextUrl.pathname)) return false;
+  return !isShareCrawler(request);
+}
+
 /** Injects `MW_LOCALE` for RSC + sets `NEXT_LOCALE` when missing (merged from former `middleware.ts`; Next 16 allows only `proxy`, not both). */
 function withLocaleNext(request: NextRequest): NextResponse {
   const locale = readResolvedLocaleFromRequest(request);
@@ -14,7 +36,7 @@ function withLocaleNext(request: NextRequest): NextResponse {
   const response = NextResponse.next({
     request: { headers: requestHeaders },
   });
-  if (!request.cookies.get(LOCALE_COOKIE)) {
+  if (shouldSetLocaleCookie(request)) {
     response.cookies.set(LOCALE_COOKIE, locale, {
       path: "/",
       maxAge: LOCALE_COOKIE_MAX_AGE,
@@ -251,6 +273,6 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // All HTML/API paths except Next internals and static assets (auth gating below; locale on every pass)
-    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|pdf\\.worker\\.mjs).*)",
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|pdf\\.worker\\.mjs|images/|icons/|splash/|og-image\\.jpg|opengraph-image|twitter-image).*)",
   ],
 };

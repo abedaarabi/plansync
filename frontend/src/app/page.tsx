@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { HomeClient } from "@/components/HomeClient";
 import { getHomepageJsonLd } from "@/lib/landingJsonLd";
-import { getSiteOrigin } from "@/lib/siteUrl";
+import { getSiteOriginFromRequest, SITE_SHARE_IMAGE } from "@/lib/siteUrl";
 
 const shareTitle = "PlanSync — Digital Delivery Platform for Data Centers";
 const shareDescription =
@@ -31,12 +31,21 @@ export const metadata: Metadata = {
     url: "/",
     type: "website",
     siteName: "PlanSync",
+    images: [
+      {
+        url: SITE_SHARE_IMAGE.path,
+        width: SITE_SHARE_IMAGE.width,
+        height: SITE_SHARE_IMAGE.height,
+        type: SITE_SHARE_IMAGE.type,
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "PlanSync — Digital Delivery for Data Centers",
     description:
       "Keep every data-center asset connected from BIM and drawings through commissioning, handover, and operations.",
+    images: [SITE_SHARE_IMAGE.path],
   },
   robots: {
     index: true,
@@ -48,8 +57,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default function Home() {
-  const origin = getSiteOrigin();
+export default async function Home() {
+  const origin = await getSiteOriginFromRequest();
   const jsonLd = getHomepageJsonLd(origin);
 
   return (
